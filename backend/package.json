@@ -1,0 +1,14 @@
+{
+  "name": "ai-wizard-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "cors": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "openai": "latest"
+  }
+}
