@@ -11,6 +11,13 @@ const port = process.env.PORT || 8787;
 app.use(cors());
 app.use(express.json());
 
+function sanitize(value) {
+  const key = process.env.OPENAI_API_KEY || "";
+  return String(value || "")
+    .replace(key, "[hidden_api_key]")
+    .replace(/sk-[A-Za-z0-9_\-]+/g, "sk-[hidden]");
+}
+
 app.get("/", (req, res) => {
   res.json({
     status: "AI Wizard backend is running"
@@ -38,7 +45,7 @@ app.post("/api/generate", async (req, res) => {
     });
 
     const response = await client.responses.create({
-      model: process.env.OPENAI_MODEL || "gpt-5.5",
+      model: process.env.OPENAI_MODEL || "gpt-5.4-mini",
       input: `
 You are AI Wizard Command Center.
 
@@ -59,9 +66,24 @@ Return:
       content: response.output_text
     });
   } catch (error) {
-    console.error(error);
+    const safeMessage = sanitize(error?.message);
+    const safeCode = sanitize(error?.code);
+    const safeType = sanitize(error?.type);
+    const safeStatus = error?.status || 500;
+
+    console.error("OpenAI error:", {
+      status: safeStatus,
+      code: safeCode,
+      type: safeType,
+      message: safeMessage
+    });
+
     res.status(500).json({
-      error: "AI generation failed"
+      error: "AI generation failed",
+      status: safeStatus,
+      code: safeCode,
+      type: safeType,
+      details: safeMessage
     });
   }
 });

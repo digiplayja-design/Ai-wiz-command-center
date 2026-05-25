@@ -1,7 +1,33 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
   runApp(const AiWizardApp());
+}
+
+String backendUrl() {
+  const overrideUrl = String.fromEnvironment('AI_WIZARD_BACKEND_URL');
+
+  if (overrideUrl.isNotEmpty) {
+    if (overrideUrl.endsWith('/api/generate')) {
+      return overrideUrl;
+    }
+    return '$overrideUrl/api/generate';
+  }
+
+  final host = Uri.base.host;
+
+  if (host.contains('-3000.app.github.dev')) {
+    final backendHost = host.replaceFirst(
+      '-3000.app.github.dev',
+      '-8787.app.github.dev',
+    );
+    return 'https://$backendHost/api/generate';
+  }
+
+  return 'http://localhost:8787/api/generate';
 }
 
 class AiWizardApp extends StatelessWidget {
@@ -21,6 +47,18 @@ class AiWizardApp extends StatelessWidget {
   }
 }
 
+class GeneratedFile {
+  final String command;
+  final String fileName;
+  final String content;
+
+  const GeneratedFile({
+    required this.command,
+    required this.fileName,
+    required this.content,
+  });
+}
+
 class CommandCenterScreen extends StatefulWidget {
   const CommandCenterScreen({super.key});
 
@@ -30,9 +68,10 @@ class CommandCenterScreen extends StatefulWidget {
 
 class _CommandCenterScreenState extends State<CommandCenterScreen> {
   final TextEditingController _controller = TextEditingController();
-  bool _generating = false;
 
-  final List<Map<String, String>> _history = [];
+  bool _loading = false;
+  String? _error;
+  final List<GeneratedFile> _files = [];
 
   final List<String> _ideas = const [
     'Make me a business plan',
@@ -42,6 +81,12 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     'Create a meal plan',
     'Write a social media post',
   ];
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   Future<void> _generate() async {
     final command = _controller.text.trim();
@@ -54,44 +99,85 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     }
 
     setState(() {
-      _generating = true;
+      _loading = true;
+      _error = null;
     });
 
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final response = await http
+          .post(
+            Uri.parse(backendUrl()),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'command': command}),
+          )
+          .timeout(const Duration(seconds: 90));
 
-    final fileName = _makeFileName(command);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(response.body);
+      }
 
-    setState(() {
-      _generating = false;
-      _history.insert(0, {
-        'command': command,
-        'file': fileName,
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final content = (data['content'] ?? '').toString().trim();
+
+      if (content.isEmpty) {
+        throw Exception('No AI content returned.');
+      }
+
+      setState(() {
+        _loading = false;
+        _controller.clear();
+        _files.insert(
+          0,
+          GeneratedFile(
+            command: command,
+            fileName: _makeFileName(command),
+            content: content,
+          ),
+        );
       });
-    });
+    } catch (error) {
+      setState(() {
+        _loading = false;
+        _error = 'AI generation failed. Make sure the backend is running.';
+      });
+    }
   }
 
-  String _makeFileName(String command) {
-    final clean = command
-        .replaceAll(RegExp(r'[^a-zA-Z0-9 ]'), '')
-        .split(' ')
-        .where((word) => word.trim().isNotEmpty)
+  String _makeFileName(String text) {
+    final words = RegExp(r'[A-Za-z0-9]+')
+        .allMatches(text)
+        .map((match) => match.group(0)!)
         .take(5)
-        .map((word) {
-      final lower = word.toLowerCase();
-      return lower[0].toUpperCase() + lower.substring(1);
-    }).join('_');
+        .toList();
 
-    if (clean.isEmpty) {
+    if (words.isEmpty) {
       return 'AI_Wizard_Output.pdf';
     }
 
-    return '$clean.pdf';
+    return '${words.join('_')}.pdf';
   }
 
-  void _useIdea(String idea) {
-    setState(() {
-      _controller.text = idea;
-    });
+  void _showFile(GeneratedFile file) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(file.fileName),
+          content: SizedBox(
+            width: 700,
+            child: SingleChildScrollView(
+              child: SelectableText(file.content),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -135,7 +221,15 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                         color: Colors.white70,
                       ),
                     ),
-                    const SizedBox(height: 36),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Backend connected',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.cyanAccent.withOpacity(0.85),
+                      ),
+                    ),
+                    const SizedBox(height: 28),
                     const PulseOrb(),
                     const SizedBox(height: 32),
                     Container(
@@ -179,7 +273,13 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                             children: _ideas.map((idea) {
                               return ActionChip(
                                 label: Text(idea),
-                                onPressed: () => _useIdea(idea),
+                                onPressed: _loading
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          _controller.text = idea;
+                                        });
+                                      },
                               );
                             }).toList(),
                           ),
@@ -188,8 +288,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                             width: double.infinity,
                             height: 54,
                             child: ElevatedButton.icon(
-                              onPressed: _generating ? null : _generate,
-                              icon: _generating
+                              onPressed: _loading ? null : _generate,
+                              icon: _loading
                                   ? const SizedBox(
                                       width: 20,
                                       height: 20,
@@ -199,18 +299,35 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                                     )
                                   : const Icon(Icons.auto_awesome),
                               label: Text(
-                                _generating
-                                    ? 'Generating...'
+                                _loading
+                                    ? 'Generating with AI...'
                                     : 'Generate Deliverable',
                                 style: const TextStyle(fontSize: 18),
                               ),
                             ),
                           ),
+                          if (_error != null) ...[
+                            const SizedBox(height: 14),
+                            Text(
+                              _error!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.redAccent),
+                            ),
+                          ],
                         ],
                       ),
                     ),
+                    const SizedBox(height: 18),
+                    Text(
+                      backendUrl(),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white38,
+                        fontSize: 11,
+                      ),
+                    ),
                     const SizedBox(height: 28),
-                    if (_history.isNotEmpty)
+                    if (_files.isNotEmpty)
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -222,7 +339,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          ..._history.map((item) {
+                          ..._files.map((file) {
                             return Container(
                               margin: const EdgeInsets.only(bottom: 12),
                               padding: const EdgeInsets.all(18),
@@ -247,7 +364,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          item['file'] ?? 'Output.pdf',
+                                          file.fileName,
                                           style: const TextStyle(
                                             fontSize: 18,
                                             fontWeight: FontWeight.bold,
@@ -255,9 +372,18 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          item['command'] ?? '',
+                                          file.command,
                                           style: const TextStyle(
                                             color: Colors.white60,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          file.content,
+                                          maxLines: 3,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: Colors.white70,
                                           ),
                                         ),
                                       ],
@@ -265,7 +391,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                                   ),
                                   const SizedBox(width: 10),
                                   FilledButton(
-                                    onPressed: () {},
+                                    onPressed: () => _showFile(file),
                                     child: const Text('Open'),
                                   ),
                                 ],
