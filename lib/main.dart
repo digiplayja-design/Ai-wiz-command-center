@@ -23,14 +23,10 @@ String backendUrl() {
     return '$overrideUrl/api/generate';
   }
 
-  final host = Uri.base.host;
+  const productionBackendUrl = 'https://chee-chai-chee-backend.onrender.com';
 
-  if (host.contains('-3000.app.github.dev')) {
-    final backendHost = host.replaceFirst(
-      '-3000.app.github.dev',
-      '-8787.app.github.dev',
-    );
-    return 'https://$backendHost/api/generate';
+  if (productionBackendUrl.isNotEmpty) {
+    return '$productionBackendUrl/api/generate';
   }
 
   return 'http://localhost:8787/api/generate';
