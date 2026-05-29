@@ -38,6 +38,7 @@ dependencies:
   pdf: ^3.12.0
   printing: ^5.14.3
   video_player: ^2.11.1
+  audioplayers: ^6.7.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -61,6 +62,9 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/consider_done_fr.mp3
+    - assets/consider_done_es.mp3
+    - assets/consider_done_en.mp3
     - assets/wizard_greeting_fr.mp4
     - assets/wizard_greeting_es.mp4
     - assets/wizard_greeting_en.mp4

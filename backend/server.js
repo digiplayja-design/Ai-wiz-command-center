@@ -34,6 +34,82 @@ const languageMap = {
   }
 };
 
+function shouldUseLiveSearch(command) {
+  const lower = String(command || "").toLowerCase();
+
+  const liveKeywords = [
+    "current",
+    "today",
+    "now",
+    "latest",
+    "recent",
+    "2026",
+    "this year",
+    "news",
+    "score",
+    "standings",
+    "stats",
+    "ranking",
+    "rankings",
+    "best team",
+    "nba",
+    "basketball",
+    "football",
+    "soccer",
+    "baseball",
+    "stock",
+    "price",
+    "weather",
+    "president",
+    "ceo",
+    "trending"
+  ];
+
+  return liveKeywords.some((word) => lower.includes(word));
+}
+
+function wantsFile(command) {
+  const lower = String(command || "").toLowerCase();
+
+  const fileWords = [
+    "pdf",
+    "word",
+    "docx",
+    "document",
+    "download",
+    "export",
+    "file",
+    "printable",
+    "save as",
+    "archivo",
+    "documento",
+    "exportar",
+    "descargar",
+    "imprimible",
+    "fichier",
+    "document",
+    "exporter",
+    "télécharger",
+    "imprimable"
+  ];
+
+  return fileWords.some((word) => lower.includes(word));
+}
+
+async function createResponse(client, { model, input, useSearch }) {
+  const request = {
+    model,
+    input
+  };
+
+  if (useSearch) {
+    request.tools = [{ type: "web_search" }];
+    request.tool_choice = "required";
+  }
+
+  return client.responses.create(request);
+}
+
 app.get("/", (req, res) => {
   res.json({
     status: "Chee Chai Chee backend is running"
@@ -45,6 +121,8 @@ app.post("/api/generate", async (req, res) => {
     const command = req.body.command;
     const languageCode = req.body.language || "en";
     const language = languageMap[languageCode] || languageMap.en;
+    const liveSearchNeeded = shouldUseLiveSearch(command);
+    const fileRequested = wantsFile(command);
 
     if (!command || command.trim().length === 0) {
       return res.status(400).json({
@@ -62,14 +140,42 @@ app.post("/api/generate", async (req, res) => {
       apiKey: process.env.OPENAI_API_KEY
     });
 
-    const response = await client.responses.create({
-      model: process.env.OPENAI_MODEL || "gpt-5.4-mini",
-      input: `
-You are Chee Chai Chee, a premium AI wizard inside a productivity app.
+    const normalModel = process.env.OPENAI_MODEL || "gpt-5.4-mini";
+    const searchModel = process.env.OPENAI_SEARCH_MODEL || normalModel;
 
+    const modeInstruction = fileRequested
+      ? `
+The user requested a file/document-style output.
+Create a polished deliverable with clean sections, practical details, and strong structure.
+`
+      : `
+The user did not request a PDF, file, or document.
+Answer like a premium AI assistant, not like a document generator.
+Do not use generic sections like Overview, Step-by-Step Plan, Common Mistakes, or Next Move unless they truly fit the question.
+For a normal question, give:
+1. Direct answer
+2. Why
+3. Best options or contenders when useful
+4. Final verdict
+`;
+
+    const searchInstruction = liveSearchNeeded
+      ? `
+This question needs current information.
+Use live web search.
+Bring up real contenders, recent data, standings, rankings, current performance, or relevant sources when useful.
+For sports questions, do not dodge. Give a best pick or ranked shortlist and explain the evidence.
+`
+      : `
+This question does not require live search unless the user explicitly asks for current information.
+`;
+
+    const input = `
+You are Chee Chai Chee, a premium multilingual AI assistant inside a productivity app.
+
+You are not just a PDF maker.
 You are not a search engine.
-You are not giving quick generic web-search style answers.
-Your job is to create polished, useful, ready-to-use deliverables.
+You are not a generic chatbot.
 
 The user selected this language:
 ${language.name}
@@ -80,48 +186,72 @@ ${language.instruction}
 The user wrote:
 "${command}"
 
-Quality standard:
-Every response must feel better than a normal chatbot answer by including:
-- A direct useful answer
-- Practical strategy or reasoning
-- Specific steps
-- Examples where useful
-- A clear next move
-- Clean structure that looks good when exported as a PDF
+${modeInstruction}
+
+${searchInstruction}
+
+Answer quality rules:
+- Be direct.
+- Be useful.
+- Give judgment when the user asks for judgment.
+- For "best" questions, do not hide behind vague wording.
+- If there is no single answer, give the top contenders and your final pick.
+- Use real evidence when available.
+- Avoid filler.
+- Avoid generic chatbot disclaimers.
+- Avoid ending with "If you want".
+- Do not mention PDF unless the user asked for a file or PDF.
 
 Formatting rules:
 - Use plain text only.
 - Do not use markdown symbols like **bold**, ###, checkboxes, or emojis.
 - Do not use strange symbols.
-- Do not include a separate Title, Titre, Título, or Titulo section inside the response.
-- The app creates the PDF title automatically, so start the response with the useful content.
-- Use clean section headings such as Overview, Strategy, Step-by-Step Plan, Examples, and Next Move.
-- In Spanish or French, translate the section headings naturally.
-- Use numbered lists for major steps.
-- Use hyphen bullets only for simple supporting points.
-- Keep headings short.
-- Avoid filler.
-- Do not end with a generic follow-up offer.
-- If creating a plan, make it practical and organized.
-- If answering a question, answer clearly first, then give deeper useful guidance.
-- If creating a document, make it look like a finished document.
-
-Suggested structure when useful:
-Title
-Overview
-Key Recommendations
-Step-by-Step Plan
-Examples or Template
-Common Mistakes to Avoid
-Next Move
+- Use short headings only when helpful.
+- Use numbered lists for rankings or steps.
+- Use hyphen bullets only when needed.
 
 Return only the finished response.
-`
-    });
+`;
+
+    let response;
+    let searched = false;
+    let fallbackUsed = false;
+
+    if (liveSearchNeeded) {
+      try {
+        response = await createResponse(client, {
+          model: searchModel,
+          input,
+          useSearch: true
+        });
+        searched = true;
+      } catch (searchError) {
+        console.error("Live search failed, falling back:", sanitize(searchError?.message));
+
+        response = await createResponse(client, {
+          model: normalModel,
+          input: `${input}
+
+Important: Live search was attempted but failed. Give the most useful answer possible and clearly avoid pretending to know live standings.`,
+          useSearch: false
+        });
+
+        fallbackUsed = true;
+      }
+    } else {
+      response = await createResponse(client, {
+        model: normalModel,
+        input,
+        useSearch: false
+      });
+    }
 
     res.json({
       title: "Chee Chai Chee Output",
       language: languageCode,
+      searched,
+      fallbackUsed,
+      fileRequested,
       content: response.output_text
     });
   } catch (error) {
