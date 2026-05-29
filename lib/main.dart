@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -322,17 +323,28 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   }
 
   String _makeFileName(String text) {
-    final words = RegExp(r'[A-Za-z0-9]+')
+    final stopWords = <String>{
+      'what', 'are', 'is', 'the', 'a', 'an', 'to', 'for', 'of', 'and',
+      'me', 'my', 'make', 'create', 'write', 'give', 'how', 'can', 'i',
+      'ways', 'five', 'please',
+      'haz', 'hazme', 'crea', 'crear', 'dame', 'para', 'una', 'un',
+      'el', 'la', 'los', 'las', 'de', 'y', 'como', 'qué', 'que',
+      'fais', 'moi', 'crée', 'creer', 'donne', 'pour', 'le', 'la',
+      'les', 'des', 'du', 'de', 'et', 'comment',
+    };
+
+    final words = RegExp(r'[A-Za-zÀ-ÿ0-9]+')
         .allMatches(text)
-        .map((match) => match.group(0)!)
-        .take(5)
+        .map((match) => match.group(0)!.toLowerCase())
+        .where((word) => !stopWords.contains(word))
+        .take(6)
         .toList();
 
     if (words.isEmpty) {
-      return 'Chee_Chai_Chee_Output.pdf';
+      return 'chee_chai_chee_${_selectedLanguage}.pdf';
     }
 
-    return '${words.join('_')}.pdf';
+    return '${words.join('_')}_${_selectedLanguage}.pdf';
   }
 
   String _cleanMarkdown(String text) {
@@ -756,6 +768,137 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     }
   }
 
+  String _localText({
+    required String en,
+    required String es,
+    required String fr,
+  }) {
+    switch (_selectedLanguage) {
+      case 'es':
+        return es;
+      case 'fr':
+        return fr;
+      default:
+        return en;
+    }
+  }
+
+  String get _copyLabel => _localText(
+        en: 'Copy',
+        es: 'Copiar',
+        fr: 'Copier',
+      );
+
+  String get _deleteLabel => _localText(
+        en: 'Delete',
+        es: 'Eliminar',
+        fr: 'Supprimer',
+      );
+
+  String get _clearAllLabel => _localText(
+        en: 'Clear All',
+        es: 'Borrar todo',
+        fr: 'Tout effacer',
+      );
+
+  String get _cancelLabel => _localText(
+        en: 'Cancel',
+        es: 'Cancelar',
+        fr: 'Annuler',
+      );
+
+  String get _copiedLabel => _localText(
+        en: 'Copied to clipboard.',
+        es: 'Copiado al portapapeles.',
+        fr: 'Copié dans le presse-papiers.',
+      );
+
+  String get _deletedLabel => _localText(
+        en: 'File deleted.',
+        es: 'Archivo eliminado.',
+        fr: 'Fichier supprimé.',
+      );
+
+  String get _clearedLabel => _localText(
+        en: 'Generated files cleared.',
+        es: 'Archivos generados borrados.',
+        fr: 'Fichiers générés effacés.',
+      );
+
+  String get _clearConfirmTitle => _localText(
+        en: 'Clear generated files?',
+        es: '¿Borrar archivos generados?',
+        fr: 'Effacer les fichiers générés ?',
+      );
+
+  String get _clearConfirmMessage => _localText(
+        en: 'This will remove all files from this session.',
+        es: 'Esto eliminará todos los archivos de esta sesión.',
+        fr: 'Cela supprimera tous les fichiers de cette session.',
+      );
+
+  Future<void> _copyFileText(GeneratedFile file) async {
+    await Clipboard.setData(
+      ClipboardData(text: _cleanDisplayText(file.content)),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(_copiedLabel)),
+    );
+  }
+
+  void _deleteFile(GeneratedFile file) {
+    setState(() {
+      _files.remove(file);
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(_deletedLabel)),
+    );
+  }
+
+  Future<void> _clearAllFiles() async {
+    if (_files.isEmpty) {
+      return;
+    }
+
+    final shouldClear = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(_clearConfirmTitle),
+          content: Text(_clearConfirmMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(_cancelLabel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(_clearAllLabel),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldClear != true) {
+      return;
+    }
+
+    setState(() {
+      _files.clear();
+    });
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(_clearedLabel)),
+    );
+  }
+
   void _showFile(GeneratedFile file) {
     showDialog(
       context: context,
@@ -769,6 +912,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             ),
           ),
           actions: [
+            TextButton(
+              onPressed: () => _copyFileText(file),
+              child: Text(_copyLabel),
+            ),
             TextButton(
               onPressed: () => _exportPdf(file),
               child: Text(_t.exportPdf),
@@ -989,15 +1136,28 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          t.generatedFiles,
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                t.generatedFiles,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: _clearAllFiles,
+              icon: const Icon(Icons.delete_sweep),
+              label: Text(_clearAllLabel),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         ..._files.map((file) {
+          final preview = _cleanDisplayText(file.content);
+
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(18),
@@ -1034,7 +1194,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        _cleanDisplayText(file.content),
+                        preview,
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: Colors.white70),
@@ -1045,6 +1205,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                 const SizedBox(width: 10),
                 Wrap(
                   spacing: 8,
+                  runSpacing: 8,
                   children: [
                     FilledButton(
                       onPressed: () => _showFile(file),
@@ -1053,6 +1214,17 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                     OutlinedButton(
                       onPressed: () => _exportPdf(file),
                       child: Text(t.pdf),
+                    ),
+                    OutlinedButton(
+                      onPressed: () => _copyFileText(file),
+                      child: Text(_copyLabel),
+                    ),
+                    TextButton(
+                      onPressed: () => _deleteFile(file),
+                      child: Text(
+                        _deleteLabel,
+                        style: const TextStyle(color: Colors.redAccent),
+                      ),
                     ),
                   ],
                 ),
