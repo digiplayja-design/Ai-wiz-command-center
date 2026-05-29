@@ -38,8 +38,6 @@ dependencies:
   pdf: ^3.12.0
   printing: ^5.14.3
   video_player: ^2.11.1
-  audioplayers: ^6.6.0
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -66,7 +64,6 @@ flutter:
     - assets/wizard_greeting_fr.mp4
     - assets/wizard_greeting_es.mp4
     - assets/wizard_greeting_en.mp4
-    - assets/chee_chai_entrance.wav
     - assets/wizard_greeting.mp4
 
   # To add assets to your application, add an assets section, like this:
