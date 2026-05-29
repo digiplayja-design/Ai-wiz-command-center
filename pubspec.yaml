@@ -64,7 +64,6 @@ flutter:
     - assets/wizard_greeting_fr.mp4
     - assets/wizard_greeting_es.mp4
     - assets/wizard_greeting_en.mp4
-    - assets/wizard_greeting.mp4
 
   # To add assets to your application, add an assets section, like this:
   # assets:
