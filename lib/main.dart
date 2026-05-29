@@ -700,37 +700,16 @@ class _TalkingWizardHostState extends State<TalkingWizardHost> {
       setState(() {
         _controller = controller;
         _loading = false;
+        _started = false;
+        _needsTap = true;
       });
-
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      try {
-        await controller.play();
-
-        await Future.delayed(const Duration(milliseconds: 900));
-
-        if (!controller.value.isPlaying) {
-          if (!mounted) return;
-          setState(() {
-            _needsTap = true;
-          });
-        } else {
-          if (!mounted) return;
-          setState(() {
-            _started = true;
-          });
-        }
-      } catch (_) {
-        if (!mounted) return;
-        setState(() {
-          _needsTap = true;
-        });
-      }
     } catch (error) {
       if (!mounted) return;
 
       setState(() {
         _loading = false;
+        _started = false;
+        _needsTap = false;
         _error = 'Chee Chai Chee could not load this language. Tap retry.';
       });
     }
@@ -748,10 +727,14 @@ class _TalkingWizardHostState extends State<TalkingWizardHost> {
     await _loadWizardVideo();
   }
 
-  Future<void> _playWizard() async {
+  void _playWizard() {
     final controller = _controller;
 
-    if (controller == null) {
+    if (controller == null || !controller.value.isInitialized) {
+      setState(() {
+        _started = false;
+        _needsTap = true;
+      });
       return;
     }
 
@@ -761,27 +744,35 @@ class _TalkingWizardHostState extends State<TalkingWizardHost> {
       _error = null;
     });
 
-    await controller.setVolume(1.0);
-    await controller.seekTo(Duration.zero);
-    await controller.play();
+    // Keep this direct and simple so iPad/Safari treats it as a real tap action.
+    controller.setVolume(1.0);
+    controller.seekTo(Duration.zero);
+
+    controller.play().then((_) {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!mounted) return;
+
+        final currentController = _controller;
+
+        if (currentController != null && !currentController.value.isPlaying) {
+          setState(() {
+            _started = false;
+            _needsTap = true;
+          });
+        }
+      });
+    }).catchError((_) {
+      if (!mounted) return;
+
+      setState(() {
+        _started = false;
+        _needsTap = true;
+      });
+    });
   }
 
-  Future<void> _replayWizard() async {
-    final controller = _controller;
-
-    if (controller == null) {
-      return;
-    }
-
-    setState(() {
-      _started = true;
-      _needsTap = false;
-      _error = null;
-    });
-
-    await controller.setVolume(1.0);
-    await controller.seekTo(Duration.zero);
-    await controller.play();
+  void _replayWizard() {
+    _playWizard();
   }
 
   @override
