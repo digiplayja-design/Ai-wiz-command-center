@@ -11,5 +11,6 @@
     "dotenv": "latest",
     "express": "latest",
     "openai": "latest"
-  }
+  },
+  "start": "node server.js"
 }
