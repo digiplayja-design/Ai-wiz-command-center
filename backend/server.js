@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import OpenAI from "openai";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
@@ -11,27 +12,43 @@ const port = process.env.PORT || 8787;
 app.use(cors());
 app.use(express.json({ limit: "5mb" }));
 
+const supabaseUrl = process.env.SUPABASE_URL || "";
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
+
+const supabaseAdmin =
+  supabaseUrl && supabaseServiceRoleKey
+    ? createClient(supabaseUrl, supabaseServiceRoleKey, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      })
+    : null;
+
 function sanitize(value) {
   const openAiKey = process.env.OPENAI_API_KEY || "";
 
   return String(value || "")
     .replace(openAiKey, "[hidden_openai_key]")
+    .replace(supabaseServiceRoleKey, "[hidden_supabase_service_role_key]")
+    .replace(supabaseAnonKey, "[hidden_supabase_anon_key]")
     .replace(/sk-[A-Za-z0-9_\-]+/g, "sk-[hidden]");
 }
 
 const languageMap = {
   en: {
     name: "English",
-    instruction: "Respond in polished English."
+    instruction: "Respond in polished English.",
   },
   es: {
     name: "Spanish",
-    instruction: "Respond in natural, polished Spanish."
+    instruction: "Respond in natural, polished Spanish.",
   },
   fr: {
     name: "French",
-    instruction: "Respond in natural, polished French."
-  }
+    instruction: "Respond in natural, polished French.",
+  },
 };
 
 function shouldUseLiveSearch(command) {
@@ -62,7 +79,7 @@ function shouldUseLiveSearch(command) {
     "weather",
     "president",
     "ceo",
-    "trending"
+    "trending",
   ];
 
   return liveKeywords.some((word) => lower.includes(word));
@@ -90,16 +107,305 @@ function wantsFile(command) {
     "document",
     "exporter",
     "télécharger",
-    "imprimable"
+    "imprimable",
   ];
 
   return fileWords.some((word) => lower.includes(word));
 }
 
-async function createResponse(client, { model, input, useSearch }) {
+function calculateCredits({ liveSearchNeeded, fileRequested }) {
+  if (fileRequested) return 3;
+  if (liveSearchNeeded) return 4;
+  return 1;
+}
+
+function getTierLimits(tier) {
+  const limits = {
+    basic: {
+      dailyRequestLimit: 3,
+      dailyCreditLimit: 3,
+      characterLimit: 1,
+      videoGenerationsMonthly: 0,
+      musicGenerationIncluded: false,
+    },
+    pro: {
+      dailyRequestLimit: 30,
+      dailyCreditLimit: 60,
+      characterLimit: 3,
+      videoGenerationsMonthly: 0,
+      musicGenerationIncluded: false,
+    },
+    ultra: {
+      dailyRequestLimit: 75,
+      dailyCreditLimit: 200,
+      characterLimit: 999,
+      videoGenerationsMonthly: 3,
+      musicGenerationIncluded: false,
+    },
+    enterprise: {
+      dailyRequestLimit: 250,
+      dailyCreditLimit: 1000,
+      characterLimit: 999,
+      videoGenerationsMonthly: 0,
+      musicGenerationIncluded: false,
+    },
+  };
+
+  return limits[tier] || limits.basic;
+}
+
+function getMonthKey(date = new Date()) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function getBearerToken(req) {
+  const header = req.headers.authorization || "";
+
+  if (!header.toLowerCase().startsWith("bearer ")) {
+    return null;
+  }
+
+  return header.slice(7).trim();
+}
+
+async function getAuthenticatedUser(req) {
+  if (!supabaseAdmin) {
+    return null;
+  }
+
+  const token = getBearerToken(req);
+
+  if (!token) {
+    return null;
+  }
+
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+
+  if (error || !data?.user) {
+    throw new Error("Invalid or expired session. Please sign in again.");
+  }
+
+  return data.user;
+}
+
+async function requireUser(req) {
+  const user = await getAuthenticatedUser(req);
+
+  if (!user) {
+    const error = new Error("Sign in required.");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  return user;
+}
+
+async function getOrCreateProfile(user) {
+  if (!supabaseAdmin || !user) {
+    return null;
+  }
+
+  const { data: existingProfile, error: selectError } = await supabaseAdmin
+    .from("user_profiles")
+    .select("*")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (selectError) {
+    throw selectError;
+  }
+
+  if (existingProfile) {
+    return existingProfile;
+  }
+
+  const { data: insertedProfile, error: insertError } = await supabaseAdmin
+    .from("user_profiles")
+    .insert({
+      id: user.id,
+      email: user.email,
+      tier: "basic",
+      selected_character: "chee_chai_chee",
+    })
+    .select("*")
+    .single();
+
+  if (insertError) {
+    throw insertError;
+  }
+
+  await supabaseAdmin.from("user_character_access").upsert({
+    user_id: user.id,
+    character_id: "chee_chai_chee",
+    granted_by: "basic_default",
+  });
+
+  return insertedProfile;
+}
+
+async function getOrCreateUsageCounter(userId) {
+  if (!supabaseAdmin || !userId) {
+    return null;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const monthKey = getMonthKey();
+
+  const { data: existing, error: selectError } = await supabaseAdmin
+    .from("usage_counters")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("usage_date", today)
+    .maybeSingle();
+
+  if (selectError) {
+    throw selectError;
+  }
+
+  if (existing) {
+    return existing;
+  }
+
+  const { data: inserted, error: insertError } = await supabaseAdmin
+    .from("usage_counters")
+    .insert({
+      user_id: userId,
+      usage_date: today,
+      month_key: monthKey,
+      standard_generations: 0,
+      live_search_generations: 0,
+      pdf_generations: 0,
+      video_generations: 0,
+      music_generations: 0,
+      credits_used: 0,
+    })
+    .select("*")
+    .single();
+
+  if (insertError) {
+    throw insertError;
+  }
+
+  return inserted;
+}
+
+function checkUsageAllowed({ profile, usageCounter, creditsNeeded }) {
+  if (!profile || !usageCounter) {
+    return {
+      allowed: true,
+      reason: null,
+    };
+  }
+
+  const tier = profile.tier || "basic";
+  const limits = getTierLimits(tier);
+
+  const totalRequests =
+    Number(usageCounter.standard_generations || 0) +
+    Number(usageCounter.live_search_generations || 0) +
+    Number(usageCounter.pdf_generations || 0);
+
+  const creditsUsed = Number(usageCounter.credits_used || 0);
+
+  if (totalRequests >= limits.dailyRequestLimit) {
+    return {
+      allowed: false,
+      reason: `Daily generation limit reached for your ${tier} plan.`,
+    };
+  }
+
+  if (creditsUsed + creditsNeeded > limits.dailyCreditLimit) {
+    return {
+      allowed: false,
+      reason: `Daily credit limit reached for your ${tier} plan.`,
+    };
+  }
+
+  return {
+    allowed: true,
+    reason: null,
+  };
+}
+
+async function incrementUsage({
+  usageCounter,
+  liveSearchUsed,
+  fileRequested,
+  creditsNeeded,
+}) {
+  if (!supabaseAdmin || !usageCounter) {
+    return null;
+  }
+
+  const updates = {
+    standard_generations:
+      Number(usageCounter.standard_generations || 0) +
+      (!liveSearchUsed && !fileRequested ? 1 : 0),
+    live_search_generations:
+      Number(usageCounter.live_search_generations || 0) +
+      (liveSearchUsed ? 1 : 0),
+    pdf_generations:
+      Number(usageCounter.pdf_generations || 0) + (fileRequested ? 1 : 0),
+    credits_used: Number(usageCounter.credits_used || 0) + creditsNeeded,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabaseAdmin
+    .from("usage_counters")
+    .update(updates)
+    .eq("id", usageCounter.id)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function saveGenerationHistory({
+  user,
+  profile,
+  command,
+  content,
+  languageCode,
+  fileRequested,
+  searched,
+  creditsNeeded,
+}) {
+  if (!supabaseAdmin || !user) {
+    return null;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("generation_history")
+    .insert({
+      user_id: user.id,
+      character_id: profile?.selected_character || "chee_chai_chee",
+      language: languageCode,
+      prompt: command,
+      response: content,
+      result_type: fileRequested ? "file" : "answer",
+      searched,
+      credits_used: creditsNeeded,
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function createOpenAIResponse(client, { model, input, useSearch }) {
   const request = {
     model,
-    input
+    input,
   };
 
   if (useSearch) {
@@ -112,35 +418,278 @@ async function createResponse(client, { model, input, useSearch }) {
 
 app.get("/", (req, res) => {
   res.json({
-    status: "Chee Chai Chee backend is running"
+    status: "Korlix AI backend is running",
   });
+});
+
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "Korlix AI backend is healthy",
+    supabaseConfigured: Boolean(supabaseAdmin),
+    openAIConfigured: Boolean(process.env.OPENAI_API_KEY),
+  });
+});
+
+app.get("/api/me", async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(500).json({
+        error: "Supabase is not configured on the backend.",
+      });
+    }
+
+    const user = await requireUser(req);
+    const profile = await getOrCreateProfile(user);
+
+    const { data: characters, error: charactersError } = await supabaseAdmin
+      .from("characters")
+      .select("*")
+      .order("sort_order", { ascending: true });
+
+    if (charactersError) {
+      throw charactersError;
+    }
+
+    const { data: characterAccess, error: accessError } = await supabaseAdmin
+      .from("user_character_access")
+      .select("*")
+      .eq("user_id", user.id);
+
+    if (accessError) {
+      throw accessError;
+    }
+
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+      },
+      profile,
+      characters: characters || [],
+      characterAccess: characterAccess || [],
+      limits: getTierLimits(profile?.tier || "basic"),
+    });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      error: sanitize(error?.message),
+    });
+  }
+});
+
+app.get("/api/history", async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(500).json({
+        error: "Supabase is not configured on the backend.",
+      });
+    }
+
+    const user = await requireUser(req);
+
+    const { data, error } = await supabaseAdmin
+      .from("generation_history")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({
+      history: data || [],
+    });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      error: sanitize(error?.message),
+    });
+  }
+});
+
+app.delete("/api/history/:id", async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(500).json({
+        error: "Supabase is not configured on the backend.",
+      });
+    }
+
+    const user = await requireUser(req);
+    const id = req.params.id;
+
+    const { error } = await supabaseAdmin
+      .from("generation_history")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({
+      success: true,
+    });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      error: sanitize(error?.message),
+    });
+  }
+});
+
+app.post("/api/reports", async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(500).json({
+        error: "Supabase is not configured on the backend.",
+      });
+    }
+
+    const user = await getAuthenticatedUser(req).catch(() => null);
+
+    const reason = String(req.body.reason || "").trim();
+    const details = String(req.body.details || "").trim();
+    const generationId = req.body.generation_id || null;
+
+    if (!reason) {
+      return res.status(400).json({
+        error: "Report reason is required.",
+      });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("reports")
+      .insert({
+        user_id: user?.id || null,
+        generation_id: generationId,
+        reason,
+        details,
+        status: "new",
+      })
+      .select("*")
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      report: data,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: sanitize(error?.message),
+    });
+  }
+});
+
+app.post("/api/account/delete-request", async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(500).json({
+        error: "Supabase is not configured on the backend.",
+      });
+    }
+
+    const user = await getAuthenticatedUser(req).catch(() => null);
+    const email = String(req.body.email || user?.email || "").trim();
+    const reason = String(req.body.reason || "").trim();
+
+    if (!user && !email) {
+      return res.status(400).json({
+        error: "Email is required for account deletion requests.",
+      });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("account_deletion_requests")
+      .insert({
+        user_id: user?.id || null,
+        email,
+        reason,
+        status: "requested",
+      })
+      .select("*")
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      request: data,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: sanitize(error?.message),
+    });
+  }
 });
 
 app.post("/api/generate", async (req, res) => {
   try {
-    const command = req.body.command;
+    const command = String(req.body.command || "").trim();
     const languageCode = req.body.language || "en";
     const language = languageMap[languageCode] || languageMap.en;
-    const liveSearchNeeded = shouldUseLiveSearch(command);
-    const fileRequested = wantsFile(command);
 
-    if (!command || command.trim().length === 0) {
+    if (!command) {
       return res.status(400).json({
-        error: "Command is required"
+        error: "Command is required",
       });
     }
 
     if (!process.env.OPENAI_API_KEY) {
       return res.status(400).json({
-        error: "Missing OPENAI_API_KEY in backend/.env"
+        error: "Missing OPENAI_API_KEY on backend.",
+      });
+    }
+
+    const liveSearchNeeded = shouldUseLiveSearch(command);
+    const fileRequested = wantsFile(command);
+    const creditsNeeded = calculateCredits({
+      liveSearchNeeded,
+      fileRequested,
+    });
+
+    let user = null;
+    let profile = null;
+    let usageCounter = null;
+    let updatedUsage = null;
+
+    try {
+      user = await getAuthenticatedUser(req);
+
+      if (user) {
+        profile = await getOrCreateProfile(user);
+        usageCounter = await getOrCreateUsageCounter(user.id);
+
+        const usageCheck = checkUsageAllowed({
+          profile,
+          usageCounter,
+          creditsNeeded,
+        });
+
+        if (!usageCheck.allowed) {
+          return res.status(429).json({
+            error: usageCheck.reason,
+            tier: profile?.tier || "basic",
+          });
+        }
+      }
+    } catch (authError) {
+      return res.status(401).json({
+        error: sanitize(authError?.message),
       });
     }
 
     const client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
+      apiKey: process.env.OPENAI_API_KEY,
     });
 
-    const normalModel = process.env.OPENAI_MODEL || "gpt-5.4-mini";
+    const normalModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
     const searchModel = process.env.OPENAI_SEARCH_MODEL || normalModel;
 
     const modeInstruction = fileRequested
@@ -171,11 +720,12 @@ This question does not require live search unless the user explicitly asks for c
 `;
 
     const input = `
-You are Chee Chai Chee, a premium multilingual AI assistant inside a productivity app.
+You are Korlix AI, a premium multilingual AI assistant platform powered by selectable AI characters.
 
-You are not just a PDF maker.
-You are not a search engine.
-You are not a generic chatbot.
+The current selected character is:
+Chee Chai Chee
+
+Chee Chai Chee is a dark cyber-mystic wizard character. His answers should feel powerful, direct, strategic, and useful. Do not be goofy. Do not sound childish.
 
 The user selected this language:
 ${language.name}
@@ -185,6 +735,9 @@ ${language.instruction}
 
 The user wrote:
 "${command}"
+
+User tier:
+${profile?.tier || "guest"}
 
 ${modeInstruction}
 
@@ -219,51 +772,88 @@ Return only the finished response.
 
     if (liveSearchNeeded) {
       try {
-        response = await createResponse(client, {
+        response = await createOpenAIResponse(client, {
           model: searchModel,
           input,
-          useSearch: true
+          useSearch: true,
         });
+
         searched = true;
       } catch (searchError) {
-        console.error("Live search failed, falling back:", sanitize(searchError?.message));
+        console.error(
+          "Live search failed, falling back:",
+          sanitize(searchError?.message)
+        );
 
-        response = await createResponse(client, {
+        response = await createOpenAIResponse(client, {
           model: normalModel,
           input: `${input}
 
 Important: Live search was attempted but failed. Give the most useful answer possible and clearly avoid pretending to know live standings.`,
-          useSearch: false
+          useSearch: false,
         });
 
         fallbackUsed = true;
       }
     } else {
-      response = await createResponse(client, {
+      response = await createOpenAIResponse(client, {
         model: normalModel,
         input,
-        useSearch: false
+        useSearch: false,
+      });
+    }
+
+    const content = String(response.output_text || "").trim();
+
+    if (!content) {
+      throw new Error("No AI content returned.");
+    }
+
+    let historyItem = null;
+
+    if (user) {
+      historyItem = await saveGenerationHistory({
+        user,
+        profile,
+        command,
+        content,
+        languageCode,
+        fileRequested,
+        searched,
+        creditsNeeded,
+      });
+
+      updatedUsage = await incrementUsage({
+        usageCounter,
+        liveSearchUsed: searched,
+        fileRequested,
+        creditsNeeded,
       });
     }
 
     res.json({
-      title: "Chee Chai Chee Output",
+      title: "Korlix AI Output",
       language: languageCode,
       searched,
       fallbackUsed,
       fileRequested,
-      content: response.output_text
+      authenticated: Boolean(user),
+      tier: profile?.tier || "guest",
+      creditsUsed: creditsNeeded,
+      usage: updatedUsage,
+      generationId: historyItem?.id || null,
+      content,
     });
   } catch (error) {
-    console.error("OpenAI error:", sanitize(error?.message));
+    console.error("AI generation error:", sanitize(error?.message));
 
     res.status(500).json({
       error: "AI generation failed",
-      details: sanitize(error?.message)
+      details: sanitize(error?.message),
     });
   }
 });
 
 app.listen(port, () => {
-  console.log(`Chee Chai Chee backend running on port ${port}`);
+  console.log(`Korlix AI backend running on port ${port}`);
 });
