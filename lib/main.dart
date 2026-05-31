@@ -39,7 +39,7 @@ class CheeChaiCheeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Chee Chai Chee',
+      title: 'Korlix AI',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -150,7 +150,7 @@ class AppLanguages {
       code: 'en',
       label: 'English',
       assetPath: 'assets/wizard_greeting_en.mp4',
-      appSubtitle: 'Ask anything. Create anything. Command Chee Chai Chee.',
+      appSubtitle: 'Choose your AI character. Ask anything. Create anything.',
       backendConnected: 'Backend connected',
       awaitingTitle: 'Chee Chai Chee awaits.',
       awaitingSubtitle: 'Tap once to awaken the wizard.',
@@ -198,7 +198,7 @@ class AppLanguages {
       code: 'es',
       label: 'Español',
       assetPath: 'assets/wizard_greeting_es.mp4',
-      appSubtitle: 'Pregunta cualquier cosa. Crea cualquier cosa. Ordena a Chee Chai Chee.',
+      appSubtitle: 'Elige tu personaje de IA. Pregunta cualquier cosa. Crea cualquier cosa.',
       backendConnected: 'Backend conectado',
       awaitingTitle: 'Chee Chai Chee espera.',
       awaitingSubtitle: 'Toca una vez para despertar al mago.',
@@ -246,7 +246,7 @@ class AppLanguages {
       code: 'fr',
       label: 'Français',
       assetPath: 'assets/wizard_greeting_fr.mp4',
-      appSubtitle: 'Posez n’importe quelle question. Créez n’importe quoi. Commandez Chee Chai Chee.',
+      appSubtitle: 'Choisissez votre personnage IA. Posez n’importe quelle question. Créez n’importe quoi.',
       backendConnected: 'Backend connecté',
       awaitingTitle: 'Chee Chai Chee attend.',
       awaitingSubtitle: 'Touchez une fois pour réveiller le sorcier.',
@@ -713,7 +713,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   pw.Text(
-                    'CHEE CHAI CHEE',
+                    'KORLIX AI',
                     style: pw.TextStyle(
                       fontSize: 9.5,
                       letterSpacing: 1.4,
@@ -926,13 +926,19 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                 padding: const EdgeInsets.fromLTRB(24, 28, 24, 40),
                 child: Column(
                   children: [
+                    Image.asset(
+                      'assets/branding/korlix_mini_mark.png',
+                      height: 72,
+                      fit: BoxFit.contain,
+                    ),
+                    const SizedBox(height: 12),
                     const Text(
-                      'CHEE CHAI CHEE',
+                      'KORLIX AI',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 44,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 4,
+                        fontSize: 42,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 4.2,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -965,6 +971,30 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0A2B3D).withOpacity(0.85),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: const Color(0xFF2EC7DF).withOpacity(0.45),
+                        ),
+                      ),
+                      child: const Text(
+                        'Current Character: Chee Chai Chee',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(0xFF69D9E8),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 24),
                     TalkingWizardHost(
                       selectedLanguage: _selectedLanguage,
@@ -990,8 +1020,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(26),
+        color: Colors.white.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(28),
         border: Border.all(
           color: Colors.cyanAccent.withOpacity(0.35),
         ),
@@ -1024,7 +1054,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
               hintText: t.commandHint,
               hintStyle: const TextStyle(color: Colors.white54),
               filled: true,
-              fillColor: Colors.black.withOpacity(0.35),
+              fillColor: Colors.black.withOpacity(0.48),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(18),
                 borderSide: BorderSide.none,
@@ -1036,6 +1066,16 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             width: double.infinity,
             height: 58,
             child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1B1024),
+                foregroundColor: const Color(0xFFE9D5FF),
+                disabledBackgroundColor: const Color(0xFF4B5563),
+                disabledForegroundColor: Colors.white70,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
               onPressed: _loading ? null : _generate,
               icon: _loading
                   ? const SizedBox(
@@ -1121,8 +1161,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(18),
+        color: Colors.white.withOpacity(0.09),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: Colors.white.withOpacity(0.15),
         ),
