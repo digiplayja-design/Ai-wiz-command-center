@@ -1018,25 +1018,43 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     final t = _t;
     final hasText = _controller.text.trim().isNotEmpty;
 
+    final scrollTitle = switch (_selectedLanguage) {
+      'es' => '¿Qué deseas saber?',
+      'fr' => 'Que souhaitez-vous savoir ?',
+      _ => 'What do you seek?',
+    };
+
+    final scrollHint = switch (_selectedLanguage) {
+      'es' => 'Escribe tu solicitud...',
+      'fr' => 'Saisissez votre demande...',
+      _ => 'Type your request...',
+    };
+
+    final doneText = switch (_selectedLanguage) {
+      'es' => 'Considéralo hecho.',
+      'fr' => 'Considérez que c’est fait.',
+      _ => 'Consider it done.',
+    };
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 22),
       decoration: BoxDecoration(
-        color: const Color(0xFF0A2B3D).withOpacity(0.72),
+        color: const Color(0xFF071B27).withOpacity(0.74),
         borderRadius: BorderRadius.circular(30),
         border: Border.all(
-          color: const Color(0xFF2EC7DF).withOpacity(0.45),
+          color: const Color(0xFF2EC7DF).withOpacity(0.42),
           width: 1.1,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF2EC7DF).withOpacity(0.12),
+            color: const Color(0xFF2EC7DF).withOpacity(0.14),
             blurRadius: 34,
             spreadRadius: 3,
           ),
           BoxShadow(
-            color: Colors.black.withOpacity(0.35),
-            blurRadius: 22,
-            offset: const Offset(0, 12),
+            color: Colors.black.withOpacity(0.42),
+            blurRadius: 24,
+            offset: const Offset(0, 14),
           ),
         ],
       ),
@@ -1048,114 +1066,210 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             textAlign: TextAlign.left,
             style: const TextStyle(
               fontSize: 22,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w900,
               letterSpacing: 0.2,
               color: Color(0xFFE4EBEE),
             ),
           ),
           const SizedBox(height: 14),
 
-          // Text box + submit button on the right.
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _controller,
-                  minLines: 2,
-                  maxLines: 4,
-                  cursorColor: const Color(0xFF69D9E8),
-                  onChanged: (_) => setState(() {}),
-                  onSubmitted: (_) {
-                    if (!_loading && _controller.text.trim().isNotEmpty) {
-                      _generate();
-                    }
-                  },
-                  style: const TextStyle(
-                    fontSize: 16,
-                    height: 1.35,
-                    color: Color(0xFFE4EBEE),
-                    fontWeight: FontWeight.w500,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: t.commandHint,
-                    hintStyle: TextStyle(
-                      color: const Color(0xFFA9C6CF).withOpacity(0.70),
-                      fontSize: 16,
-                      height: 1.35,
-                    ),
-                    filled: true,
-                    fillColor: const Color(0xFF071B27).withOpacity(0.92),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 18,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide(
-                        color: Colors.white.withOpacity(0.06),
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF2EC7DF),
-                        width: 1.2,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 62,
-                height: 62,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    backgroundColor: hasText
-                        ? const Color(0xFF140B1F)
-                        : const Color(0xFF334155),
-                    foregroundColor: const Color(0xFFE9D5FF),
-                    disabledBackgroundColor: const Color(0xFF334155),
-                    disabledForegroundColor: Colors.white54,
-                    elevation: 0,
-                    side: BorderSide(
-                      color: hasText
-                          ? const Color(0xFF69D9E8).withOpacity(0.70)
-                          : Colors.white12,
-                      width: 1,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                  ),
-                  onPressed: (_loading || !hasText) ? null : _generate,
-                  child: _loading
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Color(0xFFE9D5FF),
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 430),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: AspectRatio(
+                  aspectRatio: 9 / 16,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final w = constraints.maxWidth;
+                      final h = constraints.maxHeight;
+
+                      return Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.asset(
+                            _loading
+                                ? 'assets/characters/chee_chai_chee/workers/scroll_done_scene.png'
+                                : 'assets/characters/chee_chai_chee/workers/scroll_ask_scene.png',
+                            fit: BoxFit.cover,
                           ),
-                        )
-                      : const Icon(
-                          Icons.arrow_upward_rounded,
-                          size: 30,
-                        ),
+
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.black.withOpacity(0.02),
+                                  Colors.black.withOpacity(0.10),
+                                  Colors.black.withOpacity(0.30),
+                                ],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
+                            ),
+                          ),
+
+                          if (!_loading) ...[
+                            Positioned(
+                              left: w * 0.11,
+                              right: w * 0.11,
+                              top: h * 0.41,
+                              child: Text(
+                                scrollTitle,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Color(0xFF071B27),
+                                  fontSize: 19,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.2,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.white70,
+                                      blurRadius: 8,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            Positioned(
+                              left: w * 0.10,
+                              right: w * 0.10,
+                              top: h * 0.54,
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _controller,
+                                      minLines: 1,
+                                      maxLines: 3,
+                                      cursorColor: const Color(0xFF071B27),
+                                      onChanged: (_) => setState(() {}),
+                                      onSubmitted: (_) {
+                                        if (!_loading &&
+                                            _controller.text.trim().isNotEmpty) {
+                                          _generate();
+                                        }
+                                      },
+                                      style: const TextStyle(
+                                        fontSize: 14.5,
+                                        height: 1.25,
+                                        color: Color(0xFF071B27),
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                      decoration: InputDecoration(
+                                        hintText: scrollHint,
+                                        hintStyle: TextStyle(
+                                          color: const Color(0xFF071B27)
+                                              .withOpacity(0.60),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        filled: true,
+                                        fillColor: Colors.white.withOpacity(0.78),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                          horizontal: 13,
+                                          vertical: 12,
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(999),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  SizedBox(
+                                    width: 48,
+                                    height: 48,
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        padding: EdgeInsets.zero,
+                                        backgroundColor: hasText
+                                            ? const Color(0xFF0A2B3D)
+                                            : Colors.grey.shade700,
+                                        foregroundColor:
+                                            const Color(0xFF69D9E8),
+                                        disabledBackgroundColor:
+                                            Colors.grey.shade700,
+                                        disabledForegroundColor:
+                                            Colors.white38,
+                                        elevation: 0,
+                                        side: BorderSide(
+                                          color: hasText
+                                              ? const Color(0xFF69D9E8)
+                                              : Colors.white24,
+                                          width: 1,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                        ),
+                                      ),
+                                      onPressed: hasText ? _generate : null,
+                                      child: const Icon(
+                                        Icons.arrow_upward_rounded,
+                                        size: 28,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+
+                          if (_loading) ...[
+                            Positioned(
+                              left: w * 0.34,
+                              right: w * 0.08,
+                              top: h * 0.43,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.30),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: const Color(0xFFFFE2A8)
+                                        .withOpacity(0.70),
+                                  ),
+                                ),
+                                child: Text(
+                                  doneText,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Color(0xFFFFE2A8),
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1.1,
+                                    shadows: [
+                                      Shadow(
+                                        color: Colors.black,
+                                        blurRadius: 8,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
-            ],
+            ),
           ),
 
-          // Matrix effect appears under the text box row while loading.
           if (_loading) ...[
             const SizedBox(height: 14),
             MatrixThinkingPanel(message: t.matrixMessage),
           ],
 
-          // Quick actions stay underneath.
           const SizedBox(height: 16),
           Wrap(
             spacing: 10,
@@ -1201,6 +1315,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       ),
     );
   }
+
 
   Widget _buildResults() {
     final t = _t;
