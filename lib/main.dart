@@ -1016,84 +1016,146 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
 
   Widget _buildCommandPanel() {
     final t = _t;
+    final hasText = _controller.text.trim().isNotEmpty;
 
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(28),
+        color: const Color(0xFF0A2B3D).withOpacity(0.72),
+        borderRadius: BorderRadius.circular(30),
         border: Border.all(
-          color: Colors.cyanAccent.withOpacity(0.35),
+          color: const Color(0xFF2EC7DF).withOpacity(0.45),
+          width: 1.1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.cyanAccent.withOpacity(0.10),
-            blurRadius: 36,
-            spreadRadius: 4,
+            color: const Color(0xFF2EC7DF).withOpacity(0.12),
+            blurRadius: 34,
+            spreadRadius: 3,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.35),
+            blurRadius: 22,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              t.askCreateTitle,
-              style: const TextStyle(
-                fontSize: 21,
-                fontWeight: FontWeight.bold,
-              ),
+          Text(
+            t.askCreateTitle,
+            textAlign: TextAlign.left,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.2,
+              color: Color(0xFFE4EBEE),
             ),
           ),
           const SizedBox(height: 14),
-          TextField(
-            controller: _controller,
-            minLines: 2,
-            maxLines: 4,
-            decoration: InputDecoration(
-              hintText: t.commandHint,
-              hintStyle: const TextStyle(color: Colors.white54),
-              filled: true,
-              fillColor: Colors.black.withOpacity(0.48),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            height: 58,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1B1024),
-                foregroundColor: const Color(0xFFE9D5FF),
-                disabledBackgroundColor: const Color(0xFF4B5563),
-                disabledForegroundColor: Colors.white70,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
+
+          // Text box + submit button on the right.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _controller,
+                  minLines: 2,
+                  maxLines: 4,
+                  cursorColor: const Color(0xFF69D9E8),
+                  onChanged: (_) => setState(() {}),
+                  onSubmitted: (_) {
+                    if (!_loading && _controller.text.trim().isNotEmpty) {
+                      _generate();
+                    }
+                  },
+                  style: const TextStyle(
+                    fontSize: 16,
+                    height: 1.35,
+                    color: Color(0xFFE4EBEE),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: t.commandHint,
+                    hintStyle: TextStyle(
+                      color: const Color(0xFFA9C6CF).withOpacity(0.70),
+                      fontSize: 16,
+                      height: 1.35,
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFF071B27).withOpacity(0.92),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 18,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide(
+                        color: Colors.white.withOpacity(0.06),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF2EC7DF),
+                        width: 1.2,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-              onPressed: _loading ? null : _generate,
-              icon: _loading
-                  ? const SizedBox(
-                      width: 21,
-                      height: 21,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.auto_awesome),
-              label: Text(
-                _loading ? t.thinkingButton : t.askButton,
-                style: const TextStyle(fontSize: 19),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 62,
+                height: 62,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    backgroundColor: hasText
+                        ? const Color(0xFF140B1F)
+                        : const Color(0xFF334155),
+                    foregroundColor: const Color(0xFFE9D5FF),
+                    disabledBackgroundColor: const Color(0xFF334155),
+                    disabledForegroundColor: Colors.white54,
+                    elevation: 0,
+                    side: BorderSide(
+                      color: hasText
+                          ? const Color(0xFF69D9E8).withOpacity(0.70)
+                          : Colors.white12,
+                      width: 1,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
+                  onPressed: (_loading || !hasText) ? null : _generate,
+                  child: _loading
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFFE9D5FF),
+                          ),
+                        )
+                      : const Icon(
+                          Icons.arrow_upward_rounded,
+                          size: 30,
+                        ),
+                ),
               ),
-            ),
+            ],
           ),
+
+          // Matrix effect appears under the text box row while loading.
           if (_loading) ...[
             const SizedBox(height: 14),
             MatrixThinkingPanel(message: t.matrixMessage),
           ],
+
+          // Quick actions stay underneath.
           const SizedBox(height: 16),
           Wrap(
             spacing: 10,
@@ -1102,16 +1164,37 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             children: t.quickActions.map((action) {
               return ActionChip(
                 label: Text(action.label),
+                labelStyle: TextStyle(
+                  color: _loading
+                      ? Colors.white38
+                      : const Color(0xFFE4EBEE),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+                backgroundColor: const Color(0xFF120D18),
+                disabledColor: Colors.black.withOpacity(0.25),
+                side: BorderSide(
+                  color: _loading
+                      ? Colors.white10
+                      : const Color(0xFF2EC7DF).withOpacity(0.34),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 onPressed: _loading ? null : () => _useQuickAction(action),
               );
             }).toList(),
           ),
+
           if (_error != null) ...[
             const SizedBox(height: 14),
             Text(
               _error!,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.redAccent),
+              style: const TextStyle(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ],
@@ -1519,25 +1602,22 @@ class _TalkingWizardHostState extends State<TalkingWizardHost> {
           width: 365,
           constraints: const BoxConstraints(maxWidth: 365),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(
-              color: Colors.cyanAccent.withOpacity(0.26),
-            ),
+            borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: Colors.cyanAccent.withOpacity(0.24),
-                blurRadius: 58,
-                spreadRadius: 5,
+                color: const Color(0xFF2EC7DF).withOpacity(0.18),
+                blurRadius: 72,
+                spreadRadius: 2,
               ),
               BoxShadow(
-                color: Colors.purpleAccent.withOpacity(0.24),
-                blurRadius: 90,
-                spreadRadius: 16,
+                color: Colors.purpleAccent.withOpacity(0.18),
+                blurRadius: 110,
+                spreadRadius: 10,
               ),
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(22),
             child: AspectRatio(
               aspectRatio: 9 / 16,
               child: Stack(
