@@ -548,6 +548,41 @@ app.post("/api/auth/signin", async (req, res) => {
 });
 
 
+
+app.get("/api/supabase-diagnostics", async (req, res) => {
+  try {
+    const healthUrl = `${supabaseUrl}/auth/v1/health`;
+
+    const response = await fetch(healthUrl, {
+      method: "GET",
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${supabaseAnonKey}`,
+      },
+    });
+
+    const body = await response.text();
+
+    res.json({
+      ok: response.ok,
+      status: response.status,
+      statusText: response.statusText,
+      supabaseHost: new URL(supabaseUrl).host,
+      bodyPreview: body.slice(0, 300),
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      supabaseHost: supabaseUrl ? new URL(supabaseUrl).host : null,
+      errorName: error?.name || null,
+      errorMessage: sanitize(error?.message || ""),
+      errorCode: error?.code || error?.cause?.code || null,
+      errorCause: sanitize(error?.cause?.message || ""),
+    });
+  }
+});
+
+
 app.get("/", (req, res) => {
   res.json({
     status: "Korlix AI backend is running",
