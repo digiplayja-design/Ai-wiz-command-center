@@ -26,6 +26,16 @@ const supabaseAdmin =
       })
     : null;
 
+const supabaseAuth =
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      })
+    : null;
+
 function sanitize(value) {
   const openAiKey = process.env.OPENAI_API_KEY || "";
 
@@ -415,6 +425,120 @@ async function createOpenAIResponse(client, { model, input, useSearch }) {
 
   return client.responses.create(request);
 }
+
+
+app.post("/api/auth/signup", async (req, res) => {
+  try {
+    if (!supabaseAuth) {
+      return res.status(500).json({
+        error: "Supabase auth is not configured on the backend.",
+      });
+    }
+
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const password = String(req.body.password || "").trim();
+
+    if (!email || !password) {
+      return res.status(400).json({
+        error: "Email and password are required.",
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        error: "Password must be at least 6 characters.",
+      });
+    }
+
+    const { data, error } = await supabaseAuth.auth.signUp({
+      email,
+      password,
+    });
+
+    if (error) {
+      return res.status(error.status || 400).json({
+        error: sanitize(error.message),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: data.session
+        ? "Account created and signed in."
+        : "Account created. Check your email to confirm your account, then sign in.",
+      user: data.user
+        ? {
+            id: data.user.id,
+            email: data.user.email,
+          }
+        : null,
+      session: data.session
+        ? {
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+            expires_at: data.session.expires_at,
+          }
+        : null,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: sanitize(error?.message),
+    });
+  }
+});
+
+app.post("/api/auth/signin", async (req, res) => {
+  try {
+    if (!supabaseAuth) {
+      return res.status(500).json({
+        error: "Supabase auth is not configured on the backend.",
+      });
+    }
+
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const password = String(req.body.password || "").trim();
+
+    if (!email || !password) {
+      return res.status(400).json({
+        error: "Email and password are required.",
+      });
+    }
+
+    const { data, error } = await supabaseAuth.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      return res.status(error.status || 400).json({
+        error: sanitize(error.message),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Signed in.",
+      user: data.user
+        ? {
+            id: data.user.id,
+            email: data.user.email,
+          }
+        : null,
+      session: data.session
+        ? {
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+            expires_at: data.session.expires_at,
+          }
+        : null,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: sanitize(error?.message),
+    });
+  }
+});
+
 
 app.get("/", (req, res) => {
   res.json({
