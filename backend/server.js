@@ -12,9 +12,17 @@ const port = process.env.PORT || 8787;
 app.use(cors());
 app.use(express.json({ limit: "5mb" }));
 
-const supabaseUrl = process.env.SUPABASE_URL || "";
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
+function normalizeSupabaseUrl(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\/rest\/v1\/?$/i, "")
+    .replace(/\/auth\/v1\/?$/i, "")
+    .replace(/\/+$/g, "");
+}
+
+const supabaseUrl = normalizeSupabaseUrl(process.env.SUPABASE_URL);
+const supabaseServiceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+const supabaseAnonKey = String(process.env.SUPABASE_ANON_KEY || "").trim();
 
 const supabaseAdmin =
   supabaseUrl && supabaseServiceRoleKey
@@ -547,9 +555,19 @@ app.get("/", (req, res) => {
 });
 
 app.get("/api/health", (req, res) => {
+  let supabaseHost = null;
+
+  try {
+    supabaseHost = supabaseUrl ? new URL(supabaseUrl).host : null;
+  } catch (_) {
+    supabaseHost = "invalid-url";
+  }
+
   res.json({
     status: "Korlix AI backend is healthy",
     supabaseConfigured: Boolean(supabaseAdmin),
+    supabaseAuthConfigured: Boolean(supabaseAuth),
+    supabaseHost,
     openAIConfigured: Boolean(process.env.OPENAI_API_KEY),
   });
 });
