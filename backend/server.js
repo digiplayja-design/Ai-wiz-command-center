@@ -636,12 +636,15 @@ app.get("/api/me", async (req, res) => {
       throw accessError;
     }
 
+    const usageCounter = await getOrCreateUsageCounter(user.id);
+
     res.json({
       user: {
         id: user.id,
         email: user.email,
       },
       profile,
+      usage: usageCounter,
       characters: characters || [],
       characterAccess: characterAccess || [],
       limits: getTierLimits(profile?.tier || "basic"),

@@ -115,6 +115,16 @@ class _AuthGateState extends State<AuthGate> {
     return Stack(
       children: [
         const CommandCenterScreen(),
+        const Positioned(
+          top: 8,
+          left: 8,
+          child: SafeArea(
+            child: Material(
+              color: Colors.transparent,
+              child: KorlixAccountButton(),
+            ),
+          ),
+        ),
         Positioned(
           top: 8,
           right: 8,
@@ -414,6 +424,308 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class KorlixAccountButton extends StatefulWidget {
+  const KorlixAccountButton({super.key});
+
+  @override
+  State<KorlixAccountButton> createState() => _KorlixAccountButtonState();
+}
+
+class _KorlixAccountButtonState extends State<KorlixAccountButton> {
+  bool _loading = false;
+
+  Map<String, String> _headers() {
+    final headers = <String, String>{'Content-Type': 'application/json'};
+
+    if (kKorlixAccessToken != null && kKorlixAccessToken!.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $kKorlixAccessToken';
+    }
+
+    return headers;
+  }
+
+  String _cleanError(Object error) {
+    return error.toString().replaceFirst('Exception: ', '');
+  }
+
+  int _asInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  Future<void> _openPanel() async {
+    if (_loading) {
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+    });
+
+    try {
+      final meResponse = await http.get(
+        Uri.parse('$kKorlixBackendBaseUrl/api/me'),
+        headers: _headers(),
+      );
+
+      final historyResponse = await http.get(
+        Uri.parse('$kKorlixBackendBaseUrl/api/history'),
+        headers: _headers(),
+      );
+
+      final meData = jsonDecode(meResponse.body) as Map<String, dynamic>;
+      final historyData =
+          jsonDecode(historyResponse.body) as Map<String, dynamic>;
+
+      if (meResponse.statusCode >= 400) {
+        throw Exception(meData['error'] ?? 'Could not load account.');
+      }
+
+      if (historyResponse.statusCode >= 400) {
+        throw Exception(historyData['error'] ?? 'Could not load history.');
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      final profile =
+          (meData['profile'] as Map?)?.cast<String, dynamic>() ??
+          <String, dynamic>{};
+      final usage =
+          (meData['usage'] as Map?)?.cast<String, dynamic>() ??
+          <String, dynamic>{};
+      final limits =
+          (meData['limits'] as Map?)?.cast<String, dynamic>() ??
+          <String, dynamic>{};
+      final history = (historyData['history'] as List?) ?? [];
+
+      final tier = (profile['tier'] ?? 'basic').toString();
+      final dailyLimit = _asInt(limits['dailyRequestLimit']);
+      final usedToday =
+          _asInt(usage['standard_generations']) +
+          _asInt(usage['live_search_generations']) +
+          _asInt(usage['pdf_generations']);
+      final remaining = dailyLimit <= 0
+          ? 0
+          : ((dailyLimit - usedToday) < 0 ? 0 : dailyLimit - usedToday);
+
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: const Color(0xFF071B27),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        builder: (context) {
+          return SafeArea(
+            child: DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.78,
+              minChildSize: 0.45,
+              maxChildSize: 0.92,
+              builder: (context, controller) {
+                return ListView(
+                  controller: controller,
+                  padding: const EdgeInsets.all(22),
+                  children: [
+                    Row(
+                      children: [
+                        Image.asset(
+                          'assets/branding/korlix_mini_mark.png',
+                          height: 38,
+                          fit: BoxFit.contain,
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            'Korlix Account',
+                            style: TextStyle(
+                              color: Color(0xFFE4EBEE),
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.25),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: const Color(0xFF2EC7DF).withOpacity(0.35),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${tier.toUpperCase()} PLAN',
+                            style: const TextStyle(
+                              color: Color(0xFF69D9E8),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            dailyLimit > 0
+                                ? '$remaining of $dailyLimit daily generations remaining'
+                                : 'Custom usage limits',
+                            style: const TextStyle(
+                              color: Color(0xFFE4EBEE),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Signed in as ${kKorlixUserEmail ?? 'Korlix user'}',
+                            style: const TextStyle(
+                              color: Color(0xFFA9C6CF),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    const Text(
+                      'Saved History',
+                      style: TextStyle(
+                        color: Color(0xFFE4EBEE),
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    if (history.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.22),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white10),
+                        ),
+                        child: const Text(
+                          'No saved generations yet.',
+                          style: TextStyle(color: Color(0xFFA9C6CF)),
+                        ),
+                      )
+                    else
+                      ...history.take(20).map((item) {
+                        final row = (item as Map).cast<String, dynamic>();
+                        final prompt = (row['prompt'] ?? '').toString();
+                        final response = (row['response'] ?? '').toString();
+                        final resultType = (row['result_type'] ?? 'answer')
+                            .toString()
+                            .toUpperCase();
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.22),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: const Color(0xFF2EC7DF).withOpacity(0.22),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                resultType,
+                                style: const TextStyle(
+                                  color: Color(0xFF69D9E8),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.7,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                prompt,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Color(0xFFE4EBEE),
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                response,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Color(0xFFA9C6CF),
+                                  fontSize: 13,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                  ],
+                );
+              },
+            ),
+          );
+        },
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_cleanError(error)),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      onPressed: _loading ? null : _openPanel,
+      icon: _loading
+          ? const SizedBox(
+              width: 17,
+              height: 17,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Color(0xFF69D9E8),
+              ),
+            )
+          : const Icon(Icons.history_rounded, size: 18),
+      label: const Text('History'),
+      style: TextButton.styleFrom(
+        foregroundColor: const Color(0xFFE4EBEE),
+        backgroundColor: Colors.black.withOpacity(0.32),
       ),
     );
   }
