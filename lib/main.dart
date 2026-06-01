@@ -785,6 +785,272 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     );
   }
 
+  int _tierRank(String tier) {
+    switch (tier) {
+      case 'enterprise':
+        return 4;
+      case 'ultra':
+        return 3;
+      case 'pro':
+        return 2;
+      default:
+        return 1;
+    }
+  }
+
+  Color _tierAccent(String tier) {
+    switch (tier) {
+      case 'enterprise':
+        return const Color(0xFFE4EBEE);
+      case 'ultra':
+        return const Color(0xFFFFD166);
+      case 'pro':
+        return const Color(0xFFB794F4);
+      default:
+        return const Color(0xFF69D9E8);
+    }
+  }
+
+  String _tierLabel(String tier) {
+    switch (tier) {
+      case 'enterprise':
+        return 'Enterprise';
+      case 'ultra':
+        return 'Ultra Premium';
+      case 'pro':
+        return 'Pro';
+      default:
+        return 'Basic';
+    }
+  }
+
+  Future<void> _openCharactersPanel({
+    required String currentTier,
+    required List<dynamic> characters,
+    required List<dynamic> characterAccess,
+  }) async {
+    final accessIds = characterAccess
+        .whereType<Map>()
+        .map((item) => item['character_id']?.toString())
+        .whereType<String>()
+        .toSet();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF071B27),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.86,
+            minChildSize: 0.45,
+            maxChildSize: 0.95,
+            builder: (context, controller) {
+              return ListView(
+                controller: controller,
+                padding: const EdgeInsets.all(22),
+                children: [
+                  Row(
+                    children: [
+                      Image.asset(
+                        'assets/branding/korlix_mini_mark.png',
+                        height: 38,
+                        fit: BoxFit.contain,
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          'Korlix Characters',
+                          style: TextStyle(
+                            color: Color(0xFFE4EBEE),
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Choose your AI character. Chee Chai Chee is active now. More Korlix AI characters will unlock by tier as they are released.',
+                    style: TextStyle(
+                      color: Color(0xFFA9C6CF),
+                      fontSize: 13,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  ...characters.map((raw) {
+                    final character = (raw as Map).cast<String, dynamic>();
+                    final id = character['id']?.toString() ?? '';
+                    final name =
+                        character['name']?.toString() ?? 'Korlix Character';
+                    final description =
+                        character['description']?.toString() ?? '';
+                    final tierRequired =
+                        character['tier_required']?.toString() ?? 'basic';
+                    final isActive = character['is_active'] == true;
+                    final comingSoon = character['is_coming_soon'] == true;
+                    final selected = id == 'chee_chai_chee';
+                    final tierAllows =
+                        _tierRank(currentTier) >= _tierRank(tierRequired);
+                    final explicitlyGranted = accessIds.contains(id);
+                    final available =
+                        isActive && (tierAllows || explicitlyGranted);
+                    final accent = _tierAccent(tierRequired);
+
+                    String status;
+                    IconData icon;
+
+                    if (selected) {
+                      status = 'Selected';
+                      icon = Icons.auto_awesome;
+                    } else if (comingSoon) {
+                      status = 'Coming soon';
+                      icon = Icons.hourglass_top_rounded;
+                    } else if (available) {
+                      status = 'Available';
+                      icon = Icons.lock_open_rounded;
+                    } else {
+                      status = 'Locked';
+                      icon = Icons.lock_rounded;
+                    }
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.24),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: selected
+                              ? const Color(0xFF69D9E8).withOpacity(0.78)
+                              : accent.withOpacity(0.30),
+                          width: selected ? 1.3 : 1,
+                        ),
+                        boxShadow: [
+                          if (selected)
+                            BoxShadow(
+                              color: const Color(0xFF69D9E8).withOpacity(0.18),
+                              blurRadius: 22,
+                              spreadRadius: 2,
+                            ),
+                        ],
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: accent.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(15),
+                              border: Border.all(
+                                color: accent.withOpacity(0.45),
+                              ),
+                            ),
+                            child: Icon(icon, color: accent, size: 24),
+                          ),
+                          const SizedBox(width: 13),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        name,
+                                        style: const TextStyle(
+                                          color: Color(0xFFE4EBEE),
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 9,
+                                        vertical: 5,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: accent.withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
+                                        border: Border.all(
+                                          color: accent.withOpacity(0.40),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        status,
+                                        style: const TextStyle(
+                                          color: Color(0xFFE4EBEE),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 5),
+                                Text(
+                                  description,
+                                  style: const TextStyle(
+                                    color: Color(0xFFA9C6CF),
+                                    fontSize: 12.5,
+                                    height: 1.3,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Required tier: ${_tierLabel(tierRequired)}',
+                                  style: TextStyle(
+                                    color: accent,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0A2B3D).withOpacity(0.72),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: const Color(0xFF2EC7DF).withOpacity(0.28),
+                      ),
+                    ),
+                    child: const Text(
+                      'Character switching will activate as more Korlix AI characters are released. Basic users keep one character, Pro users access up to three, Ultra Premium users access all 9+, and Enterprise users receive all available characters plus custom/team controls.',
+                      style: TextStyle(
+                        color: Color(0xFFA9C6CF),
+                        fontSize: 12.5,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _openPlansPanel({required String currentTier}) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -1053,6 +1319,8 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
           (meData['limits'] as Map?)?.cast<String, dynamic>() ??
           <String, dynamic>{};
       final history = (historyData['history'] as List?) ?? [];
+      final characters = (meData['characters'] as List?) ?? [];
+      final characterAccess = (meData['characterAccess'] as List?) ?? [];
 
       final tier = (profile['tier'] ?? 'basic').toString();
       final dailyLimit = _asInt(limits['dailyRequestLimit']);
@@ -1154,6 +1422,24 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       label: const Text('View plans / upgrade'),
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF143B4A),
+                        foregroundColor: const Color(0xFFE4EBEE),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+                    FilledButton.icon(
+                      onPressed: () => _openCharactersPanel(
+                        currentTier: tier,
+                        characters: characters,
+                        characterAccess: characterAccess,
+                      ),
+                      icon: const Icon(Icons.groups_rounded),
+                      label: const Text('View characters'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF0A2B3D),
                         foregroundColor: const Color(0xFFE4EBEE),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(999),
