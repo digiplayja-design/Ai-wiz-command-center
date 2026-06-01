@@ -4,8 +4,6 @@ import dotenv from "dotenv";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import multer from "multer";
-import pdfParse from "pdf-parse";
-import mammoth from "mammoth";
 
 dotenv.config();
 
@@ -501,6 +499,22 @@ function getUploadMimeType(file) {
   return "application/octet-stream";
 }
 
+
+async function loadPdfParse() {
+  try {
+    const mod = await import("pdf-parse/lib/pdf-parse.js");
+    return mod.default || mod;
+  } catch (_) {
+    const mod = await import("pdf-parse");
+    return mod.default || mod;
+  }
+}
+
+async function loadMammoth() {
+  const mod = await import("mammoth");
+  return mod.default || mod;
+}
+
 async function extractUploadedDocumentText(file) {
   const fileName = String(file.originalname || "").toLowerCase();
   const mimeType = String(file.mimetype || "").toLowerCase();
@@ -511,6 +525,7 @@ async function extractUploadedDocumentText(file) {
   }
 
   if (fileName.endsWith(".pdf") || mimeType.includes("pdf")) {
+    const pdfParse = await loadPdfParse();
     const parsed = await pdfParse(buffer);
     return parsed.text || "";
   }
@@ -519,6 +534,7 @@ async function extractUploadedDocumentText(file) {
     fileName.endsWith(".docx") ||
     mimeType.includes("wordprocessingml.document")
   ) {
+    const mammoth = await loadMammoth();
     const parsed = await mammoth.extractRawText({
       buffer,
     });
