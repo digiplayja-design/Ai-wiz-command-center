@@ -649,8 +649,15 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Report submitted. Thank you.'),
+          content: Text(
+            'Report submitted. Thank you.',
+            style: TextStyle(
+              color: Color(0xFFFFFFFF),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           backgroundColor: Color(0xFF143B4A),
+          behavior: SnackBarBehavior.floating,
         ),
       );
     } catch (error) {
@@ -725,8 +732,15 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Account deletion request submitted.'),
+          content: Text(
+            'Account deletion request submitted.',
+            style: TextStyle(
+              color: Color(0xFFFFFFFF),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           backgroundColor: Color(0xFF143B4A),
+          behavior: SnackBarBehavior.floating,
         ),
       );
     } catch (error) {
