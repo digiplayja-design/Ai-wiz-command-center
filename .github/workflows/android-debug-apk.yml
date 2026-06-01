@@ -39,5 +39,5 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: chee-chai-chee-debug-apk
+          name: korlix-ai-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
