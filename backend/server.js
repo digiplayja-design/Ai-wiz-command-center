@@ -141,7 +141,7 @@ function getTierLimits(tier) {
   const limits = {
     basic: {
       dailyRequestLimit: 3,
-      dailyCreditLimit: 3,
+      dailyCreditLimit: 12,
       characterLimit: 1,
       videoGenerationsMonthly: 0,
       musicGenerationIncluded: false,
