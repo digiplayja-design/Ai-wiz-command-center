@@ -9,6 +9,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 
 bool kSupabaseReady = false;
@@ -67,6 +68,93 @@ class CheeChaiCheeApp extends StatelessWidget {
   }
 }
 
+class KorlixSessionStore {
+  static const String accessTokenKey = 'korlix_access_token';
+  static const String refreshTokenKey = 'korlix_refresh_token';
+  static const String emailKey = 'korlix_user_email';
+
+  static Future<KorlixAuthSession?> load() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final accessToken = prefs.getString(accessTokenKey);
+    final refreshToken = prefs.getString(refreshTokenKey);
+    final email = prefs.getString(emailKey);
+
+    if (accessToken == null || accessToken.isEmpty) {
+      return null;
+    }
+
+    return KorlixAuthSession(
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      email: email,
+    );
+  }
+
+  static Future<void> save(KorlixAuthSession session) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString(accessTokenKey, session.accessToken);
+
+    if (session.refreshToken != null && session.refreshToken!.isNotEmpty) {
+      await prefs.setString(refreshTokenKey, session.refreshToken!);
+    }
+
+    if (session.email != null && session.email!.isNotEmpty) {
+      await prefs.setString(emailKey, session.email!);
+    }
+  }
+
+  static Future<void> clear() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.remove(accessTokenKey);
+    await prefs.remove(refreshTokenKey);
+    await prefs.remove(emailKey);
+  }
+
+  static Future<KorlixAuthSession?> refresh(KorlixAuthSession session) async {
+    final refreshToken = session.refreshToken;
+
+    if (refreshToken == null || refreshToken.isEmpty) {
+      return session;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('$kKorlixBackendBaseUrl/api/auth/refresh'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode({'refresh_token': refreshToken}),
+      );
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode >= 400) {
+        return null;
+      }
+
+      final refreshedSession = data['session'] as Map<String, dynamic>?;
+
+      if (refreshedSession == null ||
+          refreshedSession['access_token'] == null) {
+        return null;
+      }
+
+      final newSession = KorlixAuthSession(
+        accessToken: refreshedSession['access_token'].toString(),
+        refreshToken: refreshedSession['refresh_token']?.toString(),
+        email: data['user']?['email']?.toString() ?? session.email,
+      );
+
+      await save(newSession);
+
+      return newSession;
+    } catch (_) {
+      return session;
+    }
+  }
+}
+
 class KorlixAuthSession {
   final String accessToken;
   final String? refreshToken;
@@ -87,10 +175,42 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
+  bool _booting = true;
+
   bool get _signedIn =>
       kKorlixAccessToken != null && kKorlixAccessToken!.isNotEmpty;
 
-  void _handleSignedIn(KorlixAuthSession session) {
+  @override
+  void initState() {
+    super.initState();
+    _restoreSession();
+  }
+
+  Future<void> _restoreSession() async {
+    final saved = await KorlixSessionStore.load();
+
+    if (saved != null) {
+      final refreshed = await KorlixSessionStore.refresh(saved);
+
+      if (refreshed != null) {
+        kKorlixAccessToken = refreshed.accessToken;
+        kKorlixRefreshToken = refreshed.refreshToken;
+        kKorlixUserEmail = refreshed.email;
+      } else {
+        await KorlixSessionStore.clear();
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _booting = false;
+      });
+    }
+  }
+
+  Future<void> _handleSignedIn(KorlixAuthSession session) async {
+    await KorlixSessionStore.save(session);
+
     setState(() {
       kKorlixAccessToken = session.accessToken;
       kKorlixRefreshToken = session.refreshToken;
@@ -98,7 +218,9 @@ class _AuthGateState extends State<AuthGate> {
     });
   }
 
-  void _handleSignOut() {
+  Future<void> _handleSignOut() async {
+    await KorlixSessionStore.clear();
+
     setState(() {
       kKorlixAccessToken = null;
       kKorlixRefreshToken = null;
@@ -108,6 +230,45 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
+    if (_booting) {
+      return Scaffold(
+        body: Container(
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF040612), Color(0xFF071B27), Color(0xFF0A2B3D)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset(
+                  'assets/branding/korlix_mini_mark.png',
+                  height: 72,
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'KORLIX AI',
+                  style: TextStyle(
+                    color: Color(0xFFE4EBEE),
+                    fontSize: 30,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 4,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const CircularProgressIndicator(color: Color(0xFF69D9E8)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     if (!_signedIn) {
       return AuthScreen(onSignedIn: _handleSignedIn);
     }

@@ -583,6 +583,58 @@ app.get("/api/supabase-diagnostics", async (req, res) => {
 });
 
 
+
+app.post("/api/auth/refresh", async (req, res) => {
+  try {
+    if (!supabaseAuth) {
+      return res.status(500).json({
+        error: "Supabase auth is not configured on the backend.",
+      });
+    }
+
+    const refreshToken = String(req.body.refresh_token || "").trim();
+
+    if (!refreshToken) {
+      return res.status(400).json({
+        error: "Refresh token is required.",
+      });
+    }
+
+    const { data, error } = await supabaseAuth.auth.refreshSession({
+      refresh_token: refreshToken,
+    });
+
+    if (error) {
+      return res.status(error.status || 400).json({
+        error: sanitize(error.message),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Session refreshed.",
+      user: data.user
+        ? {
+            id: data.user.id,
+            email: data.user.email,
+          }
+        : null,
+      session: data.session
+        ? {
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+            expires_at: data.session.expires_at,
+          }
+        : null,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: sanitize(error?.message),
+    });
+  }
+});
+
+
 app.get("/", (req, res) => {
   res.json({
     status: "Korlix AI backend is running",
