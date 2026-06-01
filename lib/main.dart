@@ -310,7 +310,7 @@ class _AuthGateState extends State<AuthGate> {
 }
 
 class AuthScreen extends StatefulWidget {
-  final ValueChanged<KorlixAuthSession> onSignedIn;
+  final Future<void> Function(KorlixAuthSession) onSignedIn;
 
   const AuthScreen({super.key, required this.onSignedIn});
 
@@ -395,7 +395,7 @@ class _AuthScreenState extends State<AuthScreen> {
         return;
       }
 
-      widget.onSignedIn(
+      await widget.onSignedIn(
         KorlixAuthSession(
           accessToken: session['access_token'].toString(),
           refreshToken: session['refresh_token']?.toString(),
@@ -622,6 +622,127 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
+  Future<void> _reportHistoryItem({
+    required String? generationId,
+    required String prompt,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$kKorlixBackendBaseUrl/api/reports'),
+        headers: _headers(),
+        body: jsonEncode({
+          'generation_id': generationId,
+          'reason': 'User reported AI output',
+          'details': 'Reported from saved history. Prompt: $prompt',
+        }),
+      );
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode >= 400) {
+        throw Exception(data['error'] ?? 'Report failed.');
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Report submitted. Thank you.'),
+          backgroundColor: Color(0xFF143B4A),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_cleanError(error)),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  Future<void> _requestAccountDeletion() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF071B27),
+          title: const Text(
+            'Request account deletion?',
+            style: TextStyle(color: Color(0xFFE4EBEE)),
+          ),
+          content: const Text(
+            'This will submit a request to delete your Korlix AI account and related data. You may be contacted by support if more information is needed.',
+            style: TextStyle(color: Color(0xFFA9C6CF)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text(
+                'Request deletion',
+                style: TextStyle(color: Colors.redAccent),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('$kKorlixBackendBaseUrl/api/account/delete-request'),
+        headers: _headers(),
+        body: jsonEncode({
+          'email': kKorlixUserEmail,
+          'reason':
+              'User requested account deletion from Korlix Account panel.',
+        }),
+      );
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode >= 400) {
+        throw Exception(data['error'] ?? 'Could not submit deletion request.');
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Account deletion request submitted.'),
+          backgroundColor: Color(0xFF143B4A),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_cleanError(error)),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
   Future<void> _openPanel() async {
     if (_loading) {
       return;
@@ -762,6 +883,21 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                         ],
                       ),
                     ),
+                    const SizedBox(height: 14),
+                    OutlinedButton.icon(
+                      onPressed: _requestAccountDeletion,
+                      icon: const Icon(Icons.delete_forever_rounded),
+                      label: const Text('Request account deletion'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.redAccent,
+                        side: BorderSide(
+                          color: Colors.redAccent.withOpacity(0.55),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 22),
                     const Text(
                       'Saved History',
@@ -836,6 +972,25 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                                   color: Color(0xFFA9C6CF),
                                   fontSize: 13,
                                   height: 1.35,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton.icon(
+                                  onPressed: () => _reportHistoryItem(
+                                    generationId: row['id']?.toString(),
+                                    prompt: prompt,
+                                  ),
+                                  icon: const Icon(
+                                    Icons.flag_outlined,
+                                    size: 17,
+                                  ),
+                                  label: const Text('Report Output'),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: const Color(0xFF69D9E8),
+                                    padding: EdgeInsets.zero,
+                                  ),
                                 ),
                               ),
                             ],
