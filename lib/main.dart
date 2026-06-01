@@ -12,6 +12,7 @@ import 'package:printing/printing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:video_player/video_player.dart';
 
 bool kSupabaseReady = false;
@@ -2076,6 +2077,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
 
   bool _loading = false;
   String? _error;
+  PlatformFile? _pickedDocument;
   String _selectedLanguage = 'en';
 
   final List<GeneratedItem> _results = [];
@@ -2143,7 +2145,140 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     return triggers.any(lower.contains);
   }
 
+  Future<void> _pickDocument() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'docx', 'txt', 'md', 'csv'],
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+
+    final file = result.files.single;
+
+    if (file.size > 10 * 1024 * 1024) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('File is too large. Maximum size is 10 MB.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _pickedDocument = file;
+    });
+  }
+
+  void _clearPickedDocument() {
+    setState(() {
+      _pickedDocument = null;
+    });
+  }
+
+  Future<void> _generateWithDocument() async {
+    final command = _controller.text.trim();
+    final file = _pickedDocument;
+
+    if (file == null) {
+      return;
+    }
+
+    if (command.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_t.commandEmpty)));
+      return;
+    }
+
+    if (file.bytes == null || file.bytes!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not read this file. Try uploading it again.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    _speakConsiderItDone();
+
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$kKorlixBackendBaseUrl/api/analyze-document'),
+      );
+
+      request.fields['command'] = command;
+      request.fields['language'] = _selectedLanguage;
+
+      if (kKorlixAccessToken != null && kKorlixAccessToken!.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $kKorlixAccessToken';
+      }
+
+      request.files.add(
+        http.MultipartFile.fromBytes('file', file.bytes!, filename: file.name),
+      );
+
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 120),
+      );
+      final response = await http.Response.fromStream(streamedResponse);
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(data['details'] ?? data['error'] ?? response.body);
+      }
+
+      final content = (data['content'] ?? '').toString().trim();
+
+      if (content.isEmpty) {
+        throw Exception('No AI content returned.');
+      }
+
+      final allowPdf =
+          data['fileRequested'] == true || _shouldAllowPdf(command);
+
+      setState(() {
+        _loading = false;
+        _controller.clear();
+        _pickedDocument = null;
+        _results.insert(
+          0,
+          GeneratedItem(
+            command: 'Document: ${file.name}\nQuestion: $command',
+            title: 'Document answer: ${file.name}',
+            content: content,
+            language: _selectedLanguage,
+            allowPdf: allowPdf,
+          ),
+        );
+      });
+    } catch (error) {
+      setState(() {
+        _loading = false;
+        _error = '${_t.createError}\n\nDetails: $error';
+      });
+    }
+  }
+
   Future<void> _generate() async {
+    if (_pickedDocument != null) {
+      await _generateWithDocument();
+      return;
+    }
+
     final command = _controller.text.trim();
 
     if (command.isEmpty) {
@@ -2888,6 +3023,32 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                SizedBox(
+                  width: 52,
+                  height: 56,
+                  child: OutlinedButton(
+                    onPressed: _loading ? null : _pickDocument,
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      foregroundColor: _pickedDocument == null
+                          ? const Color(0xFF69D9E8)
+                          : const Color(0xFFE4EBEE),
+                      side: BorderSide(
+                        color: _pickedDocument == null
+                            ? const Color(0xFF69D9E8).withOpacity(0.42)
+                            : const Color(0xFFFFD166).withOpacity(0.82),
+                      ),
+                      backgroundColor: _pickedDocument == null
+                          ? Colors.black.withOpacity(0.18)
+                          : const Color(0xFF7C5A00).withOpacity(0.32),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(17),
+                      ),
+                    ),
+                    child: const Icon(Icons.attach_file_rounded, size: 24),
+                  ),
+                ),
+                const SizedBox(width: 10),
                 Expanded(
                   child: TextField(
                     controller: _controller,
@@ -2973,6 +3134,52 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                 ),
               ],
             ),
+
+            if (_pickedDocument != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 9,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0A2B3D).withOpacity(0.80),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFFFFD166).withOpacity(0.42),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.description_outlined,
+                      color: Color(0xFFFFD166),
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _pickedDocument!.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFFE4EBEE),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _loading ? null : _clearPickedDocument,
+                      icon: const Icon(Icons.close_rounded),
+                      color: const Color(0xFFA9C6CF),
+                      iconSize: 18,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             // Matrix effect stays.
             if (_loading) ...[

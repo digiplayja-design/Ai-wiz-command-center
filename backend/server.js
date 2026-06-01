@@ -3,6 +3,9 @@ import cors from "cors";
 import dotenv from "dotenv";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
+import multer from "multer";
+import pdfParse from "pdf-parse";
+import mammoth from "mammoth";
 
 dotenv.config();
 
@@ -11,6 +14,14 @@ const port = process.env.PORT || 8787;
 
 app.use(cors());
 app.use(express.json({ limit: "5mb" }));
+
+const documentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+  },
+});
+
 
 function normalizeSupabaseUrl(value) {
   return String(value || "")
@@ -419,6 +430,72 @@ async function saveGenerationHistory({
 
   return data;
 }
+
+
+async function extractUploadedDocumentText(file) {
+  const fileName = String(file.originalname || "").toLowerCase();
+  const mimeType = String(file.mimetype || "").toLowerCase();
+  const buffer = file.buffer;
+
+  if (!buffer || buffer.length === 0) {
+    throw new Error("Uploaded file is empty.");
+  }
+
+  if (fileName.endsWith(".pdf") || mimeType.includes("pdf")) {
+    const parsed = await pdfParse(buffer);
+    return parsed.text || "";
+  }
+
+  if (
+    fileName.endsWith(".docx") ||
+    mimeType.includes("wordprocessingml.document")
+  ) {
+    const parsed = await mammoth.extractRawText({
+      buffer,
+    });
+
+    return parsed.value || "";
+  }
+
+  if (
+    fileName.endsWith(".txt") ||
+    fileName.endsWith(".md") ||
+    fileName.endsWith(".csv") ||
+    mimeType.includes("text/") ||
+    mimeType.includes("csv")
+  ) {
+    return buffer.toString("utf8");
+  }
+
+  throw new Error(
+    "Unsupported file type. Please upload a PDF, DOCX, TXT, MD, or CSV file."
+  );
+}
+
+function normalizeDocumentText(value) {
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{4,}/g, "\n\n\n")
+    .trim();
+}
+
+function truncateDocumentText(value) {
+  const clean = normalizeDocumentText(value);
+  const maxChars = 18000;
+
+  if (clean.length <= maxChars) {
+    return {
+      text: clean,
+      truncated: false,
+    };
+  }
+
+  return {
+    text: clean.slice(0, maxChars),
+    truncated: true,
+  };
+}
+
 
 async function createOpenAIResponse(client, { model, input, useSearch }) {
   const request = {
@@ -860,6 +937,164 @@ app.post("/api/account/delete-request", async (req, res) => {
     });
   }
 });
+
+
+app.post("/api/analyze-document", documentUpload.single("file"), async (req, res) => {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(400).json({
+        error: "Missing OPENAI_API_KEY on backend.",
+      });
+    }
+
+    const user = await requireUser(req);
+    const profile = await getOrCreateProfile(user);
+    const usageCounter = await getOrCreateUsageCounter(user.id);
+
+    const command = String(req.body.command || "").trim();
+    const languageCode = req.body.language || "en";
+    const language = languageMap[languageCode] || languageMap.en;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({
+        error: "Please upload a document.",
+      });
+    }
+
+    if (!command) {
+      return res.status(400).json({
+        error: "Ask a question about the uploaded document.",
+      });
+    }
+
+    const fileRequested = wantsFile(command);
+    const creditsNeeded = 4;
+
+    const usageCheck = checkUsageAllowed({
+      profile,
+      usageCounter,
+      creditsNeeded,
+    });
+
+    if (!usageCheck.allowed) {
+      return res.status(429).json({
+        error: usageCheck.reason,
+        tier: profile?.tier || "basic",
+      });
+    }
+
+    const rawDocumentText = await extractUploadedDocumentText(file);
+    const documentTextResult = truncateDocumentText(rawDocumentText);
+
+    if (!documentTextResult.text) {
+      return res.status(400).json({
+        error:
+          "No readable text was found in this document. Scanned images or scanned PDFs are not supported yet.",
+      });
+    }
+
+    const client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+
+    const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+
+    const input = `
+You are Korlix AI, a premium multilingual AI assistant platform powered by selectable AI characters.
+
+The selected character is:
+Chee Chai Chee
+
+Chee Chai Chee is a dark cyber-mystic wizard character. His answers should be direct, useful, strategic, and clear.
+
+The user selected this language:
+${language.name}
+
+Language rule:
+${language.instruction}
+
+The user uploaded this document:
+${file.originalname}
+
+The user asked:
+"${command}"
+
+Document text:
+"""
+${documentTextResult.text}
+"""
+
+Important rules:
+- Answer based primarily on the uploaded document.
+- If the answer is not in the document, say that clearly.
+- Do not invent details that are not supported by the document.
+- If useful, quote or reference sections from the document in plain language.
+- If the user asks for a summary, summarize clearly.
+- If the user asks a question, answer directly first.
+- If the document was truncated, say that the answer is based on the readable portion processed.
+- Do not mention PDF export unless the user asks for PDF/file/export/document.
+
+Formatting rules:
+- Use plain text only.
+- Do not use markdown symbols like **bold**, ###, checkboxes, or emojis.
+- Use short headings only when helpful.
+- Use numbered lists or hyphen bullets when useful.
+`;
+
+    const response = await createOpenAIResponse(client, {
+      model,
+      input,
+      useSearch: false,
+    });
+
+    const content = String(response.output_text || "").trim();
+
+    if (!content) {
+      throw new Error("No AI content returned.");
+    }
+
+    const historyItem = await saveGenerationHistory({
+      user,
+      profile,
+      command: `Uploaded document: ${file.originalname}\nQuestion: ${command}`,
+      content,
+      languageCode,
+      fileRequested,
+      searched: false,
+      creditsNeeded,
+    });
+
+    const updatedUsage = await incrementUsage({
+      usageCounter,
+      liveSearchUsed: false,
+      fileRequested: false,
+      creditsNeeded,
+    });
+
+    res.json({
+      title: "Korlix AI Document Answer",
+      language: languageCode,
+      fileName: file.originalname,
+      fileRequested,
+      documentTruncated: documentTextResult.truncated,
+      authenticated: true,
+      tier: profile?.tier || "basic",
+      creditsUsed: creditsNeeded,
+      usage: updatedUsage,
+      generationId: historyItem?.id || null,
+      content,
+    });
+  } catch (error) {
+    console.error("Document analysis error:", sanitize(error?.message));
+
+    res.status(error.statusCode || 500).json({
+      error: "Document analysis failed",
+      details: sanitize(error?.message),
+    });
+  }
+});
+
 
 app.post("/api/generate", async (req, res) => {
   try {
