@@ -12,7 +12,6 @@ import 'package:printing/printing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:video_player/video_player.dart';
 
 bool kSupabaseReady = false;
@@ -2077,7 +2076,6 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
 
   bool _loading = false;
   String? _error;
-  PlatformFile? _pickedDocument;
   String _selectedLanguage = 'en';
 
   final List<GeneratedItem> _results = [];
@@ -2145,140 +2143,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     return triggers.any(lower.contains);
   }
 
-  Future<void> _pickDocument() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'docx', 'txt', 'md', 'csv'],
-      withData: true,
-    );
-
-    if (result == null || result.files.isEmpty) {
-      return;
-    }
-
-    final file = result.files.single;
-
-    if (file.size > 10 * 1024 * 1024) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('File is too large. Maximum size is 10 MB.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _pickedDocument = file;
-    });
-  }
-
-  void _clearPickedDocument() {
-    setState(() {
-      _pickedDocument = null;
-    });
-  }
-
-  Future<void> _generateWithDocument() async {
-    final command = _controller.text.trim();
-    final file = _pickedDocument;
-
-    if (file == null) {
-      return;
-    }
-
-    if (command.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_t.commandEmpty)));
-      return;
-    }
-
-    if (file.bytes == null || file.bytes!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not read this file. Try uploading it again.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-
-    _speakConsiderItDone();
-
-    try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$kKorlixBackendBaseUrl/api/analyze-document'),
-      );
-
-      request.fields['command'] = command;
-      request.fields['language'] = _selectedLanguage;
-
-      if (kKorlixAccessToken != null && kKorlixAccessToken!.isNotEmpty) {
-        request.headers['Authorization'] = 'Bearer $kKorlixAccessToken';
-      }
-
-      request.files.add(
-        http.MultipartFile.fromBytes('file', file.bytes!, filename: file.name),
-      );
-
-      final streamedResponse = await request.send().timeout(
-        const Duration(seconds: 120),
-      );
-      final response = await http.Response.fromStream(streamedResponse);
-
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw Exception(data['details'] ?? data['error'] ?? response.body);
-      }
-
-      final content = (data['content'] ?? '').toString().trim();
-
-      if (content.isEmpty) {
-        throw Exception('No AI content returned.');
-      }
-
-      final allowPdf =
-          data['fileRequested'] == true || _shouldAllowPdf(command);
-
-      setState(() {
-        _loading = false;
-        _controller.clear();
-        _pickedDocument = null;
-        _results.insert(
-          0,
-          GeneratedItem(
-            command: 'Document: ${file.name}\nQuestion: $command',
-            title: 'Document answer: ${file.name}',
-            content: content,
-            language: _selectedLanguage,
-            allowPdf: allowPdf,
-          ),
-        );
-      });
-    } catch (error) {
-      setState(() {
-        _loading = false;
-        _error = '${_t.createError}\n\nDetails: $error';
-      });
-    }
-  }
-
   Future<void> _generate() async {
-    if (_pickedDocument != null) {
-      await _generateWithDocument();
-      return;
-    }
-
     final command = _controller.text.trim();
 
     if (command.isEmpty) {
@@ -2895,341 +2760,307 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   Widget _buildCommandPanel() {
     final t = _t;
     final hasText = _controller.text.trim().isNotEmpty;
-    final hasResults = _results.isNotEmpty;
 
-    final promptText = switch (_selectedLanguage) {
+    final scrollTitle = switch (_selectedLanguage) {
       'es' => '¿Qué deseas saber?',
       'fr' => 'Que souhaitez-vous savoir ?',
       _ => 'What do you seek?',
     };
 
-    final hintText = switch (_selectedLanguage) {
+    final scrollHint = switch (_selectedLanguage) {
       'es' => 'Escribe tu solicitud...',
       'fr' => 'Saisissez votre demande...',
       _ => 'Type your request...',
     };
 
-    final readyText = switch (_selectedLanguage) {
-      'es' => 'La respuesta está lista.',
-      'fr' => 'La réponse est prête.',
-      _ => 'The response is ready.',
+    final doneText = switch (_selectedLanguage) {
+      'es' => 'Considéralo hecho.',
+      'fr' => 'Considérez que c’est fait.',
+      _ => 'Consider it done.',
     };
 
-    return AnimatedSize(
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOutCubic,
-      alignment: Alignment.bottomCenter,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-        decoration: BoxDecoration(
-          color: const Color(0xFF071B27).withOpacity(0.88),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(
-            color: const Color(0xFF2EC7DF).withOpacity(0.46),
-            width: 1.1,
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 22),
+      decoration: BoxDecoration(
+        color: const Color(0xFF071B27).withOpacity(0.74),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(
+          color: const Color(0xFF2EC7DF).withOpacity(0.42),
+          width: 1.1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2EC7DF).withOpacity(0.14),
+            blurRadius: 34,
+            spreadRadius: 3,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF2EC7DF).withOpacity(0.14),
-              blurRadius: 34,
-              spreadRadius: 3,
+          BoxShadow(
+            color: Colors.black.withOpacity(0.42),
+            blurRadius: 24,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            t.askCreateTitle,
+            textAlign: TextAlign.left,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.2,
+              color: Color(0xFFE4EBEE),
             ),
-            BoxShadow(
-              color: Colors.black.withOpacity(0.40),
-              blurRadius: 24,
-              offset: const Offset(0, 14),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              t.askCreateTitle,
-              textAlign: TextAlign.left,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.1,
-                color: Color(0xFFE4EBEE),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              promptText,
-              textAlign: TextAlign.left,
-              style: const TextStyle(
-                fontSize: 14,
-                height: 1.3,
-                color: Color(0xFFA9C6CF),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+          ),
+          const SizedBox(height: 14),
 
-            // This appears above the input after a response comes back.
-            // It makes the chat panel feel like it expands upward.
-            if (hasResults && !_loading) ...[
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0A2B3D).withOpacity(0.84),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: const Color(0xFF69D9E8).withOpacity(0.40),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF69D9E8).withOpacity(0.12),
-                      blurRadius: 20,
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.auto_awesome_rounded,
-                      color: Color(0xFF69D9E8),
-                      size: 22,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        readyText,
-                        style: const TextStyle(
-                          color: Color(0xFFE4EBEE),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    const Text(
-                      'View below',
-                      style: TextStyle(
-                        color: Color(0xFF69D9E8),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 430),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: AspectRatio(
+                  aspectRatio: 9 / 16,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final w = constraints.maxWidth;
+                      final h = constraints.maxHeight;
 
-            const SizedBox(height: 14),
+                      return Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.asset(
+                            _loading
+                                ? 'assets/characters/chee_chai_chee/workers/scroll_done_scene.png'
+                                : 'assets/characters/chee_chai_chee/workers/scroll_ask_scene.png',
+                            fit: BoxFit.cover,
+                          ),
 
-            // Compact chat row directly under Chee Chai Chee.
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: 52,
-                  height: 56,
-                  child: OutlinedButton(
-                    onPressed: _loading ? null : _pickDocument,
-                    style: OutlinedButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      foregroundColor: _pickedDocument == null
-                          ? const Color(0xFF69D9E8)
-                          : const Color(0xFFE4EBEE),
-                      side: BorderSide(
-                        color: _pickedDocument == null
-                            ? const Color(0xFF69D9E8).withOpacity(0.42)
-                            : const Color(0xFFFFD166).withOpacity(0.82),
-                      ),
-                      backgroundColor: _pickedDocument == null
-                          ? Colors.black.withOpacity(0.18)
-                          : const Color(0xFF7C5A00).withOpacity(0.32),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(17),
-                      ),
-                    ),
-                    child: const Icon(Icons.attach_file_rounded, size: 24),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    minLines: 1,
-                    maxLines: 4,
-                    cursorColor: const Color(0xFF69D9E8),
-                    onChanged: (_) => setState(() {}),
-                    onSubmitted: (_) {
-                      if (!_loading && _controller.text.trim().isNotEmpty) {
-                        _generate();
-                      }
-                    },
-                    style: const TextStyle(
-                      fontSize: 15.5,
-                      height: 1.30,
-                      color: Color(0xFFE4EBEE),
-                      fontWeight: FontWeight.w600,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: hintText,
-                      hintStyle: TextStyle(
-                        color: const Color(0xFFA9C6CF).withOpacity(0.74),
-                        fontSize: 15,
-                      ),
-                      filled: true,
-                      fillColor: Colors.black.withOpacity(0.42),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 15,
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: BorderSide(
-                          color: Colors.white.withOpacity(0.09),
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: const BorderSide(
-                          color: Color(0xFF69D9E8),
-                          width: 1.3,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                SizedBox(
-                  width: 56,
-                  height: 56,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      backgroundColor: hasText
-                          ? const Color(0xFF143B4A)
-                          : const Color(0xFF334155),
-                      foregroundColor: const Color(0xFFE4EBEE),
-                      disabledBackgroundColor: const Color(0xFF334155),
-                      disabledForegroundColor: Colors.white54,
-                      elevation: 0,
-                      side: BorderSide(
-                        color: hasText
-                            ? const Color(0xFF69D9E8).withOpacity(0.70)
-                            : Colors.white12,
-                        width: 1,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(17),
-                      ),
-                    ),
-                    onPressed: (_loading || !hasText) ? null : _generate,
-                    child: _loading
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Color(0xFFE4EBEE),
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.black.withOpacity(0.02),
+                                  Colors.black.withOpacity(0.10),
+                                  Colors.black.withOpacity(0.30),
+                                ],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
                             ),
-                          )
-                        : const Icon(Icons.arrow_upward_rounded, size: 30),
-                  ),
-                ),
-              ],
-            ),
+                          ),
 
-            if (_pickedDocument != null) ...[
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 9,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0A2B3D).withOpacity(0.80),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: const Color(0xFFFFD166).withOpacity(0.42),
+                          if (!_loading) ...[
+                            Positioned(
+                              left: w * 0.11,
+                              right: w * 0.11,
+                              top: h * 0.41,
+                              child: Text(
+                                scrollTitle,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Color(0xFF071B27),
+                                  fontSize: 19,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.2,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.white70,
+                                      blurRadius: 8,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            Positioned(
+                              left: w * 0.10,
+                              right: w * 0.10,
+                              top: h * 0.54,
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _controller,
+                                      minLines: 1,
+                                      maxLines: 3,
+                                      cursorColor: const Color(0xFF071B27),
+                                      onChanged: (_) => setState(() {}),
+                                      onSubmitted: (_) {
+                                        if (!_loading &&
+                                            _controller.text
+                                                .trim()
+                                                .isNotEmpty) {
+                                          _generate();
+                                        }
+                                      },
+                                      style: const TextStyle(
+                                        fontSize: 14.5,
+                                        height: 1.25,
+                                        color: Color(0xFF071B27),
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                      decoration: InputDecoration(
+                                        hintText: scrollHint,
+                                        hintStyle: TextStyle(
+                                          color: const Color(
+                                            0xFF071B27,
+                                          ).withOpacity(0.60),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        filled: true,
+                                        fillColor: Colors.white.withOpacity(
+                                          0.78,
+                                        ),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 13,
+                                              vertical: 12,
+                                            ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            999,
+                                          ),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  SizedBox(
+                                    width: 48,
+                                    height: 48,
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        padding: EdgeInsets.zero,
+                                        backgroundColor: hasText
+                                            ? const Color(0xFF0A2B3D)
+                                            : Colors.grey.shade700,
+                                        foregroundColor: const Color(
+                                          0xFF69D9E8,
+                                        ),
+                                        disabledBackgroundColor:
+                                            Colors.grey.shade700,
+                                        disabledForegroundColor: Colors.white38,
+                                        elevation: 0,
+                                        side: BorderSide(
+                                          color: hasText
+                                              ? const Color(0xFF69D9E8)
+                                              : Colors.white24,
+                                          width: 1,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                        ),
+                                      ),
+                                      onPressed: hasText ? _generate : null,
+                                      child: const Icon(
+                                        Icons.arrow_upward_rounded,
+                                        size: 28,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+
+                          if (_loading) ...[
+                            Positioned(
+                              left: w * 0.34,
+                              right: w * 0.08,
+                              top: h * 0.43,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.30),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: const Color(
+                                      0xFFFFE2A8,
+                                    ).withOpacity(0.70),
+                                  ),
+                                ),
+                                child: Text(
+                                  doneText,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Color(0xFFFFE2A8),
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1.1,
+                                    shadows: [
+                                      Shadow(
+                                        color: Colors.black,
+                                        blurRadius: 8,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      );
+                    },
                   ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.description_outlined,
-                      color: Color(0xFFFFD166),
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _pickedDocument!.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFFE4EBEE),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: _loading ? null : _clearPickedDocument,
-                      icon: const Icon(Icons.close_rounded),
-                      color: const Color(0xFFA9C6CF),
-                      iconSize: 18,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ],
                 ),
               ),
-            ],
-
-            // Matrix effect stays.
-            if (_loading) ...[
-              const SizedBox(height: 14),
-              MatrixThinkingPanel(message: t.matrixMessage),
-            ],
-
-            const SizedBox(height: 15),
-
-            // Quick actions stay under the chat input.
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              alignment: WrapAlignment.center,
-              children: t.quickActions.map((action) {
-                return ActionChip(
-                  label: Text(action.label),
-                  labelStyle: TextStyle(
-                    color: _loading ? Colors.white38 : const Color(0xFFE4EBEE),
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
-                  ),
-                  backgroundColor: const Color(0xFF120D18),
-                  disabledColor: Colors.black.withOpacity(0.25),
-                  side: BorderSide(
-                    color: _loading
-                        ? Colors.white10
-                        : const Color(0xFF2EC7DF).withOpacity(0.34),
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  onPressed: _loading ? null : () => _useQuickAction(action),
-                );
-              }).toList(),
             ),
+          ),
 
-            if (_error != null) ...[
-              const SizedBox(height: 14),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.redAccent,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
+          if (_loading) ...[
+            const SizedBox(height: 14),
+            MatrixThinkingPanel(message: t.matrixMessage),
           ],
-        ),
+
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            alignment: WrapAlignment.center,
+            children: t.quickActions.map((action) {
+              return ActionChip(
+                label: Text(action.label),
+                labelStyle: TextStyle(
+                  color: _loading ? Colors.white38 : const Color(0xFFE4EBEE),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+                backgroundColor: const Color(0xFF120D18),
+                disabledColor: Colors.black.withOpacity(0.25),
+                side: BorderSide(
+                  color: _loading
+                      ? Colors.white10
+                      : const Color(0xFF2EC7DF).withOpacity(0.34),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                onPressed: _loading ? null : () => _useQuickAction(action),
+              );
+            }).toList(),
+          ),
+
+          if (_error != null) ...[
+            const SizedBox(height: 14),
+            Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
