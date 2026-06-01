@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
@@ -10,6 +11,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:video_player/video_player.dart';
 
 bool kSupabaseReady = false;
@@ -30,6 +32,12 @@ Future<void> main() async {
     await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
 
     kSupabaseReady = true;
+  }
+
+  if (!kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS)) {
+    await MobileAds.instance.initialize();
   }
 
   runApp(const CheeChaiCheeApp());
@@ -285,6 +293,12 @@ class _AuthGateState extends State<AuthGate> {
               child: KorlixAccountButton(),
             ),
           ),
+        ),
+        const Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: SafeArea(top: false, child: KorlixBasicAdBanner()),
         ),
         Positioned(
           top: 8,
@@ -585,6 +599,142 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class KorlixBasicAdBanner extends StatefulWidget {
+  const KorlixBasicAdBanner({super.key});
+
+  @override
+  State<KorlixBasicAdBanner> createState() => _KorlixBasicAdBannerState();
+}
+
+class _KorlixBasicAdBannerState extends State<KorlixBasicAdBanner> {
+  BannerAd? _bannerAd;
+  bool _loaded = false;
+  bool _shouldShow = false;
+
+  static const String _androidTestBannerAdUnit =
+      'ca-app-pub-3940256099942544/6300978111';
+
+  static const String _androidProductionBannerAdUnit =
+      'ca-app-pub-1549134869666707/4852386901';
+
+  bool get _mobileAdsSupported {
+    return !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  }
+
+  String get _adUnitId {
+    return kReleaseMode
+        ? _androidProductionBannerAdUnit
+        : _androidTestBannerAdUnit;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _prepareAd();
+  }
+
+  Future<void> _prepareAd() async {
+    if (!_mobileAdsSupported) {
+      return;
+    }
+
+    if (kKorlixAccessToken == null || kKorlixAccessToken!.isEmpty) {
+      return;
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse('$kKorlixBackendBaseUrl/api/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $kKorlixAccessToken',
+        },
+      );
+
+      if (response.statusCode >= 400) {
+        return;
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final profile =
+          (data['profile'] as Map?)?.cast<String, dynamic>() ??
+          <String, dynamic>{};
+      final tier = (profile['tier'] ?? 'basic').toString();
+
+      if (tier != 'basic') {
+        return;
+      }
+
+      _shouldShow = true;
+
+      final ad = BannerAd(
+        size: AdSize.banner,
+        adUnitId: _adUnitId,
+        listener: BannerAdListener(
+          onAdLoaded: (ad) {
+            if (!mounted) {
+              return;
+            }
+
+            setState(() {
+              _bannerAd = ad as BannerAd;
+              _loaded = true;
+            });
+          },
+          onAdFailedToLoad: (ad, error) {
+            ad.dispose();
+
+            if (!mounted) {
+              return;
+            }
+
+            setState(() {
+              _loaded = false;
+              _bannerAd = null;
+            });
+          },
+        ),
+        request: const AdRequest(),
+      );
+
+      await ad.load();
+    } catch (_) {
+      // Ads should never block app usage.
+    }
+  }
+
+  @override
+  void dispose() {
+    _bannerAd?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_mobileAdsSupported || !_shouldShow || !_loaded || _bannerAd == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      height: _bannerAd!.size.height.toDouble() + 12,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.72),
+        border: Border(
+          top: BorderSide(color: const Color(0xFF2EC7DF).withOpacity(0.25)),
+        ),
+      ),
+      child: SizedBox(
+        width: _bannerAd!.size.width.toDouble(),
+        height: _bannerAd!.size.height.toDouble(),
+        child: AdWidget(ad: _bannerAd!),
       ),
     );
   }
