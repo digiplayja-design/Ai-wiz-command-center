@@ -12,6 +12,8 @@ import 'package:printing/printing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:file_picker/file_picker.dart' as fp;
+import 'package:speech_to_text/speech_to_text.dart' as speech_to_text;
 import 'package:video_player/video_player.dart';
 
 bool kSupabaseReady = false;
@@ -2073,8 +2075,14 @@ class CommandCenterScreen extends StatefulWidget {
 class _CommandCenterScreenState extends State<CommandCenterScreen> {
   final TextEditingController _controller = TextEditingController();
   final AudioPlayer _wizardCuePlayer = AudioPlayer();
+  final speech_to_text.SpeechToText _speechToText =
+      speech_to_text.SpeechToText();
 
   bool _loading = false;
+  bool _voiceListening = false;
+  fp.PlatformFile? _pickedUploadFile;
+  bool _loadingTier = false;
+  String _currentTier = 'basic';
   String? _error;
   String _selectedLanguage = 'en';
 
@@ -2093,9 +2101,16 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _loadCurrentTier();
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     _wizardCuePlayer.dispose();
+    _speechToText.stop();
     super.dispose();
   }
 
@@ -2143,7 +2158,205 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     return triggers.any(lower.contains);
   }
 
+  bool get _hasDocumentUploadAccess {
+    return _currentTier == 'pro' ||
+        _currentTier == 'ultra' ||
+        _currentTier == 'enterprise';
+  }
+
+  bool get _hasAdvancedUploadAccess {
+    return _currentTier == 'ultra' || _currentTier == 'enterprise';
+  }
+
+  bool _isAdvancedUploadName(String name) {
+    final lower = name.toLowerCase();
+
+    return lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.webp');
+  }
+
+  Future<void> _handleUploadPressed() async {
+    await _loadCurrentTier();
+
+    if (!_hasDocumentUploadAccess) {
+      await _showPremiumFeaturePrompt(
+        title: 'Document Upload',
+        availability: 'Pro, Ultra Premium, Enterprise',
+        description:
+            'Upload documents and ask Korlix AI questions about them. Basic users can see this feature but must upgrade to use it.',
+      );
+      return;
+    }
+
+    final extensions = _hasAdvancedUploadAccess
+        ? ['pdf', 'docx', 'txt', 'md', 'csv', 'jpg', 'jpeg', 'png', 'webp']
+        : ['pdf', 'docx', 'txt', 'md', 'csv'];
+
+    final result = await fp.FilePicker.platform.pickFiles(
+      type: fp.FileType.custom,
+      allowedExtensions: extensions,
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+
+    final file = result.files.single;
+
+    if (file.size > 15 * 1024 * 1024) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('File is too large. Maximum size is 15 MB.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    if (_isAdvancedUploadName(file.name) && !_hasAdvancedUploadAccess) {
+      await _showPremiumFeaturePrompt(
+        title: 'OCR and Handwriting Reader',
+        availability: 'Ultra Premium, Enterprise',
+        description:
+            'Images, scans, screenshots, handwriting, and OCR-style reading are available on Ultra Premium and Enterprise.',
+      );
+      return;
+    }
+
+    setState(() {
+      _pickedUploadFile = file;
+    });
+  }
+
+  void _clearPickedUploadFile() {
+    setState(() {
+      _pickedUploadFile = null;
+    });
+  }
+
+  Future<void> _generateWithUpload() async {
+    final command = _controller.text.trim();
+    final file = _pickedUploadFile;
+
+    if (file == null) {
+      return;
+    }
+
+    if (command.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_t.commandEmpty)));
+      return;
+    }
+
+    if (file.bytes == null || file.bytes!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not read this file. Try uploading it again.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    _speakConsiderItDone();
+
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$kKorlixBackendBaseUrl/api/analyze-document'),
+      );
+
+      request.fields['command'] = command;
+      request.fields['language'] = _selectedLanguage;
+
+      if (kKorlixAccessToken != null && kKorlixAccessToken!.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $kKorlixAccessToken';
+      }
+
+      request.files.add(
+        http.MultipartFile.fromBytes('file', file.bytes!, filename: file.name),
+      );
+
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 120),
+      );
+      final response = await http.Response.fromStream(streamedResponse);
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 403 && data['upgradeRequired'] == true) {
+        setState(() {
+          _loading = false;
+        });
+
+        await _showPremiumFeaturePrompt(
+          title: data['requiredTier']?.toString() == 'ultra'
+              ? 'Ultra Premium required'
+              : 'Upgrade required',
+          availability: data['requiredTier']?.toString() == 'ultra'
+              ? 'Ultra Premium, Enterprise'
+              : 'Pro, Ultra Premium, Enterprise',
+          description:
+              data['error']?.toString() ??
+              'This upload feature requires a higher plan.',
+        );
+
+        return;
+      }
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(data['details'] ?? data['error'] ?? response.body);
+      }
+
+      final content = (data['content'] ?? '').toString().trim();
+
+      if (content.isEmpty) {
+        throw Exception('No AI content returned.');
+      }
+
+      final allowPdf =
+          data['fileRequested'] == true || _shouldAllowPdf(command);
+
+      setState(() {
+        _loading = false;
+        _controller.clear();
+        _pickedUploadFile = null;
+        _results.insert(
+          0,
+          GeneratedItem(
+            command: 'Uploaded file: ${file.name}\nQuestion: $command',
+            title: 'File answer: ${file.name}',
+            content: content,
+            language: _selectedLanguage,
+            allowPdf: allowPdf,
+          ),
+        );
+      });
+    } catch (error) {
+      setState(() {
+        _loading = false;
+        _error = '${_t.createError}\n\nDetails: $error';
+      });
+    }
+  }
+
   Future<void> _generate() async {
+    if (_pickedUploadFile != null) {
+      await _generateWithUpload();
+      return;
+    }
+
     final command = _controller.text.trim();
 
     if (command.isEmpty) {
@@ -2757,35 +2970,343 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     );
   }
 
+  Future<void> _showPremiumFeaturePrompt({
+    required String title,
+    required String availability,
+    required String description,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.62),
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF071B27),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(color: const Color(0xFF69D9E8).withOpacity(0.50)),
+          ),
+          title: Row(
+            children: [
+              const Icon(
+                Icons.workspace_premium_rounded,
+                color: Color(0xFFFFD166),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFFE4EBEE),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            '$description\n\nAvailable on: $availability\n\nOpen History, then tap View plans / upgrade to see plan options.',
+            style: const TextStyle(
+              color: Color(0xFFA9C6CF),
+              height: 1.4,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Not now',
+                style: TextStyle(color: Color(0xFFA9C6CF)),
+              ),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF143B4A),
+                foregroundColor: const Color(0xFFE4EBEE),
+              ),
+              child: const Text('Got it'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _premiumToolChip({
+    required String label,
+    required String title,
+    required String availability,
+    required String description,
+    required IconData icon,
+    bool comingSoon = false,
+  }) {
+    return ActionChip(
+      avatar: Icon(
+        comingSoon ? Icons.hourglass_top_rounded : icon,
+        size: 18,
+        color: comingSoon ? const Color(0xFFFFD166) : const Color(0xFF69D9E8),
+      ),
+      label: Text(label),
+      labelStyle: const TextStyle(
+        color: Color(0xFFE4EBEE),
+        fontWeight: FontWeight.w800,
+        fontSize: 12.5,
+      ),
+      backgroundColor: Colors.black.withOpacity(0.28),
+      side: BorderSide(
+        color: comingSoon
+            ? const Color(0xFFFFD166).withOpacity(0.40)
+            : const Color(0xFF69D9E8).withOpacity(0.34),
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+      onPressed: () => _showPremiumFeaturePrompt(
+        title: title,
+        availability: availability,
+        description: description,
+      ),
+    );
+  }
+
+  Widget _chatPremiumIconButton({
+    required IconData icon,
+    required String title,
+    required String availability,
+    required String description,
+    bool comingSoon = false,
+  }) {
+    final accent = comingSoon
+        ? const Color(0xFFFFD166)
+        : const Color(0xFF69D9E8);
+
+    return SizedBox(
+      width: 50,
+      height: 56,
+      child: OutlinedButton(
+        onPressed: _loading
+            ? null
+            : () => _showPremiumFeaturePrompt(
+                title: title,
+                availability: availability,
+                description: description,
+              ),
+        style: OutlinedButton.styleFrom(
+          padding: EdgeInsets.zero,
+          foregroundColor: accent,
+          backgroundColor: Colors.black.withOpacity(0.18),
+          side: BorderSide(color: accent.withOpacity(0.42)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(17),
+          ),
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            Icon(icon, size: 23),
+            Positioned(
+              right: 5,
+              top: 5,
+              child: Icon(
+                comingSoon ? Icons.hourglass_top_rounded : Icons.lock_rounded,
+                size: 11,
+                color: accent,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  bool get _hasVoiceAccess {
+    return _currentTier == 'pro' ||
+        _currentTier == 'ultra' ||
+        _currentTier == 'enterprise';
+  }
+
+  Future<void> _loadCurrentTier() async {
+    if (kKorlixAccessToken == null || kKorlixAccessToken!.isEmpty) {
+      return;
+    }
+
+    if (_loadingTier) {
+      return;
+    }
+
+    setState(() {
+      _loadingTier = true;
+    });
+
+    try {
+      final response = await http.get(
+        Uri.parse('$kKorlixBackendBaseUrl/api/me'),
+        headers: _authHeaders(),
+      );
+
+      if (response.statusCode >= 400) {
+        return;
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final profile =
+          (data['profile'] as Map?)?.cast<String, dynamic>() ??
+          <String, dynamic>{};
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _currentTier = (profile['tier'] ?? 'basic').toString();
+      });
+    } catch (_) {
+      // Tier loading should never block the app.
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingTier = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleVoiceInput() async {
+    await _loadCurrentTier();
+
+    if (!_hasVoiceAccess) {
+      await _showPremiumFeaturePrompt(
+        title: 'Voice Input',
+        availability: 'Pro, Ultra Premium, Enterprise',
+        description:
+            'Speak your request instead of typing. Voice input is available for Pro and higher tiers.',
+      );
+      return;
+    }
+
+    if (_voiceListening) {
+      await _speechToText.stop();
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _voiceListening = false;
+      });
+
+      return;
+    }
+
+    try {
+      final available = await _speechToText.initialize(
+        onStatus: (status) {
+          if (status == 'done' || status == 'notListening') {
+            if (mounted) {
+              setState(() {
+                _voiceListening = false;
+              });
+            }
+          }
+        },
+        onError: (_) {
+          if (mounted) {
+            setState(() {
+              _voiceListening = false;
+            });
+          }
+        },
+      );
+
+      if (!available) {
+        if (!mounted) {
+          return;
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Voice input is not available on this device.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        return;
+      }
+
+      setState(() {
+        _voiceListening = true;
+      });
+
+      await _speechToText.listen(
+        listenMode: speech_to_text.ListenMode.dictation,
+        onResult: (result) {
+          final words = result.recognizedWords.trim();
+
+          if (words.isEmpty) {
+            return;
+          }
+
+          setState(() {
+            _controller.text = words;
+            _controller.selection = TextSelection.fromPosition(
+              TextPosition(offset: _controller.text.length),
+            );
+          });
+        },
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _voiceListening = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Voice input could not start. Check microphone permission.',
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
   Widget _buildCommandPanel() {
     final t = _t;
     final hasText = _controller.text.trim().isNotEmpty;
+    final hasResults = _results.isNotEmpty;
 
-    final scrollTitle = switch (_selectedLanguage) {
-      'es' => '¿Qué deseas saber?',
-      'fr' => 'Que souhaitez-vous savoir ?',
-      _ => 'What do you seek?',
-    };
+    final promptText = _selectedLanguage == 'es'
+        ? '¿Qué deseas saber?'
+        : _selectedLanguage == 'fr'
+        ? 'Que souhaitez-vous savoir ?'
+        : 'What do you seek?';
 
-    final scrollHint = switch (_selectedLanguage) {
-      'es' => 'Escribe tu solicitud...',
-      'fr' => 'Saisissez votre demande...',
-      _ => 'Type your request...',
-    };
+    final hintText = _selectedLanguage == 'es'
+        ? 'Escribe tu solicitud...'
+        : _selectedLanguage == 'fr'
+        ? 'Saisissez votre demande...'
+        : 'Type your request...';
 
-    final doneText = switch (_selectedLanguage) {
-      'es' => 'Considéralo hecho.',
-      'fr' => 'Considérez que c’est fait.',
-      _ => 'Consider it done.',
-    };
+    final readyText = _selectedLanguage == 'es'
+        ? 'La respuesta está lista.'
+        : _selectedLanguage == 'fr'
+        ? 'La réponse est prête.'
+        : 'The response is ready.';
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 22),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
       decoration: BoxDecoration(
-        color: const Color(0xFF071B27).withOpacity(0.74),
-        borderRadius: BorderRadius.circular(30),
+        color: const Color(0xFF071B27).withOpacity(0.88),
+        borderRadius: BorderRadius.circular(28),
         border: Border.all(
-          color: const Color(0xFF2EC7DF).withOpacity(0.42),
+          color: const Color(0xFF2EC7DF).withOpacity(0.46),
           width: 1.1,
         ),
         boxShadow: [
@@ -2795,13 +3316,14 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             spreadRadius: 3,
           ),
           BoxShadow(
-            color: Colors.black.withOpacity(0.42),
+            color: Colors.black.withOpacity(0.40),
             blurRadius: 24,
             offset: const Offset(0, 14),
           ),
         ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
@@ -2810,218 +3332,302 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w900,
-              letterSpacing: 0.2,
+              letterSpacing: 0.1,
               color: Color(0xFFE4EBEE),
             ),
           ),
+          const SizedBox(height: 8),
+          Text(
+            promptText,
+            textAlign: TextAlign.left,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.3,
+              color: Color(0xFFA9C6CF),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+
+          if (hasResults && !_loading) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0A2B3D).withOpacity(0.84),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: const Color(0xFF69D9E8).withOpacity(0.40),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF69D9E8).withOpacity(0.12),
+                    blurRadius: 20,
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.auto_awesome_rounded,
+                    color: Color(0xFF69D9E8),
+                    size: 22,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      readyText,
+                      style: const TextStyle(
+                        color: Color(0xFFE4EBEE),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const Text(
+                    'View below',
+                    style: TextStyle(
+                      color: Color(0xFF69D9E8),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           const SizedBox(height: 14),
 
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 430),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: AspectRatio(
-                  aspectRatio: 9 / 16,
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final w = constraints.maxWidth;
-                      final h = constraints.maxHeight;
-
-                      return Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Image.asset(
-                            _loading
-                                ? 'assets/characters/chee_chai_chee/workers/scroll_done_scene.png'
-                                : 'assets/characters/chee_chai_chee/workers/scroll_ask_scene.png',
-                            fit: BoxFit.cover,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 50,
+                height: 56,
+                child: OutlinedButton(
+                  onPressed: _loading ? null : _handleUploadPressed,
+                  style: OutlinedButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    foregroundColor: _pickedUploadFile == null
+                        ? const Color(0xFF69D9E8)
+                        : const Color(0xFFFFD166),
+                    backgroundColor: _pickedUploadFile == null
+                        ? Colors.black.withOpacity(0.18)
+                        : const Color(0xFF7C5A00).withOpacity(0.32),
+                    side: BorderSide(
+                      color: _pickedUploadFile == null
+                          ? const Color(0xFF69D9E8).withOpacity(0.42)
+                          : const Color(0xFFFFD166).withOpacity(0.82),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(17),
+                    ),
+                  ),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.center,
+                    children: [
+                      const Icon(Icons.attach_file_rounded, size: 23),
+                      if (!_hasDocumentUploadAccess)
+                        const Positioned(
+                          right: 5,
+                          top: 5,
+                          child: Icon(
+                            Icons.lock_rounded,
+                            size: 11,
+                            color: Color(0xFFFFD166),
                           ),
-
-                          Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.black.withOpacity(0.02),
-                                  Colors.black.withOpacity(0.10),
-                                  Colors.black.withOpacity(0.30),
-                                ],
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                              ),
-                            ),
-                          ),
-
-                          if (!_loading) ...[
-                            Positioned(
-                              left: w * 0.11,
-                              right: w * 0.11,
-                              top: h * 0.41,
-                              child: Text(
-                                scrollTitle,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: Color(0xFF071B27),
-                                  fontSize: 19,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.2,
-                                  shadows: [
-                                    Shadow(
-                                      color: Colors.white70,
-                                      blurRadius: 8,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-
-                            Positioned(
-                              left: w * 0.10,
-                              right: w * 0.10,
-                              top: h * 0.54,
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: TextField(
-                                      controller: _controller,
-                                      minLines: 1,
-                                      maxLines: 3,
-                                      cursorColor: const Color(0xFF071B27),
-                                      onChanged: (_) => setState(() {}),
-                                      onSubmitted: (_) {
-                                        if (!_loading &&
-                                            _controller.text
-                                                .trim()
-                                                .isNotEmpty) {
-                                          _generate();
-                                        }
-                                      },
-                                      style: const TextStyle(
-                                        fontSize: 14.5,
-                                        height: 1.25,
-                                        color: Color(0xFF071B27),
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                      decoration: InputDecoration(
-                                        hintText: scrollHint,
-                                        hintStyle: TextStyle(
-                                          color: const Color(
-                                            0xFF071B27,
-                                          ).withOpacity(0.60),
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                        filled: true,
-                                        fillColor: Colors.white.withOpacity(
-                                          0.78,
-                                        ),
-                                        contentPadding:
-                                            const EdgeInsets.symmetric(
-                                              horizontal: 13,
-                                              vertical: 12,
-                                            ),
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            999,
-                                          ),
-                                          borderSide: BorderSide.none,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  SizedBox(
-                                    width: 48,
-                                    height: 48,
-                                    child: ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                        padding: EdgeInsets.zero,
-                                        backgroundColor: hasText
-                                            ? const Color(0xFF0A2B3D)
-                                            : Colors.grey.shade700,
-                                        foregroundColor: const Color(
-                                          0xFF69D9E8,
-                                        ),
-                                        disabledBackgroundColor:
-                                            Colors.grey.shade700,
-                                        disabledForegroundColor: Colors.white38,
-                                        elevation: 0,
-                                        side: BorderSide(
-                                          color: hasText
-                                              ? const Color(0xFF69D9E8)
-                                              : Colors.white24,
-                                          width: 1,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                        ),
-                                      ),
-                                      onPressed: hasText ? _generate : null,
-                                      child: const Icon(
-                                        Icons.arrow_upward_rounded,
-                                        size: 28,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-
-                          if (_loading) ...[
-                            Positioned(
-                              left: w * 0.34,
-                              right: w * 0.08,
-                              top: h * 0.43,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.30),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: const Color(
-                                      0xFFFFE2A8,
-                                    ).withOpacity(0.70),
-                                  ),
-                                ),
-                                child: Text(
-                                  doneText,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    color: Color(0xFFFFE2A8),
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w900,
-                                    height: 1.1,
-                                    shadows: [
-                                      Shadow(
-                                        color: Colors.black,
-                                        blurRadius: 8,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      );
-                    },
+                        ),
+                    ],
                   ),
                 ),
               ),
-            ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 50,
+                height: 56,
+                child: OutlinedButton(
+                  onPressed: _loading ? null : _handleVoiceInput,
+                  style: OutlinedButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    foregroundColor: _hasVoiceAccess
+                        ? const Color(0xFF69D9E8)
+                        : const Color(0xFFFFD166),
+                    backgroundColor: _voiceListening
+                        ? const Color(0xFF143B4A).withOpacity(0.65)
+                        : Colors.black.withOpacity(0.18),
+                    side: BorderSide(
+                      color: _voiceListening
+                          ? const Color(0xFF69D9E8)
+                          : (_hasVoiceAccess
+                                ? const Color(0xFF69D9E8).withOpacity(0.42)
+                                : const Color(0xFFFFD166).withOpacity(0.44)),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(17),
+                    ),
+                  ),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.center,
+                    children: [
+                      Icon(
+                        _voiceListening
+                            ? Icons.stop_circle_outlined
+                            : Icons.mic_rounded,
+                        size: 23,
+                      ),
+                      if (!_hasVoiceAccess)
+                        const Positioned(
+                          right: 5,
+                          top: 5,
+                          child: Icon(
+                            Icons.lock_rounded,
+                            size: 11,
+                            color: Color(0xFFFFD166),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _controller,
+                  minLines: 1,
+                  maxLines: 4,
+                  cursorColor: const Color(0xFF69D9E8),
+                  onChanged: (_) => setState(() {}),
+                  onSubmitted: (_) {
+                    if (!_loading && _controller.text.trim().isNotEmpty) {
+                      _generate();
+                    }
+                  },
+                  style: const TextStyle(
+                    fontSize: 15.5,
+                    height: 1.30,
+                    color: Color(0xFFE4EBEE),
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: hintText,
+                    hintStyle: TextStyle(
+                      color: const Color(0xFFA9C6CF).withOpacity(0.74),
+                      fontSize: 15,
+                    ),
+                    filled: true,
+                    fillColor: Colors.black.withOpacity(0.42),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 15,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(18),
+                      borderSide: BorderSide(
+                        color: Colors.white.withOpacity(0.09),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(18),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF69D9E8),
+                        width: 1.3,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 56,
+                height: 56,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    backgroundColor: hasText
+                        ? const Color(0xFF143B4A)
+                        : const Color(0xFF334155),
+                    foregroundColor: const Color(0xFFE4EBEE),
+                    disabledBackgroundColor: const Color(0xFF334155),
+                    disabledForegroundColor: Colors.white54,
+                    elevation: 0,
+                    side: BorderSide(
+                      color: hasText
+                          ? const Color(0xFF69D9E8).withOpacity(0.70)
+                          : Colors.white12,
+                      width: 1,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(17),
+                    ),
+                  ),
+                  onPressed: (_loading || !hasText) ? null : _generate,
+                  child: _loading
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFFE4EBEE),
+                          ),
+                        )
+                      : const Icon(Icons.arrow_upward_rounded, size: 30),
+                ),
+              ),
+            ],
           ),
+
+          if (_pickedUploadFile != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0A2B3D).withOpacity(0.80),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: const Color(0xFFFFD166).withOpacity(0.42),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.description_outlined,
+                    color: Color(0xFFFFD166),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _pickedUploadFile!.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFFE4EBEE),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _loading ? null : _clearPickedUploadFile,
+                    icon: const Icon(Icons.close_rounded),
+                    color: const Color(0xFFA9C6CF),
+                    iconSize: 18,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           if (_loading) ...[
             const SizedBox(height: 14),
             MatrixThinkingPanel(message: t.matrixMessage),
           ],
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 15),
+
           Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -3031,7 +3637,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                 label: Text(action.label),
                 labelStyle: TextStyle(
                   color: _loading ? Colors.white38 : const Color(0xFFE4EBEE),
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                   fontSize: 13,
                 ),
                 backgroundColor: const Color(0xFF120D18),
@@ -3049,6 +3655,81 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             }).toList(),
           ),
 
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(13),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0A2B3D).withOpacity(0.58),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: const Color(0xFF2EC7DF).withOpacity(0.22),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Premium tools',
+                  style: TextStyle(
+                    color: Color(0xFF69D9E8),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    _premiumToolChip(
+                      label: 'Upload',
+                      title: 'Document Upload',
+                      availability: 'Pro, Ultra Premium, Enterprise',
+                      description:
+                          'Upload PDFs, Word documents, text files, and spreadsheets to ask Korlix AI questions about them.',
+                      icon: Icons.attach_file_rounded,
+                    ),
+                    _premiumToolChip(
+                      label: 'Voice',
+                      title: 'Voice Input',
+                      availability: 'Pro, Ultra Premium, Enterprise',
+                      description:
+                          'Speak your request instead of typing. Voice input will be tap-to-speak, not always listening.',
+                      icon: Icons.mic_rounded,
+                    ),
+                    _premiumToolChip(
+                      label: 'OCR',
+                      title: 'OCR and Handwriting Reader',
+                      availability: 'Ultra Premium, Enterprise',
+                      description:
+                          'Read images, scanned pictures, handwritten notes, screenshots, and scanned PDFs.',
+                      icon: Icons.document_scanner_rounded,
+                    ),
+                    _premiumToolChip(
+                      label: 'Video',
+                      title: 'Video Generation',
+                      availability: 'Ultra Premium, Enterprise',
+                      description:
+                          'Create AI-assisted video generations with controlled monthly limits.',
+                      icon: Icons.movie_creation_outlined,
+                    ),
+                    _premiumToolChip(
+                      label: 'Music',
+                      title: 'Music Production',
+                      availability: 'Coming soon paid add-on',
+                      description:
+                          'Music Production will be a separate paid add-on with music credits and usage limits.',
+                      icon: Icons.music_note_rounded,
+                      comingSoon: true,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
           if (_error != null) ...[
             const SizedBox(height: 14),
             Text(
@@ -3056,7 +3737,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.redAccent,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
