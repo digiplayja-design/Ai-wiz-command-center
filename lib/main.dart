@@ -8,9 +8,29 @@ import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
 
-void main() {
+bool kSupabaseReady = false;
+String? kKorlixAccessToken;
+String? kKorlixRefreshToken;
+String? kKorlixUserEmail;
+
+const String kKorlixBackendBaseUrl =
+    'https://chee-chai-chee-backend.onrender.com';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+  const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+
+  if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
+    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+
+    kSupabaseReady = true;
+  }
+
   runApp(const CheeChaiCheeApp());
 }
 
@@ -41,11 +61,360 @@ class CheeChaiCheeApp extends StatelessWidget {
     return MaterialApp(
       title: 'Korlix AI',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
+      theme: ThemeData(useMaterial3: true, brightness: Brightness.dark),
+      home: const AuthGate(),
+    );
+  }
+}
+
+class KorlixAuthSession {
+  final String accessToken;
+  final String? refreshToken;
+  final String? email;
+
+  const KorlixAuthSession({
+    required this.accessToken,
+    this.refreshToken,
+    this.email,
+  });
+}
+
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  bool get _signedIn =>
+      kKorlixAccessToken != null && kKorlixAccessToken!.isNotEmpty;
+
+  void _handleSignedIn(KorlixAuthSession session) {
+    setState(() {
+      kKorlixAccessToken = session.accessToken;
+      kKorlixRefreshToken = session.refreshToken;
+      kKorlixUserEmail = session.email;
+    });
+  }
+
+  void _handleSignOut() {
+    setState(() {
+      kKorlixAccessToken = null;
+      kKorlixRefreshToken = null;
+      kKorlixUserEmail = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_signedIn) {
+      return AuthScreen(onSignedIn: _handleSignedIn);
+    }
+
+    return Stack(
+      children: [
+        const CommandCenterScreen(),
+        Positioned(
+          top: 8,
+          right: 8,
+          child: SafeArea(
+            child: Material(
+              color: Colors.transparent,
+              child: TextButton.icon(
+                onPressed: _handleSignOut,
+                icon: const Icon(Icons.logout, size: 18),
+                label: const Text('Sign out'),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFE4EBEE),
+                  backgroundColor: Colors.black.withOpacity(0.32),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class AuthScreen extends StatefulWidget {
+  final ValueChanged<KorlixAuthSession> onSignedIn;
+
+  const AuthScreen({super.key, required this.onSignedIn});
+
+  @override
+  State<AuthScreen> createState() => _AuthScreenState();
+}
+
+class _AuthScreenState extends State<AuthScreen> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
+  bool _isSignUp = false;
+  bool _loading = false;
+  String? _message;
+  String? _error;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  String _cleanError(Object error) {
+    return error
+        .toString()
+        .replaceFirst('Exception: ', '')
+        .replaceFirst('AuthException(message: ', '')
+        .replaceFirst(', statusCode: 400, errorCode: invalid_credentials)', '');
+  }
+
+  Future<void> _submit() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      setState(() {
+        _error = 'Enter your email and password.';
+        _message = null;
+      });
+      return;
+    }
+
+    if (password.length < 6) {
+      setState(() {
+        _error = 'Password must be at least 6 characters.';
+        _message = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+      _message = null;
+    });
+
+    try {
+      final path = _isSignUp ? '/api/auth/signup' : '/api/auth/signin';
+
+      final response = await http.post(
+        Uri.parse('$kKorlixBackendBaseUrl$path'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'password': password}),
+      );
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode >= 400) {
+        throw Exception(data['error'] ?? 'Authentication failed.');
+      }
+
+      final session = data['session'] as Map<String, dynamic>?;
+
+      if (session == null || session['access_token'] == null) {
+        setState(() {
+          _message =
+              data['message']?.toString() ??
+              'Account created. Check your email to confirm your account, then sign in.';
+          _isSignUp = false;
+        });
+        return;
+      }
+
+      widget.onSignedIn(
+        KorlixAuthSession(
+          accessToken: session['access_token'].toString(),
+          refreshToken: session['refresh_token']?.toString(),
+          email: data['user']?['email']?.toString() ?? email,
+        ),
+      );
+    } catch (error) {
+      setState(() {
+        _error = _cleanError(error);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = _isSignUp
+        ? 'Create your Korlix AI account'
+        : 'Sign in to Korlix AI';
+    final buttonText = _isSignUp ? 'Create account' : 'Sign in';
+
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF040612), Color(0xFF071B27), Color(0xFF0A2B3D)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 430),
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.34),
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                      color: const Color(0xFF2EC7DF).withOpacity(0.38),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF2EC7DF).withOpacity(0.12),
+                        blurRadius: 36,
+                        spreadRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.asset(
+                        'assets/branding/korlix_mini_mark.png',
+                        height: 74,
+                        fit: BoxFit.contain,
+                      ),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'KORLIX AI',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 4,
+                          color: Color(0xFFE4EBEE),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        title,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          color: Color(0xFFA9C6CF),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      TextField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        style: const TextStyle(color: Color(0xFFE4EBEE)),
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          labelStyle: const TextStyle(color: Color(0xFFA9C6CF)),
+                          filled: true,
+                          fillColor: const Color(0xFF071B27).withOpacity(0.86),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        style: const TextStyle(color: Color(0xFFE4EBEE)),
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          labelStyle: const TextStyle(color: Color(0xFFA9C6CF)),
+                          filled: true,
+                          fillColor: const Color(0xFF071B27).withOpacity(0.86),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.redAccent),
+                        ),
+                      ],
+                      if (_message != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          _message!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Color(0xFF69D9E8)),
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 54,
+                        child: ElevatedButton(
+                          onPressed: _loading ? null : _submit,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF143B4A),
+                            foregroundColor: const Color(0xFFE4EBEE),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                          child: _loading
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFFE4EBEE),
+                                  ),
+                                )
+                              : Text(
+                                  buttonText,
+                                  style: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: _loading
+                            ? null
+                            : () {
+                                setState(() {
+                                  _isSignUp = !_isSignUp;
+                                  _error = null;
+                                  _message = null;
+                                });
+                              },
+                        child: Text(
+                          _isSignUp
+                              ? 'Already have an account? Sign in'
+                              : 'New here? Create account',
+                          style: const TextStyle(color: Color(0xFF69D9E8)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
-      home: const CommandCenterScreen(),
     );
   }
 }
@@ -54,10 +423,7 @@ class QuickAction {
   final String label;
   final String prompt;
 
-  const QuickAction({
-    required this.label,
-    required this.prompt,
-  });
+  const QuickAction({required this.label, required this.prompt});
 }
 
 class LanguageCopy {
@@ -187,18 +553,31 @@ class AppLanguages {
       considerDone: 'Consider it done.',
       quickActions: [
         QuickAction(label: 'Ask anything', prompt: 'Answer this clearly: '),
-        QuickAction(label: 'Build a plan', prompt: 'Build a step-by-step plan for '),
+        QuickAction(
+          label: 'Build a plan',
+          prompt: 'Build a step-by-step plan for ',
+        ),
         QuickAction(label: 'Write for me', prompt: 'Write a polished '),
-        QuickAction(label: 'Study / learn', prompt: 'Create a study guide for '),
-        QuickAction(label: 'Business help', prompt: 'Give me practical business advice for '),
-        QuickAction(label: 'Content ideas', prompt: 'Give me content ideas for '),
+        QuickAction(
+          label: 'Study / learn',
+          prompt: 'Create a study guide for ',
+        ),
+        QuickAction(
+          label: 'Business help',
+          prompt: 'Give me practical business advice for ',
+        ),
+        QuickAction(
+          label: 'Content ideas',
+          prompt: 'Give me content ideas for ',
+        ),
       ],
     ),
     LanguageCopy(
       code: 'es',
       label: 'Español',
       assetPath: 'assets/wizard_greeting_es.mp4',
-      appSubtitle: 'Elige tu personaje de IA. Pregunta cualquier cosa. Crea cualquier cosa.',
+      appSubtitle:
+          'Elige tu personaje de IA. Pregunta cualquier cosa. Crea cualquier cosa.',
       backendConnected: 'Sistema Korlix en línea',
       awaitingTitle: 'Chee Chai Chee espera.',
       awaitingSubtitle: 'Toca una vez para despertar al mago.',
@@ -229,24 +608,41 @@ class AppLanguages {
       deleted: 'Resultado eliminado.',
       cleared: 'Resultados borrados.',
       clearConfirmTitle: '¿Borrar todos los resultados?',
-      clearConfirmMessage: 'Esto eliminará todos los resultados de esta sesión.',
+      clearConfirmMessage:
+          'Esto eliminará todos los resultados de esta sesión.',
       answerBadge: 'Respuesta',
       fileBadge: 'Archivo',
       considerDone: 'Considéralo hecho.',
       quickActions: [
         QuickAction(label: 'Preguntar', prompt: 'Responde esto claramente: '),
-        QuickAction(label: 'Crear plan', prompt: 'Crea un plan paso a paso para '),
-        QuickAction(label: 'Escribir', prompt: 'Escribe un texto pulido sobre '),
-        QuickAction(label: 'Estudiar', prompt: 'Crea una guía de estudio para '),
-        QuickAction(label: 'Negocios', prompt: 'Dame consejos prácticos de negocio para '),
-        QuickAction(label: 'Ideas de contenido', prompt: 'Dame ideas de contenido para '),
+        QuickAction(
+          label: 'Crear plan',
+          prompt: 'Crea un plan paso a paso para ',
+        ),
+        QuickAction(
+          label: 'Escribir',
+          prompt: 'Escribe un texto pulido sobre ',
+        ),
+        QuickAction(
+          label: 'Estudiar',
+          prompt: 'Crea una guía de estudio para ',
+        ),
+        QuickAction(
+          label: 'Negocios',
+          prompt: 'Dame consejos prácticos de negocio para ',
+        ),
+        QuickAction(
+          label: 'Ideas de contenido',
+          prompt: 'Dame ideas de contenido para ',
+        ),
       ],
     ),
     LanguageCopy(
       code: 'fr',
       label: 'Français',
       assetPath: 'assets/wizard_greeting_fr.mp4',
-      appSubtitle: 'Choisissez votre personnage IA. Posez n’importe quelle question. Créez n’importe quoi.',
+      appSubtitle:
+          'Choisissez votre personnage IA. Posez n’importe quelle question. Créez n’importe quoi.',
       backendConnected: 'Système Korlix en ligne',
       awaitingTitle: 'Chee Chai Chee attend.',
       awaitingSubtitle: 'Touchez une fois pour réveiller le sorcier.',
@@ -277,26 +673,36 @@ class AppLanguages {
       deleted: 'Résultat supprimé.',
       cleared: 'Résultats effacés.',
       clearConfirmTitle: 'Effacer tous les résultats ?',
-      clearConfirmMessage: 'Cela supprimera tous les résultats de cette session.',
+      clearConfirmMessage:
+          'Cela supprimera tous les résultats de cette session.',
       answerBadge: 'Réponse',
       fileBadge: 'Fichier',
       considerDone: 'Considérez que c’est fait.',
       quickActions: [
         QuickAction(label: 'Demander', prompt: 'Réponds clairement à ceci : '),
-        QuickAction(label: 'Créer un plan', prompt: 'Crée un plan étape par étape pour '),
-        QuickAction(label: 'Écrire', prompt: 'Rédige un texte professionnel sur '),
+        QuickAction(
+          label: 'Créer un plan',
+          prompt: 'Crée un plan étape par étape pour ',
+        ),
+        QuickAction(
+          label: 'Écrire',
+          prompt: 'Rédige un texte professionnel sur ',
+        ),
         QuickAction(label: 'Étudier', prompt: 'Crée un guide d’étude pour '),
-        QuickAction(label: 'Business', prompt: 'Donne-moi des conseils pratiques pour '),
-        QuickAction(label: 'Idées contenu', prompt: 'Donne-moi des idées de contenu pour '),
+        QuickAction(
+          label: 'Business',
+          prompt: 'Donne-moi des conseils pratiques pour ',
+        ),
+        QuickAction(
+          label: 'Idées contenu',
+          prompt: 'Donne-moi des idées de contenu pour ',
+        ),
       ],
     ),
   ];
 
   static LanguageCopy byCode(String code) {
-    return all.firstWhere(
-      (item) => item.code == code,
-      orElse: () => all.first,
-    );
+    return all.firstWhere((item) => item.code == code, orElse: () => all.first);
   }
 }
 
@@ -335,6 +741,16 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
 
   LanguageCopy get _t => AppLanguages.byCode(_selectedLanguage);
 
+  Map<String, String> _authHeaders() {
+    final headers = <String, String>{'Content-Type': 'application/json'};
+
+    if (kKorlixAccessToken != null && kKorlixAccessToken!.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $kKorlixAccessToken';
+    }
+
+    return headers;
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -352,10 +768,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         _ => 'consider_done_en.mp3',
       };
 
-      await _wizardCuePlayer.play(
-        AssetSource(asset),
-        volume: 1.0,
-      );
+      await _wizardCuePlayer.play(AssetSource(asset), volume: 1.0);
     } catch (_) {
       // The wizard cue is optional. The app should still answer if audio fails.
     }
@@ -393,9 +806,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     final command = _controller.text.trim();
 
     if (command.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_t.commandEmpty)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_t.commandEmpty)));
       return;
     }
 
@@ -412,7 +825,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       final response = await http
           .post(
             Uri.parse(backendUrl()),
-            headers: {'Content-Type': 'application/json'},
+            headers: _authHeaders(),
             body: jsonEncode({
               'command': command,
               'language': _selectedLanguage,
@@ -464,11 +877,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       return clean[0].toUpperCase() + clean.substring(1);
     }
 
-    final words = RegExp(r'[A-Za-zÀ-ÿ0-9]+')
-        .allMatches(clean)
-        .map((match) => match.group(0)!)
-        .take(8)
-        .toList();
+    final words = RegExp(
+      r'[A-Za-zÀ-ÿ0-9]+',
+    ).allMatches(clean).map((match) => match.group(0)!).take(8).toList();
 
     return words.isEmpty ? 'Chee Chai Chee' : words.join(' ');
   }
@@ -559,7 +970,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       final isNumbered = RegExp(r'^\d+\.\s+').hasMatch(clean);
       final isBullet = clean.startsWith('- ');
 
-      final isHeading = clean.length <= 48 &&
+      final isHeading =
+          clean.length <= 48 &&
           !clean.endsWith('.') &&
           !isNumbered &&
           !isBullet &&
@@ -627,10 +1039,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                 pw.Expanded(
                   child: pw.Text(
                     clean.substring(2),
-                    style: const pw.TextStyle(
-                      fontSize: 10,
-                      lineSpacing: 2,
-                    ),
+                    style: const pw.TextStyle(fontSize: 10, lineSpacing: 2),
                   ),
                 ),
               ],
@@ -645,10 +1054,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
           padding: const pw.EdgeInsets.only(bottom: 5.5),
           child: pw.Text(
             clean,
-            style: const pw.TextStyle(
-              fontSize: 10,
-              lineSpacing: 2,
-            ),
+            style: const pw.TextStyle(fontSize: 10, lineSpacing: 2),
           ),
         ),
       );
@@ -783,9 +1189,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     } catch (_) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_t.pdfError)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_t.pdfError)));
     }
   }
 
@@ -796,9 +1202,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(_t.copied)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(_t.copied)));
   }
 
   void _deleteResult(GeneratedItem item) {
@@ -806,9 +1212,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       _results.remove(item);
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(_t.deleted)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(_t.deleted)));
   }
 
   Future<void> _clearAllResults() async {
@@ -846,9 +1252,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(_t.cleared)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(_t.cleared)));
   }
 
   void _showResult(GeneratedItem item) {
@@ -909,11 +1315,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         width: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              Color(0xFF040612),
-              Color(0xFF10173A),
-              Color(0xFF250032),
-            ],
+            colors: [Color(0xFF040612), Color(0xFF10173A), Color(0xFF250032)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -1147,7 +1549,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                                       onChanged: (_) => setState(() {}),
                                       onSubmitted: (_) {
                                         if (!_loading &&
-                                            _controller.text.trim().isNotEmpty) {
+                                            _controller.text
+                                                .trim()
+                                                .isNotEmpty) {
                                           _generate();
                                         }
                                       },
@@ -1160,20 +1564,24 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                                       decoration: InputDecoration(
                                         hintText: scrollHint,
                                         hintStyle: TextStyle(
-                                          color: const Color(0xFF071B27)
-                                              .withOpacity(0.60),
+                                          color: const Color(
+                                            0xFF071B27,
+                                          ).withOpacity(0.60),
                                           fontWeight: FontWeight.w600,
                                         ),
                                         filled: true,
-                                        fillColor: Colors.white.withOpacity(0.78),
+                                        fillColor: Colors.white.withOpacity(
+                                          0.78,
+                                        ),
                                         contentPadding:
                                             const EdgeInsets.symmetric(
-                                          horizontal: 13,
-                                          vertical: 12,
-                                        ),
+                                              horizontal: 13,
+                                              vertical: 12,
+                                            ),
                                         border: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(999),
+                                          borderRadius: BorderRadius.circular(
+                                            999,
+                                          ),
                                           borderSide: BorderSide.none,
                                         ),
                                       ),
@@ -1189,12 +1597,12 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                                         backgroundColor: hasText
                                             ? const Color(0xFF0A2B3D)
                                             : Colors.grey.shade700,
-                                        foregroundColor:
-                                            const Color(0xFF69D9E8),
+                                        foregroundColor: const Color(
+                                          0xFF69D9E8,
+                                        ),
                                         disabledBackgroundColor:
                                             Colors.grey.shade700,
-                                        disabledForegroundColor:
-                                            Colors.white38,
+                                        disabledForegroundColor: Colors.white38,
                                         elevation: 0,
                                         side: BorderSide(
                                           color: hasText
@@ -1203,8 +1611,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                                           width: 1,
                                         ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(16),
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
                                         ),
                                       ),
                                       onPressed: hasText ? _generate : null,
@@ -1233,8 +1642,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                                   color: Colors.black.withOpacity(0.30),
                                   borderRadius: BorderRadius.circular(14),
                                   border: Border.all(
-                                    color: const Color(0xFFFFE2A8)
-                                        .withOpacity(0.70),
+                                    color: const Color(
+                                      0xFFFFE2A8,
+                                    ).withOpacity(0.70),
                                   ),
                                 ),
                                 child: Text(
@@ -1279,9 +1689,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
               return ActionChip(
                 label: Text(action.label),
                 labelStyle: TextStyle(
-                  color: _loading
-                      ? Colors.white38
-                      : const Color(0xFFE4EBEE),
+                  color: _loading ? Colors.white38 : const Color(0xFFE4EBEE),
                   fontWeight: FontWeight.w700,
                   fontSize: 13,
                 ),
@@ -1315,7 +1723,6 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       ),
     );
   }
-
 
   Widget _buildResults() {
     final t = _t;
@@ -1361,9 +1768,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.09),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.15),
-        ),
+        border: Border.all(color: Colors.white.withOpacity(0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1371,7 +1776,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
           Row(
             children: [
               Icon(
-                item.allowPdf ? Icons.picture_as_pdf : Icons.chat_bubble_outline,
+                item.allowPdf
+                    ? Icons.picture_as_pdf
+                    : Icons.chat_bubble_outline,
                 color: item.allowPdf ? Colors.redAccent : Colors.cyanAccent,
                 size: 30,
               ),
@@ -1386,7 +1793,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.black.withOpacity(0.35),
                   borderRadius: BorderRadius.circular(999),
@@ -1400,10 +1810,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            item.command,
-            style: const TextStyle(color: Colors.white60),
-          ),
+          Text(item.command, style: const TextStyle(color: Colors.white60)),
           const SizedBox(height: 10),
           Text(
             preview,
@@ -1447,10 +1854,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
 class MatrixThinkingPanel extends StatefulWidget {
   final String message;
 
-  const MatrixThinkingPanel({
-    super.key,
-    required this.message,
-  });
+  const MatrixThinkingPanel({super.key, required this.message});
 
   @override
   State<MatrixThinkingPanel> createState() => _MatrixThinkingPanelState();
@@ -1484,7 +1888,7 @@ class _MatrixThinkingPanelState extends State<MatrixThinkingPanel>
     for (var i = 0; i < length; i++) {
       final index =
           ((seed * 7) + i * 11 + (_controller.value * 100).floor()) %
-              _chars.length;
+          _chars.length;
       buffer.write(_chars[index]);
     }
 
@@ -1502,9 +1906,7 @@ class _MatrixThinkingPanelState extends State<MatrixThinkingPanel>
           decoration: BoxDecoration(
             color: Colors.black.withOpacity(0.48),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: Colors.cyanAccent.withOpacity(0.30),
-            ),
+            border: Border.all(color: Colors.cyanAccent.withOpacity(0.30)),
             boxShadow: [
               BoxShadow(
                 color: Colors.cyanAccent.withOpacity(0.12),
@@ -1651,27 +2053,31 @@ class _TalkingWizardHostState extends State<TalkingWizardHost> {
     controller.setVolume(1.0);
     controller.seekTo(Duration.zero);
 
-    controller.play().then((_) {
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (!mounted) return;
+    controller
+        .play()
+        .then((_) {
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (!mounted) return;
 
-        final currentController = _controller;
+            final currentController = _controller;
 
-        if (currentController != null && !currentController.value.isPlaying) {
+            if (currentController != null &&
+                !currentController.value.isPlaying) {
+              setState(() {
+                _started = false;
+                _needsTap = true;
+              });
+            }
+          });
+        })
+        .catchError((_) {
+          if (!mounted) return;
+
           setState(() {
             _started = false;
             _needsTap = true;
           });
-        }
-      });
-    }).catchError((_) {
-      if (!mounted) return;
-
-      setState(() {
-        _started = false;
-        _needsTap = true;
-      });
-    });
+        });
   }
 
   void _replayWizard() {
@@ -1690,9 +2096,7 @@ class _TalkingWizardHostState extends State<TalkingWizardHost> {
           decoration: BoxDecoration(
             color: Colors.black.withOpacity(0.30),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: Colors.cyanAccent.withOpacity(0.25),
-            ),
+            border: Border.all(color: Colors.cyanAccent.withOpacity(0.25)),
           ),
           child: Wrap(
             alignment: WrapAlignment.center,
@@ -1805,9 +2209,7 @@ class _TalkingWizardHostState extends State<TalkingWizardHost> {
                               Text(
                                 current.awaitingSubtitle,
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                ),
+                                style: const TextStyle(color: Colors.white70),
                               ),
                               const SizedBox(height: 16),
                               FilledButton.icon(
@@ -1830,9 +2232,7 @@ class _TalkingWizardHostState extends State<TalkingWizardHost> {
                             Text(
                               _error!,
                               textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.redAccent,
-                              ),
+                              style: const TextStyle(color: Colors.redAccent),
                             ),
                             const SizedBox(height: 12),
                             FilledButton(
