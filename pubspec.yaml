@@ -69,6 +69,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/characters/phil/intro.mp4
     - assets/characters/chee_chai_chee/workers/scroll_done_scene.png
     - assets/characters/chee_chai_chee/workers/scroll_ask_scene.png
     - assets/branding/korlix_full_logo.png
