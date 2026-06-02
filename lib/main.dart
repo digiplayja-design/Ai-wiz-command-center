@@ -2361,19 +2361,143 @@ class AppLanguages {
       fileBadge: 'File',
       considerDone: 'Consider it done.',
       quickActions: [
-        QuickAction(label: 'Ask anything', prompt: 'Answer this clearly: '),
         QuickAction(
-          label: 'Build a plan',
-          prompt: 'Build a step-by-step plan for ',
+          label: 'Improve my picture',
+          prompt:
+              'Transform this image into a breathtaking professional photograph captured by a world-class photographer. Cinematic composition with masterful framing, perfect balance, and strong visual storytelling. Flawless cinematic lighting with soft, flattering key light, gentle natural fill, elegant rim lighting for beautiful subject separation, and subtle volumetric atmosphere. Photorealistic skin tones with accurate, lifelike coloration, natural subsurface scattering, realistic skin texture, visible pores, and authentic micro-details while maintaining a natural, believable appearance. Razor-sharp focus on the eyes and key facial features, with a dreamy shallow depth of field and creamy, smooth bokeh in the background. Exceptional fine detail in individual hair strands, fabric textures, and environmental elements. High dynamic range with rich tonal gradation, deep yet detailed shadows, and luminous highlights without clipping. Sophisticated cinematic color grading with natural yet refined vibrancy and filmic contrast. Shot on a high-end full-frame camera (Sony A1 or Canon EOS R5) using an 85mm f/1.4 prime lens at f/1.8–f/2.2. Ultra-photorealistic, hyper-detailed, 8K resolution, award-winning photography quality, emotionally evocative, timeless masterpiece, National Geographic / high-fashion editorial level.',
         ),
-        QuickAction(label: 'Write for me', prompt: 'Write a polished '),
+        QuickAction(
+          label: 'Write my Resume',
+          prompt:
+              r'''You are an expert professional resume writer and modern resume designer with 15+ years of experience creating resumes for executives, professionals, and career changers. Your resumes are known for being both **highly effective (ATS-friendly + achievement-driven)** and **aesthetically excellent** — clean, modern, visually balanced, and premium-looking.
+
+Before you write or design anything, you must first gather the necessary information by asking me questions.
+
+Ask me all the questions below in a clean, organized bullet-point format. Do **not** generate the resume until I have answered your questions.
+
+### Questions you must ask me:
+
+**Personal & Contact Information**
+- What is your full name as you want it to appear on the resume?
+- What is your phone number, professional email address, city and state (or country), and LinkedIn URL or personal website/portfolio (if any)?
+
+**Target Role**
+- What specific job title or role are you targeting? What industry or company type are you applying to? (If you have a job description, please paste it.)
+
+**Professional Experience**
+- Please list your work experience in reverse chronological order. For each position, provide: Job title, Company name, Location, Employment dates (Month/Year – Month/Year), and 4–6 strong bullet points describing your responsibilities and achievements (ideally with numbers, percentages, or results).
+
+**Education**
+- What is your educational background? Please include degree(s), major/field of study, school/university name, graduation year, and any honors, GPA (if above 3.5), or relevant coursework.
+
+**Skills, Tools & Certifications**
+- What are your strongest technical/hard skills and tools/software you’re proficient in?
+- What soft skills or leadership qualities do you want to highlight?
+- Do you have any certifications, licenses, or professional development worth including?
+
+**Additional Sections**
+- Do you have any notable projects, volunteer work, publications, awards, speaking engagements, or leadership roles outside of work that should be included?
+- Are there any employment gaps, career transitions, or specific situations you want me to handle strategically?
+
+**Design & Formatting Preferences**
+- Do you prefer a **1-page** or **2-page** resume?
+- What design style do you like? (Examples: Modern minimalist, Clean corporate, Slightly creative, Premium executive, Tech-focused, etc.)
+- Any preferred color scheme or accent color? (I usually recommend elegant, professional palettes like deep navy + charcoal, teal accents, or sophisticated gray + black.)
+- Any sections you specifically want or don’t want on the resume?
+
+**Final Instructions**
+- Once I answer all your questions, create a **visually stunning, modern, and aesthetically pleasing resume**.
+- Use excellent visual hierarchy, generous but balanced white space, professional typography, and a clean layout that looks premium (not generic or outdated).
+- Make every bullet point achievement-oriented and results-driven.
+- Ensure the resume is ATS-friendly while still looking beautiful.
+- Present the final resume in well-formatted Markdown that I can easily copy into a design tool or convert to PDF.
+- Offer 2–3 different layout/style variations if appropriate.
+
+Start by asking me the questions now.''',
+        ),
+        QuickAction(
+          label: 'Email enhancer',
+          prompt:
+              r'''You are an expert at writing clear, professional, and effective emails. First ask me:
+- Who is the recipient and what’s our relationship?
+- What’s the main purpose of the email?
+- Any specific points or tone I want (friendly, firm, persuasive, apologetic, etc.)
+
+Then write a polished email with a good subject line and clear call-to-action.''',
+        ),
         QuickAction(
           label: 'Study / learn',
           prompt: 'Create a study guide for ',
         ),
         QuickAction(
-          label: 'Business help',
-          prompt: 'Give me practical business advice for ',
+          label: 'Fix My Credit Report',
+          prompt:
+              r'''You are a senior FCRA/FDCPA credit repair strategist and consumer rights expert with deep knowledge of the Fair Credit Reporting Act (15 U.S.C. §§ 1681–1681x), Fair Debt Collection Practices Act (15 U.S.C. § 1692 et seq.), Regulation V, FACTA, and current CFPB enforcement standards. You specialize in creating aggressive yet fully compliant credit repair strategies that maximize deletions while remaining legally sound.
+
+**IMPORTANT USER INSTRUCTION (display this clearly):**
+Please attach your full credit reports from AnnualCreditReport.com and/or directly from Equifax, Experian, and TransUnion before proceeding. The more complete the reports (including all tradelines, collections, and account details), the more powerful and targeted the strategy and letters will be.
+
+**Your Task:**
+The user has attached their credit reports. Carefully analyze every page and extract all negative, inaccurate, outdated, unverifiable, or questionable items. Then generate a complete, professional, and potent credit repair package.
+
+Create the following deliverables in this exact order:
+
+### 1. Credit Report Analysis & Prioritized Strategy
+- Summarize the current state of the credit reports across all three bureaus.
+- Identify and list every negative item (late payments, collections, charge-offs, bankruptcies, inquiries, judgments, etc.) with:
+  - Creditor / Collection agency name
+  - Account number (last 4)
+  - Date of first delinquency / Date reported
+  - Current status
+  - Which bureaus it appears on
+- Create a **prioritized action plan** ranked by potential score impact and ease of removal.
+- Include a 30/60/90-day timeline with clear milestones.
+
+### 2. Complete Set of Ready-to-Send Letters
+Generate professional, legally grounded letters for the following (customized based on the actual reports):
+
+**A. Credit Bureau Dispute Letters** (one for each major issue or grouped strategically)
+- Cite **15 U.S.C. § 1681i** (reinvestigation requirements) and **§ 1681e(b)** (reasonable procedures for accuracy).
+- Demand a full investigation and Method of Verification (MOV).
+- Clearly state why the information is inaccurate, incomplete, or unverifiable.
+- Request deletion if the information cannot be verified within 30 days.
+
+**B. Direct Dispute Letters to Furnishers** (per **15 U.S.C. § 1681s-2**)
+- Send to the original creditors or collection agencies.
+- Demand they investigate and correct or delete the information they are reporting.
+
+**C. Debt Validation / Cease & Desist Letters** (for any collection accounts)
+- Cite **FDCPA § 1692g**.
+- Request full validation of the debt and demand they cease collection activity until verification is provided.
+
+**D. 30-Day Follow-Up / Failure to Investigate Letters**
+- Templates to send if a bureau or furnisher fails to respond properly within the legal timeline.
+
+**E. Goodwill Letters** (for accurate but negative items the user may want removed through negotiation)
+
+### 3. Escalation & Enforcement Templates
+- Ready-to-use **CFPB complaint** language (for when bureaus or furnishers violate FCRA timelines or fail to investigate reasonably).
+- State Attorney General complaint template.
+- Instructions on when and how to escalate.
+
+### 4. Record-Keeping & Documentation System
+- Provide a simple tracking table format the user can use.
+- Checklist of what to document (dates sent, certified mail receipts, responses received, etc.).
+- Guidance on how to prove violations if needed for complaints or legal action.
+
+### 5. Post-Repair Recommendations
+- Steps to take immediately after successful deletions.
+- Credit rebuilding strategy tailored to the user’s current situation.
+- Warnings about what not to do (e.g., applying for new credit too soon).
+
+**Letter Requirements:**
+- All letters must be professional, factual, and assertive.
+- Use precise legal citations where they strengthen the position.
+- Never use threats, abusive language, or anything that could be considered harassment.
+- Make each letter ready to print, sign, and mail via certified mail with return receipt requested.
+- Clearly instruct the user on how and where to send each letter.
+
+Analyze the attached credit reports thoroughly and produce a complete, high-impact credit repair package. Focus on maximum legal pressure while staying fully compliant with consumer protection laws.''',
         ),
         QuickAction(
           label: 'Content ideas',
@@ -2490,8 +2614,53 @@ class AppLanguages {
       quickActions: [
         QuickAction(label: 'Demander', prompt: 'Réponds clairement à ceci : '),
         QuickAction(
-          label: 'Créer un plan',
-          prompt: 'Crée un plan étape par étape pour ',
+          label: 'Rédiger mon CV',
+          prompt:
+              r'''You are an expert professional resume writer and modern resume designer with 15+ years of experience creating resumes for executives, professionals, and career changers. Your resumes are known for being both **highly effective (ATS-friendly + achievement-driven)** and **aesthetically excellent** — clean, modern, visually balanced, and premium-looking.
+
+Before you write or design anything, you must first gather the necessary information by asking me questions.
+
+Ask me all the questions below in a clean, organized bullet-point format. Do **not** generate the resume until I have answered your questions.
+
+### Questions you must ask me:
+
+**Personal & Contact Information**
+- What is your full name as you want it to appear on the resume?
+- What is your phone number, professional email address, city and state (or country), and LinkedIn URL or personal website/portfolio (if any)?
+
+**Target Role**
+- What specific job title or role are you targeting? What industry or company type are you applying to? (If you have a job description, please paste it.)
+
+**Professional Experience**
+- Please list your work experience in reverse chronological order. For each position, provide: Job title, Company name, Location, Employment dates (Month/Year – Month/Year), and 4–6 strong bullet points describing your responsibilities and achievements (ideally with numbers, percentages, or results).
+
+**Education**
+- What is your educational background? Please include degree(s), major/field of study, school/university name, graduation year, and any honors, GPA (if above 3.5), or relevant coursework.
+
+**Skills, Tools & Certifications**
+- What are your strongest technical/hard skills and tools/software you’re proficient in?
+- What soft skills or leadership qualities do you want to highlight?
+- Do you have any certifications, licenses, or professional development worth including?
+
+**Additional Sections**
+- Do you have any notable projects, volunteer work, publications, awards, speaking engagements, or leadership roles outside of work that should be included?
+- Are there any employment gaps, career transitions, or specific situations you want me to handle strategically?
+
+**Design & Formatting Preferences**
+- Do you prefer a **1-page** or **2-page** resume?
+- What design style do you like? (Examples: Modern minimalist, Clean corporate, Slightly creative, Premium executive, Tech-focused, etc.)
+- Any preferred color scheme or accent color? (I usually recommend elegant, professional palettes like deep navy + charcoal, teal accents, or sophisticated gray + black.)
+- Any sections you specifically want or don’t want on the resume?
+
+**Final Instructions**
+- Once I answer all your questions, create a **visually stunning, modern, and aesthetically pleasing resume**.
+- Use excellent visual hierarchy, generous but balanced white space, professional typography, and a clean layout that looks premium (not generic or outdated).
+- Make every bullet point achievement-oriented and results-driven.
+- Ensure the resume is ATS-friendly while still looking beautiful.
+- Present the final resume in well-formatted Markdown that I can easily copy into a design tool or convert to PDF.
+- Offer 2–3 different layout/style variations if appropriate.
+
+Start by asking me the questions now.''',
         ),
         QuickAction(
           label: 'Écrire',
@@ -2499,8 +2668,74 @@ class AppLanguages {
         ),
         QuickAction(label: 'Étudier', prompt: 'Crée un guide d’étude pour '),
         QuickAction(
-          label: 'Business',
-          prompt: 'Donne-moi des conseils pratiques pour ',
+          label: 'Fix My Credit Report',
+          prompt:
+              r'''You are a senior FCRA/FDCPA credit repair strategist and consumer rights expert with deep knowledge of the Fair Credit Reporting Act (15 U.S.C. §§ 1681–1681x), Fair Debt Collection Practices Act (15 U.S.C. § 1692 et seq.), Regulation V, FACTA, and current CFPB enforcement standards. You specialize in creating aggressive yet fully compliant credit repair strategies that maximize deletions while remaining legally sound.
+
+**IMPORTANT USER INSTRUCTION (display this clearly):**
+Please attach your full credit reports from AnnualCreditReport.com and/or directly from Equifax, Experian, and TransUnion before proceeding. The more complete the reports (including all tradelines, collections, and account details), the more powerful and targeted the strategy and letters will be.
+
+**Your Task:**
+The user has attached their credit reports. Carefully analyze every page and extract all negative, inaccurate, outdated, unverifiable, or questionable items. Then generate a complete, professional, and potent credit repair package.
+
+Create the following deliverables in this exact order:
+
+### 1. Credit Report Analysis & Prioritized Strategy
+- Summarize the current state of the credit reports across all three bureaus.
+- Identify and list every negative item (late payments, collections, charge-offs, bankruptcies, inquiries, judgments, etc.) with:
+  - Creditor / Collection agency name
+  - Account number (last 4)
+  - Date of first delinquency / Date reported
+  - Current status
+  - Which bureaus it appears on
+- Create a **prioritized action plan** ranked by potential score impact and ease of removal.
+- Include a 30/60/90-day timeline with clear milestones.
+
+### 2. Complete Set of Ready-to-Send Letters
+Generate professional, legally grounded letters for the following (customized based on the actual reports):
+
+**A. Credit Bureau Dispute Letters** (one for each major issue or grouped strategically)
+- Cite **15 U.S.C. § 1681i** (reinvestigation requirements) and **§ 1681e(b)** (reasonable procedures for accuracy).
+- Demand a full investigation and Method of Verification (MOV).
+- Clearly state why the information is inaccurate, incomplete, or unverifiable.
+- Request deletion if the information cannot be verified within 30 days.
+
+**B. Direct Dispute Letters to Furnishers** (per **15 U.S.C. § 1681s-2**)
+- Send to the original creditors or collection agencies.
+- Demand they investigate and correct or delete the information they are reporting.
+
+**C. Debt Validation / Cease & Desist Letters** (for any collection accounts)
+- Cite **FDCPA § 1692g**.
+- Request full validation of the debt and demand they cease collection activity until verification is provided.
+
+**D. 30-Day Follow-Up / Failure to Investigate Letters**
+- Templates to send if a bureau or furnisher fails to respond properly within the legal timeline.
+
+**E. Goodwill Letters** (for accurate but negative items the user may want removed through negotiation)
+
+### 3. Escalation & Enforcement Templates
+- Ready-to-use **CFPB complaint** language (for when bureaus or furnishers violate FCRA timelines or fail to investigate reasonably).
+- State Attorney General complaint template.
+- Instructions on when and how to escalate.
+
+### 4. Record-Keeping & Documentation System
+- Provide a simple tracking table format the user can use.
+- Checklist of what to document (dates sent, certified mail receipts, responses received, etc.).
+- Guidance on how to prove violations if needed for complaints or legal action.
+
+### 5. Post-Repair Recommendations
+- Steps to take immediately after successful deletions.
+- Credit rebuilding strategy tailored to the user’s current situation.
+- Warnings about what not to do (e.g., applying for new credit too soon).
+
+**Letter Requirements:**
+- All letters must be professional, factual, and assertive.
+- Use precise legal citations where they strengthen the position.
+- Never use threats, abusive language, or anything that could be considered harassment.
+- Make each letter ready to print, sign, and mail via certified mail with return receipt requested.
+- Clearly instruct the user on how and where to send each letter.
+
+Analyze the attached credit reports thoroughly and produce a complete, high-impact credit repair package. Focus on maximum legal pressure while staying fully compliant with consumer protection laws.''',
         ),
         QuickAction(
           label: 'Idées contenu',
