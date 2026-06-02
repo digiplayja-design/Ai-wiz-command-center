@@ -742,6 +742,119 @@ class _KorlixBasicAdBannerState extends State<KorlixBasicAdBanner> {
   }
 }
 
+class KorlixCharacterIntroVideo extends StatefulWidget {
+  final String assetPath;
+  final bool selected;
+  final bool locked;
+
+  const KorlixCharacterIntroVideo({
+    super.key,
+    required this.assetPath,
+    required this.selected,
+    required this.locked,
+  });
+
+  @override
+  State<KorlixCharacterIntroVideo> createState() =>
+      _KorlixCharacterIntroVideoState();
+}
+
+class _KorlixCharacterIntroVideoState extends State<KorlixCharacterIntroVideo> {
+  late final VideoPlayerController _controller;
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = VideoPlayerController.asset(widget.assetPath)
+      ..setLooping(true)
+      ..setVolume(0);
+
+    _controller.initialize().then((_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _ready = true;
+      });
+
+      _controller.play();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant KorlixCharacterIntroVideo oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (_ready && !_controller.value.isPlaying) {
+      _controller.play();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = widget.selected
+        ? const Color(0xFF69D9E8)
+        : widget.locked
+        ? const Color(0xFFFFD166)
+        : const Color(0xFF2EC7DF);
+
+    return Container(
+      height: 210,
+      width: double.infinity,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.34),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: borderColor.withOpacity(widget.selected ? 0.82 : 0.38),
+          width: widget.selected ? 1.4 : 1,
+        ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (_ready)
+            FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width: _controller.value.size.width,
+                height: _controller.value.size.height,
+                child: VideoPlayer(_controller),
+              ),
+            )
+          else
+            const Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFF69D9E8),
+                strokeWidth: 2,
+              ),
+            ),
+          if (widget.locked)
+            Container(
+              color: Colors.black.withOpacity(0.34),
+              child: const Center(
+                child: Icon(
+                  Icons.lock_rounded,
+                  color: Color(0xFFFFD166),
+                  size: 36,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class KorlixAccountButton extends StatefulWidget {
   const KorlixAccountButton({super.key});
 
@@ -937,6 +1050,19 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     );
   }
 
+  String? _characterIntroAsset(String characterId) {
+    switch (characterId) {
+      case 'jj':
+      case 'JJ':
+        return 'assets/characters/jj/intro.mp4';
+      case 'phil':
+      case 'Phil':
+        return 'assets/characters/phil/intro.mp4';
+      default:
+        return null;
+    }
+  }
+
   int _tierRank(String tier) {
     switch (tier) {
       case 'enterprise':
@@ -1072,6 +1198,8 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       icon = Icons.lock_rounded;
                     }
 
+                    final introAsset = _characterIntroAsset(id);
+
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(16),
@@ -1093,83 +1221,96 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                             ),
                         ],
                       ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Container(
-                            width: 46,
-                            height: 46,
-                            decoration: BoxDecoration(
-                              color: accent.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(15),
-                              border: Border.all(
-                                color: accent.withOpacity(0.45),
-                              ),
+                          if (introAsset != null) ...[
+                            KorlixCharacterIntroVideo(
+                              assetPath: introAsset,
+                              selected: selected,
+                              locked: !available && !selected,
                             ),
-                            child: Icon(icon, color: accent, size: 24),
-                          ),
-                          const SizedBox(width: 13),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
+                            const SizedBox(height: 14),
+                          ],
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 46,
+                                height: 46,
+                                decoration: BoxDecoration(
+                                  color: accent.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(
+                                    color: accent.withOpacity(0.45),
+                                  ),
+                                ),
+                                child: Icon(icon, color: accent, size: 24),
+                              ),
+                              const SizedBox(width: 13),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Expanded(
-                                      child: Text(
-                                        name,
-                                        style: const TextStyle(
-                                          color: Color(0xFFE4EBEE),
-                                          fontSize: 17,
-                                          fontWeight: FontWeight.w900,
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            name,
+                                            style: const TextStyle(
+                                              color: Color(0xFFE4EBEE),
+                                              fontSize: 17,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
                                         ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 9,
+                                            vertical: 5,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: accent.withOpacity(0.12),
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                            border: Border.all(
+                                              color: accent.withOpacity(0.40),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            status,
+                                            style: const TextStyle(
+                                              color: Color(0xFFE4EBEE),
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Text(
+                                      description,
+                                      style: const TextStyle(
+                                        color: Color(0xFFA9C6CF),
+                                        fontSize: 12.5,
+                                        height: 1.3,
                                       ),
                                     ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 9,
-                                        vertical: 5,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: accent.withOpacity(0.12),
-                                        borderRadius: BorderRadius.circular(
-                                          999,
-                                        ),
-                                        border: Border.all(
-                                          color: accent.withOpacity(0.40),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        status,
-                                        style: const TextStyle(
-                                          color: Color(0xFFE4EBEE),
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w900,
-                                        ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Required tier: ${_tierLabel(tierRequired)}',
+                                      style: TextStyle(
+                                        color: accent,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
                                       ),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 5),
-                                Text(
-                                  description,
-                                  style: const TextStyle(
-                                    color: Color(0xFFA9C6CF),
-                                    fontSize: 12.5,
-                                    height: 1.3,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Required tier: ${_tierLabel(tierRequired)}',
-                                  style: TextStyle(
-                                    color: accent,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -3282,17 +3423,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     final hasText = _controller.text.trim().isNotEmpty;
     final hasResults = _results.isNotEmpty;
 
-    final promptText = _selectedLanguage == 'es'
-        ? '¿Qué deseas saber?'
-        : _selectedLanguage == 'fr'
-        ? 'Que souhaitez-vous savoir ?'
-        : 'What do you seek?';
-
     final hintText = _selectedLanguage == 'es'
-        ? 'Escribe tu solicitud...'
+        ? 'Escribe aquí...'
         : _selectedLanguage == 'fr'
-        ? 'Saisissez votre demande...'
-        : 'Type your request...';
+        ? 'Écrivez ici...'
+        : 'Type here...';
 
     final readyText = _selectedLanguage == 'es'
         ? 'La respuesta está lista.'
@@ -3300,11 +3435,58 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         ? 'La réponse est prête.'
         : 'The response is ready.';
 
+    Widget toolButton({
+      required IconData icon,
+      required String label,
+      required VoidCallback? onPressed,
+      bool locked = false,
+      bool active = false,
+    }) {
+      final accent = locked ? const Color(0xFFFFD166) : const Color(0xFF69D9E8);
+
+      return OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            Icon(active ? Icons.stop_circle_outlined : icon, size: 18),
+            if (locked)
+              const Positioned(
+                right: -7,
+                top: -7,
+                child: Icon(
+                  Icons.lock_rounded,
+                  size: 10,
+                  color: Color(0xFFFFD166),
+                ),
+              ),
+          ],
+        ),
+        label: Text(label),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: accent,
+          backgroundColor: active
+              ? const Color(0xFF143B4A).withOpacity(0.58)
+              : Colors.black.withOpacity(0.20),
+          side: BorderSide(
+            color: active ? const Color(0xFF69D9E8) : accent.withOpacity(0.42),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+          visualDensity: VisualDensity.compact,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+          ),
+          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+        ),
+      );
+    }
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
       decoration: BoxDecoration(
         color: const Color(0xFF071B27).withOpacity(0.88),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(26),
         border: Border.all(
           color: const Color(0xFF2EC7DF).withOpacity(0.46),
           width: 1.1,
@@ -3326,172 +3508,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            t.askCreateTitle,
-            textAlign: TextAlign.left,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.1,
-              color: Color(0xFFE4EBEE),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            promptText,
-            textAlign: TextAlign.left,
-            style: const TextStyle(
-              fontSize: 14,
-              height: 1.3,
-              color: Color(0xFFA9C6CF),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-
-          if (hasResults && !_loading) ...[
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0A2B3D).withOpacity(0.84),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: const Color(0xFF69D9E8).withOpacity(0.40),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF69D9E8).withOpacity(0.12),
-                    blurRadius: 20,
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.auto_awesome_rounded,
-                    color: Color(0xFF69D9E8),
-                    size: 22,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      readyText,
-                      style: const TextStyle(
-                        color: Color(0xFFE4EBEE),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  const Text(
-                    'View below',
-                    style: TextStyle(
-                      color: Color(0xFF69D9E8),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-
-          const SizedBox(height: 14),
-
+          // Main chat row. The text box now replaces the old "Ask or create" title area.
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              SizedBox(
-                width: 50,
-                height: 56,
-                child: OutlinedButton(
-                  onPressed: _loading ? null : _handleUploadPressed,
-                  style: OutlinedButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    foregroundColor: _pickedUploadFile == null
-                        ? const Color(0xFF69D9E8)
-                        : const Color(0xFFFFD166),
-                    backgroundColor: _pickedUploadFile == null
-                        ? Colors.black.withOpacity(0.18)
-                        : const Color(0xFF7C5A00).withOpacity(0.32),
-                    side: BorderSide(
-                      color: _pickedUploadFile == null
-                          ? const Color(0xFF69D9E8).withOpacity(0.42)
-                          : const Color(0xFFFFD166).withOpacity(0.82),
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(17),
-                    ),
-                  ),
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    alignment: Alignment.center,
-                    children: [
-                      const Icon(Icons.attach_file_rounded, size: 23),
-                      if (!_hasDocumentUploadAccess)
-                        const Positioned(
-                          right: 5,
-                          top: 5,
-                          child: Icon(
-                            Icons.lock_rounded,
-                            size: 11,
-                            color: Color(0xFFFFD166),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 50,
-                height: 56,
-                child: OutlinedButton(
-                  onPressed: _loading ? null : _handleVoiceInput,
-                  style: OutlinedButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    foregroundColor: _hasVoiceAccess
-                        ? const Color(0xFF69D9E8)
-                        : const Color(0xFFFFD166),
-                    backgroundColor: _voiceListening
-                        ? const Color(0xFF143B4A).withOpacity(0.65)
-                        : Colors.black.withOpacity(0.18),
-                    side: BorderSide(
-                      color: _voiceListening
-                          ? const Color(0xFF69D9E8)
-                          : (_hasVoiceAccess
-                                ? const Color(0xFF69D9E8).withOpacity(0.42)
-                                : const Color(0xFFFFD166).withOpacity(0.44)),
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(17),
-                    ),
-                  ),
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    alignment: Alignment.center,
-                    children: [
-                      Icon(
-                        _voiceListening
-                            ? Icons.stop_circle_outlined
-                            : Icons.mic_rounded,
-                        size: 23,
-                      ),
-                      if (!_hasVoiceAccess)
-                        const Positioned(
-                          right: 5,
-                          top: 5,
-                          child: Icon(
-                            Icons.lock_rounded,
-                            size: 11,
-                            color: Color(0xFFFFD166),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
               Expanded(
                 child: TextField(
                   controller: _controller,
@@ -3538,10 +3558,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               SizedBox(
-                width: 56,
-                height: 56,
+                width: 52,
+                height: 54,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     padding: EdgeInsets.zero,
@@ -3565,15 +3585,39 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                   onPressed: (_loading || !hasText) ? null : _generate,
                   child: _loading
                       ? const SizedBox(
-                          width: 22,
-                          height: 22,
+                          width: 21,
+                          height: 21,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
                             color: Color(0xFFE4EBEE),
                           ),
                         )
-                      : const Icon(Icons.arrow_upward_rounded, size: 30),
+                      : const Icon(Icons.arrow_upward_rounded, size: 28),
                 ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // Small tool row. Moving these below the input makes the Type Here box wider on phones.
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.start,
+            children: [
+              toolButton(
+                icon: Icons.attach_file_rounded,
+                label: 'Upload',
+                locked: !_hasDocumentUploadAccess,
+                onPressed: _loading ? null : _handleUploadPressed,
+              ),
+              toolButton(
+                icon: Icons.mic_rounded,
+                label: 'Voice',
+                locked: !_hasVoiceAccess,
+                active: _voiceListening,
+                onPressed: _loading ? null : _handleVoiceInput,
               ),
             ],
           ),
@@ -3621,16 +3665,50 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             ),
           ],
 
+          if (hasResults && !_loading) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0A2B3D).withOpacity(0.84),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: const Color(0xFF69D9E8).withOpacity(0.34),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.auto_awesome_rounded,
+                    color: Color(0xFF69D9E8),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      readyText,
+                      style: const TextStyle(
+                        color: Color(0xFFE4EBEE),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           if (_loading) ...[
             const SizedBox(height: 14),
             MatrixThinkingPanel(message: t.matrixMessage),
           ],
 
-          const SizedBox(height: 15),
+          const SizedBox(height: 14),
 
           Wrap(
-            spacing: 10,
-            runSpacing: 10,
+            spacing: 9,
+            runSpacing: 9,
             alignment: WrapAlignment.center,
             children: t.quickActions.map((action) {
               return ActionChip(
@@ -3638,7 +3716,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                 labelStyle: TextStyle(
                   color: _loading ? Colors.white38 : const Color(0xFFE4EBEE),
                   fontWeight: FontWeight.w800,
-                  fontSize: 13,
+                  fontSize: 12.5,
                 ),
                 backgroundColor: const Color(0xFF120D18),
                 disabledColor: Colors.black.withOpacity(0.25),
@@ -3653,81 +3731,6 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                 onPressed: _loading ? null : () => _useQuickAction(action),
               );
             }).toList(),
-          ),
-
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(13),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0A2B3D).withOpacity(0.58),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: const Color(0xFF2EC7DF).withOpacity(0.22),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'Premium tools',
-                  style: TextStyle(
-                    color: Color(0xFF69D9E8),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    _premiumToolChip(
-                      label: 'Upload',
-                      title: 'Document Upload',
-                      availability: 'Pro, Ultra Premium, Enterprise',
-                      description:
-                          'Upload PDFs, Word documents, text files, and spreadsheets to ask Korlix AI questions about them.',
-                      icon: Icons.attach_file_rounded,
-                    ),
-                    _premiumToolChip(
-                      label: 'Voice',
-                      title: 'Voice Input',
-                      availability: 'Pro, Ultra Premium, Enterprise',
-                      description:
-                          'Speak your request instead of typing. Voice input will be tap-to-speak, not always listening.',
-                      icon: Icons.mic_rounded,
-                    ),
-                    _premiumToolChip(
-                      label: 'OCR',
-                      title: 'OCR and Handwriting Reader',
-                      availability: 'Ultra Premium, Enterprise',
-                      description:
-                          'Read images, scanned pictures, handwritten notes, screenshots, and scanned PDFs.',
-                      icon: Icons.document_scanner_rounded,
-                    ),
-                    _premiumToolChip(
-                      label: 'Video',
-                      title: 'Video Generation',
-                      availability: 'Ultra Premium, Enterprise',
-                      description:
-                          'Create AI-assisted video generations with controlled monthly limits.',
-                      icon: Icons.movie_creation_outlined,
-                    ),
-                    _premiumToolChip(
-                      label: 'Music',
-                      title: 'Music Production',
-                      availability: 'Coming soon paid add-on',
-                      description:
-                          'Music Production will be a separate paid add-on with music credits and usage limits.',
-                      icon: Icons.music_note_rounded,
-                      comingSoon: true,
-                    ),
-                  ],
-                ),
-              ],
-            ),
           ),
 
           if (_error != null) ...[
