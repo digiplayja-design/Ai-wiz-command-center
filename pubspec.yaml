@@ -69,6 +69,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/characters/yuna/intro.mp4
     - assets/characters/jj/intro.mp4
     - assets/characters/phil/intro.mp4
     - assets/branding/korlix_full_logo.png
