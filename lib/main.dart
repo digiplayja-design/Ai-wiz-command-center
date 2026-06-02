@@ -689,10 +689,12 @@ class _KorlixCharacterIntroPreviewState
     extends State<KorlixCharacterIntroPreview> {
   VideoPlayerController? _controller;
   bool _ready = false;
+  late bool _muted;
 
   @override
   void initState() {
     super.initState();
+    _muted = widget.muted;
     _loadVideo();
   }
 
@@ -701,6 +703,7 @@ class _KorlixCharacterIntroPreviewState
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.assetPath != widget.assetPath) {
+      _muted = widget.muted;
       _loadVideo();
     }
   }
@@ -716,7 +719,7 @@ class _KorlixCharacterIntroPreviewState
 
       await controller.initialize();
       await controller.setLooping(true);
-      await controller.setVolume(widget.muted ? 0.0 : 1.0);
+      await controller.setVolume(_muted ? 0.0 : 1.0);
       await controller.play();
 
       if (!mounted) {
@@ -737,6 +740,24 @@ class _KorlixCharacterIntroPreviewState
     }
   }
 
+  Future<void> _toggleSound() async {
+    final controller = _controller;
+
+    if (controller == null) {
+      return;
+    }
+
+    setState(() {
+      _muted = !_muted;
+    });
+
+    await controller.setVolume(_muted ? 0.0 : 1.0);
+
+    if (!controller.value.isPlaying) {
+      await controller.play();
+    }
+  }
+
   @override
   void dispose() {
     _controller?.dispose();
@@ -751,24 +772,73 @@ class _KorlixCharacterIntroPreviewState
       borderRadius: BorderRadius.circular(16),
       child: AspectRatio(
         aspectRatio: 9 / 16,
-        child: Container(
-          color: Colors.black.withOpacity(0.45),
-          child: _ready && controller != null && controller.value.isInitialized
-              ? FittedBox(
-                  fit: BoxFit.cover,
-                  child: SizedBox(
-                    width: controller.value.size.width,
-                    height: controller.value.size.height,
-                    child: VideoPlayer(controller),
+        child: GestureDetector(
+          onTap: _ready ? _toggleSound : null,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Container(
+                color: Colors.black.withOpacity(0.45),
+                child:
+                    _ready &&
+                        controller != null &&
+                        controller.value.isInitialized
+                    ? FittedBox(
+                        fit: BoxFit.cover,
+                        child: SizedBox(
+                          width: controller.value.size.width,
+                          height: controller.value.size.height,
+                          child: VideoPlayer(controller),
+                        ),
+                      )
+                    : const Center(
+                        child: Icon(
+                          Icons.movie_creation_outlined,
+                          color: Color(0xFF69D9E8),
+                          size: 34,
+                        ),
+                      ),
+              ),
+              Positioned(
+                right: 8,
+                bottom: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
                   ),
-                )
-              : const Center(
-                  child: Icon(
-                    Icons.movie_creation_outlined,
-                    color: Color(0xFF69D9E8),
-                    size: 34,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.62),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: const Color(0xFF69D9E8).withOpacity(0.45),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _muted
+                            ? Icons.volume_off_rounded
+                            : Icons.volume_up_rounded,
+                        color: const Color(0xFFE4EBEE),
+                        size: 15,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _muted ? 'Tap for sound' : 'Sound on',
+                        style: const TextStyle(
+                          color: Color(0xFFE4EBEE),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+              ),
+            ],
+          ),
         ),
       ),
     );
