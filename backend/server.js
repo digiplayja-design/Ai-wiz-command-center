@@ -63,6 +63,52 @@ function sanitize(value) {
     .replace(/sk-[A-Za-z0-9_\-]+/g, "sk-[hidden]");
 }
 
+
+const characterPersonalityMap = {
+  jj: {
+    name: "JJ",
+    style:
+      "JJ is the Basic starter character. Keep answers friendly, clear, helpful, and easy to understand.",
+  },
+  chee_chai_chee: {
+    name: "Chee Chai Chee",
+    style:
+      "Chee Chai Chee is a dark cyber-mystic wizard. His answers should feel powerful, direct, strategic, mysterious, and useful.",
+  },
+  phil: {
+    name: "Phil",
+    style:
+      "Phil is helpful, approachable, confident, and simple. He guides users clearly and makes tasks feel easy.",
+  },
+  yuna: {
+    name: "Yuna",
+    style:
+      "Yuna is premium, elegant, sharp, creative, and strategic. She gives polished, thoughtful, high-value responses.",
+  },
+  ji_a: {
+    name: "Ji-a",
+    style:
+      "Ji-a is calm, intelligent, polished, and emotionally sharp. She gives elegant, thoughtful, premium responses with clarity and confidence.",
+  },
+};
+
+function getCharacterPersonality(characterId) {
+  return characterPersonalityMap[characterId] || characterPersonalityMap.jj;
+}
+
+function canSelectCharacterForTier(tier, characterId) {
+  if (tier === "enterprise" || tier === "ultra") {
+    return true;
+  }
+
+  if (tier === "pro") {
+    return ["jj", "phil", "character_03"].includes(characterId);
+  }
+
+  return characterId === "jj";
+}
+
+
 const languageMap = {
   en: {
     name: "English",
@@ -254,7 +300,7 @@ async function getOrCreateProfile(user) {
       id: user.id,
       email: user.email,
       tier: "basic",
-      selected_character: "chee_chai_chee",
+      selected_character: "jj",
     })
     .select("*")
     .single();
@@ -265,7 +311,7 @@ async function getOrCreateProfile(user) {
 
   await supabaseAdmin.from("user_character_access").upsert({
     user_id: user.id,
-    character_id: "chee_chai_chee",
+    character_id: "jj",
     granted_by: "basic_default",
   });
 
@@ -927,6 +973,89 @@ app.post("/api/auth/refresh", async (req, res) => {
 });
 
 
+
+app.post("/api/characters/select", async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(500).json({
+        error: "Supabase is not configured on the backend.",
+      });
+    }
+
+    const user = await requireUser(req);
+    const profile = await getOrCreateProfile(user);
+    const characterId = String(req.body.character_id || "").trim();
+
+    if (!characterId) {
+      return res.status(400).json({
+        error: "Character ID is required.",
+      });
+    }
+
+    const { data: character, error: characterError } = await supabaseAdmin
+      .from("characters")
+      .select("*")
+      .eq("id", characterId)
+      .maybeSingle();
+
+    if (characterError) {
+      throw characterError;
+    }
+
+    if (!character) {
+      return res.status(404).json({
+        error: "Character not found.",
+      });
+    }
+
+    if (!character.is_active || character.is_coming_soon) {
+      return res.status(403).json({
+        error: "This character is coming soon.",
+      });
+    }
+
+    const tier = profile?.tier || "basic";
+
+    if (!canSelectCharacterForTier(tier, characterId)) {
+      return res.status(403).json({
+        error: `This character is not available on your ${tier} plan.`,
+        upgradeRequired: true,
+        requiredTier: character.tier_required,
+      });
+    }
+
+    const { data: updatedProfile, error: updateError } = await supabaseAdmin
+      .from("user_profiles")
+      .update({
+        selected_character: characterId,
+      })
+      .eq("id", user.id)
+      .select("*")
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    await supabaseAdmin.from("user_character_access").upsert({
+      user_id: user.id,
+      character_id: characterId,
+      granted_by: "tier_select",
+    });
+
+    res.json({
+      success: true,
+      profile: updatedProfile,
+      character,
+    });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      error: sanitize(error?.message),
+    });
+  }
+});
+
+
 app.get("/", (req, res) => {
   res.json({
     status: "Korlix AI backend is running",
@@ -1452,13 +1581,19 @@ For sports questions, do not dodge. Give a best pick or ranked shortlist and exp
 This question does not require live search unless the user explicitly asks for current information.
 `;
 
+    const selectedCharacterId = profile?.selected_character || "jj";
+    const selectedCharacter = getCharacterPersonality(selectedCharacterId);
+
     const input = `
 You are Korlix AI, a premium multilingual AI assistant platform powered by selectable AI characters.
 
 The current selected character is:
-Chee Chai Chee
+${selectedCharacter.name}
 
-Chee Chai Chee is a dark cyber-mystic wizard character. His answers should feel powerful, direct, strategic, and useful. Do not be goofy. Do not sound childish.
+Character behavior:
+${selectedCharacter.style}
+
+Do not be goofy. Do not sound childish.
 
 The user selected this language:
 ${language.name}

@@ -606,6 +606,70 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 }
 
+class KorlixHomeCharacterHero extends StatelessWidget {
+  const KorlixHomeCharacterHero({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF071B27).withOpacity(0.74),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: const Color(0xFF2EC7DF).withOpacity(0.34)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2EC7DF).withOpacity(0.12),
+            blurRadius: 34,
+            spreadRadius: 3,
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          const Text(
+            'Selected Character',
+            style: TextStyle(
+              color: Color(0xFF69D9E8),
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'JJ',
+            style: TextStyle(
+              color: Color(0xFFE4EBEE),
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Basic starter character. Open History → View characters to preview and unlock more Korlix AI characters.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Color(0xFFA9C6CF),
+              fontSize: 13,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 14),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 280),
+            child: const KorlixCharacterIntroPreview(
+              assetPath: 'assets/characters/jj/intro.mp4',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class KorlixCharacterIntroPreview extends StatefulWidget {
   final String assetPath;
   final bool muted;
@@ -1488,6 +1552,8 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
         return 'assets/characters/phil/intro.mp4';
       case 'yuna':
         return 'assets/characters/yuna/intro.mp4';
+      case 'ji_a':
+        return 'assets/characters/ji_a/intro.mp4';
       case 'chee_chai_chee':
         return 'assets/wizard_greeting_en.mp4';
       default:
@@ -2263,7 +2329,7 @@ class AppLanguages {
       backendConnected: 'Korlix System Online',
       awaitingTitle: 'Chee Chai Chee awaits.',
       awaitingSubtitle: 'Tap once to awaken the wizard.',
-      awakenText: 'Awaken Chee Chai Chee',
+      awakenText: 'Select Character',
       replayGreeting: 'Replay Greeting',
       reloadWizard: 'Reload Wizard',
       askCreateTitle: 'Ask or create anything',
@@ -3341,7 +3407,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                         ),
                       ),
                       child: const Text(
-                        'Current Character: Chee Chai Chee',
+                        'Selected Character: JJ',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Color(0xFF69D9E8),
@@ -3352,10 +3418,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    TalkingWizardHost(
-                      selectedLanguage: _selectedLanguage,
-                      onLanguageChanged: _changeLanguage,
-                    ),
+                    const KorlixHomeCharacterHero(),
                     const SizedBox(height: 28),
                     _buildCommandPanel(),
                     const SizedBox(height: 26),
