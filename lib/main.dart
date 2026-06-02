@@ -2288,8 +2288,8 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                 color: Color(0xFF69D9E8),
               ),
             )
-          : const Icon(Icons.history_rounded, size: 18),
-      label: const Text('History'),
+          : const Icon(Icons.settings_rounded, size: 18),
+      label: const Text('Settings'),
       style: TextButton.styleFrom(
         foregroundColor: const Color(0xFFE4EBEE),
         backgroundColor: Colors.black.withOpacity(0.32),
