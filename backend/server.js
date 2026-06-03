@@ -314,7 +314,7 @@ async function registerDeviceSession({
   userId,
   profile,
   deviceInfo,
-});
+}) {
   if (!supabaseAdmin) {
     return null;
   }
@@ -407,7 +407,7 @@ async function touchActiveDeviceSession({
   profile,
   deviceInfo,
   allowRegister = false,
-});
+}) {
   if (!supabaseAdmin || !deviceInfo.deviceId) {
     return null;
   }
@@ -459,7 +459,7 @@ async function touchActiveDeviceSession({
 async function revokeDeviceSession({
   userId,
   deviceId,
-});
+}) {
   if (!supabaseAdmin || !userId || !deviceId) {
     return null;
   }
@@ -679,7 +679,7 @@ async function incrementUsage({
   liveSearchUsed,
   fileRequested,
   creditsNeeded,
-});
+}) {
   if (!supabaseAdmin || !usageCounter) {
     return null;
   }
@@ -720,7 +720,7 @@ async function saveGenerationHistory({
   fileRequested,
   searched,
   creditsNeeded,
-});
+}) {
   if (!supabaseAdmin || !user) {
     return null;
   }
@@ -961,7 +961,7 @@ async function createAdvancedFileResponse({
   language,
   extractedText = "",
   textWasTruncated = false,
-});
+}) {
   const model = getOpenAIModelForTier(profile, { document: true });
 
   const fileName = String(file.originalname || "uploaded-file");
@@ -1144,7 +1144,7 @@ async function createOpenAIVideoJob({
   prompt,
   size,
   seconds,
-});
+}) {
   const model = process.env.OPENAI_VIDEO_MODEL || "sora-2";
 
   const form = new FormData();
