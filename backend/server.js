@@ -904,7 +904,7 @@ function buildFileAnalysisPrompt({
   extractedText,
   textWasTruncated,
   advancedMode,
-});
+}) {
   const extractedSection = extractedText
     ? `
 Readable extracted text:
