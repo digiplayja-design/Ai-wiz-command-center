@@ -893,6 +893,7 @@ class KorlixCharacterIntroPreview extends StatefulWidget {
   final String replayLabel;
   final double aspectRatio;
   final bool fillParent;
+  final BoxFit fit;
 
   const KorlixCharacterIntroPreview({
     super.key,
@@ -904,6 +905,7 @@ class KorlixCharacterIntroPreview extends StatefulWidget {
     this.replayLabel = 'Hear',
     this.aspectRatio = 9 / 16,
     this.fillParent = false,
+    this.fit = BoxFit.cover,
   });
 
   @override
@@ -1033,6 +1035,9 @@ class _KorlixCharacterIntroPreviewState
 
   Widget _buildVideoContent() {
     final controller = _controller;
+    final effectiveFit = widget.assetPath.contains('/phil/')
+        ? BoxFit.contain
+        : widget.fit;
 
     return Stack(
       fit: StackFit.expand,
@@ -1043,7 +1048,7 @@ class _KorlixCharacterIntroPreviewState
               ? GestureDetector(
                   onTap: widget.showSoundButton ? _replayWithSound : null,
                   child: FittedBox(
-                    fit: BoxFit.cover,
+                    fit: effectiveFit,
                     child: SizedBox(
                       width: controller.value.size.width,
                       height: controller.value.size.height,
