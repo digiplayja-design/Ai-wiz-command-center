@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import cors from "cors";
 import dotenv from "dotenv";
 import OpenAI from "openai";
@@ -237,7 +238,7 @@ function getMonthKey(date = new Date()) {
 function getRequestDeviceInfo(req) {
   const body = req.body || {};
 
-  const deviceId = String(
+  let deviceId = String(
     body.device_id ||
       req.headers["x-korlix-device-id"] ||
       ""
@@ -254,6 +255,24 @@ function getRequestDeviceInfo(req) {
       req.headers["x-korlix-platform"] ||
       "unknown"
   ).trim();
+
+  // Temporary fallback so older APKs do not get locked out.
+  // New APKs should still send a real stable device_id.
+  if (!deviceId) {
+    const userAgent = String(req.headers["user-agent"] || "unknown-agent");
+    const forwardedFor = String(
+      req.headers["cf-connecting-ip"] ||
+        req.headers["x-forwarded-for"] ||
+        req.headers["x-real-ip"] ||
+        "unknown-ip"
+    );
+
+    deviceId = `fallback_${crypto
+      .createHash("sha256")
+      .update(`${platform}|${deviceLabel}|${userAgent}|${forwardedFor}`)
+      .digest("hex")
+      .slice(0, 32)}`;
+  }
 
   return {
     deviceId,
@@ -1136,12 +1155,6 @@ app.post("/api/auth/signin", async (req, res) => {
       });
     }
 
-    if (!deviceInfo.deviceId) {
-      return res.status(400).json({
-        error: "Device ID is required for sign-in.",
-      });
-    }
-
     const { data, error } = await supabaseAuth.auth.signInWithPassword({
       email,
       password,
@@ -1239,12 +1252,6 @@ app.post("/api/auth/refresh", async (req, res) => {
     if (!refreshToken) {
       return res.status(400).json({
         error: "Refresh token is required.",
-      });
-    }
-
-    if (!deviceInfo.deviceId) {
-      return res.status(400).json({
-        error: "Device ID is required for session refresh.",
       });
     }
 
