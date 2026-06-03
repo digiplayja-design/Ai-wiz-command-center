@@ -890,6 +890,7 @@ class KorlixCharacterIntroPreview extends StatefulWidget {
   final bool showSoundButton;
   final bool autoplay;
   final bool loop;
+  final String replayLabel;
   final double aspectRatio;
   final bool fillParent;
 
@@ -900,6 +901,7 @@ class KorlixCharacterIntroPreview extends StatefulWidget {
     this.showSoundButton = false,
     this.autoplay = true,
     this.loop = true,
+    this.replayLabel = 'Hear',
     this.aspectRatio = 9 / 16,
     this.fillParent = false,
   });
@@ -1092,7 +1094,11 @@ class _KorlixCharacterIntroPreviewState
             child: TextButton.icon(
               onPressed: _replayWithSound,
               icon: const Icon(Icons.replay_rounded, size: 17),
-              label: const Text('Hear JJ'),
+              label: Text(
+                widget.replayLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               style: TextButton.styleFrom(
                 foregroundColor: const Color(0xFFE4EBEE),
                 backgroundColor: Colors.black.withOpacity(0.68),
@@ -5482,6 +5488,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                               assetPath: character.assetPath,
                               muted: !character.soundOn,
                               showSoundButton: character.soundOn,
+                              replayLabel: 'Hear ${character.name}',
                               autoplay: true,
                               loop: true,
                               fillParent: true,
