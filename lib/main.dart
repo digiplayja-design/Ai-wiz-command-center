@@ -775,6 +775,8 @@ class KorlixCharacterIntroPreview extends StatefulWidget {
   final bool showSoundButton;
   final bool autoplay;
   final bool loop;
+  final double aspectRatio;
+  final bool fillParent;
 
   const KorlixCharacterIntroPreview({
     super.key,
@@ -783,6 +785,8 @@ class KorlixCharacterIntroPreview extends StatefulWidget {
     this.showSoundButton = false,
     this.autoplay = true,
     this.loop = true,
+    this.aspectRatio = 9 / 16,
+    this.fillParent = false,
   });
 
   @override
@@ -832,7 +836,6 @@ class _KorlixCharacterIntroPreviewState
       if (widget.autoplay) {
         await controller.play();
 
-        // Second sound push helps Android after navigation/sign-in.
         if (!widget.muted) {
           await Future<void>.delayed(const Duration(milliseconds: 350));
           await controller.setVolume(1.0);
@@ -911,97 +914,99 @@ class _KorlixCharacterIntroPreviewState
     super.dispose();
   }
 
+  Widget _buildVideoContent() {
+    final controller = _controller;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Container(
+          color: Colors.black.withOpacity(0.45),
+          child: _ready && controller != null && controller.value.isInitialized
+              ? GestureDetector(
+                  onTap: widget.showSoundButton ? _replayWithSound : null,
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    child: SizedBox(
+                      width: controller.value.size.width,
+                      height: controller.value.size.height,
+                      child: VideoPlayer(controller),
+                    ),
+                  ),
+                )
+              : const Center(
+                  child: Icon(
+                    Icons.movie_creation_outlined,
+                    color: Color(0xFF69D9E8),
+                    size: 34,
+                  ),
+                ),
+        ),
+        if (widget.showSoundButton)
+          Positioned(
+            right: 10,
+            bottom: 10,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.68),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: const Color(0xFF69D9E8).withOpacity(0.65),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF69D9E8).withOpacity(0.20),
+                    blurRadius: 14,
+                  ),
+                ],
+              ),
+              child: IconButton(
+                onPressed: _toggleSound,
+                icon: Icon(
+                  _soundOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                ),
+                color: const Color(0xFFE4EBEE),
+                tooltip: _soundOn ? 'Mute' : 'Unmute',
+              ),
+            ),
+          ),
+        if (widget.showSoundButton)
+          Positioned(
+            left: 10,
+            bottom: 10,
+            child: TextButton.icon(
+              onPressed: _replayWithSound,
+              icon: const Icon(Icons.replay_rounded, size: 17),
+              label: const Text('Hear JJ'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFE4EBEE),
+                backgroundColor: Colors.black.withOpacity(0.68),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                  side: BorderSide(
+                    color: const Color(0xFF69D9E8).withOpacity(0.55),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final controller = _controller;
+    final content = _buildVideoContent();
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: AspectRatio(
-        aspectRatio: 9 / 16,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Container(
-              color: Colors.black.withOpacity(0.45),
-              child:
-                  _ready && controller != null && controller.value.isInitialized
-                  ? GestureDetector(
-                      onTap: widget.showSoundButton ? _replayWithSound : null,
-                      child: FittedBox(
-                        fit: BoxFit.cover,
-                        child: SizedBox(
-                          width: controller.value.size.width,
-                          height: controller.value.size.height,
-                          child: VideoPlayer(controller),
-                        ),
-                      ),
-                    )
-                  : const Center(
-                      child: Icon(
-                        Icons.movie_creation_outlined,
-                        color: Color(0xFF69D9E8),
-                        size: 34,
-                      ),
-                    ),
-            ),
-            if (widget.showSoundButton)
-              Positioned(
-                right: 10,
-                bottom: 10,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.68),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: const Color(0xFF69D9E8).withOpacity(0.65),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF69D9E8).withOpacity(0.20),
-                        blurRadius: 14,
-                      ),
-                    ],
-                  ),
-                  child: IconButton(
-                    onPressed: _toggleSound,
-                    icon: Icon(
-                      _soundOn
-                          ? Icons.volume_up_rounded
-                          : Icons.volume_off_rounded,
-                    ),
-                    color: const Color(0xFFE4EBEE),
-                    tooltip: _soundOn ? 'Mute' : 'Unmute',
-                  ),
-                ),
-              ),
-            if (widget.showSoundButton)
-              Positioned(
-                left: 10,
-                bottom: 10,
-                child: TextButton.icon(
-                  onPressed: _replayWithSound,
-                  icon: const Icon(Icons.replay_rounded, size: 17),
-                  label: const Text('Hear JJ'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFFE4EBEE),
-                    backgroundColor: Colors.black.withOpacity(0.68),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(999),
-                      side: BorderSide(
-                        color: const Color(0xFF69D9E8).withOpacity(0.55),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
+      child: widget.fillParent
+          ? SizedBox.expand(child: content)
+          : AspectRatio(aspectRatio: widget.aspectRatio, child: content),
     );
   }
 }
@@ -4553,134 +4558,132 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   Widget _buildMockupFeaturedCharacterCard() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF071B27).withOpacity(0.72),
-          borderRadius: BorderRadius.circular(26),
-          border: Border.all(color: const Color(0xFF2EC7DF).withOpacity(0.32)),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF2EC7DF).withOpacity(0.12),
-              blurRadius: 30,
-              spreadRadius: 2,
-            ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 640;
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 560;
+          final cardHeight = compact ? 230.0 : 285.0;
 
-            final textSide = Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: wide
-                    ? CrossAxisAlignment.start
-                    : CrossAxisAlignment.center,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text(
-                    'FEATURED AI CHARACTER',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Color(0xFF69D9E8),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.7,
+          return Container(
+            height: cardHeight,
+            decoration: BoxDecoration(
+              color: const Color(0xFF071B27).withOpacity(0.72),
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(
+                color: const Color(0xFF2EC7DF).withOpacity(0.32),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF2EC7DF).withOpacity(0.12),
+                  blurRadius: 30,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Row(
+              children: [
+                Expanded(
+                  flex: compact ? 11 : 10,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      compact ? 16 : 28,
+                      compact ? 16 : 24,
+                      compact ? 10 : 18,
+                      compact ? 16 : 24,
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'JJ',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Color(0xFFE4EBEE),
-                      fontSize: 42,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'Curious, thoughtful, and always ready to chat. Ask JJ anything!',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Color(0xFFE4EBEE),
-                      fontSize: 18,
-                      height: 1.35,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 22),
-                  OutlinedButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Open History → View characters to preview and unlock more characters.',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'FEATURED AI CHARACTER',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: const Color(0xFF69D9E8),
+                            fontSize: compact ? 12 : 15,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
                           ),
                         ),
-                      );
-                    },
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF69D9E8),
-                      side: BorderSide(
-                        color: const Color(0xFF2EC7DF).withOpacity(0.62),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 15,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(999),
-                      ),
+                        SizedBox(height: compact ? 10 : 14),
+                        Text(
+                          'JJ',
+                          style: TextStyle(
+                            color: const Color(0xFFE4EBEE),
+                            fontSize: compact ? 36 : 44,
+                            fontWeight: FontWeight.w900,
+                            height: 1.0,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                        SizedBox(height: compact ? 12 : 16),
+                        Text(
+                          'Curious, thoughtful, and always ready to chat. Ask JJ anything!',
+                          maxLines: compact ? 4 : 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: const Color(0xFFE4EBEE).withOpacity(0.92),
+                            fontSize: compact ? 14 : 19,
+                            height: 1.35,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        SizedBox(height: compact ? 16 : 22),
+                        OutlinedButton(
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Open History → View characters to preview and unlock more characters.',
+                                ),
+                              ),
+                            );
+                          },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF69D9E8),
+                            side: BorderSide(
+                              color: const Color(0xFF2EC7DF).withOpacity(0.62),
+                            ),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: compact ? 18 : 24,
+                              vertical: compact ? 12 : 15,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                          child: Text(
+                            'View Character',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: compact ? 13 : 15,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    child: const Text(
-                      'View Character',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-
-            final videoSide = Container(
-              color: Colors.black.withOpacity(0.18),
-              padding: const EdgeInsets.all(14),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: 330,
-                    maxHeight: 370,
-                  ),
-                  child: const KorlixCharacterIntroPreview(
-                    assetPath: 'assets/characters/jj/intro.mp4',
-                    muted: false,
-                    showSoundButton: true,
-                    autoplay: true,
-                    loop: false,
                   ),
                 ),
-              ),
-            );
-
-            if (!wide) {
-              return Column(children: [textSide, videoSide]);
-            }
-
-            return IntrinsicHeight(
-              child: Row(
-                children: [
-                  Expanded(flex: 11, child: textSide),
-                  Expanded(flex: 12, child: videoSide),
-                ],
-              ),
-            );
-          },
-        ),
+                Expanded(
+                  flex: compact ? 10 : 11,
+                  child: Container(
+                    height: double.infinity,
+                    color: Colors.black.withOpacity(0.16),
+                    child: const KorlixCharacterIntroPreview(
+                      assetPath: 'assets/characters/jj/intro.mp4',
+                      muted: false,
+                      showSoundButton: true,
+                      autoplay: true,
+                      loop: true,
+                      fillParent: true,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
