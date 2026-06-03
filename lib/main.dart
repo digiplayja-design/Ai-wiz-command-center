@@ -749,7 +749,7 @@ class KorlixHomeCharacterHero extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Basic starter character. Open History → View characters to preview and unlock more Korlix AI characters.',
+            'Basic starter character. Open Settings → View characters to preview and unlock more Korlix AI characters.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Color(0xFFA9C6CF),
@@ -1407,7 +1407,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
         body: jsonEncode({
           'generation_id': generationId,
           'reason': 'User reported AI output',
-          'details': 'Reported from saved history. Prompt: $prompt',
+          'details': 'Reported from saved settings. Prompt: $prompt',
         }),
       );
 
@@ -1667,7 +1667,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       '3 generations per day',
                       'Access to 1 character',
                       'Ads included',
-                      'Limited saved history',
+                      'Limited saved settings',
                       'No video generation',
                       'No music production',
                     ],
@@ -1682,7 +1682,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       'Higher text generation limits',
                       'Access to up to 3 characters',
                       'PDF/export access',
-                      'Saved history access',
+                      'Saved settings access',
                       'Reduced or no ads',
                       'Voice input and document upload',
                     ],
@@ -2324,7 +2324,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                     ),
                     const SizedBox(height: 22),
                     const Text(
-                      'Saved History',
+                      'Saved Settings',
                       style: TextStyle(
                         color: Color(0xFFE4EBEE),
                         fontSize: 20,
@@ -3882,7 +3882,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             ],
           ),
           content: Text(
-            '$description\n\nAvailable on: $availability\n\nOpen History, then tap View plans / upgrade to see plan options.',
+            '$description\n\nAvailable on: $availability\n\nOpen Settings, then tap View plans / upgrade to see plan options.',
             style: const TextStyle(
               color: Color(0xFFA9C6CF),
               height: 1.4,
@@ -4183,7 +4183,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
           onPressed: () {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Open History to view your Korlix Account.'),
+                content: Text('Open Settings to view your Korlix Account.'),
               ),
             );
           },
@@ -4387,7 +4387,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
           onPressed: () {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Open History to view your Korlix Account.'),
+                content: Text('Open Settings to view your Korlix Account.'),
               ),
             );
           },
@@ -4679,7 +4679,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
-                                  'Open History → View characters to preview and unlock more characters.',
+                                  'Open Settings → View characters to preview and unlock more characters.',
                                 ),
                               ),
                             );
