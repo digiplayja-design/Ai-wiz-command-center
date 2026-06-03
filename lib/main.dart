@@ -4107,80 +4107,125 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   }
 
   Widget _buildPremiumHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
-      child: Row(
-        children: [
-          Container(
-            width: 74,
-            height: 74,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFF061A25),
-              border: Border.all(
-                color: const Color(0xFF2EC7DF).withOpacity(0.42),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF2EC7DF).withOpacity(0.20),
-                  blurRadius: 24,
-                ),
-              ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 560;
+
+        final logo = Container(
+          width: compact ? 58 : 74,
+          height: compact ? 58 : 74,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF061A25),
+            border: Border.all(
+              color: const Color(0xFF2EC7DF).withOpacity(0.42),
             ),
-            padding: const EdgeInsets.all(10),
-            child: Image.asset(
-              'assets/branding/korlix_mini_mark.png',
-              fit: BoxFit.contain,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF2EC7DF).withOpacity(0.20),
+                blurRadius: 24,
+              ),
+            ],
+          ),
+          padding: EdgeInsets.all(compact ? 8 : 10),
+          child: Image.asset(
+            'assets/branding/korlix_mini_mark.png',
+            fit: BoxFit.contain,
+          ),
+        );
+
+        final accountButton = TextButton.icon(
+          onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Open History to view your Korlix Account.'),
+              ),
+            );
+          },
+          icon: const Icon(Icons.person_outline_rounded, size: 20),
+          label: const Text('Account'),
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF69D9E8),
+            backgroundColor: Colors.black.withOpacity(0.18),
+            side: BorderSide(color: const Color(0xFF2EC7DF).withOpacity(0.45)),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 12 : 16,
+              vertical: compact ? 10 : 13,
+            ),
+            textStyle: TextStyle(
+              fontSize: compact ? 13 : 14,
+              fontWeight: FontWeight.w800,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
             ),
           ),
-          const SizedBox(width: 18),
-          const Expanded(
+        );
+
+        final titleBlock = Column(
+          crossAxisAlignment: compact
+              ? CrossAxisAlignment.center
+              : CrossAxisAlignment.start,
+          children: [
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: compact ? Alignment.center : Alignment.centerLeft,
+              child: Text(
+                'KORLIX AI',
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.visible,
+                style: TextStyle(
+                  color: const Color(0xFFE4EBEE),
+                  fontSize: compact ? 42 : 34,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: compact ? 4.2 : 3.6,
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'THE FUTURE IS HERE',
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.visible,
+              textAlign: compact ? TextAlign.center : TextAlign.left,
+              style: TextStyle(
+                color: const Color(0xFF69D9E8),
+                fontSize: compact ? 13 : 14,
+                fontWeight: FontWeight.w800,
+                letterSpacing: compact ? 3.2 : 3.8,
+              ),
+            ),
+          ],
+        );
+
+        if (compact) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'KORLIX AI',
-                  style: TextStyle(
-                    color: Color(0xFFE4EBEE),
-                    fontSize: 34,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 3.8,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  'THE FUTURE IS HERE',
-                  style: TextStyle(
-                    color: Color(0xFF69D9E8),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 4.0,
-                  ),
-                ),
+                Row(children: [logo, const Spacer(), accountButton]),
+                const SizedBox(height: 16),
+                Center(child: titleBlock),
               ],
             ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
+          child: Row(
+            children: [
+              logo,
+              const SizedBox(width: 18),
+              Expanded(child: titleBlock),
+              accountButton,
+            ],
           ),
-          TextButton.icon(
-            onPressed: () {
-              // Account is opened through the existing History/Account button.
-              // This top button is visual for now and will be wired in Stage 5.
-            },
-            icon: const Icon(Icons.person_outline_rounded, size: 22),
-            label: const Text('Account'),
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF69D9E8),
-              backgroundColor: Colors.black.withOpacity(0.18),
-              side: BorderSide(
-                color: const Color(0xFF2EC7DF).withOpacity(0.45),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -4266,83 +4311,125 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   }
 
   Widget _buildMockupHomeHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
-      child: Row(
-        children: [
-          Container(
-            width: 74,
-            height: 74,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFF061A25),
-              border: Border.all(
-                color: const Color(0xFF2EC7DF).withOpacity(0.42),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF2EC7DF).withOpacity(0.20),
-                  blurRadius: 24,
-                ),
-              ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 560;
+
+        final logo = Container(
+          width: compact ? 58 : 74,
+          height: compact ? 58 : 74,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF061A25),
+            border: Border.all(
+              color: const Color(0xFF2EC7DF).withOpacity(0.42),
             ),
-            padding: const EdgeInsets.all(10),
-            child: Image.asset(
-              'assets/branding/korlix_mini_mark.png',
-              fit: BoxFit.contain,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF2EC7DF).withOpacity(0.20),
+                blurRadius: 24,
+              ),
+            ],
+          ),
+          padding: EdgeInsets.all(compact ? 8 : 10),
+          child: Image.asset(
+            'assets/branding/korlix_mini_mark.png',
+            fit: BoxFit.contain,
+          ),
+        );
+
+        final accountButton = TextButton.icon(
+          onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Open History to view your Korlix Account.'),
+              ),
+            );
+          },
+          icon: const Icon(Icons.person_outline_rounded, size: 20),
+          label: const Text('Account'),
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF69D9E8),
+            backgroundColor: Colors.black.withOpacity(0.18),
+            side: BorderSide(color: const Color(0xFF2EC7DF).withOpacity(0.45)),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 12 : 16,
+              vertical: compact ? 10 : 13,
+            ),
+            textStyle: TextStyle(
+              fontSize: compact ? 13 : 14,
+              fontWeight: FontWeight.w800,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
             ),
           ),
-          const SizedBox(width: 18),
-          const Expanded(
+        );
+
+        final titleBlock = Column(
+          crossAxisAlignment: compact
+              ? CrossAxisAlignment.center
+              : CrossAxisAlignment.start,
+          children: [
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: compact ? Alignment.center : Alignment.centerLeft,
+              child: Text(
+                'KORLIX AI',
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.visible,
+                style: TextStyle(
+                  color: const Color(0xFFE4EBEE),
+                  fontSize: compact ? 42 : 34,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: compact ? 4.2 : 3.6,
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'THE FUTURE IS HERE',
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.visible,
+              textAlign: compact ? TextAlign.center : TextAlign.left,
+              style: TextStyle(
+                color: const Color(0xFF69D9E8),
+                fontSize: compact ? 13 : 14,
+                fontWeight: FontWeight.w800,
+                letterSpacing: compact ? 3.2 : 3.8,
+              ),
+            ),
+          ],
+        );
+
+        if (compact) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'KORLIX AI',
-                  style: TextStyle(
-                    color: Color(0xFFE4EBEE),
-                    fontSize: 34,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 3.6,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  'THE FUTURE IS HERE',
-                  style: TextStyle(
-                    color: Color(0xFF69D9E8),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 3.8,
-                  ),
-                ),
+                Row(children: [logo, const Spacer(), accountButton]),
+                const SizedBox(height: 16),
+                Center(child: titleBlock),
               ],
             ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
+          child: Row(
+            children: [
+              logo,
+              const SizedBox(width: 18),
+              Expanded(child: titleBlock),
+              accountButton,
+            ],
           ),
-          TextButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Open History to view your Korlix Account.'),
-                ),
-              );
-            },
-            icon: const Icon(Icons.person_outline_rounded, size: 22),
-            label: const Text('Account'),
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF69D9E8),
-              backgroundColor: Colors.black.withOpacity(0.18),
-              side: BorderSide(
-                color: const Color(0xFF2EC7DF).withOpacity(0.45),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
