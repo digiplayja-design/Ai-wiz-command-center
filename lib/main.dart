@@ -1838,6 +1838,8 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
         return false;
       }
 
+      kKorlixSelectedCharacterNotifier.value = characterId;
+
       await _showKorlixNotice(
         title: 'Character selected',
         message: 'Your Korlix AI character has been updated.',
@@ -2470,6 +2472,101 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
   }
 }
 
+const String kKorlixCreateVideoPrompt = r"""
+Create a flawless, ultra-clean cinematic video masterpiece in 4K resolution at 24 frames per second, shot on ARRI Alexa 65 with anamorphic lenses and mastered for IMAX.
+
+[Insert your detailed scene description here — be specific about what is happening, who or what is in the frame, the environment, time of day, emotion/mood, and key actions. Example: “A lone female cybernetic detective stands on a rain-slicked neon rooftop in a futuristic Tokyo night, coat fluttering in the wind as holographic billboards reflect in puddles below her.”]
+
+Use world-class cinematography and directing techniques inspired by Roger Deakins, Hoyte van Hoytema, and Christopher Nolan. Apply smooth, deliberate camera movements — slow dolly zooms, elegant crane shots, subtle parallax tracking, and perfectly timed reveals — never shaky or amateur.
+
+Lighting must be cinematic and dramatic: rich volumetric god rays, soft practical sources, beautiful rim lighting, and subtle lens flares that feel organic and expensive. Color grade the footage with a premium Hollywood LUT — balanced contrast, deep blacks, vibrant yet natural colors, and cinematic teal-orange or cool desaturated tones depending on the mood.
+
+Render in hyper-realistic photorealism with perfect physics, realistic motion blur, natural depth of field, razor-sharp details, and zero artifacts, noise, or AI glitches. Composition follows the rule of thirds and golden ratio for maximum visual impact. Include subtle film grain and anamorphic lens characteristics for authentic big-budget film texture.
+
+The final video must look and feel like a $200 million blockbuster trailer — clean, immersive, emotionally powerful, and undeniably world-class in every single frame.
+
+Duration: [specify desired length, e.g., 8–12 seconds].
+
+Aspect ratio: 16:9 cinematic widescreen.
+""";
+
+final ValueNotifier<String> kKorlixSelectedCharacterNotifier =
+    ValueNotifier<String>('jj');
+
+class KorlixCharacterDisplayData {
+  final String id;
+  final String name;
+  final String eyebrow;
+  final String description;
+  final String assetPath;
+  final bool soundOn;
+
+  const KorlixCharacterDisplayData({
+    required this.id,
+    required this.name,
+    required this.eyebrow,
+    required this.description,
+    required this.assetPath,
+    this.soundOn = false,
+  });
+}
+
+KorlixCharacterDisplayData korlixCharacterDisplayFor(String id) {
+  switch (id) {
+    case 'chee_chai_chee':
+      return const KorlixCharacterDisplayData(
+        id: 'chee_chai_chee',
+        name: 'Chee Chai Chee',
+        eyebrow: 'PRO AI CHARACTER',
+        description:
+            'A dark cyber-mystic wizard built for strategy, wisdom, and powerful answers.',
+        assetPath: 'assets/wizard_greeting_en.mp4',
+        soundOn: true,
+      );
+    case 'phil':
+      return const KorlixCharacterDisplayData(
+        id: 'phil',
+        name: 'Phil',
+        eyebrow: 'PRO AI CHARACTER',
+        description:
+            'Helpful, clear, and easy to talk to. Phil helps you get things done.',
+        assetPath: 'assets/characters/phil/intro.mp4',
+        soundOn: true,
+      );
+    case 'yuna':
+      return const KorlixCharacterDisplayData(
+        id: 'yuna',
+        name: 'Yuna',
+        eyebrow: 'ULTRA PREMIUM CHARACTER',
+        description:
+            'Elegant, creative, and strategic. Yuna is built for premium-level ideas.',
+        assetPath: 'assets/characters/yuna/intro.mp4',
+        soundOn: true,
+      );
+    case 'ji-a':
+      return const KorlixCharacterDisplayData(
+        id: 'ji-a',
+        name: 'Ji-A',
+        eyebrow: 'ULTRA PREMIUM CHARACTER',
+        description:
+            'A premium AI character built for focused, cinematic, high-value assistance.',
+        assetPath: 'assets/characters/ji-a/intro.mp4',
+        soundOn: true,
+      );
+    case 'jj':
+    default:
+      return const KorlixCharacterDisplayData(
+        id: 'jj',
+        name: 'JJ',
+        eyebrow: 'FEATURED AI CHARACTER',
+        description:
+            'Curious, thoughtful, and always ready to chat. Ask JJ anything!',
+        assetPath: 'assets/characters/jj/intro.mp4',
+        soundOn: true,
+      );
+  }
+}
+
 class QuickAction {
   final String label;
   final String prompt;
@@ -2741,10 +2838,7 @@ Generate professional, legally grounded letters for the following (customized ba
 
 Analyze the attached credit reports thoroughly and produce a complete, high-impact credit repair package. Focus on maximum legal pressure while staying fully compliant with consumer protection laws.''',
         ),
-        QuickAction(
-          label: 'Content ideas',
-          prompt: 'Give me content ideas for ',
-        ),
+        QuickAction(label: 'Create a video', prompt: kKorlixCreateVideoPrompt),
       ],
     ),
     LanguageCopy(
@@ -3022,6 +3116,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       speech_to_text.SpeechToText();
 
   bool _loading = false;
+  bool _selectedCharacterFetchStarted = false;
+  bool _featuredAnswerDismissed = false;
+  bool _createVideoMode = false;
   bool _voiceListening = false;
   fp.PlatformFile? _pickedUploadFile;
   bool _loadingTier = false;
@@ -3304,6 +3401,13 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
 
     final command = _controller.text.trim();
 
+    if (_createVideoMode ||
+        command.toLowerCase().contains('create a video') ||
+        command.toLowerCase().contains('cinematic video masterpiece')) {
+      await _showVideoEnginePending(command);
+      return;
+    }
+
     if (command.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -3314,6 +3418,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     final allowPdf = _shouldAllowPdf(command);
 
     setState(() {
+      _featuredAnswerDismissed = false;
       _loading = true;
       _error = null;
     });
@@ -3797,6 +3902,45 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   }
 
   void _useQuickAction(QuickAction action) {
+    if (action.label == 'Create a video') {
+      setState(() {
+        _createVideoMode = true;
+        _controller.text = '';
+        _controller.selection = TextSelection.fromPosition(
+          const TextPosition(offset: 0),
+        );
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Describe the video you want. Video generation will be connected next.',
+          ),
+        ),
+      );
+
+      return;
+    }
+
+    if (action.label == 'Create a video') {
+      setState(() {
+        _controller.text = kKorlixCreateVideoPrompt;
+        _controller.selection = TextSelection.fromPosition(
+          TextPosition(offset: _controller.text.length),
+        );
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Create a video prompt loaded. Add your scene details, then submit.',
+          ),
+        ),
+      );
+
+      return;
+    }
+
     setState(() {
       _controller.text = action.prompt;
       _controller.selection = TextSelection.fromPosition(
@@ -4595,363 +4739,559 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     );
   }
 
+  Future<void> _refreshSelectedCharacterFromBackend({
+    bool force = false,
+  }) async {
+    if (!force && _selectedCharacterFetchStarted) {
+      return;
+    }
+
+    if (kKorlixAccessToken == null || kKorlixAccessToken!.isEmpty) {
+      return;
+    }
+
+    _selectedCharacterFetchStarted = true;
+
+    try {
+      final response = await http.get(
+        Uri.parse('$kKorlixBackendBaseUrl/api/me'),
+        headers: _authHeaders(),
+      );
+
+      if (response.statusCode >= 400) {
+        return;
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final profile =
+          (data['profile'] as Map?)?.cast<String, dynamic>() ??
+          <String, dynamic>{};
+
+      final selected = (profile['selected_character'] ?? 'jj')
+          .toString()
+          .trim();
+
+      if (selected.isNotEmpty) {
+        kKorlixSelectedCharacterNotifier.value = selected;
+      }
+    } catch (_) {
+      // The home screen should still load even if character sync fails.
+    }
+  }
+
+  Future<void> _showVideoEnginePending(String scenePrompt) async {
+    if (!mounted) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.72),
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 24,
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: const Color(0xFF071B27),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: const Color(0xFFFFD166).withOpacity(0.65),
+                width: 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFFD166).withOpacity(0.16),
+                  blurRadius: 34,
+                  spreadRadius: 4,
+                ),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.48),
+                  blurRadius: 24,
+                  offset: const Offset(0, 14),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                    color: const Color(0xFFE4EBEE),
+                  ),
+                ),
+                const Icon(
+                  Icons.movie_creation_outlined,
+                  color: Color(0xFFFFD166),
+                  size: 46,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Video generation is not connected yet',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFFE4EBEE),
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'The Create a video button is ready on the front end, but it is not connected to a real video generation provider yet. Until we connect the video API, Korlix AI will not return fake text results for video requests.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFFA9C6CF),
+                    fontSize: 14,
+                    height: 1.4,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.24),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFFFFD166).withOpacity(0.26),
+                    ),
+                  ),
+                  child: Text(
+                    scenePrompt.trim().isEmpty
+                        ? 'No scene description entered yet.'
+                        : scenePrompt.trim(),
+                    maxLines: 5,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFFE4EBEE),
+                      fontSize: 12.5,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF143B4A),
+                      foregroundColor: const Color(0xFFE4EBEE),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    child: const Text(
+                      'Close',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildMockupFeaturedCharacterCard() {
-    final GeneratedItem? activeResult = (!_loading && _results.isNotEmpty)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshSelectedCharacterFromBackend();
+    });
+
+    final GeneratedItem? activeResult =
+        (!_loading && _results.isNotEmpty && !_featuredAnswerDismissed)
         ? _results.first
         : null;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 560;
-          final cardHeight = compact ? 245.0 : 285.0;
+      child: ValueListenableBuilder<String>(
+        valueListenable: kKorlixSelectedCharacterNotifier,
+        builder: (context, selectedCharacterId, _) {
+          final character = korlixCharacterDisplayFor(selectedCharacterId);
 
-          return Container(
-            height: cardHeight,
-            decoration: BoxDecoration(
-              color: const Color(0xFF071B27).withOpacity(0.72),
-              borderRadius: BorderRadius.circular(26),
-              border: Border.all(
-                color: const Color(0xFF2EC7DF).withOpacity(0.32),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF2EC7DF).withOpacity(0.12),
-                  blurRadius: 30,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Row(
-              children: [
-                Expanded(
-                  flex: compact ? 10 : 10,
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      compact ? 16 : 28,
-                      compact ? 16 : 24,
-                      compact ? 10 : 18,
-                      compact ? 16 : 24,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'FEATURED AI CHARACTER',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: const Color(0xFF69D9E8),
-                            fontSize: compact ? 11.5 : 15,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        SizedBox(height: compact ? 9 : 14),
-                        Text(
-                          'JJ',
-                          style: TextStyle(
-                            color: const Color(0xFFE4EBEE),
-                            fontSize: compact ? 34 : 44,
-                            fontWeight: FontWeight.w900,
-                            height: 1.0,
-                            letterSpacing: 1.0,
-                          ),
-                        ),
-                        SizedBox(height: compact ? 11 : 16),
-                        Text(
-                          'Curious, thoughtful, and always ready to chat. Ask JJ anything!',
-                          maxLines: compact ? 4 : 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: const Color(0xFFE4EBEE).withOpacity(0.92),
-                            fontSize: compact ? 13.5 : 19,
-                            height: 1.34,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        SizedBox(height: compact ? 14 : 22),
-                        OutlinedButton(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Open Settings → View characters to preview and unlock more characters.',
-                                ),
-                              ),
-                            );
-                          },
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF69D9E8),
-                            side: BorderSide(
-                              color: const Color(0xFF2EC7DF).withOpacity(0.62),
-                            ),
-                            padding: EdgeInsets.symmetric(
-                              horizontal: compact ? 16 : 24,
-                              vertical: compact ? 11 : 15,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                          ),
-                          child: Text(
-                            'View Character',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: compact ? 12.5 : 15,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 560;
+              final cardHeight = compact ? 245.0 : 285.0;
+
+              return Container(
+                height: cardHeight,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF071B27).withOpacity(0.72),
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(
+                    color: const Color(0xFF2EC7DF).withOpacity(0.32),
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF2EC7DF).withOpacity(0.12),
+                      blurRadius: 30,
+                      spreadRadius: 2,
+                    ),
+                  ],
                 ),
-                Expanded(
-                  flex: compact ? 11 : 12,
-                  child: Container(
-                    height: double.infinity,
-                    color: Colors.black.withOpacity(0.16),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        AnimatedOpacity(
-                          opacity: activeResult == null ? 1.0 : 0.22,
-                          duration: const Duration(milliseconds: 450),
-                          curve: Curves.easeOutCubic,
-                          child: const KorlixCharacterIntroPreview(
-                            assetPath: 'assets/characters/jj/intro.mp4',
-                            muted: false,
-                            showSoundButton: true,
-                            autoplay: true,
-                            loop: true,
-                            fillParent: true,
-                          ),
+                clipBehavior: Clip.antiAlias,
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: compact ? 10 : 10,
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          compact ? 16 : 28,
+                          compact ? 16 : 24,
+                          compact ? 10 : 18,
+                          compact ? 16 : 24,
                         ),
-
-                        if (_loading)
-                          Positioned(
-                            left: 12,
-                            right: 12,
-                            bottom: 12,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.70),
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: const Color(
-                                    0xFF69D9E8,
-                                  ).withOpacity(0.48),
-                                ),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Color(0xFF69D9E8),
-                                    ),
-                                  ),
-                                  SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      'JJ is preparing your answer...',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: Color(0xFFE4EBEE),
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              character.eyebrow,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: const Color(0xFF69D9E8),
+                                fontSize: compact ? 11.5 : 15,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
                               ),
                             ),
-                          ),
-
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 520),
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeInCubic,
-                          transitionBuilder: (child, animation) {
-                            final slide = Tween<Offset>(
-                              begin: const Offset(0.08, 0),
-                              end: Offset.zero,
-                            ).animate(animation);
-
-                            return FadeTransition(
-                              opacity: animation,
-                              child: SlideTransition(
-                                position: slide,
-                                child: child,
+                            SizedBox(height: compact ? 9 : 14),
+                            Text(
+                              character.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: const Color(0xFFE4EBEE),
+                                fontSize: compact ? 34 : 44,
+                                fontWeight: FontWeight.w900,
+                                height: 1.0,
+                                letterSpacing: 1.0,
                               ),
-                            );
-                          },
-                          child: activeResult == null
-                              ? const SizedBox.shrink()
-                              : Padding(
-                                  key: ValueKey(
-                                    '${activeResult.title}-${activeResult.command}-${activeResult.content.hashCode}',
+                            ),
+                            SizedBox(height: compact ? 11 : 16),
+                            Text(
+                              character.description,
+                              maxLines: compact ? 4 : 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: const Color(
+                                  0xFFE4EBEE,
+                                ).withOpacity(0.92),
+                                fontSize: compact ? 13.5 : 19,
+                                height: 1.34,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(height: compact ? 14 : 22),
+                            OutlinedButton(
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Open Settings → View characters to preview and unlock more characters.',
+                                    ),
                                   ),
-                                  padding: const EdgeInsets.all(12),
-                                  child: Container(
-                                    padding: EdgeInsets.all(compact ? 12 : 15),
-                                    decoration: BoxDecoration(
+                                );
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF69D9E8),
+                                side: BorderSide(
+                                  color: const Color(
+                                    0xFF2EC7DF,
+                                  ).withOpacity(0.62),
+                                ),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: compact ? 16 : 24,
+                                  vertical: compact ? 11 : 15,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                              child: Text(
+                                'View Character',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: compact ? 12.5 : 15,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: compact ? 11 : 12,
+                      child: Container(
+                        height: double.infinity,
+                        color: Colors.black.withOpacity(0.16),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            AnimatedOpacity(
+                              opacity: activeResult == null ? 1.0 : 0.0,
+                              duration: const Duration(milliseconds: 450),
+                              curve: Curves.easeOutCubic,
+                              child: KorlixCharacterIntroPreview(
+                                key: ValueKey(character.assetPath),
+                                assetPath: character.assetPath,
+                                muted: !character.soundOn,
+                                showSoundButton: character.soundOn,
+                                autoplay: true,
+                                loop: true,
+                                fillParent: true,
+                              ),
+                            ),
+
+                            if (_loading)
+                              Positioned(
+                                left: 12,
+                                right: 12,
+                                bottom: 12,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.76),
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
                                       color: const Color(
-                                        0xFF061A25,
-                                      ).withOpacity(0.92),
-                                      borderRadius: BorderRadius.circular(18),
-                                      border: Border.all(
-                                        color: const Color(
-                                          0xFF69D9E8,
-                                        ).withOpacity(0.48),
+                                        0xFF69D9E8,
+                                      ).withOpacity(0.48),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Color(0xFF69D9E8),
+                                        ),
                                       ),
-                                      boxShadow: [
-                                        BoxShadow(
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          '${character.name} is preparing your answer...',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: Color(0xFFE4EBEE),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 520),
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              transitionBuilder: (child, animation) {
+                                final slide = Tween<Offset>(
+                                  begin: const Offset(0.08, 0),
+                                  end: Offset.zero,
+                                ).animate(animation);
+
+                                return FadeTransition(
+                                  opacity: animation,
+                                  child: SlideTransition(
+                                    position: slide,
+                                    child: child,
+                                  ),
+                                );
+                              },
+                              child: activeResult == null
+                                  ? const SizedBox.shrink()
+                                  : Container(
+                                      key: ValueKey(
+                                        '${activeResult.title}-${activeResult.command}-${activeResult.content.hashCode}',
+                                      ),
+                                      padding: EdgeInsets.all(
+                                        compact ? 12 : 15,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(
+                                          0xFF061A25,
+                                        ).withOpacity(0.985),
+                                        border: Border.all(
                                           color: const Color(
                                             0xFF69D9E8,
-                                          ).withOpacity(0.18),
-                                          blurRadius: 24,
-                                          spreadRadius: 2,
+                                          ).withOpacity(0.58),
                                         ),
-                                      ],
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const Row(
-                                          children: [
-                                            Icon(
-                                              Icons.auto_awesome_rounded,
-                                              color: Color(0xFF69D9E8),
-                                              size: 18,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(
+                                              0xFF69D9E8,
+                                            ).withOpacity(0.20),
+                                            blurRadius: 28,
+                                            spreadRadius: 3,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              const Icon(
+                                                Icons.auto_awesome_rounded,
+                                                color: Color(0xFF69D9E8),
+                                                size: 18,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              const Expanded(
+                                                child: Text(
+                                                  'ANSWER READY',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    color: Color(0xFF69D9E8),
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w900,
+                                                    letterSpacing: 0.6,
+                                                  ),
+                                                ),
+                                              ),
+                                              IconButton(
+                                                onPressed: () {
+                                                  setState(() {
+                                                    _featuredAnswerDismissed =
+                                                        true;
+                                                  });
+                                                },
+                                                icon: const Icon(
+                                                  Icons.close_rounded,
+                                                ),
+                                                color: const Color(0xFFE4EBEE),
+                                                tooltip: 'Close',
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            activeResult.command,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: const Color(0xFFE4EBEE),
+                                              fontSize: compact ? 13 : 15,
+                                              fontWeight: FontWeight.w900,
+                                              height: 1.22,
                                             ),
-                                            SizedBox(width: 8),
-                                            Expanded(
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Expanded(
+                                            child: SingleChildScrollView(
                                               child: Text(
-                                                'ANSWER READY',
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
+                                                activeResult.content,
                                                 style: TextStyle(
-                                                  color: Color(0xFF69D9E8),
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w900,
-                                                  letterSpacing: 0.6,
+                                                  color: const Color(
+                                                    0xFFA9C6CF,
+                                                  ),
+                                                  fontSize: compact ? 12 : 13.5,
+                                                  height: 1.35,
+                                                  fontWeight: FontWeight.w600,
                                                 ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          activeResult.command,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: const Color(0xFFE4EBEE),
-                                            fontSize: compact ? 13 : 15,
-                                            fontWeight: FontWeight.w900,
-                                            height: 1.22,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Expanded(
-                                          child: SingleChildScrollView(
-                                            child: Text(
-                                              activeResult.content,
-                                              style: TextStyle(
-                                                color: const Color(0xFFA9C6CF),
-                                                fontSize: compact ? 12 : 13.5,
-                                                height: 1.35,
-                                                fontWeight: FontWeight.w600,
                                               ),
                                             ),
                                           ),
-                                        ),
-                                        const SizedBox(height: 10),
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: FilledButton.icon(
-                                                onPressed: () =>
-                                                    _copyFeaturedResult(
-                                                      activeResult,
+                                          const SizedBox(height: 10),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: FilledButton.icon(
+                                                  onPressed: () =>
+                                                      _copyFeaturedResult(
+                                                        activeResult,
+                                                      ),
+                                                  icon: const Icon(
+                                                    Icons.copy_rounded,
+                                                    size: 17,
+                                                  ),
+                                                  label: const Text('Copy'),
+                                                  style: FilledButton.styleFrom(
+                                                    backgroundColor:
+                                                        const Color(0xFFB794F4),
+                                                    foregroundColor:
+                                                        const Color(0xFF120D18),
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            999,
+                                                          ),
                                                     ),
-                                                icon: const Icon(
-                                                  Icons.copy_rounded,
-                                                  size: 17,
-                                                ),
-                                                label: const Text('Copy'),
-                                                style: FilledButton.styleFrom(
-                                                  backgroundColor: const Color(
-                                                    0xFFB794F4,
-                                                  ),
-                                                  foregroundColor: const Color(
-                                                    0xFF120D18,
-                                                  ),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          999,
-                                                        ),
                                                   ),
                                                 ),
                                               ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: OutlinedButton.icon(
-                                                onPressed: () =>
-                                                    _shareFeaturedResult(
-                                                      activeResult,
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: OutlinedButton.icon(
+                                                  onPressed: () =>
+                                                      _shareFeaturedResult(
+                                                        activeResult,
+                                                      ),
+                                                  icon: const Icon(
+                                                    Icons.share_rounded,
+                                                    size: 17,
+                                                  ),
+                                                  label: const Text('Share'),
+                                                  style: OutlinedButton.styleFrom(
+                                                    foregroundColor:
+                                                        const Color(0xFF69D9E8),
+                                                    side: BorderSide(
+                                                      color: const Color(
+                                                        0xFF69D9E8,
+                                                      ).withOpacity(0.58),
                                                     ),
-                                                icon: const Icon(
-                                                  Icons.share_rounded,
-                                                  size: 17,
-                                                ),
-                                                label: const Text('Share'),
-                                                style: OutlinedButton.styleFrom(
-                                                  foregroundColor: const Color(
-                                                    0xFF69D9E8,
-                                                  ),
-                                                  side: BorderSide(
-                                                    color: const Color(
-                                                      0xFF69D9E8,
-                                                    ).withOpacity(0.58),
-                                                  ),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          999,
-                                                        ),
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            999,
+                                                          ),
+                                                    ),
                                                   ),
                                                 ),
                                               ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
+                                            ],
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              );
+            },
           );
         },
       ),
