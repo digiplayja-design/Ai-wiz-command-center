@@ -1059,6 +1059,197 @@ function getOpenAIModelForTier(profile, options = {}) {
 }
 
 
+
+function getVideoTierLimit(profile) {
+  const override = Number(profile?.video_generation_limit_override || 0);
+
+  if (Number.isFinite(override) && override > 0) {
+    return override;
+  }
+
+  const tier = String(profile?.tier || "basic").toLowerCase();
+
+  if (tier === "ultra") {
+    return 3;
+  }
+
+  if (tier === "enterprise") {
+    return 10;
+  }
+
+  return 0;
+}
+
+function hasVideoGenerationAccess(profile) {
+  const tier = String(profile?.tier || "basic").toLowerCase();
+
+  return tier === "ultra" || tier === "enterprise";
+}
+
+function getVideoMonthStart() {
+  const now = new Date();
+
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+    .toISOString();
+}
+
+async function countUserVideoGenerationsThisMonth(userId) {
+  if (!supabaseAdmin || !userId) {
+    return 0;
+  }
+
+  const monthStart = getVideoMonthStart();
+
+  const { count, error } = await supabaseAdmin
+    .from("generation_history")
+    .select("id", {
+      count: "exact",
+      head: true,
+    })
+    .eq("user_id", userId)
+    .eq("result_type", "video")
+    .gte("created_at", monthStart);
+
+  if (error) {
+    throw error;
+  }
+
+  return count || 0;
+}
+
+function normalizeVideoSeconds(value) {
+  const seconds = Number(value || 8);
+
+  if ([8, 12, 16, 20].includes(seconds)) {
+    return seconds;
+  }
+
+  return 8;
+}
+
+function normalizeVideoSize(value) {
+  const allowed = new Set([
+    "720x1280",
+    "1280x720",
+    "1080x1920",
+    "1920x1080",
+  ]);
+
+  const size = String(value || "1280x720").trim();
+
+  return allowed.has(size) ? size : "1280x720";
+}
+
+async function createOpenAIVideoJob({
+  prompt,
+  size,
+  seconds,
+}) {
+  const model = process.env.OPENAI_VIDEO_MODEL || "sora-2-pro";
+
+  const response = await fetch("https://api.openai.com/v1/videos", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      prompt,
+      size,
+      seconds,
+    }),
+  });
+
+  const bodyText = await response.text();
+  let data;
+
+  try {
+    data = bodyText ? JSON.parse(bodyText) : {};
+  } catch (_) {
+    data = {
+      raw: bodyText,
+    };
+  }
+
+  if (!response.ok) {
+    const message =
+      data?.error?.message ||
+      data?.message ||
+      bodyText ||
+      "OpenAI video generation failed.";
+
+    const error = new Error(message);
+    error.statusCode = response.status;
+    throw error;
+  }
+
+  return data;
+}
+
+async function retrieveOpenAIVideo(videoId) {
+  const response = await fetch(`https://api.openai.com/v1/videos/${videoId}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    },
+  });
+
+  const bodyText = await response.text();
+  let data;
+
+  try {
+    data = bodyText ? JSON.parse(bodyText) : {};
+  } catch (_) {
+    data = {
+      raw: bodyText,
+    };
+  }
+
+  if (!response.ok) {
+    const message =
+      data?.error?.message ||
+      data?.message ||
+      bodyText ||
+      "OpenAI video status check failed.";
+
+    const error = new Error(message);
+    error.statusCode = response.status;
+    throw error;
+  }
+
+  return data;
+}
+
+async function fetchOpenAIVideoContent(videoId) {
+  const response = await fetch(
+    `https://api.openai.com/v1/videos/${videoId}/content`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const bodyText = await response.text().catch(() => "");
+    const error = new Error(
+      bodyText || "Could not retrieve generated video content."
+    );
+    error.statusCode = response.status;
+    throw error;
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+
+  return {
+    buffer: Buffer.from(arrayBuffer),
+    contentType: response.headers.get("content-type") || "video/mp4",
+  };
+}
+
+
 async function createOpenAIResponse(client, { model, input, useSearch }) {
   const request = {
     model,
@@ -1417,6 +1608,163 @@ app.post("/api/auth/signout", async (req, res) => {
   } catch (error) {
     res.status(error.statusCode || 500).json({
       error: sanitize(error?.message),
+    });
+  }
+});
+
+
+
+app.post("/api/video/generate", async (req, res) => {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(400).json({
+        error: "Missing OPENAI_API_KEY on backend.",
+      });
+    }
+
+    const user = await requireUser(req);
+    const profile = await getOrCreateProfile(user);
+    const tier = String(profile?.tier || "basic").toLowerCase();
+
+    if (!hasVideoGenerationAccess(profile)) {
+      return res.status(403).json({
+        error: "Video generation is available on Ultra Premium and Enterprise.",
+        upgradeRequired: true,
+        requiredTier: "ultra",
+      });
+    }
+
+    const monthlyLimit = getVideoTierLimit(profile);
+    const usedThisMonth = await countUserVideoGenerationsThisMonth(user.id);
+
+    if (monthlyLimit > 0 && usedThisMonth >= monthlyLimit) {
+      return res.status(429).json({
+        error: `Monthly video generation limit reached for your ${tier} plan.`,
+        tier,
+        monthlyLimit,
+        usedThisMonth,
+      });
+    }
+
+    const prompt = String(req.body.prompt || "").trim();
+    const languageCode = req.body.language || "en";
+    const size = normalizeVideoSize(req.body.size);
+    const seconds = normalizeVideoSeconds(req.body.seconds);
+
+    if (!prompt) {
+      return res.status(400).json({
+        error: "Video prompt is required.",
+      });
+    }
+
+    const videoJob = await createOpenAIVideoJob({
+      prompt,
+      size,
+      seconds,
+    });
+
+    const creditsUsed = 25;
+
+    await supabaseAdmin.from("generation_history").insert({
+      user_id: user.id,
+      character_id: profile?.selected_character || "jj",
+      language: languageCode,
+      prompt: `Video generation prompt:\n${prompt}`,
+      response: `Video generation started. Video ID: ${videoJob.id}`,
+      result_type: "video",
+      searched: false,
+      credits_used: creditsUsed,
+    });
+
+    const usageCounter = await getOrCreateUsageCounter(user.id);
+
+    if (usageCounter) {
+      await supabaseAdmin
+        .from("usage_counters")
+        .update({
+          video_generations: Number(usageCounter.video_generations || 0) + 1,
+          credits_used: Number(usageCounter.credits_used || 0) + creditsUsed,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", usageCounter.id);
+    }
+
+    res.json({
+      success: true,
+      video: videoJob,
+      videoId: videoJob.id,
+      status: videoJob.status,
+      progress: videoJob.progress || 0,
+      tier,
+      monthlyLimit,
+      usedThisMonth: usedThisMonth + 1,
+    });
+  } catch (error) {
+    console.error("Video generation error:", sanitize(error?.message));
+
+    res.status(error.statusCode || 500).json({
+      error: "Video generation failed",
+      details: sanitize(error?.message),
+    });
+  }
+});
+
+app.get("/api/video/status/:videoId", async (req, res) => {
+  try {
+    await requireUser(req);
+
+    const videoId = String(req.params.videoId || "").trim();
+
+    if (!videoId) {
+      return res.status(400).json({
+        error: "Video ID is required.",
+      });
+    }
+
+    const video = await retrieveOpenAIVideo(videoId);
+
+    res.json({
+      success: true,
+      video,
+      videoId: video.id,
+      status: video.status,
+      progress: video.progress || 0,
+      error: video.error || null,
+    });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      error: "Video status check failed",
+      details: sanitize(error?.message),
+    });
+  }
+});
+
+app.get("/api/video/content/:videoId", async (req, res) => {
+  try {
+    await requireUser(req);
+
+    const videoId = String(req.params.videoId || "").trim();
+
+    if (!videoId) {
+      return res.status(400).json({
+        error: "Video ID is required.",
+      });
+    }
+
+    const content = await fetchOpenAIVideoContent(videoId);
+
+    res.setHeader("Content-Type", content.contentType);
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="korlix-video-${videoId}.mp4"`
+    );
+    res.setHeader("Cache-Control", "private, max-age=3600");
+
+    res.send(content.buffer);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      error: "Video content retrieval failed",
+      details: sanitize(error?.message),
     });
   }
 });

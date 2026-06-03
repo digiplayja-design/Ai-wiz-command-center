@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -768,6 +769,116 @@ class KorlixHomeCharacterHero extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class KorlixGeneratedVideoPlayer extends StatefulWidget {
+  final String videoUrl;
+  final Map<String, String> headers;
+
+  const KorlixGeneratedVideoPlayer({
+    super.key,
+    required this.videoUrl,
+    required this.headers,
+  });
+
+  @override
+  State<KorlixGeneratedVideoPlayer> createState() =>
+      _KorlixGeneratedVideoPlayerState();
+}
+
+class _KorlixGeneratedVideoPlayerState
+    extends State<KorlixGeneratedVideoPlayer> {
+  VideoPlayerController? _controller;
+  bool _ready = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant KorlixGeneratedVideoPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.videoUrl != widget.videoUrl) {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    final old = _controller;
+    _controller = null;
+    _ready = false;
+    _error = null;
+    await old?.dispose();
+
+    try {
+      final controller = VideoPlayerController.networkUrl(
+        Uri.parse(widget.videoUrl),
+        httpHeaders: widget.headers,
+      );
+
+      await controller.initialize();
+      await controller.setLooping(true);
+      await controller.play();
+
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+
+      setState(() {
+        _controller = controller;
+        _ready = true;
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _error = 'Could not load video preview.';
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+
+    if (_error != null) {
+      return Center(
+        child: Text(
+          _error!,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.redAccent,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+    }
+
+    if (!_ready || controller == null || !controller.value.isInitialized) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF69D9E8)),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: AspectRatio(
+        aspectRatio: controller.value.aspectRatio,
+        child: VideoPlayer(controller),
       ),
     );
   }
@@ -3404,7 +3515,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     if (_createVideoMode ||
         command.toLowerCase().contains('create a video') ||
         command.toLowerCase().contains('cinematic video masterpiece')) {
-      await _showVideoEnginePending(command);
+      await _startOpenAIVideoGeneration(command);
       return;
     }
 
@@ -4902,6 +5013,324 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         );
       },
     );
+  }
+
+  String _buildFullKorlixVideoPrompt(String sceneDescription) {
+    return '$kKorlixCreateVideoPrompt\n\nUser scene description:\n$sceneDescription';
+  }
+
+  Future<void> _startOpenAIVideoGeneration(String sceneDescription) async {
+    final scene = sceneDescription.trim();
+
+    if (scene.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Describe the video you want first.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+      _featuredAnswerDismissed = true;
+    });
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$kKorlixBackendBaseUrl/api/video/generate'),
+            headers: _authHeaders(),
+            body: jsonEncode({
+              'prompt': _buildFullKorlixVideoPrompt(scene),
+              'language': _selectedLanguage,
+              'size': '1280x720',
+              'seconds': 8,
+            }),
+          )
+          .timeout(const Duration(seconds: 60));
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 403 && data['upgradeRequired'] == true) {
+        setState(() {
+          _loading = false;
+        });
+
+        await _showPremiumFeaturePrompt(
+          title: 'Ultra Premium required',
+          availability: 'Ultra Premium, Enterprise',
+          description:
+              data['error']?.toString() ??
+              'Video generation is available on Ultra Premium and Enterprise.',
+        );
+        return;
+      }
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(data['details'] ?? data['error'] ?? response.body);
+      }
+
+      final videoId = (data['videoId'] ?? data['video']?['id']).toString();
+
+      if (videoId.isEmpty || videoId == 'null') {
+        throw Exception('No video ID returned.');
+      }
+
+      setState(() {
+        _loading = false;
+        _createVideoMode = false;
+        _controller.clear();
+      });
+
+      await _showVideoProgressDialog(videoId: videoId, prompt: scene);
+    } catch (error) {
+      setState(() {
+        _loading = false;
+        _error = 'Video generation failed.\n\nDetails: $error';
+      });
+    }
+  }
+
+  Future<void> _showVideoProgressDialog({
+    required String videoId,
+    required String prompt,
+  }) async {
+    Timer? timer;
+    StateSetter? updateDialog;
+
+    String status = 'queued';
+    int progress = 0;
+    String? errorMessage;
+    bool completed = false;
+
+    Future<void> poll() async {
+      try {
+        final response = await http.get(
+          Uri.parse('$kKorlixBackendBaseUrl/api/video/status/$videoId'),
+          headers: _authHeaders(),
+        );
+
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw Exception(data['details'] ?? data['error'] ?? response.body);
+        }
+
+        final video =
+            (data['video'] as Map?)?.cast<String, dynamic>() ??
+            <String, dynamic>{};
+
+        status = (data['status'] ?? video['status'] ?? 'queued').toString();
+        progress =
+            int.tryParse(
+              (data['progress'] ?? video['progress'] ?? 0).toString(),
+            ) ??
+            0;
+
+        if (status == 'completed') {
+          completed = true;
+          timer?.cancel();
+        }
+
+        if (status == 'failed') {
+          errorMessage =
+              video['error']?.toString() ?? 'Video generation failed.';
+          timer?.cancel();
+        }
+
+        updateDialog?.call(() {});
+      } catch (error) {
+        errorMessage = error.toString();
+        updateDialog?.call(() {});
+      }
+    }
+
+    timer = Timer.periodic(const Duration(seconds: 12), (_) => poll());
+
+    await poll();
+
+    if (!mounted) {
+      timer.cancel();
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withOpacity(0.72),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            updateDialog = setDialogState;
+
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: 22,
+              ),
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 520),
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF071B27),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: const Color(0xFF69D9E8).withOpacity(0.55),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF69D9E8).withOpacity(0.18),
+                      blurRadius: 32,
+                      spreadRadius: 3,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.movie_creation_outlined,
+                          color: Color(0xFF69D9E8),
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text(
+                            'Korlix Video Generation',
+                            style: TextStyle(
+                              color: Color(0xFFE4EBEE),
+                              fontSize: 19,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close_rounded),
+                          color: const Color(0xFFE4EBEE),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    if (!completed && errorMessage == null) ...[
+                      const Text(
+                        'Rendering your video. This can take a few minutes.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(0xFFA9C6CF),
+                          fontSize: 14,
+                          height: 1.35,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      LinearProgressIndicator(
+                        value: progress > 0 ? progress / 100 : null,
+                        color: const Color(0xFF69D9E8),
+                        backgroundColor: Colors.black26,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Status: $status ${progress > 0 ? "• $progress%" : ""}',
+                        style: const TextStyle(
+                          color: Color(0xFFE4EBEE),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                    if (errorMessage != null) ...[
+                      const Icon(
+                        Icons.error_outline_rounded,
+                        color: Colors.redAccent,
+                        size: 40,
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        errorMessage!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.redAccent,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                    if (completed) ...[
+                      SizedBox(
+                        height: 240,
+                        child: KorlixGeneratedVideoPlayer(
+                          videoUrl:
+                              '$kKorlixBackendBaseUrl/api/video/content/$videoId',
+                          headers: _authHeaders(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        prompt,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFFA9C6CF),
+                          fontSize: 12.5,
+                          height: 1.3,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: () {
+                                Share.share(
+                                  'I created a video with Korlix AI. Video ID: $videoId',
+                                  subject: 'Korlix AI video',
+                                );
+                              },
+                              icon: const Icon(Icons.share_rounded),
+                              label: const Text('Share'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF143B4A),
+                                foregroundColor: const Color(0xFFE4EBEE),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                Clipboard.setData(ClipboardData(text: videoId));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Video ID copied.'),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.copy_rounded),
+                              label: const Text('Copy ID'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF69D9E8),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    timer.cancel();
   }
 
   Widget _buildMockupFeaturedCharacterCard() {
