@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
@@ -20,6 +21,8 @@ bool kSupabaseReady = false;
 String? kKorlixAccessToken;
 String? kKorlixRefreshToken;
 String? kKorlixUserEmail;
+String? kKorlixDeviceId;
+String? kKorlixDeviceLabel;
 
 const String kKorlixBackendBaseUrl =
     'https://chee-chai-chee-backend.onrender.com';
@@ -75,6 +78,81 @@ class CheeChaiCheeApp extends StatelessWidget {
       theme: ThemeData(useMaterial3: true, brightness: Brightness.dark),
       home: const AuthGate(),
     );
+  }
+}
+
+class KorlixDeviceStore {
+  static const String deviceIdKey = 'korlix_device_id';
+  static const String deviceLabelKey = 'korlix_device_label';
+
+  static String defaultDeviceLabel() {
+    if (kIsWeb) {
+      return 'Web browser';
+    }
+
+    return defaultTargetPlatform.name;
+  }
+
+  static Future<String> loadOrCreateDeviceId() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final existing = prefs.getString(deviceIdKey);
+
+    if (existing != null && existing.isNotEmpty) {
+      return existing;
+    }
+
+    final random = math.Random().nextInt(0x7fffffff);
+    final created = 'korlix_${DateTime.now().millisecondsSinceEpoch}_$random';
+
+    await prefs.setString(deviceIdKey, created);
+
+    return created;
+  }
+
+  static Future<String> loadOrCreateDeviceLabel() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final existing = prefs.getString(deviceLabelKey);
+
+    if (existing != null && existing.isNotEmpty) {
+      return existing;
+    }
+
+    final label = defaultDeviceLabel();
+
+    await prefs.setString(deviceLabelKey, label);
+
+    return label;
+  }
+
+  static Future<void> ensureLoaded() async {
+    kKorlixDeviceId = await loadOrCreateDeviceId();
+    kKorlixDeviceLabel = await loadOrCreateDeviceLabel();
+  }
+
+  static Map<String, String> headers() {
+    final headers = <String, String>{};
+
+    if (kKorlixDeviceId != null && kKorlixDeviceId!.isNotEmpty) {
+      headers['X-Korlix-Device-Id'] = kKorlixDeviceId!;
+    }
+
+    if (kKorlixDeviceLabel != null && kKorlixDeviceLabel!.isNotEmpty) {
+      headers['X-Korlix-Device-Label'] = kKorlixDeviceLabel!;
+    }
+
+    headers['X-Korlix-Platform'] = kIsWeb ? 'web' : defaultTargetPlatform.name;
+
+    return headers;
+  }
+
+  static Map<String, dynamic> bodyFields() {
+    return {
+      'device_id': kKorlixDeviceId,
+      'device_label': kKorlixDeviceLabel,
+      'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
+    };
   }
 }
 
@@ -197,6 +275,7 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _restoreSession() async {
+    await KorlixDeviceStore.ensureLoaded();
     final saved = await KorlixSessionStore.load();
 
     if (saved != null) {
@@ -229,6 +308,23 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _handleSignOut() async {
+    try {
+      await KorlixDeviceStore.ensureLoaded();
+
+      await http.post(
+        Uri.parse('$kKorlixBackendBaseUrl/api/auth/signout'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (kKorlixAccessToken != null && kKorlixAccessToken!.isNotEmpty)
+            'Authorization': 'Bearer $kKorlixAccessToken',
+          ...KorlixDeviceStore.headers(),
+        },
+        body: jsonEncode(KorlixDeviceStore.bodyFields()),
+      );
+    } catch (_) {
+      // Local sign-out should still happen even if the server cleanup fails.
+    }
+
     await KorlixSessionStore.clear();
 
     setState(() {
@@ -385,6 +481,7 @@ class _AuthScreenState extends State<AuthScreen> {
     });
 
     try {
+      await KorlixDeviceStore.ensureLoaded();
       final path = _isSignUp ? '/api/auth/signup' : '/api/auth/signin';
 
       final response = await http.post(
@@ -1138,6 +1235,8 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     if (kKorlixAccessToken != null && kKorlixAccessToken!.isNotEmpty) {
       headers['Authorization'] = 'Bearer $kKorlixAccessToken';
     }
+
+    headers.addAll(KorlixDeviceStore.headers());
 
     return headers;
   }
@@ -2895,6 +2994,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     if (kKorlixAccessToken != null && kKorlixAccessToken!.isNotEmpty) {
       headers['Authorization'] = 'Bearer $kKorlixAccessToken';
     }
+
+    headers.addAll(KorlixDeviceStore.headers());
 
     return headers;
   }

@@ -69,6 +69,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/characters/ji_a/intro.mp4
     - assets/characters/yuna/intro.mp4
     - assets/characters/jj/intro.mp4
     - assets/characters/phil/intro.mp4

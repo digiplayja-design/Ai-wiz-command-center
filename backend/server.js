@@ -233,6 +233,234 @@ function getMonthKey(date = new Date()) {
   return `${year}-${month}`;
 }
 
+
+function getRequestDeviceInfo(req) {
+  const body = req.body || {};
+
+  const deviceId = String(
+    body.device_id ||
+      req.headers["x-korlix-device-id"] ||
+      ""
+  ).trim();
+
+  const deviceLabel = String(
+    body.device_label ||
+      req.headers["x-korlix-device-label"] ||
+      "Unknown device"
+  ).trim();
+
+  const platform = String(
+    body.platform ||
+      req.headers["x-korlix-platform"] ||
+      "unknown"
+  ).trim();
+
+  return {
+    deviceId,
+    deviceLabel,
+    platform,
+  };
+}
+
+function getTierDeviceLimit(profile) {
+  const override = Number(profile?.max_devices_override || 0);
+
+  if (Number.isFinite(override) && override > 0) {
+    return override;
+  }
+
+  const tier = profile?.tier || "basic";
+
+  if (tier === "ultra") {
+    return 2;
+  }
+
+  if (tier === "enterprise") {
+    return 2;
+  }
+
+  return 1;
+}
+
+function makeHttpError(message, statusCode = 400) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+async function registerDeviceSession({
+  userId,
+  profile,
+  deviceInfo,
+}) {
+  if (!supabaseAdmin) {
+    return null;
+  }
+
+  if (!deviceInfo.deviceId) {
+    throw makeHttpError("Device ID is required for sign-in.", 400);
+  }
+
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from("device_sessions")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("device_id", deviceInfo.deviceId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  if (existing?.status === "active") {
+    const { data, error } = await supabaseAdmin
+      .from("device_sessions")
+      .update({
+        device_label: deviceInfo.deviceLabel || existing.device_label,
+        platform: deviceInfo.platform || existing.platform,
+        last_seen_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id)
+      .select("*")
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  }
+
+  const limit = getTierDeviceLimit(profile);
+
+  const { data: activeDevices, error: activeError } = await supabaseAdmin
+    .from("device_sessions")
+    .select("id, device_id, device_label, platform, last_seen_at")
+    .eq("user_id", userId)
+    .eq("status", "active");
+
+  if (activeError) {
+    throw activeError;
+  }
+
+  const activeCount = activeDevices?.length || 0;
+
+  if (activeCount >= limit) {
+    const tier = profile?.tier || "basic";
+
+    throw makeHttpError(
+      `Device limit reached for your ${tier} plan. Sign out from another device before signing in here.`,
+      403
+    );
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("device_sessions")
+    .upsert(
+      {
+        user_id: userId,
+        device_id: deviceInfo.deviceId,
+        device_label: deviceInfo.deviceLabel,
+        platform: deviceInfo.platform,
+        status: "active",
+        last_seen_at: new Date().toISOString(),
+        revoked_at: null,
+      },
+      {
+        onConflict: "user_id,device_id",
+      }
+    )
+    .select("*")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function touchActiveDeviceSession({
+  userId,
+  profile,
+  deviceInfo,
+  allowRegister = false,
+}) {
+  if (!supabaseAdmin || !deviceInfo.deviceId) {
+    return null;
+  }
+
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from("device_sessions")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("device_id", deviceInfo.deviceId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  if (existing?.status === "active") {
+    const { data, error } = await supabaseAdmin
+      .from("device_sessions")
+      .update({
+        device_label: deviceInfo.deviceLabel || existing.device_label,
+        platform: deviceInfo.platform || existing.platform,
+        last_seen_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id)
+      .select("*")
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  }
+
+  if (allowRegister) {
+    return registerDeviceSession({
+      userId,
+      profile,
+      deviceInfo,
+    });
+  }
+
+  throw makeHttpError(
+    "This device is not authorized for this account. Please sign in again.",
+    403
+  );
+}
+
+async function revokeDeviceSession({
+  userId,
+  deviceId,
+}) {
+  if (!supabaseAdmin || !userId || !deviceId) {
+    return null;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("device_sessions")
+    .update({
+      status: "revoked",
+      revoked_at: new Date().toISOString(),
+      last_seen_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId)
+    .eq("device_id", deviceId)
+    .select("*");
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+
 function getBearerToken(req) {
   const header = req.headers.authorization || "";
 
@@ -258,6 +486,19 @@ async function getAuthenticatedUser(req) {
 
   if (error || !data?.user) {
     throw new Error("Invalid or expired session. Please sign in again.");
+  }
+
+  const deviceInfo = getRequestDeviceInfo(req);
+
+  if (deviceInfo.deviceId) {
+    const profile = await getOrCreateProfile(data.user);
+
+    await touchActiveDeviceSession({
+      userId: data.user.id,
+      profile,
+      deviceInfo,
+      allowRegister: false,
+    });
   }
 
   return data.user;
@@ -783,6 +1024,7 @@ app.post("/api/auth/signup", async (req, res) => {
 
     const email = String(req.body.email || "").trim().toLowerCase();
     const password = String(req.body.password || "").trim();
+    const deviceInfo = getRequestDeviceInfo(req);
 
     if (!email || !password) {
       return res.status(400).json({
@@ -807,6 +1049,18 @@ app.post("/api/auth/signup", async (req, res) => {
       });
     }
 
+    let profile = null;
+    let deviceSession = null;
+
+    if (data.user && data.session) {
+      profile = await getOrCreateProfile(data.user);
+      deviceSession = await registerDeviceSession({
+        userId: data.user.id,
+        profile,
+        deviceInfo,
+      });
+    }
+
     res.json({
       success: true,
       message: data.session
@@ -818,6 +1072,8 @@ app.post("/api/auth/signup", async (req, res) => {
             email: data.user.email,
           }
         : null,
+      profile,
+      deviceSession,
       session: data.session
         ? {
             access_token: data.session.access_token,
@@ -827,7 +1083,7 @@ app.post("/api/auth/signup", async (req, res) => {
         : null,
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       error: sanitize(error?.message),
     });
   }
@@ -843,10 +1099,17 @@ app.post("/api/auth/signin", async (req, res) => {
 
     const email = String(req.body.email || "").trim().toLowerCase();
     const password = String(req.body.password || "").trim();
+    const deviceInfo = getRequestDeviceInfo(req);
 
     if (!email || !password) {
       return res.status(400).json({
         error: "Email and password are required.",
+      });
+    }
+
+    if (!deviceInfo.deviceId) {
+      return res.status(400).json({
+        error: "Device ID is required for sign-in.",
       });
     }
 
@@ -861,6 +1124,14 @@ app.post("/api/auth/signin", async (req, res) => {
       });
     }
 
+    const profile = await getOrCreateProfile(data.user);
+
+    const deviceSession = await registerDeviceSession({
+      userId: data.user.id,
+      profile,
+      deviceInfo,
+    });
+
     res.json({
       success: true,
       message: "Signed in.",
@@ -870,6 +1141,9 @@ app.post("/api/auth/signin", async (req, res) => {
             email: data.user.email,
           }
         : null,
+      profile,
+      deviceSession,
+      deviceLimit: getTierDeviceLimit(profile),
       session: data.session
         ? {
             access_token: data.session.access_token,
@@ -879,7 +1153,7 @@ app.post("/api/auth/signin", async (req, res) => {
         : null,
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       error: sanitize(error?.message),
     });
   }
@@ -931,10 +1205,17 @@ app.post("/api/auth/refresh", async (req, res) => {
     }
 
     const refreshToken = String(req.body.refresh_token || "").trim();
+    const deviceInfo = getRequestDeviceInfo(req);
 
     if (!refreshToken) {
       return res.status(400).json({
         error: "Refresh token is required.",
+      });
+    }
+
+    if (!deviceInfo.deviceId) {
+      return res.status(400).json({
+        error: "Device ID is required for session refresh.",
       });
     }
 
@@ -948,6 +1229,15 @@ app.post("/api/auth/refresh", async (req, res) => {
       });
     }
 
+    const profile = await getOrCreateProfile(data.user);
+
+    const deviceSession = await touchActiveDeviceSession({
+      userId: data.user.id,
+      profile,
+      deviceInfo,
+      allowRegister: true,
+    });
+
     res.json({
       success: true,
       message: "Session refreshed.",
@@ -957,6 +1247,9 @@ app.post("/api/auth/refresh", async (req, res) => {
             email: data.user.email,
           }
         : null,
+      profile,
+      deviceSession,
+      deviceLimit: getTierDeviceLimit(profile),
       session: data.session
         ? {
             access_token: data.session.access_token,
@@ -966,7 +1259,7 @@ app.post("/api/auth/refresh", async (req, res) => {
         : null,
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       error: sanitize(error?.message),
     });
   }
@@ -1047,6 +1340,31 @@ app.post("/api/characters/select", async (req, res) => {
       success: true,
       profile: updatedProfile,
       character,
+    });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      error: sanitize(error?.message),
+    });
+  }
+});
+
+
+
+app.post("/api/auth/signout", async (req, res) => {
+  try {
+    const user = await requireUser(req);
+    const deviceInfo = getRequestDeviceInfo(req);
+
+    if (deviceInfo.deviceId) {
+      await revokeDeviceSession({
+        userId: user.id,
+        deviceId: deviceInfo.deviceId,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Signed out from this device.",
     });
   } catch (error) {
     res.status(error.statusCode || 500).json({
