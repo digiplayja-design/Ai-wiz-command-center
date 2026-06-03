@@ -1145,7 +1145,49 @@ async function createOpenAIVideoJob({
   size,
   seconds,
 }) {
-  const model = process.env.OPENAI_VIDEO_MODEL || "sora-2-pro";
+  const model = process.env.OPENAI_VIDEO_MODEL || "sora-2";
+
+  const form = new FormData();
+  form.append("model", model);
+  form.append("prompt", prompt);
+  form.append("size", size);
+  form.append("seconds", String(seconds));
+
+  const response = await fetch("https://api.openai.com/v1/videos", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    },
+    body: form,
+  });
+
+  const bodyText = await response.text();
+  let data;
+
+  try {
+    data = bodyText ? JSON.parse(bodyText) : {};
+  } catch (_) {
+    data = {
+      raw: bodyText,
+    };
+  }
+
+  if (!response.ok) {
+    const message =
+      data?.error?.message ||
+      data?.message ||
+      bodyText ||
+      "OpenAI video generation failed.";
+
+    const error = new Error(message);
+    error.statusCode = response.status;
+    error.openaiPayload = data;
+    throw error;
+  }
+
+  return data;
+}) {
+  const model = process.env.OPENAI_VIDEO_MODEL || "sora-2";
 
   const response = await fetch("https://api.openai.com/v1/videos", {
     method: "POST",
@@ -1700,7 +1742,7 @@ app.post("/api/video/generate", async (req, res) => {
       usedThisMonth: usedThisMonth + 1,
     });
   } catch (error) {
-    console.error("Video generation error:", sanitize(error?.message));
+    console.error("Video generation error:", sanitize(error?.message), error?.openaiPayload || "");
 
     res.status(error.statusCode || 500).json({
       error: "Video generation failed",
@@ -1765,6 +1807,162 @@ app.get("/api/video/content/:videoId", async (req, res) => {
     res.status(error.statusCode || 500).json({
       error: "Video content retrieval failed",
       details: sanitize(error?.message),
+    });
+  }
+});
+
+
+
+app.post("/api/location/record", async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(500).json({
+        error: "Supabase is not configured on the backend.",
+      });
+    }
+
+    const user = await requireUser(req);
+    const profile = await getOrCreateProfile(user);
+
+    const latitude = Number(req.body.latitude);
+    const longitude = Number(req.body.longitude);
+    const accuracy = Number(req.body.accuracy || 0);
+    const feature = String(req.body.feature || "locator").trim();
+    const queryType = String(req.body.query_type || "").trim();
+    const platform = String(req.body.platform || "unknown").trim();
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return res.status(400).json({
+        error: "Valid latitude and longitude are required.",
+      });
+    }
+
+    const { data: event, error: insertError } = await supabaseAdmin
+      .from("user_location_events")
+      .insert({
+        user_id: user.id,
+        email: user.email || profile?.email || null,
+        latitude,
+        longitude,
+        accuracy: Number.isFinite(accuracy) ? accuracy : null,
+        feature,
+        query_type: queryType,
+        platform,
+      })
+      .select("*")
+      .single();
+
+    if (insertError) {
+      throw insertError;
+    }
+
+    const { data: updatedProfile, error: updateError } = await supabaseAdmin
+      .from("user_profiles")
+      .update({
+        email: user.email || profile?.email || null,
+        last_location_lat: latitude,
+        last_location_lng: longitude,
+        last_location_accuracy: Number.isFinite(accuracy) ? accuracy : null,
+        last_location_feature: feature,
+        last_location_at: new Date().toISOString(),
+      })
+      .eq("id", user.id)
+      .select("*")
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    res.json({
+      success: true,
+      event,
+      profile: updatedProfile,
+    });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      error: "Location could not be recorded.",
+      details: sanitize(error?.message),
+    });
+  }
+});
+
+app.post("/api/theme/set", async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(500).json({
+        error: "Supabase is not configured on the backend.",
+      });
+    }
+
+    const user = await requireUser(req);
+    const profile = await getOrCreateProfile(user);
+    const tier = String(profile?.tier || "basic").toLowerCase();
+
+    if (tier !== "ultra" && tier !== "enterprise") {
+      return res.status(403).json({
+        error: "Color themes are available on Ultra Premium and Enterprise.",
+        upgradeRequired: true,
+        requiredTier: "ultra",
+      });
+    }
+
+    const allowedThemes = new Set([
+      "korlix_blue",
+      "cyber_purple",
+      "ultra_gold",
+      "matrix_green",
+      "dark_crimson",
+    ]);
+
+    const preferredTheme = String(req.body.theme || "korlix_blue").trim();
+
+    if (!allowedThemes.has(preferredTheme)) {
+      return res.status(400).json({
+        error: "Invalid theme selected.",
+      });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("user_profiles")
+      .update({
+        preferred_theme: preferredTheme,
+      })
+      .eq("id", user.id)
+      .select("*")
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      profile: data,
+    });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      error: sanitize(error?.message),
+    });
+  }
+});
+
+app.get("/api/crm/me", async (req, res) => {
+  try {
+    const user = await requireUser(req);
+    const profile = await getOrCreateProfile(user);
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+      },
+      profile,
+    });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      error: sanitize(error?.message),
     });
   }
 });
