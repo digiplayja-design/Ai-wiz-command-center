@@ -238,11 +238,13 @@ function getMonthKey(date = new Date()) {
 function getRequestDeviceInfo(req) {
   const body = req.body || {};
 
-  let deviceId = String(
+  const rawDeviceId = String(
     body.device_id ||
       req.headers["x-korlix-device-id"] ||
       ""
   ).trim();
+
+  let deviceId = rawDeviceId;
 
   const deviceLabel = String(
     body.device_label ||
@@ -256,7 +258,7 @@ function getRequestDeviceInfo(req) {
       "unknown"
   ).trim();
 
-  // Temporary fallback so older APKs do not get locked out.
+  // Fallback keeps older APKs from being locked out at sign-in.
   // New APKs should still send a real stable device_id.
   if (!deviceId) {
     const userAgent = String(req.headers["user-agent"] || "unknown-agent");
@@ -278,6 +280,7 @@ function getRequestDeviceInfo(req) {
     deviceId,
     deviceLabel,
     platform,
+    explicitDeviceId: Boolean(rawDeviceId),
   };
 }
 
@@ -509,15 +512,24 @@ async function getAuthenticatedUser(req) {
 
   const deviceInfo = getRequestDeviceInfo(req);
 
-  if (deviceInfo.deviceId) {
-    const profile = await getOrCreateProfile(data.user);
+  // Device limits are enforced at sign-in.
+  // Protected requests should not fail if an older APK did not send device headers.
+  if (deviceInfo.explicitDeviceId) {
+    try {
+      const profile = await getOrCreateProfile(data.user);
 
-    await touchActiveDeviceSession({
-      userId: data.user.id,
-      profile,
-      deviceInfo,
-      allowRegister: false,
-    });
+      await touchActiveDeviceSession({
+        userId: data.user.id,
+        profile,
+        deviceInfo,
+        allowRegister: false,
+      });
+    } catch (deviceError) {
+      console.warn(
+        "Device session touch skipped:",
+        sanitize(deviceError?.message)
+      );
+    }
   }
 
   return data.user;
