@@ -2812,6 +2812,38 @@ Duration: [specify desired length, e.g., 8–12 seconds].
 Aspect ratio: 16:9 cinematic widescreen.
 """;
 
+Color korlixThemeAccentFor(String theme) {
+  switch (theme) {
+    case 'cyber_purple':
+      return const Color(0xFFB794F4);
+    case 'ultra_gold':
+      return const Color(0xFFFFD166);
+    case 'matrix_green':
+      return const Color(0xFF7CFF6B);
+    case 'dark_crimson':
+      return const Color(0xFFFF5C7A);
+    case 'korlix_blue':
+    default:
+      return const Color(0xFF69D9E8);
+  }
+}
+
+Color korlixThemePanelFor(String theme) {
+  switch (theme) {
+    case 'cyber_purple':
+      return const Color(0xFF180C2B);
+    case 'ultra_gold':
+      return const Color(0xFF241B05);
+    case 'matrix_green':
+      return const Color(0xFF071F10);
+    case 'dark_crimson':
+      return const Color(0xFF260812);
+    case 'korlix_blue':
+    default:
+      return const Color(0xFF071B27);
+  }
+}
+
 final ValueNotifier<String> kKorlixThemeNotifier = ValueNotifier<String>(
   'korlix_blue',
 );
@@ -4826,24 +4858,22 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   }
 
   Widget _buildMockupHomeHeader() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 560;
+    return ValueListenableBuilder<String>(
+      valueListenable: kKorlixThemeNotifier,
+      builder: (context, theme, _) {
+        final accent = korlixThemeAccentFor(theme);
+        final panel = korlixThemePanelFor(theme);
+        final compact = MediaQuery.of(context).size.width < 560;
 
         final logo = Container(
           width: compact ? 58 : 74,
           height: compact ? 58 : 74,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFF061A25),
-            border: Border.all(
-              color: const Color(0xFF2EC7DF).withOpacity(0.42),
-            ),
+            color: panel.withOpacity(0.94),
+            border: Border.all(color: accent.withOpacity(0.52)),
             boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF2EC7DF).withOpacity(0.20),
-                blurRadius: 24,
-              ),
+              BoxShadow(color: accent.withOpacity(0.28), blurRadius: 26),
             ],
           ),
           padding: EdgeInsets.all(compact ? 8 : 10),
@@ -4864,9 +4894,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
           icon: const Icon(Icons.person_outline_rounded, size: 20),
           label: const Text('Account'),
           style: TextButton.styleFrom(
-            foregroundColor: const Color(0xFF69D9E8),
+            foregroundColor: accent,
             backgroundColor: Colors.black.withOpacity(0.18),
-            side: BorderSide(color: const Color(0xFF2EC7DF).withOpacity(0.45)),
+            side: BorderSide(color: accent.withOpacity(0.52)),
             padding: EdgeInsets.symmetric(
               horizontal: compact ? 12 : 16,
               vertical: compact ? 10 : 13,
@@ -4888,12 +4918,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
           children: [
             FittedBox(
               fit: BoxFit.scaleDown,
-              alignment: compact ? Alignment.center : Alignment.centerLeft,
               child: Text(
                 'KORLIX AI',
                 maxLines: 1,
                 softWrap: false,
-                overflow: TextOverflow.visible,
                 style: TextStyle(
                   color: const Color(0xFFE4EBEE),
                   fontSize: compact ? 42 : 34,
@@ -4907,10 +4935,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
               'THE FUTURE IS HERE',
               maxLines: 1,
               softWrap: false,
-              overflow: TextOverflow.visible,
               textAlign: compact ? TextAlign.center : TextAlign.left,
               style: TextStyle(
-                color: const Color(0xFF69D9E8),
+                color: accent,
                 fontSize: compact ? 13 : 14,
                 fontWeight: FontWeight.w800,
                 letterSpacing: compact ? 3.2 : 3.8,
@@ -4949,83 +4976,91 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   }
 
   Widget _buildMockupLanguageTabs() {
-    Widget tab({required String code, required String label}) {
-      final selected = _selectedLanguage == code;
+    return ValueListenableBuilder<String>(
+      valueListenable: kKorlixThemeNotifier,
+      builder: (context, theme, _) {
+        final accent = korlixThemeAccentFor(theme);
+        final panel = korlixThemePanelFor(theme);
 
-      return Expanded(
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () {
-            if (_loading) {
-              return;
-            }
+        Widget tab({required String code, required String label}) {
+          final selected = _selectedLanguage == code;
 
-            setState(() {
-              _selectedLanguage = code;
-            });
-          },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            height: 58,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: selected
-                  ? const Color(0xFF0A3A4A).withOpacity(0.72)
-                  : Colors.transparent,
+          return Expanded(
+            child: InkWell(
               borderRadius: BorderRadius.circular(20),
-              border: selected
-                  ? Border.all(color: const Color(0xFF2EC7DF).withOpacity(0.42))
-                  : null,
-              boxShadow: [
-                if (selected)
-                  BoxShadow(
-                    color: const Color(0xFF2EC7DF).withOpacity(0.18),
-                    blurRadius: 18,
+              onTap: () {
+                if (_loading) {
+                  return;
+                }
+
+                setState(() {
+                  _selectedLanguage = code;
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                height: 58,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? accent.withOpacity(0.20)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(20),
+                  border: selected
+                      ? Border.all(color: accent.withOpacity(0.54))
+                      : null,
+                  boxShadow: [
+                    if (selected)
+                      BoxShadow(
+                        color: accent.withOpacity(0.22),
+                        blurRadius: 18,
+                      ),
+                  ],
+                ),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: selected
+                        ? const Color(0xFFE4EBEE)
+                        : const Color(0xFFA9C6CF),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
                   ),
-              ],
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: selected
-                    ? const Color(0xFFE4EBEE)
-                    : const Color(0xFFA9C6CF),
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
+                ),
               ),
             ),
-          ),
-        ),
-      );
-    }
+          );
+        }
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: const Color(0xFF071B27).withOpacity(0.62),
-          borderRadius: BorderRadius.circular(26),
-          border: Border.all(color: const Color(0xFF2EC7DF).withOpacity(0.24)),
-        ),
-        child: Row(
-          children: [
-            tab(code: 'en', label: 'English'),
-            Container(
-              width: 1,
-              height: 32,
-              color: const Color(0xFF2EC7DF).withOpacity(0.18),
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: panel.withOpacity(0.66),
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(color: accent.withOpacity(0.28)),
             ),
-            tab(code: 'es', label: 'Español'),
-            Container(
-              width: 1,
-              height: 32,
-              color: const Color(0xFF2EC7DF).withOpacity(0.18),
+            child: Row(
+              children: [
+                tab(code: 'en', label: 'English'),
+                Container(
+                  width: 1,
+                  height: 32,
+                  color: accent.withOpacity(0.18),
+                ),
+                tab(code: 'es', label: 'Español'),
+                Container(
+                  width: 1,
+                  height: 32,
+                  color: accent.withOpacity(0.18),
+                ),
+                tab(code: 'fr', label: 'Français'),
+              ],
             ),
-            tab(code: 'fr', label: 'Français'),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -5358,7 +5393,17 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
 
         updateDialog?.call(() {});
       } catch (error) {
-        errorMessage = error.toString();
+        final message = error.toString();
+
+        if (message.contains('SocketException') ||
+            message.contains('Failed host lookup') ||
+            message.contains('Network is unreachable')) {
+          status = 'waiting for connection';
+          updateDialog?.call(() {});
+          return;
+        }
+
+        errorMessage = message;
         updateDialog?.call(() {});
       }
     }

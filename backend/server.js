@@ -962,7 +962,11 @@ async function createAdvancedFileResponse({
   extractedText = "",
   textWasTruncated = false,
 }) {
-  const model = getOpenAIModelForTier(profile, { document: true });
+  const model =
+    process.env.OPENAI_DOCUMENT_MODEL ||
+    process.env.OPENAI_ULTRA_MODEL ||
+    process.env.OPENAI_MODEL ||
+    "gpt-4o-mini";
 
   const fileName = String(file.originalname || "uploaded-file");
   const mimeType = getUploadMimeType(file);
@@ -2261,7 +2265,11 @@ app.post("/api/analyze-document", documentUpload.single("file"), async (req, res
 
         textWasTruncated = textResult.truncated;
 
-        const model = getOpenAIModelForTier(profile, { document: true });
+        const model =
+    process.env.OPENAI_DOCUMENT_MODEL ||
+    process.env.OPENAI_ULTRA_MODEL ||
+    process.env.OPENAI_MODEL ||
+    "gpt-4o-mini";
 
         response = await createOpenAIResponse(client, {
           model,
@@ -2291,7 +2299,11 @@ app.post("/api/analyze-document", documentUpload.single("file"), async (req, res
 
       textWasTruncated = textResult.truncated;
 
-      const model = getOpenAIModelForTier(profile, { document: true });
+      const model =
+    process.env.OPENAI_DOCUMENT_MODEL ||
+    process.env.OPENAI_ULTRA_MODEL ||
+    process.env.OPENAI_MODEL ||
+    "gpt-4o-mini";
 
       response = await createOpenAIResponse(client, {
         model,
