@@ -5353,7 +5353,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
           return LayoutBuilder(
             builder: (context, constraints) {
               final compact = constraints.maxWidth < 560;
-              final cardHeight = compact ? 245.0 : 285.0;
+              final cardHeight = compact ? 315.0 : 300.0;
 
               return Container(
                 height: cardHeight,
@@ -5372,350 +5372,362 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                   ],
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: Row(
+                child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    Expanded(
-                      flex: compact ? 10 : 10,
-                      child: Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          compact ? 16 : 28,
-                          compact ? 16 : 24,
-                          compact ? 10 : 18,
-                          compact ? 16 : 24,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              character.eyebrow,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: const Color(0xFF69D9E8),
-                                fontSize: compact ? 11.5 : 15,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.5,
-                              ),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: compact ? 10 : 10,
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              compact ? 16 : 28,
+                              compact ? 16 : 24,
+                              compact ? 10 : 18,
+                              compact ? 16 : 24,
                             ),
-                            SizedBox(height: compact ? 9 : 14),
-                            Text(
-                              character.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: const Color(0xFFE4EBEE),
-                                fontSize: compact ? 34 : 44,
-                                fontWeight: FontWeight.w900,
-                                height: 1.0,
-                                letterSpacing: 1.0,
-                              ),
-                            ),
-                            SizedBox(height: compact ? 11 : 16),
-                            Text(
-                              character.description,
-                              maxLines: compact ? 4 : 3,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: const Color(
-                                  0xFFE4EBEE,
-                                ).withOpacity(0.92),
-                                fontSize: compact ? 13.5 : 19,
-                                height: 1.34,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            SizedBox(height: compact ? 14 : 22),
-                            OutlinedButton(
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Open Settings → View characters to preview and unlock more characters.',
-                                    ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  character.eyebrow,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: const Color(0xFF69D9E8),
+                                    fontSize: compact ? 11.5 : 15,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.5,
                                   ),
-                                );
-                              },
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF69D9E8),
-                                side: BorderSide(
-                                  color: const Color(
-                                    0xFF2EC7DF,
-                                  ).withOpacity(0.62),
                                 ),
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: compact ? 16 : 24,
-                                  vertical: compact ? 11 : 15,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                              ),
-                              child: Text(
-                                'View Character',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: compact ? 12.5 : 15,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: compact ? 11 : 12,
-                      child: Container(
-                        height: double.infinity,
-                        color: Colors.black.withOpacity(0.16),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            AnimatedOpacity(
-                              opacity: activeResult == null ? 1.0 : 0.0,
-                              duration: const Duration(milliseconds: 450),
-                              curve: Curves.easeOutCubic,
-                              child: KorlixCharacterIntroPreview(
-                                key: ValueKey(character.assetPath),
-                                assetPath: character.assetPath,
-                                muted: !character.soundOn,
-                                showSoundButton: character.soundOn,
-                                autoplay: true,
-                                loop: true,
-                                fillParent: true,
-                              ),
-                            ),
-
-                            if (_loading)
-                              Positioned(
-                                left: 12,
-                                right: 12,
-                                bottom: 12,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 10,
+                                SizedBox(height: compact ? 9 : 14),
+                                Text(
+                                  character.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: const Color(0xFFE4EBEE),
+                                    fontSize: compact ? 34 : 44,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1.0,
+                                    letterSpacing: 1.0,
                                   ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.76),
-                                    borderRadius: BorderRadius.circular(999),
-                                    border: Border.all(
-                                      color: const Color(
-                                        0xFF69D9E8,
-                                      ).withOpacity(0.48),
-                                    ),
+                                ),
+                                SizedBox(height: compact ? 10 : 16),
+                                Text(
+                                  character.description,
+                                  maxLines: compact ? 4 : 3,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: const Color(
+                                      0xFFE4EBEE,
+                                    ).withOpacity(0.92),
+                                    fontSize: compact ? 13.5 : 19,
+                                    height: 1.28,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                  child: Row(
-                                    children: [
-                                      const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Color(0xFF69D9E8),
+                                ),
+                                SizedBox(height: compact ? 12 : 22),
+                                SizedBox(
+                                  height: compact ? 38 : 46,
+                                  child: OutlinedButton(
+                                    onPressed: () {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Open Settings → View characters to preview and unlock more characters.',
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFF69D9E8),
+                                      side: BorderSide(
+                                        color: const Color(
+                                          0xFF2EC7DF,
+                                        ).withOpacity(0.62),
+                                      ),
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: compact ? 14 : 24,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(
+                                          999,
                                         ),
                                       ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
+                                    ),
+                                    child: Text(
+                                      compact ? 'View' : 'View Character',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: compact ? 12 : 15,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: compact ? 11 : 12,
+                          child: Container(
+                            height: double.infinity,
+                            color: Colors.black.withOpacity(0.16),
+                            child: KorlixCharacterIntroPreview(
+                              key: ValueKey(character.assetPath),
+                              assetPath: character.assetPath,
+                              muted: !character.soundOn,
+                              showSoundButton: character.soundOn,
+                              autoplay: true,
+                              loop: true,
+                              fillParent: true,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    if (_loading)
+                      Positioned(
+                        left: 12,
+                        right: 12,
+                        bottom: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.76),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: const Color(0xFF69D9E8).withOpacity(0.48),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Color(0xFF69D9E8),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  '${character.name} is preparing your answer...',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Color(0xFFE4EBEE),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 520),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) {
+                        final slide = Tween<Offset>(
+                          begin: const Offset(0, 0.04),
+                          end: Offset.zero,
+                        ).animate(animation);
+
+                        return FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(position: slide, child: child),
+                        );
+                      },
+                      child: activeResult == null
+                          ? const SizedBox.shrink()
+                          : Container(
+                              key: ValueKey(
+                                '${activeResult.title}-${activeResult.command}-${activeResult.content.hashCode}',
+                              ),
+                              width: double.infinity,
+                              height: double.infinity,
+                              padding: EdgeInsets.all(compact ? 13 : 16),
+                              decoration: BoxDecoration(
+                                color: const Color(
+                                  0xFF061A25,
+                                ).withOpacity(0.995),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(
+                                  color: const Color(
+                                    0xFF69D9E8,
+                                  ).withOpacity(0.64),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(
+                                      0xFF69D9E8,
+                                    ).withOpacity(0.22),
+                                    blurRadius: 30,
+                                    spreadRadius: 3,
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.auto_awesome_rounded,
+                                        color: Color(0xFF69D9E8),
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Expanded(
                                         child: Text(
-                                          '${character.name} is preparing your answer...',
+                                          'ANSWER READY',
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: Color(0xFFE4EBEE),
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w800,
+                                          style: TextStyle(
+                                            color: Color(0xFF69D9E8),
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 0.6,
+                                          ),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        onPressed: () {
+                                          setState(() {
+                                            _featuredAnswerDismissed = true;
+                                          });
+                                        },
+                                        icon: const Icon(Icons.close_rounded),
+                                        color: const Color(0xFFE4EBEE),
+                                        tooltip: 'Close',
+                                        visualDensity: VisualDensity.compact,
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(
+                                          minWidth: 34,
+                                          minHeight: 34,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    activeResult.command,
+                                    maxLines: compact ? 2 : 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: const Color(0xFFE4EBEE),
+                                      fontSize: compact ? 13 : 15,
+                                      fontWeight: FontWeight.w900,
+                                      height: 1.18,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Expanded(
+                                    child: Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.22),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: const Color(
+                                            0xFF2EC7DF,
+                                          ).withOpacity(0.18),
+                                        ),
+                                      ),
+                                      child: SingleChildScrollView(
+                                        child: Text(
+                                          activeResult.content,
+                                          style: TextStyle(
+                                            color: const Color(0xFFA9C6CF),
+                                            fontSize: compact ? 12.5 : 13.5,
+                                            height: 1.32,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: SizedBox(
+                                          height: compact ? 40 : 44,
+                                          child: FilledButton.icon(
+                                            onPressed: () =>
+                                                _copyFeaturedResult(
+                                                  activeResult,
+                                                ),
+                                            icon: const Icon(
+                                              Icons.copy_rounded,
+                                              size: 17,
+                                            ),
+                                            label: const Text('Copy'),
+                                            style: FilledButton.styleFrom(
+                                              backgroundColor: const Color(
+                                                0xFFB794F4,
+                                              ),
+                                              foregroundColor: const Color(
+                                                0xFF120D18,
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(999),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: SizedBox(
+                                          height: compact ? 40 : 44,
+                                          child: OutlinedButton.icon(
+                                            onPressed: () =>
+                                                _shareFeaturedResult(
+                                                  activeResult,
+                                                ),
+                                            icon: const Icon(
+                                              Icons.share_rounded,
+                                              size: 17,
+                                            ),
+                                            label: const Text('Share'),
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor: const Color(
+                                                0xFF69D9E8,
+                                              ),
+                                              side: BorderSide(
+                                                color: const Color(
+                                                  0xFF69D9E8,
+                                                ).withOpacity(0.58),
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(999),
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ],
                                   ),
-                                ),
+                                ],
                               ),
-
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 520),
-                              switchInCurve: Curves.easeOutCubic,
-                              switchOutCurve: Curves.easeInCubic,
-                              transitionBuilder: (child, animation) {
-                                final slide = Tween<Offset>(
-                                  begin: const Offset(0.08, 0),
-                                  end: Offset.zero,
-                                ).animate(animation);
-
-                                return FadeTransition(
-                                  opacity: animation,
-                                  child: SlideTransition(
-                                    position: slide,
-                                    child: child,
-                                  ),
-                                );
-                              },
-                              child: activeResult == null
-                                  ? const SizedBox.shrink()
-                                  : Container(
-                                      key: ValueKey(
-                                        '${activeResult.title}-${activeResult.command}-${activeResult.content.hashCode}',
-                                      ),
-                                      padding: EdgeInsets.all(
-                                        compact ? 12 : 15,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: const Color(
-                                          0xFF061A25,
-                                        ).withOpacity(0.985),
-                                        border: Border.all(
-                                          color: const Color(
-                                            0xFF69D9E8,
-                                          ).withOpacity(0.58),
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: const Color(
-                                              0xFF69D9E8,
-                                            ).withOpacity(0.20),
-                                            blurRadius: 28,
-                                            spreadRadius: 3,
-                                          ),
-                                        ],
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              const Icon(
-                                                Icons.auto_awesome_rounded,
-                                                color: Color(0xFF69D9E8),
-                                                size: 18,
-                                              ),
-                                              const SizedBox(width: 8),
-                                              const Expanded(
-                                                child: Text(
-                                                  'ANSWER READY',
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    color: Color(0xFF69D9E8),
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.w900,
-                                                    letterSpacing: 0.6,
-                                                  ),
-                                                ),
-                                              ),
-                                              IconButton(
-                                                onPressed: () {
-                                                  setState(() {
-                                                    _featuredAnswerDismissed =
-                                                        true;
-                                                  });
-                                                },
-                                                icon: const Icon(
-                                                  Icons.close_rounded,
-                                                ),
-                                                color: const Color(0xFFE4EBEE),
-                                                tooltip: 'Close',
-                                                visualDensity:
-                                                    VisualDensity.compact,
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 6),
-                                          Text(
-                                            activeResult.command,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: const Color(0xFFE4EBEE),
-                                              fontSize: compact ? 13 : 15,
-                                              fontWeight: FontWeight.w900,
-                                              height: 1.22,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Expanded(
-                                            child: SingleChildScrollView(
-                                              child: Text(
-                                                activeResult.content,
-                                                style: TextStyle(
-                                                  color: const Color(
-                                                    0xFFA9C6CF,
-                                                  ),
-                                                  fontSize: compact ? 12 : 13.5,
-                                                  height: 1.35,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 10),
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: FilledButton.icon(
-                                                  onPressed: () =>
-                                                      _copyFeaturedResult(
-                                                        activeResult,
-                                                      ),
-                                                  icon: const Icon(
-                                                    Icons.copy_rounded,
-                                                    size: 17,
-                                                  ),
-                                                  label: const Text('Copy'),
-                                                  style: FilledButton.styleFrom(
-                                                    backgroundColor:
-                                                        const Color(0xFFB794F4),
-                                                    foregroundColor:
-                                                        const Color(0xFF120D18),
-                                                    shape: RoundedRectangleBorder(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            999,
-                                                          ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Expanded(
-                                                child: OutlinedButton.icon(
-                                                  onPressed: () =>
-                                                      _shareFeaturedResult(
-                                                        activeResult,
-                                                      ),
-                                                  icon: const Icon(
-                                                    Icons.share_rounded,
-                                                    size: 17,
-                                                  ),
-                                                  label: const Text('Share'),
-                                                  style: OutlinedButton.styleFrom(
-                                                    foregroundColor:
-                                                        const Color(0xFF69D9E8),
-                                                    side: BorderSide(
-                                                      color: const Color(
-                                                        0xFF69D9E8,
-                                                      ).withOpacity(0.58),
-                                                    ),
-                                                    shape: RoundedRectangleBorder(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            999,
-                                                          ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
                             ),
-                          ],
-                        ),
-                      ),
                     ),
                   ],
                 ),
