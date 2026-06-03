@@ -1792,7 +1792,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
       case 'yuna':
         return 'assets/characters/yuna/intro.mp4';
       case 'ji_a':
-        return 'assets/characters/ji_a/intro.mp4';
+        return 'assets/characters/ji-a/intro.mp4';
       case 'chee_chai_chee':
         return 'assets/wizard_greeting_en.mp4';
       default:
