@@ -662,6 +662,8 @@ class KorlixHomeCharacterHero extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 280),
             child: const KorlixCharacterIntroPreview(
               assetPath: 'assets/characters/jj/intro.mp4',
+              muted: false,
+              showSoundButton: true,
             ),
           ),
         ],
@@ -673,11 +675,17 @@ class KorlixHomeCharacterHero extends StatelessWidget {
 class KorlixCharacterIntroPreview extends StatefulWidget {
   final String assetPath;
   final bool muted;
+  final bool showSoundButton;
+  final bool autoplay;
+  final bool loop;
 
   const KorlixCharacterIntroPreview({
     super.key,
     required this.assetPath,
     this.muted = true,
+    this.showSoundButton = false,
+    this.autoplay = true,
+    this.loop = true,
   });
 
   @override
@@ -689,12 +697,12 @@ class _KorlixCharacterIntroPreviewState
     extends State<KorlixCharacterIntroPreview> {
   VideoPlayerController? _controller;
   bool _ready = false;
-  late bool _muted;
+  late bool _soundOn;
 
   @override
   void initState() {
     super.initState();
-    _muted = widget.muted;
+    _soundOn = !widget.muted;
     _loadVideo();
   }
 
@@ -702,8 +710,9 @@ class _KorlixCharacterIntroPreviewState
   void didUpdateWidget(covariant KorlixCharacterIntroPreview oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (oldWidget.assetPath != widget.assetPath) {
-      _muted = widget.muted;
+    if (oldWidget.assetPath != widget.assetPath ||
+        oldWidget.muted != widget.muted) {
+      _soundOn = !widget.muted;
       _loadVideo();
     }
   }
@@ -718,9 +727,12 @@ class _KorlixCharacterIntroPreviewState
       final controller = VideoPlayerController.asset(widget.assetPath);
 
       await controller.initialize();
-      await controller.setLooping(true);
-      await controller.setVolume(_muted ? 0.0 : 1.0);
-      await controller.play();
+      await controller.setLooping(widget.loop);
+      await controller.setVolume(_soundOn ? 1.0 : 0.0);
+
+      if (widget.autoplay) {
+        await controller.play();
+      }
 
       if (!mounted) {
         await controller.dispose();
@@ -747,15 +759,41 @@ class _KorlixCharacterIntroPreviewState
       return;
     }
 
-    setState(() {
-      _muted = !_muted;
-    });
+    final next = !_soundOn;
 
-    await controller.setVolume(_muted ? 0.0 : 1.0);
+    await controller.setVolume(next ? 1.0 : 0.0);
 
     if (!controller.value.isPlaying) {
       await controller.play();
     }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _soundOn = next;
+    });
+  }
+
+  Future<void> _replayWithSound() async {
+    final controller = _controller;
+
+    if (controller == null) {
+      return;
+    }
+
+    await controller.setVolume(1.0);
+    await controller.seekTo(Duration.zero);
+    await controller.play();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _soundOn = true;
+    });
   }
 
   @override
@@ -772,73 +810,63 @@ class _KorlixCharacterIntroPreviewState
       borderRadius: BorderRadius.circular(16),
       child: AspectRatio(
         aspectRatio: 9 / 16,
-        child: GestureDetector(
-          onTap: _ready ? _toggleSound : null,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Container(
-                color: Colors.black.withOpacity(0.45),
-                child:
-                    _ready &&
-                        controller != null &&
-                        controller.value.isInitialized
-                    ? FittedBox(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Container(
+              color: Colors.black.withOpacity(0.45),
+              child:
+                  _ready && controller != null && controller.value.isInitialized
+                  ? GestureDetector(
+                      onTap: widget.showSoundButton ? _replayWithSound : null,
+                      child: FittedBox(
                         fit: BoxFit.cover,
                         child: SizedBox(
                           width: controller.value.size.width,
                           height: controller.value.size.height,
                           child: VideoPlayer(controller),
                         ),
-                      )
-                    : const Center(
-                        child: Icon(
-                          Icons.movie_creation_outlined,
-                          color: Color(0xFF69D9E8),
-                          size: 34,
-                        ),
                       ),
-              ),
+                    )
+                  : const Center(
+                      child: Icon(
+                        Icons.movie_creation_outlined,
+                        color: Color(0xFF69D9E8),
+                        size: 34,
+                      ),
+                    ),
+            ),
+            if (widget.showSoundButton)
               Positioned(
-                right: 8,
-                bottom: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 6,
-                  ),
+                right: 10,
+                bottom: 10,
+                child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.62),
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(
-                      color: const Color(0xFF69D9E8).withOpacity(0.45),
+                      color: const Color(0xFF69D9E8).withOpacity(0.55),
                     ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _muted
-                            ? Icons.volume_off_rounded
-                            : Icons.volume_up_rounded,
-                        color: const Color(0xFFE4EBEE),
-                        size: 15,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _muted ? 'Tap for sound' : 'Sound on',
-                        style: const TextStyle(
-                          color: Color(0xFFE4EBEE),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                        ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF69D9E8).withOpacity(0.20),
+                        blurRadius: 14,
                       ),
                     ],
                   ),
+                  child: IconButton(
+                    onPressed: _toggleSound,
+                    icon: Icon(
+                      _soundOn
+                          ? Icons.volume_up_rounded
+                          : Icons.volume_off_rounded,
+                    ),
+                    color: const Color(0xFFE4EBEE),
+                    tooltip: _soundOn ? 'Mute' : 'Unmute',
+                  ),
                 ),
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -3653,78 +3681,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                 padding: const EdgeInsets.fromLTRB(24, 28, 24, 40),
                 child: Column(
                   children: [
-                    Image.asset(
-                      'assets/branding/korlix_mini_mark.png',
-                      height: 72,
-                      fit: BoxFit.contain,
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'KORLIX AI',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 42,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 4.2,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      t.appSubtitle,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        color: Colors.white70,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 7,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.cyanAccent.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: Colors.cyanAccent.withOpacity(0.35),
-                        ),
-                      ),
-                      child: Text(
-                        t.backendConnected,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Colors.cyanAccent,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0A2B3D).withOpacity(0.85),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: const Color(0xFF2EC7DF).withOpacity(0.45),
-                        ),
-                      ),
-                      child: const Text(
-                        'Selected Character: JJ',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Color(0xFF69D9E8),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    const KorlixHomeCharacterHero(),
-                    const SizedBox(height: 28),
+                    _buildMockupHomeHeader(),
+                    _buildMockupLanguageTabs(),
+                    _buildMockupFeaturedCharacterCard(),
+                    const SizedBox(height: 18),
                     _buildCommandPanel(),
                     const SizedBox(height: 26),
                     _buildResults(),
@@ -4043,6 +4003,458 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         ),
       );
     }
+  }
+
+  Widget _buildPremiumHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
+      child: Row(
+        children: [
+          Container(
+            width: 74,
+            height: 74,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFF061A25),
+              border: Border.all(
+                color: const Color(0xFF2EC7DF).withOpacity(0.42),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF2EC7DF).withOpacity(0.20),
+                  blurRadius: 24,
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(10),
+            child: Image.asset(
+              'assets/branding/korlix_mini_mark.png',
+              fit: BoxFit.contain,
+            ),
+          ),
+          const SizedBox(width: 18),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'KORLIX AI',
+                  style: TextStyle(
+                    color: Color(0xFFE4EBEE),
+                    fontSize: 34,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 3.8,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'THE FUTURE IS HERE',
+                  style: TextStyle(
+                    color: Color(0xFF69D9E8),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 4.0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton.icon(
+            onPressed: () {
+              // Account is opened through the existing History/Account button.
+              // This top button is visual for now and will be wired in Stage 5.
+            },
+            icon: const Icon(Icons.person_outline_rounded, size: 22),
+            label: const Text('Account'),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF69D9E8),
+              backgroundColor: Colors.black.withOpacity(0.18),
+              side: BorderSide(
+                color: const Color(0xFF2EC7DF).withOpacity(0.45),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPremiumLanguageTabs() {
+    Widget tab({required String code, required String label}) {
+      final selected = _selectedLanguage == code;
+
+      return Expanded(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () {
+            if (_loading) {
+              return;
+            }
+
+            setState(() {
+              _selectedLanguage = code;
+            });
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: 58,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected
+                  ? const Color(0xFF0A3A4A).withOpacity(0.72)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(20),
+              border: selected
+                  ? Border.all(color: const Color(0xFF2EC7DF).withOpacity(0.42))
+                  : null,
+              boxShadow: [
+                if (selected)
+                  BoxShadow(
+                    color: const Color(0xFF2EC7DF).withOpacity(0.18),
+                    blurRadius: 18,
+                  ),
+              ],
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: selected
+                    ? const Color(0xFFE4EBEE)
+                    : const Color(0xFFA9C6CF),
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF071B27).withOpacity(0.62),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: const Color(0xFF2EC7DF).withOpacity(0.24)),
+        ),
+        child: Row(
+          children: [
+            tab(code: 'en', label: 'English'),
+            Container(
+              width: 1,
+              height: 32,
+              color: const Color(0xFF2EC7DF).withOpacity(0.18),
+            ),
+            tab(code: 'es', label: 'Español'),
+            Container(
+              width: 1,
+              height: 32,
+              color: const Color(0xFF2EC7DF).withOpacity(0.18),
+            ),
+            tab(code: 'fr', label: 'Français'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMockupHomeHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
+      child: Row(
+        children: [
+          Container(
+            width: 74,
+            height: 74,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFF061A25),
+              border: Border.all(
+                color: const Color(0xFF2EC7DF).withOpacity(0.42),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF2EC7DF).withOpacity(0.20),
+                  blurRadius: 24,
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(10),
+            child: Image.asset(
+              'assets/branding/korlix_mini_mark.png',
+              fit: BoxFit.contain,
+            ),
+          ),
+          const SizedBox(width: 18),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'KORLIX AI',
+                  style: TextStyle(
+                    color: Color(0xFFE4EBEE),
+                    fontSize: 34,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 3.6,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'THE FUTURE IS HERE',
+                  style: TextStyle(
+                    color: Color(0xFF69D9E8),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 3.8,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton.icon(
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Open History to view your Korlix Account.'),
+                ),
+              );
+            },
+            icon: const Icon(Icons.person_outline_rounded, size: 22),
+            label: const Text('Account'),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF69D9E8),
+              backgroundColor: Colors.black.withOpacity(0.18),
+              side: BorderSide(
+                color: const Color(0xFF2EC7DF).withOpacity(0.45),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMockupLanguageTabs() {
+    Widget tab({required String code, required String label}) {
+      final selected = _selectedLanguage == code;
+
+      return Expanded(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () {
+            if (_loading) {
+              return;
+            }
+
+            setState(() {
+              _selectedLanguage = code;
+            });
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: 58,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected
+                  ? const Color(0xFF0A3A4A).withOpacity(0.72)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(20),
+              border: selected
+                  ? Border.all(color: const Color(0xFF2EC7DF).withOpacity(0.42))
+                  : null,
+              boxShadow: [
+                if (selected)
+                  BoxShadow(
+                    color: const Color(0xFF2EC7DF).withOpacity(0.18),
+                    blurRadius: 18,
+                  ),
+              ],
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: selected
+                    ? const Color(0xFFE4EBEE)
+                    : const Color(0xFFA9C6CF),
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF071B27).withOpacity(0.62),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: const Color(0xFF2EC7DF).withOpacity(0.24)),
+        ),
+        child: Row(
+          children: [
+            tab(code: 'en', label: 'English'),
+            Container(
+              width: 1,
+              height: 32,
+              color: const Color(0xFF2EC7DF).withOpacity(0.18),
+            ),
+            tab(code: 'es', label: 'Español'),
+            Container(
+              width: 1,
+              height: 32,
+              color: const Color(0xFF2EC7DF).withOpacity(0.18),
+            ),
+            tab(code: 'fr', label: 'Français'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMockupFeaturedCharacterCard() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF071B27).withOpacity(0.72),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: const Color(0xFF2EC7DF).withOpacity(0.32)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF2EC7DF).withOpacity(0.12),
+              blurRadius: 30,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = constraints.maxWidth >= 640;
+
+            final textSide = Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: wide
+                    ? CrossAxisAlignment.start
+                    : CrossAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    'FEATURED AI CHARACTER',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFF69D9E8),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.7,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'JJ',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFFE4EBEE),
+                      fontSize: 42,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Curious, thoughtful, and always ready to chat. Ask JJ anything!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFFE4EBEE),
+                      fontSize: 18,
+                      height: 1.35,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  OutlinedButton(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Open History → View characters to preview and unlock more characters.',
+                          ),
+                        ),
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF69D9E8),
+                      side: BorderSide(
+                        color: const Color(0xFF2EC7DF).withOpacity(0.62),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 15,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    child: const Text(
+                      'View Character',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+
+            final videoSide = Container(
+              color: Colors.black.withOpacity(0.18),
+              padding: const EdgeInsets.all(14),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: 330,
+                    maxHeight: 370,
+                  ),
+                  child: const KorlixCharacterIntroPreview(
+                    assetPath: 'assets/characters/jj/intro.mp4',
+                  ),
+                ),
+              ),
+            );
+
+            if (!wide) {
+              return Column(children: [textSide, videoSide]);
+            }
+
+            return IntrinsicHeight(
+              child: Row(
+                children: [
+                  Expanded(flex: 11, child: textSide),
+                  Expanded(flex: 12, child: videoSide),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   Widget _buildCommandPanel() {
