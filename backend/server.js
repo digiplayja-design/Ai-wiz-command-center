@@ -931,10 +931,7 @@ async function createAdvancedFileResponse({
   extractedText = "",
   textWasTruncated = false,
 }) {
-  const model =
-    process.env.OPENAI_DOCUMENT_MODEL ||
-    process.env.OPENAI_MODEL ||
-    "gpt-4o-mini";
+  const model = getOpenAIModelForTier(profile, { document: true });
 
   const fileName = String(file.originalname || "uploaded-file");
   const mimeType = getUploadMimeType(file);
@@ -996,6 +993,38 @@ async function createAdvancedFileResponse({
     model,
     input: prompt,
   });
+}
+
+
+
+function getOpenAIModelForTier(profile, options = {}) {
+  const tier = String(profile?.tier || "basic").toLowerCase();
+
+  if (tier === "ultra") {
+    return process.env.OPENAI_ULTRA_MODEL || "gpt-5.5";
+  }
+
+  if (tier === "enterprise") {
+    return (
+      process.env.OPENAI_ENTERPRISE_MODEL ||
+      process.env.OPENAI_ULTRA_MODEL ||
+      "gpt-5.5"
+    );
+  }
+
+  if (tier === "pro") {
+    return (
+      process.env.OPENAI_PRO_MODEL ||
+      process.env.OPENAI_MODEL ||
+      "gpt-4o-mini"
+    );
+  }
+
+  return (
+    process.env.OPENAI_BASIC_MODEL ||
+    process.env.OPENAI_MODEL ||
+    "gpt-4o-mini"
+  );
 }
 
 
@@ -1708,10 +1737,7 @@ app.post("/api/analyze-document", documentUpload.single("file"), async (req, res
 
         textWasTruncated = textResult.truncated;
 
-        const model =
-          process.env.OPENAI_DOCUMENT_MODEL ||
-          process.env.OPENAI_MODEL ||
-          "gpt-4o-mini";
+        const model = getOpenAIModelForTier(profile, { document: true });
 
         response = await createOpenAIResponse(client, {
           model,
@@ -1741,10 +1767,7 @@ app.post("/api/analyze-document", documentUpload.single("file"), async (req, res
 
       textWasTruncated = textResult.truncated;
 
-      const model =
-        process.env.OPENAI_DOCUMENT_MODEL ||
-        process.env.OPENAI_MODEL ||
-        "gpt-4o-mini";
+      const model = getOpenAIModelForTier(profile, { document: true });
 
       response = await createOpenAIResponse(client, {
         model,
