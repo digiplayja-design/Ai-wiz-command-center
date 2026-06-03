@@ -18,6 +18,8 @@ import 'package:file_picker/file_picker.dart' as fp;
 import 'package:speech_to_text/speech_to_text.dart' as speech_to_text;
 import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:geolocator/geolocator.dart' as geo;
+import 'package:url_launcher/url_launcher.dart';
 
 bool kSupabaseReady = false;
 String? kKorlixAccessToken;
@@ -1198,6 +1200,8 @@ class _KorlixBasicAdBannerState extends State<KorlixBasicAdBanner> {
           (data['profile'] as Map?)?.cast<String, dynamic>() ??
           <String, dynamic>{};
       final tier = (profile['tier'] ?? 'basic').toString();
+      final preferredTheme = (profile['preferred_theme'] ?? 'korlix_blue')
+          .toString();
 
       if (tier != 'basic') {
         return;
@@ -2257,6 +2261,162 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     );
   }
 
+  Future<void> _openComingSoonPanel() async {
+    await _showKorlixNotice(
+      title: 'Coming Soon',
+      message:
+          'New Korlix AI features are being prepared, including advanced video generation, music production add-ons, more characters, and enterprise tools.',
+    );
+  }
+
+  String _themeLabel(String theme) {
+    switch (theme) {
+      case 'cyber_purple':
+        return 'Cyber Purple';
+      case 'ultra_gold':
+        return 'Ultra Gold';
+      case 'matrix_green':
+        return 'Matrix Green';
+      case 'dark_crimson':
+        return 'Dark Crimson';
+      case 'korlix_blue':
+      default:
+        return 'Korlix Blue';
+    }
+  }
+
+  Future<void> _setTheme({required String theme}) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$kKorlixBackendBaseUrl/api/theme/set'),
+        headers: _headers(),
+        body: jsonEncode({'theme': theme}),
+      );
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 403 && data['upgradeRequired'] == true) {
+        await _showKorlixNotice(
+          title: 'Ultra Premium required',
+          message:
+              data['error']?.toString() ??
+              'Color themes are available on Ultra Premium and Enterprise.',
+        );
+        return;
+      }
+
+      if (response.statusCode >= 400) {
+        throw Exception(data['error'] ?? 'Could not update theme.');
+      }
+
+      kKorlixThemeNotifier.value = theme;
+
+      await _showKorlixNotice(
+        title: 'Theme saved',
+        message:
+            '${_themeLabel(theme)} has been saved. Full app-wide color changes will continue to be polished in the front-end theme pass.',
+      );
+    } catch (error) {
+      await _showKorlixNotice(
+        title: 'Theme update failed',
+        message: _cleanError(error),
+        danger: true,
+      );
+    }
+  }
+
+  Future<void> _openThemePanel({
+    required String currentTier,
+    required String currentTheme,
+  }) async {
+    if (currentTier != 'ultra' && currentTier != 'enterprise') {
+      await _showKorlixNotice(
+        title: 'Ultra Premium required',
+        message:
+            'Color theme customization is available for Ultra Premium and Enterprise users.',
+      );
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF071B27),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (context) {
+        Widget themeTile(String theme, Color color) {
+          final selected = currentTheme == theme;
+
+          return ListTile(
+            leading: CircleAvatar(backgroundColor: color, radius: 13),
+            title: Text(
+              _themeLabel(theme),
+              style: const TextStyle(
+                color: Color(0xFFE4EBEE),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            trailing: selected
+                ? const Icon(
+                    Icons.check_circle_rounded,
+                    color: Color(0xFF69D9E8),
+                  )
+                : null,
+            onTap: () {
+              Navigator.of(context).pop();
+              _setTheme(theme: theme);
+            },
+          );
+        }
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFA9C6CF).withOpacity(0.45),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Color Theme',
+                  style: TextStyle(
+                    color: Color(0xFFE4EBEE),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Ultra Premium and Enterprise users can customize the Korlix color theme.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFFA9C6CF),
+                    fontSize: 13.5,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                themeTile('korlix_blue', const Color(0xFF69D9E8)),
+                themeTile('cyber_purple', const Color(0xFFB794F4)),
+                themeTile('ultra_gold', const Color(0xFFFFD166)),
+                themeTile('matrix_green', const Color(0xFF7CFF6B)),
+                themeTile('dark_crimson', const Color(0xFFFF5C7A)),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _openPanel() async {
     if (_loading) {
       return;
@@ -2426,6 +2586,46 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF0A2B3D),
                         foregroundColor: const Color(0xFFE4EBEE),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+                    FilledButton.icon(
+                      onPressed: _openComingSoonPanel,
+                      icon: const Icon(Icons.upcoming_rounded),
+                      label: const Text('Coming Soon'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF143B4A),
+                        foregroundColor: const Color(0xFFE4EBEE),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: () => _openThemePanel(
+                        currentTier: tier,
+                        currentTheme:
+                            (profile['preferred_theme'] ?? 'korlix_blue')
+                                .toString(),
+                      ),
+                      icon: const Icon(Icons.palette_outlined),
+                      label: const Text('Color Theme'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: tier == 'ultra' || tier == 'enterprise'
+                            ? const Color(0xFFFFD166)
+                            : const Color(0xFFA9C6CF),
+                        side: BorderSide(
+                          color:
+                              (tier == 'ultra' || tier == 'enterprise'
+                                      ? const Color(0xFFFFD166)
+                                      : const Color(0xFFA9C6CF))
+                                  .withOpacity(0.50),
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(999),
                         ),
@@ -2611,6 +2811,10 @@ Duration: [specify desired length, e.g., 8–12 seconds].
 
 Aspect ratio: 16:9 cinematic widescreen.
 """;
+
+final ValueNotifier<String> kKorlixThemeNotifier = ValueNotifier<String>(
+  'korlix_blue',
+);
 
 final ValueNotifier<String> kKorlixSelectedCharacterNotifier =
     ValueNotifier<String>('jj');
@@ -5344,6 +5548,234 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     timer.cancel();
   }
 
+  Future<geo.Position?> _getKorlixLocation() async {
+    final serviceEnabled = await geo.Geolocator.isLocationServiceEnabled();
+
+    if (!serviceEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Location services are disabled. Please turn on location.',
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return null;
+    }
+
+    var permission = await geo.Geolocator.checkPermission();
+
+    if (permission == geo.LocationPermission.denied) {
+      permission = await geo.Geolocator.requestPermission();
+    }
+
+    if (permission == geo.LocationPermission.denied) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Location permission denied.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return null;
+    }
+
+    if (permission == geo.LocationPermission.deniedForever) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Location permission is permanently denied. Enable it in app settings.',
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return null;
+    }
+
+    return geo.Geolocator.getCurrentPosition(
+      desiredAccuracy: geo.LocationAccuracy.high,
+      timeLimit: const Duration(seconds: 15),
+    );
+  }
+
+  Future<void> _recordLocatorEvent({
+    required geo.Position position,
+    required String queryType,
+  }) async {
+    try {
+      await http.post(
+        Uri.parse('$kKorlixBackendBaseUrl/api/location/record'),
+        headers: _authHeaders(),
+        body: jsonEncode({
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+          'accuracy': position.accuracy,
+          'feature': 'locator',
+          'query_type': queryType,
+          'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
+        }),
+      );
+    } catch (_) {
+      // Location recording should not block the locator feature.
+    }
+  }
+
+  Future<void> _openLocatorSearch({
+    required String queryType,
+    required String searchText,
+  }) async {
+    final position = await _getKorlixLocation();
+
+    if (position == null) {
+      return;
+    }
+
+    await _recordLocatorEvent(position: position, queryType: queryType);
+
+    final query = Uri.encodeComponent(
+      '$searchText near ${position.latitude},${position.longitude}',
+    );
+
+    final mapsUri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$query',
+    );
+
+    final launched = await launchUrl(
+      mapsUri,
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open maps.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  Future<void> _showLocatorOptions() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF071B27),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (context) {
+        Widget option({
+          required IconData icon,
+          required String title,
+          required String queryType,
+          required String searchText,
+        }) {
+          return ListTile(
+            leading: Icon(icon, color: const Color(0xFF69D9E8)),
+            title: Text(
+              title,
+              style: const TextStyle(
+                color: Color(0xFFE4EBEE),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            trailing: const Icon(
+              Icons.chevron_right_rounded,
+              color: Color(0xFFA9C6CF),
+            ),
+            onTap: () {
+              Navigator.of(context).pop();
+
+              _openLocatorSearch(queryType: queryType, searchText: searchText);
+            },
+          );
+        }
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFA9C6CF).withOpacity(0.45),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Locator',
+                  style: TextStyle(
+                    color: Color(0xFFE4EBEE),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Choose what you want to find near your current location.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFFA9C6CF),
+                    fontSize: 13.5,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                option(
+                  icon: Icons.restaurant_rounded,
+                  title: 'Find me a restaurant',
+                  queryType: 'restaurant',
+                  searchText: 'restaurant',
+                ),
+                option(
+                  icon: Icons.local_gas_station_rounded,
+                  title: 'Find me a gas station',
+                  queryType: 'gas_station',
+                  searchText: 'gas station',
+                ),
+                option(
+                  icon: Icons.church_rounded,
+                  title: 'Find me a church',
+                  queryType: 'church',
+                  searchText: 'church',
+                ),
+                option(
+                  icon: Icons.local_bar_rounded,
+                  title: 'Find me a bar',
+                  queryType: 'bar',
+                  searchText: 'bar',
+                ),
+                option(
+                  icon: Icons.local_police_rounded,
+                  title: 'Find me a police station',
+                  queryType: 'police_station',
+                  searchText: 'police station',
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openDonateCashApp() async {
+    final uri = Uri.parse('https://cash.app/\$cashapp');
+
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open Cash App donation link.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
   Widget _buildMockupFeaturedCharacterCard() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshSelectedCharacterFromBackend();
@@ -5952,6 +6384,54 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                 active: _voiceListening,
                 onPressed: _loading ? null : _handleVoiceInput,
               ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.start,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _loading ? null : _showLocatorOptions,
+                icon: const Icon(Icons.location_on_outlined, size: 18),
+                label: const Text('Locator'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF69D9E8),
+                  backgroundColor: Colors.black.withOpacity(0.20),
+                  side: BorderSide(
+                    color: const Color(0xFF69D9E8).withOpacity(0.42),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              if (_currentTier == 'basic')
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _openDonateCashApp,
+                  icon: const Icon(Icons.favorite_rounded, size: 18),
+                  label: const Text('\$cashapp'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFFFD166),
+                    backgroundColor: Colors.black.withOpacity(0.20),
+                    side: BorderSide(
+                      color: const Color(0xFFFFD166).withOpacity(0.46),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 9,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
             ],
           ),
 
