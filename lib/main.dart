@@ -808,7 +808,9 @@ class _KorlixCharacterIntroPreviewState
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.assetPath != widget.assetPath ||
-        oldWidget.muted != widget.muted) {
+        oldWidget.muted != widget.muted ||
+        oldWidget.autoplay != widget.autoplay ||
+        oldWidget.loop != widget.loop) {
       _soundOn = !widget.muted;
       _loadVideo();
     }
@@ -829,6 +831,16 @@ class _KorlixCharacterIntroPreviewState
 
       if (widget.autoplay) {
         await controller.play();
+
+        // Second sound push helps Android after navigation/sign-in.
+        if (!widget.muted) {
+          await Future<void>.delayed(const Duration(milliseconds: 350));
+          await controller.setVolume(1.0);
+
+          if (!controller.value.isPlaying) {
+            await controller.play();
+          }
+        }
       }
 
       if (!mounted) {
@@ -939,10 +951,10 @@ class _KorlixCharacterIntroPreviewState
                 bottom: 10,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.62),
+                    color: Colors.black.withOpacity(0.68),
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(
-                      color: const Color(0xFF69D9E8).withOpacity(0.55),
+                      color: const Color(0xFF69D9E8).withOpacity(0.65),
                     ),
                     boxShadow: [
                       BoxShadow(
@@ -960,6 +972,30 @@ class _KorlixCharacterIntroPreviewState
                     ),
                     color: const Color(0xFFE4EBEE),
                     tooltip: _soundOn ? 'Mute' : 'Unmute',
+                  ),
+                ),
+              ),
+            if (widget.showSoundButton)
+              Positioned(
+                left: 10,
+                bottom: 10,
+                child: TextButton.icon(
+                  onPressed: _replayWithSound,
+                  icon: const Icon(Icons.replay_rounded, size: 17),
+                  label: const Text('Hear JJ'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFFE4EBEE),
+                    backgroundColor: Colors.black.withOpacity(0.68),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                      side: BorderSide(
+                        color: const Color(0xFF69D9E8).withOpacity(0.55),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -4622,6 +4658,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                   ),
                   child: const KorlixCharacterIntroPreview(
                     assetPath: 'assets/characters/jj/intro.mp4',
+                    muted: false,
+                    showSoundButton: true,
+                    autoplay: true,
+                    loop: false,
                   ),
                 ),
               ),
