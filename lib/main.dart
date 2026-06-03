@@ -30,6 +30,9 @@ const String kKorlixBackendBaseUrl =
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await KorlixDeviceStore.ensureLoaded();
+
+  WidgetsFlutterBinding.ensureInitialized();
 
   const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
   const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
