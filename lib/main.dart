@@ -74,6 +74,24 @@ String backendUrl() {
   return 'http://localhost:8787/api/generate';
 }
 
+String korlixFriendlyErrorMessage(Object error) {
+  final raw = error.toString();
+  final lower = raw.toLowerCase();
+
+  if (lower.contains('429') ||
+      lower.contains('quota') ||
+      lower.contains('billing') ||
+      lower.contains('usage limit') ||
+      lower.contains('current quota') ||
+      lower.contains('insufficient_quota') ||
+      lower.contains('rate limit') ||
+      lower.contains('korlix ai is temporarily down')) {
+    return 'Korlix AI is temporarily down. Please try again later.';
+  }
+
+  return raw.replaceFirst('Exception: ', '');
+}
+
 class CheeChaiCheeApp extends StatelessWidget {
   const CheeChaiCheeApp({super.key});
 
@@ -1413,7 +1431,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
   }
 
   String _cleanError(Object error) {
-    return error.toString().replaceFirst('Exception: ', '');
+    return korlixFriendlyErrorMessage(error);
   }
 
   int _asInt(dynamic value) {
@@ -3746,7 +3764,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     } catch (error) {
       setState(() {
         _loading = false;
-        _error = '${_t.createError}\n\nDetails: $error';
+        _error = '${_t.createError}\n\n${korlixFriendlyErrorMessage(error)}';
       });
     }
   }
@@ -3823,7 +3841,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     } catch (error) {
       setState(() {
         _loading = false;
-        _error = '${_t.createError}\n\nDetails: $error';
+        _error = '${_t.createError}\n\n${korlixFriendlyErrorMessage(error)}';
       });
     }
   }
@@ -5339,7 +5357,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     } catch (error) {
       setState(() {
         _loading = false;
-        _error = 'Video generation failed.\n\nDetails: $error';
+        _error = korlixFriendlyErrorMessage(error);
       });
     }
   }

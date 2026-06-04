@@ -54,6 +54,46 @@ const supabaseAuth =
       })
     : null;
 
+
+const KORLIX_TEMPORARILY_DOWN_MESSAGE =
+  "Korlix AI is temporarily down. Please try again later.";
+
+function isKorlixTemporaryDownError(error) {
+  const pieces = [
+    error?.message,
+    error?.details,
+    error?.statusCode,
+    error?.code,
+    error?.type,
+    error?.openaiPayload ? JSON.stringify(error.openaiPayload) : "",
+    error ? String(error) : "",
+  ];
+
+  const combined = pieces
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return (
+    combined.includes("429") ||
+    combined.includes("quota") ||
+    combined.includes("insufficient_quota") ||
+    combined.includes("billing") ||
+    combined.includes("usage limit") ||
+    combined.includes("current quota") ||
+    combined.includes("rate limit")
+  );
+}
+
+function getKorlixUserFacingError(error) {
+  if (isKorlixTemporaryDownError(error)) {
+    return KORLIX_TEMPORARILY_DOWN_MESSAGE;
+  }
+
+  return sanitize(error?.message || error || "Something went wrong.");
+}
+
+
 function sanitize(value) {
   const openAiKey = process.env.OPENAI_API_KEY || "";
 
@@ -1331,7 +1371,7 @@ app.post("/api/auth/signup", async (req, res) => {
 
     if (error) {
       return res.status(error.status || 400).json({
-        error: sanitize(error.message),
+        error: getKorlixUserFacingError(error),
       });
     }
 
@@ -1370,7 +1410,7 @@ app.post("/api/auth/signup", async (req, res) => {
     });
   } catch (error) {
     res.status(error.statusCode || 500).json({
-      error: sanitize(error?.message),
+      error: getKorlixUserFacingError(error),
     });
   }
 });
@@ -1400,7 +1440,7 @@ app.post("/api/auth/signin", async (req, res) => {
 
     if (error) {
       return res.status(error.status || 400).json({
-        error: sanitize(error.message),
+        error: getKorlixUserFacingError(error),
       });
     }
 
@@ -1434,7 +1474,7 @@ app.post("/api/auth/signin", async (req, res) => {
     });
   } catch (error) {
     res.status(error.statusCode || 500).json({
-      error: sanitize(error?.message),
+      error: getKorlixUserFacingError(error),
     });
   }
 });
@@ -1499,7 +1539,7 @@ app.post("/api/auth/refresh", async (req, res) => {
 
     if (error) {
       return res.status(error.status || 400).json({
-        error: sanitize(error.message),
+        error: getKorlixUserFacingError(error),
       });
     }
 
@@ -1534,7 +1574,7 @@ app.post("/api/auth/refresh", async (req, res) => {
     });
   } catch (error) {
     res.status(error.statusCode || 500).json({
-      error: sanitize(error?.message),
+      error: getKorlixUserFacingError(error),
     });
   }
 });
@@ -1617,7 +1657,7 @@ app.post("/api/characters/select", async (req, res) => {
     });
   } catch (error) {
     res.status(error.statusCode || 500).json({
-      error: sanitize(error?.message),
+      error: getKorlixUserFacingError(error),
     });
   }
 });
@@ -1642,7 +1682,7 @@ app.post("/api/auth/signout", async (req, res) => {
     });
   } catch (error) {
     res.status(error.statusCode || 500).json({
-      error: sanitize(error?.message),
+      error: getKorlixUserFacingError(error),
     });
   }
 });
@@ -1738,8 +1778,8 @@ app.post("/api/video/generate", async (req, res) => {
     console.error("Video generation error:", sanitize(error?.message), error?.openaiPayload || "");
 
     res.status(error.statusCode || 500).json({
-      error: "Video generation failed",
-      details: sanitize(error?.message),
+      error: getKorlixUserFacingError(error),
+      details: getKorlixUserFacingError(error),
     });
   }
 });
@@ -1768,8 +1808,8 @@ app.get("/api/video/status/:videoId", async (req, res) => {
     });
   } catch (error) {
     res.status(error.statusCode || 500).json({
-      error: "Video status check failed",
-      details: sanitize(error?.message),
+      error: getKorlixUserFacingError(error),
+      details: getKorlixUserFacingError(error),
     });
   }
 });
@@ -1798,8 +1838,8 @@ app.get("/api/video/content/:videoId", async (req, res) => {
     res.send(content.buffer);
   } catch (error) {
     res.status(error.statusCode || 500).json({
-      error: "Video content retrieval failed",
-      details: sanitize(error?.message),
+      error: getKorlixUserFacingError(error),
+      details: getKorlixUserFacingError(error),
     });
   }
 });
@@ -1875,7 +1915,7 @@ app.post("/api/location/record", async (req, res) => {
   } catch (error) {
     res.status(error.statusCode || 500).json({
       error: "Location could not be recorded.",
-      details: sanitize(error?.message),
+      details: getKorlixUserFacingError(error),
     });
   }
 });
@@ -1935,7 +1975,7 @@ app.post("/api/theme/set", async (req, res) => {
     });
   } catch (error) {
     res.status(error.statusCode || 500).json({
-      error: sanitize(error?.message),
+      error: getKorlixUserFacingError(error),
     });
   }
 });
@@ -1955,7 +1995,7 @@ app.get("/api/crm/me", async (req, res) => {
     });
   } catch (error) {
     res.status(error.statusCode || 500).json({
-      error: sanitize(error?.message),
+      error: getKorlixUserFacingError(error),
     });
   }
 });
@@ -2029,7 +2069,7 @@ app.get("/api/me", async (req, res) => {
     });
   } catch (error) {
     res.status(error.statusCode || 500).json({
-      error: sanitize(error?.message),
+      error: getKorlixUserFacingError(error),
     });
   }
 });
@@ -2060,7 +2100,7 @@ app.get("/api/history", async (req, res) => {
     });
   } catch (error) {
     res.status(error.statusCode || 500).json({
-      error: sanitize(error?.message),
+      error: getKorlixUserFacingError(error),
     });
   }
 });
@@ -2091,7 +2131,7 @@ app.delete("/api/history/:id", async (req, res) => {
     });
   } catch (error) {
     res.status(error.statusCode || 500).json({
-      error: sanitize(error?.message),
+      error: getKorlixUserFacingError(error),
     });
   }
 });
@@ -2138,7 +2178,7 @@ app.post("/api/reports", async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({
-      error: sanitize(error?.message),
+      error: getKorlixUserFacingError(error),
     });
   }
 });
@@ -2182,7 +2222,7 @@ app.post("/api/account/delete-request", async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({
-      error: sanitize(error?.message),
+      error: getKorlixUserFacingError(error),
     });
   }
 });
@@ -2392,7 +2432,7 @@ app.post("/api/analyze-document", documentUpload.single("file"), async (req, res
 
     res.status(error.statusCode || 500).json({
       error: "File analysis failed",
-      details: sanitize(error?.message),
+      details: getKorlixUserFacingError(error),
     });
   }
 });
@@ -2623,8 +2663,8 @@ Important: Live search was attempted but failed. Give the most useful answer pos
     console.error("AI generation error:", sanitize(error?.message));
 
     res.status(500).json({
-      error: "AI generation failed",
-      details: sanitize(error?.message),
+      error: getKorlixUserFacingError(error),
+      details: getKorlixUserFacingError(error),
     });
   }
 });
