@@ -1064,6 +1064,36 @@ function getOpenAIModelForTier(profile, options = {}) {
 
 
 
+
+function getUploadedImageMime(file) {
+  const rawMime = String(file?.mimetype || "").toLowerCase();
+
+  if (rawMime.startsWith("image/") && rawMime !== "image/*") {
+    return rawMime;
+  }
+
+  const name = String(file?.originalname || "").toLowerCase();
+
+  if (name.endsWith(".jpg") || name.endsWith(".jpeg")) {
+    return "image/jpeg";
+  }
+
+  if (name.endsWith(".png")) {
+    return "image/png";
+  }
+
+  if (name.endsWith(".webp")) {
+    return "image/webp";
+  }
+
+  if (name.endsWith(".gif")) {
+    return "image/gif";
+  }
+
+  return "image/jpeg";
+}
+
+
 function getVideoTierLimit(profile) {
   const override = Number(profile?.video_generation_limit_override || 0);
 
