@@ -23,6 +23,7 @@ import 'package:geolocator/geolocator.dart' as geo;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'korlix_video_downloader.dart';
+import 'korlix_image_saver.dart';
 import 'korlix_video_preview_source.dart';
 
 bool kSupabaseReady = false;
@@ -4213,6 +4214,19 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   }
 
   Future<void> _generate() async {
+    final attachedImageForImprove = _pickedUploadFile;
+    final typedCommandForImprove = _controller.text.trim();
+
+    if (_improvePictureMode ||
+        (attachedImageForImprove != null &&
+            _mimeTypeForPickedFile(
+              attachedImageForImprove,
+            ).startsWith('image/') &&
+            _isImprovePicturePromptText(typedCommandForImprove))) {
+      await _generateImprovedPicture();
+      return;
+    }
+
     if (_improvePictureMode) {
       await _generateImprovedPicture();
       return;
@@ -4738,6 +4752,104 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     return const SizedBox.shrink();
   }
 
+  String _generatedImageFilename(GeneratedItem item) {
+    final rawTitle = item.title.trim().isEmpty ? 'korlix-image' : item.title;
+    final safeTitle = rawTitle
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
+
+    final name = safeTitle.isEmpty ? 'korlix-image' : safeTitle;
+
+    return '$name.png';
+  }
+
+  Future<Uint8List> _generatedImageBytes(GeneratedItem item) async {
+    final dataBytes = _imageBytesFromDataUrl(item.imageDataUrl);
+
+    if (dataBytes != null && dataBytes.isNotEmpty) {
+      return dataBytes;
+    }
+
+    final imageUrl = item.imageUrl;
+
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      final response = await http
+          .get(Uri.parse(imageUrl))
+          .timeout(const Duration(seconds: 60));
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return response.bodyBytes;
+      }
+
+      throw Exception(
+        'Could not download generated image. Status: ${response.statusCode}',
+      );
+    }
+
+    throw Exception('No image data is available to save or share.');
+  }
+
+  Future<void> _saveGeneratedImage(GeneratedItem item) async {
+    try {
+      final bytes = await _generatedImageBytes(item);
+
+      await saveKorlixGeneratedImage(
+        bytes: bytes,
+        filename: _generatedImageFilename(item),
+        mimeType: 'image/png',
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Image save started.')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(korlixFriendlyErrorMessage(error)),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  Future<void> _shareGeneratedImage(GeneratedItem item) async {
+    try {
+      final bytes = await _generatedImageBytes(item);
+
+      await Share.shareXFiles(
+        [
+          XFile.fromData(
+            bytes,
+            name: _generatedImageFilename(item),
+            mimeType: 'image/png',
+          ),
+        ],
+        text: 'Korlix AI improved image',
+        subject: 'Korlix AI improved image',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(korlixFriendlyErrorMessage(error)),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
   void _showResult(GeneratedItem item) {
     showDialog(
       context: context,
@@ -4763,15 +4875,28 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => _copyResultText(item),
-              child: Text(language.copy),
-            ),
-            if (item.allowPdf)
-              TextButton(
-                onPressed: () => _exportPdf(item),
-                child: Text(language.exportPdf),
+            if (item.hasImageResult) ...[
+              TextButton.icon(
+                onPressed: () => _saveGeneratedImage(item),
+                icon: const Icon(Icons.download_rounded),
+                label: const Text('Save'),
               ),
+              TextButton.icon(
+                onPressed: () => _shareGeneratedImage(item),
+                icon: const Icon(Icons.share_rounded),
+                label: const Text('Share'),
+              ),
+            ] else ...[
+              TextButton(
+                onPressed: () => _copyResultText(item),
+                child: Text(language.copy),
+              ),
+              if (item.allowPdf)
+                TextButton(
+                  onPressed: () => _exportPdf(item),
+                  child: Text(language.exportPdf),
+                ),
+            ],
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: Text(language.close),
@@ -4801,6 +4926,34 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             (label.contains('picture') || label.contains('photo'))) ||
         prompt.contains('world-class photographer') ||
         prompt.contains('professional photograph');
+  }
+
+  bool _isImprovePicturePromptText(String text) {
+    final lower = text.toLowerCase();
+
+    final mentionsImage =
+        lower.contains('picture') ||
+        lower.contains('photo') ||
+        lower.contains('image') ||
+        lower.contains('selfie') ||
+        lower.contains('portrait');
+
+    final asksImprove =
+        lower.contains('improve') ||
+        lower.contains('enhance') ||
+        lower.contains('make me look') ||
+        lower.contains('make it look') ||
+        lower.contains('look better') ||
+        lower.contains('better quality') ||
+        lower.contains('clean up') ||
+        lower.contains('retouch') ||
+        lower.contains('sharpen') ||
+        lower.contains('brighten') ||
+        lower.contains('fix my picture') ||
+        lower.contains('fix my photo') ||
+        lower.contains('fix my image');
+
+    return mentionsImage && asksImprove;
   }
 
   void _useQuickAction(QuickAction action) {
@@ -7100,10 +7253,21 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
               final isVideoAction = _isCreateVideoQuickAction(action);
               final isImproveAction = _isImprovePictureQuickAction(action);
 
+              final attachedImageForImprove = _pickedUploadFile;
+              final typedCommandForImprove = _controller.text.trim();
+              final hasAttachedImageImproveIntent =
+                  attachedImageForImprove != null &&
+                  _mimeTypeForPickedFile(
+                    attachedImageForImprove,
+                  ).startsWith('image/') &&
+                  _isImprovePicturePromptText(typedCommandForImprove);
+
               final isVideoActive =
                   isVideoAction && _createVideoMode && !_loading;
               final isImproveActive =
-                  isImproveAction && _improvePictureMode && !_loading;
+                  isImproveAction &&
+                  (_improvePictureMode || hasAttachedImageImproveIntent) &&
+                  !_loading;
               final isHighlighted = isVideoActive || isImproveActive;
 
               final enabledTextColor = isHighlighted
@@ -7291,15 +7455,28 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                 onPressed: () => _showResult(item),
                 child: Text(language.open),
               ),
-              OutlinedButton(
-                onPressed: () => _copyResultText(item),
-                child: Text(language.copy),
-              ),
-              if (item.allowPdf)
-                OutlinedButton(
-                  onPressed: () => _exportPdf(item),
-                  child: Text(language.pdf),
+              if (isImage) ...[
+                OutlinedButton.icon(
+                  onPressed: () => _saveGeneratedImage(item),
+                  icon: const Icon(Icons.download_rounded, size: 18),
+                  label: const Text('Save'),
                 ),
+                OutlinedButton.icon(
+                  onPressed: () => _shareGeneratedImage(item),
+                  icon: const Icon(Icons.share_rounded, size: 18),
+                  label: const Text('Share'),
+                ),
+              ] else ...[
+                OutlinedButton(
+                  onPressed: () => _copyResultText(item),
+                  child: Text(language.copy),
+                ),
+                if (item.allowPdf)
+                  OutlinedButton(
+                    onPressed: () => _exportPdf(item),
+                    child: Text(language.pdf),
+                  ),
+              ],
               TextButton(
                 onPressed: () => _deleteResult(item),
                 child: Text(
