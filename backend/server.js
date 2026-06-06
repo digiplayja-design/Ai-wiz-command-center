@@ -2643,8 +2643,9 @@ app.post("/api/image/improve", documentUpload.single("image"), async (req, res) 
     }
 
     const file = req.file;
-    const prompt = String(req.body.prompt || "").trim();
-    const languageCode = req.body.language || "en";
+    const body = req.body || {};
+    const prompt = String(body.prompt || "").trim();
+    const languageCode = body.language || "en";
 
     if (!file) {
       return res.status(400).json({
