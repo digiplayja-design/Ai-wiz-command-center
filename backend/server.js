@@ -22,6 +22,9 @@ const documentUpload = multer({
 });
 
 
+const passwordResetAttempts = new Map();
+
+
 function normalizeSupabaseUrl(value) {
   return String(value || "")
     .trim()
@@ -103,6 +106,255 @@ function sanitize(value) {
     .replace(supabaseAnonKey, "[hidden_supabase_anon_key]")
     .replace(/sk-[A-Za-z0-9_\-]+/g, "sk-[hidden]");
 }
+
+function isKorlixEmailLike(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
+}
+
+function getPasswordResetRedirectUrl(req) {
+  const configured = String(
+    process.env.KORLIX_PASSWORD_RESET_REDIRECT_URL ||
+      process.env.SUPABASE_PASSWORD_RESET_REDIRECT_URL ||
+      ""
+  ).trim();
+
+  if (configured) {
+    return configured;
+  }
+
+  const forwardedProto = String(req.get("x-forwarded-proto") || "")
+    .split(",")[0]
+    .trim();
+  const protocol = forwardedProto || req.protocol || "https";
+  const host = req.get("host");
+
+  if (host) {
+    return `${protocol}://${host}/reset-password`;
+  }
+
+  return "https://chee-chai-chee-backend.onrender.com/reset-password";
+}
+
+function checkPasswordResetRateLimit(req, email) {
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+  const maxAttempts = 5;
+  const ip = String(req.ip || req.get("x-forwarded-for") || "unknown")
+    .split(",")[0]
+    .trim();
+  const key = `${ip}:${String(email || "").toLowerCase()}`;
+  const existing = passwordResetAttempts.get(key) || [];
+  const recent = existing.filter((timestamp) => now - timestamp < windowMs);
+
+  if (recent.length >= maxAttempts) {
+    passwordResetAttempts.set(key, recent);
+    return false;
+  }
+
+  recent.push(now);
+  passwordResetAttempts.set(key, recent);
+  return true;
+}
+
+function secretMatches(provided, expected) {
+  const a = Buffer.from(String(provided || ""));
+  const b = Buffer.from(String(expected || ""));
+
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+async function sendKorlixPasswordResetEmail({ email, req }) {
+  if (!supabaseAuth) {
+    const error = new Error("Supabase auth is not configured on the backend.");
+    error.statusCode = 500;
+    throw error;
+  }
+
+  const redirectTo = getPasswordResetRedirectUrl(req);
+
+  const { error } = await supabaseAuth.auth.resetPasswordForEmail(email, {
+    redirectTo,
+  });
+
+  if (error) {
+    error.statusCode = error.status || 400;
+    throw error;
+  }
+
+  return { redirectTo };
+}
+
+function renderKorlixPasswordResetPage() {
+  const publicSupabaseUrl = supabaseUrl;
+  const publicSupabaseAnonKey = supabaseAnonKey;
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reset Korlix AI Password</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      box-sizing: border-box;
+      font-family: Arial, Helvetica, sans-serif;
+      color: #e4ebee;
+      background: radial-gradient(circle at top, #0a2b3d 0%, #071b27 44%, #040612 100%);
+    }
+    .card {
+      width: min(460px, 100%);
+      padding: 28px;
+      border-radius: 28px;
+      border: 1px solid rgba(46, 199, 223, 0.42);
+      background: rgba(4, 6, 18, 0.78);
+      box-shadow: 0 0 48px rgba(46, 199, 223, 0.18);
+    }
+    h1 { margin: 0 0 8px; letter-spacing: 2px; }
+    p { color: #a9c6cf; line-height: 1.45; }
+    label { display: block; margin: 18px 0 8px; font-weight: 800; }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      border-radius: 16px;
+      border: 1px solid rgba(46, 199, 223, 0.38);
+      background: #071b27;
+      color: #e4ebee;
+      padding: 14px 16px;
+      font-size: 16px;
+      outline: none;
+    }
+    button {
+      width: 100%;
+      margin-top: 20px;
+      border: 0;
+      border-radius: 999px;
+      padding: 15px 18px;
+      background: #143b4a;
+      color: #e4ebee;
+      font-size: 16px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.62; cursor: not-allowed; }
+    .message { margin-top: 16px; color: #69d9e8; font-weight: 700; }
+    .error { margin-top: 16px; color: #ff7b7b; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>KORLIX AI</h1>
+    <p>Choose a new password for your account. After it is updated, return to Korlix AI and sign in with the new password.</p>
+
+    <form id="reset-form">
+      <label for="password">New password</label>
+      <input id="password" type="password" minlength="6" autocomplete="new-password" required />
+
+      <label for="confirm-password">Confirm new password</label>
+      <input id="confirm-password" type="password" minlength="6" autocomplete="new-password" required />
+
+      <button id="submit-button" type="submit">Update password</button>
+    </form>
+
+    <div id="message" class="message" role="status"></div>
+    <div id="error" class="error" role="alert"></div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const supabaseUrl = ${JSON.stringify(publicSupabaseUrl)};
+    const supabaseAnonKey = ${JSON.stringify(publicSupabaseAnonKey)};
+    const client = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+    const form = document.getElementById('reset-form');
+    const passwordInput = document.getElementById('password');
+    const confirmInput = document.getElementById('confirm-password');
+    const submitButton = document.getElementById('submit-button');
+    const message = document.getElementById('message');
+    const errorBox = document.getElementById('error');
+
+    function showMessage(text) {
+      message.textContent = text || '';
+      errorBox.textContent = '';
+    }
+
+    function showError(text) {
+      errorBox.textContent = text || 'Something went wrong.';
+      message.textContent = '';
+    }
+
+    async function restoreRecoverySession() {
+      const search = new URLSearchParams(window.location.search);
+      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const code = search.get('code');
+      const accessToken = hash.get('access_token');
+      const refreshToken = hash.get('refresh_token');
+
+      if (code) {
+        const result = await client.auth.exchangeCodeForSession(code);
+        if (result.error) throw result.error;
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return;
+      }
+
+      if (accessToken && refreshToken) {
+        const result = await client.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (result.error) throw result.error;
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return;
+      }
+
+      const sessionResult = await client.auth.getSession();
+      if (!sessionResult.data.session) {
+        throw new Error('This reset link is missing or expired. Request a new password reset email from the Korlix AI sign-in screen.');
+      }
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const password = passwordInput.value;
+      const confirmPassword = confirmInput.value;
+
+      if (password.length < 6) {
+        showError('Password must be at least 6 characters.');
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        showError('Passwords do not match.');
+        return;
+      }
+
+      submitButton.disabled = true;
+      submitButton.textContent = 'Updating password...';
+
+      try {
+        await restoreRecoverySession();
+        const result = await client.auth.updateUser({ password });
+        if (result.error) throw result.error;
+
+        showMessage('Password updated successfully. You can now return to Korlix AI and sign in.');
+        form.reset();
+        await client.auth.signOut();
+      } catch (error) {
+        showError(error && error.message ? error.message : String(error));
+      } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Update password';
+      }
+    });
+  </script>
+</body>
+</html>`;
+}
+
 
 
 const characterPersonalityMap = {
@@ -846,13 +1098,26 @@ function hasAdvancedUploadAccess(tier) {
 
 function getUploadMimeType(file) {
   const fileName = String(file?.originalname || "").toLowerCase();
-  const mimeType = String(file?.mimetype || "").toLowerCase();
+  const rawMimeType = String(file?.mimetype || "")
+    .toLowerCase()
+    .split(";")[0]
+    .trim();
+  const isGenericMime =
+    !rawMimeType ||
+    rawMimeType === "application/octet-stream" ||
+    rawMimeType === "binary/octet-stream";
 
-  if (mimeType) return mimeType;
   if (fileName.endsWith(".png")) return "image/png";
   if (fileName.endsWith(".webp")) return "image/webp";
-  if (fileName.endsWith(".pdf")) return "application/pdf";
   if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) return "image/jpeg";
+  if (fileName.endsWith(".pdf")) return "application/pdf";
+  if (fileName.endsWith(".docx")) {
+    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  }
+  if (fileName.endsWith(".txt") || fileName.endsWith(".md")) return "text/plain";
+  if (fileName.endsWith(".csv")) return "text/csv";
+
+  if (!isGenericMime) return rawMimeType;
 
   return "application/octet-stream";
 }
@@ -1338,6 +1603,90 @@ async function createOpenAIResponse(client, { model, input, useSearch }) {
 
   return client.responses.create(request);
 }
+
+
+app.get("/reset-password", (_req, res) => {
+  res.set("Cache-Control", "no-store").type("html").send(renderKorlixPasswordResetPage());
+});
+
+app.post("/api/auth/password-reset", async (req, res) => {
+  const genericMessage =
+    "If that email belongs to a Korlix AI account, a password reset link has been sent.";
+
+  try {
+    const email = String(req.body.email || "").trim().toLowerCase();
+
+    if (!isKorlixEmailLike(email)) {
+      return res.status(400).json({
+        error: "Enter a valid email address.",
+      });
+    }
+
+    if (!checkPasswordResetRateLimit(req, email)) {
+      return res.status(429).json({
+        error: "Too many reset requests. Try again later.",
+      });
+    }
+
+    await sendKorlixPasswordResetEmail({ email, req });
+
+    res.json({
+      success: true,
+      message: genericMessage,
+    });
+  } catch (error) {
+    console.error("Password reset request failed:", sanitize(error?.message || error));
+
+    res.json({
+      success: true,
+      message: genericMessage,
+    });
+  }
+});
+
+app.post("/api/support/password-reset", async (req, res) => {
+  try {
+    const supportSecret = String(process.env.KORLIX_SUPPORT_SECRET || "").trim();
+
+    if (!supportSecret) {
+      return res.status(500).json({
+        error: "Support password reset endpoint is not configured.",
+      });
+    }
+
+    const authorization = String(req.get("authorization") || "").trim();
+    const bearerSecret = authorization.toLowerCase().startsWith("bearer ")
+      ? authorization.slice(7).trim()
+      : "";
+    const headerSecret = String(req.get("x-korlix-support-secret") || "").trim();
+
+    if (!secretMatches(bearerSecret, supportSecret) && !secretMatches(headerSecret, supportSecret)) {
+      return res.status(401).json({
+        error: "Unauthorized.",
+      });
+    }
+
+    const email = String(req.body.email || "").trim().toLowerCase();
+
+    if (!isKorlixEmailLike(email)) {
+      return res.status(400).json({
+        error: "Enter a valid email address.",
+      });
+    }
+
+    const { redirectTo } = await sendKorlixPasswordResetEmail({ email, req });
+
+    res.json({
+      success: true,
+      message: `Password reset email requested for ${email}.`,
+      redirectTo,
+    });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      error: getKorlixUserFacingError(error),
+    });
+  }
+});
 
 
 app.post("/api/auth/signup", async (req, res) => {
