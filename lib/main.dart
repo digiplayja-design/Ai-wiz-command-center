@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart' as http_parser;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -21,39 +22,132 @@ import 'package:share_plus/share_plus.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:url_launcher/url_launcher.dart';
 
+import 'korlix_video_downloader.dart';
+
 bool kSupabaseReady = false;
 String? kKorlixAccessToken;
 String? kKorlixRefreshToken;
 String? kKorlixUserEmail;
 String? kKorlixDeviceId;
 String? kKorlixDeviceLabel;
+final List<String> kKorlixBootWarnings = <String>[];
 
 const String kKorlixBackendBaseUrl =
     'https://chee-chai-chee-backend.onrender.com';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await KorlixDeviceStore.ensureLoaded();
+  await runZonedGuarded<Future<void>>(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    _installKorlixErrorSurface();
 
-  WidgetsFlutterBinding.ensureInitialized();
+    await _korlixRunBootStep('Device setup', () async {
+      await KorlixDeviceStore.ensureLoaded();
+    });
 
-  const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-  const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+    await _korlixRunBootStep('Supabase setup', () async {
+      const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+      const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
-  if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
-    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+      if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
+        await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+        kSupabaseReady = true;
+      }
+    });
 
-    kSupabaseReady = true;
-  }
+    await _korlixRunBootStep('Mobile ads setup', () async {
+      if (!kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.android ||
+              defaultTargetPlatform == TargetPlatform.iOS)) {
+        await MobileAds.instance.initialize();
+      }
+    });
 
-  if (!kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS)) {
-    await MobileAds.instance.initialize();
-  }
-
-  runApp(const CheeChaiCheeApp());
+    runApp(const CheeChaiCheeApp());
+  }, (error, stack) {
+    debugPrint('Korlix uncaught startup/runtime error: $error');
+    debugPrintStack(stackTrace: stack);
+  });
 }
+
+void _installKorlixErrorSurface() {
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    debugPrint('Korlix Flutter error: ${details.exceptionAsString()}');
+
+    if (details.stack != null) {
+      debugPrintStack(stackTrace: details.stack);
+    }
+  };
+
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    final message = details.exceptionAsString();
+
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Material(
+        color: const Color(0xFF040612),
+        child: Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 720),
+            margin: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: const Color(0xFF071B27),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: Colors.redAccent.withOpacity(0.55)),
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Korlix AI startup error',
+                    style: TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'The web app loaded, but Flutter hit a runtime error. Copy this message and send it for the next patch.',
+                    style: TextStyle(color: Color(0xFFE4EBEE), height: 1.35),
+                  ),
+                  const SizedBox(height: 14),
+                  SelectableText(
+                    message,
+                    style: const TextStyle(
+                      color: Color(0xFFE4EBEE),
+                      fontFamily: 'monospace',
+                      fontSize: 13,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  };
+}
+
+Future<void> _korlixRunBootStep(
+  String label,
+  Future<void> Function() step,
+) async {
+  try {
+    await step().timeout(const Duration(seconds: 8));
+  } catch (error, stack) {
+    final warning = '$label failed: $error';
+    kKorlixBootWarnings.add(warning);
+    debugPrint('Korlix startup warning: $warning');
+    debugPrintStack(stackTrace: stack);
+  }
+}
+
 
 String backendUrl() {
   const overrideUrl = String.fromEnvironment('AI_WIZARD_BACKEND_URL');
@@ -300,19 +394,33 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _restoreSession() async {
-    await KorlixDeviceStore.ensureLoaded();
-    final saved = await KorlixSessionStore.load();
+    try {
+      await KorlixDeviceStore.ensureLoaded().timeout(
+        const Duration(seconds: 5),
+      );
 
-    if (saved != null) {
-      final refreshed = await KorlixSessionStore.refresh(saved);
+      final saved = await KorlixSessionStore.load().timeout(
+        const Duration(seconds: 5),
+      );
 
-      if (refreshed != null) {
-        kKorlixAccessToken = refreshed.accessToken;
-        kKorlixRefreshToken = refreshed.refreshToken;
-        kKorlixUserEmail = refreshed.email;
-      } else {
-        await KorlixSessionStore.clear();
+      if (saved != null) {
+        final refreshed = await KorlixSessionStore.refresh(saved).timeout(
+          const Duration(seconds: 8),
+        );
+
+        if (refreshed != null) {
+          kKorlixAccessToken = refreshed.accessToken;
+          kKorlixRefreshToken = refreshed.refreshToken;
+          kKorlixUserEmail = refreshed.email;
+        } else {
+          await KorlixSessionStore.clear();
+        }
       }
+    } catch (error, stack) {
+      final warning = 'Session restore failed: $error';
+      kKorlixBootWarnings.add(warning);
+      debugPrint('Korlix startup warning: $warning');
+      debugPrintStack(stackTrace: stack);
     }
 
     if (mounted) {
@@ -910,7 +1018,6 @@ class KorlixCharacterIntroPreview extends StatefulWidget {
   final bool showSoundButton;
   final bool autoplay;
   final bool loop;
-  final String replayLabel;
   final double aspectRatio;
   final bool fillParent;
   final BoxFit fit;
@@ -922,7 +1029,6 @@ class KorlixCharacterIntroPreview extends StatefulWidget {
     this.showSoundButton = false,
     this.autoplay = true,
     this.loop = true,
-    this.replayLabel = 'Hear',
     this.aspectRatio = 9 / 16,
     this.fillParent = false,
     this.fit = BoxFit.cover,
@@ -1112,34 +1218,7 @@ class _KorlixCharacterIntroPreviewState
               ),
             ),
           ),
-        if (widget.showSoundButton)
-          Positioned(
-            left: 10,
-            bottom: 10,
-            child: TextButton.icon(
-              onPressed: _replayWithSound,
-              icon: const Icon(Icons.replay_rounded, size: 17),
-              label: Text(
-                widget.replayLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFFE4EBEE),
-                backgroundColor: Colors.black.withOpacity(0.68),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
-                  side: BorderSide(
-                    color: const Color(0xFF69D9E8).withOpacity(0.55),
-                  ),
-                ),
-              ),
-            ),
-          ),
+        // The text replay button was removed to keep the character cards cleaner.
       ],
     );
   }
@@ -3595,6 +3674,38 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         lower.endsWith('.webp');
   }
 
+  String _mimeTypeForPickedFile(fp.PlatformFile file) {
+    final lower = file.name.toLowerCase();
+
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+      return 'image/jpeg';
+    }
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.pdf')) return 'application/pdf';
+    if (lower.endsWith('.docx')) {
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    }
+    if (lower.endsWith('.txt') || lower.endsWith('.md')) return 'text/plain';
+    if (lower.endsWith('.csv')) return 'text/csv';
+
+    return 'application/octet-stream';
+  }
+
+  http_parser.MediaType _mediaTypeForPickedFile(fp.PlatformFile file) {
+    final mimeType = _mimeTypeForPickedFile(file);
+    final slashIndex = mimeType.indexOf('/');
+
+    if (slashIndex <= 0 || slashIndex == mimeType.length - 1) {
+      return http_parser.MediaType('application', 'octet-stream');
+    }
+
+    return http_parser.MediaType(
+      mimeType.substring(0, slashIndex),
+      mimeType.substring(slashIndex + 1),
+    );
+  }
+
   Future<void> _handleUploadPressed() async {
     await _loadCurrentTier();
 
@@ -3703,7 +3814,12 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       }
 
       request.files.add(
-        http.MultipartFile.fromBytes('file', file.bytes!, filename: file.name),
+        http.MultipartFile.fromBytes(
+          'file',
+          file.bytes!,
+          filename: file.name,
+          contentType: _mediaTypeForPickedFile(file),
+        ),
       );
 
       final streamedResponse = await request.send().timeout(
@@ -4699,34 +4815,6 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
           ),
         );
 
-        final accountButton = TextButton.icon(
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Open Settings to view your Korlix Account.'),
-              ),
-            );
-          },
-          icon: const Icon(Icons.person_outline_rounded, size: 20),
-          label: const Text('Account'),
-          style: TextButton.styleFrom(
-            foregroundColor: const Color(0xFF69D9E8),
-            backgroundColor: Colors.black.withOpacity(0.18),
-            side: BorderSide(color: const Color(0xFF2EC7DF).withOpacity(0.45)),
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 12 : 16,
-              vertical: compact ? 10 : 13,
-            ),
-            textStyle: TextStyle(
-              fontSize: compact ? 13 : 14,
-              fontWeight: FontWeight.w800,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(999),
-            ),
-          ),
-        );
-
         final titleBlock = Column(
           crossAxisAlignment: compact
               ? CrossAxisAlignment.center
@@ -4771,7 +4859,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(children: [logo, const Spacer(), accountButton]),
+                Align(alignment: Alignment.centerLeft, child: logo),
                 const SizedBox(height: 16),
                 Center(child: titleBlock),
               ],
@@ -4786,7 +4874,6 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
               logo,
               const SizedBox(width: 18),
               Expanded(child: titleBlock),
-              accountButton,
             ],
           ),
         );
@@ -4901,34 +4988,6 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
           ),
         );
 
-        final accountButton = TextButton.icon(
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Open Settings to view your Korlix Account.'),
-              ),
-            );
-          },
-          icon: const Icon(Icons.person_outline_rounded, size: 20),
-          label: const Text('Account'),
-          style: TextButton.styleFrom(
-            foregroundColor: accent,
-            backgroundColor: Colors.black.withOpacity(0.18),
-            side: BorderSide(color: accent.withOpacity(0.52)),
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 12 : 16,
-              vertical: compact ? 10 : 13,
-            ),
-            textStyle: TextStyle(
-              fontSize: compact ? 13 : 14,
-              fontWeight: FontWeight.w800,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(999),
-            ),
-          ),
-        );
-
         final titleBlock = Column(
           crossAxisAlignment: compact
               ? CrossAxisAlignment.center
@@ -4970,7 +5029,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(children: [logo, const Spacer(), accountButton]),
+                Align(alignment: Alignment.centerLeft, child: logo),
                 const SizedBox(height: 16),
                 Center(child: titleBlock),
               ],
@@ -4985,7 +5044,6 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
               logo,
               const SizedBox(width: 18),
               Expanded(child: titleBlock),
-              accountButton,
             ],
           ),
         );
@@ -5362,6 +5420,52 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     }
   }
 
+  Future<void> _downloadGeneratedVideo(String videoId) async {
+    final safeVideoId = videoId.trim();
+
+    if (safeVideoId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Video is not ready to download yet.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    final headers = Map<String, String>.from(_authHeaders())
+      ..remove('Content-Type');
+    final url = '$kKorlixBackendBaseUrl/api/video/content/$safeVideoId';
+    final filename = 'korlix-video-$safeVideoId.mp4';
+
+    try {
+      await downloadKorlixVideo(
+        url: url,
+        headers: headers,
+        filename: filename,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Video download started.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(korlixFriendlyErrorMessage(error)),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
   Future<void> _showVideoProgressDialog({
     required String videoId,
     required String prompt,
@@ -5564,14 +5668,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                         children: [
                           Expanded(
                             child: FilledButton.icon(
-                              onPressed: () {
-                                Share.share(
-                                  'I created a video with Korlix AI. Video ID: $videoId',
-                                  subject: 'Korlix AI video',
-                                );
-                              },
-                              icon: const Icon(Icons.share_rounded),
-                              label: const Text('Share'),
+                              onPressed: () => _downloadGeneratedVideo(videoId),
+                              icon: const Icon(Icons.download_rounded),
+                              label: const Text('Download Video'),
                               style: FilledButton.styleFrom(
                                 backgroundColor: const Color(0xFF143B4A),
                                 foregroundColor: const Color(0xFFE4EBEE),
@@ -5582,15 +5681,13 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                           Expanded(
                             child: OutlinedButton.icon(
                               onPressed: () {
-                                Clipboard.setData(ClipboardData(text: videoId));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Video ID copied.'),
-                                  ),
+                                Share.share(
+                                  'I created a video with Korlix AI. Video ID: $videoId',
+                                  subject: 'Korlix AI video',
                                 );
                               },
-                              icon: const Icon(Icons.copy_rounded),
-                              label: const Text('Copy ID'),
+                              icon: const Icon(Icons.share_rounded),
+                              label: const Text('Share'),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: const Color(0xFF69D9E8),
                               ),
@@ -5988,7 +6085,6 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                               assetPath: character.assetPath,
                               muted: !character.soundOn,
                               showSoundButton: character.soundOn,
-                              replayLabel: 'Hear ${character.name}',
                               autoplay: true,
                               loop: true,
                               fillParent: true,
