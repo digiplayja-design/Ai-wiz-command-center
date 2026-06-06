@@ -23,6 +23,7 @@ import 'package:geolocator/geolocator.dart' as geo;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'korlix_video_downloader.dart';
+import 'korlix_video_preview_source.dart';
 
 bool kSupabaseReady = false;
 String? kKorlixAccessToken;
@@ -36,37 +37,40 @@ const String kKorlixBackendBaseUrl =
     'https://chee-chai-chee-backend.onrender.com';
 
 Future<void> main() async {
-  await runZonedGuarded<Future<void>>(() async {
-    WidgetsFlutterBinding.ensureInitialized();
-    _installKorlixErrorSurface();
+  await runZonedGuarded<Future<void>>(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+      _installKorlixErrorSurface();
 
-    await _korlixRunBootStep('Device setup', () async {
-      await KorlixDeviceStore.ensureLoaded();
-    });
+      await _korlixRunBootStep('Device setup', () async {
+        await KorlixDeviceStore.ensureLoaded();
+      });
 
-    await _korlixRunBootStep('Supabase setup', () async {
-      const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-      const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+      await _korlixRunBootStep('Supabase setup', () async {
+        const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+        const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
-      if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
-        await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
-        kSupabaseReady = true;
-      }
-    });
+        if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
+          await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+          kSupabaseReady = true;
+        }
+      });
 
-    await _korlixRunBootStep('Mobile ads setup', () async {
-      if (!kIsWeb &&
-          (defaultTargetPlatform == TargetPlatform.android ||
-              defaultTargetPlatform == TargetPlatform.iOS)) {
-        await MobileAds.instance.initialize();
-      }
-    });
+      await _korlixRunBootStep('Mobile ads setup', () async {
+        if (!kIsWeb &&
+            (defaultTargetPlatform == TargetPlatform.android ||
+                defaultTargetPlatform == TargetPlatform.iOS)) {
+          await MobileAds.instance.initialize();
+        }
+      });
 
-    runApp(const CheeChaiCheeApp());
-  }, (error, stack) {
-    debugPrint('Korlix uncaught startup/runtime error: $error');
-    debugPrintStack(stackTrace: stack);
-  });
+      runApp(const CheeChaiCheeApp());
+    },
+    (error, stack) {
+      debugPrint('Korlix uncaught startup/runtime error: $error');
+      debugPrintStack(stackTrace: stack);
+    },
+  );
 }
 
 void _installKorlixErrorSurface() {
@@ -147,7 +151,6 @@ Future<void> _korlixRunBootStep(
     debugPrintStack(stackTrace: stack);
   }
 }
-
 
 String backendUrl() {
   const overrideUrl = String.fromEnvironment('AI_WIZARD_BACKEND_URL');
@@ -404,9 +407,9 @@ class _AuthGateState extends State<AuthGate> {
       );
 
       if (saved != null) {
-        final refreshed = await KorlixSessionStore.refresh(saved).timeout(
-          const Duration(seconds: 8),
-        );
+        final refreshed = await KorlixSessionStore.refresh(
+          saved,
+        ).timeout(const Duration(seconds: 8));
 
         if (refreshed != null) {
           kKorlixAccessToken = refreshed.accessToken;
@@ -920,7 +923,9 @@ class KorlixGeneratedVideoPlayer extends StatefulWidget {
 class _KorlixGeneratedVideoPlayerState
     extends State<KorlixGeneratedVideoPlayer> {
   VideoPlayerController? _controller;
+  KorlixVideoPreviewSource? _previewSource;
   bool _ready = false;
+  bool _loading = false;
   String? _error;
 
   @override
@@ -933,41 +938,80 @@ class _KorlixGeneratedVideoPlayerState
   void didUpdateWidget(covariant KorlixGeneratedVideoPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (oldWidget.videoUrl != widget.videoUrl) {
+    if (oldWidget.videoUrl != widget.videoUrl ||
+        oldWidget.headers.toString() != widget.headers.toString()) {
       _load();
     }
   }
 
   Future<void> _load() async {
-    final old = _controller;
-    _controller = null;
-    _ready = false;
-    _error = null;
-    await old?.dispose();
+    final oldController = _controller;
+    final oldPreviewSource = _previewSource;
+
+    if (mounted) {
+      setState(() {
+        _controller = null;
+        _previewSource = null;
+        _ready = false;
+        _loading = true;
+        _error = null;
+      });
+    } else {
+      _controller = null;
+      _previewSource = null;
+      _ready = false;
+      _loading = true;
+      _error = null;
+    }
+
+    await oldController?.dispose();
+    await releaseKorlixVideoPreviewSource(oldPreviewSource);
+
+    KorlixVideoPreviewSource? previewSource;
+    VideoPlayerController? controller;
 
     try {
-      final controller = VideoPlayerController.networkUrl(
-        Uri.parse(widget.videoUrl),
-        httpHeaders: widget.headers,
+      previewSource = await prepareKorlixVideoPreviewSource(
+        url: widget.videoUrl,
+        headers: widget.headers,
+      );
+
+      controller = VideoPlayerController.networkUrl(
+        Uri.parse(previewSource.url),
+        httpHeaders: previewSource.headers,
       );
 
       await controller.initialize();
       await controller.setLooping(true);
-      await controller.play();
+      await controller.setVolume(0);
+
+      try {
+        await controller.play();
+      } catch (playError) {
+        debugPrint('Korlix video preview autoplay warning: $playError');
+      }
 
       if (!mounted) {
         await controller.dispose();
+        await releaseKorlixVideoPreviewSource(previewSource);
         return;
       }
 
       setState(() {
         _controller = controller;
+        _previewSource = previewSource;
         _ready = true;
+        _loading = false;
       });
     } catch (error) {
+      await controller?.dispose();
+      await releaseKorlixVideoPreviewSource(previewSource);
+
       if (mounted) {
         setState(() {
-          _error = 'Could not load video preview.';
+          _loading = false;
+          _error =
+              'Could not load video preview. Use Download Video, or tap Retry Preview.';
         });
       }
     }
@@ -975,7 +1019,12 @@ class _KorlixGeneratedVideoPlayerState
 
   @override
   void dispose() {
-    _controller?.dispose();
+    final controller = _controller;
+    final previewSource = _previewSource;
+    _controller = null;
+    _previewSource = null;
+    controller?.dispose();
+    unawaited(releaseKorlixVideoPreviewSource(previewSource));
     super.dispose();
   }
 
@@ -985,13 +1034,28 @@ class _KorlixGeneratedVideoPlayerState
 
     if (_error != null) {
       return Center(
-        child: Text(
-          _error!,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.redAccent,
-            fontWeight: FontWeight.w700,
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _loading ? null : _load,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry Preview'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFB7FF00),
+                side: const BorderSide(color: Color(0xFFB7FF00)),
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -4393,10 +4457,16 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     });
   }
 
+  bool _isCreateVideoQuickAction(QuickAction action) {
+    final label = action.label.toLowerCase();
+    return label.contains('video') || action.prompt == kKorlixCreateVideoPrompt;
+  }
+
   void _useQuickAction(QuickAction action) {
-    if (action.label == 'Create a video') {
+    if (_isCreateVideoQuickAction(action)) {
       setState(() {
         _createVideoMode = true;
+        _error = null;
         _controller.text = '';
         _controller.selection = TextSelection.fromPosition(
           const TextPosition(offset: 0),
@@ -4406,26 +4476,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Describe the video you want. Video generation will be connected next.',
-          ),
-        ),
-      );
-
-      return;
-    }
-
-    if (action.label == 'Create a video') {
-      setState(() {
-        _controller.text = kKorlixCreateVideoPrompt;
-        _controller.selection = TextSelection.fromPosition(
-          TextPosition(offset: _controller.text.length),
-        );
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Create a video prompt loaded. Add your scene details, then submit.',
+            'Describe the video you want, then tap submit to generate it.',
           ),
         ),
       );
@@ -4434,6 +4485,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     }
 
     setState(() {
+      _createVideoMode = false;
       _controller.text = action.prompt;
       _controller.selection = TextSelection.fromPosition(
         TextPosition(offset: _controller.text.length),
@@ -5362,6 +5414,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       _loading = true;
       _error = null;
       _featuredAnswerDismissed = true;
+      _createVideoMode = false;
     });
 
     try {
@@ -5439,19 +5492,15 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     final filename = 'korlix-video-$safeVideoId.mp4';
 
     try {
-      await downloadKorlixVideo(
-        url: url,
-        headers: headers,
-        filename: filename,
-      );
+      await downloadKorlixVideo(url: url, headers: headers, filename: filename);
 
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Video download started.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Video download started.')));
     } catch (error) {
       if (!mounted) {
         return;
@@ -6683,19 +6732,40 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             runSpacing: 9,
             alignment: WrapAlignment.center,
             children: t.quickActions.map((action) {
+              final isVideoAction = _isCreateVideoQuickAction(action);
+              final isVideoModeActive =
+                  isVideoAction && _createVideoMode && !_loading;
+
+              final enabledTextColor = isVideoModeActive
+                  ? const Color(0xFF061008)
+                  : const Color(0xFFE4EBEE);
+
+              final enabledBackgroundColor = isVideoModeActive
+                  ? const Color(0xFFB7FF00)
+                  : const Color(0xFF120D18);
+
+              final enabledBorderColor = isVideoModeActive
+                  ? const Color(0xFFD9FF5A)
+                  : const Color(0xFF2EC7DF).withOpacity(0.34);
+
               return ActionChip(
-                label: Text(action.label),
+                avatar: isVideoAction
+                    ? Icon(
+                        Icons.movie_creation_outlined,
+                        size: 17,
+                        color: _loading ? Colors.white38 : enabledTextColor,
+                      )
+                    : null,
+                label: Text(isVideoAction ? 'Create Video' : action.label),
                 labelStyle: TextStyle(
-                  color: _loading ? Colors.white38 : const Color(0xFFE4EBEE),
-                  fontWeight: FontWeight.w800,
+                  color: _loading ? Colors.white38 : enabledTextColor,
+                  fontWeight: FontWeight.w900,
                   fontSize: 12.5,
                 ),
-                backgroundColor: const Color(0xFF120D18),
+                backgroundColor: enabledBackgroundColor,
                 disabledColor: Colors.black.withOpacity(0.25),
                 side: BorderSide(
-                  color: _loading
-                      ? Colors.white10
-                      : const Color(0xFF2EC7DF).withOpacity(0.34),
+                  color: _loading ? Colors.white10 : enabledBorderColor,
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
