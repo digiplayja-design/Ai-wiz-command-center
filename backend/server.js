@@ -1089,13 +1089,15 @@ function isAdvancedUpload(file) {
   return isImageUpload(file);
 }
 
-function hasProUploadAccess(tier) {
-  return tier === "pro" || tier === "ultra" || tier === "enterprise";
+function hasProUploadAccess(_tier) {
+  return true;
 }
 
-function hasAdvancedUploadAccess(tier) {
-  return tier === "ultra" || tier === "enterprise";
+
+function hasAdvancedUploadAccess(_tier) {
+  return true;
 }
+
 
 function getUploadMimeType(file) {
   const fileName = String(file?.originalname || "").toLowerCase();
@@ -2672,7 +2674,7 @@ app.post("/api/image/improve", documentUpload.single("image"), async (req, res) 
       });
     }
 
-    const creditsNeeded = 8;
+    const creditsNeeded = 1;
 
     const usageCheck = checkUsageAllowed({
       profile,
@@ -2796,7 +2798,7 @@ app.post("/api/analyze-document", documentUpload.single("file"), async (req, res
 
     const fileRequested = wantsFile(command);
     const useAdvancedMode = advancedUpload || (isPdfUpload(file) && hasAdvancedUploadAccess(tier));
-    const creditsNeeded = useAdvancedMode ? 5 : 4;
+    const creditsNeeded = 1;
 
     const usageCheck = checkUsageAllowed({
       profile,

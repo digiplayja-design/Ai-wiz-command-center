@@ -4034,13 +4034,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   }
 
   bool get _hasDocumentUploadAccess {
-    return _currentTier == 'pro' ||
-        _currentTier == 'ultra' ||
-        _currentTier == 'enterprise';
+    return true;
   }
 
   bool get _hasAdvancedUploadAccess {
-    return _currentTier == 'ultra' || _currentTier == 'enterprise';
+    return true;
   }
 
   bool _isAdvancedUploadName(String name) {
@@ -5422,9 +5420,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   }
 
   bool get _hasVoiceAccess {
-    return _currentTier == 'pro' ||
-        _currentTier == 'ultra' ||
-        _currentTier == 'enterprise';
+    return true;
   }
 
   Future<void> _loadCurrentTier() async {
