@@ -32,6 +32,16 @@ String? kKorlixRefreshToken;
 String? kKorlixUserEmail;
 String? kKorlixDeviceId;
 String? kKorlixDeviceLabel;
+
+final ValueNotifier<int> kKorlixStopCharacterSpeechSignal = ValueNotifier<int>(
+  0,
+);
+
+void stopKorlixCharacterSpeechGlobally() {
+  kKorlixStopCharacterSpeechSignal.value =
+      kKorlixStopCharacterSpeechSignal.value + 1;
+}
+
 final List<String> kKorlixBootWarnings = <String>[];
 
 const String kKorlixBackendBaseUrl =
@@ -1203,14 +1213,19 @@ class KorlixCharacterIntroPreview extends StatefulWidget {
 
 class _KorlixCharacterIntroPreviewState
     extends State<KorlixCharacterIntroPreview> {
+  static const int _maxAutoLoops = 3;
+
   VideoPlayerController? _controller;
   bool _ready = false;
-  late bool _soundOn;
+  bool _soundOn = false;
+  int _completedLoops = 0;
+  bool _handlingEnd = false;
 
   @override
   void initState() {
     super.initState();
     _soundOn = !widget.muted;
+    kKorlixStopCharacterSpeechSignal.addListener(_handleGlobalStopSignal);
     _loadVideo();
   }
 
@@ -1223,22 +1238,38 @@ class _KorlixCharacterIntroPreviewState
         oldWidget.autoplay != widget.autoplay ||
         oldWidget.loop != widget.loop) {
       _soundOn = !widget.muted;
+      _completedLoops = 0;
       _loadVideo();
     }
   }
 
+  void _handleGlobalStopSignal() {
+    _stopTalkingCompletely();
+  }
+
   Future<void> _loadVideo() async {
     final oldController = _controller;
+
+    if (oldController != null) {
+      oldController.removeListener(_handleVideoProgress);
+    }
+
     _controller = null;
     _ready = false;
+    _completedLoops = 0;
+    _handlingEnd = false;
+
     await oldController?.dispose();
 
     try {
       final controller = VideoPlayerController.asset(widget.assetPath);
 
       await controller.initialize();
-      await controller.setLooping(widget.loop);
+
+      // We manually control looping so talking never loops forever.
+      await controller.setLooping(false);
       await controller.setVolume(_soundOn ? 1.0 : 0.0);
+      controller.addListener(_handleVideoProgress);
 
       if (widget.autoplay) {
         await controller.play();
@@ -1254,6 +1285,7 @@ class _KorlixCharacterIntroPreviewState
       }
 
       if (!mounted) {
+        controller.removeListener(_handleVideoProgress);
         await controller.dispose();
         return;
       }
@@ -1271,6 +1303,83 @@ class _KorlixCharacterIntroPreviewState
     }
   }
 
+  void _handleVideoProgress() {
+    final controller = _controller;
+
+    if (controller == null || _handlingEnd) {
+      return;
+    }
+
+    final value = controller.value;
+
+    if (!value.isInitialized || !value.isPlaying) {
+      return;
+    }
+
+    final duration = value.duration;
+
+    if (duration == Duration.zero) {
+      return;
+    }
+
+    final remaining = duration - value.position;
+
+    if (remaining <= const Duration(milliseconds: 250)) {
+      _handleVideoReachedEnd();
+    }
+  }
+
+  Future<void> _handleVideoReachedEnd() async {
+    final controller = _controller;
+
+    if (controller == null || _handlingEnd) {
+      return;
+    }
+
+    _handlingEnd = true;
+    _completedLoops += 1;
+
+    final allowedLoops = widget.loop ? _maxAutoLoops : 1;
+
+    try {
+      if (_completedLoops >= allowedLoops) {
+        await _stopTalkingCompletely(seekToEnd: true);
+      } else {
+        await controller.seekTo(Duration.zero);
+        await controller.play();
+      }
+    } finally {
+      _handlingEnd = false;
+    }
+  }
+
+  Future<void> _stopTalkingCompletely({bool seekToEnd = false}) async {
+    final controller = _controller;
+
+    if (controller == null) {
+      return;
+    }
+
+    try {
+      await controller.setVolume(0.0);
+      await controller.pause();
+
+      if (!seekToEnd) {
+        await controller.seekTo(Duration.zero);
+      }
+    } catch (_) {
+      // Video/audio stopping should never block the app.
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _soundOn = false;
+    });
+  }
+
   Future<void> _toggleSound() async {
     final controller = _controller;
 
@@ -1280,10 +1389,16 @@ class _KorlixCharacterIntroPreviewState
 
     final next = !_soundOn;
 
-    await controller.setVolume(next ? 1.0 : 0.0);
+    try {
+      await controller.setVolume(next ? 1.0 : 0.0);
 
-    if (!controller.value.isPlaying) {
-      await controller.play();
+      if (next && !controller.value.isPlaying) {
+        _completedLoops = 0;
+        await controller.seekTo(Duration.zero);
+        await controller.play();
+      }
+    } catch (_) {
+      return;
     }
 
     if (!mounted) {
@@ -1302,9 +1417,14 @@ class _KorlixCharacterIntroPreviewState
       return;
     }
 
-    await controller.setVolume(1.0);
-    await controller.seekTo(Duration.zero);
-    await controller.play();
+    try {
+      _completedLoops = 0;
+      await controller.setVolume(1.0);
+      await controller.seekTo(Duration.zero);
+      await controller.play();
+    } catch (_) {
+      return;
+    }
 
     if (!mounted) {
       return;
@@ -1317,6 +1437,8 @@ class _KorlixCharacterIntroPreviewState
 
   @override
   void dispose() {
+    kKorlixStopCharacterSpeechSignal.removeListener(_handleGlobalStopSignal);
+    _controller?.removeListener(_handleVideoProgress);
     _controller?.dispose();
     super.dispose();
   }
@@ -1554,16 +1676,24 @@ class KorlixCharacterIntroVideo extends StatefulWidget {
 }
 
 class _KorlixCharacterIntroVideoState extends State<KorlixCharacterIntroVideo> {
+  static const int _maxAutoLoops = 3;
+
   late final VideoPlayerController _controller;
   bool _ready = false;
+  int _completedLoops = 0;
+  bool _handlingEnd = false;
 
   @override
   void initState() {
     super.initState();
 
+    kKorlixStopCharacterSpeechSignal.addListener(_handleGlobalStopSignal);
+
     _controller = VideoPlayerController.asset(widget.assetPath)
-      ..setLooping(true)
+      ..setLooping(false)
       ..setVolume(0);
+
+    _controller.addListener(_handleVideoProgress);
 
     _controller.initialize().then((_) {
       if (!mounted) {
@@ -1582,13 +1712,78 @@ class _KorlixCharacterIntroVideoState extends State<KorlixCharacterIntroVideo> {
   void didUpdateWidget(covariant KorlixCharacterIntroVideo oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (_ready && !_controller.value.isPlaying) {
+    if (_ready &&
+        !_controller.value.isPlaying &&
+        _completedLoops < _maxAutoLoops) {
       _controller.play();
+    }
+  }
+
+  void _handleGlobalStopSignal() {
+    _stopCompletely();
+  }
+
+  void _handleVideoProgress() {
+    if (!_ready || _handlingEnd) {
+      return;
+    }
+
+    final value = _controller.value;
+
+    if (!value.isInitialized || !value.isPlaying) {
+      return;
+    }
+
+    final duration = value.duration;
+
+    if (duration == Duration.zero) {
+      return;
+    }
+
+    final remaining = duration - value.position;
+
+    if (remaining <= const Duration(milliseconds: 250)) {
+      _handleVideoReachedEnd();
+    }
+  }
+
+  Future<void> _handleVideoReachedEnd() async {
+    if (_handlingEnd) {
+      return;
+    }
+
+    _handlingEnd = true;
+    _completedLoops += 1;
+
+    try {
+      if (_completedLoops >= _maxAutoLoops) {
+        await _stopCompletely(seekToEnd: true);
+      } else {
+        await _controller.seekTo(Duration.zero);
+        await _controller.play();
+      }
+    } finally {
+      _handlingEnd = false;
+    }
+  }
+
+  Future<void> _stopCompletely({bool seekToEnd = false}) async {
+    try {
+      await _controller.setVolume(0);
+      await _controller.pause();
+
+      if (!seekToEnd) {
+        await _controller.seekTo(Duration.zero);
+      }
+    } catch (_) {
+      // Character video stopping should never block the app.
     }
   }
 
   @override
   void dispose() {
+    kKorlixStopCharacterSpeechSignal.removeListener(_handleGlobalStopSignal);
+    _controller.removeListener(_handleVideoProgress);
     _controller.dispose();
     super.dispose();
   }
@@ -3782,20 +3977,32 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     super.dispose();
   }
 
-  Future<void> _speakConsiderItDone() async {
+  Future<void> _stopAiCharacterTalkingForQuery() async {
+    stopKorlixCharacterSpeechGlobally();
+
     try {
       await _wizardCuePlayer.stop();
-
-      final asset = switch (_selectedLanguage) {
-        'es' => 'consider_done_es.mp3',
-        'fr' => 'consider_done_fr.mp3',
-        _ => 'consider_done_en.mp3',
-      };
-
-      await _wizardCuePlayer.play(AssetSource(asset), volume: 1.0);
     } catch (_) {
-      // The wizard cue is optional. The app should still answer if audio fails.
+      // Character cue audio should never block a request.
     }
+
+    try {
+      await _speechToText.stop();
+    } catch (_) {
+      // Voice input should never block a request.
+    }
+
+    if (mounted && _voiceListening) {
+      setState(() {
+        _voiceListening = false;
+      });
+    }
+  }
+
+  Future<void> _speakConsiderItDone() async {
+    // Intentionally silent: when the user submits a query, Korlix should stop
+    // character talking instead of starting another voice cue.
+    await _stopAiCharacterTalkingForQuery();
   }
 
   bool _shouldAllowPdf(String command) {
@@ -3972,6 +4179,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   }
 
   Future<void> _generateImprovedPicture() async {
+    await _stopAiCharacterTalkingForQuery();
+
     final file = _pickedUploadFile;
     final command = _controller.text.trim();
 
@@ -4071,22 +4280,27 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       final content = (data['content'] ?? 'Enhanced image generated.')
           .toString();
 
+      final improvedItem = GeneratedItem(
+        command: 'Improved image: ${file.name}\nInstructions: $prompt',
+        title: 'Improved picture: ${file.name}',
+        content: content,
+        language: _selectedLanguage,
+        allowPdf: false,
+        imageDataUrl: imageDataUrl,
+        imageUrl: imageUrl,
+      );
+
       setState(() {
         _loading = false;
         _controller.clear();
         _pickedUploadFile = null;
-        _results.insert(
-          0,
-          GeneratedItem(
-            command: 'Improved image: ${file.name}\nInstructions: $prompt',
-            title: 'Improved picture: ${file.name}',
-            content: content,
-            language: _selectedLanguage,
-            allowPdf: false,
-            imageDataUrl: imageDataUrl,
-            imageUrl: imageUrl,
-          ),
-        );
+        _results.insert(0, improvedItem);
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showResult(improvedItem);
+        }
       });
     } catch (error) {
       setState(() {
@@ -4097,6 +4311,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   }
 
   Future<void> _generateWithUpload() async {
+    await _stopAiCharacterTalkingForQuery();
+
     final command = _controller.text.trim();
     final file = _pickedUploadFile;
 
@@ -4214,6 +4430,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   }
 
   Future<void> _generate() async {
+    await _stopAiCharacterTalkingForQuery();
+
     final attachedImageForImprove = _pickedUploadFile;
     final typedCommandForImprove = _controller.text.trim();
 
@@ -5916,6 +6134,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   }
 
   Future<void> _startOpenAIVideoGeneration(String sceneDescription) async {
+    await _stopAiCharacterTalkingForQuery();
+
     final scene = sceneDescription.trim();
 
     if (scene.isEmpty) {
