@@ -572,6 +572,8 @@ class _AuthScreenState extends State<AuthScreen> {
 
   bool _isSignUp = false;
   bool _loading = false;
+  bool _resetLoading = false;
+  bool _showForgotPassword = false;
   String? _message;
   String? _error;
 
@@ -590,6 +592,67 @@ class _AuthScreenState extends State<AuthScreen> {
         .replaceFirst(', statusCode: 400, errorCode: invalid_credentials)', '');
   }
 
+  bool _shouldOfferPasswordReset(String message) {
+    final lower = message.toLowerCase();
+
+    return lower.contains('invalid') ||
+        lower.contains('credential') ||
+        lower.contains('password') ||
+        lower.contains('authentication failed') ||
+        lower.contains('login');
+  }
+
+  Future<void> _requestPasswordReset() async {
+    final email = _emailController.text.trim().toLowerCase();
+
+    if (email.isEmpty) {
+      setState(() {
+        _error = 'Enter your email first, then tap Forgot password.';
+        _message = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _resetLoading = true;
+      _error = null;
+      _message = null;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse('$kKorlixBackendBaseUrl/api/auth/password-reset'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      );
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode >= 400) {
+        throw Exception(
+          data['error'] ?? 'Could not send password reset email.',
+        );
+      }
+
+      setState(() {
+        _showForgotPassword = false;
+        _message =
+            data['message']?.toString() ??
+            'If that email belongs to a Korlix AI account, a password reset link has been sent.';
+      });
+    } catch (error) {
+      setState(() {
+        _error = _cleanError(error);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _resetLoading = false;
+        });
+      }
+    }
+  }
+
   Future<void> _submit() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
@@ -598,6 +661,7 @@ class _AuthScreenState extends State<AuthScreen> {
       setState(() {
         _error = 'Enter your email and password.';
         _message = null;
+        _showForgotPassword = false;
       });
       return;
     }
@@ -606,6 +670,7 @@ class _AuthScreenState extends State<AuthScreen> {
       setState(() {
         _error = 'Password must be at least 6 characters.';
         _message = null;
+        _showForgotPassword = false;
       });
       return;
     }
@@ -614,6 +679,7 @@ class _AuthScreenState extends State<AuthScreen> {
       _loading = true;
       _error = null;
       _message = null;
+      _showForgotPassword = false;
     });
 
     try {
@@ -652,8 +718,12 @@ class _AuthScreenState extends State<AuthScreen> {
         ),
       );
     } catch (error) {
+      final cleanedError = _cleanError(error);
+
       setState(() {
-        _error = _cleanError(error);
+        _error = cleanedError;
+        _showForgotPassword =
+            !_isSignUp && _shouldOfferPasswordReset(cleanedError);
       });
     } finally {
       if (mounted) {
@@ -770,6 +840,32 @@ class _AuthScreenState extends State<AuthScreen> {
                           style: const TextStyle(color: Colors.redAccent),
                         ),
                       ],
+                      if (!_isSignUp && _showForgotPassword) ...[
+                        const SizedBox(height: 10),
+                        TextButton.icon(
+                          onPressed: (_loading || _resetLoading)
+                              ? null
+                              : _requestPasswordReset,
+                          icon: _resetLoading
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFF69D9E8),
+                                  ),
+                                )
+                              : const Icon(Icons.lock_reset_rounded, size: 18),
+                          label: Text(
+                            _resetLoading
+                                ? 'Sending reset email...'
+                                : 'Forgot password? Send reset email',
+                          ),
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF69D9E8),
+                          ),
+                        ),
+                      ],
                       if (_message != null) ...[
                         const SizedBox(height: 12),
                         Text(
@@ -818,6 +914,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                   _isSignUp = !_isSignUp;
                                   _error = null;
                                   _message = null;
+                                  _showForgotPassword = false;
                                 });
                               },
                         child: Text(
