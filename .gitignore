@@ -66,3 +66,14 @@ GoogleService-Info.plist
 *secret*.json
 *.pem
 *.p12
+# Local scripts and temporary AAB prep files
+scripts/
+android/java_pid*.hprof
+allow_basic_upload_image_voice.sh
+# Local experimental media/backups
+originals/
+assets/chee_chai_entrance.wav
+assets/wizard_greeting*.mp4
+assets/wizard_greeting*.MP4
+backend/heygen_looks.json
+backend/wizard_greeting_video_url.txt
