@@ -3,6 +3,7 @@ import crypto from "crypto";
 import cors from "cors";
 import dotenv from "dotenv";
 import OpenAI from "openai";
+import { toFile } from "openai/uploads";
 import { createClient } from "@supabase/supabase-js";
 import multer from "multer";
 
@@ -2575,6 +2576,165 @@ app.post("/api/account/delete-request", async (req, res) => {
     });
   }
 });
+
+
+function buildKorlixImageImprovePrompt(userPrompt) {
+  const instructions = String(userPrompt || "").trim();
+
+  return `
+Improve the uploaded image and return an actual enhanced image.
+
+User instructions:
+${instructions || "Create a polished, professional, natural-looking enhanced version of this picture."}
+
+Important preservation rules:
+- Preserve the subject's identity, face shape, ethnicity, age appearance, pose, hair, outfit, and overall realism.
+- Do not turn the subject into a cartoon, painting, illustration, doll, or unrealistic character.
+- Improve lighting, sharpness, color, contrast, background polish, detail, and professional photographic quality.
+- Keep the result photorealistic and respectful.
+- Do not add distorted hands, extra fingers, fake text, watermarks, or unrealistic body proportions.
+`.trim();
+}
+
+async function createKorlixImprovedImage({ file, prompt }) {
+  const mimeType = getUploadMimeType(file);
+  const model = process.env.OPENAI_IMAGE_EDIT_MODEL || "gpt-image-1";
+
+  const client = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+
+  const imageFile = await toFile(
+    file.buffer,
+    file.originalname || "korlix-upload.png",
+    {
+      type: mimeType || "image/png",
+    }
+  );
+
+  const result = await client.images.edit({
+    model,
+    image: imageFile,
+    prompt: buildKorlixImageImprovePrompt(prompt),
+    n: 1,
+    size: process.env.OPENAI_IMAGE_SIZE || "1024x1024",
+  });
+
+  const first = result?.data?.[0] || {};
+  const b64 = first.b64_json || null;
+  const imageUrl = first.url || null;
+
+  if (!b64 && !imageUrl) {
+    throw new Error("OpenAI did not return an enhanced image.");
+  }
+
+  return {
+    imageDataUrl: b64 ? `data:image/png;base64,${b64}` : null,
+    imageUrl,
+  };
+}
+
+app.post("/api/image/improve", documentUpload.single("image"), async (req, res) => {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(400).json({
+        error: "Missing OPENAI_API_KEY on backend.",
+      });
+    }
+
+    const file = req.file;
+    const prompt = String(req.body.prompt || "").trim();
+    const languageCode = req.body.language || "en";
+
+    if (!file) {
+      return res.status(400).json({
+        error: "Please upload an image first.",
+      });
+    }
+
+    if (!isImageUpload(file)) {
+      return res.status(400).json({
+        error: "Improve my picture supports JPG, JPEG, PNG, or WEBP images.",
+      });
+    }
+
+    const user = await requireUser(req);
+    const profile = await getOrCreateProfile(user);
+    const tier = profile?.tier || "basic";
+    const usageCounter = await getOrCreateUsageCounter(user.id);
+
+    if (!hasAdvancedUploadAccess(tier)) {
+      return res.status(403).json({
+        error: "Image improvement is available on Ultra Premium and Enterprise.",
+        upgradeRequired: true,
+        requiredTier: "ultra",
+      });
+    }
+
+    const creditsNeeded = 8;
+
+    const usageCheck = checkUsageAllowed({
+      profile,
+      usageCounter,
+      creditsNeeded,
+    });
+
+    if (!usageCheck.allowed) {
+      return res.status(429).json({
+        error: usageCheck.reason,
+        tier,
+      });
+    }
+
+    const imageResult = await createKorlixImprovedImage({
+      file,
+      prompt,
+    });
+
+    const content = "Enhanced image generated.";
+
+    const historyItem = await saveGenerationHistory({
+      user,
+      profile,
+      command: `Improve my picture: ${file.originalname}\nInstructions: ${prompt || "Default professional enhancement"}`,
+      content,
+      languageCode,
+      fileRequested: false,
+      searched: false,
+      creditsNeeded,
+    });
+
+    const updatedUsage = await incrementUsage({
+      usageCounter,
+      liveSearchUsed: false,
+      fileRequested: false,
+      creditsNeeded,
+    });
+
+    return res.json({
+      success: true,
+      title: "Improved picture",
+      language: languageCode,
+      fileName: file.originalname,
+      content,
+      imageDataUrl: imageResult.imageDataUrl,
+      imageUrl: imageResult.imageUrl,
+      authenticated: true,
+      tier,
+      creditsUsed: creditsNeeded,
+      usage: updatedUsage,
+      generationId: historyItem?.id || null,
+    });
+  } catch (error) {
+    console.error("Image improvement error:", sanitize(error?.message || error));
+
+    return res.status(error.statusCode || 500).json({
+      error: "Image improvement failed",
+      details: getKorlixUserFacingError(error),
+    });
+  }
+});
+
 
 
 app.post("/api/analyze-document", documentUpload.single("file"), async (req, res) => {

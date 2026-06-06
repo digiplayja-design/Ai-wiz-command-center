@@ -3708,6 +3708,8 @@ class GeneratedItem {
   final String content;
   final String language;
   final bool allowPdf;
+  final String? imageDataUrl;
+  final String? imageUrl;
 
   const GeneratedItem({
     required this.command,
@@ -3715,7 +3717,13 @@ class GeneratedItem {
     required this.content,
     required this.language,
     required this.allowPdf,
+    this.imageDataUrl,
+    this.imageUrl,
   });
+
+  bool get hasImageResult =>
+      (imageDataUrl != null && imageDataUrl!.isNotEmpty) ||
+      (imageUrl != null && imageUrl!.isNotEmpty);
 }
 
 class CommandCenterScreen extends StatefulWidget {
@@ -3735,6 +3743,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   bool _selectedCharacterFetchStarted = false;
   bool _featuredAnswerDismissed = false;
   bool _createVideoMode = false;
+  bool _improvePictureMode = false;
   bool _voiceListening = false;
   fp.PlatformFile? _pickedUploadFile;
   bool _loadingTier = false;
@@ -3929,6 +3938,163 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     });
   }
 
+  Map<String, dynamic> _decodeKorlixJsonMap(http.Response response) {
+    final body = response.body.trim();
+
+    if (body.isEmpty) {
+      throw Exception(
+        'Backend returned an empty response with status ${response.statusCode}.',
+      );
+    }
+
+    if (body.startsWith('<!DOCTYPE') ||
+        body.startsWith('<html') ||
+        body.startsWith('<')) {
+      final preview = body.length > 220 ? body.substring(0, 220) : body;
+
+      throw Exception(
+        'Backend returned an HTML page instead of JSON. '
+        'This usually means the backend route is not deployed yet or the URL is wrong. '
+        'Status: ${response.statusCode}. Response: $preview',
+      );
+    }
+
+    final decoded = jsonDecode(body);
+
+    if (decoded is Map<String, dynamic>) {
+      return decoded;
+    }
+
+    throw Exception(
+      'Backend returned JSON, but not the expected object format.',
+    );
+  }
+
+  Future<void> _generateImprovedPicture() async {
+    final file = _pickedUploadFile;
+    final command = _controller.text.trim();
+
+    if (file == null) {
+      setState(() {
+        _error = 'Upload an image first, then use Improve my picture.';
+      });
+      return;
+    }
+
+    final mimeType = _mimeTypeForPickedFile(file);
+
+    if (!mimeType.startsWith('image/')) {
+      setState(() {
+        _error = 'Improve my picture requires JPG, PNG, or WEBP image upload.';
+      });
+      return;
+    }
+
+    if (file.bytes == null || file.bytes!.isEmpty) {
+      setState(() {
+        _error = 'Could not read this image. Try uploading it again.';
+      });
+      return;
+    }
+
+    final prompt = command.isEmpty
+        ? 'Improve this picture and return an enhanced professional version.'
+        : command;
+
+    setState(() {
+      _loading = true;
+      _error = null;
+      _featuredAnswerDismissed = true;
+      _improvePictureMode = false;
+    });
+
+    _speakConsiderItDone();
+
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$kKorlixBackendBaseUrl/api/image/improve'),
+      );
+
+      final headers = Map<String, String>.from(_authHeaders())
+        ..remove('Content-Type');
+      request.headers.addAll(headers);
+
+      request.fields['prompt'] = prompt;
+      request.fields['language'] = _selectedLanguage;
+
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'image',
+          file.bytes!,
+          filename: file.name,
+          contentType: _mediaTypeForPickedFile(file),
+        ),
+      );
+
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 180),
+      );
+
+      final response = await http.Response.fromStream(streamedResponse);
+      final data = _decodeKorlixJsonMap(response);
+
+      if (response.statusCode == 403 && data['upgradeRequired'] == true) {
+        setState(() {
+          _loading = false;
+        });
+
+        await _showPremiumFeaturePrompt(
+          title: 'Ultra Premium required',
+          availability: 'Ultra Premium, Enterprise',
+          description:
+              data['error']?.toString() ??
+              'Image improvement requires Ultra Premium or Enterprise.',
+        );
+
+        return;
+      }
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(data['details'] ?? data['error'] ?? response.body);
+      }
+
+      final imageDataUrl = data['imageDataUrl']?.toString();
+      final imageUrl = data['imageUrl']?.toString();
+
+      if ((imageDataUrl == null || imageDataUrl.isEmpty) &&
+          (imageUrl == null || imageUrl.isEmpty)) {
+        throw Exception('No enhanced image was returned.');
+      }
+
+      final content = (data['content'] ?? 'Enhanced image generated.')
+          .toString();
+
+      setState(() {
+        _loading = false;
+        _controller.clear();
+        _pickedUploadFile = null;
+        _results.insert(
+          0,
+          GeneratedItem(
+            command: 'Improved image: ${file.name}\nInstructions: $prompt',
+            title: 'Improved picture: ${file.name}',
+            content: content,
+            language: _selectedLanguage,
+            allowPdf: false,
+            imageDataUrl: imageDataUrl,
+            imageUrl: imageUrl,
+          ),
+        );
+      });
+    } catch (error) {
+      setState(() {
+        _loading = false;
+        _error = '${_t.createError}\n\n${korlixFriendlyErrorMessage(error)}';
+      });
+    }
+  }
+
   Future<void> _generateWithUpload() async {
     final command = _controller.text.trim();
     final file = _pickedUploadFile;
@@ -4047,6 +4213,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   }
 
   Future<void> _generate() async {
+    if (_improvePictureMode) {
+      await _generateImprovedPicture();
+      return;
+    }
+
     if (_pickedUploadFile != null) {
       await _generateWithUpload();
       return;
@@ -4514,6 +4685,59 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     ).showSnackBar(SnackBar(content: Text(_t.cleared)));
   }
 
+  Uint8List? _imageBytesFromDataUrl(String? dataUrl) {
+    if (dataUrl == null || dataUrl.isEmpty) {
+      return null;
+    }
+
+    final commaIndex = dataUrl.indexOf(',');
+
+    if (commaIndex < 0 || commaIndex == dataUrl.length - 1) {
+      return null;
+    }
+
+    try {
+      return base64Decode(dataUrl.substring(commaIndex + 1));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Widget _buildGeneratedImagePreview(
+    GeneratedItem item, {
+    double height = 280,
+  }) {
+    final bytes = _imageBytesFromDataUrl(item.imageDataUrl);
+
+    if (bytes != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Image.memory(
+          bytes,
+          width: double.infinity,
+          height: height,
+          fit: BoxFit.contain,
+        ),
+      );
+    }
+
+    final imageUrl = item.imageUrl;
+
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Image.network(
+          imageUrl,
+          width: double.infinity,
+          height: height,
+          fit: BoxFit.contain,
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
   void _showResult(GeneratedItem item) {
     showDialog(
       context: context,
@@ -4525,7 +4749,17 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
           content: SizedBox(
             width: 720,
             child: SingleChildScrollView(
-              child: SelectableText(_cleanDisplayText(item.content)),
+              child: item.hasImageResult
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildGeneratedImagePreview(item, height: 420),
+                        const SizedBox(height: 14),
+                        SelectableText(_cleanDisplayText(item.content)),
+                      ],
+                    )
+                  : SelectableText(_cleanDisplayText(item.content)),
             ),
           ),
           actions: [
@@ -4559,10 +4793,21 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     return label.contains('video') || action.prompt == kKorlixCreateVideoPrompt;
   }
 
+  bool _isImprovePictureQuickAction(QuickAction action) {
+    final label = action.label.toLowerCase();
+    final prompt = action.prompt.toLowerCase();
+
+    return (label.contains('improve') &&
+            (label.contains('picture') || label.contains('photo'))) ||
+        prompt.contains('world-class photographer') ||
+        prompt.contains('professional photograph');
+  }
+
   void _useQuickAction(QuickAction action) {
     if (_isCreateVideoQuickAction(action)) {
       setState(() {
         _createVideoMode = true;
+        _improvePictureMode = false;
         _error = null;
         _controller.text = '';
         _controller.selection = TextSelection.fromPosition(
@@ -4581,8 +4826,31 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       return;
     }
 
+    if (_isImprovePictureQuickAction(action)) {
+      setState(() {
+        _improvePictureMode = true;
+        _createVideoMode = false;
+        _error = null;
+        _controller.text = '';
+        _controller.selection = TextSelection.fromPosition(
+          const TextPosition(offset: 0),
+        );
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Upload an image, describe the improvement, then tap submit.',
+          ),
+        ),
+      );
+
+      return;
+    }
+
     setState(() {
       _createVideoMode = false;
+      _improvePictureMode = false;
       _controller.text = action.prompt;
       _controller.selection = TextSelection.fromPosition(
         TextPosition(offset: _controller.text.length),
@@ -6830,18 +7098,23 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             alignment: WrapAlignment.center,
             children: t.quickActions.map((action) {
               final isVideoAction = _isCreateVideoQuickAction(action);
-              final isVideoModeActive =
-                  isVideoAction && _createVideoMode && !_loading;
+              final isImproveAction = _isImprovePictureQuickAction(action);
 
-              final enabledTextColor = isVideoModeActive
+              final isVideoActive =
+                  isVideoAction && _createVideoMode && !_loading;
+              final isImproveActive =
+                  isImproveAction && _improvePictureMode && !_loading;
+              final isHighlighted = isVideoActive || isImproveActive;
+
+              final enabledTextColor = isHighlighted
                   ? const Color(0xFF061008)
                   : const Color(0xFFE4EBEE);
 
-              final enabledBackgroundColor = isVideoModeActive
+              final enabledBackgroundColor = isHighlighted
                   ? const Color(0xFFB7FF00)
                   : const Color(0xFF120D18);
 
-              final enabledBorderColor = isVideoModeActive
+              final enabledBorderColor = isHighlighted
                   ? const Color(0xFFD9FF5A)
                   : const Color(0xFF2EC7DF).withOpacity(0.34);
 
@@ -6852,8 +7125,20 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                         size: 17,
                         color: _loading ? Colors.white38 : enabledTextColor,
                       )
+                    : isImproveAction
+                    ? Icon(
+                        Icons.auto_fix_high_rounded,
+                        size: 17,
+                        color: _loading ? Colors.white38 : enabledTextColor,
+                      )
                     : null,
-                label: Text(isVideoAction ? 'Create Video' : action.label),
+                label: Text(
+                  isVideoAction
+                      ? 'Create Video'
+                      : isImproveAction
+                      ? 'Improve my picture'
+                      : action.label,
+                ),
                 labelStyle: TextStyle(
                   color: _loading ? Colors.white38 : enabledTextColor,
                   fontWeight: FontWeight.w900,
@@ -6925,6 +7210,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   Widget _buildResultCard(GeneratedItem item) {
     final language = AppLanguages.byCode(item.language);
     final preview = _cleanDisplayText(item.content);
+    final isImage = item.hasImageResult;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -6940,10 +7226,16 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
           Row(
             children: [
               Icon(
-                item.allowPdf
+                isImage
+                    ? Icons.image_rounded
+                    : item.allowPdf
                     ? Icons.picture_as_pdf
                     : Icons.chat_bubble_outline,
-                color: item.allowPdf ? Colors.redAccent : Colors.cyanAccent,
+                color: isImage
+                    ? const Color(0xFFB7FF00)
+                    : item.allowPdf
+                    ? Colors.redAccent
+                    : Colors.cyanAccent,
                 size: 30,
               ),
               const SizedBox(width: 12),
@@ -6967,7 +7259,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                   border: Border.all(color: Colors.white24),
                 ),
                 child: Text(
-                  item.allowPdf ? language.fileBadge : language.answerBadge,
+                  isImage
+                      ? 'Image'
+                      : item.allowPdf
+                      ? language.fileBadge
+                      : language.answerBadge,
                   style: const TextStyle(fontSize: 12, color: Colors.white70),
                 ),
               ),
@@ -6976,6 +7272,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
           const SizedBox(height: 8),
           Text(item.command, style: const TextStyle(color: Colors.white60)),
           const SizedBox(height: 10),
+          if (isImage) ...[
+            _buildGeneratedImagePreview(item, height: 260),
+            const SizedBox(height: 10),
+          ],
           Text(
             preview,
             maxLines: 4,
