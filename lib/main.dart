@@ -3980,6 +3980,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   bool _createVideoMode = false;
   bool _improvePictureMode = false;
   bool _imaginePictureMode = false;
+  bool _fixCreditReportMode = false;
   bool _voiceListening = false;
   fp.PlatformFile? _pickedUploadFile;
   final List<fp.PlatformFile> _pickedUploadFiles = <fp.PlatformFile>[];
@@ -4695,7 +4696,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     }
 
     final command = _controller.text.trim();
-    final prompt = command.isEmpty
+    final prompt = _fixCreditReportMode
+        ? _creditReportPromptSafeUi(command)
+        : command.isEmpty
         ? 'Please summarize and explain the uploaded file${files.length == 1 ? '' : 's'}.'
         : command;
 
@@ -4703,6 +4706,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       _loading = true;
       _error = null;
       _featuredAnswerDismissed = true;
+      _fixCreditReportMode = false;
     });
 
     try {
@@ -4779,6 +4783,14 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   }
 
   Future<void> _generate() async {
+    if (_fixCreditReportMode && _activeUploadFiles.isEmpty) {
+      setState(() {
+        _error =
+            'Attach your credit report first using the Upload button, then tap submit.';
+      });
+      return;
+    }
+
     if (_imaginePictureMode) {
       await _generateImaginedPicture();
       return;
@@ -5539,12 +5551,204 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     return mentionsImage && asksImprove;
   }
 
+  bool _isCreditReportActionSafeUi(QuickAction action) {
+    final label = action.label.toLowerCase();
+    final prompt = action.prompt.toLowerCase();
+
+    return label.contains('fix my credit') ||
+        label.contains('credit report') ||
+        prompt.contains('fix my credit') ||
+        prompt.contains('credit report') ||
+        prompt.contains('credit repair') ||
+        prompt.contains('fcra') ||
+        prompt.contains('fdcpa') ||
+        prompt.contains('fair credit reporting') ||
+        prompt.contains('fair debt collection') ||
+        prompt.contains('consumer rights');
+  }
+
+  String _creditReportPromptSafeUi(String userNotes) {
+    final notes = userNotes.trim();
+
+    return <String>[
+      'Korlix AI credit report review request.',
+      '',
+      'Important disclaimer:',
+      'Korlix AI does not guarantee deletion of accounts, collections, inquiries, late payments, charge-offs, bankruptcies, repossessions, judgments, or any other credit-report item. Korlix AI also does not guarantee a credit score increase. This tool provides educational, organizational, and drafting assistance only. The user is responsible for reviewing all letters, facts, account details, addresses, dates, and legal claims before sending anything to a credit bureau, creditor, furnisher, or collection agency.',
+      '',
+      'User instruction:',
+      'The user attached one or more credit report files. Analyze the uploaded credit report files and create a practical credit-report review and dispute-preparation package.',
+      '',
+      'User notes:',
+      notes.isEmpty ? 'No extra user notes provided.' : notes,
+      '',
+      'Required output:',
+      '1. Start with a clear reminder that deletion is not guaranteed.',
+      '2. Summarize the uploaded credit report information.',
+      '3. Identify negative, inaccurate, outdated, incomplete, unverifiable, or questionable items.',
+      '4. Group items by bureau if bureau information appears in the uploaded reports.',
+      '5. Create a prioritized action plan.',
+      '6. Draft dispute-letter language the user can review and customize.',
+      '7. Flag missing information needed before sending letters.',
+      '8. Use cautious wording. Do not claim guaranteed deletion, guaranteed approval, or guaranteed score increase.',
+      '9. Do not invent account numbers, dates, balances, addresses, or bureau names that are not visible in the uploaded files.',
+    ].join('\n');
+  }
+
+  Future<void> _showCreditReportDisclaimerSafeUi() async {
+    if (!mounted) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Credit report disclaimer'),
+          content: const SingleChildScrollView(
+            child: Text(
+              'Korlix AI does not guarantee deletion of any credit-report item and does not guarantee a credit score increase.\n\n'
+              'This tool helps review uploaded credit report files, organize possible issues, and draft educational dispute-preparation language. It is not a guarantee, legal advice, financial advice, or a substitute for reviewing your own reports carefully.\n\n'
+              'How to use it:\n'
+              '1. Tap Fix My Credit Report.\n'
+              '2. Tap Upload.\n'
+              '3. Attach your credit report file or files.\n'
+              '4. Tap submit.\n\n'
+              'You can close this popup and continue.',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('I understand'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _activateCreditReportModeSafeUi() {
+    setState(() {
+      _fixCreditReportMode = true;
+      _createVideoMode = false;
+      _improvePictureMode = false;
+      _imaginePictureMode = false;
+      _error = null;
+      _controller.clear();
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _showCreditReportDisclaimerSafeUi();
+      }
+    });
+  }
+
+  Widget _buildSafeUiQuickActionChip(QuickAction action) {
+    final isVideoAction = _isCreateVideoQuickAction(action);
+    final isImproveAction = _isImprovePictureQuickAction(action);
+    final isImagineAction = _isImaginePictureQuickAction(action);
+    final isCreditAction = _isCreditReportActionSafeUi(action);
+
+    final attachedImageForImprove = _pickedUploadFile;
+    final typedCommandForImprove = _controller.text.trim();
+
+    final hasAttachedImageImproveIntent =
+        attachedImageForImprove != null &&
+        _mimeTypeForPickedFile(attachedImageForImprove).startsWith('image/') &&
+        _isImprovePicturePromptText(typedCommandForImprove);
+
+    final isVideoActive = isVideoAction && _createVideoMode && !_loading;
+    final isImproveActive =
+        isImproveAction &&
+        (_improvePictureMode || hasAttachedImageImproveIntent) &&
+        !_loading;
+    final isImagineActive = isImagineAction && _imaginePictureMode && !_loading;
+    final isCreditActive = isCreditAction && _fixCreditReportMode && !_loading;
+
+    final isHighlighted =
+        isVideoActive || isImproveActive || isImagineActive || isCreditActive;
+
+    final enabledTextColor = isHighlighted
+        ? const Color(0xFF061008)
+        : const Color(0xFFE4EBEE);
+
+    final enabledBackgroundColor = isHighlighted
+        ? const Color(0xFFB7FF00)
+        : const Color(0xFF120D18);
+
+    final enabledBorderColor = isHighlighted
+        ? const Color(0xFFD9FF5A)
+        : const Color(0xFF2EC7DF).withOpacity(0.34);
+
+    return ActionChip(
+      avatar: isVideoAction
+          ? Icon(
+              Icons.movie_creation_outlined,
+              size: 17,
+              color: _loading ? Colors.white38 : enabledTextColor,
+            )
+          : isImproveAction
+          ? Icon(
+              Icons.auto_fix_high_rounded,
+              size: 17,
+              color: _loading ? Colors.white38 : enabledTextColor,
+            )
+          : isImagineAction
+          ? Icon(
+              Icons.image_search_rounded,
+              size: 17,
+              color: _loading ? Colors.white38 : enabledTextColor,
+            )
+          : isCreditAction
+          ? Icon(
+              Icons.credit_score_rounded,
+              size: 17,
+              color: _loading ? Colors.white38 : enabledTextColor,
+            )
+          : null,
+      label: Text(
+        isVideoAction
+            ? 'Create Video'
+            : isImproveAction
+            ? 'Improve my picture'
+            : isImagineAction
+            ? 'Imagine a picture'
+            : isCreditAction
+            ? 'Fix My Credit Report'
+            : action.label,
+      ),
+      labelStyle: TextStyle(
+        color: _loading ? Colors.white38 : enabledTextColor,
+        fontWeight: FontWeight.w900,
+        fontSize: 12.5,
+      ),
+      backgroundColor: enabledBackgroundColor,
+      disabledColor: Colors.black.withOpacity(0.25),
+      side: BorderSide(color: _loading ? Colors.white10 : enabledBorderColor),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      onPressed: _loading ? null : () => _useQuickAction(action),
+    );
+  }
+
   void _useQuickAction(QuickAction action) {
+    if (_isCreditReportActionSafeUi(action)) {
+      _activateCreditReportModeSafeUi();
+      return;
+    }
+
     if (_isCreateVideoQuickAction(action)) {
       setState(() {
         _createVideoMode = true;
         _improvePictureMode = false;
         _imaginePictureMode = false;
+        _fixCreditReportMode = false;
         _error = null;
         _controller.text = '';
         _controller.selection = TextSelection.fromPosition(
@@ -5568,6 +5772,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         _improvePictureMode = true;
         _createVideoMode = false;
         _imaginePictureMode = false;
+        _fixCreditReportMode = false;
         _error = null;
         _controller.text = '';
         _controller.selection = TextSelection.fromPosition(
@@ -5591,6 +5796,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         _imaginePictureMode = true;
         _createVideoMode = false;
         _improvePictureMode = false;
+        _fixCreditReportMode = false;
         _error = null;
         _controller.text = '';
         _controller.selection = TextSelection.fromPosition(
@@ -5613,6 +5819,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       _createVideoMode = false;
       _improvePictureMode = false;
       _imaginePictureMode = false;
+      _fixCreditReportMode = false;
       _controller.text = action.prompt;
       _controller.selection = TextSelection.fromPosition(
         TextPosition(offset: _controller.text.length),
@@ -7567,12 +7774,12 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         ),
         label: Text(label),
         style: OutlinedButton.styleFrom(
-          foregroundColor: accent,
+          foregroundColor: active ? const Color(0xFF061008) : accent,
           backgroundColor: active
-              ? const Color(0xFF143B4A).withOpacity(0.58)
+              ? const Color(0xFFB7FF00)
               : Colors.black.withOpacity(0.20),
           side: BorderSide(
-            color: active ? const Color(0xFF69D9E8) : accent.withOpacity(0.42),
+            color: active ? const Color(0xFFD9FF5A) : accent.withOpacity(0.42),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
           visualDensity: VisualDensity.compact,
@@ -7712,6 +7919,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                 icon: Icons.attach_file_rounded,
                 label: 'Upload',
                 locked: !_hasDocumentUploadAccess,
+                active: _activeUploadFiles.isNotEmpty && !_loading,
                 onPressed: _loading ? null : _handleUploadPressed,
               ),
               toolButton(
@@ -7865,89 +8073,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             spacing: 9,
             runSpacing: 9,
             alignment: WrapAlignment.center,
-            children: t.quickActions.map((action) {
-              final isVideoAction = _isCreateVideoQuickAction(action);
-              final isImproveAction = _isImprovePictureQuickAction(action);
-              final isImagineAction = _isImaginePictureQuickAction(action);
-
-              final attachedImageForImprove = _pickedUploadFile;
-              final typedCommandForImprove = _controller.text.trim();
-              final hasAttachedImageImproveIntent =
-                  attachedImageForImprove != null &&
-                  _mimeTypeForPickedFile(
-                    attachedImageForImprove,
-                  ).startsWith('image/') &&
-                  _isImprovePicturePromptText(typedCommandForImprove);
-
-              final isVideoActive =
-                  isVideoAction && _createVideoMode && !_loading;
-              final isImproveActive =
-                  isImproveAction &&
-                  (_improvePictureMode || hasAttachedImageImproveIntent) &&
-                  !_loading;
-              final isImagineActive =
-                  isImagineAction && _imaginePictureMode && !_loading;
-
-              final isHighlighted =
-                  isVideoActive || isImproveActive || isImagineActive;
-
-              final enabledTextColor = isHighlighted
-                  ? const Color(0xFF061008)
-                  : const Color(0xFFE4EBEE);
-
-              final enabledBackgroundColor = isHighlighted
-                  ? const Color(0xFFB7FF00)
-                  : const Color(0xFF120D18);
-
-              final enabledBorderColor = isHighlighted
-                  ? const Color(0xFFD9FF5A)
-                  : const Color(0xFF2EC7DF).withOpacity(0.34);
-
-              return ActionChip(
-                avatar: isVideoAction
-                    ? Icon(
-                        Icons.movie_creation_outlined,
-                        size: 17,
-                        color: _loading ? Colors.white38 : enabledTextColor,
-                      )
-                    : isImproveAction
-                    ? Icon(
-                        Icons.auto_fix_high_rounded,
-                        size: 17,
-                        color: _loading ? Colors.white38 : enabledTextColor,
-                      )
-                    : isImagineAction
-                    ? Icon(
-                        Icons.image_search_rounded,
-                        size: 17,
-                        color: _loading ? Colors.white38 : enabledTextColor,
-                      )
-                    : null,
-                label: Text(
-                  isVideoAction
-                      ? 'Create Video'
-                      : isImproveAction
-                      ? 'Improve my picture'
-                      : isImagineAction
-                      ? 'Imagine a picture'
-                      : action.label,
-                ),
-                labelStyle: TextStyle(
-                  color: _loading ? Colors.white38 : enabledTextColor,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 12.5,
-                ),
-                backgroundColor: enabledBackgroundColor,
-                disabledColor: Colors.black.withOpacity(0.25),
-                side: BorderSide(
-                  color: _loading ? Colors.white10 : enabledBorderColor,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                onPressed: _loading ? null : () => _useQuickAction(action),
-              );
-            }).toList(),
+            children: t.quickActions.map(_buildSafeUiQuickActionChip).toList(),
           ),
 
           if (_error != null) ...[
