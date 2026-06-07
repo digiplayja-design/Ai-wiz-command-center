@@ -3221,6 +3221,230 @@ app.post("/api/image/improve", documentUpload.single("image"), async (req, res) 
 
 
 
+function extractKorlixResponseText(response) {
+  if (typeof response?.output_text === "string" && response.output_text.trim()) {
+    return response.output_text.trim();
+  }
+
+  const chunks = [];
+
+  for (const item of response?.output || []) {
+    for (const content of item?.content || []) {
+      if (typeof content?.text === "string") {
+        chunks.push(content.text);
+      } else if (typeof content?.value === "string") {
+        chunks.push(content.value);
+      }
+    }
+  }
+
+  return chunks.join("\n").trim();
+}
+
+function getKorlixUploadedFiles(req) {
+  if (Array.isArray(req.files)) {
+    return req.files;
+  }
+
+  if (req.files && typeof req.files === "object") {
+    return Object.values(req.files).flat();
+  }
+
+  if (req.file) {
+    return [req.file];
+  }
+
+  return [];
+}
+
+function assertKorlixSupportedUpload(file) {
+  const fileName = String(file?.originalname || "").toLowerCase();
+
+  const supported =
+    fileName.endsWith(".jpg") ||
+    fileName.endsWith(".jpeg") ||
+    fileName.endsWith(".png") ||
+    fileName.endsWith(".webp") ||
+    fileName.endsWith(".pdf") ||
+    fileName.endsWith(".txt") ||
+    fileName.endsWith(".md") ||
+    fileName.endsWith(".csv") ||
+    fileName.endsWith(".doc") ||
+    fileName.endsWith(".docx") ||
+    fileName.endsWith(".xls") ||
+    fileName.endsWith(".xlsx") ||
+    fileName.endsWith(".ppt") ||
+    fileName.endsWith(".pptx");
+
+  if (!supported) {
+    const error = new Error(
+      `Unsupported file type: ${file?.originalname || "unknown file"}`
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+}
+
+app.post("/api/analyze-documents", documentUpload.array("files", 8), async (req, res) => {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(400).json({
+        error: "Missing OPENAI_API_KEY on backend.",
+      });
+    }
+
+    const user = await requireUser(req);
+    const profile = await getOrCreateProfile(user);
+    const usageCounter = await getOrCreateUsageCounter(user.id);
+
+    const files = getKorlixUploadedFiles(req);
+    const body = req.body || {};
+    const prompt = String(body.prompt || body.question || "").trim();
+    const languageCode = body.language || "en";
+
+    if (!files.length) {
+      return res.status(400).json({
+        error: "Please upload one or more files.",
+      });
+    }
+
+    if (files.length > 8) {
+      return res.status(400).json({
+        error: "You can upload up to 8 files at once.",
+      });
+    }
+
+    for (const file of files) {
+      assertKorlixSupportedUpload(file);
+    }
+
+    const creditsNeeded = 1;
+
+    const usageCheck = checkUsageAllowed({
+      profile,
+      usageCounter,
+      creditsNeeded,
+    });
+
+    if (!usageCheck.allowed) {
+      return res.status(429).json({
+        error: usageCheck.reason,
+        tier: profile?.tier || "basic",
+      });
+    }
+
+    const client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+
+    const content = [
+      {
+        type: "input_text",
+        text: `
+The user uploaded ${files.length} file${files.length === 1 ? "" : "s"}.
+
+User question:
+${prompt || "Please summarize and explain the uploaded files."}
+
+Instructions:
+- Analyze all uploaded files together.
+- If the files relate to each other, compare and connect them.
+- If the user asks about "these files", answer using every uploaded file.
+- Be clear, practical, and specific.
+`.trim(),
+      },
+    ];
+
+    for (const file of files) {
+      const mimeType = getUploadMimeType(file);
+      const dataUrl = `data:${mimeType};base64,${file.buffer.toString("base64")}`;
+
+      if (isImageUpload(file)) {
+        content.push({
+          type: "input_image",
+          image_url: dataUrl,
+        });
+      } else {
+        content.push({
+          type: "input_file",
+          filename: file.originalname || "uploaded-file",
+          file_data: dataUrl,
+        });
+      }
+    }
+
+    const response = await client.responses.create({
+      model:
+        process.env.OPENAI_FILE_MODEL ||
+        process.env.OPENAI_MODEL ||
+        process.env.OPENAI_CHAT_MODEL ||
+        "gpt-4o-mini",
+      input: [
+        {
+          role: "user",
+          content,
+        },
+      ],
+    });
+
+    const answer = extractKorlixResponseText(response);
+
+    if (!answer) {
+      throw new Error("No answer was returned for the uploaded files.");
+    }
+
+    const fileNames = files.map((file) => file.originalname).join(", ");
+
+    const historyItem = await saveGenerationHistory({
+      user,
+      profile,
+      command: `Uploaded files: ${fileNames}\n\nQuestion: ${prompt}`,
+      content: answer,
+      languageCode,
+      fileRequested: true,
+      searched: false,
+      creditsNeeded,
+    });
+
+    const updatedUsage = await incrementUsage({
+      usageCounter,
+      liveSearchUsed: false,
+      fileRequested: true,
+      creditsNeeded,
+    });
+
+    return res.json({
+      success: true,
+      title:
+        files.length === 1
+          ? `File answer: ${files[0].originalname}`
+          : `File answer: ${files.length} files`,
+      content: answer,
+      answer,
+      files: files.map((file) => ({
+        name: file.originalname,
+        mimeType: getUploadMimeType(file),
+        size: file.size,
+      })),
+      language: languageCode,
+      authenticated: true,
+      tier: profile?.tier || "basic",
+      creditsUsed: creditsNeeded,
+      usage: updatedUsage,
+      generationId: historyItem?.id || null,
+    });
+  } catch (error) {
+    console.error("Multi-file analysis error:", sanitize(error?.message || error));
+
+    return res.status(error.statusCode || 500).json({
+      error: "File analysis failed",
+      details: getKorlixUserFacingError(error),
+    });
+  }
+});
+
+
+
 app.post("/api/analyze-document", documentUpload.single("file"), async (req, res) => {
   try {
     if (!process.env.OPENAI_API_KEY) {
@@ -3660,6 +3884,16 @@ Important: Live search was attempted but failed. Give the most useful answer pos
       details: getKorlixUserFacingError(error),
     });
   }
+});
+
+
+app.use("/api", (req, res) => {
+  return res.status(404).json({
+    error: `API route not found: ${req.method} ${req.originalUrl}`,
+    routeNotDeployed: true,
+    method: req.method,
+    path: req.originalUrl,
+  });
 });
 
 app.listen(port, () => {
