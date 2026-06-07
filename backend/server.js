@@ -499,21 +499,21 @@ function getTierLimits(tier) {
       dailyRequestLimit: 30,
       dailyCreditLimit: 60,
       characterLimit: 3,
-      videoGenerationsMonthly: 0,
+      videoGenerationsMonthly: 2,
       musicGenerationIncluded: false,
     },
     ultra: {
       dailyRequestLimit: 75,
       dailyCreditLimit: 200,
       characterLimit: 999,
-      videoGenerationsMonthly: 3,
+      videoGenerationsMonthly: 10,
       musicGenerationIncluded: false,
     },
     enterprise: {
       dailyRequestLimit: 250,
       dailyCreditLimit: 1000,
       characterLimit: 999,
-      videoGenerationsMonthly: 0,
+      videoGenerationsMonthly: 25,
       musicGenerationIncluded: false,
     },
   };
@@ -1411,22 +1411,26 @@ function getVideoTierLimit(profile) {
 
   const tier = String(profile?.tier || "basic").toLowerCase();
 
+  if (tier === "pro") {
+    return 2;
+  }
+
   if (tier === "ultra") {
-    return 3;
+    return 10;
   }
 
   if (tier === "enterprise") {
-    return 10;
+    return 25;
   }
 
   return 0;
 }
 
-function hasVideoGenerationAccess(profile) {
-  const tier = String(profile?.tier || "basic").toLowerCase();
 
-  return tier === "ultra" || tier === "enterprise";
+function hasVideoGenerationAccess(profile) {
+  return getVideoTierLimit(profile) > 0;
 }
+
 
 function getVideoMonthStart() {
   const now = new Date();
@@ -1458,6 +1462,183 @@ async function countUserVideoGenerationsThisMonth(userId) {
 
   return count || 0;
 }
+
+const KORLIX_VIDEO_CREDIT_PACKS = {
+  korlix_video_credits_3: 3,
+  korlix_video_credits_10: 10,
+  korlix_video_credits_25: 25,
+};
+
+function getKorlixVideoCreditPackAmount(productId) {
+  return Number(KORLIX_VIDEO_CREDIT_PACKS[String(productId || "").trim()] || 0);
+}
+
+function korlixCreditSecretMatches(provided, expected) {
+  const a = Buffer.from(String(provided || ""));
+  const b = Buffer.from(String(expected || ""));
+
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function getKorlixSupportBearerSecret(req) {
+  const authorization = String(req.get("authorization") || "").trim();
+
+  if (authorization.toLowerCase().startsWith("bearer ")) {
+    return authorization.slice(7).trim();
+  }
+
+  return "";
+}
+
+function requireKorlixSupportSecret(req) {
+  const configured = String(process.env.KORLIX_SUPPORT_SECRET || "").trim();
+
+  if (!configured) {
+    const error = new Error("KORLIX_SUPPORT_SECRET is not configured.");
+    error.statusCode = 500;
+    throw error;
+  }
+
+  const bearerSecret = getKorlixSupportBearerSecret(req);
+  const headerSecret = String(req.get("x-korlix-support-secret") || "").trim();
+
+  if (
+    !korlixCreditSecretMatches(bearerSecret, configured) &&
+    !korlixCreditSecretMatches(headerSecret, configured)
+  ) {
+    const error = new Error("Unauthorized.");
+    error.statusCode = 401;
+    throw error;
+  }
+}
+
+function hashKorlixPurchaseToken(token) {
+  const normalized = String(token || "").trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  return crypto.createHash("sha256").update(normalized).digest("hex");
+}
+
+async function getPurchasedVideoCreditBalance(userId) {
+  if (!supabaseAdmin || !userId) {
+    return 0;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("video_credit_ledger")
+    .select("delta")
+    .eq("user_id", userId);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data || []).reduce((total, row) => total + Number(row.delta || 0), 0);
+}
+
+async function addVideoCreditLedgerEntry({
+  userId,
+  delta,
+  source,
+  productId = null,
+  purchaseToken = null,
+  description = null,
+  metadata = {},
+}) {
+  if (!supabaseAdmin) {
+    const error = new Error("Supabase is not configured on the backend.");
+    error.statusCode = 500;
+    throw error;
+  }
+
+  const purchaseTokenHash = hashKorlixPurchaseToken(purchaseToken);
+
+  const payload = {
+    user_id: userId,
+    delta,
+    source,
+    product_id: productId,
+    purchase_token_hash: purchaseTokenHash,
+    description,
+    metadata,
+  };
+
+  const { data, error } = await supabaseAdmin
+    .from("video_credit_ledger")
+    .insert(payload)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function findKorlixProfileForCreditGrant({ userId, email }) {
+  if (!supabaseAdmin) {
+    return null;
+  }
+
+  let query = supabaseAdmin.from("user_profiles").select("*").limit(1);
+
+  if (userId) {
+    query = query.eq("id", userId);
+  } else {
+    query = query.ilike("email", String(email || "").trim());
+  }
+
+  const { data, error } = await query.maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function getVideoCreditSummaryForUser({ userId, profile }) {
+  const monthlyLimit = getVideoTierLimit(profile);
+  const usedThisMonth = await countUserVideoGenerationsThisMonth(userId);
+  const purchasedVideoCredits = await getPurchasedVideoCreditBalance(userId);
+  const includedRemaining = Math.max(monthlyLimit - usedThisMonth, 0);
+
+  return {
+    tier: String(profile?.tier || "basic").toLowerCase(),
+    monthlyLimit,
+    usedThisMonth,
+    includedRemaining,
+    purchasedVideoCredits,
+    canGenerateVideo: includedRemaining > 0 || purchasedVideoCredits > 0,
+    packs: KORLIX_VIDEO_CREDIT_PACKS,
+  };
+}
+
+async function spendPurchasedVideoCredit({ userId, videoId, prompt }) {
+  const balance = await getPurchasedVideoCreditBalance(userId);
+
+  if (balance <= 0) {
+    const error = new Error("No purchased video credits remaining.");
+    error.statusCode = 402;
+    throw error;
+  }
+
+  return addVideoCreditLedgerEntry({
+    userId,
+    delta: -1,
+    source: "video_generation",
+    description: `Spent 1 purchased video credit for video ${videoId}`,
+    metadata: {
+      videoId,
+      prompt: String(prompt || "").slice(0, 1000),
+    },
+  });
+}
+
 
 function normalizeVideoSeconds(value) {
   const seconds = Number(value || 8);
@@ -2041,6 +2222,85 @@ app.post("/api/auth/signout", async (req, res) => {
 
 
 
+app.get("/api/video-credits", async (req, res) => {
+  try {
+    const user = await requireUser(req);
+    const profile = await getOrCreateProfile(user);
+    const summary = await getVideoCreditSummaryForUser({
+      userId: user.id,
+      profile,
+    });
+
+    return res.json({
+      success: true,
+      ...summary,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      error: getKorlixUserFacingError(error),
+    });
+  }
+});
+
+app.post("/api/video-credits/support-grant", async (req, res) => {
+  try {
+    requireKorlixSupportSecret(req);
+
+    const body = req.body || {};
+    const userId = String(body.userId || body.user_id || "").trim();
+    const email = String(body.email || "").trim().toLowerCase();
+    const credits = Number(body.credits || 0);
+    const reason = String(body.reason || "support_grant").trim();
+
+    if (!userId && !email) {
+      return res.status(400).json({
+        error: "Provide userId or email.",
+      });
+    }
+
+    if (!Number.isInteger(credits) || credits <= 0 || credits > 100) {
+      return res.status(400).json({
+        error: "credits must be an integer from 1 to 100.",
+      });
+    }
+
+    const profile = await findKorlixProfileForCreditGrant({ userId, email });
+
+    if (!profile) {
+      return res.status(404).json({
+        error: "User profile not found. Ask the user to sign in once first.",
+      });
+    }
+
+    const entry = await addVideoCreditLedgerEntry({
+      userId: profile.id,
+      delta: credits,
+      source: "support_grant",
+      description: reason,
+      metadata: {
+        email: profile.email || email || null,
+        grantedBy: "support",
+      },
+    });
+
+    const balance = await getPurchasedVideoCreditBalance(profile.id);
+
+    return res.json({
+      success: true,
+      message: `Granted ${credits} video credit(s).`,
+      userId: profile.id,
+      email: profile.email || email || null,
+      balance,
+      entryId: entry.id,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      error: getKorlixUserFacingError(error),
+    });
+  }
+});
+
+
 app.post("/api/video/generate", async (req, res) => {
   try {
     if (!process.env.OPENAI_API_KEY) {
@@ -2053,25 +2313,10 @@ app.post("/api/video/generate", async (req, res) => {
     const profile = await getOrCreateProfile(user);
     const tier = String(profile?.tier || "basic").toLowerCase();
 
-    if (!hasVideoGenerationAccess(profile)) {
-      return res.status(403).json({
-        error: "Video generation is available on Ultra Premium and Enterprise.",
-        upgradeRequired: true,
-        requiredTier: "ultra",
-      });
-    }
-
-    const monthlyLimit = getVideoTierLimit(profile);
-    const usedThisMonth = await countUserVideoGenerationsThisMonth(user.id);
-
-    if (monthlyLimit > 0 && usedThisMonth >= monthlyLimit) {
-      return res.status(429).json({
-        error: `Monthly video generation limit reached for your ${tier} plan.`,
-        tier,
-        monthlyLimit,
-        usedThisMonth,
-      });
-    }
+    const creditSummaryBefore = await getVideoCreditSummaryForUser({
+      userId: user.id,
+      profile,
+    });
 
     const prompt = String(req.body.prompt || "").trim();
     const languageCode = req.body.language || "en";
@@ -2084,11 +2329,42 @@ app.post("/api/video/generate", async (req, res) => {
       });
     }
 
+    const shouldSpendPurchasedCredit =
+      creditSummaryBefore.includedRemaining <= 0 &&
+      creditSummaryBefore.purchasedVideoCredits > 0;
+
+    if (
+      creditSummaryBefore.includedRemaining <= 0 &&
+      creditSummaryBefore.purchasedVideoCredits <= 0
+    ) {
+      return res.status(402).json({
+        error:
+          tier === "basic"
+            ? "Basic does not include monthly video generations. Buy video credits to generate videos."
+            : "No video generations remaining. Buy video credits to continue.",
+        buyCreditsRequired: true,
+        tier,
+        monthlyLimit: creditSummaryBefore.monthlyLimit,
+        usedThisMonth: creditSummaryBefore.usedThisMonth,
+        includedRemaining: creditSummaryBefore.includedRemaining,
+        purchasedVideoCredits: creditSummaryBefore.purchasedVideoCredits,
+        packs: creditSummaryBefore.packs,
+      });
+    }
+
     const videoJob = await createOpenAIVideoJob({
       prompt,
       size,
       seconds,
     });
+
+    if (shouldSpendPurchasedCredit) {
+      await spendPurchasedVideoCredit({
+        userId: user.id,
+        videoId: videoJob.id,
+        prompt,
+      });
+    }
 
     const creditsUsed = 25;
 
@@ -2116,20 +2392,33 @@ app.post("/api/video/generate", async (req, res) => {
         .eq("id", usageCounter.id);
     }
 
-    res.json({
+    const creditSummaryAfter = await getVideoCreditSummaryForUser({
+      userId: user.id,
+      profile,
+    });
+
+    return res.json({
       success: true,
       video: videoJob,
       videoId: videoJob.id,
       status: videoJob.status,
       progress: videoJob.progress || 0,
       tier,
-      monthlyLimit,
-      usedThisMonth: usedThisMonth + 1,
+      spentPurchasedCredit: shouldSpendPurchasedCredit,
+      monthlyLimit: creditSummaryAfter.monthlyLimit,
+      usedThisMonth: creditSummaryAfter.usedThisMonth,
+      includedRemaining: creditSummaryAfter.includedRemaining,
+      purchasedVideoCredits: creditSummaryAfter.purchasedVideoCredits,
+      videoCredits: creditSummaryAfter,
     });
   } catch (error) {
-    console.error("Video generation error:", sanitize(error?.message), error?.openaiPayload || "");
+    console.error(
+      "Video generation error:",
+      sanitize(error?.message),
+      error?.openaiPayload || ""
+    );
 
-    res.status(error.statusCode || 500).json({
+    return res.status(error.statusCode || 500).json({
       error: getKorlixUserFacingError(error),
       details: getKorlixUserFacingError(error),
     });
