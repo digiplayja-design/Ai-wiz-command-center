@@ -3982,6 +3982,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   bool _imaginePictureMode = false;
   bool _voiceListening = false;
   fp.PlatformFile? _pickedUploadFile;
+  final List<fp.PlatformFile> _pickedUploadFiles = <fp.PlatformFile>[];
   bool _loadingTier = false;
   String _currentTier = 'basic';
   String? _error;
@@ -4090,6 +4091,238 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         lower.endsWith('.webp');
   }
 
+  List<fp.PlatformFile> get _activeUploadFiles {
+    if (_pickedUploadFiles.isNotEmpty) {
+      return List<fp.PlatformFile>.unmodifiable(_pickedUploadFiles);
+    }
+
+    final single = _pickedUploadFile;
+
+    if (single == null) {
+      return const <fp.PlatformFile>[];
+    }
+
+    return <fp.PlatformFile>[single];
+  }
+
+  String get _uploadSummaryLabel {
+    final files = _activeUploadFiles;
+
+    if (files.isEmpty) {
+      return '';
+    }
+
+    if (files.length == 1) {
+      return files.first.name;
+    }
+
+    return '${files.length} files selected';
+  }
+
+  String _uploadDetailsLabel(List<fp.PlatformFile> files) {
+    if (files.isEmpty) {
+      return '';
+    }
+
+    if (files.length <= 3) {
+      return files.map((file) => file.name).join(', ');
+    }
+
+    final firstThree = files.take(3).map((file) => file.name).join(', ');
+
+    return '$firstThree, +${files.length - 3} more';
+  }
+
+  String _formatUploadFileSize(int? bytes) {
+    final size = bytes ?? 0;
+
+    if (size <= 0) {
+      return '';
+    }
+
+    if (size < 1024) {
+      return '$size B';
+    }
+
+    if (size < 1024 * 1024) {
+      return '${(size / 1024).toStringAsFixed(1)} KB';
+    }
+
+    return '${(size / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  void _removePickedUploadFileAt(int index) {
+    final files = List<fp.PlatformFile>.from(_activeUploadFiles);
+
+    if (index < 0 || index >= files.length) {
+      return;
+    }
+
+    files.removeAt(index);
+
+    setState(() {
+      _pickedUploadFiles
+        ..clear()
+        ..addAll(files);
+
+      _pickedUploadFile = files.isEmpty ? null : files.first;
+
+      if (files.isEmpty) {
+        _error = null;
+      }
+    });
+  }
+
+  Widget _buildSelectedUploadFilesPanel() {
+    final files = _activeUploadFiles;
+
+    if (files.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 12, bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.18),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF2EC7DF).withOpacity(0.42)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                files.length == 1
+                    ? Icons.attach_file_rounded
+                    : Icons.file_copy_rounded,
+                color: const Color(0xFF69D9E8),
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  files.length == 1
+                      ? '1 file attached'
+                      : '${files.length} files attached',
+                  style: const TextStyle(
+                    color: Color(0xFFE4EBEE),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _clearPickedUploadFiles,
+                icon: const Icon(Icons.delete_sweep_rounded, size: 16),
+                label: const Text('Clear all'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.redAccent,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...files.asMap().entries.map((entry) {
+            final index = entry.key;
+            final file = entry.value;
+            final sizeLabel = _formatUploadFileSize(file.size);
+
+            return Container(
+              margin: EdgeInsets.only(top: index == 0 ? 0 : 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              decoration: BoxDecoration(
+                color: const Color(0xFF071B27).withOpacity(0.92),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: const Color(0xFF69D9E8).withOpacity(0.25),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _mimeTypeForPickedFile(file).startsWith('image/')
+                        ? Icons.image_rounded
+                        : Icons.description_rounded,
+                    color: const Color(0xFF69D9E8),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          file.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFFE4EBEE),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                        if (sizeLabel.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            sizeLabel,
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Remove this file',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => _removePickedUploadFileAt(index),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white70,
+                      size: 20,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  void _clearPickedUploadFiles() {
+    setState(() {
+      _pickedUploadFile = null;
+      _pickedUploadFiles.clear();
+    });
+  }
+
+  bool _isSupportedMultiUploadName(String name) {
+    final lower = name.toLowerCase();
+
+    return lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.webp') ||
+        lower.endsWith('.pdf') ||
+        lower.endsWith('.txt') ||
+        lower.endsWith('.md') ||
+        lower.endsWith('.csv') ||
+        lower.endsWith('.doc') ||
+        lower.endsWith('.docx') ||
+        lower.endsWith('.xls') ||
+        lower.endsWith('.xlsx') ||
+        lower.endsWith('.ppt') ||
+        lower.endsWith('.pptx');
+  }
+
   String _mimeTypeForPickedFile(fp.PlatformFile file) {
     final lower = file.name.toLowerCase();
 
@@ -4123,59 +4356,78 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   }
 
   Future<void> _handleUploadPressed() async {
-    await _loadCurrentTier();
-
-    if (!_hasDocumentUploadAccess) {
-      await _showPremiumFeaturePrompt(
-        title: 'Document Upload',
-        availability: 'Pro, Ultra Premium, Enterprise',
-        description:
-            'Upload documents and ask Korlix AI questions about them. Basic users can see this feature but must upgrade to use it.',
+    try {
+      final result = await fp.FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        withData: true,
+        type: fp.FileType.custom,
+        allowedExtensions: const [
+          'jpg',
+          'jpeg',
+          'png',
+          'webp',
+          'pdf',
+          'txt',
+          'md',
+          'csv',
+          'doc',
+          'docx',
+          'xls',
+          'xlsx',
+          'ppt',
+          'pptx',
+        ],
       );
-      return;
+
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+
+      final selectedFiles = result.files
+          .where((file) => file.bytes != null && file.bytes!.isNotEmpty)
+          .toList();
+
+      if (selectedFiles.isEmpty) {
+        setState(() {
+          _error = 'Could not read the selected file. Try again.';
+        });
+        return;
+      }
+
+      const maxFiles = 8;
+
+      if (selectedFiles.length > maxFiles) {
+        setState(() {
+          _error = 'You can upload up to $maxFiles files at once.';
+        });
+        return;
+      }
+
+      final unsupported = selectedFiles
+          .where((file) => !_isSupportedMultiUploadName(file.name))
+          .map((file) => file.name)
+          .toList();
+
+      if (unsupported.isNotEmpty) {
+        setState(() {
+          _error =
+              'Unsupported file type: ${unsupported.join(', ')}. Use image, PDF, TXT, CSV, DOCX, XLSX, or PPTX files.';
+        });
+        return;
+      }
+
+      setState(() {
+        _pickedUploadFile = selectedFiles.first;
+        _pickedUploadFiles
+          ..clear()
+          ..addAll(selectedFiles);
+        _error = null;
+      });
+    } catch (error) {
+      setState(() {
+        _error = korlixFriendlyErrorMessage(error);
+      });
     }
-
-    final extensions = _hasAdvancedUploadAccess
-        ? ['pdf', 'docx', 'txt', 'md', 'csv', 'jpg', 'jpeg', 'png', 'webp']
-        : ['pdf', 'docx', 'txt', 'md', 'csv'];
-
-    final result = await fp.FilePicker.platform.pickFiles(
-      type: fp.FileType.custom,
-      allowedExtensions: extensions,
-      withData: true,
-    );
-
-    if (result == null || result.files.isEmpty) {
-      return;
-    }
-
-    final file = result.files.single;
-
-    if (file.size > 15 * 1024 * 1024) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('File is too large. Maximum size is 15 MB.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-      return;
-    }
-
-    if (_isAdvancedUploadName(file.name) && !_hasAdvancedUploadAccess) {
-      await _showPremiumFeaturePrompt(
-        title: 'OCR and Handwriting Reader',
-        availability: 'Ultra Premium, Enterprise',
-        description:
-            'Images, scans, screenshots, handwriting, and OCR-style reading are available on Ultra Premium and Enterprise.',
-      );
-      return;
-    }
-
-    setState(() {
-      _pickedUploadFile = file;
-    });
   }
 
   void _clearPickedUploadFile() {
@@ -4290,7 +4542,17 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   Future<void> _generateImprovedPicture() async {
     await _stopAiCharacterTalkingForQuery();
 
-    final file = _pickedUploadFile;
+    final files = _activeUploadFiles;
+
+    if (files.length > 1) {
+      setState(() {
+        _error =
+            'Improve my picture works with one image at a time. Remove extra files and try again.';
+      });
+      return;
+    }
+
+    final file = files.isEmpty ? null : files.first;
     final command = _controller.text.trim();
 
     if (file == null) {
@@ -4403,6 +4665,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         _loading = false;
         _controller.clear();
         _pickedUploadFile = null;
+        _pickedUploadFiles.clear();
         _results.insert(0, improvedItem);
       });
 
@@ -4422,111 +4685,88 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   Future<void> _generateWithUpload() async {
     await _stopAiCharacterTalkingForQuery();
 
+    final files = _activeUploadFiles;
+
+    if (files.isEmpty) {
+      setState(() {
+        _error = 'Upload one or more files first.';
+      });
+      return;
+    }
+
     final command = _controller.text.trim();
-    final file = _pickedUploadFile;
-
-    if (file == null) {
-      return;
-    }
-
-    if (command.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_t.commandEmpty)));
-      return;
-    }
-
-    if (file.bytes == null || file.bytes!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not read this file. Try uploading it again.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-      return;
-    }
+    final prompt = command.isEmpty
+        ? 'Please summarize and explain the uploaded file${files.length == 1 ? '' : 's'}.'
+        : command;
 
     setState(() {
       _loading = true;
       _error = null;
+      _featuredAnswerDismissed = true;
     });
-
-    _speakConsiderItDone();
 
     try {
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('$kKorlixBackendBaseUrl/api/analyze-document'),
+        Uri.parse('$kKorlixBackendBaseUrl/api/analyze-documents'),
       );
 
-      request.fields['command'] = command;
+      final headers = Map<String, String>.from(_authHeaders())
+        ..remove('Content-Type');
+      request.headers.addAll(headers);
+
+      request.fields['prompt'] = prompt;
+      request.fields['question'] = prompt;
       request.fields['language'] = _selectedLanguage;
 
-      if (kKorlixAccessToken != null && kKorlixAccessToken!.isNotEmpty) {
-        request.headers['Authorization'] = 'Bearer $kKorlixAccessToken';
+      for (final file in files) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'files',
+            file.bytes!,
+            filename: file.name,
+            contentType: _mediaTypeForPickedFile(file),
+          ),
+        );
       }
-
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'file',
-          file.bytes!,
-          filename: file.name,
-          contentType: _mediaTypeForPickedFile(file),
-        ),
-      );
 
       final streamedResponse = await request.send().timeout(
-        const Duration(seconds: 120),
+        const Duration(seconds: 180),
       );
+
       final response = await http.Response.fromStream(streamedResponse);
-
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-
-      if (response.statusCode == 403 && data['upgradeRequired'] == true) {
-        setState(() {
-          _loading = false;
-        });
-
-        await _showPremiumFeaturePrompt(
-          title: data['requiredTier']?.toString() == 'ultra'
-              ? 'Ultra Premium required'
-              : 'Upgrade required',
-          availability: data['requiredTier']?.toString() == 'ultra'
-              ? 'Ultra Premium, Enterprise'
-              : 'Pro, Ultra Premium, Enterprise',
-          description:
-              data['error']?.toString() ??
-              'This upload feature requires a higher plan.',
-        );
-
-        return;
-      }
+      final data = _decodeKorlixJsonMap(response);
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw Exception(data['details'] ?? data['error'] ?? response.body);
       }
 
-      final content = (data['content'] ?? '').toString().trim();
+      final content = (data['content'] ?? data['answer'] ?? '').toString();
 
-      if (content.isEmpty) {
-        throw Exception('No AI content returned.');
+      if (content.trim().isEmpty) {
+        throw Exception('No answer was returned for the uploaded files.');
       }
 
-      final allowPdf =
-          data['fileRequested'] == true || _shouldAllowPdf(command);
+      final title = files.length == 1
+          ? 'File answer: ${files.first.name}'
+          : 'File answer: ${files.length} files';
+
+      final fileList = files.map((file) => '- ${file.name}').join('\n');
 
       setState(() {
         _loading = false;
         _controller.clear();
         _pickedUploadFile = null;
+        _pickedUploadFiles.clear();
         _results.insert(
           0,
           GeneratedItem(
-            command: 'Uploaded file: ${file.name}\nQuestion: $command',
-            title: 'File answer: ${file.name}',
+            command:
+                'Uploaded file${files.length == 1 ? '' : 's'}:\n$fileList\n\nQuestion: $prompt',
+            title: title,
             content: content,
             language: _selectedLanguage,
-            allowPdf: allowPdf,
+            allowPdf: false,
           ),
         );
       });
@@ -4564,7 +4804,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       return;
     }
 
-    if (_pickedUploadFile != null) {
+    if (_activeUploadFiles.isNotEmpty) {
       await _generateWithUpload();
       return;
     }
@@ -7532,7 +7772,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             ],
           ),
 
-          if (_pickedUploadFile != null) ...[
+          if (_activeUploadFiles.isNotEmpty) ...[
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
@@ -7553,7 +7793,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      _pickedUploadFile!.name,
+                      _uploadSummaryLabel,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -7615,6 +7855,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
           ],
 
           const SizedBox(height: 14),
+
+          if (_activeUploadFiles.isNotEmpty) ...[
+            _buildSelectedUploadFilesPanel(),
+            const SizedBox(height: 10),
+          ],
 
           Wrap(
             spacing: 9,
