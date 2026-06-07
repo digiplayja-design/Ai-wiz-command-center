@@ -1132,25 +1132,46 @@ function getUploadMimeType(file) {
     .toLowerCase()
     .split(";")[0]
     .trim();
-  const isGenericMime =
+
+  // Always trust the filename extension first. Mobile browsers and some
+  // file pickers often send real files as application/octet-stream.
+  if (fileName.endsWith(".png")) return "image/png";
+  if (fileName.endsWith(".webp")) return "image/webp";
+  if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+    return "image/jpeg";
+  }
+
+  if (fileName.endsWith(".pdf")) return "application/pdf";
+  if (fileName.endsWith(".txt") || fileName.endsWith(".md")) return "text/plain";
+  if (fileName.endsWith(".csv")) return "text/csv";
+
+  if (fileName.endsWith(".doc")) return "application/msword";
+  if (fileName.endsWith(".docx")) {
+    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  }
+
+  if (fileName.endsWith(".xls")) return "application/vnd.ms-excel";
+  if (fileName.endsWith(".xlsx")) {
+    return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  }
+
+  if (fileName.endsWith(".ppt")) return "application/vnd.ms-powerpoint";
+  if (fileName.endsWith(".pptx")) {
+    return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+  }
+
+  const genericMime =
     !rawMimeType ||
     rawMimeType === "application/octet-stream" ||
     rawMimeType === "binary/octet-stream";
 
-  if (fileName.endsWith(".png")) return "image/png";
-  if (fileName.endsWith(".webp")) return "image/webp";
-  if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) return "image/jpeg";
-  if (fileName.endsWith(".pdf")) return "application/pdf";
-  if (fileName.endsWith(".docx")) {
-    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (!genericMime) {
+    return rawMimeType;
   }
-  if (fileName.endsWith(".txt") || fileName.endsWith(".md")) return "text/plain";
-  if (fileName.endsWith(".csv")) return "text/csv";
-
-  if (!isGenericMime) return rawMimeType;
 
   return "application/octet-stream";
 }
+
 
 
 async function loadPdfParse() {
@@ -3357,6 +3378,12 @@ Instructions:
 
     for (const file of files) {
       const mimeType = getUploadMimeType(file);
+    if (mimeType === "application/octet-stream") {
+      return res.status(400).json({
+        error: `Unsupported single file type after MIME detection: ${file.originalname}`,
+      });
+    }
+
       const dataUrl = `data:${mimeType};base64,${file.buffer.toString("base64")}`;
 
       if (isImageUpload(file)) {
