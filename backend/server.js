@@ -358,6 +358,30 @@ function renderKorlixPasswordResetPage() {
 
 
 
+function normalizeKorlixCharacterId(characterId) {
+  const raw = String(characterId || "").trim().toLowerCase();
+
+  if (!raw) {
+    return "";
+  }
+
+  const normalized = raw.replaceAll("-", "_").replaceAll(" ", "_");
+
+  if (normalized === "ji_a" || normalized === "jia") {
+    return "ji_a";
+  }
+
+  if (
+    normalized === "chee_chai_chee" ||
+    normalized === "cheechai" ||
+    normalized === "cheechaichee"
+  ) {
+    return "chee_chai_chee";
+  }
+
+  return normalized;
+}
+
 const characterPersonalityMap = {
   jj: {
     name: "JJ",
@@ -387,19 +411,22 @@ const characterPersonalityMap = {
 };
 
 function getCharacterPersonality(characterId) {
-  return characterPersonalityMap[characterId] || characterPersonalityMap.jj;
+  const normalizedCharacterId = normalizeKorlixCharacterId(characterId);
+  return characterPersonalityMap[normalizedCharacterId] || characterPersonalityMap.jj;
 }
 
 function canSelectCharacterForTier(tier, characterId) {
+  const normalizedCharacterId = normalizeKorlixCharacterId(characterId);
+
   if (tier === "enterprise" || tier === "ultra") {
     return true;
   }
 
   if (tier === "pro") {
-    return ["jj", "phil", "character_03"].includes(characterId);
+    return ["jj", "phil", "chee_chai_chee"].includes(normalizedCharacterId);
   }
 
-  return characterId === "jj";
+  return normalizedCharacterId === "jj";
 }
 
 
@@ -2124,7 +2151,8 @@ app.post("/api/characters/select", async (req, res) => {
 
     const user = await requireUser(req);
     const profile = await getOrCreateProfile(user);
-    const characterId = String(req.body.character_id || "").trim();
+    const requestedCharacterId = String(req.body.character_id || "").trim();
+    const characterId = normalizeKorlixCharacterId(requestedCharacterId);
 
     if (!characterId) {
       return res.status(400).json({
@@ -2924,6 +2952,170 @@ async function createKorlixImprovedImage({ file, prompt }) {
     imageUrl,
   };
 }
+
+function buildKorlixImageCreatePrompt(userPrompt) {
+  const instructions = String(userPrompt || "").trim();
+
+  return `
+Create an original image based on the user's description.
+
+User description:
+${instructions}
+
+Korlix quality rules:
+- Return an actual generated image, not a text description.
+- Make the image polished, high-quality, and visually coherent.
+- Follow the user description closely.
+- Avoid distorted hands, extra limbs, unreadable text, watermarks, and unrealistic artifacts unless the user explicitly asks for a surreal style.
+- Keep the result safe, respectful, and appropriate for a general app audience.
+`.trim();
+}
+
+async function createKorlixImaginedImage({ prompt }) {
+  const model =
+    process.env.OPENAI_IMAGE_GENERATION_MODEL ||
+    process.env.OPENAI_IMAGE_EDIT_MODEL ||
+    "gpt-image-1";
+
+  const response = await fetch("https://api.openai.com/v1/images/generations", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      prompt: buildKorlixImageCreatePrompt(prompt),
+      n: 1,
+      size: process.env.OPENAI_IMAGE_SIZE || "1024x1024",
+    }),
+  });
+
+  const text = await response.text();
+  let data;
+
+  try {
+    data = JSON.parse(text);
+  } catch (_error) {
+    throw new Error(
+      `OpenAI image generation returned a non-JSON response: ${text.slice(
+        0,
+        300
+      )}`
+    );
+  }
+
+  if (!response.ok) {
+    const message =
+      data?.error?.message ||
+      data?.message ||
+      `OpenAI image generation failed with status ${response.status}`;
+    throw new Error(message);
+  }
+
+  const first = data?.data?.[0] || {};
+  const b64 =
+    first.b64_json ||
+    first.image_base64 ||
+    first.base64_json ||
+    first.image?.b64_json ||
+    first.image?.base64;
+
+  const imageUrl = first.url || first.image_url || first.image?.url || null;
+
+  if (!b64 && !imageUrl) {
+    throw new Error("OpenAI did not return a generated image.");
+  }
+
+  return {
+    imageDataUrl: b64 ? `data:image/png;base64,${b64}` : null,
+    imageUrl,
+  };
+}
+
+app.post("/api/image/create", async (req, res) => {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(400).json({
+        error: "Missing OPENAI_API_KEY on backend.",
+      });
+    }
+
+    const user = await requireUser(req);
+    const profile = await getOrCreateProfile(user);
+    const usageCounter = await getOrCreateUsageCounter(user.id);
+
+    const body = req.body || {};
+    const prompt = String(body.prompt || "").trim();
+    const languageCode = body.language || "en";
+
+    if (!prompt) {
+      return res.status(400).json({
+        error: "Describe the picture you want Korlix AI to create.",
+      });
+    }
+
+    const creditsNeeded = 1;
+
+    const usageCheck = checkUsageAllowed({
+      profile,
+      usageCounter,
+      creditsNeeded,
+    });
+
+    if (!usageCheck.allowed) {
+      return res.status(429).json({
+        error: usageCheck.reason,
+        tier: profile?.tier || "basic",
+      });
+    }
+
+    const imageResult = await createKorlixImaginedImage({ prompt });
+
+    const content = "Image generated.";
+
+    const historyItem = await saveGenerationHistory({
+      user,
+      profile,
+      command: `Imagine a picture:\n${prompt}`,
+      content,
+      languageCode,
+      fileRequested: false,
+      searched: false,
+      creditsNeeded,
+    });
+
+    const updatedUsage = await incrementUsage({
+      usageCounter,
+      liveSearchUsed: false,
+      fileRequested: false,
+      creditsNeeded,
+    });
+
+    return res.json({
+      success: true,
+      title: "Imagined picture",
+      language: languageCode,
+      content,
+      imageDataUrl: imageResult.imageDataUrl,
+      imageUrl: imageResult.imageUrl,
+      authenticated: true,
+      tier: profile?.tier || "basic",
+      creditsUsed: creditsNeeded,
+      usage: updatedUsage,
+      generationId: historyItem?.id || null,
+    });
+  } catch (error) {
+    console.error("Image create error:", sanitize(error?.message || error));
+
+    return res.status(error.statusCode || 500).json({
+      error: "Image generation failed",
+      details: getKorlixUserFacingError(error),
+    });
+  }
+});
+
+
 
 app.post("/api/image/improve", documentUpload.single("image"), async (req, res) => {
   try {

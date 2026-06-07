@@ -26,6 +26,9 @@ import 'korlix_video_downloader.dart';
 import 'korlix_image_saver.dart';
 import 'korlix_video_preview_source.dart';
 
+const String kKorlixImaginePicturePrompt =
+    'Describe the picture you want Korlix AI to create.';
+
 bool kSupabaseReady = false;
 String? kKorlixAccessToken;
 String? kKorlixRefreshToken;
@@ -2367,7 +2370,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
   }
 
   String? _characterIntroAsset(String id) {
-    switch (id) {
+    switch (normalizeKorlixCharacterId(id)) {
       case 'jj':
         return 'assets/characters/jj/intro.mp4';
       case 'phil':
@@ -2387,23 +2390,27 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     required String tier,
     required String characterId,
   }) {
+    final normalizedCharacterId = normalizeKorlixCharacterId(characterId);
+
     if (tier == 'enterprise' || tier == 'ultra') {
       return true;
     }
 
     if (tier == 'pro') {
-      return ['jj', 'chee_chai_chee', 'phil'].contains(characterId);
+      return ['jj', 'chee_chai_chee', 'phil'].contains(normalizedCharacterId);
     }
 
-    return characterId == 'jj';
+    return normalizedCharacterId == 'jj';
   }
 
   Future<bool> _selectCharacter(String characterId) async {
+    final normalizedCharacterId = normalizeKorlixCharacterId(characterId);
+
     try {
       final response = await http.post(
         Uri.parse('$kKorlixBackendBaseUrl/api/characters/select'),
         headers: _headers(),
-        body: jsonEncode({'character_id': characterId}),
+        body: jsonEncode({'character_id': normalizedCharacterId}),
       );
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -2418,7 +2425,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
         return false;
       }
 
-      kKorlixSelectedCharacterNotifier.value = characterId;
+      kKorlixSelectedCharacterNotifier.value = normalizedCharacterId;
 
       await _showKorlixNotice(
         title: 'Character selected',
@@ -2428,9 +2435,8 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
       return true;
     } catch (error) {
       await _showKorlixNotice(
-        title: 'Character selection failed',
-        message: _cleanError(error),
-        danger: true,
+        title: 'Character update failed',
+        message: korlixFriendlyErrorMessage(error),
       );
 
       return false;
@@ -2447,9 +2453,10 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
         .whereType<Map>()
         .map((item) => item['character_id']?.toString())
         .whereType<String>()
+        .map(normalizeKorlixCharacterId)
         .toSet();
 
-    var selectedId = selectedCharacterId;
+    var selectedId = normalizeKorlixCharacterId(selectedCharacterId);
 
     await showModalBottomSheet<void>(
       context: context,
@@ -2504,7 +2511,8 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       const SizedBox(height: 18),
                       ...characters.map((raw) {
                         final character = (raw as Map).cast<String, dynamic>();
-                        final id = character['id']?.toString() ?? '';
+                        final rawId = character['id']?.toString() ?? '';
+                        final id = normalizeKorlixCharacterId(rawId);
                         final name =
                             character['name']?.toString() ?? 'Korlix Character';
                         final description =
@@ -2513,7 +2521,9 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                             character['tier_required']?.toString() ?? 'basic';
                         final isActive = character['is_active'] == true;
                         final comingSoon = character['is_coming_soon'] == true;
-                        final selected = id == selectedId;
+                        final selected =
+                            normalizeKorlixCharacterId(id) ==
+                            normalizeKorlixCharacterId(selectedId);
                         final tierAllows = _tierCanSelectCharacter(
                           tier: currentTier,
                           characterId: id,
@@ -3305,6 +3315,33 @@ final ValueNotifier<String> kKorlixThemeNotifier = ValueNotifier<String>(
 final ValueNotifier<String> kKorlixSelectedCharacterNotifier =
     ValueNotifier<String>('jj');
 
+String normalizeKorlixCharacterId(String? id) {
+  final raw = (id ?? '').trim().toLowerCase();
+
+  if (raw.isEmpty) {
+    return 'jj';
+  }
+
+  final normalized = raw.replaceAll('-', '_').replaceAll(' ', '_');
+
+  switch (normalized) {
+    case 'ji_a':
+    case 'jia':
+      return 'ji_a';
+    case 'chee_chai_chee':
+    case 'cheechai':
+    case 'cheechaichee':
+      return 'chee_chai_chee';
+    case 'jj':
+    case 'phil':
+    case 'yuna':
+    case 'enterprise':
+      return normalized;
+    default:
+      return normalized;
+  }
+}
+
 class KorlixCharacterDisplayData {
   final String id;
   final String name;
@@ -3324,7 +3361,7 @@ class KorlixCharacterDisplayData {
 }
 
 KorlixCharacterDisplayData korlixCharacterDisplayFor(String id) {
-  switch (id) {
+  switch (normalizeKorlixCharacterId(id)) {
     case 'chee_chai_chee':
       return const KorlixCharacterDisplayData(
         id: 'chee_chai_chee',
@@ -3355,9 +3392,9 @@ KorlixCharacterDisplayData korlixCharacterDisplayFor(String id) {
         assetPath: 'assets/characters/yuna/intro.mp4',
         soundOn: true,
       );
-    case 'ji-a':
+    case 'ji_a':
       return const KorlixCharacterDisplayData(
-        id: 'ji-a',
+        id: 'ji_a',
         name: 'Ji-A',
         eyebrow: 'ULTRA PREMIUM CHARACTER',
         description:
@@ -3650,6 +3687,10 @@ Generate professional, legally grounded letters for the following (customized ba
 
 Analyze the attached credit reports thoroughly and produce a complete, high-impact credit repair package. Focus on maximum legal pressure while staying fully compliant with consumer protection laws.''',
         ),
+        QuickAction(
+          label: 'Imagine a picture',
+          prompt: kKorlixImaginePicturePrompt,
+        ),
         QuickAction(label: 'Create a video', prompt: kKorlixCreateVideoPrompt),
       ],
     ),
@@ -3940,6 +3981,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   bool _featuredAnswerDismissed = false;
   bool _createVideoMode = false;
   bool _improvePictureMode = false;
+  bool _imaginePictureMode = false;
   bool _voiceListening = false;
   fp.PlatformFile? _pickedUploadFile;
   bool _loadingTier = false;
@@ -4174,6 +4216,77 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     throw Exception(
       'Backend returned JSON, but not the expected object format.',
     );
+  }
+
+  Future<void> _generateImaginedPicture() async {
+    await _stopAiCharacterTalkingForQuery();
+
+    final prompt = _controller.text.trim();
+
+    if (prompt.isEmpty) {
+      setState(() {
+        _error = 'Describe the picture you want Korlix AI to create.';
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+      _featuredAnswerDismissed = true;
+      _imaginePictureMode = false;
+    });
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$kKorlixBackendBaseUrl/api/image/create'),
+            headers: _authHeaders(),
+            body: jsonEncode({'prompt': prompt, 'language': _selectedLanguage}),
+          )
+          .timeout(const Duration(seconds: 180));
+
+      final data = _decodeKorlixJsonMap(response);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(data['details'] ?? data['error'] ?? response.body);
+      }
+
+      final imageDataUrl = data['imageDataUrl']?.toString();
+      final imageUrl = data['imageUrl']?.toString();
+
+      if ((imageDataUrl == null || imageDataUrl.isEmpty) &&
+          (imageUrl == null || imageUrl.isEmpty)) {
+        throw Exception('No image was returned.');
+      }
+
+      final imaginedItem = GeneratedItem(
+        command: 'Imagine a picture: $prompt',
+        title: data['title']?.toString() ?? 'Imagined picture',
+        content: data['content']?.toString() ?? 'Image generated.',
+        language: _selectedLanguage,
+        allowPdf: false,
+        imageDataUrl: imageDataUrl,
+        imageUrl: imageUrl,
+      );
+
+      setState(() {
+        _loading = false;
+        _controller.clear();
+        _results.insert(0, imaginedItem);
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showResult(imaginedItem);
+        }
+      });
+    } catch (error) {
+      setState(() {
+        _loading = false;
+        _error = '${_t.createError}\n\n${korlixFriendlyErrorMessage(error)}';
+      });
+    }
   }
 
   Future<void> _generateImprovedPicture() async {
@@ -4428,6 +4541,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   }
 
   Future<void> _generate() async {
+    if (_imaginePictureMode) {
+      await _generateImaginedPicture();
+      return;
+    }
+
     await _stopAiCharacterTalkingForQuery();
 
     final attachedImageForImprove = _pickedUploadFile;
@@ -5144,6 +5262,17 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         prompt.contains('professional photograph');
   }
 
+  bool _isImaginePictureQuickAction(QuickAction action) {
+    final label = action.label.toLowerCase();
+    final prompt = action.prompt.toLowerCase();
+
+    return (label.contains('imagine') &&
+            (label.contains('picture') ||
+                label.contains('image') ||
+                label.contains('photo'))) ||
+        prompt == kKorlixImaginePicturePrompt.toLowerCase();
+  }
+
   bool _isImprovePicturePromptText(String text) {
     final lower = text.toLowerCase();
 
@@ -5177,6 +5306,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       setState(() {
         _createVideoMode = true;
         _improvePictureMode = false;
+        _imaginePictureMode = false;
         _error = null;
         _controller.text = '';
         _controller.selection = TextSelection.fromPosition(
@@ -5199,6 +5329,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       setState(() {
         _improvePictureMode = true;
         _createVideoMode = false;
+        _imaginePictureMode = false;
         _error = null;
         _controller.text = '';
         _controller.selection = TextSelection.fromPosition(
@@ -5217,9 +5348,33 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       return;
     }
 
+    if (_isImaginePictureQuickAction(action)) {
+      setState(() {
+        _imaginePictureMode = true;
+        _createVideoMode = false;
+        _improvePictureMode = false;
+        _error = null;
+        _controller.text = '';
+        _controller.selection = TextSelection.fromPosition(
+          const TextPosition(offset: 0),
+        );
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Describe the picture you want Korlix AI to create, then tap submit.',
+          ),
+        ),
+      );
+
+      return;
+    }
+
     setState(() {
       _createVideoMode = false;
       _improvePictureMode = false;
+      _imaginePictureMode = false;
       _controller.text = action.prompt;
       _controller.selection = TextSelection.fromPosition(
         TextPosition(offset: _controller.text.length),
@@ -5993,7 +6148,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
           .trim();
 
       if (selected.isNotEmpty) {
-        kKorlixSelectedCharacterNotifier.value = selected;
+        kKorlixSelectedCharacterNotifier.value = normalizeKorlixCharacterId(
+          selected,
+        );
       }
     } catch (_) {
       // The home screen should still load even if character sync fails.
@@ -7468,6 +7625,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             children: t.quickActions.map((action) {
               final isVideoAction = _isCreateVideoQuickAction(action);
               final isImproveAction = _isImprovePictureQuickAction(action);
+              final isImagineAction = _isImaginePictureQuickAction(action);
 
               final attachedImageForImprove = _pickedUploadFile;
               final typedCommandForImprove = _controller.text.trim();
@@ -7484,7 +7642,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                   isImproveAction &&
                   (_improvePictureMode || hasAttachedImageImproveIntent) &&
                   !_loading;
-              final isHighlighted = isVideoActive || isImproveActive;
+              final isImagineActive =
+                  isImagineAction && _imaginePictureMode && !_loading;
+
+              final isHighlighted =
+                  isVideoActive || isImproveActive || isImagineActive;
 
               final enabledTextColor = isHighlighted
                   ? const Color(0xFF061008)
@@ -7511,12 +7673,20 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                         size: 17,
                         color: _loading ? Colors.white38 : enabledTextColor,
                       )
+                    : isImagineAction
+                    ? Icon(
+                        Icons.image_search_rounded,
+                        size: 17,
+                        color: _loading ? Colors.white38 : enabledTextColor,
+                      )
                     : null,
                 label: Text(
                   isVideoAction
                       ? 'Create Video'
                       : isImproveAction
                       ? 'Improve my picture'
+                      : isImagineAction
+                      ? 'Imagine a picture'
                       : action.label,
                 ),
                 labelStyle: TextStyle(
