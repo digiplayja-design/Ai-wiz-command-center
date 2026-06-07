@@ -1227,7 +1227,7 @@ class _KorlixCharacterIntroPreviewState
   @override
   void initState() {
     super.initState();
-    _soundOn = !widget.muted;
+    _soundOn = false;
     kKorlixStopCharacterSpeechSignal.addListener(_handleGlobalStopSignal);
     _loadVideo();
   }
@@ -1240,7 +1240,7 @@ class _KorlixCharacterIntroPreviewState
         oldWidget.muted != widget.muted ||
         oldWidget.autoplay != widget.autoplay ||
         oldWidget.loop != widget.loop) {
-      _soundOn = !widget.muted;
+      _soundOn = false;
       _completedLoops = 0;
       _loadVideo();
     }
@@ -1270,22 +1270,20 @@ class _KorlixCharacterIntroPreviewState
       await controller.initialize();
 
       // We manually control looping so talking never loops forever.
+      // Start muted first so web/mobile browsers allow autoplay.
       await controller.setLooping(false);
-      await controller.setVolume(_soundOn ? 1.0 : 0.0);
+      await controller.setVolume(0.0);
       controller.addListener(_handleVideoProgress);
 
       if (widget.autoplay) {
-        await controller.play();
-
-        if (!widget.muted) {
-          await Future<void>.delayed(const Duration(milliseconds: 350));
-          await controller.setVolume(1.0);
-
-          if (!controller.value.isPlaying) {
-            await controller.play();
-          }
+        try {
+          await controller.play();
+        } catch (error) {
+          debugPrint('Korlix character autoplay warning: $error');
         }
       }
+
+      _soundOn = false;
 
       if (!mounted) {
         controller.removeListener(_handleVideoProgress);
@@ -2380,7 +2378,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
       case 'ji_a':
         return 'assets/characters/ji-a/intro.mp4';
       case 'chee_chai_chee':
-        return 'assets/wizard_greeting_en.mp4';
+        return 'assets/characters/chee_chai_chee/intro.mp4';
       default:
         return null;
     }
@@ -3369,7 +3367,7 @@ KorlixCharacterDisplayData korlixCharacterDisplayFor(String id) {
         eyebrow: 'PRO AI CHARACTER',
         description:
             'A dark cyber-mystic wizard built for strategy, wisdom, and powerful answers.',
-        assetPath: 'assets/wizard_greeting_en.mp4',
+        assetPath: 'assets/characters/chee_chai_chee/intro.mp4',
         soundOn: true,
       );
     case 'phil':
@@ -3512,7 +3510,7 @@ class AppLanguages {
     LanguageCopy(
       code: 'en',
       label: 'English',
-      assetPath: 'assets/wizard_greeting_en.mp4',
+      assetPath: 'assets/characters/chee_chai_chee/intro.mp4',
       appSubtitle: 'Choose your AI character. Ask anything. Create anything.',
       backendConnected: 'Korlix System Online',
       awaitingTitle: 'Chee Chai Chee awaits.',
@@ -3697,7 +3695,7 @@ Analyze the attached credit reports thoroughly and produce a complete, high-impa
     LanguageCopy(
       code: 'es',
       label: 'Español',
-      assetPath: 'assets/wizard_greeting_es.mp4',
+      assetPath: 'assets/characters/chee_chai_chee/intro.mp4',
       appSubtitle:
           'Elige tu personaje de IA. Pregunta cualquier cosa. Crea cualquier cosa.',
       backendConnected: 'Sistema Korlix en línea',
