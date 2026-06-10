@@ -3775,7 +3775,37 @@ This question does not require live search unless the user explicitly asks for c
     const selectedCharacterId = profile?.selected_character || "jj";
     const selectedCharacter = getCharacterPersonality(selectedCharacterId);
 
-    const input = `
+    
+  // === MEMORY: fetch last 10 exchanges for this user + character ===
+  let conversationHistoryText = '';
+  try {
+    const characterIdForHistory = profile && profile.selected_character ? profile.selected_character : 'chee_chai_chee';
+    const userId = user && user.id ? user.id : null;
+    if (userId) {
+      const { data: historyRows } = await supabaseAdmin
+        .from('generation_history')
+        .select('prompt, response')
+        .eq('user_id', userId)
+        .eq('character_id', characterIdForHistory)
+        .eq('result_type', 'answer')
+        .order('created_at', { ascending: false })
+        .limit(10);
+      if (historyRows && historyRows.length > 0) {
+        const reversed = historyRows.slice().reverse();
+        conversationHistoryText = reversed.map(function(r) {
+          return 'User: ' + (r.prompt || '') + '\nAssistant: ' + (r.response || '');
+        }).join('\n');
+      }
+    }
+  } catch (memErr) {
+    console.error('Memory fetch error (non-fatal):', memErr && memErr.message ? memErr.message : memErr);
+  }
+  const memoryBlock = conversationHistoryText
+    ? 'Recent conversation history:\n' + conversationHistoryText + '\n\n'
+    : '';
+  // === END MEMORY ===
+
+const input = `
 You are Korlix AI, a premium multilingual AI assistant platform powered by selectable AI characters.
 
 The current selected character is:
@@ -3792,7 +3822,7 @@ ${language.name}
 Language rule:
 ${language.instruction}
 
-The user wrote:
+${memoryBlock}The user wrote:
 "${command}"
 
 User tier:
