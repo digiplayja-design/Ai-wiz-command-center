@@ -3742,7 +3742,7 @@ app.post("/api/generate", async (req, res) => {
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    const normalModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
+    const normalModel = process.env.OPENAI_MODEL || "gpt-5.5";
     const searchModel = process.env.OPENAI_SEARCH_MODEL || normalModel;
 
     const modeInstruction = fileRequested
@@ -3784,7 +3784,7 @@ This question does not require live search unless the user explicitly asks for c
     if (userId) {
       const { data: historyRows } = await supabaseAdmin
         .from('generation_history')
-        .select('prompt, response')
+        .select('prompt, content')
         .eq('user_id', userId)
         .eq('character_id', characterIdForHistory)
         .eq('result_type', 'answer')
@@ -3793,7 +3793,7 @@ This question does not require live search unless the user explicitly asks for c
       if (historyRows && historyRows.length > 0) {
         const reversed = historyRows.slice().reverse();
         conversationHistoryText = reversed.map(function(r) {
-          return 'User: ' + (r.prompt || '') + '\nAssistant: ' + (r.response || '');
+          return 'User: ' + (r.prompt || '') + '\nAssistant: ' + (r.content || '');
         }).join('\n');
       }
     }
