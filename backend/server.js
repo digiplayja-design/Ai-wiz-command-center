@@ -1,4 +1,9 @@
 import express from "express";
+
+// ── Credit Docs: PDF + DOCX generation ──
+const PDFDocument = require('pdfkit');
+const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = require('docx');
+// ── End Credit Docs requires ──
 import crypto from "crypto";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -26,6 +31,62 @@ const documentUpload = multer({
 const passwordResetAttempts = new Map();
 
 
+
+// ── Credit Docs Helper: generate PDF buffer ──
+async function generateCreditDisputePDF(letterText) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 72, size: 'LETTER' });
+    const chunks = [];
+    doc.on('data', chunk => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    // Header
+    doc.fontSize(18).font('Helvetica-Bold').text('Credit Dispute Letter', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(10).font('Helvetica').text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), { align: 'center' });
+    doc.moveDown(1.5);
+
+    // Body — split on double newlines for paragraphs
+    const paragraphs = letterText.split(/\n\n+/);
+    doc.fontSize(11).font('Helvetica');
+    for (const para of paragraphs) {
+      const trimmed = para.trim();
+      if (trimmed) {
+        doc.text(trimmed, { align: 'left', lineGap: 2 });
+        doc.moveDown(0.8);
+      }
+    }
+    doc.end();
+  });
+}
+
+// ── Credit Docs Helper: generate DOCX buffer ──
+async function generateCreditDisputeDOCX(letterText) {
+  const paragraphs = letterText.split(/\n\n+/);
+  const children = [
+    new Paragraph({
+      text: 'Credit Dispute Letter',
+      heading: HeadingLevel.HEADING_1,
+      alignment: AlignmentType.CENTER,
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), italics: true })],
+      alignment: AlignmentType.CENTER,
+    }),
+    new Paragraph({ text: '' }),
+    ...paragraphs.map(para => new Paragraph({
+      children: [new TextRun({ text: para.trim(), size: 24 })],
+      spacing: { after: 200 },
+    })),
+  ];
+
+  const doc = new Document({
+    sections: [{ properties: {}, children }],
+  });
+  return await Packer.toBuffer(doc);
+}
+// ── End Credit Docs Helpers ──
 function normalizeSupabaseUrl(value) {
   return String(value || "")
     .trim()
@@ -3415,6 +3476,24 @@ Instructions:
     });
 
     const answer = extractKorlixResponseText(response);
+    // ── Credit Docs: Generate PDF + DOCX if this is a file/credit request ──
+    let pdfBase64 = null;
+    let docxBase64 = null;
+    if (fileRequested) {
+      try {
+        const [pdfBuf, docxBuf] = await Promise.all([
+          generateCreditDisputePDF(answer),
+          generateCreditDisputeDOCX(answer),
+        ]);
+        pdfBase64 = pdfBuf.toString('base64');
+        docxBase64 = docxBuf.toString('base64');
+        console.log('[CreditDocs] PDF and DOCX generated successfully');
+      } catch (docErr) {
+        console.error('[CreditDocs] Failed to generate docs:', docErr.message);
+        // Non-fatal: continue without docs
+      }
+    }
+    // ── End Credit Docs generation ──
 
     if (!answer) {
       throw new Error("No answer was returned for the uploaded files.");
@@ -3670,6 +3749,8 @@ app.post("/api/analyze-document", documentUpload.single("file"), async (req, res
       usage: updatedUsage,
       generationId: historyItem?.id || null,
       content,
+      pdf_base64: pdfBase64 || undefined,
+      docx_base64: docxBase64 || undefined,
     });
   } catch (error) {
     console.error("File analysis error:", sanitize(error?.message));
