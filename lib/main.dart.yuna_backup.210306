@@ -1005,7 +1005,7 @@ class KorlixHomeCharacterHero extends StatelessWidget {
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 280),
             child: const KorlixCharacterIntroPreview(
-              assetPath: 'assets/characters/jj/intro.mp4',
+              assetPath: 'assets/characters/jj/intro_sequence.mp4',
               muted: false,
               showSoundButton: true,
             ),
@@ -1216,18 +1216,29 @@ class KorlixCharacterIntroPreview extends StatefulWidget {
 
 class _KorlixCharacterIntroPreviewState
     extends State<KorlixCharacterIntroPreview> {
-  static const int _maxAutoLoops = 3;
+  static const int _maxRegularPlays = 3;
 
   VideoPlayerController? _controller;
+  Timer? _endTimer;
+
   bool _ready = false;
   bool _soundOn = false;
-  int _completedLoops = 0;
+  bool _autoplaySoundBlocked = false;
   bool _handlingEnd = false;
+  int _regularPlayCount = 0;
+
+  bool get _isJjCombinedSequence => widget.assetPath.toLowerCase().contains(
+    'assets/characters/jj/intro_sequence.mp4',
+  );
+
+  bool get _shouldStartWithSound {
+    return widget.showSoundButton || !widget.muted;
+  }
 
   @override
   void initState() {
     super.initState();
-    _soundOn = false;
+    _soundOn = _shouldStartWithSound;
     kKorlixStopCharacterSpeechSignal.addListener(_handleGlobalStopSignal);
     _loadVideo();
   }
@@ -1240,27 +1251,33 @@ class _KorlixCharacterIntroPreviewState
         oldWidget.muted != widget.muted ||
         oldWidget.autoplay != widget.autoplay ||
         oldWidget.loop != widget.loop) {
-      _soundOn = false;
-      _completedLoops = 0;
+      _soundOn = _shouldStartWithSound;
+      _autoplaySoundBlocked = false;
+      _regularPlayCount = 0;
       _loadVideo();
     }
   }
 
   void _handleGlobalStopSignal() {
-    _stopTalkingCompletely();
+    unawaited(_stopCompletely(resetToStart: true));
   }
 
   Future<void> _loadVideo() async {
+    _endTimer?.cancel();
+
     final oldController = _controller;
 
     if (oldController != null) {
-      oldController.removeListener(_handleVideoProgress);
+      oldController.removeListener(_watchEnd);
     }
 
     _controller = null;
     _ready = false;
-    _completedLoops = 0;
     _handlingEnd = false;
+
+    if (mounted) {
+      setState(() {});
+    }
 
     await oldController?.dispose();
 
@@ -1268,25 +1285,12 @@ class _KorlixCharacterIntroPreviewState
       final controller = VideoPlayerController.asset(widget.assetPath);
 
       await controller.initialize();
-
-      // We manually control looping so talking never loops forever.
-      // Start muted first so web/mobile browsers allow autoplay.
       await controller.setLooping(false);
-      await controller.setVolume(0.0);
-      controller.addListener(_handleVideoProgress);
-
-      if (widget.autoplay) {
-        try {
-          await controller.play();
-        } catch (error) {
-          debugPrint('Korlix character autoplay warning: $error');
-        }
-      }
-
-      _soundOn = false;
+      await controller.setVolume(_soundOn ? 1.0 : 0.0);
+      controller.addListener(_watchEnd);
 
       if (!mounted) {
-        controller.removeListener(_handleVideoProgress);
+        controller.removeListener(_watchEnd);
         await controller.dispose();
         return;
       }
@@ -1295,7 +1299,15 @@ class _KorlixCharacterIntroPreviewState
         _controller = controller;
         _ready = true;
       });
-    } catch (_) {
+
+      if (widget.autoplay) {
+        await _playWithFallback(controller);
+      }
+
+      _scheduleEnd(controller);
+    } catch (error) {
+      debugPrint('Korlix character video load failed: $error');
+
       if (mounted) {
         setState(() {
           _ready = false;
@@ -1304,7 +1316,43 @@ class _KorlixCharacterIntroPreviewState
     }
   }
 
-  void _handleVideoProgress() {
+  Future<void> _playWithFallback(VideoPlayerController controller) async {
+    try {
+      await controller.setVolume(_soundOn ? 1.0 : 0.0);
+      await controller.play();
+    } catch (error) {
+      debugPrint('Korlix autoplay sound warning: $error');
+
+      try {
+        _soundOn = false;
+        _autoplaySoundBlocked = true;
+        await controller.setVolume(0.0);
+        await controller.play();
+
+        if (mounted) {
+          setState(() {});
+        }
+      } catch (fallbackError) {
+        debugPrint('Korlix muted autoplay warning: $fallbackError');
+      }
+    }
+  }
+
+  void _scheduleEnd(VideoPlayerController controller) {
+    _endTimer?.cancel();
+
+    final duration = controller.value.duration;
+
+    if (duration == Duration.zero) {
+      return;
+    }
+
+    _endTimer = Timer(duration + const Duration(milliseconds: 500), () {
+      unawaited(_handleVideoEnd());
+    });
+  }
+
+  void _watchEnd() {
     final controller = _controller;
 
     if (controller == null || _handlingEnd) {
@@ -1313,7 +1361,7 @@ class _KorlixCharacterIntroPreviewState
 
     final value = controller.value;
 
-    if (!value.isInitialized || !value.isPlaying) {
+    if (!value.isInitialized) {
       return;
     }
 
@@ -1325,12 +1373,12 @@ class _KorlixCharacterIntroPreviewState
 
     final remaining = duration - value.position;
 
-    if (remaining <= const Duration(milliseconds: 250)) {
-      _handleVideoReachedEnd();
+    if (remaining <= const Duration(milliseconds: 150)) {
+      unawaited(_handleVideoEnd());
     }
   }
 
-  Future<void> _handleVideoReachedEnd() async {
+  Future<void> _handleVideoEnd() async {
     final controller = _controller;
 
     if (controller == null || _handlingEnd) {
@@ -1338,23 +1386,32 @@ class _KorlixCharacterIntroPreviewState
     }
 
     _handlingEnd = true;
-    _completedLoops += 1;
-
-    final allowedLoops = widget.loop ? _maxAutoLoops : 1;
+    _endTimer?.cancel();
 
     try {
-      if (_completedLoops >= allowedLoops) {
-        await _stopTalkingCompletely(seekToEnd: true);
-      } else {
-        await controller.seekTo(Duration.zero);
-        await controller.play();
+      if (_isJjCombinedSequence || !widget.loop) {
+        await _stopCompletely(resetToStart: false);
+        return;
       }
+
+      _regularPlayCount += 1;
+
+      if (_regularPlayCount >= _maxRegularPlays) {
+        await _stopCompletely(resetToStart: false);
+        return;
+      }
+
+      await controller.seekTo(Duration.zero);
+      await controller.play();
+      _scheduleEnd(controller);
     } finally {
       _handlingEnd = false;
     }
   }
 
-  Future<void> _stopTalkingCompletely({bool seekToEnd = false}) async {
+  Future<void> _stopCompletely({required bool resetToStart}) async {
+    _endTimer?.cancel();
+
     final controller = _controller;
 
     if (controller == null) {
@@ -1362,53 +1419,45 @@ class _KorlixCharacterIntroPreviewState
     }
 
     try {
-      await controller.setVolume(0.0);
       await controller.pause();
 
-      if (!seekToEnd) {
+      if (resetToStart) {
         await controller.seekTo(Duration.zero);
       }
     } catch (_) {
-      // Video/audio stopping should never block the app.
+      // Stopping video/audio should never block the app.
     }
 
-    if (!mounted) {
-      return;
+    if (mounted) {
+      setState(() {});
     }
-
-    setState(() {
-      _soundOn = false;
-    });
   }
 
   Future<void> _toggleSound() async {
     final controller = _controller;
+    final next = !_soundOn;
+
+    setState(() {
+      _soundOn = next;
+      _autoplaySoundBlocked = false;
+    });
 
     if (controller == null) {
       return;
     }
-
-    final next = !_soundOn;
 
     try {
       await controller.setVolume(next ? 1.0 : 0.0);
 
       if (next && !controller.value.isPlaying) {
-        _completedLoops = 0;
+        _regularPlayCount = 0;
         await controller.seekTo(Duration.zero);
         await controller.play();
+        _scheduleEnd(controller);
       }
-    } catch (_) {
-      return;
+    } catch (error) {
+      debugPrint('Korlix sound toggle warning: $error');
     }
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _soundOn = next;
-    });
   }
 
   Future<void> _replayWithSound() async {
@@ -1418,28 +1467,28 @@ class _KorlixCharacterIntroPreviewState
       return;
     }
 
+    _regularPlayCount = 0;
+
     try {
-      _completedLoops = 0;
+      setState(() {
+        _soundOn = true;
+        _autoplaySoundBlocked = false;
+      });
+
       await controller.setVolume(1.0);
       await controller.seekTo(Duration.zero);
       await controller.play();
-    } catch (_) {
-      return;
+      _scheduleEnd(controller);
+    } catch (error) {
+      debugPrint('Korlix replay with sound warning: $error');
     }
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _soundOn = true;
-    });
   }
 
   @override
   void dispose() {
+    _endTimer?.cancel();
     kKorlixStopCharacterSpeechSignal.removeListener(_handleGlobalStopSignal);
-    _controller?.removeListener(_handleVideoProgress);
+    _controller?.removeListener(_watchEnd);
     _controller?.dispose();
     super.dispose();
   }
@@ -1475,6 +1524,31 @@ class _KorlixCharacterIntroPreviewState
                   ),
                 ),
         ),
+        if (_autoplaySoundBlocked)
+          Positioned(
+            left: 10,
+            right: 10,
+            top: 10,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.68),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: const Color(0xFFFFD166).withOpacity(0.65),
+                ),
+              ),
+              child: const Text(
+                'Tap the speaker to hear this character.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Color(0xFFFFD166),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
         if (widget.showSoundButton)
           Positioned(
             right: 10,
@@ -1503,7 +1577,6 @@ class _KorlixCharacterIntroPreviewState
               ),
             ),
           ),
-        // The text replay button was removed to keep the character cards cleaner.
       ],
     );
   }
@@ -2370,7 +2443,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
   String? _characterIntroAsset(String id) {
     switch (normalizeKorlixCharacterId(id)) {
       case 'jj':
-        return 'assets/characters/jj/intro.mp4';
+        return 'assets/characters/jj/intro_sequence.mp4';
       case 'phil':
         return 'assets/characters/phil/intro.mp4';
       case 'yuna':
@@ -3408,7 +3481,7 @@ KorlixCharacterDisplayData korlixCharacterDisplayFor(String id) {
         eyebrow: 'FEATURED AI CHARACTER',
         description:
             'Curious, thoughtful, and always ready to chat. Ask JJ anything!',
-        assetPath: 'assets/characters/jj/intro.mp4',
+        assetPath: 'assets/characters/jj/intro_sequence.mp4',
         soundOn: true,
       );
   }
@@ -4683,6 +4756,38 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     }
   }
 
+  String _restoredFixCreditEmbeddedPrompt(String userNotes) {
+    final notes = userNotes.trim();
+    final extraNotes = notes.isEmpty ? 'No extra user notes provided.' : notes;
+
+    return <String>[
+      'You are a senior FCRA/FDCPA credit repair strategist and consumer rights expert with deep knowledge of the Fair Credit Reporting Act, Fair Debt Collection Practices Act, Regulation V, FACTA, and CFPB enforcement standards.',
+      '',
+      'IMPORTANT DISCLAIMER:',
+      'Korlix AI does not guarantee deletion of accounts, collections, inquiries, late payments, charge-offs, bankruptcies, repossessions, judgments, or any other credit-report item. Korlix AI also does not guarantee a credit score increase. This tool provides educational, organizational, and drafting assistance only. The user is responsible for reviewing all letters, facts, account details, addresses, dates, and legal claims before sending anything to a credit bureau, creditor, furnisher, or collection agency.',
+      '',
+      'USER TASK:',
+      'The user attached one or more credit report files. Analyze the uploaded credit report files and create a practical credit-report review and dispute-preparation package.',
+      '',
+      'USER NOTES:',
+      extraNotes,
+      '',
+      'REQUIRED OUTPUT:',
+      '1. Start with a clear reminder that deletion is not guaranteed.',
+      '2. Summarize the uploaded credit report information.',
+      '3. Identify negative, inaccurate, outdated, incomplete, unverifiable, duplicate, or questionable items.',
+      '4. Group items by credit bureau if bureau information appears in the uploaded reports.',
+      '5. Group items by creditor, collection agency, account type, balance, status, and date information when available.',
+      '6. Identify missing details the user should verify before sending any dispute.',
+      '7. Create a prioritized credit-repair action plan.',
+      '8. Draft dispute-letter language the user can review and customize.',
+      '9. Include cautious FCRA/FDCPA-style language where appropriate.',
+      '10. Do not claim guaranteed deletion, guaranteed approval, guaranteed score increase, or guaranteed legal results.',
+      '11. Do not invent account numbers, dates, balances, creditor names, addresses, or bureau names that are not visible in the uploaded files.',
+      '12. If the uploaded file is not actually a credit report, explain what was uploaded and ask the user to attach the correct credit report.',
+    ].join('\n');
+  }
+
   Future<void> _generateWithUpload() async {
     await _stopAiCharacterTalkingForQuery();
 
@@ -4697,7 +4802,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
 
     final command = _controller.text.trim();
     final prompt = _fixCreditReportMode
-        ? _creditReportPromptSafeUi(command)
+        ? _restoredFixCreditEmbeddedPrompt(command)
         : command.isEmpty
         ? 'Please summarize and explain the uploaded file${files.length == 1 ? '' : 's'}.'
         : command;
@@ -5640,7 +5745,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       _improvePictureMode = false;
       _imaginePictureMode = false;
       _error = null;
-      _controller.clear();
+      _controller.text =
+          'Attach your credit report with Upload, then tap submit. Add optional notes here.';
+      _controller.selection = TextSelection.fromPosition(
+        TextPosition(offset: _controller.text.length),
+      );
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -8415,7 +8524,7 @@ class _TalkingWizardHostState extends State<TalkingWizardHost> {
         _controller = controller;
         _loading = false;
         _started = false;
-        _needsTap = false;
+        _needsTap = true;
       });
     } catch (error) {
       if (!mounted) return;
@@ -8435,7 +8544,7 @@ class _TalkingWizardHostState extends State<TalkingWizardHost> {
     if (controller == null || !controller.value.isInitialized) {
       setState(() {
         _started = false;
-        _needsTap = false;
+        _needsTap = true;
       });
       return;
     }
@@ -8461,7 +8570,7 @@ class _TalkingWizardHostState extends State<TalkingWizardHost> {
                 !currentController.value.isPlaying) {
               setState(() {
                 _started = false;
-                _needsTap = false;
+                _needsTap = true;
               });
             }
           });
@@ -8471,7 +8580,7 @@ class _TalkingWizardHostState extends State<TalkingWizardHost> {
 
           setState(() {
             _started = false;
-            _needsTap = false;
+            _needsTap = true;
           });
         });
   }
