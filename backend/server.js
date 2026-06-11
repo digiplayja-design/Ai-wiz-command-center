@@ -2,7 +2,7 @@ import express from "express";
 
 // ── Credit Docs: PDF + DOCX generation ──
 // pdfkit loaded dynamically (ESM compat)
-const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = require('docx');
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
 // ── End Credit Docs requires ──
 import crypto from "crypto";
 import cors from "cors";
