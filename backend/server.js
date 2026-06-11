@@ -1,7 +1,7 @@
 import express from "express";
 
 // ── Credit Docs: PDF + DOCX generation ──
-const PDFDocument = require('pdfkit');
+// pdfkit loaded dynamically (ESM compat)
 const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = require('docx');
 // ── End Credit Docs requires ──
 import crypto from "crypto";
@@ -34,6 +34,8 @@ const passwordResetAttempts = new Map();
 
 // ── Credit Docs Helper: generate PDF buffer ──
 async function generateCreditDisputePDF(letterText) {
+  const PDFDocumentModule = await import('pdfkit');
+  const PDFDocument = PDFDocumentModule.default || PDFDocumentModule;
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 72, size: 'LETTER' });
     const chunks = [];
