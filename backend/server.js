@@ -1,7 +1,7 @@
 import express from "express";
 
 // ── Credit Docs: PDF + DOCX generation ──
-// pdfkit loaded dynamically (ESM compat)
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
 // ── End Credit Docs requires ──
 import crypto from "crypto";
@@ -34,36 +34,63 @@ const passwordResetAttempts = new Map();
 
 // ── Credit Docs Helper: generate PDF buffer ──
 async function generateCreditDisputePDF(letterText) {
-  const PDFDocumentModule = await import('pdfkit');
-  const PDFDocument = PDFDocumentModule.default || PDFDocumentModule;
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ margin: 72, size: 'LETTER' });
-    const chunks = [];
-    doc.on('data', chunk => chunks.push(chunk));
-    doc.on('end', () => resolve(Buffer.concat(chunks)));
-    doc.on('error', reject);
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const fontSize = 11;
+  const margin = 72;
+  const lineHeight = fontSize * 1.4;
+  const pageWidth = 612;
+  const pageHeight = 792;
+  const maxWidth = pageWidth - margin * 2;
 
-    // Header
-    doc.fontSize(18).font('Helvetica-Bold').text('Credit Dispute Letter', { align: 'center' });
-    doc.moveDown(0.5);
-    doc.fontSize(10).font('Helvetica').text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), { align: 'center' });
-    doc.moveDown(1.5);
-
-    // Body — split on double newlines for paragraphs
-    const paragraphs = letterText.split(/\n\n+/);
-    doc.fontSize(11).font('Helvetica');
-    for (const para of paragraphs) {
-      const trimmed = para.trim();
-      if (trimmed) {
-        doc.text(trimmed, { align: 'left', lineGap: 2 });
-        doc.moveDown(0.8);
+  // Word wrap helper
+  function wrapText(text, f, size, maxW) {
+    const words = text.split(' ');
+    const lines = [];
+    let current = '';
+    for (const word of words) {
+      const test = current ? current + ' ' + word : word;
+      if (f.widthOfTextAtSize(test, size) <= maxW) {
+        current = test;
+      } else {
+        if (current) lines.push(current);
+        current = word;
       }
     }
-    doc.end();
-  });
+    if (current) lines.push(current);
+    return lines;
+  }
+
+  let page = pdfDoc.addPage([pageWidth, pageHeight]);
+  let y = pageHeight - margin;
+
+  // Title
+  const title = 'Credit Dispute Letter';
+  const titleWidth = boldFont.widthOfTextAtSize(title, 14);
+  page.drawText(title, { x: (pageWidth - titleWidth) / 2, y, font: boldFont, size: 14, color: rgb(0.1, 0.1, 0.1) });
+  y -= lineHeight * 2;
+
+  const paragraphs = letterText.split('
+');
+  for (const para of paragraphs) {
+    const lines = wrapText(para.trim(), font, fontSize, maxWidth);
+    for (const line of lines) {
+      if (y < margin + lineHeight) {
+        page = pdfDoc.addPage([pageWidth, pageHeight]);
+        y = pageHeight - margin;
+      }
+      page.drawText(line, { x: margin, y, font, size: fontSize, color: rgb(0.1, 0.1, 0.1) });
+      y -= lineHeight;
+    }
+    y -= lineHeight * 0.3;
+  }
+
+  const pdfBytes = await pdfDoc.save();
+  return Buffer.from(pdfBytes);
 }
 
-// ── Credit Docs Helper: generate DOCX buffer ──
+
 async function generateCreditDisputeDOCX(letterText) {
   const paragraphs = letterText.split(/\n\n+/);
   const children = [
