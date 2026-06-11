@@ -71,8 +71,7 @@ async function generateCreditDisputePDF(letterText) {
   page.drawText(title, { x: (pageWidth - titleWidth) / 2, y, font: boldFont, size: 14, color: rgb(0.1, 0.1, 0.1) });
   y -= lineHeight * 2;
 
-  const paragraphs = letterText.split('
-');
+  const paragraphs = letterText.split('\n');
   for (const para of paragraphs) {
     const lines = wrapText(para.trim(), font, fontSize, maxWidth);
     for (const line of lines) {
@@ -3550,8 +3549,8 @@ Instructions:
 
     
         // Credit Docs: generate PDF + DOCX if this is a credit dispute request
-        let pdfBase64 = null;
-        let docxBase64 = null;
+        let pdfBase64Docs = null;
+        let docxBase64Docs = null;
         const isCreditDispute = (prompt || '').toLowerCase().includes('credit') || (prompt || '').toLowerCase().includes('dispute') || (prompt || '').toLowerCase().includes('fix my credit');
         if (isCreditDispute) {
           try {
@@ -3559,8 +3558,8 @@ Instructions:
               generateCreditDisputePDF(answer),
               generateCreditDisputeDOCX(answer),
             ]);
-            pdfBase64 = pdfBuf.toString('base64');
-            docxBase64 = docxBuf.toString('base64');
+            pdfBase64Docs = pdfBuf.toString('base64');
+            docxBase64Docs = docxBuf.toString('base64');
             console.log('[CreditDocs] PDF and DOCX generated for analyze-documents');
           } catch (docErr) {
             console.error('[CreditDocs] Failed to generate docs:', docErr.message);
@@ -3575,8 +3574,8 @@ Instructions:
           : `File answer: ${files.length} files`,
       content: answer,
       answer,
-      pdf_base64: pdfBase64 || undefined,
-      docx_base64: docxBase64 || undefined,
+      pdf_base64: pdfBase64Docs || undefined,
+      docx_base64: docxBase64Docs || undefined,
       files: files.map((file) => ({
         name: file.originalname,
         mimeType: getUploadMimeType(file),
