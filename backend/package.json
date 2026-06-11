@@ -16,7 +16,7 @@
     "multer": "^2.1.1",
     "openai": "latest",
     "pdf-parse": "^2.4.5",
-    "pdfkit": "^0.19.1"
+    "pdfkit": "0.15.0"
   },
   "start": "node server.js"
 }
