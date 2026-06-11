@@ -3521,7 +3521,26 @@ Instructions:
       creditsNeeded,
     });
 
-    return res.json({
+    
+        // Credit Docs: generate PDF + DOCX if this is a credit dispute request
+        let pdfBase64 = null;
+        let docxBase64 = null;
+        const isCreditDispute = (prompt || '').toLowerCase().includes('credit') || (prompt || '').toLowerCase().includes('dispute') || (prompt || '').toLowerCase().includes('fix my credit');
+        if (isCreditDispute) {
+          try {
+            const [pdfBuf, docxBuf] = await Promise.all([
+              generateCreditDisputePDF(answer),
+              generateCreditDisputeDOCX(answer),
+            ]);
+            pdfBase64 = pdfBuf.toString('base64');
+            docxBase64 = docxBuf.toString('base64');
+            console.log('[CreditDocs] PDF and DOCX generated for analyze-documents');
+          } catch (docErr) {
+            console.error('[CreditDocs] Failed to generate docs:', docErr.message);
+          }
+        }
+
+        return res.json({
       success: true,
       title:
         files.length === 1
@@ -3529,6 +3548,8 @@ Instructions:
           : `File answer: ${files.length} files`,
       content: answer,
       answer,
+      pdf_base64: pdfBase64 || undefined,
+      docx_base64: docxBase64 || undefined,
       files: files.map((file) => ({
         name: file.originalname,
         mimeType: getUploadMimeType(file),
