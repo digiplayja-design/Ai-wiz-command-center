@@ -4615,7 +4615,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       );
 
       final streamedResponse = await request.send().timeout(
-        const Duration(seconds: 180),
+        const Duration(seconds: 360),
       );
 
       final response = await http.Response.fromStream(streamedResponse);
@@ -4735,7 +4735,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       }
 
       final streamedResponse = await request.send().timeout(
-        const Duration(seconds: 180),
+        const Duration(seconds: 360),
       );
 
       final response = await http.Response.fromStream(streamedResponse);
