@@ -4805,10 +4805,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
           ),
         );
           _chatMessages.add(ChatMessage(
-            userText: 'Uploaded file${files.length == 1 ? \"\" : \'s\'}:
-$fileList
-
-Question: $prompt',
+            userText: 'Uploaded file(s):\n$fileList\n\nQuestion: $prompt',
             aiText: content,
             language: _selectedLanguage,
             createdAt: DateTime.now(),
