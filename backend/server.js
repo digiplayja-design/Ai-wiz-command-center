@@ -1,8 +1,8 @@
 import express from "express";
 
 // ── Credit Docs: PDF + DOCX generation ──
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
+const PDFDocument = require('pdfkit');
+const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = require('docx');
 // ── End Credit Docs requires ──
 import crypto from "crypto";
 import cors from "cors";
@@ -34,62 +34,34 @@ const passwordResetAttempts = new Map();
 
 // ── Credit Docs Helper: generate PDF buffer ──
 async function generateCreditDisputePDF(letterText) {
-  const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const fontSize = 11;
-  const margin = 72;
-  const lineHeight = fontSize * 1.4;
-  const pageWidth = 612;
-  const pageHeight = 792;
-  const maxWidth = pageWidth - margin * 2;
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 72, size: 'LETTER' });
+    const chunks = [];
+    doc.on('data', chunk => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
 
-  // Word wrap helper
-  function wrapText(text, f, size, maxW) {
-    const words = text.split(' ');
-    const lines = [];
-    let current = '';
-    for (const word of words) {
-      const test = current ? current + ' ' + word : word;
-      if (f.widthOfTextAtSize(test, size) <= maxW) {
-        current = test;
-      } else {
-        if (current) lines.push(current);
-        current = word;
+    // Header
+    doc.fontSize(18).font('Helvetica-Bold').text('Credit Dispute Letter', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(10).font('Helvetica').text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), { align: 'center' });
+    doc.moveDown(1.5);
+
+    // Body — split on double newlines for paragraphs
+    const paragraphs = letterText.split(/\n\n+/);
+    doc.fontSize(11).font('Helvetica');
+    for (const para of paragraphs) {
+      const trimmed = para.trim();
+      if (trimmed) {
+        doc.text(trimmed, { align: 'left', lineGap: 2 });
+        doc.moveDown(0.8);
       }
     }
-    if (current) lines.push(current);
-    return lines;
-  }
-
-  let page = pdfDoc.addPage([pageWidth, pageHeight]);
-  let y = pageHeight - margin;
-
-  // Title
-  const title = 'Credit Dispute Letter';
-  const titleWidth = boldFont.widthOfTextAtSize(title, 14);
-  page.drawText(title, { x: (pageWidth - titleWidth) / 2, y, font: boldFont, size: 14, color: rgb(0.1, 0.1, 0.1) });
-  y -= lineHeight * 2;
-
-  const paragraphs = letterText.split('\n');
-  for (const para of paragraphs) {
-    const lines = wrapText(para.trim(), font, fontSize, maxWidth);
-    for (const line of lines) {
-      if (y < margin + lineHeight) {
-        page = pdfDoc.addPage([pageWidth, pageHeight]);
-        y = pageHeight - margin;
-      }
-      page.drawText(line, { x: margin, y, font, size: fontSize, color: rgb(0.1, 0.1, 0.1) });
-      y -= lineHeight;
-    }
-    y -= lineHeight * 0.3;
-  }
-
-  const pdfBytes = await pdfDoc.save();
-  return Buffer.from(pdfBytes);
+    doc.end();
+  });
 }
 
-
+// ── Credit Docs Helper: generate DOCX buffer ──
 async function generateCreditDisputeDOCX(letterText) {
   const paragraphs = letterText.split(/\n\n+/);
   const children = [
@@ -115,27 +87,6 @@ async function generateCreditDisputeDOCX(letterText) {
   return await Packer.toBuffer(doc);
 }
 // ── End Credit Docs Helpers ──
-
-// === MEMORY EXTRACTION HELPER ===
-async function extractAndSaveMemory(userId, userMessage, currentMemory, supabaseAdmin, openaiClient) {
-  try {
-    const hasPersonalPronouns = /\b(I|my|mine|me|we|our|us)\b/i.test(userMessage);
-    const extractionPrompt = 'You are a memory extraction assistant.
-The user said: "' + userMessage + '"
-Current stored facts:
-' + (currentMemory || 'None') + '
-Task: If the user revealed a new permanent personal fact (name, family, preferences, location, occupation), extract it and append to current facts.
-If no new facts, output exactly: UNCHANGED
-Otherwise output updated bulleted list.';
-    const response = await openaiClient.chat.completions.create({ model: 'gpt-4o-mini', messages: [{ role: 'system', content: extractionPrompt }], temperature: 0.1, max_tokens: 300 });
-    const newMemory = response.choices[0].message.content.trim();
-    if (newMemory && newMemory !== 'UNCHANGED' && newMemory !== currentMemory) {
-      await supabaseAdmin.from('profiles').update({ long_term_memory: newMemory }).eq('id', userId);
-    }
-  } catch (err) { console.error('[Memory] extraction failed:', err.message); }
-}
-// === END MEMORY EXTRACTION HELPER ===
-
 function normalizeSupabaseUrl(value) {
   return String(value || "")
     .trim()
@@ -3568,26 +3519,7 @@ Instructions:
       creditsNeeded,
     });
 
-    
-        // Credit Docs: generate PDF + DOCX if this is a credit dispute request
-        let pdfBase64Docs = null;
-        let docxBase64Docs = null;
-        const isCreditDispute = (prompt || '').toLowerCase().includes('credit') || (prompt || '').toLowerCase().includes('dispute') || (prompt || '').toLowerCase().includes('fix my credit');
-        if (isCreditDispute) {
-          try {
-            const [pdfBuf, docxBuf] = await Promise.all([
-              generateCreditDisputePDF(answer),
-              generateCreditDisputeDOCX(answer),
-            ]);
-            pdfBase64Docs = pdfBuf.toString('base64');
-            docxBase64Docs = docxBuf.toString('base64');
-            console.log('[CreditDocs] PDF and DOCX generated for analyze-documents');
-          } catch (docErr) {
-            console.error('[CreditDocs] Failed to generate docs:', docErr.message);
-          }
-        }
-
-        return res.json({
+    return res.json({
       success: true,
       title:
         files.length === 1
@@ -3595,8 +3527,6 @@ Instructions:
           : `File answer: ${files.length} files`,
       content: answer,
       answer,
-      pdf_base64: pdfBase64Docs || undefined,
-      docx_base64: docxBase64Docs || undefined,
       files: files.map((file) => ({
         name: file.originalname,
         mimeType: getUploadMimeType(file),
@@ -3927,32 +3857,33 @@ This question does not require live search unless the user explicitly asks for c
     const selectedCharacter = getCharacterPersonality(selectedCharacterId);
 
     
-  // === MEMORY: Long-term Profile Memory + Short-term Conversation History ===
+  // === MEMORY: fetch last 10 exchanges for this user + character ===
   let conversationHistoryText = '';
-  let longTermMemory = profile?.long_term_memory || '';
   try {
     const characterIdForHistory = profile && profile.selected_character ? profile.selected_character : 'chee_chai_chee';
     const userId = user && user.id ? user.id : null;
     if (userId) {
-      const { data: historyRows } = await supabaseAdmin.from('generation_history').select('prompt, content').eq('user_id', userId).eq('character_id', characterIdForHistory).eq('result_type', 'answer').order('created_at', { ascending: false }).limit(10);
+      const { data: historyRows } = await supabaseAdmin
+        .from('generation_history')
+        .select('prompt, content')
+        .eq('user_id', userId)
+        .eq('character_id', characterIdForHistory)
+        .eq('result_type', 'answer')
+        .order('created_at', { ascending: false })
+        .limit(10);
       if (historyRows && historyRows.length > 0) {
         const reversed = historyRows.slice().reverse();
-        conversationHistoryText = reversed.map(r => 'User: ' + (r.prompt||'') + '
-Assistant: ' + (r.content||'')).join('
-');
+        conversationHistoryText = reversed.map(function(r) {
+          return 'User: ' + (r.prompt || '') + '\nAssistant: ' + (r.content || '');
+        }).join('\n');
       }
-      extractAndSaveMemory(userId, command, longTermMemory, supabaseAdmin, client);
     }
-  } catch (memErr) { console.error('Memory fetch error:', memErr?.message); }
-  const shortTermBlock = conversationHistoryText ? 'Recent conversation history:
-' + conversationHistoryText + '
-
-' : '';
-  const longTermBlock = longTermMemory ? 'Permanent facts you know about the user:
-' + longTermMemory + '
-
-' : '';
-  const memoryBlock = longTermBlock + shortTermBlock;
+  } catch (memErr) {
+    console.error('Memory fetch error (non-fatal):', memErr && memErr.message ? memErr.message : memErr);
+  }
+  const memoryBlock = conversationHistoryText
+    ? 'Recent conversation history:\n' + conversationHistoryText + '\n\n'
+    : '';
   // === END MEMORY ===
 
 const input = `
