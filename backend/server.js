@@ -115,6 +115,27 @@ async function generateCreditDisputeDOCX(letterText) {
   return await Packer.toBuffer(doc);
 }
 // ── End Credit Docs Helpers ──
+
+// === MEMORY EXTRACTION HELPER ===
+async function extractAndSaveMemory(userId, userMessage, currentMemory, supabaseAdmin, openaiClient) {
+  try {
+    const hasPersonalPronouns = /\b(I|my|mine|me|we|our|us)\b/i.test(userMessage);
+    const extractionPrompt = 'You are a memory extraction assistant.
+The user said: "' + userMessage + '"
+Current stored facts:
+' + (currentMemory || 'None') + '
+Task: If the user revealed a new permanent personal fact (name, family, preferences, location, occupation), extract it and append to current facts.
+If no new facts, output exactly: UNCHANGED
+Otherwise output updated bulleted list.';
+    const response = await openaiClient.chat.completions.create({ model: 'gpt-4o-mini', messages: [{ role: 'system', content: extractionPrompt }], temperature: 0.1, max_tokens: 300 });
+    const newMemory = response.choices[0].message.content.trim();
+    if (newMemory && newMemory !== 'UNCHANGED' && newMemory !== currentMemory) {
+      await supabaseAdmin.from('profiles').update({ long_term_memory: newMemory }).eq('id', userId);
+    }
+  } catch (err) { console.error('[Memory] extraction failed:', err.message); }
+}
+// === END MEMORY EXTRACTION HELPER ===
+
 function normalizeSupabaseUrl(value) {
   return String(value || "")
     .trim()
@@ -3906,33 +3927,32 @@ This question does not require live search unless the user explicitly asks for c
     const selectedCharacter = getCharacterPersonality(selectedCharacterId);
 
     
-  // === MEMORY: fetch last 10 exchanges for this user + character ===
+  // === MEMORY: Long-term Profile Memory + Short-term Conversation History ===
   let conversationHistoryText = '';
+  let longTermMemory = profile?.long_term_memory || '';
   try {
     const characterIdForHistory = profile && profile.selected_character ? profile.selected_character : 'chee_chai_chee';
     const userId = user && user.id ? user.id : null;
     if (userId) {
-      const { data: historyRows } = await supabaseAdmin
-        .from('generation_history')
-        .select('prompt, content')
-        .eq('user_id', userId)
-        .eq('character_id', characterIdForHistory)
-        .eq('result_type', 'answer')
-        .order('created_at', { ascending: false })
-        .limit(10);
+      const { data: historyRows } = await supabaseAdmin.from('generation_history').select('prompt, content').eq('user_id', userId).eq('character_id', characterIdForHistory).eq('result_type', 'answer').order('created_at', { ascending: false }).limit(10);
       if (historyRows && historyRows.length > 0) {
         const reversed = historyRows.slice().reverse();
-        conversationHistoryText = reversed.map(function(r) {
-          return 'User: ' + (r.prompt || '') + '\nAssistant: ' + (r.content || '');
-        }).join('\n');
+        conversationHistoryText = reversed.map(r => 'User: ' + (r.prompt||'') + '
+Assistant: ' + (r.content||'')).join('
+');
       }
+      extractAndSaveMemory(userId, command, longTermMemory, supabaseAdmin, client);
     }
-  } catch (memErr) {
-    console.error('Memory fetch error (non-fatal):', memErr && memErr.message ? memErr.message : memErr);
-  }
-  const memoryBlock = conversationHistoryText
-    ? 'Recent conversation history:\n' + conversationHistoryText + '\n\n'
-    : '';
+  } catch (memErr) { console.error('Memory fetch error:', memErr?.message); }
+  const shortTermBlock = conversationHistoryText ? 'Recent conversation history:
+' + conversationHistoryText + '
+
+' : '';
+  const longTermBlock = longTermMemory ? 'Permanent facts you know about the user:
+' + longTermMemory + '
+
+' : '';
+  const memoryBlock = longTermBlock + shortTermBlock;
   // === END MEMORY ===
 
 const input = `
