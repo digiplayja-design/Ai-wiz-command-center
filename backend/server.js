@@ -3479,7 +3479,7 @@ Instructions:
     // ── Credit Docs: Generate PDF + DOCX if this is a file/credit request ──
     let pdfBase64 = null;
     let docxBase64 = null;
-    if (fileRequested) {
+    if (true) {
       try {
         const [pdfBuf, docxBuf] = await Promise.all([
           generateCreditDisputePDF(answer),
@@ -3538,6 +3538,8 @@ Instructions:
       creditsUsed: creditsNeeded,
       usage: updatedUsage,
       generationId: historyItem?.id || null,
+      pdf_base64: pdfBase64 || undefined,
+      docx_base64: docxBase64 || undefined,
     });
   } catch (error) {
     console.error("Multi-file analysis error:", sanitize(error?.message || error));
