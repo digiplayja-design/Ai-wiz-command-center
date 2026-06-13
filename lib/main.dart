@@ -8197,17 +8197,22 @@ Widget _buildMockupFeaturedCharacterCard() {
                                           ).withOpacity(0.18),
                                         ),
                                       ),
-                                      child: SingleChildScrollView(
-                                        child: Text(
-                                          activeResult.content,
-                                          style: TextStyle(
-                                            color: const Color(0xFFA9C6CF),
-                                            fontSize: compact ? 12.5 : 13.5,
-                                            height: 1.32,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
+                                      child: activeResult.hasImageResult
+                                          ? _buildGeneratedImagePreview(
+                                              activeResult,
+                                              height: double.infinity,
+                                            )
+                                          : SingleChildScrollView(
+                                              child: Text(
+                                                activeResult.content,
+                                                style: TextStyle(
+                                                  color: const Color(0xFFA9C6CF),
+                                                  fontSize: compact ? 12.5 : 13.5,
+                                                  height: 1.32,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
                                     ),
                                   ),
                                   const SizedBox(height: 10),
