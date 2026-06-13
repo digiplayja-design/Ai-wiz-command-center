@@ -5968,6 +5968,17 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     }
 
     if (_isImprovePictureQuickAction(action)) {
+      // Toggle off if already active
+      if (_improvePictureMode) {
+        setState(() {
+          _improvePictureMode = false;
+          _error = null;
+          _controller.text = '';
+          _controller.selection = const TextSelection.collapsed(offset: 0);
+        });
+        return;
+      }
+
       const defaultImprovePrompt =
           'Enhance this photo with professional quality: improve lighting, sharpness, color, contrast, and background polish. Preserve the subject identity, face, and overall realism. Make it look like a high-end professional photograph.';
       setState(() {
@@ -8710,6 +8721,11 @@ Widget _buildMockupFeaturedCharacterCard() {
   Widget _buildChatBubblePair(ChatMessage msg, int index) {
     // If this message has been closed/deleted, render nothing
     if (_deletedMessages.contains(index)) return const SizedBox.shrink();
+
+    // Skip messages with empty user text or empty AI text (e.g. incomplete history entries)
+    if (msg.userText.trim().isEmpty || msg.aiText.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     final isMinimized = _minimizedMessages.contains(index);
     final aiPreview = _cleanDisplayText(msg.aiText);
