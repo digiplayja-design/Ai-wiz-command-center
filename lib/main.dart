@@ -4022,7 +4022,6 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   bool _improvePictureMode = false;
   bool _imaginePictureMode = false;
   bool _fixCreditReportMode = false;
-        _createAppMode = false;
   bool _createAppMode = false;
   bool _voiceListening = false;
   fp.PlatformFile? _pickedUploadFile;
@@ -4751,7 +4750,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       _error = null;
       _featuredAnswerDismissed = true;
       _fixCreditReportMode = false;
-        _createAppMode = false;
+      _createAppMode = false;
     });
 
     try {
