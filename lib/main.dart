@@ -8125,7 +8125,7 @@ Widget _buildMockupFeaturedCharacterCard() {
                                         onPressed: () => setState(() => _answerMinimized = !_answerMinimized),
                                         tooltip: _answerMinimized ? 'Maximize' : 'Minimize',
                                         icon: Icon(
-                                          _answerMinimized ? Icons.expand_more_rounded : Icons.expand_less_rounded,
+                                          _answerMinimized ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
                                           color: const Color(0xFF69D9E8),
                                           size: 18,
                                         ),
@@ -8666,7 +8666,7 @@ Widget _buildMockupFeaturedCharacterCard() {
               onPressed: () => setState(() => _chatMinimized = !_chatMinimized),
               tooltip: _chatMinimized ? 'Maximize chat' : 'Minimize chat',
               icon: Icon(
-                _chatMinimized ? Icons.expand_more_rounded : Icons.expand_less_rounded,
+                _chatMinimized ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
                 color: const Color(0xFF2EC7DF),
                 size: 22,
               ),
@@ -8741,7 +8741,7 @@ Widget _buildMockupFeaturedCharacterCard() {
                       }
                     }),
                     icon: Icon(
-                      isMinimized ? Icons.expand_more_rounded : Icons.expand_less_rounded,
+                      isMinimized ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
                       size: 16,
                       color: const Color(0xFF69D9E8).withOpacity(0.7),
                     ),
