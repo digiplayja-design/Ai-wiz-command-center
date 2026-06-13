@@ -4037,6 +4037,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   bool _chatHistoryLoaded = false;
   bool _chatMinimized = false;
   bool _answerMinimized = false;
+  // Per-message minimize/delete state (tracked by index in _chatMessages)
+  final Set<int> _minimizedMessages = {};
+  final Set<int> _deletedMessages = {};
 
   LanguageCopy get _t => AppLanguages.byCode(_selectedLanguage);
 
@@ -8693,7 +8696,7 @@ Widget _buildMockupFeaturedCharacterCard() {
               itemCount: _chatMessages.length,
               itemBuilder: (context, index) {
                 final msg = _chatMessages[index];
-                return _buildChatBubblePair(msg);
+                return _buildChatBubblePair(msg, index);
               },
             ),
           ),
@@ -8702,144 +8705,202 @@ Widget _buildMockupFeaturedCharacterCard() {
     );
   }
 
-  Widget _buildChatBubblePair(ChatMessage msg) {
+  Widget _buildChatBubblePair(ChatMessage msg, int index) {
+    // If this message has been closed/deleted, render nothing
+    if (_deletedMessages.contains(index)) return const SizedBox.shrink();
+
+    final isMinimized = _minimizedMessages.contains(index);
     final aiPreview = _cleanDisplayText(msg.aiText);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ── User message (right-aligned) ──
-        Align(
-          alignment: Alignment.centerRight,
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 8, left: 48),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1A4A5C),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(18),
-                topRight: Radius.circular(4),
-                bottomLeft: Radius.circular(18),
-                bottomRight: Radius.circular(18),
-              ),
-              border: Border.all(color: const Color(0xFF69D9E8).withOpacity(0.4)),
-            ),
-            child: Text(
-              msg.userText,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-            ),
-          ),
-        ),
-        // ── AI response (left-aligned) ──
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 18, right: 48),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0A1F2E),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(4),
-                topRight: Radius.circular(18),
-                bottomLeft: Radius.circular(18),
-                bottomRight: Radius.circular(18),
-              ),
-              border: Border.all(color: Colors.white.withOpacity(0.12)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        // ── User message (right-aligned) with per-message controls ──
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Minimize / Maximize / Close controls (left of user bubble)
+            Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // AI avatar row
-                Row(
-                  children: [
-                    Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF69D9E8).withOpacity(0.15),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFF69D9E8).withOpacity(0.5)),
-                      ),
-                      child: const Icon(Icons.auto_awesome_rounded, color: Color(0xFF69D9E8), size: 16),
+                // Minimize / Maximize
+                SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    tooltip: isMinimized ? 'Maximize message' : 'Minimize message',
+                    onPressed: () => setState(() {
+                      if (isMinimized) {
+                        _minimizedMessages.remove(index);
+                      } else {
+                        _minimizedMessages.add(index);
+                      }
+                    }),
+                    icon: Icon(
+                      isMinimized ? Icons.expand_more_rounded : Icons.expand_less_rounded,
+                      size: 16,
+                      color: const Color(0xFF69D9E8).withOpacity(0.7),
                     ),
-                    const SizedBox(width: 8),
-                    const Text('Korlix AI', style: TextStyle(color: Color(0xFF69D9E8), fontSize: 12, fontWeight: FontWeight.w700)),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 10),
-                // AI response text
-                if (msg.isImage && msg.generatedItem != null) ...[
-                  _buildGeneratedImagePreview(msg.generatedItem!, height: 200),
-                  const SizedBox(height: 8),
-                ],
-                Text(
-                  aiPreview,
-                  maxLines: 6,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
-                ),
-                const SizedBox(height: 12),
-                // Action buttons: Share, Copy, Download
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    // Copy
-                    _chatActionButton(
-                      icon: Icons.copy_rounded,
-                      label: 'Copy',
-                      onTap: () async {
-                        await Clipboard.setData(ClipboardData(text: msg.aiText));
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Copied to clipboard'), duration: Duration(seconds: 2)),
-                          );
-                        }
-                      },
+                // Close / Delete
+                SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Remove message',
+                    onPressed: () => setState(() => _deletedMessages.add(index)),
+                    icon: Icon(
+                      Icons.close_rounded,
+                      size: 16,
+                      color: Colors.white.withOpacity(0.35),
                     ),
-                    // Share
-                    _chatActionButton(
-                      icon: Icons.share_rounded,
-                      label: 'Share',
-                      onTap: () => Share.share(msg.aiText),
-                    ),
-                    // Download / Open full
-                    _chatActionButton(
-                      icon: Icons.open_in_full_rounded,
-                      label: 'Open',
-                      onTap: () {
-                        if (msg.generatedItem != null) {
-                          _showResult(msg.generatedItem!);
-                        } else {
-                          // Show full text in dialog
-                          showDialog<void>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              backgroundColor: const Color(0xFF071B27),
-                              title: const Text('Full Response', style: TextStyle(color: Colors.white)),
-                              content: SingleChildScrollView(child: Text(msg.aiText, style: const TextStyle(color: Colors.white70))),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-                              ],
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                    // PDF export if applicable
-                    if (msg.allowPdf && msg.generatedItem != null)
-                      _chatActionButton(
-                        icon: Icons.picture_as_pdf_rounded,
-                        label: 'PDF',
-                        onTap: () => _exportPdf(msg.generatedItem!),
-                      ),
-                    // Credit dispute letter downloads
-                    if (msg.isCreditDispute) ..._buildCreditDisputeDownloadButtons(msg),
-                  ],
+                  ),
                 ),
               ],
             ),
-          ),
+            const SizedBox(width: 4),
+            // User bubble
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A4A5C),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(18),
+                      topRight: Radius.circular(4),
+                      bottomLeft: Radius.circular(18),
+                      bottomRight: Radius.circular(18),
+                    ),
+                    border: Border.all(color: const Color(0xFF69D9E8).withOpacity(0.4)),
+                  ),
+                  child: Text(
+                    msg.userText,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
+        // ── AI response (left-aligned) — hidden when minimized ──
+        if (!isMinimized)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 18, right: 48),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0A1F2E),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(18),
+                  bottomLeft: Radius.circular(18),
+                  bottomRight: Radius.circular(18),
+                ),
+                border: Border.all(color: Colors.white.withOpacity(0.12)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // AI avatar row
+                  Row(
+                    children: [
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF69D9E8).withOpacity(0.15),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFF69D9E8).withOpacity(0.5)),
+                        ),
+                        child: const Icon(Icons.auto_awesome_rounded, color: Color(0xFF69D9E8), size: 16),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text('Korlix AI', style: TextStyle(color: Color(0xFF69D9E8), fontSize: 12, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // AI response text
+                  if (msg.isImage && msg.generatedItem != null) ...[
+                    _buildGeneratedImagePreview(msg.generatedItem!, height: 200),
+                    const SizedBox(height: 8),
+                  ],
+                  Text(
+                    aiPreview,
+                    maxLines: 6,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
+                  ),
+                  const SizedBox(height: 12),
+                  // Action buttons: Copy, Share, Open, PDF, Credit Dispute
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      // Copy
+                      _chatActionButton(
+                        icon: Icons.copy_rounded,
+                        label: 'Copy',
+                        onTap: () async {
+                          await Clipboard.setData(ClipboardData(text: msg.aiText));
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Copied to clipboard'), duration: Duration(seconds: 2)),
+                            );
+                          }
+                        },
+                      ),
+                      // Share
+                      _chatActionButton(
+                        icon: Icons.share_rounded,
+                        label: 'Share',
+                        onTap: () => Share.share(msg.aiText),
+                      ),
+                      // Open full
+                      _chatActionButton(
+                        icon: Icons.open_in_full_rounded,
+                        label: 'Open',
+                        onTap: () {
+                          if (msg.generatedItem != null) {
+                            _showResult(msg.generatedItem!);
+                          } else {
+                            showDialog<void>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                backgroundColor: const Color(0xFF071B27),
+                                title: const Text('Full Response', style: TextStyle(color: Colors.white)),
+                                content: SingleChildScrollView(child: Text(msg.aiText, style: const TextStyle(color: Colors.white70))),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+                                ],
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                      // PDF export if applicable
+                      if (msg.allowPdf && msg.generatedItem != null)
+                        _chatActionButton(
+                          icon: Icons.picture_as_pdf_rounded,
+                          label: 'PDF',
+                          onTap: () => _exportPdf(msg.generatedItem!),
+                        ),
+                      // Credit dispute letter downloads
+                      if (msg.isCreditDispute) ..._buildCreditDisputeDownloadButtons(msg),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
       ],
     );
   }
