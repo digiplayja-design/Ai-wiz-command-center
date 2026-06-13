@@ -3022,64 +3022,42 @@ Korlix quality rules:
 }
 
 async function createKorlixImaginedImage({ prompt }) {
-  const model =
-    process.env.OPENAI_IMAGE_GENERATION_MODEL ||
-    process.env.OPENAI_IMAGE_EDIT_MODEL ||
-    "gpt-image-1";
-
-  const response = await fetch("https://api.openai.com/v1/images/generations", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      prompt: buildKorlixImageCreatePrompt(prompt),
-      n: 1,
-      size: process.env.OPENAI_IMAGE_SIZE || "1024x1024",
-    }),
+  // GPT-5.5 via the Responses API with the image_generation tool is the highest-quality
+  // path for image generation from text. GPT-5.5 acts as the reasoning/orchestration
+  // layer, auto-revises the prompt for better results, and internally selects the best
+  // GPT Image model (gpt-image-2 or gpt-image-1.5).
+  const client = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
   });
 
-  const text = await response.text();
-  let data;
+  const response = await client.responses.create({
+    model: "gpt-5.5",
+    input: buildKorlixImageCreatePrompt(prompt),
+    tools: [
+      {
+        type: "image_generation",
+        action: "generate",     // Always generate a new image from the prompt
+        quality: "high",        // Maximum quality tier
+        size: "1024x1024",      // Standard high-res square
+        output_format: "png",   // Lossless PNG output
+      },
+    ],
+    tool_choice: { type: "image_generation" }, // Force the image generation tool
+  });
 
-  try {
-    data = JSON.parse(text);
-  } catch (_error) {
-    throw new Error(
-      `OpenAI image generation returned a non-JSON response: ${text.slice(
-        0,
-        300
-      )}`
-    );
-  }
+  // Extract the base64 image from the image_generation_call output
+  const imageOutput = response.output?.find(
+    (o) => o.type === "image_generation_call"
+  );
+  const b64 = imageOutput?.result || null;
 
-  if (!response.ok) {
-    const message =
-      data?.error?.message ||
-      data?.message ||
-      `OpenAI image generation failed with status ${response.status}`;
-    throw new Error(message);
-  }
-
-  const first = data?.data?.[0] || {};
-  const b64 =
-    first.b64_json ||
-    first.image_base64 ||
-    first.base64_json ||
-    first.image?.b64_json ||
-    first.image?.base64;
-
-  const imageUrl = first.url || first.image_url || first.image?.url || null;
-
-  if (!b64 && !imageUrl) {
-    throw new Error("OpenAI did not return a generated image.");
+  if (!b64) {
+    throw new Error("GPT-5.5 did not return a generated image.");
   }
 
   return {
-    imageDataUrl: b64 ? `data:image/png;base64,${b64}` : null,
-    imageUrl,
+    imageDataUrl: `data:image/png;base64,${b64}`,
+    imageUrl: null,
   };
 }
 
