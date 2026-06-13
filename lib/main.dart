@@ -3689,6 +3689,10 @@ Analyze the attached credit reports thoroughly and produce a complete, high-impa
           label: 'Imagine a picture',
           prompt: kKorlixImaginePicturePrompt,
         ),
+        QuickAction(
+          label: 'Create an App',
+          prompt: 'Create an App',
+        ),
         QuickAction(label: 'Create a video', prompt: kKorlixCreateVideoPrompt),
       ],
     ),
@@ -4018,6 +4022,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   bool _improvePictureMode = false;
   bool _imaginePictureMode = false;
   bool _fixCreditReportMode = false;
+        _createAppMode = false;
+  bool _createAppMode = false;
   bool _voiceListening = false;
   fp.PlatformFile? _pickedUploadFile;
   final List<fp.PlatformFile> _pickedUploadFiles = <fp.PlatformFile>[];
@@ -4745,6 +4751,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       _error = null;
       _featuredAnswerDismissed = true;
       _fixCreditReportMode = false;
+        _createAppMode = false;
     });
 
     try {
@@ -5661,6 +5668,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     });
   }
 
+  bool _isCreateAppQuickAction(QuickAction action) {
+    final label = action.label.toLowerCase();
+    return label.contains('create an app') || label.contains('build an app');
+  }
+
   bool _isCreateVideoQuickAction(QuickAction action) {
     final label = action.label.toLowerCase();
     return label.contains('video') || action.prompt == kKorlixCreateVideoPrompt;
@@ -5822,6 +5834,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     final isImproveAction = _isImprovePictureQuickAction(action);
     final isImagineAction = _isImaginePictureQuickAction(action);
     final isCreditAction = _isCreditReportActionSafeUi(action);
+    final isAppAction = _isCreateAppQuickAction(action);
 
     final attachedImageForImprove = _pickedUploadFile;
     final typedCommandForImprove = _controller.text.trim();
@@ -5838,9 +5851,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         !_loading;
     final isImagineActive = isImagineAction && _imaginePictureMode && !_loading;
     final isCreditActive = isCreditAction && _fixCreditReportMode && !_loading;
+    final isAppActive = isAppAction && _createAppMode && !_loading;
 
     final isHighlighted =
-        isVideoActive || isImproveActive || isImagineActive || isCreditActive;
+        isVideoActive || isImproveActive || isImagineActive || isCreditActive || isAppActive;
 
     final enabledTextColor = isHighlighted
         ? const Color(0xFF061008)
@@ -5879,6 +5893,12 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
               size: 17,
               color: _loading ? Colors.white38 : enabledTextColor,
             )
+          : isAppAction
+          ? Icon(
+              Icons.app_shortcut_rounded,
+              size: 17,
+              color: _loading ? Colors.white38 : enabledTextColor,
+            )
           : null,
       label: Text(
         isVideoAction
@@ -5889,6 +5909,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             ? 'Imagine a picture'
             : isCreditAction
             ? 'Fix My Credit Report'
+            : isAppAction
+            ? 'Create an App'
             : action.label,
       ),
       labelStyle: TextStyle(
@@ -5910,12 +5932,18 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       return;
     }
 
+    if (_isCreateAppQuickAction(action)) {
+      _showAppCreationDialog();
+      return;
+    }
+
     if (_isCreateVideoQuickAction(action)) {
       setState(() {
         _createVideoMode = true;
         _improvePictureMode = false;
         _imaginePictureMode = false;
         _fixCreditReportMode = false;
+        _createAppMode = false;
         _error = null;
         _controller.text = '';
         _controller.selection = TextSelection.fromPosition(
@@ -5940,6 +5968,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         _createVideoMode = false;
         _imaginePictureMode = false;
         _fixCreditReportMode = false;
+        _createAppMode = false;
         _error = null;
         _controller.text = '';
         _controller.selection = TextSelection.fromPosition(
@@ -5964,6 +5993,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         _createVideoMode = false;
         _improvePictureMode = false;
         _fixCreditReportMode = false;
+        _createAppMode = false;
         _error = null;
         _controller.text = '';
         _controller.selection = TextSelection.fromPosition(
@@ -5987,10 +6017,194 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       _improvePictureMode = false;
       _imaginePictureMode = false;
       _fixCreditReportMode = false;
+        _createAppMode = false;
       _controller.text = action.prompt;
       _controller.selection = TextSelection.fromPosition(
         TextPosition(offset: _controller.text.length),
       );
+    });
+  }
+
+
+  Future<void> _showAppCreationDialog() async {
+    int currentStep = 0;
+    final List<String> questions = [
+      "What is your app idea or name?",
+      "Who is the target audience for this app?",
+      "What are the 3-5 main features?",
+      "Which platforms? (iOS, Android, Web, All)",
+      "Any design preferences? (colors, style, theme)"
+    ];
+    final List<TextEditingController> controllers = List.generate(
+      questions.length,
+      (index) => TextEditingController(),
+    );
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF0A1526),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: const Color(0xFF2EC7DF).withOpacity(0.3)),
+              ),
+              title: const Text(
+                'Create an App',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
+              ),
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Step ${currentStep + 1} of ${questions.length}',
+                      style: const TextStyle(
+                        color: Color(0xFF69D9E8),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      questions[currentStep],
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: controllers[currentStep],
+                      style: const TextStyle(color: Colors.white),
+                      autofocus: true,
+                      maxLines: currentStep == 2 ? 3 : 1,
+                      decoration: InputDecoration(
+                        hintText: 'Type your answer here...',
+                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                        filled: true,
+                        fillColor: Colors.black.withOpacity(0.3),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Color(0xFF2EC7DF)),
+                        ),
+                      ),
+                      onSubmitted: (_) {
+                        if (controllers[currentStep].text.trim().isNotEmpty) {
+                          if (currentStep < questions.length - 1) {
+                            setStateDialog(() {
+                              currentStep++;
+                            });
+                          } else {
+                            Navigator.of(context).pop(true);
+                          }
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop(false);
+                  },
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.white60),
+                  ),
+                ),
+                if (currentStep > 0)
+                  TextButton(
+                    onPressed: () {
+                      setStateDialog(() {
+                        currentStep--;
+                      });
+                    },
+                    child: const Text(
+                      'Back',
+                      style: TextStyle(color: Color(0xFF2EC7DF)),
+                    ),
+                  ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (controllers[currentStep].text.trim().isEmpty) return;
+                    
+                    if (currentStep < questions.length - 1) {
+                      setStateDialog(() {
+                        currentStep++;
+                      });
+                    } else {
+                      Navigator.of(context).pop(true);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFB7FF00),
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    currentStep == questions.length - 1 ? 'Generate App Spec' : 'Next',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).then((completed) {
+      if (completed == true) {
+        // Compile the answers into a prompt
+        final appIdea = controllers[0].text.trim();
+        final audience = controllers[1].text.trim();
+        final features = controllers[2].text.trim();
+        final platforms = controllers[3].text.trim();
+        final design = controllers[4].text.trim();
+
+        final prompt = '''You are an expert App Architect and Senior Product Manager.
+Please generate a comprehensive App Specification and Development Plan for the following app:
+
+**App Idea/Name:** $appIdea
+**Target Audience:** $audience
+**Core Features:** $features
+**Target Platforms:** $platforms
+**Design Preferences:** $design
+
+Please include:
+1. Executive Summary & Value Proposition
+2. User Personas & Core Use Cases
+3. Detailed Feature Breakdown (MVP vs V2)
+4. Recommended Tech Stack (Frontend, Backend, Database)
+5. Screen-by-Screen UI/UX Flow
+6. Estimated Development Timeline & Milestones
+7. Monetization Strategy (if applicable)
+
+Make the output professional, well-structured using Markdown, and highly detailed.''';
+
+        setState(() {
+          _createAppMode = true;
+          _controller.text = prompt;
+        });
+        
+        // Auto-submit the generated prompt
+        _generate();
+      }
     });
   }
 
