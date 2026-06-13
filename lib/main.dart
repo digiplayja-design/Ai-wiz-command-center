@@ -8218,7 +8218,7 @@ Widget _buildMockupFeaturedCharacterCard() {
                                       child: activeResult.hasImageResult
                                           ? _buildGeneratedImagePreview(
                                               activeResult,
-                                              height: double.infinity,
+                                              height: 300,
                                             )
                                           : SingleChildScrollView(
                                               child: Text(
