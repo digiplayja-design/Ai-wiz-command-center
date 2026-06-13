@@ -4035,6 +4035,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   final List<ChatMessage> _chatMessages = [];
   final ScrollController _chatScrollController = ScrollController();
   bool _chatHistoryLoaded = false;
+  bool _chatMinimized = false;
+  bool _answerMinimized = false;
 
   LanguageCopy get _t => AppLanguages.byCode(_selectedLanguage);
 
@@ -4996,6 +4998,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
 
     setState(() {
       _featuredAnswerDismissed = false;
+      _answerMinimized = false;
       _loading = true;
       _error = null;
     });
@@ -8065,7 +8068,7 @@ Widget _buildMockupFeaturedCharacterCard() {
                                 '${activeResult.title}-${activeResult.command}-${activeResult.content.hashCode}',
                               ),
                               width: double.infinity,
-                              height: double.infinity,
+                              height: _answerMinimized ? null : double.infinity,
                               padding: EdgeInsets.all(compact ? 13 : 16),
                               decoration: BoxDecoration(
                                 color: const Color(
@@ -8089,6 +8092,7 @@ Widget _buildMockupFeaturedCharacterCard() {
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: _answerMinimized ? MainAxisSize.min : MainAxisSize.max,
                                 children: [
                                   Row(
                                     children: [
@@ -8111,6 +8115,16 @@ Widget _buildMockupFeaturedCharacterCard() {
                                           ),
                                         ),
                                       ),
+                                      // Minimize/Maximize button
+                                      IconButton(
+                                        onPressed: () => setState(() => _answerMinimized = !_answerMinimized),
+                                        tooltip: _answerMinimized ? 'Maximize' : 'Minimize',
+                                        icon: Icon(
+                                          _answerMinimized ? Icons.expand_more_rounded : Icons.expand_less_rounded,
+                                          color: const Color(0xFF69D9E8),
+                                          size: 18,
+                                        ),
+                                      ),
                                       IconButton(
                                         onPressed: () {
                                           setState(() {
@@ -8129,6 +8143,8 @@ Widget _buildMockupFeaturedCharacterCard() {
                                       ),
                                     ],
                                   ),
+                                  // Body content — hidden when minimized
+                                  if (!_answerMinimized) ...[
                                   const SizedBox(height: 6),
                                   Text(
                                     activeResult.command,
@@ -8232,6 +8248,7 @@ Widget _buildMockupFeaturedCharacterCard() {
                                       ),
                                     ],
                                   ),
+                                  ], // end if (!_answerMinimized)
                                 ],
                               ),
                             ),
@@ -8639,6 +8656,16 @@ Widget _buildMockupFeaturedCharacterCard() {
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
             ),
+            // Minimize/Maximize button
+            IconButton(
+              onPressed: () => setState(() => _chatMinimized = !_chatMinimized),
+              tooltip: _chatMinimized ? 'Maximize chat' : 'Minimize chat',
+              icon: Icon(
+                _chatMinimized ? Icons.expand_more_rounded : Icons.expand_less_rounded,
+                color: const Color(0xFF2EC7DF),
+                size: 22,
+              ),
+            ),
             TextButton.icon(
               onPressed: () async {
                 await _clearAllResults();
@@ -8649,26 +8676,28 @@ Widget _buildMockupFeaturedCharacterCard() {
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        // Chat bubble list
-        Container(
-          constraints: const BoxConstraints(maxHeight: 600),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.04),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.10)),
+        // Chat bubble list (hidden when minimized)
+        if (!_chatMinimized) ...[  
+          const SizedBox(height: 8),
+          Container(
+            constraints: const BoxConstraints(maxHeight: 600),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withOpacity(0.10)),
+            ),
+            child: ListView.builder(
+              controller: _chatScrollController,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              shrinkWrap: true,
+              itemCount: _chatMessages.length,
+              itemBuilder: (context, index) {
+                final msg = _chatMessages[index];
+                return _buildChatBubblePair(msg);
+              },
+            ),
           ),
-          child: ListView.builder(
-            controller: _chatScrollController,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            shrinkWrap: true,
-            itemCount: _chatMessages.length,
-            itemBuilder: (context, index) {
-              final msg = _chatMessages[index];
-              return _buildChatBubblePair(msg);
-            },
-          ),
-        ),
+        ],
       ],
     );
   }
