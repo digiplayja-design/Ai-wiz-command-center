@@ -5933,6 +5933,16 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
 
   void _useQuickAction(QuickAction action) {
     if (_isCreditReportActionSafeUi(action)) {
+      // Toggle off if already active
+      if (_fixCreditReportMode) {
+        setState(() {
+          _fixCreditReportMode = false;
+          _error = null;
+          _controller.text = '';
+          _controller.selection = const TextSelection.collapsed(offset: 0);
+        });
+        return;
+      }
       _activateCreditReportModeSafeUi();
       return;
     }
