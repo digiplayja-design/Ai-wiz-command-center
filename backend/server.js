@@ -6,6 +6,7 @@ import OpenAI from "openai";
 import { toFile } from "openai/uploads";
 import { createClient } from "@supabase/supabase-js";
 import multer from "multer";
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, Table, TableRow, TableCell, WidthType, ShadingType } from "docx";
 
 dotenv.config();
 
@@ -3943,6 +3944,308 @@ Important: Live search was attempted but failed. Give the most useful answer pos
   }
 });
 
+
+// ============================================================
+// CREDIT DISPUTE LETTERS — generate 3 DOCX letters (Equifax, Experian, TransUnion)
+// ============================================================
+app.post("/api/credit-dispute-letters", documentUpload.array("files", 8), async (req, res) => {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(400).json({ error: "Missing OPENAI_API_KEY on backend." });
+    }
+
+    const user = await requireUser(req);
+    const profile = await getOrCreateProfile(user);
+    const usageCounter = await getOrCreateUsageCounter(user.id);
+    const files = getKorlixUploadedFiles(req);
+    const body = req.body || {};
+    const languageCode = body.language || "en";
+    const userNotes = String(body.prompt || body.question || "").trim();
+
+    if (!files.length) {
+      return res.status(400).json({ error: "Please upload your credit report file(s)." });
+    }
+
+    const creditsNeeded = 3; // 3 letters = 3 credits
+    const usageCheck = checkUsageAllowed({ profile, usageCounter, creditsNeeded });
+    if (!usageCheck.allowed) {
+      return res.status(429).json({ error: usageCheck.reason, tier: profile?.tier || "basic" });
+    }
+
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    // Build multimodal content array with the uploaded files
+    const content = [
+      {
+        type: "input_text",
+        text: `You are a professional credit repair specialist. The user uploaded their credit report(s).
+
+Your job: Analyze the credit report and produce dispute letter content for ALL THREE major credit bureaus.
+
+Return ONLY valid JSON in this exact format (no markdown, no explanation outside the JSON):
+{
+  "consumerName": "[Full name from report or 'Consumer']",
+  "consumerAddress": "[Address from report or 'Address on File']",
+  "reportDate": "[Date from report or today's date]",
+  "summary": "[2-3 sentence plain-English summary of the credit report issues found]",
+  "equifax": {
+    "items": [
+      {
+        "accountName": "[Creditor name]",
+        "accountNumber": "[Last 4 digits or masked]",
+        "disputeReason": "[Specific reason: inaccurate, outdated, unverifiable, not mine, etc.]",
+        "requestedAction": "[Delete, correct, or verify]"
+      }
+    ]
+  },
+  "experian": {
+    "items": [
+      {
+        "accountName": "[Creditor name]",
+        "accountNumber": "[Last 4 digits or masked]",
+        "disputeReason": "[Specific reason]",
+        "requestedAction": "[Delete, correct, or verify]"
+      }
+    ]
+  },
+  "transunion": {
+    "items": [
+      {
+        "accountName": "[Creditor name]",
+        "accountNumber": "[Last 4 digits or masked]",
+        "disputeReason": "[Specific reason]",
+        "requestedAction": "[Delete, correct, or verify]"
+      }
+    ]
+  }
+}
+
+IMPORTANT RULES:
+- Only include items that are actually negative, inaccurate, outdated, or questionable.
+- If a bureau has no items to dispute, set its "items" to an empty array [].
+- Do NOT invent account numbers, dates, or balances not visible in the report.
+- Do NOT include guaranteed deletion language.
+- User notes: ${userNotes || "None provided."}`
+      }
+    ];
+
+    for (const file of files) {
+      const mimeType = getUploadMimeType(file);
+      if (mimeType === "application/octet-stream") {
+        return res.status(400).json({ error: `Unsupported file type: ${file.originalname}` });
+      }
+      const dataUrl = `data:${mimeType};base64,${file.buffer.toString("base64")}`;
+      if (isImageUpload(file)) {
+        content.push({ type: "input_image", image_url: dataUrl });
+      } else {
+        content.push({ type: "input_file", filename: file.originalname || "credit-report", file_data: dataUrl });
+      }
+    }
+
+    const response = await client.responses.create({
+      model: process.env.OPENAI_FILE_MODEL || process.env.OPENAI_MODEL || "gpt-4o-mini",
+      input: [{ role: "user", content }],
+    });
+
+    const rawAnswer = extractKorlixResponseText(response);
+    if (!rawAnswer) throw new Error("No answer returned from AI.");
+
+    // Parse the JSON response from the AI
+    let parsed;
+    try {
+      const jsonMatch = rawAnswer.match(/\{[\s\S]*\}/);
+      parsed = JSON.parse(jsonMatch ? jsonMatch[0] : rawAnswer);
+    } catch (e) {
+      throw new Error("AI returned invalid JSON for dispute letters. Please try again.");
+    }
+
+    const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    const consumerName = parsed.consumerName || "Consumer";
+    const consumerAddress = parsed.consumerAddress || "Address on File";
+    const summary = parsed.summary || "";
+
+    // Helper: build a DOCX letter for one bureau
+    async function buildDisputeDocx(bureauName, bureauAddress, items) {
+      const children = [];
+
+      // Header
+      children.push(
+        new Paragraph({
+          text: "CREDIT DISPUTE LETTER",
+          heading: HeadingLevel.HEADING_1,
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 200 },
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: `Sent to: ${bureauName}`, bold: true, size: 24 })],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 400 },
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: today, size: 22 })],
+          spacing: { after: 200 },
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: bureauName, bold: true, size: 22 })],
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: bureauAddress, size: 22 })],
+          spacing: { after: 400 },
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({ text: "Re: Formal Dispute of Inaccurate/Unverifiable Credit Report Information", bold: true, size: 22 }),
+          ],
+          spacing: { after: 400 },
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: `Dear ${bureauName} Dispute Department,`, size: 22 })],
+          spacing: { after: 200 },
+        }),
+        new Paragraph({
+          children: [new TextRun({
+            text: `I am writing to formally dispute the following information in my credit file. The items I dispute are inaccurate, incomplete, outdated, or cannot be verified. Pursuant to the Fair Credit Reporting Act (FCRA), 15 U.S.C. § 1681i, I request that you investigate and correct or remove the items listed below.`,
+            size: 22,
+          })],
+          spacing: { after: 400 },
+        }),
+      );
+
+      if (items && items.length > 0) {
+        children.push(
+          new Paragraph({
+            text: "DISPUTED ITEMS",
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 200, after: 200 },
+          })
+        );
+
+        items.forEach((item, idx) => {
+          children.push(
+            new Paragraph({
+              children: [new TextRun({ text: `${idx + 1}. ${item.accountName || "Unknown Account"}`, bold: true, size: 22 })],
+              spacing: { before: 200 },
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: `Account Number: ${item.accountNumber || "N/A"}`, size: 22 })],
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: `Reason for Dispute: ${item.disputeReason || "Inaccurate information"}`, size: 22 })],
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: `Requested Action: ${item.requestedAction || "Please investigate and correct or remove this item."}`, size: 22 })],
+              spacing: { after: 200 },
+            }),
+          );
+        });
+      } else {
+        children.push(
+          new Paragraph({
+            children: [new TextRun({ text: "No specific items were identified for this bureau based on the uploaded report.", italics: true, size: 22 })],
+            spacing: { after: 400 },
+          })
+        );
+      }
+
+      // Closing
+      children.push(
+        new Paragraph({
+          children: [new TextRun({
+            text: `Please investigate these matters and provide me with written results of your investigation within 30 days as required by the FCRA. If you cannot verify the information, please delete it from my credit report immediately.`,
+            size: 22,
+          })],
+          spacing: { before: 400, after: 400 },
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: "Sincerely,", size: 22 })],
+          spacing: { after: 400 },
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: consumerName, bold: true, size: 22 })],
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: consumerAddress, size: 22 })],
+          spacing: { after: 200 },
+        }),
+        new Paragraph({
+          children: [new TextRun({
+            text: "DISCLAIMER: This letter was generated with AI assistance for educational and organizational purposes only. Korlix AI does not guarantee deletion of any credit report item or any increase in credit score. Please review all information carefully before sending.",
+            italics: true,
+            size: 18,
+            color: "888888",
+          })],
+          spacing: { before: 600 },
+        }),
+      );
+
+      const doc = new Document({
+        sections: [{ properties: {}, children }],
+      });
+
+      const buffer = await Packer.toBuffer(doc);
+      return buffer.toString("base64");
+    }
+
+    // Bureau addresses
+    const bureauAddresses = {
+      equifax: "Equifax Information Services LLC\nP.O. Box 740256\nAtlanta, GA 30374-0256",
+      experian: "Experian\nP.O. Box 4500\nAllen, TX 75013",
+      transunion: "TransUnion LLC\nConsumer Dispute Center\nP.O. Box 2000\nChester, PA 19016",
+    };
+
+    const [equifaxDocx, experianDocx, transunionDocx] = await Promise.all([
+      buildDisputeDocx("Equifax", bureauAddresses.equifax, parsed.equifax?.items || []),
+      buildDisputeDocx("Experian", bureauAddresses.experian, parsed.experian?.items || []),
+      buildDisputeDocx("TransUnion", bureauAddresses.transunion, parsed.transunion?.items || []),
+    ]);
+
+    const fileNames = files.map((f) => f.originalname).join(", ");
+    const summaryText = `Credit Dispute Letters Generated\n\n${summary}\n\nEquifax items: ${(parsed.equifax?.items || []).length}\nExperian items: ${(parsed.experian?.items || []).length}\nTransUnion items: ${(parsed.transunion?.items || []).length}\n\nDISCLAIMER: Korlix AI does not guarantee deletion of any credit report item or any increase in credit score. Please review all letters carefully before sending.`;
+
+    const historyItem = await saveGenerationHistory({
+      user,
+      profile,
+      command: `Credit dispute letters for: ${fileNames}`,
+      content: summaryText,
+      languageCode,
+      fileRequested: true,
+      searched: false,
+      creditsNeeded,
+    });
+
+    const updatedUsage = await incrementUsage({
+      usageCounter,
+      liveSearchUsed: false,
+      fileRequested: true,
+      creditsNeeded,
+    });
+
+    return res.json({
+      success: true,
+      content: summaryText,
+      summary,
+      consumerName,
+      equifaxDocxBase64: equifaxDocx,
+      experianDocxBase64: experianDocx,
+      transunionDocxBase64: transunionDocx,
+      equifaxItemCount: (parsed.equifax?.items || []).length,
+      experianItemCount: (parsed.experian?.items || []).length,
+      transunionItemCount: (parsed.transunion?.items || []).length,
+      language: languageCode,
+      authenticated: true,
+      tier: profile?.tier || "basic",
+      creditsUsed: creditsNeeded,
+      usage: updatedUsage,
+      generationId: historyItem?.id || null,
+    });
+  } catch (error) {
+    console.error("Credit dispute letters error:", sanitize(error?.message || error));
+    return res.status(error.statusCode || 500).json({
+      error: "Failed to generate dispute letters",
+      details: getKorlixUserFacingError(error),
+    });
+  }
+});
 
 app.use("/api", (req, res) => {
   return res.status(404).json({

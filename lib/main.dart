@@ -3973,6 +3973,12 @@ class ChatMessage {
   final bool allowPdf;
   final GeneratedItem? generatedItem;
   final DateTime createdAt;
+  // Credit dispute letter fields
+  final bool isCreditDispute;
+  final String? equifaxDocxBase64;
+  final String? experianDocxBase64;
+  final String? transunionDocxBase64;
+  final String? consumerName;
 
   const ChatMessage({
     required this.userText,
@@ -3984,6 +3990,11 @@ class ChatMessage {
     this.allowPdf = false,
     this.generatedItem,
     required this.createdAt,
+    this.isCreditDispute = false,
+    this.equifaxDocxBase64,
+    this.experianDocxBase64,
+    this.transunionDocxBase64,
+    this.consumerName,
   });
 }
 // ── End ChatMessage ──
@@ -4727,11 +4738,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     }
 
     final command = _controller.text.trim();
-    final prompt = _fixCreditReportMode
-        ? _creditReportPromptSafeUi(command)
-        : command.isEmpty
-        ? 'Please summarize and explain the uploaded file${files.length == 1 ? '' : 's'}.'
-        : command;
+    final isCreditMode = _fixCreditReportMode;
 
     setState(() {
       _loading = true;
@@ -4741,9 +4748,86 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     });
 
     try {
+      if (isCreditMode) {
+        // ── CREDIT DISPUTE MODE: call /api/credit-dispute-letters ──
+        final request = http.MultipartRequest(
+          'POST',
+          Uri.parse('$kKorlixBackendBaseUrl/api/credit-dispute-letters'),
+        );
+        final headers = Map<String, String>.from(_authHeaders())
+          ..remove('Content-Type');
+        request.headers.addAll(headers);
+        request.fields['prompt'] = command;
+        request.fields['language'] = _selectedLanguage;
+        for (final file in files) {
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'files',
+              file.bytes!,
+              filename: file.name,
+              contentType: _mediaTypeForPickedFile(file),
+            ),
+          );
+        }
+        final streamedResponse = await request.send().timeout(const Duration(seconds: 360));
+        final response = await http.Response.fromStream(streamedResponse);
+        final data = _decodeKorlixJsonMap(response);
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw Exception(data['details'] ?? data['error'] ?? response.body);
+        }
+        final content = (data['content'] ?? '').toString();
+        final equifaxDocx = data['equifaxDocxBase64'] as String?;
+        final experianDocx = data['experianDocxBase64'] as String?;
+        final transunionDocx = data['transunionDocxBase64'] as String?;
+        final consumerName = (data['consumerName'] ?? 'Consumer').toString();
+        final fileList = files.map((f) => '- ${f.name}').join('\n');
+        setState(() {
+          _loading = false;
+          _controller.clear();
+          _pickedUploadFile = null;
+          _pickedUploadFiles.clear();
+          _results.insert(
+            0,
+            GeneratedItem(
+              command: 'Credit dispute letters for:\n$fileList',
+              title: 'Credit Dispute Letters',
+              content: content,
+              language: _selectedLanguage,
+              allowPdf: false,
+            ),
+          );
+          _chatMessages.add(ChatMessage(
+            userText: 'Please generate dispute letters for my credit report:\n$fileList',
+            aiText: content,
+            language: _selectedLanguage,
+            createdAt: DateTime.now(),
+            isCreditDispute: true,
+            equifaxDocxBase64: equifaxDocx,
+            experianDocxBase64: experianDocx,
+            transunionDocxBase64: transunionDocx,
+            consumerName: consumerName,
+          ));
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_chatScrollController.hasClients) {
+              _chatScrollController.animateTo(
+                _chatScrollController.position.maxScrollExtent,
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeOut,
+              );
+            }
+          });
+        });
+        return;
+      }
+
+      // ── NORMAL FILE UPLOAD MODE ──
+      final prompt = command.isEmpty
+          ? 'Please summarize and explain the uploaded file${files.length == 1 ? '' : 's'}.'
+          : command;
+
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('$kKorlixBackendBaseUrl/api/analyze-documents'),
+        Uri.parse('\$kKorlixBackendBaseUrl/api/analyze-documents'),
       );
 
       final headers = Map<String, String>.from(_authHeaders())
@@ -4804,39 +4888,39 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             allowPdf: false,
           ),
         );
-          _chatMessages.add(ChatMessage(
-            userText: 'Uploaded file(s):\n$fileList\n\nQuestion: $prompt',
-            aiText: content,
-            language: _selectedLanguage,
-            createdAt: DateTime.now(),
-          ));
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_chatScrollController.hasClients) {
-              _chatScrollController.animateTo(
-                _chatScrollController.position.maxScrollExtent,
-                duration: const Duration(milliseconds: 400),
-                curve: Curves.easeOut,
-              );
-            }
-          });
+        _chatMessages.add(ChatMessage(
+          userText: 'Uploaded file(s):\n$fileList\n\nQuestion: $prompt',
+          aiText: content,
+          language: _selectedLanguage,
+          createdAt: DateTime.now(),
+        ));
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_chatScrollController.hasClients) {
+            _chatScrollController.animateTo(
+              _chatScrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 400),
+              curve: Curves.easeOut,
+            );
+          }
+        });
       });
 
-        // Credit Docs: Show PDF + DOCX download buttons if available
-        final String? _pdfBase64 = data['pdf_base64'] as String?;
-        final String? _docxBase64 = data['docx_base64'] as String?;
-        if (_pdfBase64 != null && _pdfBase64.isNotEmpty) {
-          setState(() {
-            _results.insert(
-              0,
-              GeneratedItem(
-                command: '__DOWNLOAD_CARD__',
-                title: 'Credit Dispute Letter Downloads',
-                content: '__DOWNLOAD_CARD__|' + _pdfBase64 + '|' + (_docxBase64 ?? ''),
-                language: _selectedLanguage,
-                allowPdf: false,
-              ),
-            );
-          });
+      // Legacy: Show PDF + DOCX download buttons if available from old endpoint
+      final String? legacyPdfBase64 = data['pdf_base64'] as String?;
+      final String? legacyDocxBase64 = data['docx_base64'] as String?;
+      if (legacyPdfBase64 != null && legacyPdfBase64.isNotEmpty) {
+        setState(() {
+          _results.insert(
+            0,
+            GeneratedItem(
+              command: '__DOWNLOAD_CARD__',
+              title: 'Credit Dispute Letter Downloads',
+              content: '__DOWNLOAD_CARD__|' + legacyPdfBase64 + '|' + (legacyDocxBase64 ?? ''),
+              language: _selectedLanguage,
+              allowPdf: false,
+            ),
+          );
+        });
         }
 
     } catch (error) {
@@ -5720,7 +5804,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       _improvePictureMode = false;
       _imaginePictureMode = false;
       _error = null;
-      _controller.clear();
+      _controller.text = 'Please analyze my attached credit report and generate 3 separate dispute letters (Equifax, Experian, TransUnion) for any negative or inaccurate items.';
+      _controller.selection = TextSelection.fromPosition(
+        TextPosition(offset: _controller.text.length),
+      );
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -7911,6 +7998,11 @@ Widget _buildMockupFeaturedCharacterCard() {
     final t = _t;
     final hasText = _controller.text.trim().isNotEmpty;
     final hasResults = _results.isNotEmpty;
+    
+    // In credit report mode, we MUST have both text and an attached file to submit
+    final canSubmit = _fixCreditReportMode 
+        ? (hasText && _activeUploadFiles.isNotEmpty)
+        : hasText;
 
     final hintText = _selectedLanguage == 'es'
         ? 'Escribe aquí...'
@@ -7930,8 +8022,10 @@ Widget _buildMockupFeaturedCharacterCard() {
       required VoidCallback? onPressed,
       bool locked = false,
       bool active = false,
+      bool success = false, // Added for green state without changing icon
     }) {
       final accent = locked ? const Color(0xFFFFD166) : const Color(0xFF69D9E8);
+      final isGreen = active || success;
 
       return OutlinedButton.icon(
         onPressed: onPressed,
@@ -7954,19 +8048,19 @@ Widget _buildMockupFeaturedCharacterCard() {
         ),
         label: Text(label),
         style: OutlinedButton.styleFrom(
-          foregroundColor: active ? const Color(0xFF061008) : accent,
-          backgroundColor: active
+          foregroundColor: isGreen ? const Color(0xFF061008) : accent,
+          backgroundColor: isGreen
               ? const Color(0xFFB7FF00)
               : Colors.black.withOpacity(0.20),
           side: BorderSide(
-            color: active ? const Color(0xFFD9FF5A) : accent.withOpacity(0.42),
+            color: isGreen
+                ? const Color(0xFFD9FF5A)
+                : accent.withOpacity(0.42),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
-          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(20),
           ),
-          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
         ),
       );
     }
@@ -8054,7 +8148,7 @@ Widget _buildMockupFeaturedCharacterCard() {
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     padding: EdgeInsets.zero,
-                    backgroundColor: hasText
+                    backgroundColor: canSubmit
                         ? const Color(0xFF143B4A)
                         : const Color(0xFF334155),
                     foregroundColor: const Color(0xFFE4EBEE),
@@ -8062,7 +8156,7 @@ Widget _buildMockupFeaturedCharacterCard() {
                     disabledForegroundColor: Colors.white54,
                     elevation: 0,
                     side: BorderSide(
-                      color: hasText
+                      color: canSubmit
                           ? const Color(0xFF69D9E8).withOpacity(0.70)
                           : Colors.white12,
                       width: 1,
@@ -8071,7 +8165,7 @@ Widget _buildMockupFeaturedCharacterCard() {
                       borderRadius: BorderRadius.circular(17),
                     ),
                   ),
-                  onPressed: (_loading || !hasText) ? null : _generate,
+                  onPressed: (_loading || !canSubmit) ? null : _generate,
                   child: _loading
                       ? const SizedBox(
                           width: 21,
@@ -8099,7 +8193,8 @@ Widget _buildMockupFeaturedCharacterCard() {
                 icon: Icons.attach_file_rounded,
                 label: 'Upload',
                 locked: !_hasDocumentUploadAccess,
-                active: _activeUploadFiles.isNotEmpty && !_loading,
+                success: _activeUploadFiles.isNotEmpty,
+                active: false, // Don't use active because it changes the icon to a stop square
                 onPressed: _loading ? null : _handleUploadPressed,
               ),
               toolButton(
@@ -8456,6 +8551,8 @@ Widget _buildMockupFeaturedCharacterCard() {
                         label: 'PDF',
                         onTap: () => _exportPdf(msg.generatedItem!),
                       ),
+                    // Credit dispute letter downloads
+                    if (msg.isCreditDispute) ..._buildCreditDisputeDownloadButtons(msg),
                   ],
                 ),
               ],
@@ -8464,6 +8561,38 @@ Widget _buildMockupFeaturedCharacterCard() {
         ),
       ],
     );
+  }
+
+  List<Widget> _buildCreditDisputeDownloadButtons(ChatMessage msg) {
+    void downloadDocx(String? base64Data, String bureauName) {
+      if (base64Data == null || base64Data.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No $bureauName letter available.')),
+        );
+        return;
+      }
+      final safeName = (msg.consumerName ?? 'Consumer').replaceAll(' ', '_');
+      final fileName = 'Dispute_Letter_${bureauName}_$safeName.docx';
+      _saveCreditDocFile(base64Data, fileName);
+    }
+
+    return [
+      _chatActionButton(
+        icon: Icons.download_rounded,
+        label: 'Equifax Letter',
+        onTap: () => downloadDocx(msg.equifaxDocxBase64, 'Equifax'),
+      ),
+      _chatActionButton(
+        icon: Icons.download_rounded,
+        label: 'Experian Letter',
+        onTap: () => downloadDocx(msg.experianDocxBase64, 'Experian'),
+      ),
+      _chatActionButton(
+        icon: Icons.download_rounded,
+        label: 'TransUnion Letter',
+        onTap: () => downloadDocx(msg.transunionDocxBase64, 'TransUnion'),
+      ),
+    ];
   }
 
   Widget _chatActionButton({required IconData icon, required String label, required VoidCallback onTap}) {
