@@ -5968,6 +5968,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     }
 
     if (_isImprovePictureQuickAction(action)) {
+      const defaultImprovePrompt =
+          'Enhance this photo with professional quality: improve lighting, sharpness, color, contrast, and background polish. Preserve the subject identity, face, and overall realism. Make it look like a high-end professional photograph.';
       setState(() {
         _improvePictureMode = true;
         _createVideoMode = false;
@@ -5975,16 +5977,16 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         _fixCreditReportMode = false;
         _createAppMode = false;
         _error = null;
-        _controller.text = '';
+        _controller.text = defaultImprovePrompt;
         _controller.selection = TextSelection.fromPosition(
-          const TextPosition(offset: 0),
+          TextPosition(offset: defaultImprovePrompt.length),
         );
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Upload an image, describe the improvement, then tap submit.',
+            'Upload an image, then tap submit — or edit the prompt first.',
           ),
         ),
       );
