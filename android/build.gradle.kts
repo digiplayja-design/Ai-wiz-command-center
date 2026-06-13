@@ -3,6 +3,12 @@ allprojects {
         google()
         mavenCentral()
     }
+    configurations.all {
+        resolutionStrategy {
+            force("androidx.work:work-runtime:2.9.0")
+            force("androidx.work:work-runtime-ktx:2.9.0")
+        }
+    }
 }
 
 val newBuildDir: Directory =
