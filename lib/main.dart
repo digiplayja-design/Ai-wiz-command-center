@@ -74,7 +74,7 @@ Future<void> main() async {
         if (!kIsWeb &&
             (defaultTargetPlatform == TargetPlatform.android ||
                 defaultTargetPlatform == TargetPlatform.iOS)) {
-          await MobileAds.instance.initialize();
+          try { await MobileAds.instance.initialize(); } catch (e) { debugPrint("AdMob init failed: $e"); }
         }
       });
 
