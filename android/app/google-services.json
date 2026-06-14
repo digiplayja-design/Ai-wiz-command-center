@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "830884744891",
+    "project_id": "korlix-ai",
+    "storage_bucket": "korlix-ai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:830884744891:android:440a18e8544fcc2de1e39e",
+        "android_client_info": {
+          "package_name": "com.korlixdeveloper.korlixai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD1F6OMrVdt7hGMw_62_-PTFqfdk9ClLsI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
