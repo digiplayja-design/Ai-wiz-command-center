@@ -77,3 +77,13 @@ assets/wizard_greeting*.mp4
 assets/wizard_greeting*.MP4
 backend/heygen_looks.json
 backend/wizard_greeting_video_url.txt
+
+# Local backup folders and temporary patch scripts
+_backup*/
+backup*/
+*.orig
+*.patch
+patch_*.py
+patch_*.js
+setup_*_safe.sh
+fix_*_bundle_id.sh
