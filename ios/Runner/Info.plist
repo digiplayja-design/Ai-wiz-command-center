@@ -73,11 +73,11 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Korlix AI uses your location to provide location-aware responses.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Korlix AI uses the camera for image analysis features.</string>
+	<string>Korlix AI needs camera access so you can take or upload pictures for image features.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Korlix AI accesses your photo library for image analysis features.</string>
+	<string>Korlix AI needs access to your photo library so you can select images to enhance.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Korlix AI saves generated images and files to your photo library when you request it.</string>
+	<string>Korlix AI can save enhanced images to your photo library when you choose to save them.</string>
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-1549134869666707~2553349019</string>
 	<key>SKAdNetworkItems</key>

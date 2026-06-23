@@ -16,6 +16,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:file_picker/file_picker.dart' as fp;
+import 'package:image_picker/image_picker.dart' as ip;
 import 'package:speech_to_text/speech_to_text.dart' as speech_to_text;
 import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
@@ -74,7 +75,11 @@ Future<void> main() async {
         if (!kIsWeb &&
             (defaultTargetPlatform == TargetPlatform.android ||
                 defaultTargetPlatform == TargetPlatform.iOS)) {
-          try { await MobileAds.instance.initialize(); } catch (e) { debugPrint("AdMob init failed: $e"); }
+          try {
+            await MobileAds.instance.initialize();
+          } catch (e) {
+            debugPrint("AdMob init failed: $e");
+          }
         }
       });
 
@@ -3689,10 +3694,7 @@ Analyze the attached credit reports thoroughly and produce a complete, high-impa
           label: 'Imagine a picture',
           prompt: kKorlixImaginePicturePrompt,
         ),
-        QuickAction(
-          label: 'Create an App',
-          prompt: 'Create an App',
-        ),
+        QuickAction(label: 'Create an App', prompt: 'Create an App'),
         QuickAction(label: 'Create a video', prompt: kKorlixCreateVideoPrompt),
       ],
     ),
@@ -3965,7 +3967,6 @@ class GeneratedItem {
       (imageUrl != null && imageUrl!.isNotEmpty);
 }
 
-
 // ── ChatMessage: represents one turn in the persistent chat thread ──
 class ChatMessage {
   final String userText;
@@ -4001,6 +4002,7 @@ class ChatMessage {
     this.consumerName,
   });
 }
+
 // ── End ChatMessage ──
 class CommandCenterScreen extends StatefulWidget {
   const CommandCenterScreen({super.key});
@@ -4408,7 +4410,103 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     );
   }
 
+  Future<String?> _showIosUploadSourceSheet() async {
+    return showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Photo Library'),
+                subtitle: const Text(
+                  'Choose a picture from your iPhone photos',
+                ),
+                onTap: () => Navigator.of(sheetContext).pop('photos'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.insert_drive_file_outlined),
+                title: const Text('Files'),
+                subtitle: const Text(
+                  'Choose documents, PDFs, CSV, or other files',
+                ),
+                onTap: () => Navigator.of(sheetContext).pop('files'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.close),
+                title: const Text('Cancel'),
+                onTap: () => Navigator.of(sheetContext).pop(null),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickSinglePhotoFromIosLibrary() async {
+    try {
+      final pickedImage = await ip.ImagePicker().pickImage(
+        source: ip.ImageSource.gallery,
+        requestFullMetadata: false,
+        imageQuality: 95,
+      );
+
+      if (pickedImage == null) {
+        return;
+      }
+
+      final bytes = await pickedImage.readAsBytes();
+      final fallbackName = pickedImage.name.trim().isNotEmpty
+          ? pickedImage.name.trim()
+          : 'korlix-photo.jpg';
+
+      final platformFile = fp.PlatformFile(
+        name: fallbackName,
+        size: bytes.length,
+        bytes: bytes,
+        path: pickedImage.path,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _error = null;
+        _pickedUploadFile = platformFile;
+        _pickedUploadFiles
+          ..clear()
+          ..add(platformFile);
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _error =
+            'Could not open your photo library. Please try again or choose Files.';
+      });
+    }
+  }
+
   Future<void> _handleUploadPressed() async {
+    if (Theme.of(context).platform == TargetPlatform.iOS) {
+      final source = await _showIosUploadSourceSheet();
+
+      if (source == 'photos') {
+        await _pickSinglePhotoFromIosLibrary();
+        return;
+      }
+
+      if (source == null) {
+        return;
+      }
+    }
+
     try {
       final result = await fp.FilePicker.platform.pickFiles(
         allowMultiple: true,
@@ -4780,7 +4878,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             ),
           );
         }
-        final streamedResponse = await request.send().timeout(const Duration(seconds: 360));
+        final streamedResponse = await request.send().timeout(
+          const Duration(seconds: 360),
+        );
         final response = await http.Response.fromStream(streamedResponse);
         final data = _decodeKorlixJsonMap(response);
         if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -4807,17 +4907,20 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
               allowPdf: false,
             ),
           );
-          _chatMessages.add(ChatMessage(
-            userText: 'Please generate dispute letters for my credit report:\n$fileList',
-            aiText: content,
-            language: _selectedLanguage,
-            createdAt: DateTime.now(),
-            isCreditDispute: true,
-            equifaxDocxBase64: equifaxDocx,
-            experianDocxBase64: experianDocx,
-            transunionDocxBase64: transunionDocx,
-            consumerName: consumerName,
-          ));
+          _chatMessages.add(
+            ChatMessage(
+              userText:
+                  'Please generate dispute letters for my credit report:\n$fileList',
+              aiText: content,
+              language: _selectedLanguage,
+              createdAt: DateTime.now(),
+              isCreditDispute: true,
+              equifaxDocxBase64: equifaxDocx,
+              experianDocxBase64: experianDocx,
+              transunionDocxBase64: transunionDocx,
+              consumerName: consumerName,
+            ),
+          );
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (_chatScrollController.hasClients) {
               _chatScrollController.animateTo(
@@ -4899,12 +5002,14 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             allowPdf: false,
           ),
         );
-        _chatMessages.add(ChatMessage(
-          userText: 'Uploaded file(s):\n$fileList\n\nQuestion: $prompt',
-          aiText: content,
-          language: _selectedLanguage,
-          createdAt: DateTime.now(),
-        ));
+        _chatMessages.add(
+          ChatMessage(
+            userText: 'Uploaded file(s):\n$fileList\n\nQuestion: $prompt',
+            aiText: content,
+            language: _selectedLanguage,
+            createdAt: DateTime.now(),
+          ),
+        );
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (_chatScrollController.hasClients) {
             _chatScrollController.animateTo(
@@ -4926,14 +5031,17 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             GeneratedItem(
               command: '__DOWNLOAD_CARD__',
               title: 'Credit Dispute Letter Downloads',
-              content: '__DOWNLOAD_CARD__|' + legacyPdfBase64 + '|' + (legacyDocxBase64 ?? ''),
+              content:
+                  '__DOWNLOAD_CARD__|' +
+                  legacyPdfBase64 +
+                  '|' +
+                  (legacyDocxBase64 ?? ''),
               language: _selectedLanguage,
               allowPdf: false,
             ),
           );
         });
-        }
-
+      }
     } catch (error) {
       setState(() {
         _loading = false;
@@ -5035,30 +5143,32 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         _loading = false;
         _controller.clear();
         final newItem = GeneratedItem(
-            command: command,
-            title: _makeResultTitle(command),
-            content: content,
-            language: _selectedLanguage,
-            allowPdf: allowPdf,
-          );
-          _results.insert(0, newItem);
-          _chatMessages.add(ChatMessage(
+          command: command,
+          title: _makeResultTitle(command),
+          content: content,
+          language: _selectedLanguage,
+          allowPdf: allowPdf,
+        );
+        _results.insert(0, newItem);
+        _chatMessages.add(
+          ChatMessage(
             userText: command,
             aiText: content,
             language: _selectedLanguage,
             allowPdf: allowPdf,
             generatedItem: newItem,
             createdAt: DateTime.now(),
-          ));
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_chatScrollController.hasClients) {
-              _chatScrollController.animateTo(
-                _chatScrollController.position.maxScrollExtent,
-                duration: const Duration(milliseconds: 400),
-                curve: Curves.easeOut,
-              );
-            }
-          });
+          ),
+        );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_chatScrollController.hasClients) {
+            _chatScrollController.animateTo(
+              _chatScrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 400),
+              curve: Curves.easeOut,
+            );
+          }
+        });
       });
     } catch (error) {
       setState(() {
@@ -5821,7 +5931,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       _improvePictureMode = false;
       _imaginePictureMode = false;
       _error = null;
-      _controller.text = 'Please analyze my attached credit report and generate 3 separate dispute letters (Equifax, Experian, TransUnion) for any negative or inaccurate items.';
+      _controller.text =
+          'Please analyze my attached credit report and generate 3 separate dispute letters (Equifax, Experian, TransUnion) for any negative or inaccurate items.';
       _controller.selection = TextSelection.fromPosition(
         TextPosition(offset: _controller.text.length),
       );
@@ -5859,7 +5970,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     final isAppActive = isAppAction && _createAppMode && !_loading;
 
     final isHighlighted =
-        isVideoActive || isImproveActive || isImagineActive || isCreditActive || isAppActive;
+        isVideoActive ||
+        isImproveActive ||
+        isImagineActive ||
+        isCreditActive ||
+        isAppActive;
 
     final enabledTextColor = isHighlighted
         ? const Color(0xFF061008)
@@ -6045,14 +6160,13 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       _improvePictureMode = false;
       _imaginePictureMode = false;
       _fixCreditReportMode = false;
-        _createAppMode = false;
+      _createAppMode = false;
       _controller.text = action.prompt;
       _controller.selection = TextSelection.fromPosition(
         TextPosition(offset: _controller.text.length),
       );
     });
   }
-
 
   Future<void> _showAppCreationDialog() async {
     int currentStep = 0;
@@ -6061,7 +6175,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
       "Who is the target audience for this app?",
       "What are the 3-5 main features?",
       "Which platforms? (iOS, Android, Web, All)",
-      "Any design preferences? (colors, style, theme)"
+      "Any design preferences? (colors, style, theme)",
     ];
     final List<TextEditingController> controllers = List.generate(
       questions.length,
@@ -6078,7 +6192,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
               backgroundColor: const Color(0xFF0A1526),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: const Color(0xFF2EC7DF).withOpacity(0.3)),
+                side: BorderSide(
+                  color: const Color(0xFF2EC7DF).withOpacity(0.3),
+                ),
               ),
               title: const Text(
                 'Create an App',
@@ -6105,10 +6221,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                     const SizedBox(height: 12),
                     Text(
                       questions[currentStep],
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
                     ),
                     const SizedBox(height: 16),
                     TextField(
@@ -6118,7 +6231,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                       maxLines: currentStep == 2 ? 3 : 1,
                       decoration: InputDecoration(
                         hintText: 'Type your answer here...',
-                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                        hintStyle: TextStyle(
+                          color: Colors.white.withOpacity(0.3),
+                        ),
                         filled: true,
                         fillColor: Colors.black.withOpacity(0.3),
                         border: OutlineInputBorder(
@@ -6127,7 +6242,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Color(0xFF2EC7DF)),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF2EC7DF),
+                          ),
                         ),
                       ),
                       onSubmitted: (_) {
@@ -6170,7 +6287,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                 ElevatedButton(
                   onPressed: () {
                     if (controllers[currentStep].text.trim().isEmpty) return;
-                    
+
                     if (currentStep < questions.length - 1) {
                       setStateDialog(() {
                         currentStep++;
@@ -6187,7 +6304,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
                     ),
                   ),
                   child: Text(
-                    currentStep == questions.length - 1 ? 'Generate App Spec' : 'Next',
+                    currentStep == questions.length - 1
+                        ? 'Generate App Spec'
+                        : 'Next',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -6209,21 +6328,32 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         final platformLower = platforms.toLowerCase();
         final String techStack;
         final String codeInstructions;
-        if (platformLower.contains('ios') && !platformLower.contains('android') && !platformLower.contains('web')) {
+        if (platformLower.contains('ios') &&
+            !platformLower.contains('android') &&
+            !platformLower.contains('web')) {
           techStack = 'Swift + SwiftUI (iOS native)';
-          codeInstructions = 'Write the starter code in Swift/SwiftUI including: ContentView.swift, main app entry point, navigation structure, and at least 3 core screen files with full UI code.';
-        } else if (platformLower.contains('android') && !platformLower.contains('ios') && !platformLower.contains('web')) {
+          codeInstructions =
+              'Write the starter code in Swift/SwiftUI including: ContentView.swift, main app entry point, navigation structure, and at least 3 core screen files with full UI code.';
+        } else if (platformLower.contains('android') &&
+            !platformLower.contains('ios') &&
+            !platformLower.contains('web')) {
           techStack = 'Kotlin + Jetpack Compose (Android native)';
-          codeInstructions = 'Write the starter code in Kotlin/Jetpack Compose including: MainActivity.kt, navigation setup, and at least 3 core screen composables with full UI code.';
-        } else if (platformLower.contains('web') && !platformLower.contains('ios') && !platformLower.contains('android')) {
+          codeInstructions =
+              'Write the starter code in Kotlin/Jetpack Compose including: MainActivity.kt, navigation setup, and at least 3 core screen composables with full UI code.';
+        } else if (platformLower.contains('web') &&
+            !platformLower.contains('ios') &&
+            !platformLower.contains('android')) {
           techStack = 'React + TypeScript + TailwindCSS (Web)';
-          codeInstructions = 'Write the starter code including: App.tsx, index.tsx, tailwind config, and at least 3 core page/component files with full JSX/TSX code.';
+          codeInstructions =
+              'Write the starter code including: App.tsx, index.tsx, tailwind config, and at least 3 core page/component files with full JSX/TSX code.';
         } else {
           techStack = 'Flutter + Dart (Cross-platform: iOS, Android, Web)';
-          codeInstructions = 'Write the starter code in Flutter/Dart including: main.dart, pubspec.yaml dependencies, and at least 3 core screen files with full Widget code.';
+          codeInstructions =
+              'Write the starter code in Flutter/Dart including: main.dart, pubspec.yaml dependencies, and at least 3 core screen files with full Widget code.';
         }
 
-        final prompt = '''You are an expert App Architect, Senior Product Manager, and Senior Software Engineer.
+        final prompt =
+            '''You are an expert App Architect, Senior Product Manager, and Senior Software Engineer.
 
 Your task has TWO parts. Complete BOTH in full.
 
@@ -6268,7 +6398,7 @@ Make the entire output professional, well-structured using Markdown, and product
           _createAppMode = true;
           _controller.text = prompt;
         });
-        
+
         // Auto-submit the generated prompt
         _generate();
       }
@@ -6301,7 +6431,10 @@ Make the entire output professional, well-structured using Markdown, and product
                     _buildMockupLanguageTabs(),
                     _buildMockupFeaturedCharacterCard(),
                     const SizedBox(height: 18),
-                    if (_chatMessages.length >= 2) ...[_buildResults(), const SizedBox(height: 18)],
+                    if (_chatMessages.length >= 2) ...[
+                      _buildResults(),
+                      const SizedBox(height: 18),
+                    ],
                     _buildCommandPanel(),
                   ],
                 ),
@@ -6516,7 +6649,6 @@ Make the entire output professional, well-structured using Markdown, and product
     }
   }
 
-
   Future<void> _loadChatHistory() async {
     if (kKorlixAccessToken == null || kKorlixAccessToken!.isEmpty) return;
     if (_chatHistoryLoaded) return;
@@ -6535,16 +6667,20 @@ Make the entire output professional, well-structured using Markdown, and product
         final resp = (item['response'] ?? '').toString();
         final lang = (item['language'] ?? 'en').toString();
         final resultType = (item['result_type'] ?? 'answer').toString();
-        final createdAt = DateTime.tryParse((item['created_at'] ?? '').toString()) ?? DateTime.now();
+        final createdAt =
+            DateTime.tryParse((item['created_at'] ?? '').toString()) ??
+            DateTime.now();
         if (prompt.isEmpty || resp.isEmpty) continue;
-        msgs.add(ChatMessage(
-          userText: prompt,
-          aiText: resp,
-          isImage: resultType == 'image',
-          language: lang,
-          allowPdf: resultType == 'file',
-          createdAt: createdAt,
-        ));
+        msgs.add(
+          ChatMessage(
+            userText: prompt,
+            aiText: resp,
+            isImage: resultType == 'image',
+            language: lang,
+            allowPdf: resultType == 'file',
+            createdAt: createdAt,
+          ),
+        );
       }
       setState(() {
         _chatMessages.clear();
@@ -6553,13 +6689,16 @@ Make the entire output professional, well-structured using Markdown, and product
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_chatScrollController.hasClients) {
-          _chatScrollController.jumpTo(_chatScrollController.position.maxScrollExtent);
+          _chatScrollController.jumpTo(
+            _chatScrollController.position.maxScrollExtent,
+          );
         }
       });
     } catch (_) {
       // Chat history loading should never block the app.
     }
   }
+
   Future<void> _handleVoiceInput() async {
     await _loadCurrentTier();
 
@@ -7830,7 +7969,6 @@ Make the entire output professional, well-structured using Markdown, and product
     }
   }
 
-  
   Widget _buildCreditDownloadCard(String pdfBase64, String docxBase64) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
@@ -7843,34 +7981,68 @@ Make the entire output professional, well-structured using Markdown, and product
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(children: [
-            const Icon(Icons.description_rounded, color: Color(0xFF4A90D9), size: 22),
-            const SizedBox(width: 8),
-            const Expanded(child: Text('Credit Dispute Letter Ready',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15))),
-          ]),
+          Row(
+            children: [
+              const Icon(
+                Icons.description_rounded,
+                color: Color(0xFF4A90D9),
+                size: 22,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Credit Dispute Letter Ready',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 6),
-          const Text('Download your print-ready dispute letter:',
-            style: TextStyle(color: Color(0xFFB0BEC5), fontSize: 12)),
+          const Text(
+            'Download your print-ready dispute letter:',
+            style: TextStyle(color: Color(0xFFB0BEC5), fontSize: 12),
+          ),
           const SizedBox(height: 14),
           if (pdfBase64.isNotEmpty)
             ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB71C1C),
-                foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFB71C1C),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
               icon: const Icon(Icons.picture_as_pdf_rounded, size: 20),
-              label: const Text('Download PDF', style: TextStyle(fontWeight: FontWeight.bold)),
-              onPressed: () => _saveCreditDocFile(pdfBase64, 'credit_dispute_letter.pdf'),
+              label: const Text(
+                'Download PDF',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () =>
+                  _saveCreditDocFile(pdfBase64, 'credit_dispute_letter.pdf'),
             ),
           if (pdfBase64.isNotEmpty) const SizedBox(height: 8),
           if (docxBase64.isNotEmpty)
             ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1565C0),
-                foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1565C0),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
               icon: const Icon(Icons.article_rounded, size: 20),
-              label: const Text('Download Word Doc', style: TextStyle(fontWeight: FontWeight.bold)),
-              onPressed: () => _saveCreditDocFile(docxBase64, 'credit_dispute_letter.docx'),
+              label: const Text(
+                'Download Word Doc',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () =>
+                  _saveCreditDocFile(docxBase64, 'credit_dispute_letter.docx'),
             ),
         ],
       ),
@@ -7880,14 +8052,21 @@ Make the entire output professional, well-structured using Markdown, and product
   Future<void> _saveCreditDocFile(String base64Data, String fileName) async {
     try {
       final bytes = base64Decode(base64Data);
-      await Share.shareXFiles([XFile.fromData(bytes, name: fileName,
-        mimeType: fileName.endsWith('.pdf') ? 'application/pdf'
-          : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')],
-        text: 'Credit Dispute Letter');
-    } catch (e) { debugPrint('[CreditDocs] Save error: ' + e.toString()); }
+      await Share.shareXFiles([
+        XFile.fromData(
+          bytes,
+          name: fileName,
+          mimeType: fileName.endsWith('.pdf')
+              ? 'application/pdf'
+              : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ),
+      ], text: 'Credit Dispute Letter');
+    } catch (e) {
+      debugPrint('[CreditDocs] Save error: ' + e.toString());
+    }
   }
 
-Widget _buildMockupFeaturedCharacterCard() {
+  Widget _buildMockupFeaturedCharacterCard() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshSelectedCharacterFromBackend();
     });
@@ -8136,7 +8315,9 @@ Widget _buildMockupFeaturedCharacterCard() {
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: _answerMinimized ? MainAxisSize.min : MainAxisSize.max,
+                                mainAxisSize: _answerMinimized
+                                    ? MainAxisSize.min
+                                    : MainAxisSize.max,
                                 children: [
                                   Row(
                                     children: [
@@ -8161,10 +8342,17 @@ Widget _buildMockupFeaturedCharacterCard() {
                                       ),
                                       // Minimize/Maximize button
                                       IconButton(
-                                        onPressed: () => setState(() => _answerMinimized = !_answerMinimized),
-                                        tooltip: _answerMinimized ? 'Maximize' : 'Minimize',
+                                        onPressed: () => setState(
+                                          () => _answerMinimized =
+                                              !_answerMinimized,
+                                        ),
+                                        tooltip: _answerMinimized
+                                            ? 'Maximize'
+                                            : 'Minimize',
                                         icon: Icon(
-                                          _answerMinimized ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
+                                          _answerMinimized
+                                              ? Icons.keyboard_arrow_down
+                                              : Icons.keyboard_arrow_up,
                                           color: const Color(0xFF69D9E8),
                                           size: 18,
                                         ),
@@ -8189,114 +8377,124 @@ Widget _buildMockupFeaturedCharacterCard() {
                                   ),
                                   // Body content — hidden when minimized
                                   if (!_answerMinimized) ...[
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    activeResult.command,
-                                    maxLines: compact ? 2 : 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: const Color(0xFFE4EBEE),
-                                      fontSize: compact ? 13 : 15,
-                                      fontWeight: FontWeight.w900,
-                                      height: 1.18,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Expanded(
-                                    child: Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withOpacity(0.22),
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(
-                                          color: const Color(
-                                            0xFF2EC7DF,
-                                          ).withOpacity(0.18),
-                                        ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      activeResult.command,
+                                      maxLines: compact ? 2 : 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: const Color(0xFFE4EBEE),
+                                        fontSize: compact ? 13 : 15,
+                                        fontWeight: FontWeight.w900,
+                                        height: 1.18,
                                       ),
-                                      child: activeResult.hasImageResult
-                                          ? _buildGeneratedImagePreview(
-                                              activeResult,
-                                              height: 300,
-                                            )
-                                          : SingleChildScrollView(
-                                              child: Text(
-                                                activeResult.content,
-                                                style: TextStyle(
-                                                  color: const Color(0xFFA9C6CF),
-                                                  fontSize: compact ? 12.5 : 13.5,
-                                                  height: 1.32,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                            ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: SizedBox(
-                                          height: compact ? 40 : 44,
-                                          child: FilledButton.icon(
-                                            onPressed: () =>
-                                                _copyFeaturedResult(
-                                                  activeResult,
+                                    const SizedBox(height: 8),
+                                    Expanded(
+                                      child: Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.22),
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                          border: Border.all(
+                                            color: const Color(
+                                              0xFF2EC7DF,
+                                            ).withOpacity(0.18),
+                                          ),
+                                        ),
+                                        child: activeResult.hasImageResult
+                                            ? _buildGeneratedImagePreview(
+                                                activeResult,
+                                                height: 300,
+                                              )
+                                            : SingleChildScrollView(
+                                                child: Text(
+                                                  activeResult.content,
+                                                  style: TextStyle(
+                                                    color: const Color(
+                                                      0xFFA9C6CF,
+                                                    ),
+                                                    fontSize: compact
+                                                        ? 12.5
+                                                        : 13.5,
+                                                    height: 1.32,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
                                                 ),
-                                            icon: const Icon(
-                                              Icons.copy_rounded,
-                                              size: 17,
-                                            ),
-                                            label: const Text('Copy'),
-                                            style: FilledButton.styleFrom(
-                                              backgroundColor: const Color(
-                                                0xFFB794F4,
                                               ),
-                                              foregroundColor: const Color(
-                                                0xFF120D18,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: SizedBox(
+                                            height: compact ? 40 : 44,
+                                            child: FilledButton.icon(
+                                              onPressed: () =>
+                                                  _copyFeaturedResult(
+                                                    activeResult,
+                                                  ),
+                                              icon: const Icon(
+                                                Icons.copy_rounded,
+                                                size: 17,
                                               ),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(999),
+                                              label: const Text('Copy'),
+                                              style: FilledButton.styleFrom(
+                                                backgroundColor: const Color(
+                                                  0xFFB794F4,
+                                                ),
+                                                foregroundColor: const Color(
+                                                  0xFF120D18,
+                                                ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                        999,
+                                                      ),
+                                                ),
                                               ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: SizedBox(
-                                          height: compact ? 40 : 44,
-                                          child: OutlinedButton.icon(
-                                            onPressed: () =>
-                                                _shareFeaturedResult(
-                                                  activeResult,
-                                                ),
-                                            icon: const Icon(
-                                              Icons.share_rounded,
-                                              size: 17,
-                                            ),
-                                            label: const Text('Share'),
-                                            style: OutlinedButton.styleFrom(
-                                              foregroundColor: const Color(
-                                                0xFF69D9E8,
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: SizedBox(
+                                            height: compact ? 40 : 44,
+                                            child: OutlinedButton.icon(
+                                              onPressed: () =>
+                                                  _shareFeaturedResult(
+                                                    activeResult,
+                                                  ),
+                                              icon: const Icon(
+                                                Icons.share_rounded,
+                                                size: 17,
                                               ),
-                                              side: BorderSide(
-                                                color: const Color(
+                                              label: const Text('Share'),
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor: const Color(
                                                   0xFF69D9E8,
-                                                ).withOpacity(0.58),
-                                              ),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(999),
+                                                ),
+                                                side: BorderSide(
+                                                  color: const Color(
+                                                    0xFF69D9E8,
+                                                  ).withOpacity(0.58),
+                                                ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                        999,
+                                                      ),
+                                                ),
                                               ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
+                                      ],
+                                    ),
                                   ], // end if (!_answerMinimized)
                                 ],
                               ),
@@ -8316,9 +8514,9 @@ Widget _buildMockupFeaturedCharacterCard() {
     final t = _t;
     final hasText = _controller.text.trim().isNotEmpty;
     final hasResults = _results.isNotEmpty;
-    
+
     // In credit report mode, we MUST have both text and an attached file to submit
-    final canSubmit = _fixCreditReportMode 
+    final canSubmit = _fixCreditReportMode
         ? (hasText && _activeUploadFiles.isNotEmpty)
         : hasText;
 
@@ -8371,9 +8569,7 @@ Widget _buildMockupFeaturedCharacterCard() {
               ? const Color(0xFFB7FF00)
               : Colors.black.withOpacity(0.20),
           side: BorderSide(
-            color: isGreen
-                ? const Color(0xFFD9FF5A)
-                : accent.withOpacity(0.42),
+            color: isGreen ? const Color(0xFFD9FF5A) : accent.withOpacity(0.42),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           shape: RoundedRectangleBorder(
@@ -8512,7 +8708,8 @@ Widget _buildMockupFeaturedCharacterCard() {
                 label: 'Upload',
                 locked: !_hasDocumentUploadAccess,
                 success: _activeUploadFiles.isNotEmpty,
-                active: false, // Don't use active because it changes the icon to a stop square
+                active:
+                    false, // Don't use active because it changes the icon to a stop square
                 onPressed: _loading ? null : _handleUploadPressed,
               ),
               toolButton(
@@ -8710,7 +8907,9 @@ Widget _buildMockupFeaturedCharacterCard() {
               onPressed: () => setState(() => _chatMinimized = !_chatMinimized),
               tooltip: _chatMinimized ? 'Maximize chat' : 'Minimize chat',
               icon: Icon(
-                _chatMinimized ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
+                _chatMinimized
+                    ? Icons.keyboard_arrow_down
+                    : Icons.keyboard_arrow_up,
                 color: const Color(0xFF2EC7DF),
                 size: 22,
               ),
@@ -8718,7 +8917,9 @@ Widget _buildMockupFeaturedCharacterCard() {
             TextButton.icon(
               onPressed: () async {
                 await _clearAllResults();
-                setState(() { _chatMessages.clear(); });
+                setState(() {
+                  _chatMessages.clear();
+                });
               },
               icon: const Icon(Icons.delete_sweep, size: 18),
               label: const Text('Clear'),
@@ -8726,7 +8927,7 @@ Widget _buildMockupFeaturedCharacterCard() {
           ],
         ),
         // Chat bubble list (hidden when minimized)
-        if (!_chatMinimized) ...[  
+        if (!_chatMinimized) ...[
           const SizedBox(height: 8),
           Container(
             constraints: const BoxConstraints(maxHeight: 600),
@@ -8781,7 +8982,9 @@ Widget _buildMockupFeaturedCharacterCard() {
                   child: IconButton(
                     padding: EdgeInsets.zero,
                     visualDensity: VisualDensity.compact,
-                    tooltip: isMinimized ? 'Maximize message' : 'Minimize message',
+                    tooltip: isMinimized
+                        ? 'Maximize message'
+                        : 'Minimize message',
                     onPressed: () => setState(() {
                       if (isMinimized) {
                         _minimizedMessages.remove(index);
@@ -8790,7 +8993,9 @@ Widget _buildMockupFeaturedCharacterCard() {
                       }
                     }),
                     icon: Icon(
-                      isMinimized ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
+                      isMinimized
+                          ? Icons.keyboard_arrow_down
+                          : Icons.keyboard_arrow_up,
                       size: 16,
                       color: const Color(0xFF69D9E8).withOpacity(0.7),
                     ),
@@ -8804,7 +9009,8 @@ Widget _buildMockupFeaturedCharacterCard() {
                     padding: EdgeInsets.zero,
                     visualDensity: VisualDensity.compact,
                     tooltip: 'Remove message',
-                    onPressed: () => setState(() => _deletedMessages.add(index)),
+                    onPressed: () =>
+                        setState(() => _deletedMessages.add(index)),
                     icon: Icon(
                       Icons.close_rounded,
                       size: 16,
@@ -8821,7 +9027,10 @@ Widget _buildMockupFeaturedCharacterCard() {
                 alignment: Alignment.centerRight,
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF1A4A5C),
                     borderRadius: const BorderRadius.only(
@@ -8830,7 +9039,9 @@ Widget _buildMockupFeaturedCharacterCard() {
                       bottomLeft: Radius.circular(18),
                       bottomRight: Radius.circular(18),
                     ),
-                    border: Border.all(color: const Color(0xFF69D9E8).withOpacity(0.4)),
+                    border: Border.all(
+                      color: const Color(0xFF69D9E8).withOpacity(0.4),
+                    ),
                   ),
                   child: Text(
                     msg.userText,
@@ -8870,25 +9081,45 @@ Widget _buildMockupFeaturedCharacterCard() {
                         decoration: BoxDecoration(
                           color: const Color(0xFF69D9E8).withOpacity(0.15),
                           shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFF69D9E8).withOpacity(0.5)),
+                          border: Border.all(
+                            color: const Color(0xFF69D9E8).withOpacity(0.5),
+                          ),
                         ),
-                        child: const Icon(Icons.auto_awesome_rounded, color: Color(0xFF69D9E8), size: 16),
+                        child: const Icon(
+                          Icons.auto_awesome_rounded,
+                          color: Color(0xFF69D9E8),
+                          size: 16,
+                        ),
                       ),
                       const SizedBox(width: 8),
-                      const Text('Korlix AI', style: TextStyle(color: Color(0xFF69D9E8), fontSize: 12, fontWeight: FontWeight.w700)),
+                      const Text(
+                        'Korlix AI',
+                        style: TextStyle(
+                          color: Color(0xFF69D9E8),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 10),
                   // AI response text
                   if (msg.isImage && msg.generatedItem != null) ...[
-                    _buildGeneratedImagePreview(msg.generatedItem!, height: 200),
+                    _buildGeneratedImagePreview(
+                      msg.generatedItem!,
+                      height: 200,
+                    ),
                     const SizedBox(height: 8),
                   ],
                   Text(
                     aiPreview,
                     maxLines: 6,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   // Action buttons: Copy, Share, Open, PDF, Credit Dispute
@@ -8901,10 +9132,15 @@ Widget _buildMockupFeaturedCharacterCard() {
                         icon: Icons.copy_rounded,
                         label: 'Copy',
                         onTap: () async {
-                          await Clipboard.setData(ClipboardData(text: msg.aiText));
+                          await Clipboard.setData(
+                            ClipboardData(text: msg.aiText),
+                          );
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Copied to clipboard'), duration: Duration(seconds: 2)),
+                              const SnackBar(
+                                content: Text('Copied to clipboard'),
+                                duration: Duration(seconds: 2),
+                              ),
                             );
                           }
                         },
@@ -8927,10 +9163,23 @@ Widget _buildMockupFeaturedCharacterCard() {
                               context: context,
                               builder: (ctx) => AlertDialog(
                                 backgroundColor: const Color(0xFF071B27),
-                                title: const Text('Full Response', style: TextStyle(color: Colors.white)),
-                                content: SingleChildScrollView(child: Text(msg.aiText, style: const TextStyle(color: Colors.white70))),
+                                title: const Text(
+                                  'Full Response',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                                content: SingleChildScrollView(
+                                  child: Text(
+                                    msg.aiText,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ),
                                 actions: [
-                                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: const Text('Close'),
+                                  ),
                                 ],
                               ),
                             );
@@ -8945,7 +9194,8 @@ Widget _buildMockupFeaturedCharacterCard() {
                           onTap: () => _exportPdf(msg.generatedItem!),
                         ),
                       // Credit dispute letter downloads
-                      if (msg.isCreditDispute) ..._buildCreditDisputeDownloadButtons(msg),
+                      if (msg.isCreditDispute)
+                        ..._buildCreditDisputeDownloadButtons(msg),
                     ],
                   ),
                 ],
@@ -8988,7 +9238,11 @@ Widget _buildMockupFeaturedCharacterCard() {
     ];
   }
 
-  Widget _chatActionButton({required IconData icon, required String label, required VoidCallback onTap}) {
+  Widget _chatActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
@@ -9004,7 +9258,10 @@ Widget _buildMockupFeaturedCharacterCard() {
           children: [
             Icon(icon, size: 14, color: const Color(0xFF69D9E8)),
             const SizedBox(width: 4),
-            Text(label, style: const TextStyle(fontSize: 12, color: Colors.white70)),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, color: Colors.white70),
+            ),
           ],
         ),
       ),
@@ -9012,7 +9269,6 @@ Widget _buildMockupFeaturedCharacterCard() {
   }
 
   Widget _buildResultCard(GeneratedItem item) {
-
     if (item.command == '__DOWNLOAD_CARD__') {
       final parts = item.content.split('|');
       final pdfB64 = parts.length > 1 ? parts[1] : '';
