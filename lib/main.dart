@@ -8012,9 +8012,47 @@ Make the entire output professional, well-structured using Markdown, and product
     }
   }
 
-  Uri _buildLocatorMapUri(String encodedQuery) {
+  String _cleanLocatorSearchText(String value) {
+    var text = value.trim();
+
+    text = text.replaceFirst(
+      RegExp(
+        r'^(find|show|locate|search|get)\s+(me\s+)?(a\s+|an\s+|the\s+)?',
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    text = text.replaceAll(
+      RegExp(r'\s+(near me|around me|nearby)$', caseSensitive: false),
+      '',
+    );
+
+    return text.trim().isEmpty ? value.trim() : text.trim();
+  }
+
+  Uri _buildLocatorMapUri({
+    required String searchText,
+    double? latitude,
+    double? longitude,
+  }) {
+    final cleanedSearchText = _cleanLocatorSearchText(searchText);
+    final encodedQuery = Uri.encodeQueryComponent(cleanedSearchText);
+
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-      return Uri.parse('http://maps.apple.com/?q=$encodedQuery');
+      final params = <String>['q=$encodedQuery'];
+
+      if (latitude != null && longitude != null) {
+        final coordinates =
+            '${latitude.toStringAsFixed(6)},${longitude.toStringAsFixed(6)}';
+
+        // Apple Maps search-near-location format.
+        // Do not use ll here, because ll can turn q into a pin label.
+        params.add('sll=$coordinates');
+        params.add('z=14');
+      }
+
+      return Uri.parse('http://maps.apple.com/?${params.join('&')}');
     }
 
     return Uri.parse(
@@ -8038,7 +8076,11 @@ Make the entire output professional, well-structured using Markdown, and product
       '$searchText near ${position.latitude},${position.longitude}',
     );
 
-    final mapsUri = _buildLocatorMapUri(query);
+    final mapsUri = _buildLocatorMapUri(
+      searchText: Uri.decodeComponent(query),
+      latitude: position.latitude,
+      longitude: position.longitude,
+    );
 
     final launched = await launchUrl(
       mapsUri,
