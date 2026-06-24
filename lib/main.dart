@@ -6752,13 +6752,24 @@ Make the entire output professional, well-structured using Markdown, and product
     }
   }
 
+  void _clearUtilitySelection() {
+    _selectedUtilityTool = null;
+    _utilityPanelOpen = false;
+    _improvePictureMode = false;
+    _fixCreditReportMode = false;
+  }
+
   void _toggleUtilityPanel() {
     if (_loading) {
       return;
     }
 
     setState(() {
-      _utilityPanelOpen = !_utilityPanelOpen;
+      if (_utilityPanelOpen || _selectedUtilityTool != null) {
+        _clearUtilitySelection();
+      } else {
+        _utilityPanelOpen = true;
+      }
     });
   }
 
@@ -6769,7 +6780,8 @@ Make the entire output professional, well-structured using Markdown, and product
 
     setState(() {
       if (_selectedUtilityTool == tool) {
-        _selectedUtilityTool = null;
+        _clearUtilitySelection();
+        return;
       } else {
         _selectedUtilityTool = tool;
       }
@@ -6848,7 +6860,7 @@ Make the entire output professional, well-structured using Markdown, and product
                     ? null
                     : () {
                         setState(() {
-                          _utilityPanelOpen = false;
+                          _clearUtilitySelection();
                         });
                       },
                 icon: const Icon(Icons.close, color: Color(0xFFE5E7EB)),
