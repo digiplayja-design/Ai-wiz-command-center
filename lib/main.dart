@@ -8953,6 +8953,7 @@ Make the entire output professional, well-structured using Markdown, and product
                   ),
                 ),
               ),
+              _buildUtilityButton(),
               if (_currentTier == 'basic')
                 OutlinedButton.icon(
                   onPressed: _loading ? null : _openDonateCashApp,
