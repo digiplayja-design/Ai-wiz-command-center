@@ -9275,27 +9275,29 @@ Make the entire output professional, well-structured using Markdown, and product
   Widget _buildNeonAnswerReadyFrame({required Widget child}) {
     const cyanGlow = Color(0xFF76F7FF);
     const violetGlow = Color(0xFFFF4DFF);
+    const electricBlue = Color(0xFF278DFF);
     const deepInk = Color(0xFF06182B);
-    const frameRadius = 30.0;
+    const outerRadius = 32.0;
+    const innerRadius = 29.0;
 
-    Widget rail({
+    Widget glowRail({
       required double width,
       required double height,
       required Color color,
-      double opacity = 0.72,
+      double opacity = 0.9,
     }) {
       return IgnorePointer(
         child: Container(
           width: width,
           height: height,
           decoration: BoxDecoration(
-            color: color.withOpacity(opacity),
             borderRadius: BorderRadius.circular(99),
+            color: color.withOpacity(opacity),
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(0.68),
-                blurRadius: 12,
-                spreadRadius: 1,
+                color: color.withOpacity(0.85),
+                blurRadius: 16,
+                spreadRadius: 1.4,
               ),
             ],
           ),
@@ -9303,105 +9305,224 @@ Make the entire output professional, well-structured using Markdown, and product
       );
     }
 
+    Widget cornerPlate({required Alignment alignment, required Color color}) {
+      return IgnorePointer(
+        child: Align(
+          alignment: alignment,
+          child: Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: color.withOpacity(0.9), width: 1.6),
+              gradient: RadialGradient(
+                center: alignment,
+                radius: 1.2,
+                colors: [color.withOpacity(0.32), Colors.transparent],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Container(
-      margin: const EdgeInsets.only(top: 6, bottom: 10),
+      margin: const EdgeInsets.only(top: 16, bottom: 12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(frameRadius),
+        borderRadius: BorderRadius.circular(outerRadius),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            cyanGlow.withOpacity(0.95),
+            electricBlue.withOpacity(0.72),
+            violetGlow.withOpacity(0.95),
+          ],
+        ),
         boxShadow: [
           BoxShadow(
-            color: cyanGlow.withOpacity(0.34),
-            blurRadius: 30,
-            spreadRadius: 1,
-            offset: const Offset(-4, -2),
-          ),
-          BoxShadow(
-            color: violetGlow.withOpacity(0.30),
+            color: cyanGlow.withOpacity(0.42),
             blurRadius: 34,
             spreadRadius: 2,
-            offset: const Offset(5, 4),
+            offset: const Offset(-5, -3),
+          ),
+          BoxShadow(
+            color: violetGlow.withOpacity(0.40),
+            blurRadius: 38,
+            spreadRadius: 3,
+            offset: const Offset(6, 5),
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(frameRadius),
+      child: Container(
+        padding: const EdgeInsets.all(2.4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(outerRadius),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              cyanGlow.withOpacity(0.92),
+              Colors.white.withOpacity(0.16),
+              violetGlow.withOpacity(0.88),
+            ],
+            stops: const [0.0, 0.46, 1.0],
+          ),
+        ),
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            Positioned.fill(
-              child: DecoratedBox(
+            ClipRRect(
+              borderRadius: BorderRadius.circular(innerRadius),
+              child: Container(
                 decoration: BoxDecoration(
                   color: deepInk.withOpacity(0.22),
+                  borderRadius: BorderRadius.circular(innerRadius),
+                ),
+
+                // This paints ON TOP of the existing old ANSWER READY child.
+                // The old card can no longer hide the cyber styling behind it.
+                foregroundDecoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(innerRadius),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.26),
+                    width: 1.1,
+                  ),
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      cyanGlow.withOpacity(0.18),
-                      deepInk.withOpacity(0.04),
-                      violetGlow.withOpacity(0.18),
+                      cyanGlow.withOpacity(0.24),
+                      Colors.transparent,
+                      violetGlow.withOpacity(0.26),
                     ],
-                    stops: const [0.0, 0.52, 1.0],
+                    stops: const [0.0, 0.48, 1.0],
+                  ),
+                ),
+                child: child,
+              ),
+            ),
+
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(innerRadius),
+                    border: Border.all(
+                      color: cyanGlow.withOpacity(0.95),
+                      width: 2.0,
+                    ),
                   ),
                 ),
               ),
             ),
 
-            // Keep the existing ANSWER READY card and all Copy/Share logic intact.
-            child,
-
-            // Foreground cyber glass layer. This is painted above the old card,
-            // so the neon style cannot hide behind the active-result bubble.
             Positioned.fill(
               child: IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(frameRadius),
-                    border: Border.all(
-                      color: cyanGlow.withOpacity(0.78),
-                      width: 1.35,
-                    ),
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                    borderRadius: BorderRadius.circular(innerRadius),
+                    gradient: RadialGradient(
+                      center: Alignment.topRight,
+                      radius: 1.25,
                       colors: [
-                        Colors.white.withOpacity(0.055),
+                        violetGlow.withOpacity(0.24),
                         Colors.transparent,
-                        violetGlow.withOpacity(0.11),
                       ],
-                      stops: const [0.0, 0.48, 1.0],
                     ),
                   ),
                 ),
               ),
             ),
+
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(innerRadius),
+                    gradient: RadialGradient(
+                      center: Alignment.bottomLeft,
+                      radius: 1.2,
+                      colors: [cyanGlow.withOpacity(0.22), Colors.transparent],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            cornerPlate(alignment: Alignment.topLeft, color: cyanGlow),
+            cornerPlate(alignment: Alignment.topRight, color: violetGlow),
+            cornerPlate(alignment: Alignment.bottomLeft, color: violetGlow),
+            cornerPlate(alignment: Alignment.bottomRight, color: cyanGlow),
+
             Positioned(
-              top: 15,
-              left: 24,
-              child: rail(width: 82, height: 3, color: cyanGlow, opacity: 0.86),
+              top: 13,
+              left: 28,
+              child: glowRail(width: 92, height: 3.5, color: cyanGlow),
             ),
             Positioned(
-              top: 15,
-              right: 24,
-              child: rail(
-                width: 58,
-                height: 3,
+              top: 13,
+              right: 28,
+              child: glowRail(width: 72, height: 3.5, color: violetGlow),
+            ),
+            Positioned(
+              bottom: 13,
+              left: 30,
+              child: glowRail(
+                width: 68,
+                height: 2.5,
                 color: violetGlow,
-                opacity: 0.86,
+                opacity: 0.78,
               ),
             ),
             Positioned(
-              bottom: 15,
-              left: 26,
-              child: rail(
-                width: 54,
-                height: 2,
-                color: violetGlow,
-                opacity: 0.66,
+              bottom: 13,
+              right: 30,
+              child: glowRail(
+                width: 88,
+                height: 2.5,
+                color: cyanGlow,
+                opacity: 0.78,
               ),
             ),
+
             Positioned(
-              bottom: 15,
-              right: 26,
-              child: rail(width: 76, height: 2, color: cyanGlow, opacity: 0.66),
+              top: -12,
+              left: 30,
+              child: IgnorePointer(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color: const Color(0xFF071B2D).withOpacity(0.96),
+                    border: Border.all(
+                      color: cyanGlow.withOpacity(0.95),
+                      width: 1.2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: cyanGlow.withOpacity(0.55),
+                        blurRadius: 16,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: const Text(
+                    'KORLIX RESPONSE',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Color(0xFFBDFBFF),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.3,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
