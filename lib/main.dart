@@ -8012,6 +8012,16 @@ Make the entire output professional, well-structured using Markdown, and product
     }
   }
 
+  Uri _buildLocatorMapUri(String encodedQuery) {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      return Uri.parse('http://maps.apple.com/?q=$encodedQuery');
+    }
+
+    return Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$encodedQuery',
+    );
+  }
+
   Future<void> _openLocatorSearch({
     required String queryType,
     required String searchText,
@@ -8028,9 +8038,7 @@ Make the entire output professional, well-structured using Markdown, and product
       '$searchText near ${position.latitude},${position.longitude}',
     );
 
-    final mapsUri = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=$query',
-    );
+    final mapsUri = _buildLocatorMapUri(query);
 
     final launched = await launchUrl(
       mapsUri,
