@@ -8072,12 +8072,8 @@ Make the entire output professional, well-structured using Markdown, and product
 
     await _recordLocatorEvent(position: position, queryType: queryType);
 
-    final query = Uri.encodeComponent(
-      '$searchText near ${position.latitude},${position.longitude}',
-    );
-
     final mapsUri = _buildLocatorMapUri(
-      searchText: Uri.decodeComponent(query),
+      searchText: searchText,
       latitude: position.latitude,
       longitude: position.longitude,
     );
