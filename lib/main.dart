@@ -4024,6 +4024,26 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   bool _improvePictureMode = false;
   bool _imaginePictureMode = false;
   bool _fixCreditReportMode = false;
+
+  bool _utilityPanelOpen = false;
+  String? _selectedUtilityTool;
+
+  static const List<String> _utilityTools = <String>[
+    'Photo editor',
+    'Video splitter',
+    'Background remover',
+    'PDF editor',
+    'Songwriter',
+    'Voice recorder',
+    'Notebook',
+    'Alarm',
+    'Weather',
+    'Outside temperature',
+    'GIF maker',
+    'Ringtone maker',
+    'Reel maker',
+  ];
+
   bool _createAppMode = false;
   bool _voiceListening = false;
   fp.PlatformFile? _pickedUploadFile;
@@ -6699,6 +6719,192 @@ Make the entire output professional, well-structured using Markdown, and product
     }
   }
 
+  String _utilityToolDescription(String tool) {
+    switch (tool) {
+      case 'Photo editor':
+        return 'Upload a photo, describe the edits you want, then submit.';
+      case 'Video splitter':
+        return 'Upload a video and describe how you want it split.';
+      case 'Background remover':
+        return 'Upload a photo and Korlix AI will prepare it for background removal.';
+      case 'PDF editor':
+        return 'Upload a PDF and describe what you want edited, summarized, or extracted.';
+      case 'Songwriter':
+        return 'Describe the song style, topic, mood, hook, verse, or chorus you want.';
+      case 'Voice recorder':
+        return 'Record or upload voice notes for transcription, cleanup, or summaries.';
+      case 'Notebook':
+        return 'Create notes, ideas, reminders, plans, or saved thoughts.';
+      case 'Alarm':
+        return 'Create an in-app reminder or alarm-style note.';
+      case 'Weather':
+        return 'Use your location to ask for current weather or forecasts.';
+      case 'Outside temperature':
+        return 'Use your location to ask for the current outside temperature.';
+      case 'GIF maker':
+        return 'Upload media and describe the GIF you want to create.';
+      case 'Ringtone maker':
+        return 'Create or trim audio ideas for ringtone-style clips.';
+      case 'Reel maker':
+        return 'Plan or generate short-form reel concepts, captions, scenes, and scripts.';
+      default:
+        return 'Select a utility, then type what you want Korlix AI to do.';
+    }
+  }
+
+  void _toggleUtilityPanel() {
+    if (_loading) {
+      return;
+    }
+
+    setState(() {
+      _utilityPanelOpen = !_utilityPanelOpen;
+    });
+  }
+
+  void _selectUtilityTool(String tool) {
+    if (_loading) {
+      return;
+    }
+
+    setState(() {
+      if (_selectedUtilityTool == tool) {
+        _selectedUtilityTool = null;
+      } else {
+        _selectedUtilityTool = tool;
+      }
+
+      _utilityPanelOpen = true;
+
+      if (tool == 'Photo editor' || tool == 'Background remover') {
+        _improvePictureMode = true;
+        _fixCreditReportMode = false;
+      } else if (tool == 'PDF editor') {
+        _improvePictureMode = false;
+        _fixCreditReportMode = false;
+      } else {
+        _improvePictureMode = false;
+        _fixCreditReportMode = false;
+      }
+    });
+  }
+
+  Widget _buildUtilityButton() {
+    final isActive = _utilityPanelOpen || _selectedUtilityTool != null;
+
+    return ActionChip(
+      avatar: Icon(
+        Icons.build_circle_outlined,
+        size: 18,
+        color: isActive ? Colors.white : const Color(0xFF67E8F9),
+      ),
+      label: const Text('Utility'),
+      labelStyle: TextStyle(
+        color: isActive ? Colors.white : const Color(0xFFE5E7EB),
+        fontWeight: FontWeight.w700,
+      ),
+      backgroundColor: isActive
+          ? const Color(0xFF16A34A)
+          : const Color(0xFF111827),
+      side: BorderSide(
+        color: isActive ? const Color(0xFF22C55E) : const Color(0xFF0891B2),
+      ),
+      onPressed: _loading ? null : _toggleUtilityPanel,
+    );
+  }
+
+  Widget _buildUtilityPanel() {
+    final selectedTool = _selectedUtilityTool;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF071923),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFF0891B2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.tune, color: Color(0xFF67E8F9), size: 20),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Utility',
+                  style: TextStyle(
+                    color: Color(0xFFE5E7EB),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Close utilities',
+                onPressed: _loading
+                    ? null
+                    : () {
+                        setState(() {
+                          _utilityPanelOpen = false;
+                        });
+                      },
+                icon: const Icon(Icons.close, color: Color(0xFFE5E7EB)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _utilityTools.map((tool) {
+              final selected = selectedTool == tool;
+
+              return ActionChip(
+                label: Text(tool),
+                labelStyle: TextStyle(
+                  color: selected ? Colors.white : const Color(0xFFE5E7EB),
+                  fontWeight: FontWeight.w700,
+                ),
+                backgroundColor: selected
+                    ? const Color(0xFF16A34A)
+                    : const Color(0xFF111827),
+                side: BorderSide(
+                  color: selected
+                      ? const Color(0xFF22C55E)
+                      : const Color(0xFF0891B2),
+                ),
+                onPressed: _loading ? null : () => _selectUtilityTool(tool),
+              );
+            }).toList(),
+          ),
+          if (selectedTool != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFF145369)),
+              ),
+              child: Text(
+                _utilityToolDescription(selectedTool),
+                style: const TextStyle(
+                  color: Color(0xFFE5E7EB),
+                  fontSize: 13,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Future<void> _handleVoiceInput() async {
     await _loadCurrentTier();
 
@@ -8770,6 +8976,7 @@ Make the entire output professional, well-structured using Markdown, and product
             ],
           ),
 
+          if (_utilityPanelOpen) _buildUtilityPanel(),
           if (_activeUploadFiles.isNotEmpty) ...[
             const SizedBox(height: 10),
             Container(
