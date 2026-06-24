@@ -8593,217 +8593,224 @@ Make the entire output professional, well-structured using Markdown, and product
                       },
                       child: activeResult == null
                           ? const SizedBox.shrink()
-                          : Container(
-                              key: ValueKey(
-                                '${activeResult.title}-${activeResult.command}-${activeResult.content.hashCode}',
-                              ),
-                              width: double.infinity,
-                              height: _answerMinimized ? null : double.infinity,
-                              padding: EdgeInsets.all(compact ? 13 : 16),
-                              decoration: BoxDecoration(
-                                color: const Color(
-                                  0xFF061A25,
-                                ).withOpacity(0.995),
-                                borderRadius: BorderRadius.circular(24),
-                                border: Border.all(
-                                  color: const Color(
-                                    0xFF69D9E8,
-                                  ).withOpacity(0.64),
+                          : _buildNeonAnswerReadyFrame(
+                              child: Container(
+                                key: ValueKey(
+                                  '${activeResult.title}-${activeResult.command}-${activeResult.content.hashCode}',
                                 ),
-                                boxShadow: [
-                                  BoxShadow(
+                                width: double.infinity,
+                                height: _answerMinimized
+                                    ? null
+                                    : double.infinity,
+                                padding: EdgeInsets.all(compact ? 13 : 16),
+                                decoration: BoxDecoration(
+                                  color: const Color(
+                                    0xFF061A25,
+                                  ).withOpacity(0.995),
+                                  borderRadius: BorderRadius.circular(24),
+                                  border: Border.all(
                                     color: const Color(
                                       0xFF69D9E8,
-                                    ).withOpacity(0.22),
-                                    blurRadius: 30,
-                                    spreadRadius: 3,
+                                    ).withOpacity(0.64),
                                   ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: _answerMinimized
-                                    ? MainAxisSize.min
-                                    : MainAxisSize.max,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.auto_awesome_rounded,
-                                        color: Color(0xFF69D9E8),
-                                        size: 18,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      const Expanded(
-                                        child: Text(
-                                          'ANSWER READY',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: Color(0xFF69D9E8),
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w900,
-                                            letterSpacing: 0.6,
-                                          ),
-                                        ),
-                                      ),
-                                      // Minimize/Maximize button
-                                      IconButton(
-                                        onPressed: () => setState(
-                                          () => _answerMinimized =
-                                              !_answerMinimized,
-                                        ),
-                                        tooltip: _answerMinimized
-                                            ? 'Maximize'
-                                            : 'Minimize',
-                                        icon: Icon(
-                                          _answerMinimized
-                                              ? Icons.keyboard_arrow_down
-                                              : Icons.keyboard_arrow_up,
-                                          color: const Color(0xFF69D9E8),
-                                          size: 18,
-                                        ),
-                                      ),
-                                      IconButton(
-                                        onPressed: () {
-                                          setState(() {
-                                            _featuredAnswerDismissed = true;
-                                          });
-                                        },
-                                        icon: const Icon(Icons.close_rounded),
-                                        color: const Color(0xFFE4EBEE),
-                                        tooltip: 'Close',
-                                        visualDensity: VisualDensity.compact,
-                                        padding: EdgeInsets.zero,
-                                        constraints: const BoxConstraints(
-                                          minWidth: 34,
-                                          minHeight: 34,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  // Body content — hidden when minimized
-                                  if (!_answerMinimized) ...[
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      activeResult.command,
-                                      maxLines: compact ? 2 : 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: const Color(0xFFE4EBEE),
-                                        fontSize: compact ? 13 : 15,
-                                        fontWeight: FontWeight.w900,
-                                        height: 1.18,
-                                      ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFF69D9E8,
+                                      ).withOpacity(0.22),
+                                      blurRadius: 30,
+                                      spreadRadius: 3,
                                     ),
-                                    const SizedBox(height: 8),
-                                    Expanded(
-                                      child: Container(
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withOpacity(0.22),
-                                          borderRadius: BorderRadius.circular(
-                                            14,
-                                          ),
-                                          border: Border.all(
-                                            color: const Color(
-                                              0xFF2EC7DF,
-                                            ).withOpacity(0.18),
-                                          ),
-                                        ),
-                                        child: activeResult.hasImageResult
-                                            ? _buildGeneratedImagePreview(
-                                                activeResult,
-                                                height: 300,
-                                              )
-                                            : SingleChildScrollView(
-                                                child: Text(
-                                                  activeResult.content,
-                                                  style: TextStyle(
-                                                    color: const Color(
-                                                      0xFFA9C6CF,
-                                                    ),
-                                                    fontSize: compact
-                                                        ? 12.5
-                                                        : 13.5,
-                                                    height: 1.32,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: _answerMinimized
+                                      ? MainAxisSize.min
+                                      : MainAxisSize.max,
+                                  children: [
                                     Row(
                                       children: [
-                                        Expanded(
-                                          child: SizedBox(
-                                            height: compact ? 40 : 44,
-                                            child: FilledButton.icon(
-                                              onPressed: () =>
-                                                  _copyFeaturedResult(
-                                                    activeResult,
-                                                  ),
-                                              icon: const Icon(
-                                                Icons.copy_rounded,
-                                                size: 17,
-                                              ),
-                                              label: const Text('Copy'),
-                                              style: FilledButton.styleFrom(
-                                                backgroundColor: const Color(
-                                                  0xFFB794F4,
-                                                ),
-                                                foregroundColor: const Color(
-                                                  0xFF120D18,
-                                                ),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                        999,
-                                                      ),
-                                                ),
-                                              ),
+                                        const Icon(
+                                          Icons.auto_awesome_rounded,
+                                          color: Color(0xFF69D9E8),
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        const Expanded(
+                                          child: Text(
+                                            'ANSWER READY',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: Color(0xFF69D9E8),
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w900,
+                                              letterSpacing: 0.6,
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: SizedBox(
-                                            height: compact ? 40 : 44,
-                                            child: OutlinedButton.icon(
-                                              onPressed: () =>
-                                                  _shareFeaturedResult(
-                                                    activeResult,
-                                                  ),
-                                              icon: const Icon(
-                                                Icons.share_rounded,
-                                                size: 17,
-                                              ),
-                                              label: const Text('Share'),
-                                              style: OutlinedButton.styleFrom(
-                                                foregroundColor: const Color(
-                                                  0xFF69D9E8,
-                                                ),
-                                                side: BorderSide(
-                                                  color: const Color(
-                                                    0xFF69D9E8,
-                                                  ).withOpacity(0.58),
-                                                ),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                        999,
-                                                      ),
-                                                ),
-                                              ),
-                                            ),
+                                        // Minimize/Maximize button
+                                        IconButton(
+                                          onPressed: () => setState(
+                                            () => _answerMinimized =
+                                                !_answerMinimized,
+                                          ),
+                                          tooltip: _answerMinimized
+                                              ? 'Maximize'
+                                              : 'Minimize',
+                                          icon: Icon(
+                                            _answerMinimized
+                                                ? Icons.keyboard_arrow_down
+                                                : Icons.keyboard_arrow_up,
+                                            color: const Color(0xFF69D9E8),
+                                            size: 18,
+                                          ),
+                                        ),
+                                        IconButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              _featuredAnswerDismissed = true;
+                                            });
+                                          },
+                                          icon: const Icon(Icons.close_rounded),
+                                          color: const Color(0xFFE4EBEE),
+                                          tooltip: 'Close',
+                                          visualDensity: VisualDensity.compact,
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(
+                                            minWidth: 34,
+                                            minHeight: 34,
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ], // end if (!_answerMinimized)
-                                ],
+                                    // Body content — hidden when minimized
+                                    if (!_answerMinimized) ...[
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        activeResult.command,
+                                        maxLines: compact ? 2 : 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: const Color(0xFFE4EBEE),
+                                          fontSize: compact ? 13 : 15,
+                                          fontWeight: FontWeight.w900,
+                                          height: 1.18,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Expanded(
+                                        child: Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.all(10),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withOpacity(
+                                              0.22,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              14,
+                                            ),
+                                            border: Border.all(
+                                              color: const Color(
+                                                0xFF2EC7DF,
+                                              ).withOpacity(0.18),
+                                            ),
+                                          ),
+                                          child: activeResult.hasImageResult
+                                              ? _buildGeneratedImagePreview(
+                                                  activeResult,
+                                                  height: 300,
+                                                )
+                                              : SingleChildScrollView(
+                                                  child: Text(
+                                                    activeResult.content,
+                                                    style: TextStyle(
+                                                      color: const Color(
+                                                        0xFFA9C6CF,
+                                                      ),
+                                                      fontSize: compact
+                                                          ? 12.5
+                                                          : 13.5,
+                                                      height: 1.32,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: SizedBox(
+                                              height: compact ? 40 : 44,
+                                              child: FilledButton.icon(
+                                                onPressed: () =>
+                                                    _copyFeaturedResult(
+                                                      activeResult,
+                                                    ),
+                                                icon: const Icon(
+                                                  Icons.copy_rounded,
+                                                  size: 17,
+                                                ),
+                                                label: const Text('Copy'),
+                                                style: FilledButton.styleFrom(
+                                                  backgroundColor: const Color(
+                                                    0xFFB794F4,
+                                                  ),
+                                                  foregroundColor: const Color(
+                                                    0xFF120D18,
+                                                  ),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          999,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: SizedBox(
+                                              height: compact ? 40 : 44,
+                                              child: OutlinedButton.icon(
+                                                onPressed: () =>
+                                                    _shareFeaturedResult(
+                                                      activeResult,
+                                                    ),
+                                                icon: const Icon(
+                                                  Icons.share_rounded,
+                                                  size: 17,
+                                                ),
+                                                label: const Text('Share'),
+                                                style: OutlinedButton.styleFrom(
+                                                  foregroundColor: const Color(
+                                                    0xFF69D9E8,
+                                                  ),
+                                                  side: BorderSide(
+                                                    color: const Color(
+                                                      0xFF69D9E8,
+                                                    ).withOpacity(0.58),
+                                                  ),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          999,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ], // end if (!_answerMinimized)
+                                  ],
+                                ),
                               ),
                             ),
                     ),
@@ -9262,6 +9269,114 @@ Make the entire output professional, well-structured using Markdown, and product
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildNeonAnswerReadyFrame({required Widget child}) {
+    const cyanGlow = Color(0xFF69D9E8);
+    const violetGlow = Color(0xFFFF4CF2);
+    const deepGlass = Color(0xFF061724);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            cyanGlow.withOpacity(0.96),
+            violetGlow.withOpacity(0.72),
+            cyanGlow.withOpacity(0.42),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: cyanGlow.withOpacity(0.36),
+            blurRadius: 30,
+            spreadRadius: 1.4,
+          ),
+          BoxShadow(
+            color: violetGlow.withOpacity(0.26),
+            blurRadius: 44,
+            spreadRadius: 1.6,
+          ),
+        ],
+      ),
+      child: Container(
+        margin: const EdgeInsets.all(1.35),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(29),
+          color: deepGlass.withOpacity(0.89),
+          border: Border.all(color: cyanGlow.withOpacity(0.36), width: 0.9),
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            child,
+            Positioned(
+              top: 14,
+              left: 20,
+              child: Container(
+                width: 54,
+                height: 2.2,
+                decoration: BoxDecoration(
+                  color: cyanGlow.withOpacity(0.82),
+                  borderRadius: BorderRadius.circular(99),
+                  boxShadow: [
+                    BoxShadow(
+                      color: cyanGlow.withOpacity(0.66),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              top: 14,
+              right: 22,
+              child: Container(
+                width: 40,
+                height: 2.2,
+                decoration: BoxDecoration(
+                  color: violetGlow.withOpacity(0.82),
+                  borderRadius: BorderRadius.circular(99),
+                  boxShadow: [
+                    BoxShadow(
+                      color: violetGlow.withOpacity(0.66),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 14,
+              left: 24,
+              child: Container(
+                width: 46,
+                height: 2,
+                decoration: BoxDecoration(
+                  color: violetGlow.withOpacity(0.60),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 14,
+              right: 24,
+              child: Container(
+                width: 64,
+                height: 2,
+                decoration: BoxDecoration(
+                  color: cyanGlow.withOpacity(0.60),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

@@ -44,8 +44,11 @@ workflows:
           set -e
 
           echo "Building IPA..."
-          flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
-
+          VERSION_LINE="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
+          BUILD_NAME="${VERSION_LINE%%+*}"
+          BUILD_NUMBER="${VERSION_LINE##*+}"
+          echo "Building IPA version $BUILD_NAME ($BUILD_NUMBER)..."
+          flutter build ipa --release --build-name="$BUILD_NAME" --build-number="$BUILD_NUMBER" --export-options-plist=/Users/builder/export_options.plist
           echo ""
           echo "Searching for generated IPA files..."
           find build -type f -name "*.ipa" -print || true
