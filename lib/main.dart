@@ -6773,6 +6773,48 @@ Make the entire output professional, well-structured using Markdown, and product
     });
   }
 
+  String _utilityStarterPrompt(String tool) {
+    switch (tool) {
+      case 'Photo editor':
+        return "Photo editor: Upload a photo, then describe the exact edits you want. Example: brighten it, sharpen details, remove blemishes, change the background, or make it look professional.";
+      case 'Background remover':
+        return "Background remover: Upload an image, then submit this request: remove the background cleanly, keep the main subject sharp, and return a polished cutout-style result.";
+      case 'Songwriter':
+        return "Songwriter: Write a song about [topic]. Genre: [genre]. Mood: [mood]. Include a title, verse 1, chorus, verse 2, bridge, and final chorus.";
+      case 'Notebook':
+        return "Notebook: Organize these notes into a clean notebook entry with headings, bullets, action items, and a short summary: ";
+      case 'PDF editor':
+        return "PDF editor: Upload a PDF, then tell me what you want done. Example: summarize it, rewrite a section, extract key points, turn it into notes, or draft edits.";
+      case 'Video splitter':
+        return "Video splitter: Upload or describe your video, then tell me how you want it split. Example: split into 30-second clips, chapters, scenes, reels, or highlights.";
+      case 'Voice recorder':
+        return "Voice recorder: Record or dictate your thoughts with the Voice button, then ask me to clean the transcript, summarize it, turn it into notes, or create action items.";
+      case 'Alarm':
+        return "Alarm: Tell me what you need to remember, the date, the time, and the repeat schedule. I can help format a reminder plan you can add to your device.";
+      case 'Weather':
+        return "Weather: Tell me the city or location you want weather for, or use Locator first, then ask for current conditions, forecast, and practical advice.";
+      case 'Outside temperature':
+        return "Outside temperature: Tell me your city or location, or use Locator first, then ask for the current outside temperature and what to wear.";
+      case 'GIF maker':
+        return "GIF maker: Upload media or describe the scene, then tell me the GIF style, length, captions, and motion you want.";
+      case 'Ringtone maker':
+        return "Ringtone maker: Describe the ringtone style, mood, length, instruments, and whether it should loop. I can draft the concept, lyrics, or sound direction.";
+      case 'Reel maker':
+        return "Reel maker: Tell me the topic, audience, tone, and target length. I can create a reel script, shot list, captions, hooks, and scene-by-scene plan.";
+      default:
+        return "Utility: Tell me what you want to do with $tool.";
+    }
+  }
+
+  void _applyUtilityToolPrompt(String tool) {
+    final prompt = _utilityStarterPrompt(tool);
+
+    _controller.text = prompt;
+    _controller.selection = TextSelection.collapsed(
+      offset: _controller.text.length,
+    );
+  }
+
   void _selectUtilityTool(String tool) {
     if (_loading) {
       return;
@@ -6784,6 +6826,7 @@ Make the entire output professional, well-structured using Markdown, and product
         return;
       } else {
         _selectedUtilityTool = tool;
+        _applyUtilityToolPrompt(tool);
       }
 
       _utilityPanelOpen = true;
