@@ -9273,106 +9273,135 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   Widget _buildNeonAnswerReadyFrame({required Widget child}) {
-    const cyanGlow = Color(0xFF69D9E8);
-    const violetGlow = Color(0xFFFF4CF2);
-    const deepGlass = Color(0xFF061724);
+    const cyanGlow = Color(0xFF76F7FF);
+    const violetGlow = Color(0xFFFF4DFF);
+    const deepInk = Color(0xFF06182B);
+    const frameRadius = 30.0;
+
+    Widget rail({
+      required double width,
+      required double height,
+      required Color color,
+      double opacity = 0.72,
+    }) {
+      return IgnorePointer(
+        child: Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: color.withOpacity(opacity),
+            borderRadius: BorderRadius.circular(99),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.68),
+                blurRadius: 12,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 10),
+      margin: const EdgeInsets.only(top: 6, bottom: 10),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            cyanGlow.withOpacity(0.96),
-            violetGlow.withOpacity(0.72),
-            cyanGlow.withOpacity(0.42),
-          ],
-        ),
+        borderRadius: BorderRadius.circular(frameRadius),
         boxShadow: [
           BoxShadow(
-            color: cyanGlow.withOpacity(0.36),
+            color: cyanGlow.withOpacity(0.34),
             blurRadius: 30,
-            spreadRadius: 1.4,
+            spreadRadius: 1,
+            offset: const Offset(-4, -2),
           ),
           BoxShadow(
-            color: violetGlow.withOpacity(0.26),
-            blurRadius: 44,
-            spreadRadius: 1.6,
+            color: violetGlow.withOpacity(0.30),
+            blurRadius: 34,
+            spreadRadius: 2,
+            offset: const Offset(5, 4),
           ),
         ],
       ),
-      child: Container(
-        margin: const EdgeInsets.all(1.35),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(29),
-          color: deepGlass.withOpacity(0.89),
-          border: Border.all(color: cyanGlow.withOpacity(0.36), width: 0.9),
-        ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(frameRadius),
         child: Stack(
           clipBehavior: Clip.none,
           children: [
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: deepInk.withOpacity(0.22),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      cyanGlow.withOpacity(0.18),
+                      deepInk.withOpacity(0.04),
+                      violetGlow.withOpacity(0.18),
+                    ],
+                    stops: const [0.0, 0.52, 1.0],
+                  ),
+                ),
+              ),
+            ),
+
+            // Keep the existing ANSWER READY card and all Copy/Share logic intact.
             child,
-            Positioned(
-              top: 14,
-              left: 20,
-              child: Container(
-                width: 54,
-                height: 2.2,
-                decoration: BoxDecoration(
-                  color: cyanGlow.withOpacity(0.82),
-                  borderRadius: BorderRadius.circular(99),
-                  boxShadow: [
-                    BoxShadow(
-                      color: cyanGlow.withOpacity(0.66),
-                      blurRadius: 10,
+
+            // Foreground cyber glass layer. This is painted above the old card,
+            // so the neon style cannot hide behind the active-result bubble.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(frameRadius),
+                    border: Border.all(
+                      color: cyanGlow.withOpacity(0.78),
+                      width: 1.35,
                     ),
-                  ],
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.white.withOpacity(0.055),
+                        Colors.transparent,
+                        violetGlow.withOpacity(0.11),
+                      ],
+                      stops: const [0.0, 0.48, 1.0],
+                    ),
+                  ),
                 ),
               ),
             ),
             Positioned(
-              top: 14,
-              right: 22,
-              child: Container(
-                width: 40,
-                height: 2.2,
-                decoration: BoxDecoration(
-                  color: violetGlow.withOpacity(0.82),
-                  borderRadius: BorderRadius.circular(99),
-                  boxShadow: [
-                    BoxShadow(
-                      color: violetGlow.withOpacity(0.66),
-                      blurRadius: 10,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 14,
+              top: 15,
               left: 24,
-              child: Container(
-                width: 46,
-                height: 2,
-                decoration: BoxDecoration(
-                  color: violetGlow.withOpacity(0.60),
-                  borderRadius: BorderRadius.circular(99),
-                ),
+              child: rail(width: 82, height: 3, color: cyanGlow, opacity: 0.86),
+            ),
+            Positioned(
+              top: 15,
+              right: 24,
+              child: rail(
+                width: 58,
+                height: 3,
+                color: violetGlow,
+                opacity: 0.86,
               ),
             ),
             Positioned(
-              bottom: 14,
-              right: 24,
-              child: Container(
-                width: 64,
+              bottom: 15,
+              left: 26,
+              child: rail(
+                width: 54,
                 height: 2,
-                decoration: BoxDecoration(
-                  color: cyanGlow.withOpacity(0.60),
-                  borderRadius: BorderRadius.circular(99),
-                ),
+                color: violetGlow,
+                opacity: 0.66,
               ),
+            ),
+            Positioned(
+              bottom: 15,
+              right: 26,
+              child: rail(width: 76, height: 2, color: cyanGlow, opacity: 0.66),
             ),
           ],
         ),
