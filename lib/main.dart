@@ -9252,12 +9252,111 @@ Make the entire output professional, well-structured using Markdown, and product
               itemCount: _chatMessages.length,
               itemBuilder: (context, index) {
                 final msg = _chatMessages[index];
-                return _buildChatBubblePair(msg, index);
+                final bubblePair = _buildChatBubblePair(msg, index);
+                return _buildNeonChatBubbleFrame(
+                  index: index,
+                  child: bubblePair,
+                );
               },
             ),
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildNeonChatBubbleFrame({
+    required int index,
+    required Widget child,
+  }) {
+    // Preserve empty/deleted messages exactly as-is.
+    if (child is SizedBox && child.width == 0 && child.height == 0) {
+      return child;
+    }
+
+    final primaryGlow = index.isEven
+        ? const Color(0xFF69D9E8)
+        : const Color(0xFFFF4CF2);
+    final secondaryGlow = index.isEven
+        ? const Color(0xFFFF4CF2)
+        : const Color(0xFF69D9E8);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 7),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            primaryGlow.withOpacity(0.92),
+            secondaryGlow.withOpacity(0.70),
+            const Color(0xFF143B4A).withOpacity(0.38),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: primaryGlow.withOpacity(0.30),
+            blurRadius: 22,
+            spreadRadius: 1.1,
+          ),
+          BoxShadow(
+            color: secondaryGlow.withOpacity(0.18),
+            blurRadius: 34,
+            spreadRadius: 1.2,
+          ),
+        ],
+      ),
+      child: Container(
+        margin: const EdgeInsets.all(1.15),
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(23),
+          color: const Color(0xFF061724).withOpacity(0.84),
+          border: Border.all(color: primaryGlow.withOpacity(0.34), width: 0.8),
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              top: 8,
+              right: 12,
+              child: Container(
+                width: 34,
+                height: 2,
+                decoration: BoxDecoration(
+                  color: secondaryGlow.withOpacity(0.72),
+                  borderRadius: BorderRadius.circular(99),
+                  boxShadow: [
+                    BoxShadow(
+                      color: secondaryGlow.withOpacity(0.52),
+                      blurRadius: 8,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 8,
+              left: 12,
+              child: Container(
+                width: 42,
+                height: 2,
+                decoration: BoxDecoration(
+                  color: primaryGlow.withOpacity(0.70),
+                  borderRadius: BorderRadius.circular(99),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryGlow.withOpacity(0.50),
+                      blurRadius: 8,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            child,
+          ],
+        ),
+      ),
     );
   }
 
