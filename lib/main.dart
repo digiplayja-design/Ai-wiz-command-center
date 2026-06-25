@@ -9291,7 +9291,159 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
+
   Widget _buildNeonAnswerReadyFrame({required Widget child}) {
+    const cyanGlow = Color(0xFF63F3FF);
+    const magentaGlow = Color(0xFFFF4AF3);
+    const deepBlue = Color(0xFF08101F);
+    const deepPurple = Color(0xFF160B2F);
+
+    Widget glowRail({
+      required double width,
+      required double height,
+      required Color color,
+    }) {
+      return IgnorePointer(
+        child: Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(99),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.72),
+                blurRadius: 14,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 14, bottom: 14),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(2.2),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(26),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  cyanGlow.withValues(alpha: 0.96),
+                  const Color(0xFF328DFF).withValues(alpha: 0.54),
+                  magentaGlow.withValues(alpha: 0.96),
+                ],
+                stops: const [0.0, 0.48, 1.0],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: cyanGlow.withValues(alpha: 0.28),
+                  blurRadius: 24,
+                  spreadRadius: 1.2,
+                  offset: const Offset(-3, -2),
+                ),
+                BoxShadow(
+                  color: magentaGlow.withValues(alpha: 0.30),
+                  blurRadius: 28,
+                  spreadRadius: 1.2,
+                  offset: const Offset(3, 3),
+                ),
+              ],
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF0C2844),
+                    deepBlue,
+                    deepPurple,
+                  ],
+                  stops: [0.0, 0.54, 1.0],
+                ),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  width: 0.95,
+                ),
+              ),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(24),
+                          gradient: RadialGradient(
+                            center: const Alignment(0.6, -0.9),
+                            radius: 1.25,
+                            colors: [
+                              Colors.white.withValues(alpha: 0.10),
+                              cyanGlow.withValues(alpha: 0.05),
+                              Colors.transparent,
+                            ],
+                            stops: const [0.0, 0.24, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(top: 12, left: 16, child: glowRail(width: 74, height: 3, color: cyanGlow)),
+                  Positioned(top: 12, right: 16, child: glowRail(width: 62, height: 3, color: magentaGlow)),
+                  Positioned(bottom: 12, left: 16, child: glowRail(width: 58, height: 2, color: magentaGlow.withValues(alpha: 0.90))),
+                  Positioned(bottom: 12, right: 16, child: glowRail(width: 76, height: 2, color: cyanGlow.withValues(alpha: 0.90))),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+                    child: child,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            top: -13,
+            left: 24,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0A1730),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: cyanGlow.withValues(alpha: 0.85),
+                  width: 1.0,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: cyanGlow.withValues(alpha: 0.24),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: Text(
+                'KORLIX RESPONSE',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.96),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 2.0,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+) {
     const cyan = Color(0xFF6DF7FF);
     const magenta = Color(0xFFFF4DFF);
     const deepOuter = Color(0xFF040814);
@@ -9341,10 +9493,105 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
+
   Widget _buildNeonChatBubbleFrame({
     required int index,
     required Widget child,
   }) {
+    final primaryGlow =
+        index.isEven ? const Color(0xFF63F3FF) : const Color(0xFFFF4AF3);
+    final secondaryGlow =
+        index.isEven ? const Color(0xFFFF4AF3) : const Color(0xFF63F3FF);
+
+    Widget glowRail({
+      required double width,
+      required double height,
+      required Color color,
+    }) {
+      return IgnorePointer(
+        child: Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(99),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.68),
+                blurRadius: 12,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(1.9),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            primaryGlow.withValues(alpha: 0.94),
+            const Color(0xFF3A52FF).withValues(alpha: 0.18),
+            secondaryGlow.withValues(alpha: 0.94),
+          ],
+          stops: const [0.0, 0.52, 1.0],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: primaryGlow.withValues(alpha: 0.18),
+            blurRadius: 18,
+            spreadRadius: 0.7,
+            offset: const Offset(-2, -1),
+          ),
+          BoxShadow(
+            color: secondaryGlow.withValues(alpha: 0.18),
+            blurRadius: 18,
+            spreadRadius: 0.7,
+            offset: const Offset(2, 2),
+          ),
+        ],
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF091522),
+              Color(0xFF07111D),
+              Color(0xFF140A2C),
+            ],
+            stops: [0.0, 0.58, 1.0],
+          ),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.07),
+            width: 0.9,
+          ),
+        ),
+        child: Stack(
+          children: [
+            Positioned(top: 10, left: 14, child: glowRail(width: 68, height: 2.5, color: primaryGlow)),
+            Positioned(top: 10, right: 14, child: glowRail(width: 52, height: 2.5, color: secondaryGlow)),
+            Positioned(bottom: 10, left: 14, child: glowRail(width: 46, height: 2, color: secondaryGlow.withValues(alpha: 0.90))),
+            Positioned(bottom: 10, right: 14, child: glowRail(width: 70, height: 2, color: primaryGlow.withValues(alpha: 0.90))),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+              child: child,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+) {
     // Preserve empty/deleted messages exactly as-is.
     if (child is SizedBox && child.width == 0 && child.height == 0) {
       return child;
