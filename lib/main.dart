@@ -8603,43 +8603,42 @@ Make the entire output professional, well-structured using Markdown, and product
                                     ? null
                                     : double.infinity,
                                 padding: EdgeInsets.all(compact ? 13 : 16),
+                                // CYBER PANEL FRONT: this is the visible ANSWER READY card face.
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(28),
-                                  color: const Color(
-                                    0xFF061724,
-                                  ).withOpacity(0.46),
-                                  gradient: LinearGradient(
+                                  borderRadius: BorderRadius.circular(20),
+                                  color: const Color(0xFF07111F),
+                                  gradient: const LinearGradient(
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                     colors: [
-                                      const Color(0xFF76F7FF).withOpacity(0.24),
-                                      const Color(0xFF061724).withOpacity(0.50),
-                                      const Color(0xFFFF4DFF).withOpacity(0.22),
+                                      Color(0xFF0C2844),
+                                      Color(0xFF07111F),
+                                      Color(0xFF19103A),
                                     ],
-                                    stops: const [0.0, 0.52, 1.0],
+                                    stops: [0.0, 0.52, 1.0],
                                   ),
                                   border: Border.all(
                                     color: const Color(
-                                      0xFF76F7FF,
-                                    ).withOpacity(0.62),
-                                    width: 1.25,
+                                      0xFF6DF7FF,
+                                    ).withValues(alpha: 0.62),
+                                    width: 1.15,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
                                       color: const Color(
-                                        0xFF76F7FF,
-                                      ).withOpacity(0.22),
-                                      blurRadius: 24,
-                                      spreadRadius: 1,
-                                      offset: const Offset(-3, -2),
+                                        0xFF6DF7FF,
+                                      ).withValues(alpha: 0.16),
+                                      blurRadius: 18,
+                                      spreadRadius: 0.8,
+                                      offset: const Offset(-2, -1),
                                     ),
                                     BoxShadow(
                                       color: const Color(
                                         0xFFFF4DFF,
-                                      ).withOpacity(0.20),
-                                      blurRadius: 28,
-                                      spreadRadius: 1,
-                                      offset: const Offset(3, 3),
+                                      ).withValues(alpha: 0.16),
+                                      blurRadius: 20,
+                                      spreadRadius: 0.8,
+                                      offset: const Offset(2, 2),
                                     ),
                                   ],
                                 ),
@@ -9293,49 +9292,51 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   Widget _buildNeonAnswerReadyFrame({required Widget child}) {
-    const cyanGlow = Color(0xFF76F7FF);
-    const violetGlow = Color(0xFFFF4DFF);
-    const deepInk = Color(0xFF06182B);
+    const cyan = Color(0xFF6DF7FF);
+    const magenta = Color(0xFFFF4DFF);
+    const deepOuter = Color(0xFF040814);
 
     return Container(
       margin: const EdgeInsets.only(top: 14, bottom: 12),
-      padding: const EdgeInsets.all(2.2),
+      padding: const EdgeInsets.all(2.4),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(24),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            cyanGlow.withOpacity(0.92),
-            const Color(0xFF2D8CFF).withOpacity(0.54),
-            violetGlow.withOpacity(0.92),
+            cyan.withValues(alpha: 0.95),
+            const Color(0xFF2D8CFF).withValues(alpha: 0.62),
+            magenta.withValues(alpha: 0.95),
           ],
-          stops: const [0.0, 0.48, 1.0],
+          stops: const [0.0, 0.46, 1.0],
         ),
         boxShadow: [
           BoxShadow(
-            color: cyanGlow.withOpacity(0.38),
-            blurRadius: 30,
-            spreadRadius: 2,
-            offset: const Offset(-5, -3),
+            color: cyan.withValues(alpha: 0.34),
+            blurRadius: 26,
+            spreadRadius: 1.5,
+            offset: const Offset(-4, -2),
           ),
           BoxShadow(
-            color: violetGlow.withOpacity(0.36),
-            blurRadius: 34,
-            spreadRadius: 2,
-            offset: const Offset(5, 4),
+            color: magenta.withValues(alpha: 0.32),
+            blurRadius: 30,
+            spreadRadius: 1.5,
+            offset: const Offset(4, 3),
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: deepInk.withOpacity(0.18),
-            borderRadius: BorderRadius.circular(28),
+      child: Container(
+        padding: const EdgeInsets.all(1.2),
+        decoration: BoxDecoration(
+          color: deepOuter,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.08),
+            width: 0.8,
           ),
-          child: child,
         ),
+        child: child,
       ),
     );
   }
