@@ -26,6 +26,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'korlix_video_downloader.dart';
 import 'korlix_image_saver.dart';
 import 'korlix_video_preview_source.dart';
+import 'korlix_cyber_widgets.dart';
 
 const String kKorlixImaginePicturePrompt =
     'Describe the picture you want Korlix AI to create.';
@@ -8937,291 +8938,251 @@ Make the entire output professional, well-structured using Markdown, and product
     return ValueListenableBuilder<String>(
       valueListenable: kKorlixThemeNotifier,
       builder: (context, theme, _) {
-        final accent = korlixThemeAccentFor(theme);
-        final secondary = korlixThemeSecondaryFor(theme);
-        final panel = korlixThemePanelFor(theme);
+        Color accentFor(String value) {
+          switch (value) {
+            case 'black_white':
+              return const Color(0xFFEDEDED);
+            case 'purple_green':
+              return const Color(0xFFB794F4);
+            case 'white_gray':
+              return const Color(0xFFF5F5F5);
+            case 'gold_black':
+              return const Color(0xFFFFD166);
+            case 'pink_white':
+              return const Color(0xFFFF7AB8);
+            case 'korlix_blue':
+            default:
+              return const Color(0xFF69D9E8);
+          }
+        }
 
-        Widget glowDot(Color color) {
-          return Container(
-            width: 7,
-            height: 7,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: color.withValues(alpha: 0.70),
-                  blurRadius: 10,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
+        Color secondaryFor(String value) {
+          switch (value) {
+            case 'black_white':
+              return const Color(0xFF8B95A1);
+            case 'purple_green':
+              return const Color(0xFF7CFF6B);
+            case 'white_gray':
+              return const Color(0xFF9CA3AF);
+            case 'gold_black':
+              return const Color(0xFFFFB000);
+            case 'pink_white':
+              return Colors.white;
+            case 'korlix_blue':
+            default:
+              return const Color(0xFFFF4AF3);
+          }
+        }
+
+        Color panelFor(String value) {
+          switch (value) {
+            case 'black_white':
+              return const Color(0xFF030303);
+            case 'purple_green':
+              return const Color(0xFF10081B);
+            case 'white_gray':
+              return const Color(0xFF101214);
+            case 'gold_black':
+              return const Color(0xFF080704);
+            case 'pink_white':
+              return const Color(0xFF170711);
+            case 'korlix_blue':
+            default:
+              return const Color(0xFF071B27);
+          }
+        }
+
+        Future<void> setLocalTheme(String value) async {
+          kKorlixThemeNotifier.value = value;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('korlix_ui_theme', value);
+
+          if (mounted) {
+            setState(() {});
+          }
+        }
+
+        final accent = accentFor(theme);
+        final secondary = secondaryFor(theme);
+        final panel = panelFor(theme);
+
+        Widget themeDot(String value, Color a, Color b) {
+          return KorlixThemeDot(
+            selected: kKorlixThemeNotifier.value == value,
+            colorA: a,
+            colorB: b,
+            onTap: () {
+              setLocalTheme(value);
+            },
           );
         }
 
-        Widget simpleToolButton({
+        Widget toolButton({
           required IconData icon,
           required String label,
-          required VoidCallback? onPressed,
+          required VoidCallback? onTap,
+          Color? color,
           bool active = false,
+          bool vertical = false,
+          String? subLabel,
         }) {
-          return SizedBox(
-            height: 42,
-            child: OutlinedButton.icon(
-              onPressed: onPressed,
-              icon: Icon(icon, size: 18),
-              label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: active ? const Color(0xFF061008) : accent,
-                backgroundColor: active
-                    ? accent.withValues(alpha: 0.90)
-                    : Colors.black.withValues(alpha: 0.14),
-                side: BorderSide(
-                  color: active ? accent : accent.withValues(alpha: 0.46),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 9,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                textStyle: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          );
-        }
-
-        Widget promptModuleButton({
-          required IconData icon,
-          required String label,
-          required Color color,
-          required VoidCallback? onPressed,
-          bool active = false,
-        }) {
-          return ClipPath(
-            clipper: const _KorlixCyberPanelClipper(cut: 14),
-            child: Material(
-              color: Colors.black.withValues(alpha: active ? 0.32 : 0.20),
-              child: InkWell(
-                onTap: onPressed,
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: color.withValues(alpha: active ? 0.86 : 0.52),
-                      width: 1.1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: color.withValues(alpha: active ? 0.22 : 0.09),
-                        blurRadius: 16,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(icon, color: color, size: 25),
-                      const SizedBox(height: 4),
-                      Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: color,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 11,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+          return KorlixDeepCyberButton(
+            icon: icon,
+            label: label,
+            subLabel: subLabel,
+            accent: color ?? accent,
+            secondary: secondary,
+            fill: panel,
+            active: active,
+            vertical: vertical,
+            onTap: onTap,
           );
         }
 
         Widget answerReadyPanel() {
           final answerHeight = activeResult == null
-              ? 260.0
+              ? 300.0
               : _answerMinimized
-              ? 94.0
-              : 330.0;
+              ? 112.0
+              : 365.0;
 
-          return Container(
-            margin: const EdgeInsets.only(top: 14),
-            padding: const EdgeInsets.all(2.2),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              gradient: LinearGradient(
-                colors: [
-                  accent.withValues(alpha: 0.96),
-                  secondary.withValues(alpha: 0.90),
-                ],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: accent.withValues(alpha: 0.26),
-                  blurRadius: 30,
-                  spreadRadius: 2,
-                ),
-                BoxShadow(
-                  color: secondary.withValues(alpha: 0.18),
-                  blurRadius: 32,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-            child: ClipPath(
-              clipper: const _KorlixCyberPanelClipper(cut: 30),
-              child: Container(
-                height: answerHeight,
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-                decoration: BoxDecoration(
-                  color: panel.withValues(alpha: 0.96),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      panel.withValues(alpha: 0.98),
-                      Colors.black.withValues(alpha: 0.92),
-                      panel.withValues(alpha: 0.90),
-                    ],
-                    stops: const [0.0, 0.54, 1.0],
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+          return KorlixDeepCyberFrame(
+            height: answerHeight,
+            accent: accent,
+            secondary: secondary,
+            fill: panel,
+            cut: 34,
+            depth: 22,
+            padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'ANSWER READY',
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: accent,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 3.2,
-                              shadows: [
-                                Shadow(
-                                  color: accent.withValues(alpha: 0.58),
-                                  blurRadius: 16,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        if (activeResult != null) ...[
-                          IconButton(
-                            onPressed: () => setState(
-                              () => _answerMinimized = !_answerMinimized,
-                            ),
-                            icon: Icon(
-                              _answerMinimized
-                                  ? Icons.keyboard_arrow_down_rounded
-                                  : Icons.keyboard_arrow_up_rounded,
-                              color: accent,
-                            ),
-                            tooltip: _answerMinimized
-                                ? 'Expand answer'
-                                : 'Collapse answer',
-                          ),
-                          IconButton(
-                            onPressed: () {
-                              setState(() {
-                                _featuredAnswerDismissed = true;
-                              });
-                            },
-                            icon: const Icon(Icons.close_rounded),
-                            color: const Color(0xFFE4EBEE),
-                            tooltip: 'Close answer',
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        glowDot(accent),
-                        const SizedBox(width: 7),
-                        glowDot(secondary),
-                        const SizedBox(width: 7),
-                        glowDot(accent.withValues(alpha: 0.65)),
-                      ],
-                    ),
-                    if (!_answerMinimized) ...[
-                      const SizedBox(height: 18),
-                      Expanded(
-                        child: activeResult == null
-                            ? const SizedBox.expand()
-                            : Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.18),
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(
-                                    color: accent.withValues(alpha: 0.20),
-                                  ),
-                                ),
-                                child: activeResult.hasImageResult
-                                    ? _buildGeneratedImagePreview(
-                                        activeResult,
-                                        height: 260,
-                                      )
-                                    : SingleChildScrollView(
-                                        child: Text(
-                                          activeResult.content,
-                                          textAlign: TextAlign.left,
-                                          style: const TextStyle(
-                                            color: Color(0xFFE4EBEE),
-                                            fontSize: 14,
-                                            height: 1.42,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                              ),
-                      ),
-                      if (activeResult != null) ...[
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: simpleToolButton(
-                                icon: Icons.copy_rounded,
-                                label: 'COPY',
-                                active: true,
-                                onPressed: () =>
-                                    _copyFeaturedResult(activeResult),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: simpleToolButton(
-                                icon: Icons.share_rounded,
-                                label: 'SHARE',
-                                onPressed: () =>
-                                    _shareFeaturedResult(activeResult),
-                              ),
+                    Expanded(
+                      child: Text(
+                        'ANSWER READY',
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: accent,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 5.4,
+                          shadows: [
+                            Shadow(
+                              color: accent.withValues(alpha: 0.70),
+                              blurRadius: 18,
                             ),
                           ],
                         ),
-                      ],
+                      ),
+                    ),
+                    if (activeResult != null) ...[
+                      IconButton(
+                        onPressed: () => setState(
+                          () => _answerMinimized = !_answerMinimized,
+                        ),
+                        tooltip: _answerMinimized
+                            ? 'Expand answer'
+                            : 'Collapse answer',
+                        icon: Icon(
+                          _answerMinimized
+                              ? Icons.keyboard_arrow_down_rounded
+                              : Icons.keyboard_arrow_up_rounded,
+                          color: accent,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          setState(() {
+                            _featuredAnswerDismissed = true;
+                          });
+                        },
+                        tooltip: 'Close answer',
+                        icon: const Icon(Icons.close_rounded),
+                        color: const Color(0xFFE4EBEE),
+                      ),
                     ],
                   ],
                 ),
-              ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    KorlixGlowDot(color: accent),
+                    const SizedBox(width: 10),
+                    KorlixGlowDot(color: Color.lerp(accent, secondary, 0.5)!),
+                    const SizedBox(width: 10),
+                    KorlixGlowDot(color: secondary),
+                  ],
+                ),
+                if (!_answerMinimized) ...[
+                  const SizedBox(height: 22),
+                  Expanded(
+                    child: activeResult == null
+                        ? const SizedBox.expand()
+                        : Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.20),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: accent.withValues(alpha: 0.18),
+                              ),
+                            ),
+                            child: activeResult.hasImageResult
+                                ? _buildGeneratedImagePreview(
+                                    activeResult,
+                                    height: 300,
+                                  )
+                                : SingleChildScrollView(
+                                    child: Text(
+                                      activeResult.content,
+                                      textAlign: TextAlign.left,
+                                      style: const TextStyle(
+                                        color: Color(0xFFE4EBEE),
+                                        fontSize: 14.5,
+                                        height: 1.44,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                  ),
+                  if (activeResult != null) ...[
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: KorlixDeepCyberButton(
+                            icon: Icons.copy_rounded,
+                            label: 'COPY',
+                            accent: accent,
+                            secondary: secondary,
+                            fill: panel,
+                            active: true,
+                            onTap: () => _copyFeaturedResult(activeResult),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: KorlixDeepCyberButton(
+                            icon: Icons.share_rounded,
+                            label: 'SHARE',
+                            accent: secondary,
+                            secondary: accent,
+                            fill: panel,
+                            onTap: () => _shareFeaturedResult(activeResult),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ],
             ),
           );
         }
@@ -9229,117 +9190,83 @@ Make the entire output professional, well-structured using Markdown, and product
         Widget promptBar() {
           final chatOpen = !_chatMinimized;
 
-          return Container(
-            margin: const EdgeInsets.only(top: 12),
-            padding: const EdgeInsets.all(2.1),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  accent.withValues(alpha: 0.92),
-                  secondary.withValues(alpha: 0.80),
-                ],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: accent.withValues(alpha: 0.24),
-                  blurRadius: 24,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: panel.withValues(alpha: 0.95),
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 74,
-                    height: 66,
-                    child: promptModuleButton(
-                      icon: Icons.chat_bubble_outline_rounded,
-                      label: 'CHAT',
-                      color: chatOpen ? secondary : accent,
-                      active: chatOpen,
-                      onPressed: () => setState(() {
-                        _chatMinimized = !_chatMinimized;
-                      }),
-                    ),
+          return KorlixDeepCyberFrame(
+            height: 94,
+            accent: accent,
+            secondary: secondary,
+            fill: panel,
+            cut: 22,
+            depth: 14,
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 82,
+                  child: toolButton(
+                    icon: Icons.chat_bubble_outline_rounded,
+                    label: 'CHAT',
+                    subLabel: 'history',
+                    color: chatOpen ? secondary : accent,
+                    active: chatOpen,
+                    vertical: true,
+                    onTap: () => setState(() {
+                      _chatMinimized = !_chatMinimized;
+                    }),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ClipPath(
-                      clipper: const _KorlixCyberPanelClipper(cut: 12),
-                      child: TextField(
-                        controller: _controller,
-                        minLines: 1,
-                        maxLines: 4,
-                        cursorColor: accent,
-                        onChanged: (_) => setState(() {}),
-                        onSubmitted: (_) {
-                          if (!_loading && _controller.text.trim().isNotEmpty) {
-                            _generate();
-                          }
-                        },
-                        style: const TextStyle(
-                          fontSize: 15.5,
-                          height: 1.30,
-                          color: Color(0xFFE4EBEE),
-                          fontWeight: FontWeight.w600,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: hintText,
-                          hintStyle: TextStyle(
-                            color: const Color(
-                              0xFFA9C6CF,
-                            ).withValues(alpha: 0.74),
-                            fontSize: 15,
-                          ),
-                          filled: true,
-                          fillColor: Colors.black.withValues(alpha: 0.36),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 17,
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.zero,
-                            borderSide: BorderSide(
-                              color: accent.withValues(alpha: 0.24),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.zero,
-                            borderSide: BorderSide(
-                              color: accent.withValues(alpha: 0.85),
-                              width: 1.3,
-                            ),
-                          ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: KorlixInputFieldFrame(
+                    accent: accent,
+                    secondary: secondary,
+                    fill: panel,
+                    child: TextField(
+                      controller: _controller,
+                      minLines: 1,
+                      maxLines: 4,
+                      cursorColor: accent,
+                      onChanged: (_) => setState(() {}),
+                      onSubmitted: (_) {
+                        if (!_loading && _controller.text.trim().isNotEmpty) {
+                          _generate();
+                        }
+                      },
+                      style: const TextStyle(
+                        color: Color(0xFFE4EBEE),
+                        fontSize: 15.5,
+                        height: 1.28,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      decoration: InputDecoration(
+                        border: InputBorder.none,
+                        isDense: true,
+                        hintText: hintText,
+                        hintStyle: TextStyle(
+                          color: const Color(
+                            0xFFA9C6CF,
+                          ).withValues(alpha: 0.72),
+                          fontSize: 15,
+                          fontStyle: FontStyle.italic,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  SizedBox(
-                    width: 74,
-                    height: 66,
-                    child: promptModuleButton(
-                      icon: _loading
-                          ? Icons.hourglass_top_rounded
-                          : Icons.send_rounded,
-                      label: 'SEND',
-                      color: canSubmit ? secondary : Colors.white38,
-                      active: canSubmit,
-                      onPressed: (_loading || !canSubmit) ? null : _generate,
-                    ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: 82,
+                  child: toolButton(
+                    icon: _loading
+                        ? Icons.hourglass_top_rounded
+                        : Icons.send_rounded,
+                    label: 'SEND',
+                    color: canSubmit ? secondary : Colors.white38,
+                    active: canSubmit,
+                    vertical: true,
+                    onTap: (_loading || !canSubmit) ? null : _generate,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           );
         }
@@ -9349,65 +9276,87 @@ Make the entire output professional, well-structured using Markdown, and product
               _utilityPanelOpen || _selectedUtilityTool != null;
 
           return Container(
-            margin: const EdgeInsets.only(top: 12),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: panel.withValues(alpha: 0.72),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: accent.withValues(alpha: 0.42),
-                width: 1,
+            margin: const EdgeInsets.only(top: 14),
+            child: KorlixDeepCyberFrame(
+              accent: accent,
+              secondary: secondary,
+              fill: panel,
+              cut: 20,
+              depth: 12,
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                children: [
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 150,
+                        child: toolButton(
+                          icon: Icons.cloud_upload_outlined,
+                          label: 'Upload',
+                          active: _activeUploadFiles.isNotEmpty,
+                          onTap: _loading ? null : _handleUploadPressed,
+                        ),
+                      ),
+                      SizedBox(
+                        width: 150,
+                        child: toolButton(
+                          icon: Icons.mic_rounded,
+                          label: 'Voice',
+                          active: _voiceListening,
+                          onTap: _loading ? null : _handleVoiceInput,
+                        ),
+                      ),
+                      SizedBox(
+                        width: 150,
+                        child: toolButton(
+                          icon: Icons.location_on_outlined,
+                          label: 'Locator',
+                          onTap: _loading ? null : _showLocatorOptions,
+                        ),
+                      ),
+                      SizedBox(
+                        width: 150,
+                        child: toolButton(
+                          icon: Icons.grid_view_rounded,
+                          label: 'Utility',
+                          color: utilityActive ? secondary : accent,
+                          active: utilityActive,
+                          onTap: _loading ? null : _toggleUtilityPanel,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'QUICK TOOLS',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: accent,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 3.1,
+                      shadows: [
+                        Shadow(
+                          color: accent.withValues(alpha: 0.55),
+                          blurRadius: 10,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 9,
+                    runSpacing: 9,
+                    alignment: WrapAlignment.center,
+                    children: _t.quickActions
+                        .map(_buildSafeUiQuickActionChip)
+                        .toList(),
+                  ),
+                ],
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: accent.withValues(alpha: 0.10),
-                  blurRadius: 24,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Wrap(
-                  spacing: 9,
-                  runSpacing: 9,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    simpleToolButton(
-                      icon: Icons.attach_file_rounded,
-                      label: 'Upload',
-                      active: _activeUploadFiles.isNotEmpty,
-                      onPressed: _loading ? null : _handleUploadPressed,
-                    ),
-                    simpleToolButton(
-                      icon: Icons.mic_rounded,
-                      label: 'Voice',
-                      active: _voiceListening,
-                      onPressed: _loading ? null : _handleVoiceInput,
-                    ),
-                    simpleToolButton(
-                      icon: Icons.location_on_outlined,
-                      label: 'Locator',
-                      onPressed: _loading ? null : _showLocatorOptions,
-                    ),
-                    simpleToolButton(
-                      icon: Icons.build_circle_outlined,
-                      label: 'Utility',
-                      active: utilityActive,
-                      onPressed: _loading ? null : _toggleUtilityPanel,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 9,
-                  runSpacing: 9,
-                  alignment: WrapAlignment.center,
-                  children: _t.quickActions
-                      .map(_buildSafeUiQuickActionChip)
-                      .toList(),
-                ),
-              ],
             ),
           );
         }
@@ -9419,6 +9368,7 @@ Make the entire output professional, well-structured using Markdown, and product
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               answerReadyPanel(),
+              const SizedBox(height: 14),
               promptBar(),
 
               if (!_chatMinimized) ...[
@@ -9454,6 +9404,45 @@ Make the entire output professional, well-structured using Markdown, and product
                   ),
                 ),
               ],
+
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'THEME',
+                    style: TextStyle(
+                      color: const Color(0xFFA9C6CF).withValues(alpha: 0.85),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2.4,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  themeDot(
+                    'korlix_blue',
+                    const Color(0xFF69D9E8),
+                    const Color(0xFFFF4AF3),
+                  ),
+                  themeDot(
+                    'black_white',
+                    Colors.white,
+                    const Color(0xFF8B95A1),
+                  ),
+                  themeDot(
+                    'purple_green',
+                    const Color(0xFFB794F4),
+                    const Color(0xFF7CFF6B),
+                  ),
+                  themeDot('white_gray', Colors.white, const Color(0xFF9CA3AF)),
+                  themeDot(
+                    'gold_black',
+                    const Color(0xFFFFD166),
+                    const Color(0xFF080704),
+                  ),
+                  themeDot('pink_white', const Color(0xFFFF7AB8), Colors.white),
+                ],
+              ),
             ],
           ),
         );
