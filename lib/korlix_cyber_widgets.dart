@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-const String kKorlixCyberWidgetsVersion = 'contour_v2_deep_hardware';
+const String kKorlixCyberWidgetsVersion = 'contour_v2_no_outer_glow';
 
 Path _korlixCyberPath(Size size, double cut, [double inset = 0]) {
   final left = inset;
@@ -320,22 +320,6 @@ class _KorlixDeepCyberFramePainter extends CustomPainter {
       ..maskFilter = MaskFilter.blur(BlurStyle.normal, depth + 6);
     canvas.drawPath(outer.shift(Offset(0, depth * 0.42)), softOuterShadow);
 
-    final glowHalo = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 9
-      ..strokeJoin = StrokeJoin.bevel
-      ..shader = LinearGradient(
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-        colors: [
-          accent.withValues(alpha: 0.30),
-          secondary.withValues(alpha: 0.18),
-          secondary.withValues(alpha: 0.34),
-        ],
-      ).createShader(rect)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, 18);
-    canvas.drawPath(outer, glowHalo);
-
     final basePaint = Paint()
       ..style = PaintingStyle.fill
       ..shader = LinearGradient(
@@ -396,8 +380,8 @@ class _KorlixDeepCyberFramePainter extends CustomPainter {
     canvas.drawPath(darkInset, innerFill);
 
     _stroke(canvas, outer, Colors.black, 4.4, alpha: 0.54);
-    _stroke(canvas, outer, accent, 2.6, alpha: 0.74, blur: 5);
-    _stroke(canvas, outer, secondary, 1.7, alpha: 0.54, blur: 8);
+    _stroke(canvas, outer, accent, 1.8, alpha: 0.72);
+    _stroke(canvas, outer, secondary, 1.1, alpha: 0.42);
     _stroke(canvas, outerInset, Colors.white, 1.3, alpha: 0.32);
     _stroke(canvas, bevelInset, Colors.black, 2.4, alpha: 0.58);
     _stroke(canvas, darkInset, Colors.white, 0.9, alpha: 0.18);
@@ -508,20 +492,6 @@ class _KorlixDeepCyberFramePainter extends CustomPainter {
         reverse: true,
       );
     }
-
-    final cornerGlow = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4.8
-      ..strokeJoin = StrokeJoin.bevel
-      ..strokeCap = StrokeCap.square
-      ..shader = LinearGradient(
-        colors: [
-          accent.withValues(alpha: 0.80),
-          secondary.withValues(alpha: 0.80),
-        ],
-      ).createShader(rect)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-    canvas.drawPath(_korlixCyberPath(size, cut, 3), cornerGlow);
   }
 
   @override

@@ -8477,13 +8477,7 @@ Make the entire output professional, well-structured using Markdown, and product
                   border: Border.all(
                     color: const Color(0xFF2EC7DF).withOpacity(0.32),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF2EC7DF).withOpacity(0.12),
-                      blurRadius: 30,
-                      spreadRadius: 2,
-                    ),
-                  ],
+                  boxShadow: const [],
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Stack(
@@ -8698,24 +8692,7 @@ Make the entire output professional, well-structured using Markdown, and product
                                     ).withValues(alpha: 0.62),
                                     width: 1.15,
                                   ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(
-                                        0xFF6DF7FF,
-                                      ).withValues(alpha: 0.16),
-                                      blurRadius: 18,
-                                      spreadRadius: 0.8,
-                                      offset: const Offset(-2, -1),
-                                    ),
-                                    BoxShadow(
-                                      color: const Color(
-                                        0xFFFF4DFF,
-                                      ).withValues(alpha: 0.16),
-                                      blurRadius: 20,
-                                      spreadRadius: 0.8,
-                                      offset: const Offset(2, 2),
-                                    ),
-                                  ],
+                                  boxShadow: [],
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -9567,20 +9544,7 @@ Make the entire output professional, well-structured using Markdown, and product
           ],
           stops: const [0.0, 0.48, 1.0],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: cyan.withValues(alpha: 0.28),
-            blurRadius: 24,
-            spreadRadius: 1.2,
-            offset: const Offset(-3, -2),
-          ),
-          BoxShadow(
-            color: magenta.withValues(alpha: 0.30),
-            blurRadius: 28,
-            spreadRadius: 1.2,
-            offset: const Offset(3, 3),
-          ),
-        ],
+        boxShadow: const [],
       ),
       child: Container(
         decoration: BoxDecoration(
@@ -9710,20 +9674,7 @@ Make the entire output professional, well-structured using Markdown, and product
           ],
           stops: const [0.0, 0.52, 1.0],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: primary.withValues(alpha: 0.18),
-            blurRadius: 18,
-            spreadRadius: 0.7,
-            offset: const Offset(-2, -1),
-          ),
-          BoxShadow(
-            color: secondary.withValues(alpha: 0.18),
-            blurRadius: 18,
-            spreadRadius: 0.7,
-            offset: const Offset(2, 2),
-          ),
-        ],
+        boxShadow: const [],
       ),
       child: Container(
         decoration: BoxDecoration(
