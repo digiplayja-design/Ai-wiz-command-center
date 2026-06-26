@@ -9505,44 +9505,20 @@ Make the entire output professional, well-structured using Markdown, and product
     const cyan = Color(0xFF63F3FF);
     const magenta = Color(0xFFFF4AF3);
 
-    Widget rail({
-      required double width,
-      required double height,
-      required Color color,
-    }) {
-      return IgnorePointer(
-        child: Container(
-          width: width,
-          height: height,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(99),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.70),
-                blurRadius: 14,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return Container(
-      margin: const EdgeInsets.only(top: 14, bottom: 14),
-      padding: const EdgeInsets.all(2.4),
+      margin: const EdgeInsets.only(top: 12, bottom: 12),
+      padding: const EdgeInsets.all(1.7),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            cyan.withValues(alpha: 0.96),
-            const Color(0xFF2D8CFF).withValues(alpha: 0.54),
-            magenta.withValues(alpha: 0.96),
+            cyan.withValues(alpha: 0.90),
+            const Color(0xFF2D8CFF).withValues(alpha: 0.34),
+            magenta.withValues(alpha: 0.90),
           ],
-          stops: const [0.0, 0.48, 1.0],
+          stops: const [0.0, 0.50, 1.0],
         ),
         boxShadow: const [],
       ),
@@ -9552,68 +9528,17 @@ Make the entire output professional, well-structured using Markdown, and product
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF0C2844), Color(0xFF08101F), Color(0xFF160B2F)],
-            stops: [0.0, 0.54, 1.0],
+            colors: [Color(0xFF0B2238), Color(0xFF08101F), Color(0xFF140A2C)],
+            stops: [0.0, 0.56, 1.0],
           ),
           border: Border.all(
             color: Colors.white.withValues(alpha: 0.08),
             width: 0.95,
           ),
         ),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(24),
-                    gradient: RadialGradient(
-                      center: const Alignment(0.6, -0.9),
-                      radius: 1.25,
-                      colors: [
-                        Colors.white.withValues(alpha: 0.10),
-                        cyan.withValues(alpha: 0.05),
-                        Colors.transparent,
-                      ],
-                      stops: const [0.0, 0.24, 1.0],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              top: 12,
-              left: 16,
-              child: rail(width: 74, height: 3, color: cyan),
-            ),
-            Positioned(
-              top: 12,
-              right: 16,
-              child: rail(width: 62, height: 3, color: magenta),
-            ),
-            Positioned(
-              bottom: 12,
-              left: 16,
-              child: rail(
-                width: 58,
-                height: 2,
-                color: magenta.withValues(alpha: 0.90),
-              ),
-            ),
-            Positioned(
-              bottom: 12,
-              right: 16,
-              child: rail(
-                width: 76,
-                height: 2,
-                color: cyan.withValues(alpha: 0.90),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
-              child: child,
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+          child: child,
         ),
       ),
     );
@@ -9623,7 +9548,6 @@ Make the entire output professional, well-structured using Markdown, and product
     required int index,
     required Widget child,
   }) {
-    // Preserve empty/deleted chat rows exactly as-is.
     if (child is SizedBox && child.width == 0 && child.height == 0) {
       return child;
     }
@@ -9635,42 +9559,18 @@ Make the entire output professional, well-structured using Markdown, and product
         ? const Color(0xFFFF4AF3)
         : const Color(0xFF63F3FF);
 
-    Widget rail({
-      required double width,
-      required double height,
-      required Color color,
-    }) {
-      return IgnorePointer(
-        child: Container(
-          width: width,
-          height: height,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(99),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.65),
-                blurRadius: 12,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(1.9),
+      padding: const EdgeInsets.all(1.4),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            primary.withValues(alpha: 0.94),
-            const Color(0xFF3A52FF).withValues(alpha: 0.18),
-            secondary.withValues(alpha: 0.94),
+            primary.withValues(alpha: 0.82),
+            const Color(0xFF3A52FF).withValues(alpha: 0.12),
+            secondary.withValues(alpha: 0.82),
           ],
           stops: const [0.0, 0.52, 1.0],
         ),
@@ -9690,41 +9590,9 @@ Make the entire output professional, well-structured using Markdown, and product
             width: 0.9,
           ),
         ),
-        child: Stack(
-          children: [
-            Positioned(
-              top: 10,
-              left: 14,
-              child: rail(width: 68, height: 2.5, color: primary),
-            ),
-            Positioned(
-              top: 10,
-              right: 14,
-              child: rail(width: 52, height: 2.5, color: secondary),
-            ),
-            Positioned(
-              bottom: 10,
-              left: 14,
-              child: rail(
-                width: 46,
-                height: 2,
-                color: secondary.withValues(alpha: 0.90),
-              ),
-            ),
-            Positioned(
-              bottom: 10,
-              right: 14,
-              child: rail(
-                width: 70,
-                height: 2,
-                color: primary.withValues(alpha: 0.90),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-              child: child,
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          child: child,
         ),
       ),
     );
