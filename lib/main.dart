@@ -8895,6 +8895,128 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
+  void _handleSafeUiQuickAction(QuickAction action) {
+    if (_loading) {
+      return;
+    }
+
+    void setInputText(String value) {
+      _controller.text = value;
+      _controller.selection = TextSelection.collapsed(
+        offset: _controller.text.length,
+      );
+    }
+
+    void clearModeFlags() {
+      _createVideoMode = false;
+      _improvePictureMode = false;
+      _imaginePictureMode = false;
+      _fixCreditReportMode = false;
+      _createAppMode = false;
+      _selectedUtilityTool = null;
+    }
+
+    final prompt = action.prompt.trim();
+
+    if (_isCreditReportActionSafeUi(action)) {
+      if (_fixCreditReportMode) {
+        setState(() {
+          _fixCreditReportMode = false;
+          _error = null;
+          setInputText('');
+        });
+      } else {
+        _activateCreditReportModeSafeUi();
+      }
+
+      return;
+    }
+
+    if (_isCreateVideoQuickAction(action)) {
+      setState(() {
+        clearModeFlags();
+        _createVideoMode = true;
+        _error = null;
+        setInputText('');
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Describe the video you want, then tap Send.'),
+        ),
+      );
+
+      return;
+    }
+
+    if (_isImprovePictureQuickAction(action)) {
+      if (_improvePictureMode) {
+        setState(() {
+          _improvePictureMode = false;
+          _error = null;
+          setInputText('');
+        });
+
+        return;
+      }
+
+      final defaultPrompt = prompt.isNotEmpty
+          ? prompt
+          : 'Improve this picture professionally.';
+
+      setState(() {
+        clearModeFlags();
+        _improvePictureMode = true;
+        _error = null;
+        setInputText(defaultPrompt);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Upload an image, then tap Send — or edit the prompt first.',
+          ),
+        ),
+      );
+
+      return;
+    }
+
+    if (_isImaginePictureQuickAction(action)) {
+      setState(() {
+        clearModeFlags();
+        _imaginePictureMode = true;
+        _error = null;
+        setInputText(prompt.isNotEmpty ? prompt : 'Imagine a picture: ');
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Describe the picture you want, then tap Send.'),
+        ),
+      );
+
+      return;
+    }
+
+    if (_isCreateAppQuickAction(action)) {
+      setState(() {
+        clearModeFlags();
+        _createAppMode = true;
+        _error = null;
+        setInputText(prompt.isNotEmpty ? prompt : 'Create an App');
+      });
+
+      return;
+    }
+
+    setState(() {
+      clearModeFlags();
+      _error = null;
+      setInputText(prompt);
+    });
+  }
+
   Widget _buildCommandPanel() {
     final t = _t;
     final hasText = _controller.text.trim().isNotEmpty;
@@ -8904,175 +9026,257 @@ Make the entire output professional, well-structured using Markdown, and product
         : hasText;
 
     final hintText = _selectedLanguage == 'es'
-        ? 'Escribe aquí...'
+        ? 'Escribe tu mensaje aquí...'
         : _selectedLanguage == 'fr'
-        ? 'Écrivez ici...'
-        : 'Type here...';
+        ? 'Écrivez votre message ici...'
+        : 'Type your message here...';
 
-    Widget toolButton({
-      required IconData icon,
-      required String label,
-      required VoidCallback? onPressed,
-      bool locked = false,
-      bool active = false,
-      bool success = false,
-    }) {
-      final accent = locked ? const Color(0xFFFFD166) : const Color(0xFF69D9E8);
-      final isGreen = active || success;
+    final GeneratedItem? activeResult =
+        (!_loading && _results.isNotEmpty && !_featuredAnswerDismissed)
+        ? _results.first
+        : null;
 
-      return OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(active ? Icons.stop_circle_outlined : icon, size: 18),
-        label: Text(label),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: isGreen ? const Color(0xFF061008) : accent,
-          backgroundColor: isGreen
-              ? const Color(0xFFB7FF00)
-              : Colors.black.withOpacity(0.22),
-          side: BorderSide(
-            color: isGreen ? const Color(0xFFD9FF5A) : accent.withOpacity(0.48),
-            width: 1,
+    IconData quickIconFor(QuickAction action) {
+      if (_isCreateVideoQuickAction(action)) {
+        return Icons.movie_creation_outlined;
+      }
+
+      if (_isImprovePictureQuickAction(action)) {
+        return Icons.auto_fix_high_rounded;
+      }
+
+      if (_isImaginePictureQuickAction(action)) {
+        return Icons.image_search_rounded;
+      }
+
+      if (_isCreditReportActionSafeUi(action)) {
+        return Icons.credit_score_rounded;
+      }
+
+      if (_isCreateAppQuickAction(action)) {
+        return Icons.app_shortcut_rounded;
+      }
+
+      final label = action.label.toLowerCase();
+
+      if (label.contains('resume') || label.contains('cv')) {
+        return Icons.description_outlined;
+      }
+
+      if (label.contains('email')) {
+        return Icons.mail_outline_rounded;
+      }
+
+      if (label.contains('study') || label.contains('learn')) {
+        return Icons.school_outlined;
+      }
+
+      return Icons.auto_awesome_rounded;
+    }
+
+    bool quickSelected(QuickAction action) {
+      return (_isCreateVideoQuickAction(action) && _createVideoMode) ||
+          (_isImprovePictureQuickAction(action) && _improvePictureMode) ||
+          (_isImaginePictureQuickAction(action) && _imaginePictureMode) ||
+          (_isCreditReportActionSafeUi(action) && _fixCreditReportMode) ||
+          (_isCreateAppQuickAction(action) && _createAppMode);
+    }
+
+    Widget answerBody() {
+      if (_loading && activeResult == null) {
+        return const SizedBox(
+          height: 230,
+          child: Center(
+            child: CircularProgressIndicator(
+              strokeWidth: 2.6,
+              color: Color(0xFFB98B12),
+            ),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          shape: RoundedRectangleBorder(
+        );
+      }
+
+      if (activeResult == null) {
+        return const SizedBox(height: 230);
+      }
+
+      if (activeResult.hasImageResult) {
+        return SizedBox(
+          height: 230,
+          child: ClipRRect(
             borderRadius: BorderRadius.circular(18),
+            child: _buildGeneratedImagePreview(activeResult, height: 230),
+          ),
+        );
+      }
+
+      return SizedBox(
+        height: 230,
+        child: SingleChildScrollView(
+          child: Text(
+            activeResult.content,
+            style: const TextStyle(
+              color: Color(0xFF232323),
+              fontSize: 14,
+              height: 1.42,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF071B27).withOpacity(0.90),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: const Color(0xFF2EC7DF).withOpacity(0.38),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.30),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+    Widget quickButton(QuickAction action) {
+      return _KorlixGoldToolButton(
+        icon: quickIconFor(action),
+        label: action.label,
+        selected: quickSelected(action),
+        onTap: _loading ? null : () => _handleSafeUiQuickAction(action),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              OutlinedButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _chatMinimized = !_chatMinimized;
-                  });
-                },
-                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
-                label: const Text('Chat'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF69D9E8),
-                  backgroundColor: Colors.black.withOpacity(0.22),
-                  side: BorderSide(
-                    color: const Color(0xFF69D9E8).withOpacity(0.46),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 13,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(17),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: _controller,
-                  minLines: 1,
-                  maxLines: 4,
-                  cursorColor: const Color(0xFF69D9E8),
-                  onChanged: (_) => setState(() {}),
-                  onSubmitted: (_) {
-                    if (!_loading && canSubmit) {
-                      _generate();
-                    }
-                  },
-                  style: const TextStyle(
-                    fontSize: 15.5,
-                    height: 1.30,
-                    color: Color(0xFFE4EBEE),
-                    fontWeight: FontWeight.w600,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: hintText,
-                    hintStyle: TextStyle(
-                      color: const Color(0xFFA9C6CF).withOpacity(0.74),
-                      fontSize: 15,
-                    ),
-                    filled: true,
-                    fillColor: Colors.black.withOpacity(0.42),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 15,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(17),
-                      borderSide: BorderSide(
-                        color: Colors.white.withOpacity(0.09),
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(17),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF69D9E8),
-                        width: 1.3,
-                      ),
+          _KorlixGoldFrame(
+            style: _KorlixGoldFrameStyle.answer,
+            minHeight: 360,
+            padding: const EdgeInsets.fromLTRB(18, 24, 18, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ShaderMask(
+                  shaderCallback: (bounds) => const LinearGradient(
+                    colors: [
+                      Color(0xFF8D6500),
+                      Color(0xFFE3BC45),
+                      Color(0xFF8D6500),
+                    ],
+                  ).createShader(bounds),
+                  child: const Text(
+                    'ANSWER READY',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 27,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 8,
+                      height: 1.05,
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 54,
-                height: 54,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    backgroundColor: canSubmit
-                        ? const Color(0xFF143B4A)
-                        : const Color(0xFF334155),
-                    foregroundColor: const Color(0xFFE4EBEE),
-                    disabledBackgroundColor: const Color(0xFF334155),
-                    disabledForegroundColor: Colors.white54,
-                    elevation: 0,
-                    side: BorderSide(
-                      color: canSubmit
-                          ? const Color(0xFF69D9E8).withOpacity(0.70)
-                          : Colors.white12,
-                      width: 1,
+                const SizedBox(height: 13),
+                const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _KorlixGoldDot(),
+                    SizedBox(width: 14),
+                    _KorlixGoldDot(),
+                    SizedBox(width: 14),
+                    _KorlixGoldDot(),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                ExpandedIfBounded(fallback: answerBody(), child: answerBody()),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: _KorlixGoldFrame(
+              style: _KorlixGoldFrameStyle.prompt,
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _KorlixGoldToolButton(
+                      icon: Icons.chat_bubble_outline_rounded,
+                      label: 'CHAT\nHISTORY',
+                      compact: true,
+                      selected: !_chatMinimized,
+                      onTap: () {
+                        setState(() {
+                          _chatMinimized = !_chatMinimized;
+                        });
+                      },
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(17),
-                    ),
-                  ),
-                  onPressed: (_loading || !canSubmit) ? null : _generate,
-                  child: _loading
-                      ? const SizedBox(
-                          width: 21,
-                          height: 21,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Color(0xFFE4EBEE),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: AnimatedSize(
+                        duration: const Duration(milliseconds: 180),
+                        curve: Curves.easeOutCubic,
+                        alignment: Alignment.topCenter,
+                        child: Container(
+                          constraints: const BoxConstraints(minHeight: 64),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.78),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: const Color(0xFFC99818).withOpacity(0.38),
+                              width: 1.1,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.07),
+                                blurRadius: 12,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
                           ),
-                        )
-                      : const Icon(Icons.arrow_upward_rounded, size: 28),
+                          child: TextField(
+                            controller: _controller,
+                            minLines: 1,
+                            maxLines: 5,
+                            keyboardType: TextInputType.multiline,
+                            textInputAction: TextInputAction.newline,
+                            cursorColor: const Color(0xFFB98B12),
+                            onChanged: (_) => setState(() {}),
+                            style: const TextStyle(
+                              color: Color(0xFF252525),
+                              fontSize: 16,
+                              height: 1.28,
+                              fontStyle: FontStyle.italic,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            decoration: InputDecoration(
+                              border: InputBorder.none,
+                              isDense: true,
+                              hintText: hintText,
+                              hintStyle: TextStyle(
+                                color: Colors.black.withOpacity(0.42),
+                                fontSize: 16,
+                                fontStyle: FontStyle.italic,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 19,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    _KorlixGoldToolButton(
+                      icon: Icons.send_rounded,
+                      label: 'SEND',
+                      compact: true,
+                      selected: canSubmit,
+                      onTap: (_loading || !canSubmit) ? null : _generate,
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
 
           if (!_chatMinimized) ...[
@@ -9080,82 +9284,96 @@ Make the entire output professional, well-structured using Markdown, and product
             _buildChatThread(),
           ],
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
 
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            alignment: WrapAlignment.center,
-            children: [
-              toolButton(
-                icon: Icons.attach_file_rounded,
-                label: 'Upload',
-                locked: !_hasDocumentUploadAccess,
-                success: _activeUploadFiles.isNotEmpty,
-                onPressed: _loading ? null : _handleUploadPressed,
-              ),
-              toolButton(
-                icon: Icons.mic_rounded,
-                label: 'Voice',
-                locked: !_hasVoiceAccess,
-                active: _voiceListening,
-                onPressed: _loading ? null : _handleVoiceInput,
-              ),
-              toolButton(
-                icon: Icons.location_on_outlined,
-                label: 'Locator',
-                onPressed: _loading ? null : _showLocatorOptions,
-              ),
-              toolButton(
-                icon: Icons.build_circle_outlined,
-                label: 'Utility',
-                active: _utilityPanelOpen || _selectedUtilityTool != null,
-                onPressed: _loading ? null : _toggleUtilityPanel,
-              ),
-              if (_currentTier == 'basic')
-                toolButton(
-                  icon: Icons.favorite_rounded,
-                  label: r'$cashapp',
-                  onPressed: _loading ? null : _openDonateCashApp,
+          _KorlixGoldFrame(
+            style: _KorlixGoldFrameStyle.tools,
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'QUICK TOOLS',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFFB98B12),
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 5,
+                  ),
                 ),
-            ],
-          ),
+                const SizedBox(height: 16),
 
-          if (_utilityPanelOpen) ...[
-            const SizedBox(height: 12),
-            _buildUtilityPanel(),
-          ],
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    _KorlixGoldToolButton(
+                      icon: Icons.cloud_upload_outlined,
+                      label: 'Upload',
+                      selected: _activeUploadFiles.isNotEmpty,
+                      onTap: _loading ? null : _handleUploadPressed,
+                    ),
+                    _KorlixGoldToolButton(
+                      icon: Icons.mic_rounded,
+                      label: 'Voice',
+                      selected: _voiceListening,
+                      onTap: _loading ? null : _handleVoiceInput,
+                    ),
+                    _KorlixGoldToolButton(
+                      icon: Icons.location_on_outlined,
+                      label: 'Locator',
+                      onTap: _loading ? null : _showLocatorOptions,
+                    ),
+                    _KorlixGoldToolButton(
+                      icon: Icons.construction_rounded,
+                      label: 'Utility',
+                      selected:
+                          _utilityPanelOpen || _selectedUtilityTool != null,
+                      onTap: _loading ? null : _toggleUtilityPanel,
+                    ),
+                  ],
+                ),
 
-          if (_activeUploadFiles.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _buildSelectedUploadFilesPanel(),
-          ],
+                if (_utilityPanelOpen) ...[
+                  const SizedBox(height: 14),
+                  _buildUtilityPanel(),
+                ],
 
-          if (_loading) ...[
-            const SizedBox(height: 14),
-            MatrixThinkingPanel(message: t.matrixMessage),
-          ],
+                if (_activeUploadFiles.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  _buildSelectedUploadFilesPanel(),
+                ],
 
-          const SizedBox(height: 14),
+                if (_loading) ...[
+                  const SizedBox(height: 14),
+                  MatrixThinkingPanel(message: t.matrixMessage),
+                ],
 
-          Wrap(
-            spacing: 9,
-            runSpacing: 9,
-            alignment: WrapAlignment.center,
-            children: t.quickActions.map(_buildSafeUiQuickActionChip).toList(),
-          ),
+                const SizedBox(height: 18),
 
-          if (_error != null) ...[
-            const SizedBox(height: 14),
-            Text(
-              _error!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.redAccent,
-                fontWeight: FontWeight.w700,
-              ),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  alignment: WrapAlignment.center,
+                  children: t.quickActions.map(quickButton).toList(),
+                ),
+
+                if (_error != null) ...[
+                  const SizedBox(height: 14),
+                  Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.redAccent,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -9791,6 +10009,386 @@ class _KorlixCyberPanelClipper extends CustomClipper<Path> {
     return oldClipper.cut != cut;
   }
 }
+
+// BEGIN KORLIX WHITE GOLD CUSTOM PAINTER UI
+
+enum _KorlixGoldFrameStyle { answer, prompt, tools, button }
+
+class ExpandedIfBounded extends StatelessWidget {
+  final Widget child;
+  final Widget fallback;
+
+  const ExpandedIfBounded({required this.child, required this.fallback});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.hasBoundedHeight && constraints.maxHeight.isFinite) {
+          return Expanded(child: child);
+        }
+
+        return fallback;
+      },
+    );
+  }
+}
+
+class _KorlixGoldDot extends StatelessWidget {
+  const _KorlixGoldDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFFE690), Color(0xFFBD8A10), Color(0xFFE5BE3F)],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFB98B12).withOpacity(0.22),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _KorlixGoldFrame extends StatelessWidget {
+  final _KorlixGoldFrameStyle style;
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double? minHeight;
+
+  const _KorlixGoldFrame({
+    required this.style,
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+    this.minHeight,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _KorlixGoldFramePainter(style: style),
+      child: Container(
+        constraints: BoxConstraints(minHeight: minHeight ?? 0),
+        padding: padding,
+        child: child,
+      ),
+    );
+  }
+}
+
+class _KorlixGoldToolButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final bool selected;
+  final bool compact;
+
+  const _KorlixGoldToolButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.selected = false,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = onTap == null;
+    final minWidth = compact ? 78.0 : 156.0;
+    final minHeight = compact ? 66.0 : 58.0;
+
+    return Opacity(
+      opacity: disabled ? 0.48 : 1,
+      child: Semantics(
+        button: true,
+        label: label.replaceAll('\n', ' '),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: CustomPaint(
+            painter: _KorlixGoldFramePainter(
+              style: _KorlixGoldFrameStyle.button,
+              selected: selected,
+            ),
+            child: Container(
+              constraints: BoxConstraints(
+                minWidth: minWidth,
+                minHeight: minHeight,
+              ),
+              padding: compact
+                  ? const EdgeInsets.symmetric(horizontal: 8, vertical: 10)
+                  : const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: compact
+                  ? Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          icon,
+                          color: selected
+                              ? const Color(0xFF5B3D00)
+                              : const Color(0xFF9D7108),
+                          size: 23,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          label,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: selected
+                                ? const Color(0xFF5B3D00)
+                                : const Color(0xFF9D7108),
+                            fontSize: 11,
+                            height: 1.05,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          icon,
+                          color: selected
+                              ? const Color(0xFF5B3D00)
+                              : const Color(0xFF9D7108),
+                          size: 21,
+                        ),
+                        const SizedBox(width: 9),
+                        Flexible(
+                          child: Text(
+                            label,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: selected
+                                  ? const Color(0xFF5B3D00)
+                                  : const Color(0xFF252525),
+                              fontSize: 14,
+                              height: 1.12,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _KorlixGoldFramePainter extends CustomPainter {
+  final _KorlixGoldFrameStyle style;
+  final bool selected;
+
+  const _KorlixGoldFramePainter({required this.style, this.selected = false});
+
+  Path _octPath(Rect rect, double cut) {
+    final c = cut.clamp(4.0, rect.shortestSide * 0.24).toDouble();
+
+    return Path()
+      ..moveTo(rect.left + c, rect.top)
+      ..lineTo(rect.right - c, rect.top)
+      ..lineTo(rect.right, rect.top + c)
+      ..lineTo(rect.right, rect.bottom - c)
+      ..lineTo(rect.right - c, rect.bottom)
+      ..lineTo(rect.left + c, rect.bottom)
+      ..lineTo(rect.left, rect.bottom - c)
+      ..lineTo(rect.left, rect.top + c)
+      ..close();
+  }
+
+  void _stroke(
+    Canvas canvas,
+    Path path,
+    Color color,
+    double width, {
+    double alpha = 1,
+  }) {
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeJoin = StrokeJoin.bevel
+        ..strokeWidth = width
+        ..color = color.withOpacity(alpha),
+    );
+  }
+
+  void _goldBar(Canvas canvas, Rect rect, {bool vertical = false}) {
+    final barPath = _octPath(rect, vertical ? 8 : 7);
+    final shader = LinearGradient(
+      begin: vertical ? Alignment.topCenter : Alignment.centerLeft,
+      end: vertical ? Alignment.bottomCenter : Alignment.centerRight,
+      colors: const [
+        Color(0xFFFCE9A4),
+        Color(0xFFBD8A10),
+        Color(0xFFFFD75A),
+        Color(0xFF9E6E05),
+      ],
+      stops: const [0.0, 0.34, 0.68, 1.0],
+    ).createShader(rect);
+
+    canvas.drawPath(
+      barPath,
+      Paint()
+        ..style = PaintingStyle.fill
+        ..shader = shader,
+    );
+
+    _stroke(canvas, barPath, const Color(0xFFFFFFFF), 0.8, alpha: 0.55);
+    _stroke(canvas, barPath, const Color(0xFF8C6204), 1.1, alpha: 0.68);
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) {
+      return;
+    }
+
+    final rect = Offset.zero & size;
+    final shortSide = size.width < size.height ? size.width : size.height;
+
+    final cut = style == _KorlixGoldFrameStyle.button
+        ? shortSide * 0.22
+        : style == _KorlixGoldFrameStyle.prompt
+        ? shortSide * 0.18
+        : shortSide * 0.095;
+
+    final outer = _octPath(rect.deflate(2), cut);
+    final inner = _octPath(
+      rect.deflate(style == _KorlixGoldFrameStyle.button ? 7 : 11),
+      cut * 0.78,
+    );
+
+    final fillShader = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: style == _KorlixGoldFrameStyle.button && selected
+          ? const [Color(0xFFFFE690), Color(0xFFD6A51C), Color(0xFFF9D66A)]
+          : const [
+              Color(0xFFFCFCFC),
+              Color(0xFFF5F3EF),
+              Color(0xFFE8E4DB),
+              Color(0xFFFFFFFF),
+            ],
+      stops: const [0.0, 0.45, 0.78, 1.0],
+    ).createShader(rect);
+
+    canvas.drawPath(
+      outer.shift(const Offset(0, 4)),
+      Paint()
+        ..style = PaintingStyle.fill
+        ..color = Colors.black.withOpacity(
+          style == _KorlixGoldFrameStyle.button ? 0.12 : 0.16,
+        )
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
+    );
+
+    canvas.drawPath(
+      outer,
+      Paint()
+        ..style = PaintingStyle.fill
+        ..shader = fillShader,
+    );
+
+    _stroke(canvas, outer, const Color(0xFFFFFFFF), 2.2, alpha: 0.96);
+    _stroke(canvas, outer, const Color(0xFFB98B12), 2.0, alpha: 0.78);
+    _stroke(canvas, inner, const Color(0xFFD9A719), 1.15, alpha: 0.82);
+
+    final inset = style == _KorlixGoldFrameStyle.button ? 12.0 : 20.0;
+    final cavity = _octPath(rect.deflate(inset), cut * 0.54);
+
+    canvas.drawPath(
+      cavity,
+      Paint()
+        ..style = PaintingStyle.fill
+        ..color = style == _KorlixGoldFrameStyle.button && selected
+            ? const Color(0xFFFFF3C8).withOpacity(0.50)
+            : Colors.white.withOpacity(0.42),
+    );
+
+    _stroke(canvas, cavity, const Color(0xFFFFFFFF), 0.85, alpha: 0.70);
+    _stroke(canvas, cavity, const Color(0xFFC99818), 0.9, alpha: 0.46);
+
+    if (style == _KorlixGoldFrameStyle.answer ||
+        style == _KorlixGoldFrameStyle.tools) {
+      final topWidth = size.width * 0.23;
+      _goldBar(
+        canvas,
+        Rect.fromCenter(
+          center: Offset(size.width / 2, 17),
+          width: topWidth,
+          height: 34,
+        ),
+      );
+
+      _goldBar(
+        canvas,
+        Rect.fromCenter(
+          center: Offset(size.width / 2, size.height - 17),
+          width: topWidth * 0.86,
+          height: 30,
+        ),
+      );
+
+      _goldBar(
+        canvas,
+        Rect.fromLTWH(15, size.height * 0.30, 18, size.height * 0.32),
+        vertical: true,
+      );
+
+      _goldBar(
+        canvas,
+        Rect.fromLTWH(
+          size.width - 33,
+          size.height * 0.30,
+          18,
+          size.height * 0.32,
+        ),
+        vertical: true,
+      );
+    }
+
+    if (style == _KorlixGoldFrameStyle.prompt) {
+      _goldBar(
+        canvas,
+        Rect.fromLTWH(12, 12, 8, size.height - 24),
+        vertical: true,
+      );
+
+      _goldBar(
+        canvas,
+        Rect.fromLTWH(size.width - 20, 12, 8, size.height - 24),
+        vertical: true,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _KorlixGoldFramePainter oldDelegate) {
+    return oldDelegate.style != style || oldDelegate.selected != selected;
+  }
+}
+
+// END KORLIX WHITE GOLD CUSTOM PAINTER UI
 
 class MatrixThinkingPanel extends StatefulWidget {
   final String message;
