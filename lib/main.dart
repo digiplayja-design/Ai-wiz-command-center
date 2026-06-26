@@ -10101,79 +10101,8 @@ class _KorlixCleanAnswerReadyBox extends StatelessWidget {
       painter: const _KorlixCleanAnswerReadyBoxPainter(),
       child: Container(
         height: 318,
-        padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ShaderMask(
-              shaderCallback: (bounds) => const LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  Color(0xFFB7F7FF),
-                  Color(0xFF69D9E8),
-                  Color(0xFFFF4AF3),
-                ],
-              ).createShader(bounds),
-              child: const Text(
-                'ANSWER READY',
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 23,
-                  height: 1.0,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 7.0,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _KorlixAnswerReadyDot(color: Color(0xFF69D9E8)),
-                SizedBox(width: 12),
-                _KorlixAnswerReadyDot(color: Color(0xFFB794F4)),
-                SizedBox(width: 12),
-                _KorlixAnswerReadyDot(color: Color(0xFFFF4AF3)),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                child: child,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _KorlixAnswerReadyDot extends StatelessWidget {
-  final Color color;
-
-  const _KorlixAnswerReadyDot({required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 13,
-      height: 13,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color,
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.42),
-            blurRadius: 8,
-            spreadRadius: 1,
-          ),
-        ],
+        padding: const EdgeInsets.fromLTRB(34, 30, 34, 30),
+        child: child,
       ),
     );
   }
