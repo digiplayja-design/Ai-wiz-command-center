@@ -8477,7 +8477,13 @@ Make the entire output professional, well-structured using Markdown, and product
                   border: Border.all(
                     color: const Color(0xFF2EC7DF).withOpacity(0.32),
                   ),
-                  boxShadow: const [],
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF2EC7DF).withOpacity(0.12),
+                      blurRadius: 30,
+                      spreadRadius: 2,
+                    ),
+                  ],
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Stack(
@@ -8692,7 +8698,24 @@ Make the entire output professional, well-structured using Markdown, and product
                                     ).withValues(alpha: 0.62),
                                     width: 1.15,
                                   ),
-                                  boxShadow: [],
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFF6DF7FF,
+                                      ).withValues(alpha: 0.16),
+                                      blurRadius: 18,
+                                      spreadRadius: 0.8,
+                                      offset: const Offset(-2, -1),
+                                    ),
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFFFF4DFF,
+                                      ).withValues(alpha: 0.16),
+                                      blurRadius: 20,
+                                      spreadRadius: 0.8,
+                                      offset: const Offset(2, 2),
+                                    ),
+                                  ],
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -8895,487 +8918,535 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
-  void _handleSafeUiQuickAction(QuickAction action) {
-    if (_loading) {
-      return;
-    }
-
-    void setInputText(String value) {
-      _controller.text = value;
-      _controller.selection = TextSelection.collapsed(
-        offset: _controller.text.length,
-      );
-    }
-
-    void clearModeFlags() {
-      _createVideoMode = false;
-      _improvePictureMode = false;
-      _imaginePictureMode = false;
-      _fixCreditReportMode = false;
-      _createAppMode = false;
-      _selectedUtilityTool = null;
-    }
-
-    final prompt = action.prompt.trim();
-
-    if (_isCreditReportActionSafeUi(action)) {
-      if (_fixCreditReportMode) {
-        setState(() {
-          _fixCreditReportMode = false;
-          _error = null;
-          setInputText('');
-        });
-      } else {
-        _activateCreditReportModeSafeUi();
-      }
-
-      return;
-    }
-
-    if (_isCreateVideoQuickAction(action)) {
-      setState(() {
-        clearModeFlags();
-        _createVideoMode = true;
-        _error = null;
-        setInputText('');
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Describe the video you want, then tap Send.'),
-        ),
-      );
-
-      return;
-    }
-
-    if (_isImprovePictureQuickAction(action)) {
-      if (_improvePictureMode) {
-        setState(() {
-          _improvePictureMode = false;
-          _error = null;
-          setInputText('');
-        });
-
-        return;
-      }
-
-      final defaultPrompt = prompt.isNotEmpty
-          ? prompt
-          : 'Improve this picture professionally.';
-
-      setState(() {
-        clearModeFlags();
-        _improvePictureMode = true;
-        _error = null;
-        setInputText(defaultPrompt);
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Upload an image, then tap Send — or edit the prompt first.',
-          ),
-        ),
-      );
-
-      return;
-    }
-
-    if (_isImaginePictureQuickAction(action)) {
-      setState(() {
-        clearModeFlags();
-        _imaginePictureMode = true;
-        _error = null;
-        setInputText(prompt.isNotEmpty ? prompt : 'Imagine a picture: ');
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Describe the picture you want, then tap Send.'),
-        ),
-      );
-
-      return;
-    }
-
-    if (_isCreateAppQuickAction(action)) {
-      setState(() {
-        clearModeFlags();
-        _createAppMode = true;
-        _error = null;
-        setInputText(prompt.isNotEmpty ? prompt : 'Create an App');
-      });
-
-      return;
-    }
-
-    setState(() {
-      clearModeFlags();
-      _error = null;
-      setInputText(prompt);
-    });
-  }
-
   Widget _buildCommandPanel() {
-    final t = _t;
     final hasText = _controller.text.trim().isNotEmpty;
-
     final canSubmit = _fixCreditReportMode
         ? (hasText && _activeUploadFiles.isNotEmpty)
         : hasText;
 
     final hintText = _selectedLanguage == 'es'
-        ? 'Escribe tu mensaje aquí...'
+        ? 'Escribe aquí...'
         : _selectedLanguage == 'fr'
-        ? 'Écrivez votre message ici...'
-        : 'Type your message here...';
+        ? 'Écrivez ici...'
+        : 'Type your message...';
 
     final GeneratedItem? activeResult =
         (!_loading && _results.isNotEmpty && !_featuredAnswerDismissed)
         ? _results.first
         : null;
 
-    IconData quickIconFor(QuickAction action) {
-      if (_isCreateVideoQuickAction(action)) {
-        return Icons.movie_creation_outlined;
-      }
+    return ValueListenableBuilder<String>(
+      valueListenable: kKorlixThemeNotifier,
+      builder: (context, theme, _) {
+        Color accentFor(String value) {
+          switch (value) {
+            case 'black_white':
+              return const Color(0xFFEDEDED);
+            case 'purple_green':
+              return const Color(0xFFB794F4);
+            case 'white_gray':
+              return const Color(0xFFF5F5F5);
+            case 'gold_black':
+              return const Color(0xFFFFD166);
+            case 'pink_white':
+              return const Color(0xFFFF7AB8);
+            case 'korlix_blue':
+            default:
+              return const Color(0xFF69D9E8);
+          }
+        }
 
-      if (_isImprovePictureQuickAction(action)) {
-        return Icons.auto_fix_high_rounded;
-      }
+        Color secondaryFor(String value) {
+          switch (value) {
+            case 'black_white':
+              return const Color(0xFF8B95A1);
+            case 'purple_green':
+              return const Color(0xFF7CFF6B);
+            case 'white_gray':
+              return const Color(0xFF9CA3AF);
+            case 'gold_black':
+              return const Color(0xFFFFB000);
+            case 'pink_white':
+              return Colors.white;
+            case 'korlix_blue':
+            default:
+              return const Color(0xFFFF4AF3);
+          }
+        }
 
-      if (_isImaginePictureQuickAction(action)) {
-        return Icons.image_search_rounded;
-      }
+        Color panelFor(String value) {
+          switch (value) {
+            case 'black_white':
+              return const Color(0xFF030303);
+            case 'purple_green':
+              return const Color(0xFF10081B);
+            case 'white_gray':
+              return const Color(0xFF101214);
+            case 'gold_black':
+              return const Color(0xFF080704);
+            case 'pink_white':
+              return const Color(0xFF170711);
+            case 'korlix_blue':
+            default:
+              return const Color(0xFF071B27);
+          }
+        }
 
-      if (_isCreditReportActionSafeUi(action)) {
-        return Icons.credit_score_rounded;
-      }
+        Future<void> setLocalTheme(String value) async {
+          kKorlixThemeNotifier.value = value;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('korlix_ui_theme', value);
 
-      if (_isCreateAppQuickAction(action)) {
-        return Icons.app_shortcut_rounded;
-      }
+          if (mounted) {
+            setState(() {});
+          }
+        }
 
-      final label = action.label.toLowerCase();
+        final accent = accentFor(theme);
+        final secondary = secondaryFor(theme);
+        final panel = panelFor(theme);
 
-      if (label.contains('resume') || label.contains('cv')) {
-        return Icons.description_outlined;
-      }
+        Widget themeDot(String value, Color a, Color b) {
+          return KorlixThemeDot(
+            selected: kKorlixThemeNotifier.value == value,
+            colorA: a,
+            colorB: b,
+            onTap: () {
+              setLocalTheme(value);
+            },
+          );
+        }
 
-      if (label.contains('email')) {
-        return Icons.mail_outline_rounded;
-      }
+        Widget toolButton({
+          required IconData icon,
+          required String label,
+          required VoidCallback? onTap,
+          Color? color,
+          bool active = false,
+          bool vertical = false,
+          String? subLabel,
+        }) {
+          return KorlixDeepCyberButton(
+            icon: icon,
+            label: label,
+            subLabel: subLabel,
+            accent: color ?? accent,
+            secondary: secondary,
+            fill: panel,
+            active: active,
+            vertical: vertical,
+            onTap: onTap,
+          );
+        }
 
-      if (label.contains('study') || label.contains('learn')) {
-        return Icons.school_outlined;
-      }
+        Widget answerReadyPanel() {
+          final answerHeight = activeResult == null
+              ? 300.0
+              : _answerMinimized
+              ? 112.0
+              : 365.0;
 
-      return Icons.auto_awesome_rounded;
-    }
-
-    bool quickSelected(QuickAction action) {
-      return (_isCreateVideoQuickAction(action) && _createVideoMode) ||
-          (_isImprovePictureQuickAction(action) && _improvePictureMode) ||
-          (_isImaginePictureQuickAction(action) && _imaginePictureMode) ||
-          (_isCreditReportActionSafeUi(action) && _fixCreditReportMode) ||
-          (_isCreateAppQuickAction(action) && _createAppMode);
-    }
-
-    Widget answerBody() {
-      if (_loading && activeResult == null) {
-        return const SizedBox(
-          height: 230,
-          child: Center(
-            child: CircularProgressIndicator(
-              strokeWidth: 2.6,
-              color: Color(0xFFB98B12),
-            ),
-          ),
-        );
-      }
-
-      if (activeResult == null) {
-        return const SizedBox(height: 230);
-      }
-
-      if (activeResult.hasImageResult) {
-        return SizedBox(
-          height: 230,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: _buildGeneratedImagePreview(activeResult, height: 230),
-          ),
-        );
-      }
-
-      return SizedBox(
-        height: 230,
-        child: SingleChildScrollView(
-          child: Text(
-            activeResult.content,
-            style: const TextStyle(
-              color: Color(0xFF232323),
-              fontSize: 14,
-              height: 1.42,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      );
-    }
-
-    Widget quickButton(QuickAction action) {
-      return _KorlixGoldToolButton(
-        icon: quickIconFor(action),
-        label: action.label,
-        selected: quickSelected(action),
-        onTap: _loading ? null : () => _handleSafeUiQuickAction(action),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _KorlixGoldFrame(
-            style: _KorlixGoldFrameStyle.answer,
-            minHeight: 360,
-            padding: const EdgeInsets.fromLTRB(18, 24, 18, 18),
+          return KorlixDeepCyberFrame(
+            height: answerHeight,
+            accent: accent,
+            secondary: secondary,
+            fill: panel,
+            cut: 34,
+            depth: 22,
+            padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                ShaderMask(
-                  shaderCallback: (bounds) => const LinearGradient(
-                    colors: [
-                      Color(0xFF8D6500),
-                      Color(0xFFE3BC45),
-                      Color(0xFF8D6500),
-                    ],
-                  ).createShader(bounds),
-                  child: const Text(
-                    'ANSWER READY',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 27,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 8,
-                      height: 1.05,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 13),
-                const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Row(
                   children: [
-                    _KorlixGoldDot(),
-                    SizedBox(width: 14),
-                    _KorlixGoldDot(),
-                    SizedBox(width: 14),
-                    _KorlixGoldDot(),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                ExpandedIfBounded(fallback: answerBody(), child: answerBody()),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          AnimatedSize(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.topCenter,
-            child: _KorlixGoldFrame(
-              style: _KorlixGoldFrameStyle.prompt,
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-              child: IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _KorlixGoldToolButton(
-                      icon: Icons.chat_bubble_outline_rounded,
-                      label: 'CHAT\nHISTORY',
-                      compact: true,
-                      selected: !_chatMinimized,
-                      onTap: () {
-                        setState(() {
-                          _chatMinimized = !_chatMinimized;
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 10),
                     Expanded(
-                      child: AnimatedSize(
-                        duration: const Duration(milliseconds: 180),
-                        curve: Curves.easeOutCubic,
-                        alignment: Alignment.topCenter,
-                        child: Container(
-                          constraints: const BoxConstraints(minHeight: 64),
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.78),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: const Color(0xFFC99818).withOpacity(0.38),
-                              width: 1.1,
+                      child: Text(
+                        'ANSWER READY',
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: accent,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 5.4,
+                          shadows: [
+                            Shadow(
+                              color: accent.withValues(alpha: 0.70),
+                              blurRadius: 18,
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.07),
-                                blurRadius: 12,
-                                offset: const Offset(0, 5),
-                              ),
-                            ],
-                          ),
-                          child: TextField(
-                            controller: _controller,
-                            minLines: 1,
-                            maxLines: 5,
-                            keyboardType: TextInputType.multiline,
-                            textInputAction: TextInputAction.newline,
-                            cursorColor: const Color(0xFFB98B12),
-                            onChanged: (_) => setState(() {}),
-                            style: const TextStyle(
-                              color: Color(0xFF252525),
-                              fontSize: 16,
-                              height: 1.28,
-                              fontStyle: FontStyle.italic,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              isDense: true,
-                              hintText: hintText,
-                              hintStyle: TextStyle(
-                                color: Colors.black.withOpacity(0.42),
-                                fontSize: 16,
-                                fontStyle: FontStyle.italic,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                vertical: 19,
-                              ),
-                            ),
-                          ),
+                          ],
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    _KorlixGoldToolButton(
-                      icon: Icons.send_rounded,
-                      label: 'SEND',
-                      compact: true,
-                      selected: canSubmit,
-                      onTap: (_loading || !canSubmit) ? null : _generate,
-                    ),
+                    if (activeResult != null) ...[
+                      IconButton(
+                        onPressed: () => setState(
+                          () => _answerMinimized = !_answerMinimized,
+                        ),
+                        tooltip: _answerMinimized
+                            ? 'Expand answer'
+                            : 'Collapse answer',
+                        icon: Icon(
+                          _answerMinimized
+                              ? Icons.keyboard_arrow_down_rounded
+                              : Icons.keyboard_arrow_up_rounded,
+                          color: accent,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          setState(() {
+                            _featuredAnswerDismissed = true;
+                          });
+                        },
+                        tooltip: 'Close answer',
+                        icon: const Icon(Icons.close_rounded),
+                        color: const Color(0xFFE4EBEE),
+                      ),
+                    ],
                   ],
                 ),
-              ),
-            ),
-          ),
-
-          if (!_chatMinimized) ...[
-            const SizedBox(height: 12),
-            _buildChatThread(),
-          ],
-
-          const SizedBox(height: 16),
-
-          _KorlixGoldFrame(
-            style: _KorlixGoldFrameStyle.tools,
-            padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'QUICK TOOLS',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Color(0xFFB98B12),
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 5,
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  alignment: WrapAlignment.center,
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _KorlixGoldToolButton(
-                      icon: Icons.cloud_upload_outlined,
-                      label: 'Upload',
-                      selected: _activeUploadFiles.isNotEmpty,
-                      onTap: _loading ? null : _handleUploadPressed,
-                    ),
-                    _KorlixGoldToolButton(
-                      icon: Icons.mic_rounded,
-                      label: 'Voice',
-                      selected: _voiceListening,
-                      onTap: _loading ? null : _handleVoiceInput,
-                    ),
-                    _KorlixGoldToolButton(
-                      icon: Icons.location_on_outlined,
-                      label: 'Locator',
-                      onTap: _loading ? null : _showLocatorOptions,
-                    ),
-                    _KorlixGoldToolButton(
-                      icon: Icons.construction_rounded,
-                      label: 'Utility',
-                      selected:
-                          _utilityPanelOpen || _selectedUtilityTool != null,
-                      onTap: _loading ? null : _toggleUtilityPanel,
-                    ),
+                    KorlixGlowDot(color: accent),
+                    const SizedBox(width: 10),
+                    KorlixGlowDot(color: Color.lerp(accent, secondary, 0.5)!),
+                    const SizedBox(width: 10),
+                    KorlixGlowDot(color: secondary),
                   ],
                 ),
-
-                if (_utilityPanelOpen) ...[
-                  const SizedBox(height: 14),
-                  _buildUtilityPanel(),
-                ],
-
-                if (_activeUploadFiles.isNotEmpty) ...[
-                  const SizedBox(height: 14),
-                  _buildSelectedUploadFilesPanel(),
-                ],
-
-                if (_loading) ...[
-                  const SizedBox(height: 14),
-                  MatrixThinkingPanel(message: t.matrixMessage),
-                ],
-
-                const SizedBox(height: 18),
-
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  alignment: WrapAlignment.center,
-                  children: t.quickActions.map(quickButton).toList(),
-                ),
-
-                if (_error != null) ...[
-                  const SizedBox(height: 14),
-                  Text(
-                    _error!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.redAccent,
-                      fontWeight: FontWeight.w700,
-                    ),
+                if (!_answerMinimized) ...[
+                  const SizedBox(height: 22),
+                  Expanded(
+                    child: activeResult == null
+                        ? const SizedBox.expand()
+                        : Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.20),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: accent.withValues(alpha: 0.18),
+                              ),
+                            ),
+                            child: activeResult.hasImageResult
+                                ? _buildGeneratedImagePreview(
+                                    activeResult,
+                                    height: 300,
+                                  )
+                                : SingleChildScrollView(
+                                    child: Text(
+                                      activeResult.content,
+                                      textAlign: TextAlign.left,
+                                      style: const TextStyle(
+                                        color: Color(0xFFE4EBEE),
+                                        fontSize: 14.5,
+                                        height: 1.44,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                          ),
                   ),
+                  if (activeResult != null) ...[
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: KorlixDeepCyberButton(
+                            icon: Icons.copy_rounded,
+                            label: 'COPY',
+                            accent: accent,
+                            secondary: secondary,
+                            fill: panel,
+                            active: true,
+                            onTap: () => _copyFeaturedResult(activeResult),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: KorlixDeepCyberButton(
+                            icon: Icons.share_rounded,
+                            label: 'SHARE',
+                            accent: secondary,
+                            secondary: accent,
+                            fill: panel,
+                            onTap: () => _shareFeaturedResult(activeResult),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ],
             ),
+          );
+        }
+
+        Widget promptBar() {
+          final chatOpen = !_chatMinimized;
+
+          return KorlixDeepCyberFrame(
+            height: 94,
+            accent: accent,
+            secondary: secondary,
+            fill: panel,
+            cut: 22,
+            depth: 14,
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 82,
+                  child: toolButton(
+                    icon: Icons.chat_bubble_outline_rounded,
+                    label: 'CHAT',
+                    subLabel: 'history',
+                    color: chatOpen ? secondary : accent,
+                    active: chatOpen,
+                    vertical: true,
+                    onTap: () => setState(() {
+                      _chatMinimized = !_chatMinimized;
+                    }),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: KorlixInputFieldFrame(
+                    accent: accent,
+                    secondary: secondary,
+                    fill: panel,
+                    child: TextField(
+                      controller: _controller,
+                      minLines: 1,
+                      maxLines: 4,
+                      cursorColor: accent,
+                      onChanged: (_) => setState(() {}),
+                      onSubmitted: (_) {
+                        if (!_loading && _controller.text.trim().isNotEmpty) {
+                          _generate();
+                        }
+                      },
+                      style: const TextStyle(
+                        color: Color(0xFFE4EBEE),
+                        fontSize: 15.5,
+                        height: 1.28,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      decoration: InputDecoration(
+                        border: InputBorder.none,
+                        isDense: true,
+                        hintText: hintText,
+                        hintStyle: TextStyle(
+                          color: const Color(
+                            0xFFA9C6CF,
+                          ).withValues(alpha: 0.72),
+                          fontSize: 15,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: 82,
+                  child: toolButton(
+                    icon: _loading
+                        ? Icons.hourglass_top_rounded
+                        : Icons.send_rounded,
+                    label: 'SEND',
+                    color: canSubmit ? secondary : Colors.white38,
+                    active: canSubmit,
+                    vertical: true,
+                    onTap: (_loading || !canSubmit) ? null : _generate,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        Widget toolsPanel() {
+          final utilityActive =
+              _utilityPanelOpen || _selectedUtilityTool != null;
+
+          return Container(
+            margin: const EdgeInsets.only(top: 14),
+            child: KorlixDeepCyberFrame(
+              accent: accent,
+              secondary: secondary,
+              fill: panel,
+              cut: 20,
+              depth: 12,
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                children: [
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 150,
+                        child: toolButton(
+                          icon: Icons.cloud_upload_outlined,
+                          label: 'Upload',
+                          active: _activeUploadFiles.isNotEmpty,
+                          onTap: _loading ? null : _handleUploadPressed,
+                        ),
+                      ),
+                      SizedBox(
+                        width: 150,
+                        child: toolButton(
+                          icon: Icons.mic_rounded,
+                          label: 'Voice',
+                          active: _voiceListening,
+                          onTap: _loading ? null : _handleVoiceInput,
+                        ),
+                      ),
+                      SizedBox(
+                        width: 150,
+                        child: toolButton(
+                          icon: Icons.location_on_outlined,
+                          label: 'Locator',
+                          onTap: _loading ? null : _showLocatorOptions,
+                        ),
+                      ),
+                      SizedBox(
+                        width: 150,
+                        child: toolButton(
+                          icon: Icons.grid_view_rounded,
+                          label: 'Utility',
+                          color: utilityActive ? secondary : accent,
+                          active: utilityActive,
+                          onTap: _loading ? null : _toggleUtilityPanel,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'QUICK TOOLS',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: accent,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 3.1,
+                      shadows: [
+                        Shadow(
+                          color: accent.withValues(alpha: 0.55),
+                          blurRadius: 10,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 9,
+                    runSpacing: 9,
+                    alignment: WrapAlignment.center,
+                    children: _t.quickActions
+                        .map(_buildSafeUiQuickActionChip)
+                        .toList(),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              answerReadyPanel(),
+              const SizedBox(height: 14),
+              promptBar(),
+
+              if (!_chatMinimized) ...[
+                const SizedBox(height: 12),
+                _buildChatThread(),
+              ],
+
+              if (_activeUploadFiles.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                _buildSelectedUploadFilesPanel(),
+              ],
+
+              if (_loading) ...[
+                const SizedBox(height: 12),
+                MatrixThinkingPanel(message: _t.matrixMessage),
+              ],
+
+              toolsPanel(),
+
+              if (_utilityPanelOpen) ...[
+                const SizedBox(height: 10),
+                _buildUtilityPanel(),
+              ],
+
+              if (_error != null) ...[
+                const SizedBox(height: 14),
+                Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.redAccent,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'THEME',
+                    style: TextStyle(
+                      color: const Color(0xFFA9C6CF).withValues(alpha: 0.85),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2.4,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  themeDot(
+                    'korlix_blue',
+                    const Color(0xFF69D9E8),
+                    const Color(0xFFFF4AF3),
+                  ),
+                  themeDot(
+                    'black_white',
+                    Colors.white,
+                    const Color(0xFF8B95A1),
+                  ),
+                  themeDot(
+                    'purple_green',
+                    const Color(0xFFB794F4),
+                    const Color(0xFF7CFF6B),
+                  ),
+                  themeDot('white_gray', Colors.white, const Color(0xFF9CA3AF)),
+                  themeDot(
+                    'gold_black',
+                    const Color(0xFFFFD166),
+                    const Color(0xFF080704),
+                  ),
+                  themeDot('pink_white', const Color(0xFFFF7AB8), Colors.white),
+                ],
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -9457,38 +9528,128 @@ Make the entire output professional, well-structured using Markdown, and product
     const cyan = Color(0xFF63F3FF);
     const magenta = Color(0xFFFF4AF3);
 
+    Widget rail({
+      required double width,
+      required double height,
+      required Color color,
+    }) {
+      return IgnorePointer(
+        child: Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(99),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.70),
+                blurRadius: 14,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       margin: const EdgeInsets.only(top: 14, bottom: 14),
-      padding: const EdgeInsets.all(1.6),
+      padding: const EdgeInsets.all(2.4),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            cyan.withOpacity(0.82),
-            const Color(0xFF2D8CFF).withOpacity(0.22),
-            magenta.withOpacity(0.82),
+            cyan.withValues(alpha: 0.96),
+            const Color(0xFF2D8CFF).withValues(alpha: 0.54),
+            magenta.withValues(alpha: 0.96),
           ],
-          stops: const [0.0, 0.52, 1.0],
+          stops: const [0.0, 0.48, 1.0],
         ),
-        boxShadow: const [],
+        boxShadow: [
+          BoxShadow(
+            color: cyan.withValues(alpha: 0.28),
+            blurRadius: 24,
+            spreadRadius: 1.2,
+            offset: const Offset(-3, -2),
+          ),
+          BoxShadow(
+            color: magenta.withValues(alpha: 0.30),
+            blurRadius: 28,
+            spreadRadius: 1.2,
+            offset: const Offset(3, 3),
+          ),
+        ],
       ),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
-          color: const Color(0xFF07111F),
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF081D30), Color(0xFF07111F), Color(0xFF120824)],
-            stops: [0.0, 0.58, 1.0],
+            colors: [Color(0xFF0C2844), Color(0xFF08101F), Color(0xFF160B2F)],
+            stops: [0.0, 0.54, 1.0],
           ),
-          border: Border.all(color: Colors.white24, width: 0.7),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.08),
+            width: 0.95,
+          ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
-          child: child,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    gradient: RadialGradient(
+                      center: const Alignment(0.6, -0.9),
+                      radius: 1.25,
+                      colors: [
+                        Colors.white.withValues(alpha: 0.10),
+                        cyan.withValues(alpha: 0.05),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.24, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 12,
+              left: 16,
+              child: rail(width: 74, height: 3, color: cyan),
+            ),
+            Positioned(
+              top: 12,
+              right: 16,
+              child: rail(width: 62, height: 3, color: magenta),
+            ),
+            Positioned(
+              bottom: 12,
+              left: 16,
+              child: rail(
+                width: 58,
+                height: 2,
+                color: magenta.withValues(alpha: 0.90),
+              ),
+            ),
+            Positioned(
+              bottom: 12,
+              right: 16,
+              child: rail(
+                width: 76,
+                height: 2,
+                color: cyan.withValues(alpha: 0.90),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+              child: child,
+            ),
+          ],
         ),
       ),
     );
@@ -9498,6 +9659,7 @@ Make the entire output professional, well-structured using Markdown, and product
     required int index,
     required Widget child,
   }) {
+    // Preserve empty/deleted chat rows exactly as-is.
     if (child is SizedBox && child.width == 0 && child.height == 0) {
       return child;
     }
@@ -9509,32 +9671,109 @@ Make the entire output professional, well-structured using Markdown, and product
         ? const Color(0xFFFF4AF3)
         : const Color(0xFF63F3FF);
 
+    Widget rail({
+      required double width,
+      required double height,
+      required Color color,
+    }) {
+      return IgnorePointer(
+        child: Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(99),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.65),
+                blurRadius: 12,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(1.2),
+      padding: const EdgeInsets.all(1.9),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            primary.withOpacity(0.72),
-            const Color(0xFF3A52FF).withOpacity(0.10),
-            secondary.withOpacity(0.72),
+            primary.withValues(alpha: 0.94),
+            const Color(0xFF3A52FF).withValues(alpha: 0.18),
+            secondary.withValues(alpha: 0.94),
           ],
           stops: const [0.0, 0.52, 1.0],
         ),
-        boxShadow: const [],
+        boxShadow: [
+          BoxShadow(
+            color: primary.withValues(alpha: 0.18),
+            blurRadius: 18,
+            spreadRadius: 0.7,
+            offset: const Offset(-2, -1),
+          ),
+          BoxShadow(
+            color: secondary.withValues(alpha: 0.18),
+            blurRadius: 18,
+            spreadRadius: 0.7,
+            offset: const Offset(2, 2),
+          ),
+        ],
       ),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
-          color: const Color(0xFF07111D),
-          border: Border.all(color: Colors.white.withOpacity(0.08), width: 0.8),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF091522), Color(0xFF07111D), Color(0xFF140A2C)],
+            stops: [0.0, 0.58, 1.0],
+          ),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.07),
+            width: 0.9,
+          ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-          child: child,
+        child: Stack(
+          children: [
+            Positioned(
+              top: 10,
+              left: 14,
+              child: rail(width: 68, height: 2.5, color: primary),
+            ),
+            Positioned(
+              top: 10,
+              right: 14,
+              child: rail(width: 52, height: 2.5, color: secondary),
+            ),
+            Positioned(
+              bottom: 10,
+              left: 14,
+              child: rail(
+                width: 46,
+                height: 2,
+                color: secondary.withValues(alpha: 0.90),
+              ),
+            ),
+            Positioned(
+              bottom: 10,
+              right: 14,
+              child: rail(
+                width: 70,
+                height: 2,
+                color: primary.withValues(alpha: 0.90),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+              child: child,
+            ),
+          ],
         ),
       ),
     );
@@ -10009,386 +10248,6 @@ class _KorlixCyberPanelClipper extends CustomClipper<Path> {
     return oldClipper.cut != cut;
   }
 }
-
-// BEGIN KORLIX WHITE GOLD CUSTOM PAINTER UI
-
-enum _KorlixGoldFrameStyle { answer, prompt, tools, button }
-
-class ExpandedIfBounded extends StatelessWidget {
-  final Widget child;
-  final Widget fallback;
-
-  const ExpandedIfBounded({required this.child, required this.fallback});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.hasBoundedHeight && constraints.maxHeight.isFinite) {
-          return Expanded(child: child);
-        }
-
-        return fallback;
-      },
-    );
-  }
-}
-
-class _KorlixGoldDot extends StatelessWidget {
-  const _KorlixGoldDot();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 18,
-      height: 18,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFFFE690), Color(0xFFBD8A10), Color(0xFFE5BE3F)],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFB98B12).withOpacity(0.22),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _KorlixGoldFrame extends StatelessWidget {
-  final _KorlixGoldFrameStyle style;
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-  final double? minHeight;
-
-  const _KorlixGoldFrame({
-    required this.style,
-    required this.child,
-    this.padding = const EdgeInsets.all(16),
-    this.minHeight,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _KorlixGoldFramePainter(style: style),
-      child: Container(
-        constraints: BoxConstraints(minHeight: minHeight ?? 0),
-        padding: padding,
-        child: child,
-      ),
-    );
-  }
-}
-
-class _KorlixGoldToolButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-  final bool selected;
-  final bool compact;
-
-  const _KorlixGoldToolButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.selected = false,
-    this.compact = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final disabled = onTap == null;
-    final minWidth = compact ? 78.0 : 156.0;
-    final minHeight = compact ? 66.0 : 58.0;
-
-    return Opacity(
-      opacity: disabled ? 0.48 : 1,
-      child: Semantics(
-        button: true,
-        label: label.replaceAll('\n', ' '),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
-          child: CustomPaint(
-            painter: _KorlixGoldFramePainter(
-              style: _KorlixGoldFrameStyle.button,
-              selected: selected,
-            ),
-            child: Container(
-              constraints: BoxConstraints(
-                minWidth: minWidth,
-                minHeight: minHeight,
-              ),
-              padding: compact
-                  ? const EdgeInsets.symmetric(horizontal: 8, vertical: 10)
-                  : const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: compact
-                  ? Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          icon,
-                          color: selected
-                              ? const Color(0xFF5B3D00)
-                              : const Color(0xFF9D7108),
-                          size: 23,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          label,
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: selected
-                                ? const Color(0xFF5B3D00)
-                                : const Color(0xFF9D7108),
-                            fontSize: 11,
-                            height: 1.05,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                      ],
-                    )
-                  : Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          icon,
-                          color: selected
-                              ? const Color(0xFF5B3D00)
-                              : const Color(0xFF9D7108),
-                          size: 21,
-                        ),
-                        const SizedBox(width: 9),
-                        Flexible(
-                          child: Text(
-                            label,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: selected
-                                  ? const Color(0xFF5B3D00)
-                                  : const Color(0xFF252525),
-                              fontSize: 14,
-                              height: 1.12,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _KorlixGoldFramePainter extends CustomPainter {
-  final _KorlixGoldFrameStyle style;
-  final bool selected;
-
-  const _KorlixGoldFramePainter({required this.style, this.selected = false});
-
-  Path _octPath(Rect rect, double cut) {
-    final c = cut.clamp(4.0, rect.shortestSide * 0.24).toDouble();
-
-    return Path()
-      ..moveTo(rect.left + c, rect.top)
-      ..lineTo(rect.right - c, rect.top)
-      ..lineTo(rect.right, rect.top + c)
-      ..lineTo(rect.right, rect.bottom - c)
-      ..lineTo(rect.right - c, rect.bottom)
-      ..lineTo(rect.left + c, rect.bottom)
-      ..lineTo(rect.left, rect.bottom - c)
-      ..lineTo(rect.left, rect.top + c)
-      ..close();
-  }
-
-  void _stroke(
-    Canvas canvas,
-    Path path,
-    Color color,
-    double width, {
-    double alpha = 1,
-  }) {
-    canvas.drawPath(
-      path,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeJoin = StrokeJoin.bevel
-        ..strokeWidth = width
-        ..color = color.withOpacity(alpha),
-    );
-  }
-
-  void _goldBar(Canvas canvas, Rect rect, {bool vertical = false}) {
-    final barPath = _octPath(rect, vertical ? 8 : 7);
-    final shader = LinearGradient(
-      begin: vertical ? Alignment.topCenter : Alignment.centerLeft,
-      end: vertical ? Alignment.bottomCenter : Alignment.centerRight,
-      colors: const [
-        Color(0xFFFCE9A4),
-        Color(0xFFBD8A10),
-        Color(0xFFFFD75A),
-        Color(0xFF9E6E05),
-      ],
-      stops: const [0.0, 0.34, 0.68, 1.0],
-    ).createShader(rect);
-
-    canvas.drawPath(
-      barPath,
-      Paint()
-        ..style = PaintingStyle.fill
-        ..shader = shader,
-    );
-
-    _stroke(canvas, barPath, const Color(0xFFFFFFFF), 0.8, alpha: 0.55);
-    _stroke(canvas, barPath, const Color(0xFF8C6204), 1.1, alpha: 0.68);
-  }
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.width <= 0 || size.height <= 0) {
-      return;
-    }
-
-    final rect = Offset.zero & size;
-    final shortSide = size.width < size.height ? size.width : size.height;
-
-    final cut = style == _KorlixGoldFrameStyle.button
-        ? shortSide * 0.22
-        : style == _KorlixGoldFrameStyle.prompt
-        ? shortSide * 0.18
-        : shortSide * 0.095;
-
-    final outer = _octPath(rect.deflate(2), cut);
-    final inner = _octPath(
-      rect.deflate(style == _KorlixGoldFrameStyle.button ? 7 : 11),
-      cut * 0.78,
-    );
-
-    final fillShader = LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: style == _KorlixGoldFrameStyle.button && selected
-          ? const [Color(0xFFFFE690), Color(0xFFD6A51C), Color(0xFFF9D66A)]
-          : const [
-              Color(0xFFFCFCFC),
-              Color(0xFFF5F3EF),
-              Color(0xFFE8E4DB),
-              Color(0xFFFFFFFF),
-            ],
-      stops: const [0.0, 0.45, 0.78, 1.0],
-    ).createShader(rect);
-
-    canvas.drawPath(
-      outer.shift(const Offset(0, 4)),
-      Paint()
-        ..style = PaintingStyle.fill
-        ..color = Colors.black.withOpacity(
-          style == _KorlixGoldFrameStyle.button ? 0.12 : 0.16,
-        )
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
-    );
-
-    canvas.drawPath(
-      outer,
-      Paint()
-        ..style = PaintingStyle.fill
-        ..shader = fillShader,
-    );
-
-    _stroke(canvas, outer, const Color(0xFFFFFFFF), 2.2, alpha: 0.96);
-    _stroke(canvas, outer, const Color(0xFFB98B12), 2.0, alpha: 0.78);
-    _stroke(canvas, inner, const Color(0xFFD9A719), 1.15, alpha: 0.82);
-
-    final inset = style == _KorlixGoldFrameStyle.button ? 12.0 : 20.0;
-    final cavity = _octPath(rect.deflate(inset), cut * 0.54);
-
-    canvas.drawPath(
-      cavity,
-      Paint()
-        ..style = PaintingStyle.fill
-        ..color = style == _KorlixGoldFrameStyle.button && selected
-            ? const Color(0xFFFFF3C8).withOpacity(0.50)
-            : Colors.white.withOpacity(0.42),
-    );
-
-    _stroke(canvas, cavity, const Color(0xFFFFFFFF), 0.85, alpha: 0.70);
-    _stroke(canvas, cavity, const Color(0xFFC99818), 0.9, alpha: 0.46);
-
-    if (style == _KorlixGoldFrameStyle.answer ||
-        style == _KorlixGoldFrameStyle.tools) {
-      final topWidth = size.width * 0.23;
-      _goldBar(
-        canvas,
-        Rect.fromCenter(
-          center: Offset(size.width / 2, 17),
-          width: topWidth,
-          height: 34,
-        ),
-      );
-
-      _goldBar(
-        canvas,
-        Rect.fromCenter(
-          center: Offset(size.width / 2, size.height - 17),
-          width: topWidth * 0.86,
-          height: 30,
-        ),
-      );
-
-      _goldBar(
-        canvas,
-        Rect.fromLTWH(15, size.height * 0.30, 18, size.height * 0.32),
-        vertical: true,
-      );
-
-      _goldBar(
-        canvas,
-        Rect.fromLTWH(
-          size.width - 33,
-          size.height * 0.30,
-          18,
-          size.height * 0.32,
-        ),
-        vertical: true,
-      );
-    }
-
-    if (style == _KorlixGoldFrameStyle.prompt) {
-      _goldBar(
-        canvas,
-        Rect.fromLTWH(12, 12, 8, size.height - 24),
-        vertical: true,
-      );
-
-      _goldBar(
-        canvas,
-        Rect.fromLTWH(size.width - 20, 12, 8, size.height - 24),
-        vertical: true,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _KorlixGoldFramePainter oldDelegate) {
-    return oldDelegate.style != style || oldDelegate.selected != selected;
-  }
-}
-
-// END KORLIX WHITE GOLD CUSTOM PAINTER UI
 
 class MatrixThinkingPanel extends StatefulWidget {
   final String message;
