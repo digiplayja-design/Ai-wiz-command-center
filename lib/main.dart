@@ -8932,6 +8932,11 @@ Make the entire output professional, well-structured using Markdown, and product
         ? 'Écrivez ici...'
         : 'Type your message...';
 
+    final GeneratedItem? activeResult =
+        (!_loading && _results.isNotEmpty && !_featuredAnswerDismissed)
+        ? _results.first
+        : null;
+
     Widget toolButton({
       required IconData icon,
       required String label,
@@ -8976,6 +8981,55 @@ Make the entire output professional, well-structured using Markdown, and product
             borderRadius: BorderRadius.circular(20),
           ),
         ),
+      );
+    }
+
+    Widget answerReadyBody() {
+      if (_loading && activeResult == null) {
+        return const Center(
+          child: SizedBox(
+            width: 30,
+            height: 30,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.4,
+              color: Color(0xFF69D9E8),
+            ),
+          ),
+        );
+      }
+
+      if (activeResult == null) {
+        return const SizedBox.expand();
+      }
+
+      if (activeResult.hasImageResult) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: _buildGeneratedImagePreview(activeResult, height: 210),
+        );
+      }
+
+      return SingleChildScrollView(
+        child: Text(
+          activeResult.content,
+          style: const TextStyle(
+            color: Color(0xFFE4EBEE),
+            fontSize: 14,
+            height: 1.42,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
+
+    Widget answerReadyPanel() {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: activeResult == null ? null : () => _showResult(activeResult),
+        onLongPress: activeResult == null
+            ? null
+            : () => _copyFeaturedResult(activeResult),
+        child: _KorlixCleanAnswerReadyBox(child: answerReadyBody()),
       );
     }
 
@@ -9092,129 +9146,144 @@ Make the entire output professional, well-structured using Markdown, and product
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF071B27).withOpacity(0.88),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(
-          color: const Color(0xFF2EC7DF).withOpacity(0.46),
-          width: 1.1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.34),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          singleInputBoard(),
-
-          const SizedBox(height: 12),
-
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            alignment: WrapAlignment.center,
-            children: [
-              toolButton(
-                icon: Icons.attach_file_rounded,
-                label: 'Upload',
-                locked: !_hasDocumentUploadAccess,
-                success: _activeUploadFiles.isNotEmpty,
-                active: false,
-                onPressed: _loading ? null : _handleUploadPressed,
-              ),
-              toolButton(
-                icon: Icons.mic_rounded,
-                label: 'Voice',
-                locked: !_hasVoiceAccess,
-                active: _voiceListening,
-                onPressed: _loading ? null : _handleVoiceInput,
-              ),
-              OutlinedButton.icon(
-                onPressed: _loading ? null : _showLocatorOptions,
-                icon: const Icon(Icons.location_on_outlined, size: 18),
-                label: const Text('Locator'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF69D9E8),
-                  backgroundColor: Colors.black.withOpacity(0.20),
-                  side: BorderSide(
-                    color: const Color(0xFF69D9E8).withOpacity(0.42),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 9,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
-              _buildUtilityButton(),
-              if (_currentTier == 'basic')
-                OutlinedButton.icon(
-                  onPressed: _loading ? null : _openDonateCashApp,
-                  icon: const Icon(Icons.favorite_rounded, size: 18),
-                  label: const Text(r'$cashapp'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFFFD166),
-                    backgroundColor: Colors.black.withOpacity(0.20),
-                    side: BorderSide(
-                      color: const Color(0xFFFFD166).withOpacity(0.46),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 9,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-
-          if (_utilityPanelOpen) ...[
-            const SizedBox(height: 12),
-            _buildUtilityPanel(),
-          ],
-
-          if (_activeUploadFiles.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _buildSelectedUploadFilesPanel(),
-          ],
-
-          if (_loading) ...[
-            const SizedBox(height: 14),
-            MatrixThinkingPanel(message: t.matrixMessage),
-          ],
+          answerReadyPanel(),
 
           const SizedBox(height: 14),
 
-          Wrap(
-            spacing: 9,
-            runSpacing: 9,
-            alignment: WrapAlignment.center,
-            children: t.quickActions.map(_buildSafeUiQuickActionChip).toList(),
-          ),
-
-          if (_error != null) ...[
-            const SizedBox(height: 14),
-            Text(
-              _error!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.redAccent,
-                fontWeight: FontWeight.w700,
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF071B27).withOpacity(0.88),
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(
+                color: const Color(0xFF2EC7DF).withOpacity(0.46),
+                width: 1.1,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.34),
+                  blurRadius: 18,
+                  offset: const Offset(0, 10),
+                ),
+              ],
             ),
-          ],
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                singleInputBoard(),
+
+                const SizedBox(height: 12),
+
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    toolButton(
+                      icon: Icons.attach_file_rounded,
+                      label: 'Upload',
+                      locked: !_hasDocumentUploadAccess,
+                      success: _activeUploadFiles.isNotEmpty,
+                      active: false,
+                      onPressed: _loading ? null : _handleUploadPressed,
+                    ),
+                    toolButton(
+                      icon: Icons.mic_rounded,
+                      label: 'Voice',
+                      locked: !_hasVoiceAccess,
+                      active: _voiceListening,
+                      onPressed: _loading ? null : _handleVoiceInput,
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _loading ? null : _showLocatorOptions,
+                      icon: const Icon(Icons.location_on_outlined, size: 18),
+                      label: const Text('Locator'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF69D9E8),
+                        backgroundColor: Colors.black.withOpacity(0.20),
+                        side: BorderSide(
+                          color: const Color(0xFF69D9E8).withOpacity(0.42),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 9,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    _buildUtilityButton(),
+                    if (_currentTier == 'basic')
+                      OutlinedButton.icon(
+                        onPressed: _loading ? null : _openDonateCashApp,
+                        icon: const Icon(Icons.favorite_rounded, size: 18),
+                        label: const Text(r'$cashapp'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFFFD166),
+                          backgroundColor: Colors.black.withOpacity(0.20),
+                          side: BorderSide(
+                            color: const Color(0xFFFFD166).withOpacity(0.46),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 9,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+
+                if (_utilityPanelOpen) ...[
+                  const SizedBox(height: 12),
+                  _buildUtilityPanel(),
+                ],
+
+                if (_activeUploadFiles.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _buildSelectedUploadFilesPanel(),
+                ],
+
+                if (_loading) ...[
+                  const SizedBox(height: 14),
+                  MatrixThinkingPanel(message: t.matrixMessage),
+                ],
+
+                const SizedBox(height: 14),
+
+                Wrap(
+                  spacing: 9,
+                  runSpacing: 9,
+                  alignment: WrapAlignment.center,
+                  children: t.quickActions
+                      .map(_buildSafeUiQuickActionChip)
+                      .toList(),
+                ),
+
+                if (_error != null) ...[
+                  const SizedBox(height: 14),
+                  Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.redAccent,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -10018,6 +10087,252 @@ class _KorlixCyberPanelClipper extends CustomClipper<Path> {
     return oldClipper.cut != cut;
   }
 }
+
+// BEGIN KORLIX CLEAN ANSWER READY BOX
+
+class _KorlixCleanAnswerReadyBox extends StatelessWidget {
+  final Widget child;
+
+  const _KorlixCleanAnswerReadyBox({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: const _KorlixCleanAnswerReadyBoxPainter(),
+      child: Container(
+        height: 318,
+        padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ShaderMask(
+              shaderCallback: (bounds) => const LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  Color(0xFFB7F7FF),
+                  Color(0xFF69D9E8),
+                  Color(0xFFFF4AF3),
+                ],
+              ).createShader(bounds),
+              child: const Text(
+                'ANSWER READY',
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 23,
+                  height: 1.0,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 7.0,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _KorlixAnswerReadyDot(color: Color(0xFF69D9E8)),
+                SizedBox(width: 12),
+                _KorlixAnswerReadyDot(color: Color(0xFFB794F4)),
+                SizedBox(width: 12),
+                _KorlixAnswerReadyDot(color: Color(0xFFFF4AF3)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: child,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _KorlixAnswerReadyDot extends StatelessWidget {
+  final Color color;
+
+  const _KorlixAnswerReadyDot({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 13,
+      height: 13,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color,
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.42),
+            blurRadius: 8,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _KorlixCleanAnswerReadyBoxPainter extends CustomPainter {
+  const _KorlixCleanAnswerReadyBoxPainter();
+
+  Path _octPath(Rect rect, double cut) {
+    return Path()
+      ..moveTo(rect.left + cut, rect.top)
+      ..lineTo(rect.right - cut, rect.top)
+      ..lineTo(rect.right, rect.top + cut)
+      ..lineTo(rect.right, rect.bottom - cut)
+      ..lineTo(rect.right - cut, rect.bottom)
+      ..lineTo(rect.left + cut, rect.bottom)
+      ..lineTo(rect.left, rect.bottom - cut)
+      ..lineTo(rect.left, rect.top + cut)
+      ..close();
+  }
+
+  void _stroke(
+    Canvas canvas,
+    Path path,
+    Color color,
+    double width,
+    double alpha,
+  ) {
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeJoin = StrokeJoin.bevel
+        ..strokeCap = StrokeCap.square
+        ..strokeWidth = width
+        ..color = color.withValues(alpha: alpha),
+    );
+  }
+
+  void _accentLine(
+    Canvas canvas,
+    Offset from,
+    Offset to,
+    Color color,
+    double width,
+  ) {
+    canvas.drawLine(
+      from,
+      to,
+      Paint()
+        ..strokeCap = StrokeCap.square
+        ..strokeWidth = width
+        ..color = color.withValues(alpha: 0.88),
+    );
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) {
+      return;
+    }
+
+    const cyan = Color(0xFF69D9E8);
+    const blue = Color(0xFF2D8CFF);
+    const magenta = Color(0xFFFF4AF3);
+
+    final rect = Offset.zero & size;
+    final outer = _octPath(rect.deflate(6), 30);
+    final inner = _octPath(rect.deflate(18), 23);
+    final cavity = _octPath(rect.deflate(30), 18);
+
+    // Soft depth only, not a large outside halo.
+    canvas.drawPath(
+      outer.shift(const Offset(0, 8)),
+      Paint()
+        ..style = PaintingStyle.fill
+        ..color = Colors.black.withValues(alpha: 0.30)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+    );
+
+    canvas.drawPath(
+      outer,
+      Paint()
+        ..style = PaintingStyle.fill
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF18283A), Color(0xFF07111F), Color(0xFF21103A)],
+          stops: [0.0, 0.55, 1.0],
+        ).createShader(rect),
+    );
+
+    canvas.drawPath(
+      inner,
+      Paint()
+        ..style = PaintingStyle.fill
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0D2438), Color(0xFF07111F), Color(0xFF160B2F)],
+        ).createShader(rect),
+    );
+
+    // Clean angular borders.
+    _stroke(canvas, outer, Colors.white, 2.6, 0.18);
+    _stroke(canvas, outer, cyan, 1.6, 0.60);
+    _stroke(canvas, outer, magenta, 1.2, 0.44);
+    _stroke(canvas, inner, Colors.white, 1.1, 0.16);
+    _stroke(canvas, inner, cyan, 1.1, 0.36);
+    _stroke(canvas, cavity, magenta, 1.2, 0.50);
+
+    // Single clean highlight lines drawn by the painter, not floating widgets.
+    _accentLine(
+      canvas,
+      Offset(size.width * 0.10, size.height * 0.86),
+      Offset(size.width * 0.24, size.height * 0.86),
+      cyan,
+      2.2,
+    );
+    _accentLine(
+      canvas,
+      Offset(size.width * 0.73, size.height * 0.86),
+      Offset(size.width * 0.91, size.height * 0.86),
+      magenta,
+      2.4,
+    );
+    _accentLine(
+      canvas,
+      Offset(size.width * 0.78, size.height * 0.09),
+      Offset(size.width * 0.93, size.height * 0.09),
+      magenta,
+      2.4,
+    );
+
+    // Subtle right-side color edge.
+    final rightEdge = Path()
+      ..moveTo(size.width - 34, 44)
+      ..lineTo(size.width - 18, 60)
+      ..lineTo(size.width - 18, size.height - 60)
+      ..lineTo(size.width - 34, size.height - 44);
+
+    _stroke(canvas, rightEdge, magenta, 2.0, 0.44);
+
+    final leftEdge = Path()
+      ..moveTo(34, 44)
+      ..lineTo(18, 60)
+      ..lineTo(18, size.height - 60)
+      ..lineTo(34, size.height - 44);
+
+    _stroke(canvas, leftEdge, cyan, 2.0, 0.40);
+  }
+
+  @override
+  bool shouldRepaint(covariant _KorlixCleanAnswerReadyBoxPainter oldDelegate) {
+    return false;
+  }
+}
+
+// END KORLIX CLEAN ANSWER READY BOX
 
 class MatrixThinkingPanel extends StatefulWidget {
   final String message;
