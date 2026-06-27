@@ -6291,39 +6291,605 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     }
   }
 
+  String _korlixAiDisclaimerText() {
+    return 'KORLIX AI can make mistakes. Always exercise caution and double-check important facts before relying on any answer, image, video, document, or recommendation.';
+  }
+
+  Widget _buildKorlixAiDisclaimerBanner({bool compact = false}) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 12 : 14,
+        vertical: compact ? 10 : 12,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFF07111F).withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFFFD166).withValues(alpha: 0.42),
+          width: 1.0,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.info_outline_rounded,
+            color: Color(0xFFFFD166),
+            size: 18,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              _korlixAiDisclaimerText(),
+              style: TextStyle(
+                color: const Color(0xFFE4EBEE).withValues(alpha: 0.90),
+                fontSize: compact ? 11.5 : 12.5,
+                height: 1.32,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<String> _generatedContentReportCategories() {
+    return const <String>[
+      'Offensive or abusive',
+      'Unsafe or harmful',
+      'False or misleading',
+      'Sexual content',
+      'Hate or harassment',
+      'Other',
+    ];
+  }
+
+  String _generatedContentReportSummary({
+    required String contentType,
+    required String prompt,
+    required String outputSummary,
+    String? contentId,
+    String? imageUrl,
+    String? videoId,
+  }) {
+    final buffer = StringBuffer()
+      ..writeln('Korlix AI Reported Output')
+      ..writeln('Type: $contentType')
+      ..writeln('Time: ${DateTime.now().toIso8601String()}');
+
+    if ((contentId ?? '').trim().isNotEmpty) {
+      buffer.writeln('Content ID: ${contentId!.trim()}');
+    }
+
+    if ((videoId ?? '').trim().isNotEmpty) {
+      buffer.writeln('Video ID: ${videoId!.trim()}');
+    }
+
+    if ((imageUrl ?? '').trim().isNotEmpty) {
+      buffer.writeln('Image URL: ${imageUrl!.trim()}');
+    }
+
+    if (prompt.trim().isNotEmpty) {
+      buffer
+        ..writeln()
+        ..writeln('Prompt:')
+        ..writeln(prompt.trim());
+    }
+
+    if (outputSummary.trim().isNotEmpty) {
+      buffer
+        ..writeln()
+        ..writeln('Generated output summary:')
+        ..writeln(outputSummary.trim());
+    }
+
+    return buffer.toString();
+  }
+
+  Future<bool> _submitGeneratedContentReport({
+    required String contentType,
+    required String prompt,
+    required String outputSummary,
+    required String reason,
+    required String details,
+    String? contentId,
+    String? imageUrl,
+    String? videoId,
+  }) async {
+    final payload = <String, dynamic>{
+      'contentType': contentType,
+      'reason': reason,
+      'details': details,
+      'prompt': prompt,
+      'outputSummary': outputSummary,
+      'contentId': contentId,
+      'imageUrl': imageUrl,
+      'videoId': videoId,
+      'language': _selectedLanguage,
+      'appVersion': 'Korlix AI',
+      'createdAt': DateTime.now().toIso8601String(),
+    };
+
+    final endpoints = <String>[
+      '$kKorlixBackendBaseUrl/api/reports/content',
+      '$kKorlixBackendBaseUrl/api/report-output',
+      '$kKorlixBackendBaseUrl/api/report',
+    ];
+
+    for (final endpoint in endpoints) {
+      try {
+        final response = await http
+            .post(
+              Uri.parse(endpoint),
+              headers: _authHeaders(),
+              body: jsonEncode(payload),
+            )
+            .timeout(const Duration(seconds: 18));
+
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          return true;
+        }
+      } catch (_) {
+        // Try the next endpoint/fallback.
+      }
+    }
+
+    return false;
+  }
+
+  Future<void> _openGeneratedContentReportEmailFallback({
+    required String contentType,
+    required String prompt,
+    required String outputSummary,
+    required String reason,
+    required String details,
+    String? contentId,
+    String? imageUrl,
+    String? videoId,
+  }) async {
+    final body = StringBuffer()
+      ..writeln(
+        _generatedContentReportSummary(
+          contentType: contentType,
+          prompt: prompt,
+          outputSummary: outputSummary,
+          contentId: contentId,
+          imageUrl: imageUrl,
+          videoId: videoId,
+        ),
+      )
+      ..writeln()
+      ..writeln('Reason:')
+      ..writeln(reason)
+      ..writeln()
+      ..writeln('Additional details:')
+      ..writeln(
+        details.trim().isEmpty ? '[No extra details provided]' : details.trim(),
+      );
+
+    final uri = Uri(
+      scheme: 'mailto',
+      path: 'support@korlixdeveloper.com',
+      queryParameters: <String, String>{
+        'subject': 'Report AI Output - Korlix AI',
+        'body': body.toString(),
+      },
+    );
+
+    try {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (launched) {
+        return;
+      }
+    } catch (_) {}
+
+    await Clipboard.setData(ClipboardData(text: body.toString()));
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Report details copied. Email support@korlixdeveloper.com if the email app did not open.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showReportGeneratedContentSheet({
+    required String contentType,
+    required String prompt,
+    required String outputSummary,
+    String? contentId,
+    String? imageUrl,
+    String? videoId,
+  }) async {
+    final detailsController = TextEditingController();
+    var selectedReason = _generatedContentReportCategories().first;
+
+    try {
+      final result = await showModalBottomSheet<Map<String, String>>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: const Color(0xFF07111F),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (sheetContext) {
+          return StatefulBuilder(
+            builder: (context, setSheetState) {
+              final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+              return SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(20, 18, 20, 22 + bottomInset),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFFA9C6CF,
+                            ).withValues(alpha: 0.42),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        const Icon(
+                          Icons.flag_rounded,
+                          color: Colors.redAccent,
+                          size: 36,
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Report generated content',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Color(0xFFE4EBEE),
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Tell us why this $contentType may be offensive, unsafe, misleading, or inappropriate.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Color(0xFFA9C6CF),
+                            fontSize: 13.5,
+                            height: 1.35,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          alignment: WrapAlignment.center,
+                          children: _generatedContentReportCategories().map((
+                            reason,
+                          ) {
+                            final selected = selectedReason == reason;
+
+                            return ChoiceChip(
+                              selected: selected,
+                              label: Text(reason),
+                              onSelected: (_) {
+                                setSheetState(() {
+                                  selectedReason = reason;
+                                });
+                              },
+                              selectedColor: Colors.redAccent.withValues(
+                                alpha: 0.22,
+                              ),
+                              backgroundColor: Colors.black.withValues(
+                                alpha: 0.20,
+                              ),
+                              side: BorderSide(
+                                color: selected
+                                    ? Colors.redAccent
+                                    : const Color(
+                                        0xFF69D9E8,
+                                      ).withValues(alpha: 0.30),
+                              ),
+                              labelStyle: TextStyle(
+                                color: selected
+                                    ? Colors.white
+                                    : const Color(
+                                        0xFFE4EBEE,
+                                      ).withValues(alpha: 0.86),
+                                fontWeight: FontWeight.w800,
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 14),
+                        TextField(
+                          controller: detailsController,
+                          minLines: 3,
+                          maxLines: 5,
+                          style: const TextStyle(color: Color(0xFFE4EBEE)),
+                          cursorColor: const Color(0xFF69D9E8),
+                          decoration: InputDecoration(
+                            hintText: 'Optional details...',
+                            hintStyle: TextStyle(
+                              color: const Color(
+                                0xFFA9C6CF,
+                              ).withValues(alpha: 0.72),
+                            ),
+                            filled: true,
+                            fillColor: Colors.black.withValues(alpha: 0.24),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(
+                                color: const Color(
+                                  0xFF69D9E8,
+                                ).withValues(alpha: 0.26),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF69D9E8),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildKorlixAiDisclaimerBanner(compact: true),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () =>
+                                    Navigator.of(sheetContext).pop(),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFFE4EBEE),
+                                  side: BorderSide(
+                                    color: Colors.white.withValues(alpha: 0.22),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 13,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Cancel',
+                                  style: TextStyle(fontWeight: FontWeight.w900),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed: () {
+                                  Navigator.of(
+                                    sheetContext,
+                                  ).pop(<String, String>{
+                                    'reason': selectedReason,
+                                    'details': detailsController.text.trim(),
+                                  });
+                                },
+                                icon: const Icon(Icons.flag_rounded),
+                                label: const Text('Submit'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.redAccent,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 13,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+
+      if (result == null || !mounted) {
+        return;
+      }
+
+      final reason = result['reason'] ?? 'Other';
+      final details = result['details'] ?? '';
+
+      final sent = await _submitGeneratedContentReport(
+        contentType: contentType,
+        prompt: prompt,
+        outputSummary: outputSummary,
+        reason: reason,
+        details: details,
+        contentId: contentId,
+        imageUrl: imageUrl,
+        videoId: videoId,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (sent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Report submitted. Thank you.')),
+        );
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not submit automatically. Opening support email fallback.',
+          ),
+        ),
+      );
+
+      await _openGeneratedContentReportEmailFallback(
+        contentType: contentType,
+        prompt: prompt,
+        outputSummary: outputSummary,
+        reason: reason,
+        details: details,
+        contentId: contentId,
+        imageUrl: imageUrl,
+        videoId: videoId,
+      );
+    } finally {
+      detailsController.dispose();
+    }
+  }
+
+  Widget _buildReportGeneratedContentPill({
+    required String contentType,
+    required String prompt,
+    required String outputSummary,
+    String? contentId,
+    String? imageUrl,
+    String? videoId,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showReportGeneratedContentSheet(
+          contentType: contentType,
+          prompt: prompt,
+          outputSummary: outputSummary,
+          contentId: contentId,
+          imageUrl: imageUrl,
+          videoId: videoId,
+        ),
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: BoxDecoration(
+            color: const Color(0xDD14090E),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: Colors.redAccent.withValues(alpha: 0.70),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.32),
+                blurRadius: 12,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.flag_rounded, color: Colors.redAccent, size: 15),
+              SizedBox(width: 5),
+              Text(
+                'Report',
+                style: TextStyle(
+                  color: Color(0xFFF3FBFF),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildGeneratedImagePreview(
     GeneratedItem item, {
-    double height = 280,
+    double height = 260,
   }) {
     final bytes = _imageBytesFromDataUrl(item.imageDataUrl);
+    final imageUrl = item.imageUrl;
+    final prompt = item.command.trim();
+    final outputSummary = item.content.trim().isEmpty
+        ? 'Generated image'
+        : _cleanDisplayText(item.content).trim();
+
+    Widget imageChild;
 
     if (bytes != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: Image.memory(
-          bytes,
-          width: double.infinity,
-          height: height,
-          fit: BoxFit.contain,
+      imageChild = Image.memory(
+        bytes,
+        width: double.infinity,
+        height: height,
+        fit: BoxFit.cover,
+      );
+    } else if (imageUrl != null && imageUrl.isNotEmpty) {
+      imageChild = Image.network(
+        imageUrl,
+        width: double.infinity,
+        height: height,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            height: height,
+            alignment: Alignment.center,
+            color: Colors.black.withValues(alpha: 0.24),
+            child: const Text(
+              'Generated image could not be loaded.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Color(0xFFA9C6CF)),
+            ),
+          );
+        },
+      );
+    } else {
+      imageChild = Container(
+        height: height,
+        alignment: Alignment.center,
+        color: Colors.black.withValues(alpha: 0.24),
+        child: const Text(
+          'Generated image is not available.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Color(0xFFA9C6CF)),
         ),
       );
     }
 
-    final imageUrl = item.imageUrl;
-
-    if (imageUrl != null && imageUrl.isNotEmpty) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: Image.network(
-          imageUrl,
-          width: double.infinity,
-          height: height,
-          fit: BoxFit.contain,
-        ),
-      );
-    }
-
-    return const SizedBox.shrink();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: Stack(
+        children: [
+          SizedBox(width: double.infinity, height: height, child: imageChild),
+          Positioned(
+            top: 10,
+            right: 10,
+            child: _buildReportGeneratedContentPill(
+              contentType: 'image',
+              prompt: prompt,
+              outputSummary: outputSummary,
+              contentId: item.title,
+              imageUrl: imageUrl,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _generatedImageFilename(GeneratedItem item) {
@@ -8610,10 +9176,27 @@ Make the entire output professional, well-structured using Markdown, and product
                     if (completed) ...[
                       SizedBox(
                         height: 240,
-                        child: KorlixGeneratedVideoPlayer(
-                          videoUrl:
-                              '$kKorlixBackendBaseUrl/api/video/content/$videoId',
-                          headers: _authHeaders(),
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: KorlixGeneratedVideoPlayer(
+                                videoUrl:
+                                    '$kKorlixBackendBaseUrl/api/video/content/$videoId',
+                                headers: _authHeaders(),
+                              ),
+                            ),
+                            Positioned(
+                              top: 10,
+                              right: 10,
+                              child: _buildReportGeneratedContentPill(
+                                contentType: 'video',
+                                prompt: prompt,
+                                outputSummary: 'Generated video ID: $videoId',
+                                contentId: videoId,
+                                videoId: videoId,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 12),
