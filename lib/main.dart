@@ -7723,6 +7723,7 @@ Make the entire output professional, well-structured using Markdown, and product
                     _buildMockupHomeHeader(),
                     _buildMockupLanguageTabs(),
                     _buildMockupFeaturedCharacterCard(),
+                    _buildThemeShortcutCircles(),
                     _buildPersistentSavedTopicsMenuRow(),
                     const SizedBox(height: 18),
                     if (_chatMessages.length >= 2) ...[
@@ -10683,7 +10684,7 @@ Make the entire output professional, well-structured using Markdown, and product
           foregroundColor: isGreen ? skin.textOnAccent : accent,
           backgroundColor: isGreen
               ? skin.success
-              : Colors.black.withOpacity(0.20),
+              : skin.buttonFill.withOpacity(skin.isLight ? 0.78 : 0.72),
           side: BorderSide(
             color: isGreen
                 ? skin.success.withOpacity(0.82)
@@ -10796,7 +10797,7 @@ Make the entire output professional, well-structured using Markdown, and product
                   decoration: InputDecoration(
                     hintText: hintText,
                     hintStyle: TextStyle(
-                      color: const Color(0xFFA9C6CF).withOpacity(0.74),
+                      color: skin.mutedText.withOpacity(0.74),
                       fontSize: 15.5,
                       fontStyle: FontStyle.italic,
                       fontWeight: FontWeight.w600,
@@ -10914,7 +10915,9 @@ Make the entire output professional, well-structured using Markdown, and product
                       label: Text('Locator'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: skin.primary,
-                        backgroundColor: Colors.black.withOpacity(0.20),
+                        backgroundColor: skin.buttonFill.withOpacity(
+                          skin.isLight ? 0.78 : 0.72,
+                        ),
                         side: BorderSide(color: skin.primary.withOpacity(0.42)),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
@@ -10933,7 +10936,9 @@ Make the entire output professional, well-structured using Markdown, and product
                         label: Text(r'$cashapp'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: skin.premium,
-                          backgroundColor: Colors.black.withOpacity(0.20),
+                          backgroundColor: skin.buttonFill.withOpacity(
+                            skin.isLight ? 0.78 : 0.72,
+                          ),
                           side: BorderSide(
                             color: skin.premium.withOpacity(0.46),
                           ),
@@ -12440,6 +12445,152 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
+  Future<void> _applyThemeShortcut({required String theme}) async {
+    final normalizedTheme = korlixNormalizeSkinId(theme);
+
+    kKorlixThemeNotifier.value = normalizedTheme;
+
+    if (mounted) {
+      setState(() {});
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('korlix_ui_theme', normalizedTheme);
+    } catch (_) {
+      // Local theme switching should still work even if persistence fails.
+    }
+
+    try {
+      await http
+          .post(
+            Uri.parse('$kKorlixBackendBaseUrl/api/theme/set'),
+            headers: KorlixDeviceStore.headers(),
+            body: jsonEncode({'theme': normalizedTheme}),
+          )
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {
+      // Backend theme sync should not block the visible shortcut switch.
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Theme applied: ${korlixThemeLabelFor(normalizedTheme)}'),
+      ),
+    );
+  }
+
+  Widget _buildThemeShortcutCircles() {
+    const skinIds = <String>[
+      'korlix_blue',
+      'matrix_green',
+      'ultra_gold',
+      'pink_white',
+      'dark_crimson',
+      'white_gray',
+    ];
+
+    return ValueListenableBuilder<String>(
+      valueListenable: kKorlixThemeNotifier,
+      builder: (context, theme, _) {
+        final activeId = korlixNormalizeSkinId(theme);
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(22, 10, 22, 2),
+          child: Align(
+            alignment: Alignment.center,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: korlixSkinPaletteFor(activeId).panel.withValues(
+                  alpha: korlixSkinPaletteFor(activeId).isLight ? 0.64 : 0.38,
+                ),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: korlixSkinPaletteFor(activeId).border.withValues(
+                    alpha: korlixSkinPaletteFor(activeId).isLight ? 0.32 : 0.24,
+                  ),
+                ),
+              ),
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 10,
+                runSpacing: 8,
+                children: skinIds.map((skinId) {
+                  final skin = korlixSkinPaletteFor(skinId);
+                  final selected = skin.id == activeId;
+
+                  return Tooltip(
+                    message: skin.label,
+                    child: Semantics(
+                      button: true,
+                      label: 'Apply ${skin.label} theme',
+                      selected: selected,
+                      child: InkWell(
+                        onTap: () => _applyThemeShortcut(theme: skin.id),
+                        customBorder: const CircleBorder(),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          width: selected ? 38 : 32,
+                          height: selected ? 38 : 32,
+                          padding: EdgeInsets.all(selected ? 3.0 : 2.3),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: selected
+                                  ? skin.text
+                                  : skin.border.withValues(alpha: 0.62),
+                              width: selected ? 2.0 : 1.05,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: skin.glow.withValues(
+                                  alpha: selected ? 0.36 : 0.16,
+                                ),
+                                blurRadius: selected ? 14 : 8,
+                                spreadRadius: selected ? 1 : 0,
+                              ),
+                            ],
+                          ),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  skin.primary,
+                                  skin.secondary,
+                                  skin.panelDeep,
+                                ],
+                                stops: const [0.0, 0.62, 1.0],
+                              ),
+                            ),
+                            child: selected
+                                ? Icon(
+                                    Icons.check_rounded,
+                                    color: skin.textOnAccent,
+                                    size: 16,
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildPersistentSavedTopicsMenuRow() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 8, 22, 6),
@@ -13154,7 +13305,9 @@ class _KorlixCleanAnswerReadyBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: const _KorlixCleanAnswerReadyBoxPainter(),
+      painter: _KorlixCleanAnswerReadyBoxPainter(
+        korlixSkinPaletteFor(kKorlixThemeNotifier.value),
+      ),
       child: Container(
         height: 318,
         padding: const EdgeInsets.fromLTRB(34, 30, 34, 30),
@@ -13165,18 +13318,24 @@ class _KorlixCleanAnswerReadyBox extends StatelessWidget {
 }
 
 class _KorlixCleanAnswerReadyBoxPainter extends CustomPainter {
-  const _KorlixCleanAnswerReadyBoxPainter();
+  final KorlixSkinPalette skin;
 
-  Path _octPath(Rect rect, double cut) {
+  const _KorlixCleanAnswerReadyBoxPainter(this.skin);
+
+  Path _panelPath(Size size, double inset) {
+    final width = size.width;
+    final height = size.height;
+    final cut = math.max(14.0, math.min(width, height) * 0.075);
+
     return Path()
-      ..moveTo(rect.left + cut, rect.top)
-      ..lineTo(rect.right - cut, rect.top)
-      ..lineTo(rect.right, rect.top + cut)
-      ..lineTo(rect.right, rect.bottom - cut)
-      ..lineTo(rect.right - cut, rect.bottom)
-      ..lineTo(rect.left + cut, rect.bottom)
-      ..lineTo(rect.left, rect.bottom - cut)
-      ..lineTo(rect.left, rect.top + cut)
+      ..moveTo(inset + cut, inset)
+      ..lineTo(width - inset - cut * 0.82, inset)
+      ..lineTo(width - inset, inset + cut)
+      ..lineTo(width - inset, height - inset - cut)
+      ..lineTo(width - inset - cut * 0.88, height - inset)
+      ..lineTo(inset + cut * 0.92, height - inset)
+      ..lineTo(inset, height - inset - cut)
+      ..lineTo(inset, inset + cut)
       ..close();
   }
 
@@ -13191,9 +13350,9 @@ class _KorlixCleanAnswerReadyBoxPainter extends CustomPainter {
       path,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeJoin = StrokeJoin.bevel
-        ..strokeCap = StrokeCap.square
         ..strokeWidth = width
+        ..strokeJoin = StrokeJoin.round
+        ..strokeCap = StrokeCap.round
         ..color = color.withValues(alpha: alpha),
     );
   }
@@ -13209,18 +13368,16 @@ class _KorlixCleanAnswerReadyBoxPainter extends CustomPainter {
       path,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeJoin = StrokeJoin.bevel
-        ..strokeCap = StrokeCap.square
         ..strokeWidth = width
+        ..strokeJoin = StrokeJoin.round
+        ..strokeCap = StrokeCap.round
         ..shader = LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
           colors: [
-            const Color(0xFF69D9E8).withValues(alpha: alpha),
-            korlixSkinPaletteFor(
-              kKorlixThemeNotifier.value,
-            ).tertiary.withValues(alpha: alpha * 0.52),
-            const Color(0xFFFF4AF3).withValues(alpha: alpha),
+            skin.primary.withValues(alpha: alpha),
+            skin.tertiary.withValues(alpha: alpha * 0.62),
+            skin.secondary.withValues(alpha: alpha),
           ],
           stops: const [0.0, 0.52, 1.0],
         ).createShader(rect),
@@ -13229,63 +13386,70 @@ class _KorlixCleanAnswerReadyBoxPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (size.width <= 0 || size.height <= 0) {
+    if (size.width <= 1 || size.height <= 1) {
       return;
     }
 
     final rect = Offset.zero & size;
-
-    // Clean two-border Answer panel.
-    // Removed all decorative accent bars:
-    // - top-right magenta remnant
-    // - bottom-left cyan remnant
-    // - bottom-right magenta remnant
-    final outer = _octPath(rect.deflate(6), 30);
-    final inner = _octPath(rect.deflate(19), 23);
+    final outer = _panelPath(size, 2.5);
+    final middle = _panelPath(size, 13.5);
 
     canvas.drawPath(
-      outer.shift(const Offset(0, 8)),
+      outer.shift(const Offset(0, 7)),
       Paint()
         ..style = PaintingStyle.fill
-        ..color = Colors.black.withValues(alpha: 0.30)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+        ..color = Colors.black.withValues(alpha: skin.isLight ? 0.10 : 0.26)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14),
     );
 
     canvas.drawPath(
       outer,
       Paint()
         ..style = PaintingStyle.fill
-        ..shader = const LinearGradient(
+        ..shader = LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF18283A), Color(0xFF07111F), Color(0xFF21103A)],
-          stops: [0.0, 0.55, 1.0],
+          colors: [
+            skin.panelSoft.withValues(alpha: skin.isLight ? 0.84 : 0.78),
+            skin.panel.withValues(alpha: skin.isLight ? 0.92 : 0.72),
+            skin.panelDeep.withValues(alpha: skin.isLight ? 0.88 : 0.84),
+          ],
+          stops: const [0.0, 0.55, 1.0],
         ).createShader(rect),
     );
 
     canvas.drawPath(
-      inner,
+      middle,
       Paint()
         ..style = PaintingStyle.fill
-        ..shader = const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0D2438), Color(0xFF07111F), Color(0xFF160B2F)],
+        ..shader = RadialGradient(
+          center: const Alignment(0.52, -0.35),
+          radius: 1.15,
+          colors: [
+            skin.primary.withValues(alpha: skin.isLight ? 0.055 : 0.095),
+            skin.panelDeep.withValues(alpha: skin.isLight ? 0.18 : 0.10),
+            Colors.transparent,
+          ],
+          stops: const [0.0, 0.45, 1.0],
         ).createShader(rect),
     );
 
-    // Border line 1: outer.
-    _strokeSolid(canvas, outer, Colors.white, 2.4, 0.16);
-    _strokeGradient(canvas, outer, rect, 1.7, 0.78);
+    // Two clean border lines only: outer + middle.
+    // No decorative short remnants are drawn here.
+    _strokeSolid(canvas, outer, Colors.white, 2.3, skin.isLight ? 0.26 : 0.16);
+    _strokeGradient(canvas, outer, rect, 1.75, skin.isLight ? 0.74 : 0.82);
 
-    // Border line 2: inner.
-    _strokeSolid(canvas, inner, Colors.white, 0.9, 0.12);
-    _strokeGradient(canvas, inner, rect, 1.25, 0.52);
+    _strokeSolid(canvas, middle, Colors.white, 0.9, skin.isLight ? 0.22 : 0.12);
+    _strokeGradient(canvas, middle, rect, 1.25, skin.isLight ? 0.46 : 0.54);
   }
 
   @override
   bool shouldRepaint(covariant _KorlixCleanAnswerReadyBoxPainter oldDelegate) {
-    return false;
+    return oldDelegate.skin.id != skin.id ||
+        oldDelegate.skin.primary != skin.primary ||
+        oldDelegate.skin.secondary != skin.secondary ||
+        oldDelegate.skin.panel != skin.panel ||
+        oldDelegate.skin.panelDeep != skin.panelDeep;
   }
 }
 
