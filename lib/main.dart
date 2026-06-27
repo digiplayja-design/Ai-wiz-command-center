@@ -2797,6 +2797,8 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
       ),
       builder: (context) {
+        final activeSkin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
+
         final skinIds = <String>[
           'korlix_blue',
           'matrix_green',
@@ -2807,9 +2809,9 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
         ];
 
         Widget themeTile(String theme) {
-          final skin = korlixSkinPaletteFor(theme);
+          final tileSkin = korlixSkinPaletteFor(theme);
           final selected =
-              korlixNormalizeSkinId(kKorlixThemeNotifier.value) == skin.id;
+              korlixNormalizeSkinId(kKorlixThemeNotifier.value) == tileSkin.id;
 
           return ListTile(
             leading: Container(
@@ -2820,15 +2822,21 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [skin.primary, skin.secondary, skin.panel],
+                  colors: [
+                    tileSkin.primary,
+                    tileSkin.secondary,
+                    tileSkin.panel,
+                  ],
                 ),
                 border: Border.all(
-                  color: selected ? skin.text : skin.border.withOpacity(0.40),
+                  color: selected
+                      ? activeSkin.text
+                      : tileSkin.border.withOpacity(0.40),
                   width: selected ? 2.2 : 1.1,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: skin.glow.withOpacity(selected ? 0.42 : 0.16),
+                    color: tileSkin.glow.withOpacity(selected ? 0.42 : 0.16),
                     blurRadius: selected ? 18 : 10,
                     spreadRadius: selected ? 1.2 : 0,
                   ),
@@ -2836,27 +2844,31 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
               ),
             ),
             title: Text(
-              skin.label,
-              style: TextStyle(color: skin.text, fontWeight: FontWeight.w900),
+              tileSkin.label,
+              style: TextStyle(
+                color: activeSkin.text,
+                fontWeight: FontWeight.w900,
+              ),
             ),
             subtitle: Text(
               selected ? 'Active skin' : 'Tap to apply',
               style: TextStyle(
-                color: skin.mutedText.withOpacity(0.82),
+                color: activeSkin.mutedText.withOpacity(0.82),
                 fontWeight: FontWeight.w600,
               ),
             ),
             trailing: selected
-                ? Icon(Icons.check_circle_rounded, color: skin.primary)
-                : Icon(Icons.chevron_right_rounded, color: skin.mutedText),
+                ? Icon(Icons.check_circle_rounded, color: tileSkin.primary)
+                : Icon(
+                    Icons.chevron_right_rounded,
+                    color: activeSkin.mutedText,
+                  ),
             onTap: () async {
               Navigator.of(context).pop();
-              await _setTheme(theme: skin.id);
+              await _setTheme(theme: tileSkin.id);
             },
           );
         }
-
-        final activeSkin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
 
         return SafeArea(
           child: Padding(
@@ -8496,8 +8508,7 @@ Make the entire output professional, well-structured using Markdown, and product
     return ValueListenableBuilder<String>(
       valueListenable: kKorlixThemeNotifier,
       builder: (context, theme, _) {
-        final accent = korlixThemeAccentFor(theme);
-        final panel = korlixThemePanelFor(theme);
+        final skin = korlixSkinPaletteFor(theme);
         final compact = MediaQuery.of(context).size.width < 560;
 
         final logo = Container(
@@ -8505,10 +8516,13 @@ Make the entire output professional, well-structured using Markdown, and product
           height: compact ? 58 : 74,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: panel.withOpacity(0.94),
-            border: Border.all(color: accent.withOpacity(0.52)),
+            color: skin.panel.withOpacity(skin.isLight ? 0.84 : 0.94),
+            border: Border.all(color: skin.primary.withOpacity(0.52)),
             boxShadow: [
-              BoxShadow(color: accent.withOpacity(0.28), blurRadius: 26),
+              BoxShadow(
+                color: skin.glow.withOpacity(skin.isLight ? 0.12 : 0.28),
+                blurRadius: 26,
+              ),
             ],
           ),
           padding: EdgeInsets.all(compact ? 8 : 10),
@@ -8530,7 +8544,7 @@ Make the entire output professional, well-structured using Markdown, and product
                 maxLines: 1,
                 softWrap: false,
                 style: TextStyle(
-                  color: const Color(0xFFE4EBEE),
+                  color: skin.text,
                   fontSize: compact ? 42 : 34,
                   fontWeight: FontWeight.w900,
                   letterSpacing: compact ? 4.2 : 3.6,
@@ -8544,7 +8558,7 @@ Make the entire output professional, well-structured using Markdown, and product
               softWrap: false,
               textAlign: compact ? TextAlign.center : TextAlign.left,
               style: TextStyle(
-                color: accent,
+                color: skin.primary,
                 fontSize: compact ? 13 : 14,
                 fontWeight: FontWeight.w800,
                 letterSpacing: compact ? 3.2 : 3.8,
@@ -8553,26 +8567,15 @@ Make the entire output professional, well-structured using Markdown, and product
           ],
         );
 
-        if (compact) {
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Align(alignment: Alignment.centerLeft, child: logo),
-                const SizedBox(height: 16),
-                Center(child: titleBlock),
-              ],
-            ),
-          );
-        }
-
         return Padding(
-          padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
+          padding: const EdgeInsets.fromLTRB(22, 24, 22, 0),
           child: Row(
+            mainAxisAlignment: compact
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.start,
             children: [
               logo,
-              const SizedBox(width: 18),
+              const SizedBox(width: 16),
               Expanded(child: titleBlock),
             ],
           ),
@@ -8585,8 +8588,7 @@ Make the entire output professional, well-structured using Markdown, and product
     return ValueListenableBuilder<String>(
       valueListenable: kKorlixThemeNotifier,
       builder: (context, theme, _) {
-        final accent = korlixThemeAccentFor(theme);
-        final panel = korlixThemePanelFor(theme);
+        final skin = korlixSkinPaletteFor(theme);
 
         Widget tab({required String code, required String label}) {
           final selected = _selectedLanguage == code;
@@ -8609,16 +8611,22 @@ Make the entire output professional, well-structured using Markdown, and product
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: selected
-                      ? accent.withOpacity(0.20)
+                      ? skin.primary.withOpacity(skin.isLight ? 0.24 : 0.20)
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(20),
                   border: selected
-                      ? Border.all(color: accent.withOpacity(0.54))
+                      ? Border.all(
+                          color: skin.primary.withOpacity(
+                            skin.isLight ? 0.72 : 0.54,
+                          ),
+                        )
                       : null,
                   boxShadow: [
                     if (selected)
                       BoxShadow(
-                        color: accent.withOpacity(0.22),
+                        color: skin.glow.withOpacity(
+                          skin.isLight ? 0.14 : 0.22,
+                        ),
                         blurRadius: 18,
                       ),
                   ],
@@ -8626,9 +8634,7 @@ Make the entire output professional, well-structured using Markdown, and product
                 child: Text(
                   label,
                   style: TextStyle(
-                    color: selected
-                        ? const Color(0xFFE4EBEE)
-                        : const Color(0xFFA9C6CF),
+                    color: selected ? skin.text : skin.mutedText,
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                   ),
@@ -8643,9 +8649,17 @@ Make the entire output professional, well-structured using Markdown, and product
           child: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: panel.withOpacity(0.66),
+              color: skin.panel.withOpacity(skin.isLight ? 0.56 : 0.66),
               borderRadius: BorderRadius.circular(26),
-              border: Border.all(color: accent.withOpacity(0.28)),
+              border: Border.all(
+                color: skin.border.withOpacity(skin.isLight ? 0.36 : 0.28),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: skin.glow.withOpacity(skin.isLight ? 0.06 : 0.12),
+                  blurRadius: 16,
+                ),
+              ],
             ),
             child: Row(
               children: [
@@ -8653,13 +8667,13 @@ Make the entire output professional, well-structured using Markdown, and product
                 Container(
                   width: 1,
                   height: 32,
-                  color: accent.withOpacity(0.18),
+                  color: skin.border.withOpacity(0.18),
                 ),
                 tab(code: 'es', label: 'Español'),
                 Container(
                   width: 1,
                   height: 32,
-                  color: accent.withOpacity(0.18),
+                  color: skin.border.withOpacity(0.18),
                 ),
                 tab(code: 'fr', label: 'Français'),
               ],
@@ -9658,6 +9672,7 @@ Make the entire output professional, well-structured using Markdown, and product
         valueListenable: kKorlixSelectedCharacterNotifier,
         builder: (context, selectedCharacterId, _) {
           final character = korlixCharacterDisplayFor(selectedCharacterId);
+          final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
 
           return LayoutBuilder(
             builder: (context, constraints) {
@@ -9667,14 +9682,14 @@ Make the entire output professional, well-structured using Markdown, and product
               return Container(
                 height: cardHeight,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF071B27).withOpacity(0.72),
+                  color: skin.panel.withOpacity(skin.isLight ? 0.88 : 0.72),
                   borderRadius: BorderRadius.circular(26),
                   border: Border.all(
-                    color: const Color(0xFF2EC7DF).withOpacity(0.32),
+                    color: skin.border.withOpacity(skin.isLight ? 0.52 : 0.32),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF2EC7DF).withOpacity(0.12),
+                      color: skin.glow.withOpacity(skin.isLight ? 0.08 : 0.12),
                       blurRadius: 30,
                       spreadRadius: 2,
                     ),
@@ -9704,7 +9719,7 @@ Make the entire output professional, well-structured using Markdown, and product
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color: const Color(0xFF69D9E8),
+                                    color: skin.primary,
                                     fontSize: compact ? 11.5 : 15,
                                     fontWeight: FontWeight.w900,
                                     letterSpacing: 0.5,
@@ -9716,7 +9731,7 @@ Make the entire output professional, well-structured using Markdown, and product
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color: const Color(0xFFE4EBEE),
+                                    color: skin.text,
                                     fontSize: compact ? 34 : 44,
                                     fontWeight: FontWeight.w900,
                                     height: 1.0,
@@ -9729,9 +9744,7 @@ Make the entire output professional, well-structured using Markdown, and product
                                   maxLines: compact ? 4 : 3,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color: const Color(
-                                      0xFFE4EBEE,
-                                    ).withOpacity(0.92),
+                                    color: skin.mutedText.withOpacity(0.96),
                                     fontSize: compact ? 13.5 : 19,
                                     height: 1.28,
                                     fontWeight: FontWeight.w600,
@@ -9753,11 +9766,9 @@ Make the entire output professional, well-structured using Markdown, and product
                                       );
                                     },
                                     style: OutlinedButton.styleFrom(
-                                      foregroundColor: const Color(0xFF69D9E8),
+                                      foregroundColor: skin.primary,
                                       side: BorderSide(
-                                        color: const Color(
-                                          0xFF2EC7DF,
-                                        ).withOpacity(0.62),
+                                        color: skin.border.withOpacity(0.62),
                                       ),
                                       padding: EdgeInsets.symmetric(
                                         horizontal: compact ? 14 : 24,
@@ -9814,27 +9825,27 @@ Make the entire output professional, well-structured using Markdown, and product
                             color: Colors.black.withOpacity(0.76),
                             borderRadius: BorderRadius.circular(999),
                             border: Border.all(
-                              color: const Color(0xFF69D9E8).withOpacity(0.48),
+                              color: skin.primary.withOpacity(0.48),
                             ),
                           ),
                           child: Row(
                             children: [
-                              const SizedBox(
+                              SizedBox(
                                 width: 16,
                                 height: 16,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: Color(0xFF69D9E8),
+                                  color: skin.primary,
                                 ),
                               ),
-                              const SizedBox(width: 10),
+                              SizedBox(width: 10),
                               Expanded(
                                 child: Text(
                                   '${character.name} is preparing your answer...',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Color(0xFFE4EBEE),
+                                  style: TextStyle(
+                                    color: skin.text,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w800,
                                   ),
@@ -9876,36 +9887,32 @@ Make the entire output professional, well-structured using Markdown, and product
                                 // CYBER PANEL FRONT: visible ANSWER READY card face.
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(20),
-                                  color: const Color(0xFF07111F),
-                                  gradient: const LinearGradient(
+                                  color: skin.panelDeep,
+                                  gradient: LinearGradient(
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                     colors: [
-                                      Color(0xFF0C2844),
-                                      Color(0xFF07111F),
-                                      Color(0xFF19103A),
+                                      skin.panelSoft,
+                                      skin.panel,
+                                      skin.panelDeep,
                                     ],
                                     stops: [0.0, 0.52, 1.0],
                                   ),
                                   border: Border.all(
-                                    color: const Color(
-                                      0xFF6DF7FF,
-                                    ).withValues(alpha: 0.62),
+                                    color: skin.border.withValues(alpha: 0.62),
                                     width: 1.15,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(
-                                        0xFF6DF7FF,
-                                      ).withValues(alpha: 0.16),
+                                      color: skin.glow.withValues(alpha: 0.16),
                                       blurRadius: 18,
                                       spreadRadius: 0.8,
                                       offset: const Offset(-2, -1),
                                     ),
                                     BoxShadow(
-                                      color: const Color(
-                                        0xFFFF4DFF,
-                                      ).withValues(alpha: 0.16),
+                                      color: skin.secondary.withValues(
+                                        alpha: 0.16,
+                                      ),
                                       blurRadius: 20,
                                       spreadRadius: 0.8,
                                       offset: const Offset(2, 2),
@@ -9920,19 +9927,19 @@ Make the entire output professional, well-structured using Markdown, and product
                                   children: [
                                     Row(
                                       children: [
-                                        const Icon(
+                                        Icon(
                                           Icons.auto_awesome_rounded,
-                                          color: Color(0xFF69D9E8),
+                                          color: skin.primary,
                                           size: 18,
                                         ),
-                                        const SizedBox(width: 8),
-                                        const Expanded(
+                                        SizedBox(width: 8),
+                                        Expanded(
                                           child: Text(
                                             'ANSWER READY',
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
-                                              color: Color(0xFF69D9E8),
+                                              color: skin.primary,
                                               fontSize: 11,
                                               fontWeight: FontWeight.w900,
                                               letterSpacing: 0.6,
@@ -9952,7 +9959,7 @@ Make the entire output professional, well-structured using Markdown, and product
                                             _answerMinimized
                                                 ? Icons.keyboard_arrow_down
                                                 : Icons.keyboard_arrow_up,
-                                            color: const Color(0xFF69D9E8),
+                                            color: skin.primary,
                                             size: 18,
                                           ),
                                         ),
@@ -9962,8 +9969,8 @@ Make the entire output professional, well-structured using Markdown, and product
                                               _featuredAnswerDismissed = true;
                                             });
                                           },
-                                          icon: const Icon(Icons.close_rounded),
-                                          color: const Color(0xFFE4EBEE),
+                                          icon: Icon(Icons.close_rounded),
+                                          color: skin.text,
                                           tooltip: 'Close',
                                           visualDensity: VisualDensity.compact,
                                           padding: EdgeInsets.zero,
@@ -9976,7 +9983,7 @@ Make the entire output professional, well-structured using Markdown, and product
                                     ),
                                     // Body content — hidden when minimized
                                     if (!_answerMinimized) ...[
-                                      const SizedBox(height: 8),
+                                      SizedBox(height: 8),
                                       Expanded(
                                         child:
                                             _buildAnswerReadyConversationView(
@@ -10381,6 +10388,8 @@ Make the entire output professional, well-structured using Markdown, and product
     required VoidCallback onDelete,
     required String deleteTooltip,
   }) {
+    final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
+
     final radius = BorderRadius.only(
       topLeft: Radius.circular(isUser ? 20 : 7),
       topRight: Radius.circular(isUser ? 7 : 20),
@@ -10407,8 +10416,10 @@ Make the entire output professional, well-structured using Markdown, and product
               padding: const EdgeInsets.fromLTRB(13, 10, 9, 12),
               decoration: BoxDecoration(
                 color: isUser
-                    ? const Color(0xFF082B3C).withValues(alpha: 0.82)
-                    : const Color(0xFF2A0B34).withValues(alpha: 0.78),
+                    ? skin.primary.withValues(alpha: skin.isLight ? 0.12 : 0.18)
+                    : skin.secondary.withValues(
+                        alpha: skin.isLight ? 0.10 : 0.18,
+                      ),
                 borderRadius: radius,
                 border: Border.all(
                   color: accent.withValues(alpha: 0.76),
@@ -10438,7 +10449,7 @@ Make the entire output professional, well-structured using Markdown, and product
                         label: label,
                         color: accent,
                       ),
-                      const Spacer(),
+                      Spacer(),
                       Tooltip(
                         message: deleteTooltip,
                         child: InkWell(
@@ -10456,7 +10467,7 @@ Make the entire output professional, well-structured using Markdown, and product
                                 width: 0.9,
                               ),
                             ),
-                            child: const Icon(
+                            child: Icon(
                               Icons.delete_outline_rounded,
                               color: Colors.redAccent,
                               size: 19,
@@ -10466,7 +10477,7 @@ Make the entire output professional, well-structured using Markdown, and product
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   child,
                 ],
               ),
@@ -10478,10 +10489,12 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   Widget _buildAnswerText(String value, {required bool compact}) {
+    final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
+
     return Text(
       value,
       style: TextStyle(
-        color: const Color(0xFFF3FBFF),
+        color: skin.text,
         fontSize: compact ? 13.5 : 14.5,
         height: 1.38,
         fontWeight: FontWeight.w600,
@@ -10493,8 +10506,9 @@ Make the entire output professional, well-structured using Markdown, and product
     GeneratedItem item, {
     required bool compact,
   }) {
-    const userAccent = Color(0xFF69D9E8);
-    const aiAccent = Color(0xFFFF4AF3);
+    final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
+    final userAccent = skin.primary;
+    final aiAccent = skin.secondary;
 
     final entries = <MapEntry<int, ChatMessage>>[];
 
@@ -10558,7 +10572,7 @@ Make the entire output professional, well-structured using Markdown, and product
                   height: compact ? 175 : 230,
                 ),
               ),
-              if (text.trim().isNotEmpty) const SizedBox(height: 10),
+              if (text.trim().isNotEmpty) SizedBox(height: 10),
             ],
             if (text.trim().isNotEmpty)
               _buildAnswerText(_cleanDisplayText(text), compact: compact),
@@ -10608,6 +10622,7 @@ Make the entire output professional, well-structured using Markdown, and product
 
   Widget _buildCommandPanel() {
     final t = _t;
+    final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
     final hasText = _controller.text.trim().isNotEmpty;
 
     final canSubmit = _fixCreditReportMode
@@ -10645,25 +10660,23 @@ Make the entire output professional, well-structured using Markdown, and product
           children: [
             Icon(active ? Icons.stop_circle_outlined : icon, size: 18),
             if (locked)
-              const Positioned(
+              Positioned(
                 right: -7,
                 top: -7,
-                child: Icon(
-                  Icons.lock_rounded,
-                  size: 10,
-                  color: Color(0xFFFFD166),
-                ),
+                child: Icon(Icons.lock_rounded, size: 10, color: skin.premium),
               ),
           ],
         ),
         label: Text(label),
         style: OutlinedButton.styleFrom(
-          foregroundColor: isGreen ? const Color(0xFF061008) : accent,
+          foregroundColor: isGreen ? skin.textOnAccent : accent,
           backgroundColor: isGreen
-              ? const Color(0xFFB7FF00)
+              ? skin.success
               : Colors.black.withOpacity(0.20),
           side: BorderSide(
-            color: isGreen ? const Color(0xFFD9FF5A) : accent.withOpacity(0.42),
+            color: isGreen
+                ? skin.success.withOpacity(0.82)
+                : accent.withOpacity(0.42),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           shape: RoundedRectangleBorder(
@@ -10674,14 +10687,15 @@ Make the entire output professional, well-structured using Markdown, and product
     }
 
     Widget answerReadyBody() {
+      final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
       if (_loading && activeResult == null) {
-        return const Center(
+        return Center(
           child: SizedBox(
             width: 30,
             height: 30,
             child: CircularProgressIndicator(
               strokeWidth: 2.4,
-              color: Color(0xFF69D9E8),
+              color: skin.primary,
             ),
           ),
         );
@@ -10709,6 +10723,7 @@ Make the entire output professional, well-structured using Markdown, and product
     }
 
     Widget singleInputBoard() {
+      final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
       return AnimatedSize(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
@@ -10720,7 +10735,7 @@ Make the entire output professional, well-structured using Markdown, and product
             color: Colors.black.withOpacity(0.40),
             borderRadius: BorderRadius.circular(22),
             border: Border.all(
-              color: const Color(0xFF69D9E8).withOpacity(0.48),
+              color: skin.primary.withOpacity(0.48),
               width: 1.15,
             ),
             gradient: LinearGradient(
@@ -10737,7 +10752,7 @@ Make the entire output professional, well-structured using Markdown, and product
                   kKorlixThemeNotifier.value,
                 ).panelDeep.withOpacity(0.70),
               ],
-              stops: const [0.0, 0.55, 1.0],
+              stops: [0.0, 0.55, 1.0],
             ),
             boxShadow: [
               BoxShadow(
@@ -10758,12 +10773,12 @@ Make the entire output professional, well-structured using Markdown, and product
                   keyboardType: TextInputType.multiline,
                   textInputAction: TextInputAction.newline,
                   scrollPadding: const EdgeInsets.only(bottom: 120),
-                  cursorColor: const Color(0xFF69D9E8),
+                  cursorColor: skin.primary,
                   onChanged: (_) => setState(() {}),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     height: 1.28,
-                    color: Color(0xFFE4EBEE),
+                    color: skin.text,
                     fontWeight: FontWeight.w700,
                     fontStyle: FontStyle.italic,
                   ),
@@ -10784,7 +10799,7 @@ Make the entire output professional, well-structured using Markdown, and product
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Semantics(
                 button: true,
                 label: 'Send',
@@ -10803,12 +10818,12 @@ Make the entire output professional, well-structured using Markdown, and product
                       borderRadius: BorderRadius.circular(18),
                     ),
                     child: _loading
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 21,
                             height: 21,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Color(0xFFE4EBEE),
+                              color: skin.text,
                             ),
                           )
                         : Icon(
@@ -10835,7 +10850,7 @@ Make the entire output professional, well-structured using Markdown, and product
         children: [
           answerReadyPanel(),
 
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
 
           Container(
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
@@ -10843,7 +10858,7 @@ Make the entire output professional, well-structured using Markdown, and product
               color: const Color(0xFF071B27).withOpacity(0.88),
               borderRadius: BorderRadius.circular(26),
               border: Border.all(
-                color: const Color(0xFF2EC7DF).withOpacity(0.46),
+                color: skin.border.withOpacity(0.46),
                 width: 1.1,
               ),
               boxShadow: [
@@ -10860,7 +10875,7 @@ Make the entire output professional, well-structured using Markdown, and product
               children: [
                 singleInputBoard(),
 
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
 
                 Wrap(
                   spacing: 8,
@@ -10884,14 +10899,12 @@ Make the entire output professional, well-structured using Markdown, and product
                     ),
                     OutlinedButton.icon(
                       onPressed: _loading ? null : _showLocatorOptions,
-                      icon: const Icon(Icons.location_on_outlined, size: 18),
-                      label: const Text('Locator'),
+                      icon: Icon(Icons.location_on_outlined, size: 18),
+                      label: Text('Locator'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF69D9E8),
+                        foregroundColor: skin.primary,
                         backgroundColor: Colors.black.withOpacity(0.20),
-                        side: BorderSide(
-                          color: const Color(0xFF69D9E8).withOpacity(0.42),
-                        ),
+                        side: BorderSide(color: skin.primary.withOpacity(0.42)),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 9,
@@ -10905,13 +10918,13 @@ Make the entire output professional, well-structured using Markdown, and product
                     if (_currentTier == 'basic')
                       OutlinedButton.icon(
                         onPressed: _loading ? null : _openDonateCashApp,
-                        icon: const Icon(Icons.favorite_rounded, size: 18),
-                        label: const Text(r'$cashapp'),
+                        icon: Icon(Icons.favorite_rounded, size: 18),
+                        label: Text(r'$cashapp'),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFFFD166),
+                          foregroundColor: skin.premium,
                           backgroundColor: Colors.black.withOpacity(0.20),
                           side: BorderSide(
-                            color: const Color(0xFFFFD166).withOpacity(0.46),
+                            color: skin.premium.withOpacity(0.46),
                           ),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
@@ -10926,21 +10939,21 @@ Make the entire output professional, well-structured using Markdown, and product
                 ),
 
                 if (_utilityPanelOpen) ...[
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   _buildUtilityPanel(),
                 ],
 
                 if (_activeUploadFiles.isNotEmpty) ...[
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   _buildSelectedUploadFilesPanel(),
                 ],
 
                 if (_loading) ...[
-                  const SizedBox(height: 14),
+                  SizedBox(height: 14),
                   MatrixThinkingPanel(message: t.matrixMessage),
                 ],
 
-                const SizedBox(height: 14),
+                SizedBox(height: 14),
 
                 Wrap(
                   spacing: 9,
@@ -10952,11 +10965,11 @@ Make the entire output professional, well-structured using Markdown, and product
                 ),
 
                 if (_error != null) ...[
-                  const SizedBox(height: 14),
+                  SizedBox(height: 14),
                   Text(
                     _error!,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.redAccent,
                       fontWeight: FontWeight.w700,
                     ),
@@ -11779,6 +11792,8 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   Widget _buildSavedTopicsMenuButton() {
+    final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
+
     return CompositedTransformTarget(
       link: _savedTopicsMenuLayerLink,
       child: Material(
@@ -11792,21 +11807,15 @@ Make the entire output professional, well-structured using Markdown, and product
             height: 46,
             decoration: BoxDecoration(
               color: _showSavedTopicsPanel
-                  ? const Color(0xFF12213A).withOpacity(0.96)
-                  : const Color(0xCC10192E),
+                  ? skin.panelSoft.withOpacity(skin.isLight ? 0.88 : 0.96)
+                  : skin.panel.withOpacity(skin.isLight ? 0.88 : 0.80),
               borderRadius: BorderRadius.circular(15),
               border: Border.all(
-                color: _showSavedTopicsPanel
-                    ? const Color(0xFFFF4AF3)
-                    : const Color(0xFF8BEFFF),
+                color: _showSavedTopicsPanel ? skin.secondary : skin.primary,
                 width: 1.25,
               ),
             ),
-            child: const Icon(
-              Icons.menu_rounded,
-              color: Color(0xFFF2FBFF),
-              size: 27,
-            ),
+            child: Icon(Icons.menu_rounded, color: skin.text, size: 27),
           ),
         ),
       ),
@@ -12152,6 +12161,7 @@ Make the entire output professional, well-structured using Markdown, and product
 
   Widget _buildSavedTopicsOverlay() {
     final topics = _sortedChatTopicThreads;
+    final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
 
     Widget topicIconButton({
       required String tooltip,
@@ -12173,6 +12183,7 @@ Make the entire output professional, well-structured using Markdown, and product
     }
 
     Widget topicRow(KorlixLocalChatTopic topic) {
+      final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
       final selected = topic.id == _activeChatTopicId;
       final renaming = topic.id == _renamingTopicId;
 
@@ -12181,10 +12192,10 @@ Make the entire output professional, well-structured using Markdown, and product
           duration: const Duration(milliseconds: 160),
           padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
           decoration: BoxDecoration(
-            color: const Color(0xFF183050).withValues(alpha: 0.78),
+            color: skin.panelSoft.withValues(alpha: skin.isLight ? 0.88 : 0.78),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: const Color(0xFFFF4AF3).withValues(alpha: 0.88),
+              color: skin.secondary.withValues(alpha: 0.88),
               width: 1.15,
             ),
           ),
@@ -12196,20 +12207,20 @@ Make the entire output professional, well-structured using Markdown, and product
                   autofocus: true,
                   minLines: 1,
                   maxLines: 1,
-                  cursorColor: const Color(0xFF69D9E8),
+                  cursorColor: skin.primary,
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _submitRenameSavedTopic(topic.id),
-                  style: const TextStyle(
-                    color: Color(0xFFF3FBFF),
+                  style: TextStyle(
+                    color: skin.text,
                     fontSize: 14.5,
                     fontWeight: FontWeight.w800,
                   ),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     border: InputBorder.none,
                     isDense: true,
                     hintText: 'Rename chat',
                     hintStyle: TextStyle(
-                      color: Color(0x99F3FBFF),
+                      color: skin.hintText.withOpacity(0.70),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -12217,11 +12228,11 @@ Make the entire output professional, well-structured using Markdown, and product
               ),
               IconButton(
                 onPressed: () => _submitRenameSavedTopic(topic.id),
-                icon: const Icon(Icons.check_rounded, color: Color(0xFF69D9E8)),
+                icon: Icon(Icons.check_rounded, color: skin.primary),
               ),
               IconButton(
                 onPressed: _cancelRenameSavedTopic,
-                icon: const Icon(Icons.close_rounded, color: Color(0xFFA9C6CF)),
+                icon: Icon(Icons.close_rounded, color: skin.mutedText),
               ),
             ],
           ),
@@ -12232,13 +12243,13 @@ Make the entire output professional, well-structured using Markdown, and product
         duration: const Duration(milliseconds: 160),
         decoration: BoxDecoration(
           color: selected
-              ? const Color(0xFF183050).withValues(alpha: 0.78)
-              : const Color(0xFF07111F).withValues(alpha: 0.58),
+              ? skin.panelSoft.withValues(alpha: skin.isLight ? 0.88 : 0.78)
+              : skin.panel.withValues(alpha: skin.isLight ? 0.86 : 0.58),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: selected
-                ? const Color(0xFFFF4AF3).withValues(alpha: 0.82)
-                : const Color(0xFF69D9E8).withValues(alpha: 0.42),
+                ? skin.secondary.withValues(alpha: 0.82)
+                : skin.border.withValues(alpha: 0.42),
             width: 1.05,
           ),
         ),
@@ -12257,13 +12268,13 @@ Make the entire output professional, well-structured using Markdown, and product
                         topic.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFFF3FBFF),
+                        style: TextStyle(
+                          color: skin.text,
                           fontSize: 14.5,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      const SizedBox(height: 3),
+                      SizedBox(height: 3),
                       Text(
                         '${_chatTopicMessageCount(topic)} messages',
                         maxLines: 1,
@@ -12284,13 +12295,13 @@ Make the entire output professional, well-structured using Markdown, and product
             topicIconButton(
               tooltip: 'Rename chat',
               icon: Icons.edit_outlined,
-              color: const Color(0xFF69D9E8),
+              color: skin.primary,
               onTap: () => _beginRenameSavedTopic(topic),
             ),
             topicIconButton(
               tooltip: 'Export chat',
               icon: Icons.ios_share_rounded,
-              color: const Color(0xFF69D9E8),
+              color: skin.primary,
               onTap: () => _showExportSavedTopicSheet(topic),
             ),
             topicIconButton(
@@ -12299,7 +12310,7 @@ Make the entire output professional, well-structured using Markdown, and product
               color: Colors.redAccent,
               onTap: () => _confirmDeleteSavedTopic(topic.id),
             ),
-            const SizedBox(width: 6),
+            SizedBox(width: 6),
           ],
         ),
       );
@@ -12308,24 +12319,24 @@ Make the entire output professional, well-structured using Markdown, and product
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
       decoration: BoxDecoration(
-        color: const Color(0xF20B1428),
+        color: skin.panelDeep.withValues(alpha: skin.isLight ? 0.94 : 0.95),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: const Color(0xFF89EAFF).withValues(alpha: 0.76),
+          color: skin.border.withValues(alpha: 0.76),
           width: 1.15,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF69D9E8).withValues(alpha: 0.16),
+            color: skin.glow.withValues(alpha: 0.16),
             blurRadius: 22,
             offset: const Offset(0, 8),
           ),
           BoxShadow(
-            color: const Color(0xFFFF4AF3).withValues(alpha: 0.12),
+            color: skin.secondary.withValues(alpha: 0.12),
             blurRadius: 28,
             offset: const Offset(8, 10),
           ),
-          const BoxShadow(
+          BoxShadow(
             color: Color(0xAA000000),
             blurRadius: 18,
             offset: Offset(0, 10),
@@ -12341,19 +12352,21 @@ Make the entire output professional, well-structured using Markdown, and product
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
               decoration: BoxDecoration(
-                color: const Color(0xFF0B2438).withValues(alpha: 0.78),
+                color: skin.panelSoft.withValues(
+                  alpha: skin.isLight ? 0.86 : 0.78,
+                ),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: const Color(0xFF69D9E8).withValues(alpha: 0.62),
+                  color: skin.border.withValues(alpha: 0.62),
                   width: 1.0,
                 ),
               ),
-              child: const Text(
+              child: Text(
                 'New Chat',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: Color(0xFFF3FBFF),
+                  color: skin.text,
                   fontSize: 15,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 0.2,
@@ -12361,7 +12374,7 @@ Make the entire output professional, well-structured using Markdown, and product
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           Expanded(
             child: topics.isEmpty
                 ? Center(
@@ -12369,7 +12382,7 @@ Make the entire output professional, well-structured using Markdown, and product
                       'No saved chats yet.\nTap New Chat, send a message, and it will appear here.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: const Color(0xFFF3FBFF).withValues(alpha: 0.72),
+                        color: skin.text.withValues(alpha: 0.72),
                         fontSize: 13,
                         height: 1.35,
                         fontWeight: FontWeight.w600,
@@ -12380,13 +12393,13 @@ Make the entire output professional, well-structured using Markdown, and product
                     controller: _savedTopicsScrollController,
                     physics: const BouncingScrollPhysics(),
                     itemCount: topics.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 9),
+                    separatorBuilder: (_, __) => SizedBox(height: 9),
                     itemBuilder: (context, index) {
                       return topicRow(topics[index]);
                     },
                   ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Center(
             child: InkWell(
               onTap: _showMoreSavedTopics,
@@ -12396,13 +12409,16 @@ Make the entire output professional, well-structured using Markdown, and product
                 height: 32,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: const Color(0x1AFFFFFF),
+                  color: skin.text.withOpacity(0.10),
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: const Color(0x668BEFFF), width: 1),
+                  border: Border.all(
+                    color: skin.border.withOpacity(0.42),
+                    width: 1,
+                  ),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.keyboard_arrow_down_rounded,
-                  color: Color(0xFFF2FBFF),
+                  color: skin.text,
                   size: 25,
                 ),
               ),
@@ -12503,8 +12519,6 @@ Make the entire output professional, well-structured using Markdown, and product
 
   Widget _buildNeonAnswerReadyFrame({required Widget child}) {
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
-    final primary = skin.primary;
-    final secondary = skin.secondary;
 
     return Container(
       margin: const EdgeInsets.only(top: 14, bottom: 14),
@@ -12515,23 +12529,23 @@ Make the entire output professional, well-structured using Markdown, and product
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
           colors: [
-            primary.withOpacity(skin.isLight ? 0.88 : 0.96),
-            skin.tertiary.withOpacity(skin.isLight ? 0.32 : 0.46),
-            secondary.withOpacity(skin.isLight ? 0.72 : 0.96),
+            skin.primary.withOpacity(skin.isLight ? 0.82 : 0.96),
+            skin.tertiary.withOpacity(skin.isLight ? 0.28 : 0.46),
+            skin.secondary.withOpacity(skin.isLight ? 0.70 : 0.96),
           ],
-          stops: const [0.0, 0.52, 1.0],
+          stops: [0.0, 0.52, 1.0],
         ),
         boxShadow: [
           BoxShadow(
-            color: primary.withOpacity(skin.isLight ? 0.20 : 0.26),
+            color: skin.glow.withOpacity(skin.isLight ? 0.14 : 0.26),
             blurRadius: skin.isLight ? 18 : 24,
-            spreadRadius: skin.isLight ? 0.4 : 1.0,
+            spreadRadius: skin.isLight ? 0.2 : 1.0,
             offset: const Offset(-2, -1),
           ),
           BoxShadow(
-            color: secondary.withOpacity(skin.isLight ? 0.16 : 0.26),
-            blurRadius: skin.isLight ? 20 : 28,
-            spreadRadius: skin.isLight ? 0.4 : 1.0,
+            color: skin.secondary.withOpacity(skin.isLight ? 0.10 : 0.22),
+            blurRadius: skin.isLight ? 18 : 26,
+            spreadRadius: skin.isLight ? 0.2 : 0.8,
             offset: const Offset(2, 2),
           ),
         ],
@@ -12543,11 +12557,11 @@ Make the entire output professional, well-structured using Markdown, and product
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [skin.panelSoft, skin.panel, skin.panelDeep],
-            stops: const [0.0, 0.54, 1.0],
+            stops: [0.0, 0.54, 1.0],
           ),
           border: Border.all(
             color: skin.isLight
-                ? skin.border.withOpacity(0.50)
+                ? skin.border.withOpacity(0.56)
                 : Colors.white.withOpacity(0.08),
             width: 0.95,
           ),
@@ -12563,11 +12577,11 @@ Make the entire output professional, well-structured using Markdown, and product
                       center: const Alignment(0.6, -0.9),
                       radius: 1.25,
                       colors: [
-                        Colors.white.withOpacity(skin.isLight ? 0.34 : 0.10),
-                        primary.withOpacity(skin.isLight ? 0.06 : 0.05),
+                        Colors.white.withOpacity(skin.isLight ? 0.30 : 0.10),
+                        skin.primary.withOpacity(skin.isLight ? 0.05 : 0.05),
                         Colors.transparent,
                       ],
-                      stops: const [0.0, 0.24, 1.0],
+                      stops: [0.0, 0.24, 1.0],
                     ),
                   ),
                 ),
@@ -12587,7 +12601,6 @@ Make the entire output professional, well-structured using Markdown, and product
     required int index,
     required Widget child,
   }) {
-    // Preserve empty/deleted chat rows exactly as-is.
     if (child is SizedBox && child.width == 0 && child.height == 0) {
       return child;
     }
@@ -12605,15 +12618,15 @@ Make the entire output professional, well-structured using Markdown, and product
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            primary.withOpacity(skin.isLight ? 0.78 : 0.94),
-            skin.tertiary.withOpacity(skin.isLight ? 0.18 : 0.22),
+            primary.withOpacity(skin.isLight ? 0.74 : 0.94),
+            skin.tertiary.withOpacity(skin.isLight ? 0.16 : 0.22),
             secondary.withOpacity(skin.isLight ? 0.70 : 0.94),
           ],
-          stops: const [0.0, 0.52, 1.0],
+          stops: [0.0, 0.52, 1.0],
         ),
         boxShadow: [
           BoxShadow(
-            color: primary.withOpacity(skin.isLight ? 0.12 : 0.18),
+            color: primary.withOpacity(skin.isLight ? 0.10 : 0.18),
             blurRadius: 18,
             spreadRadius: 0.7,
             offset: const Offset(-2, -1),
@@ -12633,7 +12646,7 @@ Make the entire output professional, well-structured using Markdown, and product
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [skin.panelSoft, skin.panel, skin.panelDeep],
-            stops: const [0.0, 0.58, 1.0],
+            stops: [0.0, 0.58, 1.0],
           ),
           border: Border.all(
             color: skin.isLight
