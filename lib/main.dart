@@ -10169,42 +10169,22 @@ class _KorlixCleanAnswerReadyBoxPainter extends CustomPainter {
     );
   }
 
-  void _accentLine(
-    Canvas canvas,
-    Offset from,
-    Offset to,
-    Color color,
-    double width,
-  ) {
-    canvas.drawLine(
-      from,
-      to,
-      Paint()
-        ..strokeCap = StrokeCap.square
-        ..strokeWidth = width
-        ..color = color.withValues(alpha: 0.88),
-    );
-  }
-
   @override
   void paint(Canvas canvas, Size size) {
     if (size.width <= 0 || size.height <= 0) {
       return;
     }
 
-    const cyan = Color(0xFF69D9E8);
-    const magenta = Color(0xFFFF4AF3);
-
     final rect = Offset.zero & size;
 
-    // Two-border version:
-    // 1) outer angular frame
-    // 2) middle/inner angular frame
-    // The previous innermost border/cavity path is intentionally removed.
+    // Clean two-border Answer panel.
+    // Removed all decorative accent bars:
+    // - top-right magenta remnant
+    // - bottom-left cyan remnant
+    // - bottom-right magenta remnant
     final outer = _octPath(rect.deflate(6), 30);
     final inner = _octPath(rect.deflate(19), 23);
 
-    // Soft depth only, not an extra border.
     canvas.drawPath(
       outer.shift(const Offset(0, 8)),
       Paint()
@@ -10243,29 +10223,6 @@ class _KorlixCleanAnswerReadyBoxPainter extends CustomPainter {
     // Border line 2: inner.
     _strokeSolid(canvas, inner, Colors.white, 0.9, 0.12);
     _strokeGradient(canvas, inner, rect, 1.25, 0.52);
-
-    // Decorative short highlights only. These are not full border paths.
-    _accentLine(
-      canvas,
-      Offset(size.width * 0.10, size.height * 0.86),
-      Offset(size.width * 0.24, size.height * 0.86),
-      cyan,
-      2.2,
-    );
-    _accentLine(
-      canvas,
-      Offset(size.width * 0.73, size.height * 0.86),
-      Offset(size.width * 0.91, size.height * 0.86),
-      magenta,
-      2.4,
-    );
-    _accentLine(
-      canvas,
-      Offset(size.width * 0.78, size.height * 0.09),
-      Offset(size.width * 0.93, size.height * 0.09),
-      magenta,
-      2.4,
-    );
   }
 
   @override
