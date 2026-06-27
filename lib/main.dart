@@ -7413,6 +7413,17 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     }
 
     if (_isImaginePictureQuickAction(action)) {
+      // Toggle off if already active.
+      if (_imaginePictureMode) {
+        setState(() {
+          _imaginePictureMode = false;
+          _error = null;
+          _controller.text = '';
+          _controller.selection = const TextSelection.collapsed(offset: 0);
+        });
+        return;
+      }
+
       setState(() {
         _imaginePictureMode = true;
         _createVideoMode = false;
