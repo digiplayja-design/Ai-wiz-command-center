@@ -4160,7 +4160,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   final List<GeneratedItem> _results = [];
   final List<ChatMessage> _chatMessages = [];
   final ScrollController _chatScrollController = ScrollController();
-  static const String _localChatTopicsPrefsKey = 'korlix_local_chat_topics_v1';
+  static const String _localChatTopicsPrefsKey =
+      'korlix_local_chat_topics_strict_v1';
   final Map<String, KorlixLocalChatTopic> _chatTopicsById =
       <String, KorlixLocalChatTopic>{};
   String? _activeChatTopicId;
@@ -4192,11 +4193,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     super.initState();
     _loadSavedKorlixTheme();
     _loadCurrentTier();
-    _loadLocalChatTopics().then((_) {
-      if (mounted && _chatTopicsById.isEmpty) {
-        _loadChatHistory();
-      }
-    });
+    _loadLocalChatTopics();
   }
 
   Future<void> _loadSavedKorlixTheme() async {
@@ -5014,7 +5011,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         final headers = Map<String, String>.from(_authHeaders())
           ..remove('Content-Type');
         request.headers.addAll(headers);
-        request.fields['prompt'] = _buildThreadAwarePrompt(command);
+        request.fields['prompt'] = _buildTopicIsolatedPrompt(command);
+        request.fields.addAll(_strictTopicRequestFields());
         request.fields['language'] = _selectedLanguage;
         for (final file in files) {
           request.files.add(
@@ -6832,9 +6830,12 @@ Make the entire output professional, well-structured using Markdown, and product
         );
       }
       setState(() {
-        _chatMessages.clear();
-        _chatMessages.addAll(msgs);
-        _seedLegacyTopicFromLoadedHistory(msgs);
+        // Strict topic isolation: flat backend history is not loaded into
+        // a new selected topic. Saved topics are restored only from
+        // _localChatTopicsPrefsKey.
+        if (_chatTopicsById.isEmpty) {
+          _chatMessages.clear();
+        }
         _chatHistoryLoaded = true;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -9941,7 +9942,7 @@ Make the entire output professional, well-structured using Markdown, and product
           try {
             messages.add(_decodeChatMessage(raw.cast<String, dynamic>()));
           } catch (_) {
-            // Skip corrupt local rows instead of crashing the home screen.
+            // Skip corrupt rows.
           }
         }
       }
@@ -10027,7 +10028,7 @@ Make the entire output professional, well-structured using Markdown, and product
 
       _scrollChatThreadToBottomSoon();
     } catch (_) {
-      // Local chat-topic loading should never block the command center.
+      // Strict local topic loading should never block the command center.
     }
   }
 
@@ -10075,17 +10076,27 @@ Make the entire output professional, well-structured using Markdown, and product
     final currentId = _activeChatTopicId;
 
     if (currentId != null && _chatTopicsById.containsKey(currentId)) {
+      final topic = _chatTopicsById[currentId]!;
+
+      if ((topic.title == 'New Chat' || topic.title.trim().isEmpty) &&
+          topic.messages.isEmpty &&
+          prompt.trim().isNotEmpty) {
+        _chatTopicsById[currentId] = topic.copyWith(
+          title: _deriveTopicTitle(prompt),
+          updatedAt: DateTime.now(),
+        );
+      }
+
       return;
     }
 
-    final now = DateTime.now();
     final id = _makeLocalChatTopicId();
 
     _activeChatTopicId = id;
     _chatTopicsById[id] = KorlixLocalChatTopic(
       id: id,
       title: _deriveTopicTitle(prompt),
-      updatedAt: now,
+      updatedAt: DateTime.now(),
       messages: const <ChatMessage>[],
     );
   }
@@ -10124,7 +10135,6 @@ Make the entire output professional, well-structured using Markdown, and product
     }
 
     final messages = List<ChatMessage>.from(existing.messages)..add(message);
-
     var title = existing.title.trim();
 
     if (title.isEmpty || title == 'New Chat' || title == 'Untitled chat') {
@@ -10141,63 +10151,78 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   void _seedLegacyTopicFromLoadedHistory(List<ChatMessage> messages) {
-    if (messages.isEmpty || _chatTopicsById.isNotEmpty) {
-      return;
-    }
-
-    final id = _makeLocalChatTopicId();
-
-    final topic = KorlixLocalChatTopic(
-      id: id,
-      title: _deriveTopicTitle(messages.first.userText),
-      updatedAt: messages.last.createdAt,
-      messages: List<ChatMessage>.from(messages),
-    );
-
-    _chatTopicsById[id] = topic;
-    _activeChatTopicId = id;
-
-    unawaited(_persistLocalChatTopics());
+    // Strict isolation: legacy flat backend history must not become active
+    // memory for newly created topics.
   }
 
   String _buildThreadAwarePrompt(String command) {
+    return _buildTopicIsolatedPrompt(command);
+  }
+
+  Map<String, String> _strictTopicRequestFields() {
+    final topicId = _activeChatTopicId ?? '';
+
+    return <String, String>{
+      'topicId': topicId,
+      'threadId': topicId,
+      'conversationId': topicId,
+      'memoryScope': 'selected_topic_only',
+      'strictTopicOnly': 'true',
+      'ignoreGlobalMemory': 'true',
+    };
+  }
+
+  String _buildTopicIsolatedPrompt(String command) {
+    _ensureActiveChatTopicForPrompt(command);
+
     final topicId = _activeChatTopicId;
     final topic = topicId == null ? null : _chatTopicsById[topicId];
 
-    final messages = topic?.messages ?? <ChatMessage>[];
-
-    if (messages.isEmpty) {
-      return command;
-    }
-
-    final recentMessages = messages.length > 8
-        ? messages.sublist(messages.length - 8)
-        : List<ChatMessage>.from(messages);
+    final messages = topic?.messages ?? const <ChatMessage>[];
 
     final buffer = StringBuffer()
-      ..writeln('Continue this selected chat topic only.')
-      ..writeln('Use only the previous conversation from this topic as memory.')
-      ..writeln('Do not use messages from any other chat topic.')
+      ..writeln('STRICT CHAT TOPIC ISOLATION MODE.')
+      ..writeln(
+        'Only use the messages listed under SELECTED TOPIC MEMORY below.',
+      )
+      ..writeln(
+        'Do not use profile memory, global history, other chat topics, or previous sessions.',
+      )
+      ..writeln(
+        'If the user asks for a fact that is not present in SELECTED TOPIC MEMORY, say that it has not been provided in this chat.',
+      )
+      ..writeln(
+        'Example: if the user asks "what is my name?" and no name appears in SELECTED TOPIC MEMORY, answer that the user has not told you their name in this chat.',
+      )
       ..writeln()
-      ..writeln('Previous conversation in this selected topic:');
+      ..writeln('SELECTED TOPIC MEMORY:');
 
-    for (final message in recentMessages) {
-      final userText = message.userText.trim();
-      final aiText = _cleanDisplayText(message.aiText).trim();
+    if (messages.isEmpty) {
+      buffer.writeln('[No previous messages in this selected topic.]');
+    } else {
+      final recentMessages = messages.length > 8
+          ? messages.sublist(messages.length - 8)
+          : List<ChatMessage>.from(messages);
 
-      if (userText.isNotEmpty) {
-        buffer.writeln('User: $userText');
+      for (final message in recentMessages) {
+        final userText = message.userText.trim();
+        final aiText = _cleanDisplayText(message.aiText).trim();
+
+        if (userText.isNotEmpty) {
+          buffer.writeln('User: $userText');
+        }
+
+        if (aiText.isNotEmpty) {
+          buffer.writeln('Korlix AI: $aiText');
+        }
+
+        buffer.writeln();
       }
-
-      if (aiText.isNotEmpty) {
-        buffer.writeln('Korlix AI: $aiText');
-      }
-
-      buffer.writeln();
     }
 
     buffer
-      ..writeln('Current user message:')
+      ..writeln()
+      ..writeln('CURRENT USER MESSAGE:')
       ..writeln(command.trim());
 
     return buffer.toString();
@@ -10301,8 +10326,17 @@ Make the entire output professional, well-structured using Markdown, and product
   void _startNewTopicChat() {
     _closeSavedTopicsOverlay();
 
+    final newId = _makeLocalChatTopicId();
+
     setState(() {
-      _activeChatTopicId = null;
+      _activeChatTopicId = newId;
+      _chatTopicsById[newId] = KorlixLocalChatTopic(
+        id: newId,
+        title: 'New Chat',
+        updatedAt: DateTime.now(),
+        messages: const <ChatMessage>[],
+      );
+
       _controller.clear();
       _results.clear();
       _chatMessages.clear();
@@ -10323,11 +10357,9 @@ Make the entire output professional, well-structured using Markdown, and product
       _pickedUploadFiles.clear();
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('New chat started. Send a message to save this topic.'),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('New isolated chat started.')));
   }
 
   void _openSavedTopic(String topicId) {
