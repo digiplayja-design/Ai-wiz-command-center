@@ -9821,16 +9821,6 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
-  List<KorlixLocalChatTopic> get _sortedChatTopicThreads {
-    final topics = _chatTopicsById.values
-        .where((topic) => topic.messages.isNotEmpty)
-        .toList();
-
-    topics.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-
-    return topics;
-  }
-
   Map<String, dynamic> _encodeGeneratedItem(GeneratedItem item) {
     return <String, dynamic>{
       'command': item.command,
@@ -9950,7 +9940,9 @@ Make the entire output professional, well-structured using Markdown, and product
         if (raw is Map) {
           try {
             messages.add(_decodeChatMessage(raw.cast<String, dynamic>()));
-          } catch (_) {}
+          } catch (_) {
+            // Skip corrupt local rows instead of crashing the home screen.
+          }
         }
       }
     }
@@ -9963,6 +9955,16 @@ Make the entire output professional, well-structured using Markdown, and product
           DateTime.now(),
       messages: messages,
     );
+  }
+
+  List<KorlixLocalChatTopic> get _sortedChatTopicThreads {
+    final topics = _chatTopicsById.values
+        .where((topic) => topic.messages.isNotEmpty)
+        .toList();
+
+    topics.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+    return topics;
   }
 
   Future<void> _loadLocalChatTopics() async {
@@ -10024,7 +10026,9 @@ Make the entire output professional, well-structured using Markdown, and product
       });
 
       _scrollChatThreadToBottomSoon();
-    } catch (_) {}
+    } catch (_) {
+      // Local chat-topic loading should never block the command center.
+    }
   }
 
   Future<void> _persistLocalChatTopics() async {
@@ -10035,7 +10039,9 @@ Make the entire output professional, well-structured using Markdown, and product
       );
 
       await prefs.setString(_localChatTopicsPrefsKey, encoded);
-    } catch (_) {}
+    } catch (_) {
+      // Local persistence should never block generation.
+    }
   }
 
   String _makeLocalChatTopicId() {
@@ -10158,7 +10164,7 @@ Make the entire output professional, well-structured using Markdown, and product
     final topicId = _activeChatTopicId;
     final topic = topicId == null ? null : _chatTopicsById[topicId];
 
-    final messages = topic?.messages ?? _chatMessages;
+    final messages = topic?.messages ?? <ChatMessage>[];
 
     if (messages.isEmpty) {
       return command;
@@ -10169,9 +10175,11 @@ Make the entire output professional, well-structured using Markdown, and product
         : List<ChatMessage>.from(messages);
 
     final buffer = StringBuffer()
-      ..writeln('Continue this existing chat topic with memory.')
+      ..writeln('Continue this selected chat topic only.')
+      ..writeln('Use only the previous conversation from this topic as memory.')
+      ..writeln('Do not use messages from any other chat topic.')
       ..writeln()
-      ..writeln('Previous conversation in this topic:');
+      ..writeln('Previous conversation in this selected topic:');
 
     for (final message in recentMessages) {
       final userText = message.userText.trim();
@@ -10371,41 +10379,6 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
-  Widget _buildSavedTopicsMenuButton() {
-    return CompositedTransformTarget(
-      link: _savedTopicsMenuLayerLink,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _toggleSavedTopicsPanel,
-          borderRadius: BorderRadius.circular(15),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: _showSavedTopicsPanel
-                  ? const Color(0xFF12213A).withOpacity(0.96)
-                  : const Color(0xCC10192E),
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(
-                color: _showSavedTopicsPanel
-                    ? const Color(0xFFFF4AF3)
-                    : const Color(0xFF8BEFFF),
-                width: 1.25,
-              ),
-            ),
-            child: const Icon(
-              Icons.menu_rounded,
-              color: Color(0xFFF2FBFF),
-              size: 27,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   void _refreshSavedTopicsOverlay() {
     _savedTopicsOverlayEntry?.markNeedsBuild();
   }
@@ -10502,15 +10475,6 @@ Make the entire output professional, well-structured using Markdown, and product
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 48,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFA9C6CF).withValues(alpha: 0.42),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                const SizedBox(height: 18),
                 const Icon(
                   Icons.delete_forever_rounded,
                   color: Colors.redAccent,
@@ -10543,20 +10507,7 @@ Make the entire output professional, well-structured using Markdown, and product
                     Expanded(
                       child: OutlinedButton(
                         onPressed: () => Navigator.of(context).pop(false),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFE4EBEE),
-                          side: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.22),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 13),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                        ),
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(fontWeight: FontWeight.w900),
-                        ),
+                        child: const Text('Cancel'),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -10568,10 +10519,6 @@ Make the entire output professional, well-structured using Markdown, and product
                         style: FilledButton.styleFrom(
                           backgroundColor: Colors.redAccent,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 13),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(999),
-                          ),
                         ),
                       ),
                     ),
@@ -10648,6 +10595,41 @@ Make the entire output professional, well-structured using Markdown, and product
     ).showSnackBar(SnackBar(content: Text('Deleted "${topic.title}".')));
   }
 
+  Widget _buildSavedTopicsMenuButton() {
+    return CompositedTransformTarget(
+      link: _savedTopicsMenuLayerLink,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _toggleSavedTopicsPanel,
+          borderRadius: BorderRadius.circular(15),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: _showSavedTopicsPanel
+                  ? const Color(0xFF12213A).withOpacity(0.96)
+                  : const Color(0xCC10192E),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: _showSavedTopicsPanel
+                    ? const Color(0xFFFF4AF3)
+                    : const Color(0xFF8BEFFF),
+                width: 1.25,
+              ),
+            ),
+            child: const Icon(
+              Icons.menu_rounded,
+              color: Color(0xFFF2FBFF),
+              size: 27,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSavedTopicsOverlay() {
     final topics = _sortedChatTopicThreads;
 
@@ -10694,49 +10676,13 @@ Make the entire output professional, well-structured using Markdown, and product
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
-              InkWell(
-                onTap: () => _submitRenameSavedTopic(topic.id),
-                borderRadius: BorderRadius.circular(999),
-                child: Container(
-                  width: 34,
-                  height: 34,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF69D9E8).withValues(alpha: 0.13),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: const Color(0xFF69D9E8).withValues(alpha: 0.70),
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.check_rounded,
-                    color: Color(0xFF69D9E8),
-                    size: 21,
-                  ),
-                ),
+              IconButton(
+                onPressed: () => _submitRenameSavedTopic(topic.id),
+                icon: const Icon(Icons.check_rounded, color: Color(0xFF69D9E8)),
               ),
-              const SizedBox(width: 6),
-              InkWell(
-                onTap: _cancelRenameSavedTopic,
-                borderRadius: BorderRadius.circular(999),
-                child: Container(
-                  width: 34,
-                  height: 34,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.18),
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.close_rounded,
-                    color: Color(0xFFA9C6CF),
-                    size: 20,
-                  ),
-                ),
+              IconButton(
+                onPressed: _cancelRenameSavedTopic,
+                icon: const Icon(Icons.close_rounded, color: Color(0xFFA9C6CF)),
               ),
             ],
           ),
@@ -10778,34 +10724,22 @@ Make the entire output professional, well-structured using Markdown, and product
                 ),
               ),
             ),
-            Tooltip(
-              message: 'Rename chat',
-              child: InkWell(
-                onTap: () => _beginRenameSavedTopic(topic),
-                borderRadius: BorderRadius.circular(999),
-                child: const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Icon(
-                    Icons.edit_outlined,
-                    color: Color(0xFF69D9E8),
-                    size: 20,
-                  ),
-                ),
+            IconButton(
+              tooltip: 'Rename chat',
+              onPressed: () => _beginRenameSavedTopic(topic),
+              icon: const Icon(
+                Icons.edit_outlined,
+                color: Color(0xFF69D9E8),
+                size: 20,
               ),
             ),
-            Tooltip(
-              message: 'Delete chat',
-              child: InkWell(
-                onTap: () => _confirmDeleteSavedTopic(topic.id),
-                borderRadius: BorderRadius.circular(999),
-                child: const Padding(
-                  padding: EdgeInsets.fromLTRB(6, 8, 10, 8),
-                  child: Icon(
-                    Icons.delete_outline_rounded,
-                    color: Colors.redAccent,
-                    size: 21,
-                  ),
-                ),
+            IconButton(
+              tooltip: 'Delete chat',
+              onPressed: () => _confirmDeleteSavedTopic(topic.id),
+              icon: const Icon(
+                Icons.delete_outline_rounded,
+                color: Colors.redAccent,
+                size: 21,
               ),
             ),
           ],
@@ -10869,9 +10803,7 @@ Make the entire output professional, well-structured using Markdown, and product
               ),
             ),
           ),
-
           const SizedBox(height: 12),
-
           Expanded(
             child: topics.isEmpty
                 ? Center(
@@ -10896,9 +10828,7 @@ Make the entire output professional, well-structured using Markdown, and product
                     },
                   ),
           ),
-
           const SizedBox(height: 10),
-
           Center(
             child: InkWell(
               onTap: _showMoreSavedTopics,
