@@ -4071,6 +4071,35 @@ class ChatMessage {
 }
 
 // ── End ChatMessage ──
+
+class KorlixLocalChatTopic {
+  final String id;
+  final String title;
+  final DateTime updatedAt;
+  final List<ChatMessage> messages;
+
+  const KorlixLocalChatTopic({
+    required this.id,
+    required this.title,
+    required this.updatedAt,
+    required this.messages,
+  });
+
+  KorlixLocalChatTopic copyWith({
+    String? id,
+    String? title,
+    DateTime? updatedAt,
+    List<ChatMessage>? messages,
+  }) {
+    return KorlixLocalChatTopic(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      updatedAt: updatedAt ?? this.updatedAt,
+      messages: messages ?? this.messages,
+    );
+  }
+}
+
 class CommandCenterScreen extends StatefulWidget {
   const CommandCenterScreen({super.key});
 
@@ -4084,13 +4113,6 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
 
   // Demo topic list for the slide-out topic picker.
   // Later you can swap this to your real saved conversation titles.
-  final List<String> _savedTopicTitles = <String>[
-    'World Cup',
-    'UFO',
-    'Vegetarian diet',
-  ];
-
-  String? _activeSavedTopic;
 
   final TextEditingController _controller = TextEditingController();
   final AudioPlayer _wizardCuePlayer = AudioPlayer();
@@ -4136,6 +4158,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   final List<GeneratedItem> _results = [];
   final List<ChatMessage> _chatMessages = [];
   final ScrollController _chatScrollController = ScrollController();
+  static const String _localChatTopicsPrefsKey = 'korlix_local_chat_topics_v1';
+  final Map<String, KorlixLocalChatTopic> _chatTopicsById =
+      <String, KorlixLocalChatTopic>{};
+  String? _activeChatTopicId;
   OverlayEntry? _savedTopicsOverlayEntry;
   final LayerLink _savedTopicsMenuLayerLink = LayerLink();
   bool _chatHistoryLoaded = false;
@@ -4164,7 +4190,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     super.initState();
     _loadSavedKorlixTheme();
     _loadCurrentTier();
-    _loadChatHistory();
+    _loadLocalChatTopics().then((_) {
+      if (mounted && _chatTopicsById.isEmpty) {
+        _loadChatHistory();
+      }
+    });
   }
 
   Future<void> _loadSavedKorlixTheme() async {
@@ -4981,7 +5011,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
         final headers = Map<String, String>.from(_authHeaders())
           ..remove('Content-Type');
         request.headers.addAll(headers);
-        request.fields['prompt'] = command;
+        request.fields['prompt'] = _buildThreadAwarePrompt(command);
         request.fields['language'] = _selectedLanguage;
         for (final file in files) {
           request.files.add(
@@ -5022,7 +5052,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
               allowPdf: false,
             ),
           );
-          _chatMessages.add(
+          _addChatMessage(
             ChatMessage(
               userText:
                   'Please generate dispute letters for my credit report:\n$fileList',
@@ -5117,7 +5147,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
             allowPdf: false,
           ),
         );
-        _chatMessages.add(
+        _addChatMessage(
           ChatMessage(
             userText: 'Uploaded file(s):\n$fileList\n\nQuestion: $prompt',
             aiText: content,
@@ -5265,7 +5295,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
           allowPdf: allowPdf,
         );
         _results.insert(0, newItem);
-        _chatMessages.add(
+        _addChatMessage(
           ChatMessage(
             userText: command,
             aiText: content,
@@ -6548,7 +6578,7 @@ Make the entire output professional, well-structured using Markdown, and product
                     _buildPersistentSavedTopicsMenuRow(),
                     const SizedBox(height: 18),
                     if (_chatMessages.length >= 2) ...[
-                      _buildResultsWithTopicOverlay(),
+                      _buildResults(),
                       const SizedBox(height: 18),
                     ],
                     _buildCommandPanel(),
@@ -6801,6 +6831,7 @@ Make the entire output professional, well-structured using Markdown, and product
       setState(() {
         _chatMessages.clear();
         _chatMessages.addAll(msgs);
+        _seedLegacyTopicFromLoadedHistory(msgs);
         _chatHistoryLoaded = true;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -8469,16 +8500,6 @@ Make the entire output professional, well-structured using Markdown, and product
     }
   }
 
-  Widget _buildPersistentSavedTopicsMenuRow() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 8, 22, 6),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: _buildSavedTopicsMenuButton(),
-      ),
-    );
-  }
-
   Widget _buildMockupFeaturedCharacterCard() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshSelectedCharacterFromBackend();
@@ -9318,239 +9339,394 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
-  void _toggleSavedTopicsPanel() {
-    if (_savedTopicsOverlayEntry != null) {
-      _closeSavedTopicsOverlay();
-      return;
-    }
-
-    _openSavedTopicsOverlay();
+  Map<String, dynamic> _encodeGeneratedItem(GeneratedItem item) {
+    return <String, dynamic>{
+      'command': item.command,
+      'title': item.title,
+      'content': item.content,
+      'language': item.language,
+      'allowPdf': item.allowPdf,
+      'imageDataUrl': item.imageDataUrl,
+      'imageUrl': item.imageUrl,
+    };
   }
 
-  void _openSavedTopic(String topic) {
-    _closeSavedTopicsOverlay();
+  GeneratedItem _decodeGeneratedItem(Map<String, dynamic> data) {
+    return GeneratedItem(
+      command: (data['command'] ?? '').toString(),
+      title: (data['title'] ?? 'Korlix AI').toString(),
+      content: (data['content'] ?? '').toString(),
+      language: (data['language'] ?? 'en').toString(),
+      allowPdf: data['allowPdf'] == true,
+      imageDataUrl: data['imageDataUrl']?.toString(),
+      imageUrl: data['imageUrl']?.toString(),
+    );
+  }
 
-    setState(() {
-      _activeSavedTopic = topic;
-      _chatMinimized = true;
-      _error = null;
+  Map<String, dynamic> _encodeChatMessage(ChatMessage message) {
+    return <String, dynamic>{
+      'userText': message.userText,
+      'aiText': message.aiText,
+      'isImage': message.isImage,
+      'imageDataUrl': message.imageDataUrl,
+      'imageUrl': message.imageUrl,
+      'language': message.language,
+      'allowPdf': message.allowPdf,
+      'createdAt': message.createdAt.toIso8601String(),
+      'isCreditDispute': message.isCreditDispute,
+      'equifaxDocxBase64': message.equifaxDocxBase64,
+      'experianDocxBase64': message.experianDocxBase64,
+      'transunionDocxBase64': message.transunionDocxBase64,
+      'consumerName': message.consumerName,
+      if (message.generatedItem != null)
+        'generatedItem': _encodeGeneratedItem(message.generatedItem!),
+    };
+  }
 
-      _controller.text = 'Continue our conversation about $topic: ';
-      _controller.selection = TextSelection.collapsed(
-        offset: _controller.text.length,
+  ChatMessage _decodeChatMessage(Map<String, dynamic> data) {
+    final generatedRaw = data['generatedItem'];
+    GeneratedItem? generatedItem;
+
+    if (generatedRaw is Map) {
+      generatedItem = _decodeGeneratedItem(
+        generatedRaw.cast<String, dynamic>(),
       );
-    });
+    }
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Selected topic: $topic')));
+    final isImage = data['isImage'] == true;
+    final imageDataUrl = data['imageDataUrl']?.toString();
+    final imageUrl = data['imageUrl']?.toString();
 
-    // Backend hook:
-    // When real conversation threads are added, this is where we should call
-    // something like _loadConversationThread(topicId) instead of only filling
-    // the input prompt.
+    if (generatedItem == null &&
+        (isImage ||
+            (imageDataUrl != null && imageDataUrl.isNotEmpty) ||
+            (imageUrl != null && imageUrl.isNotEmpty))) {
+      generatedItem = GeneratedItem(
+        command: (data['userText'] ?? '').toString(),
+        title: 'Image',
+        content: (data['aiText'] ?? '').toString(),
+        language: (data['language'] ?? 'en').toString(),
+        allowPdf: data['allowPdf'] == true,
+        imageDataUrl: imageDataUrl,
+        imageUrl: imageUrl,
+      );
+    }
+
+    final createdAt =
+        DateTime.tryParse((data['createdAt'] ?? '').toString()) ??
+        DateTime.now();
+
+    return ChatMessage(
+      userText: (data['userText'] ?? '').toString(),
+      aiText: (data['aiText'] ?? '').toString(),
+      isImage: isImage,
+      imageDataUrl: imageDataUrl,
+      imageUrl: imageUrl,
+      language: (data['language'] ?? 'en').toString(),
+      allowPdf: data['allowPdf'] == true,
+      generatedItem: generatedItem,
+      createdAt: createdAt,
+      isCreditDispute: data['isCreditDispute'] == true,
+      equifaxDocxBase64: data['equifaxDocxBase64']?.toString(),
+      experianDocxBase64: data['experianDocxBase64']?.toString(),
+      transunionDocxBase64: data['transunionDocxBase64']?.toString(),
+      consumerName: data['consumerName']?.toString(),
+    );
   }
 
-  Future<void> _showMoreSavedTopics() async {
-    if (!_savedTopicsScrollController.hasClients) {
+  Map<String, dynamic> _encodeLocalChatTopic(KorlixLocalChatTopic topic) {
+    return <String, dynamic>{
+      'id': topic.id,
+      'title': topic.title,
+      'updatedAt': topic.updatedAt.toIso8601String(),
+      'messages': topic.messages.map(_encodeChatMessage).toList(),
+    };
+  }
+
+  KorlixLocalChatTopic? _decodeLocalChatTopic(Map<String, dynamic> data) {
+    final id = (data['id'] ?? '').toString().trim();
+
+    if (id.isEmpty) {
+      return null;
+    }
+
+    final rawMessages = data['messages'];
+    final messages = <ChatMessage>[];
+
+    if (rawMessages is List) {
+      for (final raw in rawMessages) {
+        if (raw is Map) {
+          try {
+            messages.add(_decodeChatMessage(raw.cast<String, dynamic>()));
+          } catch (_) {
+            // Skip corrupt local rows instead of crashing the home screen.
+          }
+        }
+      }
+    }
+
+    return KorlixLocalChatTopic(
+      id: id,
+      title: (data['title'] ?? 'Untitled chat').toString(),
+      updatedAt:
+          DateTime.tryParse((data['updatedAt'] ?? '').toString()) ??
+          DateTime.now(),
+      messages: messages,
+    );
+  }
+
+  List<KorlixLocalChatTopic> get _sortedChatTopicThreads {
+    final topics = _chatTopicsById.values
+        .where((topic) => topic.messages.isNotEmpty)
+        .toList();
+
+    topics.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+    return topics;
+  }
+
+  Future<void> _loadLocalChatTopics() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final rawText = prefs.getString(_localChatTopicsPrefsKey);
+
+      if (rawText == null || rawText.trim().isEmpty) {
+        return;
+      }
+
+      final raw = jsonDecode(rawText);
+
+      if (raw is! List) {
+        return;
+      }
+
+      final loaded = <String, KorlixLocalChatTopic>{};
+
+      for (final item in raw) {
+        if (item is Map) {
+          final topic = _decodeLocalChatTopic(item.cast<String, dynamic>());
+
+          if (topic != null && topic.messages.isNotEmpty) {
+            loaded[topic.id] = topic;
+          }
+        }
+      }
+
+      if (loaded.isEmpty || !mounted) {
+        return;
+      }
+
+      final sorted = loaded.values.toList()
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+      setState(() {
+        _chatTopicsById
+          ..clear()
+          ..addAll(loaded);
+
+        _activeChatTopicId = sorted.first.id;
+
+        _chatMessages
+          ..clear()
+          ..addAll(sorted.first.messages);
+
+        _results.clear();
+
+        if (sorted.first.messages.isNotEmpty) {
+          _results.add(
+            _generatedItemFromChatMessage(sorted.first.messages.last),
+          );
+        }
+
+        _featuredAnswerDismissed = false;
+        _answerMinimized = false;
+        _chatMinimized = true;
+      });
+
+      _scrollChatThreadToBottomSoon();
+    } catch (_) {
+      // Local topic loading should never block the command center.
+    }
+  }
+
+  Future<void> _persistLocalChatTopics() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final encoded = jsonEncode(
+        _sortedChatTopicThreads.map(_encodeLocalChatTopic).toList(),
+      );
+
+      await prefs.setString(_localChatTopicsPrefsKey, encoded);
+    } catch (_) {
+      // Local topic persistence should never block generation.
+    }
+  }
+
+  String _makeLocalChatTopicId() {
+    return 'topic_${DateTime.now().microsecondsSinceEpoch}';
+  }
+
+  String _deriveTopicTitle(String prompt) {
+    var cleaned = prompt
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll(
+          RegExp(
+            r'^(please|can you|could you|help me)\s+',
+            caseSensitive: false,
+          ),
+          '',
+        )
+        .trim();
+
+    if (cleaned.isEmpty) {
+      return 'New Chat';
+    }
+
+    if (cleaned.length > 42) {
+      cleaned = '${cleaned.substring(0, 42).trim()}...';
+    }
+
+    return cleaned;
+  }
+
+  void _ensureActiveChatTopicForPrompt(String prompt) {
+    final currentId = _activeChatTopicId;
+
+    if (currentId != null && _chatTopicsById.containsKey(currentId)) {
       return;
     }
 
-    final max = _savedTopicsScrollController.position.maxScrollExtent;
-    final next = (_savedTopicsScrollController.offset + 132.0)
-        .clamp(0.0, max)
-        .toDouble();
+    final now = DateTime.now();
+    final id = _makeLocalChatTopicId();
 
-    await _savedTopicsScrollController.animateTo(
-      next,
-      duration: const Duration(milliseconds: 240),
-      curve: Curves.easeOutCubic,
+    _activeChatTopicId = id;
+    _chatTopicsById[id] = KorlixLocalChatTopic(
+      id: id,
+      title: _deriveTopicTitle(prompt),
+      updatedAt: now,
+      messages: const <ChatMessage>[],
     );
   }
 
-  Widget _buildSavedTopicsMenuButton() {
-    return CompositedTransformTarget(
-      link: _savedTopicsMenuLayerLink,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _toggleSavedTopicsPanel,
-          borderRadius: BorderRadius.circular(15),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: _showSavedTopicsPanel
-                  ? const Color(0xFF12213A).withOpacity(0.96)
-                  : const Color(0xCC10192E),
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(
-                color: _showSavedTopicsPanel
-                    ? const Color(0xFFFF4AF3)
-                    : const Color(0xFF8BEFFF),
-                width: 1.25,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color:
-                      (_showSavedTopicsPanel
-                              ? const Color(0xFFFF4AF3)
-                              : const Color(0xFF69D9E8))
-                          .withOpacity(0.18),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.menu_rounded,
-              color: Color(0xFFF2FBFF),
-              size: 27,
-            ),
-          ),
-        ),
-      ),
+  GeneratedItem _generatedItemFromChatMessage(ChatMessage message) {
+    if (message.generatedItem != null) {
+      return message.generatedItem!;
+    }
+
+    return GeneratedItem(
+      command: message.userText,
+      title: _makeResultTitle(message.userText),
+      content: message.aiText,
+      language: message.language,
+      allowPdf: message.allowPdf,
+      imageDataUrl: message.imageDataUrl,
+      imageUrl: message.imageUrl,
     );
   }
 
-  Widget _buildSavedTopicsOverlay() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-      decoration: BoxDecoration(
-        color: const Color(0xF20B1428),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: const Color(0xFF89EAFF).withOpacity(0.76),
-          width: 1.15,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF69D9E8).withOpacity(0.16),
-            blurRadius: 22,
-            offset: const Offset(0, 8),
-          ),
-          BoxShadow(
-            color: const Color(0xFFFF4AF3).withOpacity(0.12),
-            blurRadius: 28,
-            offset: const Offset(8, 10),
-          ),
-          const BoxShadow(
-            color: Color(0xAA000000),
-            blurRadius: 18,
-            offset: Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          InkWell(
-            onTap: _startNewTopicChat,
-            borderRadius: BorderRadius.circular(14),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0B2438).withOpacity(0.78),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: const Color(0xFF69D9E8).withOpacity(0.62),
-                  width: 1.0,
-                ),
-              ),
-              child: const Text(
-                'New Chat',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Color(0xFFF3FBFF),
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.2,
-                ),
-              ),
-            ),
-          ),
+  void _addChatMessage(ChatMessage message) {
+    _ensureActiveChatTopicForPrompt(message.userText);
 
-          const SizedBox(height: 12),
+    _chatMessages.add(message);
 
-          Expanded(
-            child: ListView.separated(
-              controller: _savedTopicsScrollController,
-              physics: const BouncingScrollPhysics(),
-              itemCount: _savedTopicTitles.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 9),
-              itemBuilder: (context, index) {
-                final topic = _savedTopicTitles[index];
-                final selected = topic == _activeSavedTopic;
+    final topicId = _activeChatTopicId;
 
-                return InkWell(
-                  onTap: () => _openSavedTopic(topic),
-                  borderRadius: BorderRadius.circular(13),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 13,
-                    ),
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? const Color(0xFF183050).withOpacity(0.78)
-                          : const Color(0xFF07111F).withOpacity(0.58),
-                      borderRadius: BorderRadius.circular(13),
-                      border: Border.all(
-                        color: selected
-                            ? const Color(0xFFFF4AF3).withOpacity(0.82)
-                            : const Color(0xFF69D9E8).withOpacity(0.36),
-                        width: 1.0,
-                      ),
-                    ),
-                    child: Text(
-                      topic,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFFF3FBFF),
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
+    if (topicId == null) {
+      return;
+    }
 
-          const SizedBox(height: 10),
+    final existing = _chatTopicsById[topicId];
 
-          Center(
-            child: InkWell(
-              onTap: _showMoreSavedTopics,
-              borderRadius: BorderRadius.circular(999),
-              child: Container(
-                width: 48,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: const Color(0x1AFFFFFF),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: const Color(0x668BEFFF), width: 1),
-                ),
-                child: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: Color(0xFFF2FBFF),
-                  size: 25,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+    if (existing == null) {
+      return;
+    }
+
+    final messages = List<ChatMessage>.from(existing.messages)..add(message);
+
+    var title = existing.title.trim();
+
+    if (title.isEmpty || title == 'New Chat' || title == 'Untitled chat') {
+      title = _deriveTopicTitle(message.userText);
+    }
+
+    _chatTopicsById[topicId] = existing.copyWith(
+      title: title,
+      updatedAt: DateTime.now(),
+      messages: messages,
     );
+
+    unawaited(_persistLocalChatTopics());
   }
 
-  Widget _buildResultsWithTopicOverlay() {
-    return const SizedBox.shrink();
+  void _seedLegacyTopicFromLoadedHistory(List<ChatMessage> messages) {
+    if (messages.isEmpty || _chatTopicsById.isNotEmpty) {
+      return;
+    }
+
+    final id = _makeLocalChatTopicId();
+
+    final topic = KorlixLocalChatTopic(
+      id: id,
+      title: _deriveTopicTitle(messages.first.userText),
+      updatedAt: messages.last.createdAt,
+      messages: List<ChatMessage>.from(messages),
+    );
+
+    _chatTopicsById[id] = topic;
+    _activeChatTopicId = id;
+
+    unawaited(_persistLocalChatTopics());
+  }
+
+  String _buildThreadAwarePrompt(String command) {
+    final topicId = _activeChatTopicId;
+    final topic = topicId == null ? null : _chatTopicsById[topicId];
+
+    final messages = topic?.messages ?? _chatMessages;
+
+    if (messages.isEmpty) {
+      return command;
+    }
+
+    final recentMessages = messages.length > 8
+        ? messages.sublist(messages.length - 8)
+        : List<ChatMessage>.from(messages);
+
+    final buffer = StringBuffer()
+      ..writeln('Continue this existing chat topic with memory.')
+      ..writeln()
+      ..writeln('Previous conversation in this topic:');
+
+    for (final message in recentMessages) {
+      final userText = message.userText.trim();
+      final aiText = _cleanDisplayText(message.aiText).trim();
+
+      if (userText.isNotEmpty) {
+        buffer.writeln('User: $userText');
+      }
+
+      if (aiText.isNotEmpty) {
+        buffer.writeln('Korlix AI: $aiText');
+      }
+
+      buffer.writeln();
+    }
+
+    buffer
+      ..writeln('Current user message:')
+      ..writeln(command.trim());
+
+    return buffer.toString();
+  }
+
+  void _scrollChatThreadToBottomSoon() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_chatScrollController.hasClients) {
+        _chatScrollController.jumpTo(
+          _chatScrollController.position.maxScrollExtent,
+        );
+      }
+    });
   }
 
   void _closeSavedTopicsOverlay() {
@@ -9629,11 +9805,20 @@ Make the entire output professional, well-structured using Markdown, and product
     overlay.insert(_savedTopicsOverlayEntry!);
   }
 
+  void _toggleSavedTopicsPanel() {
+    if (_savedTopicsOverlayEntry != null) {
+      _closeSavedTopicsOverlay();
+      return;
+    }
+
+    _openSavedTopicsOverlay();
+  }
+
   void _startNewTopicChat() {
     _closeSavedTopicsOverlay();
 
     setState(() {
-      _activeSavedTopic = null;
+      _activeChatTopicId = null;
       _controller.clear();
       _results.clear();
       _chatMessages.clear();
@@ -9654,9 +9839,270 @@ Make the entire output professional, well-structured using Markdown, and product
       _pickedUploadFiles.clear();
     });
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('New chat started.')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('New chat started. Send a message to save this topic.'),
+      ),
+    );
+  }
+
+  void _openSavedTopic(String topicId) {
+    final topic = _chatTopicsById[topicId];
+
+    if (topic == null) {
+      return;
+    }
+
+    _closeSavedTopicsOverlay();
+
+    setState(() {
+      _activeChatTopicId = topic.id;
+
+      _chatMessages
+        ..clear()
+        ..addAll(topic.messages);
+
+      _results.clear();
+
+      if (topic.messages.isNotEmpty) {
+        _results.add(_generatedItemFromChatMessage(topic.messages.last));
+      }
+
+      _controller.clear();
+      _featuredAnswerDismissed = false;
+      _answerMinimized = false;
+      _chatMinimized = true;
+      _error = null;
+    });
+
+    _scrollChatThreadToBottomSoon();
+  }
+
+  Future<void> _showMoreSavedTopics() async {
+    if (!_savedTopicsScrollController.hasClients) {
+      return;
+    }
+
+    final max = _savedTopicsScrollController.position.maxScrollExtent;
+    final next = (_savedTopicsScrollController.offset + 132.0)
+        .clamp(0.0, max)
+        .toDouble();
+
+    await _savedTopicsScrollController.animateTo(
+      next,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  Widget _buildSavedTopicsMenuButton() {
+    return CompositedTransformTarget(
+      link: _savedTopicsMenuLayerLink,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _toggleSavedTopicsPanel,
+          borderRadius: BorderRadius.circular(15),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: _showSavedTopicsPanel
+                  ? const Color(0xFF12213A).withOpacity(0.96)
+                  : const Color(0xCC10192E),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: _showSavedTopicsPanel
+                    ? const Color(0xFFFF4AF3)
+                    : const Color(0xFF8BEFFF),
+                width: 1.25,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color:
+                      (_showSavedTopicsPanel
+                              ? const Color(0xFFFF4AF3)
+                              : const Color(0xFF69D9E8))
+                          .withOpacity(0.18),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.menu_rounded,
+              color: Color(0xFFF2FBFF),
+              size: 27,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSavedTopicsOverlay() {
+    final topics = _sortedChatTopicThreads;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xF20B1428),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: const Color(0xFF89EAFF).withOpacity(0.76),
+          width: 1.15,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF69D9E8).withOpacity(0.16),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: const Color(0xFFFF4AF3).withOpacity(0.12),
+            blurRadius: 28,
+            offset: const Offset(8, 10),
+          ),
+          const BoxShadow(
+            color: Color(0xAA000000),
+            blurRadius: 18,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: _startNewTopicChat,
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0B2438).withOpacity(0.78),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: const Color(0xFF69D9E8).withOpacity(0.62),
+                  width: 1.0,
+                ),
+              ),
+              child: const Text(
+                'New Chat',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Color(0xFFF3FBFF),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          Expanded(
+            child: topics.isEmpty
+                ? Center(
+                    child: Text(
+                      'No saved chats yet.\\nTap New Chat, send a message, and it will appear here.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: const Color(0xFFF3FBFF).withOpacity(0.72),
+                        fontSize: 13,
+                        height: 1.35,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    controller: _savedTopicsScrollController,
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: topics.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 9),
+                    itemBuilder: (context, index) {
+                      final topic = topics[index];
+                      final selected = topic.id == _activeChatTopicId;
+
+                      return InkWell(
+                        onTap: () => _openSavedTopic(topic.id),
+                        borderRadius: BorderRadius.circular(13),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 13,
+                          ),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? const Color(0xFF183050).withOpacity(0.78)
+                                : const Color(0xFF07111F).withOpacity(0.58),
+                            borderRadius: BorderRadius.circular(13),
+                            border: Border.all(
+                              color: selected
+                                  ? const Color(0xFFFF4AF3).withOpacity(0.82)
+                                  : const Color(0xFF69D9E8).withOpacity(0.36),
+                              width: 1.0,
+                            ),
+                          ),
+                          child: Text(
+                            topic.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFFF3FBFF),
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+
+          const SizedBox(height: 10),
+
+          Center(
+            child: InkWell(
+              onTap: _showMoreSavedTopics,
+              borderRadius: BorderRadius.circular(999),
+              child: Container(
+                width: 48,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0x1AFFFFFF),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: const Color(0x668BEFFF), width: 1),
+                ),
+                child: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Color(0xFFF2FBFF),
+                  size: 25,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPersistentSavedTopicsMenuRow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 8, 22, 6),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: _buildSavedTopicsMenuButton(),
+      ),
+    );
+  }
+
+  Widget _buildResultsWithTopicOverlay() {
+    return const SizedBox.shrink();
   }
 
   Widget _buildResults() {
