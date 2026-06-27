@@ -6545,6 +6545,7 @@ Make the entire output professional, well-structured using Markdown, and product
                     _buildMockupHomeHeader(),
                     _buildMockupLanguageTabs(),
                     _buildMockupFeaturedCharacterCard(),
+                    _buildPersistentSavedTopicsMenuRow(),
                     const SizedBox(height: 18),
                     if (_chatMessages.length >= 2) ...[
                       _buildResultsWithTopicOverlay(),
@@ -8468,6 +8469,16 @@ Make the entire output professional, well-structured using Markdown, and product
     }
   }
 
+  Widget _buildPersistentSavedTopicsMenuRow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 8, 22, 6),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: _buildSavedTopicsMenuButton(),
+      ),
+    );
+  }
+
   Widget _buildMockupFeaturedCharacterCard() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshSelectedCharacterFromBackend();
@@ -9539,13 +9550,7 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   Widget _buildResultsWithTopicOverlay() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 0, 22, 8),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: _buildSavedTopicsMenuButton(),
-      ),
-    );
+    return const SizedBox.shrink();
   }
 
   void _closeSavedTopicsOverlay() {
