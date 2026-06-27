@@ -4110,6 +4110,8 @@ class CommandCenterScreen extends StatefulWidget {
 class _CommandCenterScreenState extends State<CommandCenterScreen> {
   bool _showSavedTopicsPanel = false;
   final ScrollController _savedTopicsScrollController = ScrollController();
+  final TextEditingController _renameTopicController = TextEditingController();
+  String? _renamingTopicId;
 
   // Demo topic list for the slide-out topic picker.
   // Later you can swap this to your real saved conversation titles.
@@ -4210,6 +4212,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   void dispose() {
     _savedTopicsOverlayEntry?.remove();
     _savedTopicsOverlayEntry = null;
+    _renameTopicController.dispose();
     _savedTopicsScrollController.dispose();
     _chatScrollController.dispose();
     _controller.dispose();
@@ -10403,8 +10406,412 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
+  void _refreshSavedTopicsOverlay() {
+    _savedTopicsOverlayEntry?.markNeedsBuild();
+  }
+
+  String _cleanSavedTopicRename(String value, String fallback) {
+    var cleaned = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    if (cleaned.isEmpty) {
+      cleaned = fallback.trim().isEmpty ? 'Untitled chat' : fallback.trim();
+    }
+
+    if (cleaned.length > 48) {
+      cleaned = '${cleaned.substring(0, 48).trim()}...';
+    }
+
+    return cleaned;
+  }
+
+  void _beginRenameSavedTopic(KorlixLocalChatTopic topic) {
+    _renameTopicController.text = topic.title;
+    _renameTopicController.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: _renameTopicController.text.length,
+    );
+
+    setState(() {
+      _renamingTopicId = topic.id;
+    });
+
+    _refreshSavedTopicsOverlay();
+  }
+
+  void _cancelRenameSavedTopic() {
+    setState(() {
+      _renamingTopicId = null;
+      _renameTopicController.clear();
+    });
+
+    _refreshSavedTopicsOverlay();
+  }
+
+  Future<void> _submitRenameSavedTopic(String topicId) async {
+    final topic = _chatTopicsById[topicId];
+
+    if (topic == null) {
+      _cancelRenameSavedTopic();
+      return;
+    }
+
+    final renamed = _cleanSavedTopicRename(
+      _renameTopicController.text,
+      topic.title,
+    );
+
+    setState(() {
+      _chatTopicsById[topicId] = topic.copyWith(
+        title: renamed,
+        updatedAt: DateTime.now(),
+      );
+      _renamingTopicId = null;
+      _renameTopicController.clear();
+    });
+
+    await _persistLocalChatTopics();
+
+    if (!mounted) {
+      return;
+    }
+
+    _refreshSavedTopicsOverlay();
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Renamed to "$renamed".')));
+  }
+
+  Future<void> _confirmDeleteSavedTopic(String topicId) async {
+    final topic = _chatTopicsById[topicId];
+
+    if (topic == null) {
+      return;
+    }
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: const Color(0xFF07111F),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFA9C6CF).withValues(alpha: 0.42),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Icon(
+                  Icons.delete_forever_rounded,
+                  color: Colors.redAccent,
+                  size: 38,
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Delete chat topic?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFFE4EBEE),
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Delete "${topic.title}" and all messages inside this thread?',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xFFA9C6CF),
+                    fontSize: 13.5,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFE4EBEE),
+                          side: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.22),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        icon: const Icon(Icons.delete_outline_rounded),
+                        label: const Text('Delete'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (confirmed == true && mounted) {
+      await _deleteSavedTopic(topicId);
+    }
+  }
+
+  Future<void> _deleteSavedTopic(String topicId) async {
+    final deletingActive = topicId == _activeChatTopicId;
+    final topic = _chatTopicsById[topicId];
+
+    if (topic == null) {
+      return;
+    }
+
+    setState(() {
+      _chatTopicsById.remove(topicId);
+      _renamingTopicId = null;
+      _renameTopicController.clear();
+
+      if (deletingActive) {
+        final remaining = _sortedChatTopicThreads;
+
+        if (remaining.isEmpty) {
+          _activeChatTopicId = null;
+          _chatMessages.clear();
+          _results.clear();
+          _featuredAnswerDismissed = true;
+          _answerMinimized = false;
+          _chatMinimized = true;
+        } else {
+          final next = remaining.first;
+          _activeChatTopicId = next.id;
+
+          _chatMessages
+            ..clear()
+            ..addAll(next.messages);
+
+          _results.clear();
+
+          if (next.messages.isNotEmpty) {
+            _results.add(_generatedItemFromChatMessage(next.messages.last));
+            _featuredAnswerDismissed = false;
+          } else {
+            _featuredAnswerDismissed = true;
+          }
+
+          _answerMinimized = false;
+          _chatMinimized = true;
+        }
+      }
+    });
+
+    await _persistLocalChatTopics();
+
+    if (!mounted) {
+      return;
+    }
+
+    _refreshSavedTopicsOverlay();
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Deleted "${topic.title}".')));
+  }
+
   Widget _buildSavedTopicsOverlay() {
     final topics = _sortedChatTopicThreads;
+
+    Widget topicRow(KorlixLocalChatTopic topic) {
+      final selected = topic.id == _activeChatTopicId;
+      final renaming = topic.id == _renamingTopicId;
+
+      if (renaming) {
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF183050).withValues(alpha: 0.78),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: const Color(0xFFFF4AF3).withValues(alpha: 0.88),
+              width: 1.15,
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _renameTopicController,
+                  autofocus: true,
+                  minLines: 1,
+                  maxLines: 1,
+                  cursorColor: const Color(0xFF69D9E8),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _submitRenameSavedTopic(topic.id),
+                  style: const TextStyle(
+                    color: Color(0xFFF3FBFF),
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    isDense: true,
+                    hintText: 'Rename chat',
+                    hintStyle: TextStyle(
+                      color: Color(0x99F3FBFF),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              InkWell(
+                onTap: () => _submitRenameSavedTopic(topic.id),
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF69D9E8).withValues(alpha: 0.13),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: const Color(0xFF69D9E8).withValues(alpha: 0.70),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    color: Color(0xFF69D9E8),
+                    size: 21,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              InkWell(
+                onTap: _cancelRenameSavedTopic,
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.18),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.close_rounded,
+                    color: Color(0xFFA9C6CF),
+                    size: 20,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      return AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFF183050).withValues(alpha: 0.78)
+              : const Color(0xFF07111F).withValues(alpha: 0.58),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected
+                ? const Color(0xFFFF4AF3).withValues(alpha: 0.82)
+                : const Color(0xFF69D9E8).withValues(alpha: 0.42),
+            width: 1.05,
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: () => _openSavedTopic(topic.id),
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 13, 8, 13),
+                  child: Text(
+                    topic.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFFF3FBFF),
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Tooltip(
+              message: 'Rename chat',
+              child: InkWell(
+                onTap: () => _beginRenameSavedTopic(topic),
+                borderRadius: BorderRadius.circular(999),
+                child: const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Icon(
+                    Icons.edit_outlined,
+                    color: Color(0xFF69D9E8),
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
+            Tooltip(
+              message: 'Delete chat',
+              child: InkWell(
+                onTap: () => _confirmDeleteSavedTopic(topic.id),
+                borderRadius: BorderRadius.circular(999),
+                child: const Padding(
+                  padding: EdgeInsets.fromLTRB(6, 8, 10, 8),
+                  child: Icon(
+                    Icons.delete_outline_rounded,
+                    color: Colors.redAccent,
+                    size: 21,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
@@ -10412,17 +10819,17 @@ Make the entire output professional, well-structured using Markdown, and product
         color: const Color(0xF20B1428),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: const Color(0xFF89EAFF).withOpacity(0.76),
+          color: const Color(0xFF89EAFF).withValues(alpha: 0.76),
           width: 1.15,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF69D9E8).withOpacity(0.16),
+            color: const Color(0xFF69D9E8).withValues(alpha: 0.16),
             blurRadius: 22,
             offset: const Offset(0, 8),
           ),
           BoxShadow(
-            color: const Color(0xFFFF4AF3).withOpacity(0.12),
+            color: const Color(0xFFFF4AF3).withValues(alpha: 0.12),
             blurRadius: 28,
             offset: const Offset(8, 10),
           ),
@@ -10442,10 +10849,10 @@ Make the entire output professional, well-structured using Markdown, and product
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
               decoration: BoxDecoration(
-                color: const Color(0xFF0B2438).withOpacity(0.78),
+                color: const Color(0xFF0B2438).withValues(alpha: 0.78),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: const Color(0xFF69D9E8).withOpacity(0.62),
+                  color: const Color(0xFF69D9E8).withValues(alpha: 0.62),
                   width: 1.0,
                 ),
               ),
@@ -10472,7 +10879,7 @@ Make the entire output professional, well-structured using Markdown, and product
                       'No saved chats yet.\nTap New Chat, send a message, and it will appear here.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: const Color(0xFFF3FBFF).withOpacity(0.72),
+                        color: const Color(0xFFF3FBFF).withValues(alpha: 0.72),
                         fontSize: 13,
                         height: 1.35,
                         fontWeight: FontWeight.w600,
@@ -10485,42 +10892,7 @@ Make the entire output professional, well-structured using Markdown, and product
                     itemCount: topics.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 9),
                     itemBuilder: (context, index) {
-                      final topic = topics[index];
-                      final selected = topic.id == _activeChatTopicId;
-
-                      return InkWell(
-                        onTap: () => _openSavedTopic(topic.id),
-                        borderRadius: BorderRadius.circular(13),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 160),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 13,
-                          ),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? const Color(0xFF183050).withOpacity(0.78)
-                                : const Color(0xFF07111F).withOpacity(0.58),
-                            borderRadius: BorderRadius.circular(13),
-                            border: Border.all(
-                              color: selected
-                                  ? const Color(0xFFFF4AF3).withOpacity(0.82)
-                                  : const Color(0xFF69D9E8).withOpacity(0.36),
-                              width: 1.0,
-                            ),
-                          ),
-                          child: Text(
-                            topic.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFFF3FBFF),
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      );
+                      return topicRow(topics[index]);
                     },
                   ),
           ),
