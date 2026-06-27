@@ -2779,8 +2779,10 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Theme applied: ${_themeLabel(theme)}')),
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      korlixThemeAppliedSnackBar(korlixNormalizeSkinId(theme)),
     );
   }
 
@@ -3613,6 +3615,83 @@ List<Color> korlixThemeBackgroundFor(String theme) {
   final skin = korlixSkinPaletteFor(theme);
 
   return <Color>[skin.backgroundTop, skin.backgroundMid, skin.backgroundBottom];
+}
+
+SnackBar korlixThemeAppliedSnackBar(String theme) {
+  final normalizedTheme = korlixNormalizeSkinId(theme);
+  final skin = korlixSkinPaletteFor(normalizedTheme);
+
+  return SnackBar(
+    behavior: SnackBarBehavior.floating,
+    duration: const Duration(milliseconds: 1600),
+    elevation: 0,
+    backgroundColor: Colors.transparent,
+    margin: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+    padding: EdgeInsets.zero,
+    content: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: skin.panelDeep.withValues(alpha: skin.isLight ? 0.94 : 0.96),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: skin.border.withValues(alpha: skin.isLight ? 0.54 : 0.62),
+          width: 1.05,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: skin.glow.withValues(alpha: skin.isLight ? 0.14 : 0.24),
+            blurRadius: 18,
+            spreadRadius: 0.5,
+            offset: const Offset(0, 6),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: skin.isLight ? 0.10 : 0.34),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [skin.primary, skin.secondary, skin.panelDeep],
+              ),
+              border: Border.all(
+                color: skin.text.withValues(alpha: skin.isLight ? 0.42 : 0.34),
+              ),
+            ),
+            child: Icon(
+              Icons.palette_rounded,
+              color: skin.textOnAccent,
+              size: 16,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Theme applied: ${korlixThemeLabelFor(normalizedTheme)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: skin.text,
+                fontSize: 13.2,
+                height: 1.2,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 final ValueNotifier<String> kKorlixThemeNotifier = ValueNotifier<String>(
@@ -12477,11 +12556,9 @@ Make the entire output professional, well-structured using Markdown, and product
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Theme applied: ${korlixThemeLabelFor(normalizedTheme)}'),
-      ),
-    );
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(korlixThemeAppliedSnackBar(normalizedTheme));
   }
 
   Widget _buildThemeShortcutCircles() {
