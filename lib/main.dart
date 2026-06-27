@@ -5196,6 +5196,330 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     }
   }
 
+  List<ChatMessage> _strictActiveTopicMessages() {
+    final topicId = _activeChatTopicId;
+
+    if (topicId == null || topicId.trim().isEmpty) {
+      return const <ChatMessage>[];
+    }
+
+    final topic = _chatTopicsById[topicId];
+
+    if (topic == null) {
+      return const <ChatMessage>[];
+    }
+
+    return List<ChatMessage>.unmodifiable(topic.messages);
+  }
+
+  int? _strictMemoryNormalizeNumber(String value) {
+    final cleaned = value.toLowerCase().trim();
+
+    final parsed = int.tryParse(cleaned);
+
+    if (parsed != null) {
+      return parsed;
+    }
+
+    const words = <String, int>{
+      'zero': 0,
+      'no': 0,
+      'one': 1,
+      'a': 1,
+      'an': 1,
+      'two': 2,
+      'three': 3,
+      'four': 4,
+      'five': 5,
+      'six': 6,
+      'seven': 7,
+      'eight': 8,
+      'nine': 9,
+      'ten': 10,
+      'eleven': 11,
+      'twelve': 12,
+      'thirteen': 13,
+      'fourteen': 14,
+      'fifteen': 15,
+      'sixteen': 16,
+      'seventeen': 17,
+      'eighteen': 18,
+      'nineteen': 19,
+      'twenty': 20,
+    };
+
+    return words[cleaned];
+  }
+
+  String _strictMemoryCleanFactName(String value) {
+    var cleaned = value.trim();
+
+    cleaned = cleaned.replaceAll(RegExp(r'[.!?,;:]+$'), '');
+
+    cleaned = cleaned.replaceAll(
+      RegExp(
+        r'\s+(and|but|because|so|with|from|in|at|for|about)\s+.*$',
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    if (cleaned.length > 40) {
+      cleaned = cleaned.substring(0, 40).trim();
+    }
+
+    return cleaned;
+  }
+
+  String? _strictExtractNameFromTopic() {
+    final messages = _strictActiveTopicMessages();
+
+    final patterns = <RegExp>[
+      RegExp(
+        r"\bmy\s+name\s+is\s+([a-z][a-z .'\-]{0,50})",
+        caseSensitive: false,
+      ),
+      RegExp(r"\bi\s+am\s+([a-z][a-z .'\-]{0,50})", caseSensitive: false),
+      RegExp(r"\bi'm\s+([a-z][a-z .'\-]{0,50})", caseSensitive: false),
+    ];
+
+    final badStarts = <String>{
+      'not',
+      'going',
+      'looking',
+      'trying',
+      'asking',
+      'wondering',
+      'working',
+      'using',
+      'here',
+      'from',
+      'sure',
+      'ready',
+      'confused',
+    };
+
+    for (final message in messages.reversed) {
+      final text = message.userText.trim();
+
+      if (text.isEmpty) {
+        continue;
+      }
+
+      for (final pattern in patterns) {
+        final match = pattern.firstMatch(text);
+
+        if (match == null) {
+          continue;
+        }
+
+        final name = _strictMemoryCleanFactName(match.group(1) ?? '');
+
+        if (name.isEmpty) {
+          continue;
+        }
+
+        final firstWord = name.toLowerCase().split(RegExp(r'\s+')).first;
+
+        if (badStarts.contains(firstWord)) {
+          continue;
+        }
+
+        return name;
+      }
+    }
+
+    return null;
+  }
+
+  String? _strictExtractSiblingFactFromTopic() {
+    final messages = _strictActiveTopicMessages();
+
+    int? brothers;
+    int? sisters;
+    int? siblings;
+
+    for (final message in messages) {
+      final text = message.userText.toLowerCase();
+
+      final brotherMatch = RegExp(
+        r'\bi\s+have\s+(\d+|zero|no|one|a|an|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+brothers?\b',
+      ).firstMatch(text);
+
+      if (brotherMatch != null) {
+        brothers = _strictMemoryNormalizeNumber(brotherMatch.group(1) ?? '');
+      }
+
+      final sisterMatch = RegExp(
+        r'\bi\s+have\s+(\d+|zero|no|one|a|an|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+sisters?\b',
+      ).firstMatch(text);
+
+      if (sisterMatch != null) {
+        sisters = _strictMemoryNormalizeNumber(sisterMatch.group(1) ?? '');
+      }
+
+      final siblingMatch = RegExp(
+        r'\bi\s+have\s+(\d+|zero|no|one|a|an|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+siblings?\b',
+      ).firstMatch(text);
+
+      if (siblingMatch != null) {
+        siblings = _strictMemoryNormalizeNumber(siblingMatch.group(1) ?? '');
+      }
+    }
+
+    if (brothers == null && sisters == null && siblings == null) {
+      return null;
+    }
+
+    final parts = <String>[];
+
+    if (brothers != null) {
+      parts.add('$brothers brother${brothers == 1 ? '' : 's'}');
+    }
+
+    if (sisters != null) {
+      parts.add('$sisters sister${sisters == 1 ? '' : 's'}');
+    }
+
+    if (siblings != null && brothers == null && sisters == null) {
+      parts.add('$siblings sibling${siblings == 1 ? '' : 's'}');
+    }
+
+    if (parts.isEmpty) {
+      return null;
+    }
+
+    if (parts.length == 1) {
+      return 'In this chat, you told me you have ${parts.first}.';
+    }
+
+    return 'In this chat, you told me you have ${parts.join(' and ')}.';
+  }
+
+  bool _strictIsNameQuestion(String command) {
+    final lower = command.toLowerCase();
+
+    return RegExp(r"\bwhat'?s\s+my\s+name\b").hasMatch(lower) ||
+        RegExp(r'\bwhat\s+is\s+my\s+name\b').hasMatch(lower) ||
+        RegExp(r'\bwho\s+am\s+i\b').hasMatch(lower) ||
+        RegExp(r'\bdo\s+you\s+know\s+my\s+name\b').hasMatch(lower);
+  }
+
+  bool _strictIsSiblingQuestion(String command) {
+    final lower = command.toLowerCase();
+
+    final mentionsSibling =
+        lower.contains('brother') ||
+        lower.contains('sister') ||
+        lower.contains('sibling');
+
+    if (!mentionsSibling) {
+      return false;
+    }
+
+    return lower.contains('how many') ||
+        lower.contains('do i have') ||
+        lower.contains('do you know') ||
+        lower.contains('remember');
+  }
+
+  bool _strictIsPersonalMemoryQuestion(String command) {
+    final lower = command.toLowerCase();
+
+    if (_strictIsNameQuestion(command) || _strictIsSiblingQuestion(command)) {
+      return true;
+    }
+
+    final asksAboutUser =
+        RegExp(r"\bwhat'?s\s+my\b").hasMatch(lower) ||
+        RegExp(r'\bwhat\s+is\s+my\b').hasMatch(lower) ||
+        RegExp(r'\bwhat\s+do\s+i\s+have\b').hasMatch(lower) ||
+        RegExp(r'\bhow\s+many\b.*\bdo\s+i\s+have\b').hasMatch(lower) ||
+        RegExp(r'\bdo\s+you\s+remember\b').hasMatch(lower) ||
+        RegExp(r'\bdid\s+i\s+tell\s+you\b').hasMatch(lower) ||
+        RegExp(r'\bwhat\s+do\s+you\s+know\s+about\s+me\b').hasMatch(lower);
+
+    return asksAboutUser;
+  }
+
+  String? _strictTopicMemoryGuardAnswer(String command) {
+    if (!_strictIsPersonalMemoryQuestion(command)) {
+      return null;
+    }
+
+    if (_strictIsNameQuestion(command)) {
+      final name = _strictExtractNameFromTopic();
+
+      if (name != null && name.trim().isNotEmpty) {
+        return 'In this chat, you told me your name is $name.';
+      }
+
+      return 'You have not told me your name in this chat.';
+    }
+
+    if (_strictIsSiblingQuestion(command)) {
+      final siblingFact = _strictExtractSiblingFactFromTopic();
+
+      if (siblingFact != null && siblingFact.trim().isNotEmpty) {
+        return siblingFact;
+      }
+
+      return 'You have not told me how many brothers or sisters you have in this chat.';
+    }
+
+    final hasSelectedTopicMemory = _strictActiveTopicMessages().isNotEmpty;
+
+    if (!hasSelectedTopicMemory) {
+      return 'You have not provided that information in this chat.';
+    }
+
+    return 'I do not see that information in this chat.';
+  }
+
+  bool _respondWithStrictTopicMemoryGuard(String command) {
+    final answer = _strictTopicMemoryGuardAnswer(command);
+
+    if (answer == null) {
+      return false;
+    }
+
+    final item = GeneratedItem(
+      command: command,
+      title: 'Topic Memory',
+      content: answer,
+      language: _selectedLanguage,
+      allowPdf: false,
+    );
+
+    final message = ChatMessage(
+      userText: command,
+      aiText: answer,
+      language: _selectedLanguage,
+      allowPdf: false,
+      generatedItem: item,
+      createdAt: DateTime.now(),
+    );
+
+    setState(() {
+      _controller.clear();
+      _error = null;
+      _featuredAnswerDismissed = false;
+      _answerMinimized = false;
+
+      _results
+        ..clear()
+        ..add(item);
+
+      _addChatMessage(message);
+    });
+
+    _scrollChatThreadToBottomSoon();
+
+    return true;
+  }
+
   Future<void> _generate() async {
     if (_fixCreditReportMode && _activeUploadFiles.isEmpty) {
       setState(() {
@@ -5236,6 +5560,15 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     }
 
     final command = _controller.text.trim();
+    if (command.isNotEmpty &&
+        !_fixCreditReportMode &&
+        !_improvePictureMode &&
+        !_imaginePictureMode &&
+        !_createVideoMode &&
+        _activeUploadFiles.isEmpty &&
+        _respondWithStrictTopicMemoryGuard(command)) {
+      return;
+    }
 
     if (_createVideoMode ||
         command.toLowerCase().contains('create a video') ||
@@ -10169,6 +10502,9 @@ Make the entire output professional, well-structured using Markdown, and product
       'memoryScope': 'selected_topic_only',
       'strictTopicOnly': 'true',
       'ignoreGlobalMemory': 'true',
+      'disableAccountMemory': 'true',
+      'disableUserProfileMemory': 'true',
+      'disableHistoryLookup': 'true',
     };
   }
 
