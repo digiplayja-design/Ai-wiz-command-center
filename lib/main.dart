@@ -10124,7 +10124,7 @@ class _KorlixCleanAnswerReadyBoxPainter extends CustomPainter {
       ..close();
   }
 
-  void _stroke(
+  void _strokeSolid(
     Canvas canvas,
     Path path,
     Color color,
@@ -10139,6 +10139,33 @@ class _KorlixCleanAnswerReadyBoxPainter extends CustomPainter {
         ..strokeCap = StrokeCap.square
         ..strokeWidth = width
         ..color = color.withValues(alpha: alpha),
+    );
+  }
+
+  void _strokeGradient(
+    Canvas canvas,
+    Path path,
+    Rect rect,
+    double width,
+    double alpha,
+  ) {
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeJoin = StrokeJoin.bevel
+        ..strokeCap = StrokeCap.square
+        ..strokeWidth = width
+        ..shader = LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            const Color(0xFF69D9E8).withValues(alpha: alpha),
+            const Color(0xFF2D8CFF).withValues(alpha: alpha * 0.52),
+            const Color(0xFFFF4AF3).withValues(alpha: alpha),
+          ],
+          stops: const [0.0, 0.52, 1.0],
+        ).createShader(rect),
     );
   }
 
@@ -10166,15 +10193,18 @@ class _KorlixCleanAnswerReadyBoxPainter extends CustomPainter {
     }
 
     const cyan = Color(0xFF69D9E8);
-    const blue = Color(0xFF2D8CFF);
     const magenta = Color(0xFFFF4AF3);
 
     final rect = Offset.zero & size;
-    final outer = _octPath(rect.deflate(6), 30);
-    final inner = _octPath(rect.deflate(18), 23);
-    final cavity = _octPath(rect.deflate(30), 18);
 
-    // Soft depth only, not a large outside halo.
+    // Two-border version:
+    // 1) outer angular frame
+    // 2) middle/inner angular frame
+    // The previous innermost border/cavity path is intentionally removed.
+    final outer = _octPath(rect.deflate(6), 30);
+    final inner = _octPath(rect.deflate(19), 23);
+
+    // Soft depth only, not an extra border.
     canvas.drawPath(
       outer.shift(const Offset(0, 8)),
       Paint()
@@ -10206,15 +10236,15 @@ class _KorlixCleanAnswerReadyBoxPainter extends CustomPainter {
         ).createShader(rect),
     );
 
-    // Clean angular borders.
-    _stroke(canvas, outer, Colors.white, 2.6, 0.18);
-    _stroke(canvas, outer, cyan, 1.6, 0.60);
-    _stroke(canvas, outer, magenta, 1.2, 0.44);
-    _stroke(canvas, inner, Colors.white, 1.1, 0.16);
-    _stroke(canvas, inner, cyan, 1.1, 0.36);
-    _stroke(canvas, cavity, magenta, 1.2, 0.50);
+    // Border line 1: outer.
+    _strokeSolid(canvas, outer, Colors.white, 2.4, 0.16);
+    _strokeGradient(canvas, outer, rect, 1.7, 0.78);
 
-    // Single clean highlight lines drawn by the painter, not floating widgets.
+    // Border line 2: inner.
+    _strokeSolid(canvas, inner, Colors.white, 0.9, 0.12);
+    _strokeGradient(canvas, inner, rect, 1.25, 0.52);
+
+    // Decorative short highlights only. These are not full border paths.
     _accentLine(
       canvas,
       Offset(size.width * 0.10, size.height * 0.86),
@@ -10236,23 +10266,6 @@ class _KorlixCleanAnswerReadyBoxPainter extends CustomPainter {
       magenta,
       2.4,
     );
-
-    // Subtle right-side color edge.
-    final rightEdge = Path()
-      ..moveTo(size.width - 34, 44)
-      ..lineTo(size.width - 18, 60)
-      ..lineTo(size.width - 18, size.height - 60)
-      ..lineTo(size.width - 34, size.height - 44);
-
-    _stroke(canvas, rightEdge, magenta, 2.0, 0.44);
-
-    final leftEdge = Path()
-      ..moveTo(34, 44)
-      ..lineTo(18, 60)
-      ..lineTo(18, size.height - 60)
-      ..lineTo(34, size.height - 44);
-
-    _stroke(canvas, leftEdge, cyan, 2.0, 0.40);
   }
 
   @override
