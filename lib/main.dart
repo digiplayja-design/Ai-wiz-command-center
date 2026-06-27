@@ -4136,6 +4136,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   final List<GeneratedItem> _results = [];
   final List<ChatMessage> _chatMessages = [];
   final ScrollController _chatScrollController = ScrollController();
+  OverlayEntry? _savedTopicsOverlayEntry;
+  final LayerLink _savedTopicsMenuLayerLink = LayerLink();
   bool _chatHistoryLoaded = false;
   bool _chatMinimized = true;
   bool _answerMinimized = false;
@@ -4176,6 +4178,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
 
   @override
   void dispose() {
+    _savedTopicsOverlayEntry?.remove();
+    _savedTopicsOverlayEntry = null;
+    _savedTopicsScrollController.dispose();
     _chatScrollController.dispose();
     _controller.dispose();
     _wizardCuePlayer.dispose();
@@ -9303,55 +9308,95 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   void _toggleSavedTopicsPanel() {
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _showSavedTopicsPanel = !_showSavedTopicsPanel;
-    });
+    if (_savedTopicsOverlayEntry != null) {
+      _closeSavedTopicsOverlay();
+      return;
+    }
+
+    _openSavedTopicsOverlay();
   }
 
   void _openSavedTopic(String topic) {
+    _closeSavedTopicsOverlay();
+
     setState(() {
       _activeSavedTopic = topic;
-      _showSavedTopicsPanel = false;
+      _chatMinimized = true;
+      _error = null;
+
+      _controller.text = 'Continue our conversation about $topic: ';
+      _controller.selection = TextSelection.collapsed(
+        offset: _controller.text.length,
+      );
     });
 
-    // HOOK:
-    // Replace this with your real restore / reopen chat logic when ready.
-    // Example:
-    // _restoreConversationByTitle(topic);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Selected topic: $topic')));
+
+    // Backend hook:
+    // When real conversation threads are added, this is where we should call
+    // something like _loadConversationThread(topicId) instead of only filling
+    // the input prompt.
   }
 
   Future<void> _showMoreSavedTopics() async {
-    if (!_savedTopicsScrollController.hasClients) return;
+    if (!_savedTopicsScrollController.hasClients) {
+      return;
+    }
 
     final max = _savedTopicsScrollController.position.maxScrollExtent;
-    final next = (_savedTopicsScrollController.offset + 120.0).clamp(0.0, max);
+    final next = (_savedTopicsScrollController.offset + 132.0)
+        .clamp(0.0, max)
+        .toDouble();
 
     await _savedTopicsScrollController.animateTo(
       next,
       duration: const Duration(milliseconds: 240),
-      curve: Curves.easeOut,
+      curve: Curves.easeOutCubic,
     );
   }
 
   Widget _buildSavedTopicsMenuButton() {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: _toggleSavedTopicsPanel,
-        borderRadius: BorderRadius.circular(14),
-        child: Ink(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: const Color(0xCC10192E),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF8BEFFF), width: 1.2),
-          ),
-          child: const Icon(
-            Icons.menu_rounded,
-            color: Color(0xFFF2FBFF),
-            size: 24,
+    return CompositedTransformTarget(
+      link: _savedTopicsMenuLayerLink,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _toggleSavedTopicsPanel,
+          borderRadius: BorderRadius.circular(15),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: _showSavedTopicsPanel
+                  ? const Color(0xFF12213A).withOpacity(0.96)
+                  : const Color(0xCC10192E),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: _showSavedTopicsPanel
+                    ? const Color(0xFFFF4AF3)
+                    : const Color(0xFF8BEFFF),
+                width: 1.25,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color:
+                      (_showSavedTopicsPanel
+                              ? const Color(0xFFFF4AF3)
+                              : const Color(0xFF69D9E8))
+                          .withOpacity(0.18),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.menu_rounded,
+              color: Color(0xFFF2FBFF),
+              size: 27,
+            ),
           ),
         ),
       ),
@@ -9360,50 +9405,92 @@ Make the entire output professional, well-structured using Markdown, and product
 
   Widget _buildSavedTopicsOverlay() {
     return Container(
-      height: 248,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
       decoration: BoxDecoration(
-        color: const Color(0xF1121C32),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF89EAFF), width: 1.1),
-        boxShadow: const [
+        color: const Color(0xF20B1428),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: const Color(0xFF89EAFF).withOpacity(0.76),
+          width: 1.15,
+        ),
+        boxShadow: [
           BoxShadow(
-            color: Color(0x66000000),
+            color: const Color(0xFF69D9E8).withOpacity(0.16),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: const Color(0xFFFF4AF3).withOpacity(0.12),
+            blurRadius: 28,
+            offset: const Offset(8, 10),
+          ),
+          const BoxShadow(
+            color: Color(0xAA000000),
             blurRadius: 18,
-            offset: Offset(0, 8),
+            offset: Offset(0, 10),
           ),
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          InkWell(
+            onTap: _startNewTopicChat,
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0B2438).withOpacity(0.78),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: const Color(0xFF69D9E8).withOpacity(0.62),
+                  width: 1.0,
+                ),
+              ),
+              child: const Text(
+                'New Chat',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Color(0xFFF3FBFF),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
           Expanded(
             child: ListView.separated(
               controller: _savedTopicsScrollController,
               physics: const BouncingScrollPhysics(),
               itemCount: _savedTopicTitles.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (_, __) => const SizedBox(height: 9),
               itemBuilder: (context, index) {
                 final topic = _savedTopicTitles[index];
-                final isSelected = topic == _activeSavedTopic;
+                final selected = topic == _activeSavedTopic;
 
                 return InkWell(
-                  borderRadius: BorderRadius.circular(12),
                   onTap: () => _openSavedTopic(topic),
+                  borderRadius: BorderRadius.circular(13),
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
+                    duration: const Duration(milliseconds: 160),
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 11,
+                      horizontal: 14,
+                      vertical: 13,
                     ),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: isSelected
-                          ? const Color(0x261FE1FF)
-                          : const Color(0x14000000),
+                      color: selected
+                          ? const Color(0xFF183050).withOpacity(0.78)
+                          : const Color(0xFF07111F).withOpacity(0.58),
+                      borderRadius: BorderRadius.circular(13),
                       border: Border.all(
-                        color: isSelected
-                            ? const Color(0xFFFF57F3)
-                            : const Color(0x668CEEFF),
+                        color: selected
+                            ? const Color(0xFFFF4AF3).withOpacity(0.82)
+                            : const Color(0xFF69D9E8).withOpacity(0.36),
                         width: 1.0,
                       ),
                     ),
@@ -9413,8 +9500,8 @@ Make the entire output professional, well-structured using Markdown, and product
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Color(0xFFF3FBFF),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -9422,21 +9509,27 @@ Make the entire output professional, well-structured using Markdown, and product
               },
             ),
           ),
-          const SizedBox(height: 8),
-          GestureDetector(
-            onTap: _showMoreSavedTopics,
-            child: Container(
-              width: 42,
-              height: 28,
-              decoration: BoxDecoration(
-                color: const Color(0x1AFFFFFF),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0x66BFEFFF), width: 1),
-              ),
-              child: const Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: Color(0xFFF2FBFF),
-                size: 22,
+
+          const SizedBox(height: 10),
+
+          Center(
+            child: InkWell(
+              onTap: _showMoreSavedTopics,
+              borderRadius: BorderRadius.circular(999),
+              child: Container(
+                width: 48,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0x1AFFFFFF),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: const Color(0x668BEFFF), width: 1),
+                ),
+                child: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Color(0xFFF2FBFF),
+                  size: 25,
+                ),
               ),
             ),
           ),
@@ -9446,36 +9539,80 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   Widget _buildResultsWithTopicOverlay() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        double drawerWidth = constraints.maxWidth * 0.58;
-        if (drawerWidth < 220) drawerWidth = 220;
-        if (drawerWidth > 290) drawerWidth = 290;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 0, 22, 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: _buildSavedTopicsMenuButton(),
+      ),
+    );
+  }
+
+  void _closeSavedTopicsOverlay() {
+    _savedTopicsOverlayEntry?.remove();
+    _savedTopicsOverlayEntry = null;
+
+    if (mounted && _showSavedTopicsPanel) {
+      setState(() {
+        _showSavedTopicsPanel = false;
+      });
+    }
+  }
+
+  void _openSavedTopicsOverlay() {
+    FocusScope.of(context).unfocus();
+
+    _savedTopicsOverlayEntry?.remove();
+    _savedTopicsOverlayEntry = null;
+
+    setState(() {
+      _showSavedTopicsPanel = true;
+    });
+
+    final overlay = Overlay.of(context, rootOverlay: true);
+
+    _savedTopicsOverlayEntry = OverlayEntry(
+      builder: (overlayContext) {
+        final screenSize = MediaQuery.sizeOf(overlayContext);
+        var drawerWidth = screenSize.width * 0.70;
+
+        if (drawerWidth < 250) {
+          drawerWidth = 250;
+        }
+
+        if (drawerWidth > 315) {
+          drawerWidth = 315;
+        }
+
+        var drawerHeight = screenSize.height * 0.46;
+
+        if (drawerHeight < 330) {
+          drawerHeight = 330;
+        }
+
+        if (drawerHeight > 430) {
+          drawerHeight = 430;
+        }
 
         return Stack(
-          clipBehavior: Clip.none,
           children: [
-            _buildResults(),
-
-            // Small menu button resting above-left of the answer box.
-            Positioned(top: -24, left: 8, child: _buildSavedTopicsMenuButton()),
-
-            // Slide-out topic list.
-            // It overlays / covers part of the answer box instead of pushing it down.
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutCubic,
-              top: -8,
-              left: _showSavedTopicsPanel ? 0 : -drawerWidth - 18,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 200),
-                opacity: _showSavedTopicsPanel ? 1 : 0,
-                child: IgnorePointer(
-                  ignoring: !_showSavedTopicsPanel,
-                  child: SizedBox(
-                    width: drawerWidth,
-                    child: _buildSavedTopicsOverlay(),
-                  ),
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _closeSavedTopicsOverlay,
+                child: const SizedBox.expand(),
+              ),
+            ),
+            CompositedTransformFollower(
+              link: _savedTopicsMenuLayerLink,
+              showWhenUnlinked: false,
+              offset: const Offset(0, 52),
+              child: Material(
+                type: MaterialType.transparency,
+                child: SizedBox(
+                  width: drawerWidth,
+                  height: drawerHeight,
+                  child: _buildSavedTopicsOverlay(),
                 ),
               ),
             ),
@@ -9483,6 +9620,38 @@ Make the entire output professional, well-structured using Markdown, and product
         );
       },
     );
+
+    overlay.insert(_savedTopicsOverlayEntry!);
+  }
+
+  void _startNewTopicChat() {
+    _closeSavedTopicsOverlay();
+
+    setState(() {
+      _activeSavedTopic = null;
+      _controller.clear();
+      _results.clear();
+      _chatMessages.clear();
+      _featuredAnswerDismissed = false;
+      _answerMinimized = false;
+      _chatMinimized = true;
+      _error = null;
+
+      _createVideoMode = false;
+      _improvePictureMode = false;
+      _imaginePictureMode = false;
+      _fixCreditReportMode = false;
+      _createAppMode = false;
+
+      _utilityPanelOpen = false;
+      _selectedUtilityTool = null;
+      _pickedUploadFile = null;
+      _pickedUploadFiles.clear();
+    });
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('New chat started.')));
   }
 
   Widget _buildResults() {
