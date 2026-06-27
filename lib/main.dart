@@ -9339,6 +9339,16 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
+  List<KorlixLocalChatTopic> get _sortedChatTopicThreads {
+    final topics = _chatTopicsById.values
+        .where((topic) => topic.messages.isNotEmpty)
+        .toList();
+
+    topics.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+    return topics;
+  }
+
   Map<String, dynamic> _encodeGeneratedItem(GeneratedItem item) {
     return <String, dynamic>{
       'command': item.command,
@@ -9458,9 +9468,7 @@ Make the entire output professional, well-structured using Markdown, and product
         if (raw is Map) {
           try {
             messages.add(_decodeChatMessage(raw.cast<String, dynamic>()));
-          } catch (_) {
-            // Skip corrupt local rows instead of crashing the home screen.
-          }
+          } catch (_) {}
         }
       }
     }
@@ -9473,16 +9481,6 @@ Make the entire output professional, well-structured using Markdown, and product
           DateTime.now(),
       messages: messages,
     );
-  }
-
-  List<KorlixLocalChatTopic> get _sortedChatTopicThreads {
-    final topics = _chatTopicsById.values
-        .where((topic) => topic.messages.isNotEmpty)
-        .toList();
-
-    topics.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-
-    return topics;
   }
 
   Future<void> _loadLocalChatTopics() async {
@@ -9544,9 +9542,7 @@ Make the entire output professional, well-structured using Markdown, and product
       });
 
       _scrollChatThreadToBottomSoon();
-    } catch (_) {
-      // Local topic loading should never block the command center.
-    }
+    } catch (_) {}
   }
 
   Future<void> _persistLocalChatTopics() async {
@@ -9557,9 +9553,7 @@ Make the entire output professional, well-structured using Markdown, and product
       );
 
       await prefs.setString(_localChatTopicsPrefsKey, encoded);
-    } catch (_) {
-      // Local topic persistence should never block generation.
-    }
+    } catch (_) {}
   }
 
   String _makeLocalChatTopicId() {
@@ -9918,17 +9912,6 @@ Make the entire output professional, well-structured using Markdown, and product
                     : const Color(0xFF8BEFFF),
                 width: 1.25,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color:
-                      (_showSavedTopicsPanel
-                              ? const Color(0xFFFF4AF3)
-                              : const Color(0xFF69D9E8))
-                          .withOpacity(0.18),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
-                ),
-              ],
             ),
             child: const Icon(
               Icons.menu_rounded,
@@ -10007,7 +9990,7 @@ Make the entire output professional, well-structured using Markdown, and product
             child: topics.isEmpty
                 ? Center(
                     child: Text(
-                      'No saved chats yet.\\nTap New Chat, send a message, and it will appear here.',
+                      'No saved chats yet.\nTap New Chat, send a message, and it will appear here.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: const Color(0xFFF3FBFF).withOpacity(0.72),
