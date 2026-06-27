@@ -8831,58 +8831,12 @@ Make the entire output professional, well-structured using Markdown, and product
                                     ),
                                     // Body content — hidden when minimized
                                     if (!_answerMinimized) ...[
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        activeResult.command,
-                                        maxLines: compact ? 2 : 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: const Color(0xFFE4EBEE),
-                                          fontSize: compact ? 13 : 15,
-                                          fontWeight: FontWeight.w900,
-                                          height: 1.18,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
                                       Expanded(
-                                        child: Container(
-                                          width: double.infinity,
-                                          padding: const EdgeInsets.all(10),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withOpacity(
-                                              0.22,
+                                        child:
+                                            _buildAnswerReadyConversationView(
+                                              activeResult,
+                                              compact: compact,
                                             ),
-                                            borderRadius: BorderRadius.circular(
-                                              14,
-                                            ),
-                                            border: Border.all(
-                                              color: const Color(
-                                                0xFF2EC7DF,
-                                              ).withOpacity(0.18),
-                                            ),
-                                          ),
-                                          child: activeResult.hasImageResult
-                                              ? _buildGeneratedImagePreview(
-                                                  activeResult,
-                                                  height: 300,
-                                                )
-                                              : SingleChildScrollView(
-                                                  child: Text(
-                                                    activeResult.content,
-                                                    style: TextStyle(
-                                                      color: const Color(
-                                                        0xFFA9C6CF,
-                                                      ),
-                                                      fontSize: compact
-                                                          ? 12.5
-                                                          : 13.5,
-                                                      height: 1.32,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ),
-                                        ),
                                       ),
                                       const SizedBox(height: 10),
                                       Row(
@@ -8964,6 +8918,199 @@ Make the entire output professional, well-structured using Markdown, and product
             },
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildAnswerTurnLabel({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 16),
+        const SizedBox(width: 7),
+        Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.35,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAnswerTurnBubble({
+    required bool isUser,
+    required IconData icon,
+    required String label,
+    required Color accent,
+    required Widget child,
+  }) {
+    final radius = BorderRadius.only(
+      topLeft: Radius.circular(isUser ? 20 : 7),
+      topRight: Radius.circular(isUser ? 7 : 20),
+      bottomLeft: const Radius.circular(20),
+      bottomRight: const Radius.circular(20),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth * 0.96
+            : double.infinity;
+
+        return Align(
+          alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: Container(
+              margin: EdgeInsets.only(
+                left: isUser ? 26 : 0,
+                right: isUser ? 0 : 26,
+                bottom: 12,
+              ),
+              padding: const EdgeInsets.fromLTRB(13, 11, 13, 12),
+              decoration: BoxDecoration(
+                color: isUser
+                    ? const Color(0xFF082B3C).withValues(alpha: 0.82)
+                    : const Color(0xFF2A0B34).withValues(alpha: 0.78),
+                borderRadius: radius,
+                border: Border.all(
+                  color: accent.withValues(alpha: 0.76),
+                  width: 1.05,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: accent.withValues(alpha: 0.14),
+                    blurRadius: 16,
+                    offset: const Offset(0, 7),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.20),
+                    blurRadius: 12,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildAnswerTurnLabel(
+                    icon: icon,
+                    label: label,
+                    color: accent,
+                  ),
+                  const SizedBox(height: 8),
+                  child,
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAnswerText(String value, {required bool compact}) {
+    return Text(
+      value,
+      style: TextStyle(
+        color: const Color(0xFFF3FBFF),
+        fontSize: compact ? 13.5 : 14.5,
+        height: 1.38,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
+  Widget _buildAnswerReadyConversationView(
+    GeneratedItem item, {
+    required bool compact,
+  }) {
+    const userAccent = Color(0xFF69D9E8);
+    const aiAccent = Color(0xFFFF4AF3);
+
+    final availableMessages = _chatMessages
+        .where(
+          (msg) =>
+              msg.userText.trim().isNotEmpty || msg.aiText.trim().isNotEmpty,
+        )
+        .toList();
+
+    final recentMessages = availableMessages.length > 4
+        ? availableMessages.sublist(availableMessages.length - 4)
+        : availableMessages;
+
+    Widget userBubble(String text) {
+      return _buildAnswerTurnBubble(
+        isUser: true,
+        icon: Icons.person_rounded,
+        label: 'You',
+        accent: userAccent,
+        child: _buildAnswerText(text, compact: compact),
+      );
+    }
+
+    Widget aiBubble({required String text, GeneratedItem? generatedItem}) {
+      final hasImage = generatedItem?.hasImageResult == true;
+
+      return _buildAnswerTurnBubble(
+        isUser: false,
+        icon: Icons.auto_awesome_rounded,
+        label: 'Korlix AI',
+        accent: aiAccent,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (hasImage) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: _buildGeneratedImagePreview(
+                  generatedItem!,
+                  height: compact ? 175 : 230,
+                ),
+              ),
+              if (text.trim().isNotEmpty) const SizedBox(height: 10),
+            ],
+            if (text.trim().isNotEmpty)
+              _buildAnswerText(_cleanDisplayText(text), compact: compact),
+          ],
+        ),
+      );
+    }
+
+    return Scrollbar(
+      thumbVisibility: false,
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.only(right: 2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (recentMessages.isEmpty) ...[
+              if (item.command.trim().isNotEmpty) userBubble(item.command),
+              aiBubble(
+                text: item.content,
+                generatedItem: item.hasImageResult ? item : null,
+              ),
+            ] else ...[
+              for (final msg in recentMessages) ...[
+                if (msg.userText.trim().isNotEmpty) userBubble(msg.userText),
+                if (msg.aiText.trim().isNotEmpty ||
+                    msg.generatedItem?.hasImageResult == true)
+                  aiBubble(text: msg.aiText, generatedItem: msg.generatedItem),
+              ],
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -9052,23 +9199,9 @@ Make the entire output professional, well-structured using Markdown, and product
         return const SizedBox.expand();
       }
 
-      if (activeResult.hasImageResult) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: _buildGeneratedImagePreview(activeResult, height: 210),
-        );
-      }
-
-      return SingleChildScrollView(
-        child: Text(
-          activeResult.content,
-          style: const TextStyle(
-            color: Color(0xFFE4EBEE),
-            fontSize: 14,
-            height: 1.42,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+      return _buildAnswerReadyConversationView(
+        activeResult,
+        compact: MediaQuery.sizeOf(context).width < 430,
       );
     }
 
