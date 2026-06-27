@@ -4079,6 +4079,19 @@ class CommandCenterScreen extends StatefulWidget {
 }
 
 class _CommandCenterScreenState extends State<CommandCenterScreen> {
+  bool _showSavedTopicsPanel = false;
+  final ScrollController _savedTopicsScrollController = ScrollController();
+
+  // Demo topic list for the slide-out topic picker.
+  // Later you can swap this to your real saved conversation titles.
+  final List<String> _savedTopicTitles = <String>[
+    'World Cup',
+    'UFO',
+    'Vegetarian diet',
+  ];
+
+  String? _activeSavedTopic;
+
   final TextEditingController _controller = TextEditingController();
   final AudioPlayer _wizardCuePlayer = AudioPlayer();
   final speech_to_text.SpeechToText _speechToText =
@@ -6529,7 +6542,7 @@ Make the entire output professional, well-structured using Markdown, and product
                     _buildMockupFeaturedCharacterCard(),
                     const SizedBox(height: 18),
                     if (_chatMessages.length >= 2) ...[
-                      _buildResults(),
+                      _buildResultsWithTopicOverlay(),
                       const SizedBox(height: 18),
                     ],
                     _buildCommandPanel(),
@@ -9286,6 +9299,189 @@ Make the entire output professional, well-structured using Markdown, and product
           ),
         ],
       ),
+    );
+  }
+
+  void _toggleSavedTopicsPanel() {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _showSavedTopicsPanel = !_showSavedTopicsPanel;
+    });
+  }
+
+  void _openSavedTopic(String topic) {
+    setState(() {
+      _activeSavedTopic = topic;
+      _showSavedTopicsPanel = false;
+    });
+
+    // HOOK:
+    // Replace this with your real restore / reopen chat logic when ready.
+    // Example:
+    // _restoreConversationByTitle(topic);
+  }
+
+  Future<void> _showMoreSavedTopics() async {
+    if (!_savedTopicsScrollController.hasClients) return;
+
+    final max = _savedTopicsScrollController.position.maxScrollExtent;
+    final next = (_savedTopicsScrollController.offset + 120.0).clamp(0.0, max);
+
+    await _savedTopicsScrollController.animateTo(
+      next,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOut,
+    );
+  }
+
+  Widget _buildSavedTopicsMenuButton() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _toggleSavedTopicsPanel,
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: const Color(0xCC10192E),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF8BEFFF), width: 1.2),
+          ),
+          child: const Icon(
+            Icons.menu_rounded,
+            color: Color(0xFFF2FBFF),
+            size: 24,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSavedTopicsOverlay() {
+    return Container(
+      height: 248,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      decoration: BoxDecoration(
+        color: const Color(0xF1121C32),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFF89EAFF), width: 1.1),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x66000000),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView.separated(
+              controller: _savedTopicsScrollController,
+              physics: const BouncingScrollPhysics(),
+              itemCount: _savedTopicTitles.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final topic = _savedTopicTitles[index];
+                final isSelected = topic == _activeSavedTopic;
+
+                return InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _openSavedTopic(topic),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 11,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: isSelected
+                          ? const Color(0x261FE1FF)
+                          : const Color(0x14000000),
+                      border: Border.all(
+                        color: isSelected
+                            ? const Color(0xFFFF57F3)
+                            : const Color(0x668CEEFF),
+                        width: 1.0,
+                      ),
+                    ),
+                    child: Text(
+                      topic,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFFF3FBFF),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: _showMoreSavedTopics,
+            child: Container(
+              width: 42,
+              height: 28,
+              decoration: BoxDecoration(
+                color: const Color(0x1AFFFFFF),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0x66BFEFFF), width: 1),
+              ),
+              child: const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: Color(0xFFF2FBFF),
+                size: 22,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResultsWithTopicOverlay() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        double drawerWidth = constraints.maxWidth * 0.58;
+        if (drawerWidth < 220) drawerWidth = 220;
+        if (drawerWidth > 290) drawerWidth = 290;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            _buildResults(),
+
+            // Small menu button resting above-left of the answer box.
+            Positioned(top: -24, left: 8, child: _buildSavedTopicsMenuButton()),
+
+            // Slide-out topic list.
+            // It overlays / covers part of the answer box instead of pushing it down.
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutCubic,
+              top: -8,
+              left: _showSavedTopicsPanel ? 0 : -drawerWidth - 18,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 200),
+                opacity: _showSavedTopicsPanel ? 1 : 0,
+                child: IgnorePointer(
+                  ignoring: !_showSavedTopicsPanel,
+                  child: SizedBox(
+                    width: drawerWidth,
+                    child: _buildSavedTopicsOverlay(),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
