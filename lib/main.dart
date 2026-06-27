@@ -8831,80 +8831,13 @@ Make the entire output professional, well-structured using Markdown, and product
                                     ),
                                     // Body content — hidden when minimized
                                     if (!_answerMinimized) ...[
+                                      const SizedBox(height: 8),
                                       Expanded(
                                         child:
                                             _buildAnswerReadyConversationView(
                                               activeResult,
                                               compact: compact,
                                             ),
-                                      ),
-                                      const SizedBox(height: 10),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: SizedBox(
-                                              height: compact ? 40 : 44,
-                                              child: FilledButton.icon(
-                                                onPressed: () =>
-                                                    _copyFeaturedResult(
-                                                      activeResult,
-                                                    ),
-                                                icon: const Icon(
-                                                  Icons.copy_rounded,
-                                                  size: 17,
-                                                ),
-                                                label: const Text('Copy'),
-                                                style: FilledButton.styleFrom(
-                                                  backgroundColor: const Color(
-                                                    0xFFB794F4,
-                                                  ),
-                                                  foregroundColor: const Color(
-                                                    0xFF120D18,
-                                                  ),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          999,
-                                                        ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: SizedBox(
-                                              height: compact ? 40 : 44,
-                                              child: OutlinedButton.icon(
-                                                onPressed: () =>
-                                                    _shareFeaturedResult(
-                                                      activeResult,
-                                                    ),
-                                                icon: const Icon(
-                                                  Icons.share_rounded,
-                                                  size: 17,
-                                                ),
-                                                label: const Text('Share'),
-                                                style: OutlinedButton.styleFrom(
-                                                  foregroundColor: const Color(
-                                                    0xFF69D9E8,
-                                                  ),
-                                                  side: BorderSide(
-                                                    color: const Color(
-                                                      0xFF69D9E8,
-                                                    ).withOpacity(0.58),
-                                                  ),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          999,
-                                                        ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
                                       ),
                                     ], // end if (!_answerMinimized)
                                   ],
@@ -8920,6 +8853,355 @@ Make the entire output professional, well-structured using Markdown, and product
         },
       ),
     );
+  }
+
+  bool _answerChatMessageHasVisibleTurn(ChatMessage message) {
+    return message.userText.trim().isNotEmpty ||
+        message.aiText.trim().isNotEmpty ||
+        message.generatedItem?.hasImageResult == true ||
+        (message.imageDataUrl != null && message.imageDataUrl!.isNotEmpty) ||
+        (message.imageUrl != null && message.imageUrl!.isNotEmpty);
+  }
+
+  ChatMessage _copyChatMessageForAnswerDeletion(
+    ChatMessage message, {
+    String? userText,
+    String? aiText,
+    bool clearAiPayload = false,
+  }) {
+    return ChatMessage(
+      userText: userText ?? message.userText,
+      aiText: aiText ?? message.aiText,
+      isImage: clearAiPayload ? false : message.isImage,
+      imageDataUrl: clearAiPayload ? null : message.imageDataUrl,
+      imageUrl: clearAiPayload ? null : message.imageUrl,
+      language: message.language,
+      allowPdf: clearAiPayload ? false : message.allowPdf,
+      generatedItem: clearAiPayload ? null : message.generatedItem,
+      createdAt: message.createdAt,
+      isCreditDispute: clearAiPayload ? false : message.isCreditDispute,
+      equifaxDocxBase64: clearAiPayload ? null : message.equifaxDocxBase64,
+      experianDocxBase64: clearAiPayload ? null : message.experianDocxBase64,
+      transunionDocxBase64: clearAiPayload
+          ? null
+          : message.transunionDocxBase64,
+      consumerName: message.consumerName,
+    );
+  }
+
+  GeneratedItem _answerPanelGeneratedItemFromChatMessage(ChatMessage message) {
+    if (message.generatedItem != null) {
+      return message.generatedItem!;
+    }
+
+    return GeneratedItem(
+      command: message.userText,
+      title: _makeResultTitle(
+        message.userText.trim().isNotEmpty ? message.userText : message.aiText,
+      ),
+      content: message.aiText,
+      language: message.language,
+      allowPdf: message.allowPdf,
+      imageDataUrl: message.imageDataUrl,
+      imageUrl: message.imageUrl,
+    );
+  }
+
+  GeneratedItem? _latestVisibleAnswerItem() {
+    for (final message in _chatMessages.reversed) {
+      if (_answerChatMessageHasVisibleTurn(message)) {
+        return _answerPanelGeneratedItemFromChatMessage(message);
+      }
+    }
+
+    return null;
+  }
+
+  void _syncActiveTopicAfterAnswerTurnDeletion() {
+    final topicId = _activeChatTopicId;
+
+    if (topicId == null) {
+      return;
+    }
+
+    final existing = _chatTopicsById[topicId];
+
+    if (existing == null) {
+      return;
+    }
+
+    final visibleMessages = _chatMessages
+        .where(_answerChatMessageHasVisibleTurn)
+        .toList();
+
+    if (visibleMessages.isEmpty) {
+      _chatTopicsById.remove(topicId);
+      _activeChatTopicId = null;
+    } else {
+      _chatTopicsById[topicId] = existing.copyWith(
+        updatedAt: DateTime.now(),
+        messages: visibleMessages,
+      );
+    }
+
+    unawaited(_persistLocalChatTopics());
+  }
+
+  void _deleteAnswerBoxTurn({
+    required int messageIndex,
+    required bool deleteUser,
+  }) {
+    if (messageIndex < 0 || messageIndex >= _chatMessages.length) {
+      return;
+    }
+
+    final original = _chatMessages[messageIndex];
+
+    final updated = _copyChatMessageForAnswerDeletion(
+      original,
+      userText: deleteUser ? '' : original.userText,
+      aiText: deleteUser ? original.aiText : '',
+      clearAiPayload: !deleteUser,
+    );
+
+    setState(() {
+      _chatMessages[messageIndex] = updated;
+      _chatMessages.removeWhere(
+        (message) => !_answerChatMessageHasVisibleTurn(message),
+      );
+
+      _minimizedMessages.clear();
+      _deletedMessages.clear();
+
+      _results.clear();
+
+      final latest = _latestVisibleAnswerItem();
+
+      if (latest != null) {
+        _results.add(latest);
+        _featuredAnswerDismissed = false;
+      } else {
+        _featuredAnswerDismissed = true;
+      }
+    });
+
+    _syncActiveTopicAfterAnswerTurnDeletion();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          deleteUser ? 'Your question was deleted.' : 'The answer was deleted.',
+        ),
+      ),
+    );
+  }
+
+  void _deleteLooseActiveResultTurn({required bool deleteUser}) {
+    if (_results.isEmpty) {
+      return;
+    }
+
+    final item = _results.first;
+
+    final command = deleteUser ? '' : item.command;
+    final content = deleteUser ? item.content : '';
+
+    if (command.trim().isEmpty && content.trim().isEmpty && !deleteUser) {
+      setState(() {
+        _results.clear();
+        _featuredAnswerDismissed = true;
+      });
+      return;
+    }
+
+    final updated = GeneratedItem(
+      command: command,
+      title: item.title,
+      content: content,
+      language: item.language,
+      allowPdf: deleteUser ? item.allowPdf : false,
+      imageDataUrl: deleteUser ? item.imageDataUrl : null,
+      imageUrl: deleteUser ? item.imageUrl : null,
+    );
+
+    setState(() {
+      _results
+        ..clear()
+        ..add(updated);
+      _featuredAnswerDismissed = false;
+    });
+  }
+
+  Future<void> _confirmDeleteAnswerBoxTurn({
+    required int messageIndex,
+    required bool deleteUser,
+  }) async {
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: const Color(0xFF07111F),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFA9C6CF).withValues(alpha: 0.42),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Icon(
+                  deleteUser
+                      ? Icons.person_remove_alt_1_rounded
+                      : Icons.delete_outline_rounded,
+                  color: Colors.redAccent,
+                  size: 36,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  deleteUser ? 'Delete your question?' : 'Delete this answer?',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xFFE4EBEE),
+                    fontSize: 19,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  deleteUser
+                      ? 'Only your question will be removed from this answer box.'
+                      : 'Only the AI answer will be removed from this answer box.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xFFA9C6CF),
+                    fontSize: 13.5,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFE4EBEE),
+                          side: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.22),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        icon: const Icon(Icons.delete_outline_rounded),
+                        label: const Text('Delete'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (confirmed == true && mounted) {
+      _deleteAnswerBoxTurn(messageIndex: messageIndex, deleteUser: deleteUser);
+    }
+  }
+
+  Future<void> _confirmDeleteLooseAnswerResultTurn({
+    required bool deleteUser,
+  }) async {
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: const Color(0xFF07111F),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.delete_outline_rounded,
+                  color: Colors.redAccent,
+                  size: 36,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  deleteUser ? 'Delete your question?' : 'Delete this answer?',
+                  style: const TextStyle(
+                    color: Color(0xFFE4EBEE),
+                    fontSize: 19,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Delete'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (confirmed == true && mounted) {
+      _deleteLooseActiveResultTurn(deleteUser: deleteUser);
+    }
   }
 
   Widget _buildAnswerTurnLabel({
@@ -8951,6 +9233,8 @@ Make the entire output professional, well-structured using Markdown, and product
     required String label,
     required Color accent,
     required Widget child,
+    required VoidCallback onDelete,
+    required String deleteTooltip,
   }) {
     final radius = BorderRadius.only(
       topLeft: Radius.circular(isUser ? 20 : 7),
@@ -8975,7 +9259,7 @@ Make the entire output professional, well-structured using Markdown, and product
                 right: isUser ? 0 : 26,
                 bottom: 12,
               ),
-              padding: const EdgeInsets.fromLTRB(13, 11, 13, 12),
+              padding: const EdgeInsets.fromLTRB(13, 10, 9, 12),
               decoration: BoxDecoration(
                 color: isUser
                     ? const Color(0xFF082B3C).withValues(alpha: 0.82)
@@ -9002,10 +9286,40 @@ Make the entire output professional, well-structured using Markdown, and product
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildAnswerTurnLabel(
-                    icon: icon,
-                    label: label,
-                    color: accent,
+                  Row(
+                    children: [
+                      _buildAnswerTurnLabel(
+                        icon: icon,
+                        label: label,
+                        color: accent,
+                      ),
+                      const Spacer(),
+                      Tooltip(
+                        message: deleteTooltip,
+                        child: InkWell(
+                          onTap: onDelete,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.22),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.redAccent.withValues(alpha: 0.48),
+                                width: 0.9,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.delete_outline_rounded,
+                              color: Colors.redAccent,
+                              size: 19,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   child,
@@ -9037,28 +9351,42 @@ Make the entire output professional, well-structured using Markdown, and product
     const userAccent = Color(0xFF69D9E8);
     const aiAccent = Color(0xFFFF4AF3);
 
-    final availableMessages = _chatMessages
-        .where(
-          (msg) =>
-              msg.userText.trim().isNotEmpty || msg.aiText.trim().isNotEmpty,
-        )
-        .toList();
+    final entries = <MapEntry<int, ChatMessage>>[];
 
-    final recentMessages = availableMessages.length > 4
-        ? availableMessages.sublist(availableMessages.length - 4)
-        : availableMessages;
+    for (var index = 0; index < _chatMessages.length; index++) {
+      final message = _chatMessages[index];
 
-    Widget userBubble(String text) {
+      if (_answerChatMessageHasVisibleTurn(message)) {
+        entries.add(MapEntry(index, message));
+      }
+    }
+
+    final recentEntries = entries.length > 4
+        ? entries.sublist(entries.length - 4)
+        : entries;
+
+    Widget userBubble({required int? messageIndex, required String text}) {
       return _buildAnswerTurnBubble(
         isUser: true,
         icon: Icons.person_rounded,
         label: 'You',
         accent: userAccent,
+        deleteTooltip: 'Delete your question',
+        onDelete: messageIndex == null
+            ? () => _confirmDeleteLooseAnswerResultTurn(deleteUser: true)
+            : () => _confirmDeleteAnswerBoxTurn(
+                messageIndex: messageIndex,
+                deleteUser: true,
+              ),
         child: _buildAnswerText(text, compact: compact),
       );
     }
 
-    Widget aiBubble({required String text, GeneratedItem? generatedItem}) {
+    Widget aiBubble({
+      required int? messageIndex,
+      required String text,
+      GeneratedItem? generatedItem,
+    }) {
       final hasImage = generatedItem?.hasImageResult == true;
 
       return _buildAnswerTurnBubble(
@@ -9066,6 +9394,13 @@ Make the entire output professional, well-structured using Markdown, and product
         icon: Icons.auto_awesome_rounded,
         label: 'Korlix AI',
         accent: aiAccent,
+        deleteTooltip: 'Delete this answer',
+        onDelete: messageIndex == null
+            ? () => _confirmDeleteLooseAnswerResultTurn(deleteUser: false)
+            : () => _confirmDeleteAnswerBoxTurn(
+                messageIndex: messageIndex,
+                deleteUser: false,
+              ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -9095,18 +9430,29 @@ Make the entire output professional, well-structured using Markdown, and product
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (recentMessages.isEmpty) ...[
-              if (item.command.trim().isNotEmpty) userBubble(item.command),
-              aiBubble(
-                text: item.content,
-                generatedItem: item.hasImageResult ? item : null,
-              ),
+            if (recentEntries.isEmpty) ...[
+              if (item.command.trim().isNotEmpty)
+                userBubble(messageIndex: null, text: item.command),
+              if (item.content.trim().isNotEmpty || item.hasImageResult)
+                aiBubble(
+                  messageIndex: null,
+                  text: item.content,
+                  generatedItem: item.hasImageResult ? item : null,
+                ),
             ] else ...[
-              for (final msg in recentMessages) ...[
-                if (msg.userText.trim().isNotEmpty) userBubble(msg.userText),
-                if (msg.aiText.trim().isNotEmpty ||
-                    msg.generatedItem?.hasImageResult == true)
-                  aiBubble(text: msg.aiText, generatedItem: msg.generatedItem),
+              for (final entry in recentEntries) ...[
+                if (entry.value.userText.trim().isNotEmpty)
+                  userBubble(
+                    messageIndex: entry.key,
+                    text: entry.value.userText,
+                  ),
+                if (entry.value.aiText.trim().isNotEmpty ||
+                    entry.value.generatedItem?.hasImageResult == true)
+                  aiBubble(
+                    messageIndex: entry.key,
+                    text: entry.value.aiText,
+                    generatedItem: entry.value.generatedItem,
+                  ),
               ],
             ],
           ],
