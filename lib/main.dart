@@ -9233,6 +9233,8 @@ Make the entire output professional, well-structured using Markdown, and product
     required String label,
     required Color accent,
     required Widget child,
+    required VoidCallback onDelete,
+    required String deleteTooltip,
   }) {
     final radius = BorderRadius.only(
       topLeft: Radius.circular(isUser ? 20 : 7),
@@ -9257,7 +9259,7 @@ Make the entire output professional, well-structured using Markdown, and product
                 right: isUser ? 0 : 26,
                 bottom: 12,
               ),
-              padding: const EdgeInsets.fromLTRB(13, 11, 13, 12),
+              padding: const EdgeInsets.fromLTRB(13, 10, 9, 12),
               decoration: BoxDecoration(
                 color: isUser
                     ? const Color(0xFF082B3C).withValues(alpha: 0.82)
@@ -9284,10 +9286,40 @@ Make the entire output professional, well-structured using Markdown, and product
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildAnswerTurnLabel(
-                    icon: icon,
-                    label: label,
-                    color: accent,
+                  Row(
+                    children: [
+                      _buildAnswerTurnLabel(
+                        icon: icon,
+                        label: label,
+                        color: accent,
+                      ),
+                      const Spacer(),
+                      Tooltip(
+                        message: deleteTooltip,
+                        child: InkWell(
+                          onTap: onDelete,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.22),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.redAccent.withValues(alpha: 0.48),
+                                width: 0.9,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.delete_outline_rounded,
+                              color: Colors.redAccent,
+                              size: 19,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   child,
@@ -9319,28 +9351,42 @@ Make the entire output professional, well-structured using Markdown, and product
     const userAccent = Color(0xFF69D9E8);
     const aiAccent = Color(0xFFFF4AF3);
 
-    final availableMessages = _chatMessages
-        .where(
-          (msg) =>
-              msg.userText.trim().isNotEmpty || msg.aiText.trim().isNotEmpty,
-        )
-        .toList();
+    final entries = <MapEntry<int, ChatMessage>>[];
 
-    final recentMessages = availableMessages.length > 4
-        ? availableMessages.sublist(availableMessages.length - 4)
-        : availableMessages;
+    for (var index = 0; index < _chatMessages.length; index++) {
+      final message = _chatMessages[index];
 
-    Widget userBubble(String text) {
+      if (_answerChatMessageHasVisibleTurn(message)) {
+        entries.add(MapEntry(index, message));
+      }
+    }
+
+    final recentEntries = entries.length > 4
+        ? entries.sublist(entries.length - 4)
+        : entries;
+
+    Widget userBubble({required int? messageIndex, required String text}) {
       return _buildAnswerTurnBubble(
         isUser: true,
         icon: Icons.person_rounded,
         label: 'You',
         accent: userAccent,
+        deleteTooltip: 'Delete your question',
+        onDelete: messageIndex == null
+            ? () => _confirmDeleteLooseAnswerResultTurn(deleteUser: true)
+            : () => _confirmDeleteAnswerBoxTurn(
+                messageIndex: messageIndex,
+                deleteUser: true,
+              ),
         child: _buildAnswerText(text, compact: compact),
       );
     }
 
-    Widget aiBubble({required String text, GeneratedItem? generatedItem}) {
+    Widget aiBubble({
+      required int? messageIndex,
+      required String text,
+      GeneratedItem? generatedItem,
+    }) {
       final hasImage = generatedItem?.hasImageResult == true;
 
       return _buildAnswerTurnBubble(
@@ -9348,6 +9394,13 @@ Make the entire output professional, well-structured using Markdown, and product
         icon: Icons.auto_awesome_rounded,
         label: 'Korlix AI',
         accent: aiAccent,
+        deleteTooltip: 'Delete this answer',
+        onDelete: messageIndex == null
+            ? () => _confirmDeleteLooseAnswerResultTurn(deleteUser: false)
+            : () => _confirmDeleteAnswerBoxTurn(
+                messageIndex: messageIndex,
+                deleteUser: false,
+              ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -9377,18 +9430,29 @@ Make the entire output professional, well-structured using Markdown, and product
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (recentMessages.isEmpty) ...[
-              if (item.command.trim().isNotEmpty) userBubble(item.command),
-              aiBubble(
-                text: item.content,
-                generatedItem: item.hasImageResult ? item : null,
-              ),
+            if (recentEntries.isEmpty) ...[
+              if (item.command.trim().isNotEmpty)
+                userBubble(messageIndex: null, text: item.command),
+              if (item.content.trim().isNotEmpty || item.hasImageResult)
+                aiBubble(
+                  messageIndex: null,
+                  text: item.content,
+                  generatedItem: item.hasImageResult ? item : null,
+                ),
             ] else ...[
-              for (final msg in recentMessages) ...[
-                if (msg.userText.trim().isNotEmpty) userBubble(msg.userText),
-                if (msg.aiText.trim().isNotEmpty ||
-                    msg.generatedItem?.hasImageResult == true)
-                  aiBubble(text: msg.aiText, generatedItem: msg.generatedItem),
+              for (final entry in recentEntries) ...[
+                if (entry.value.userText.trim().isNotEmpty)
+                  userBubble(
+                    messageIndex: entry.key,
+                    text: entry.value.userText,
+                  ),
+                if (entry.value.aiText.trim().isNotEmpty ||
+                    entry.value.generatedItem?.hasImageResult == true)
+                  aiBubble(
+                    messageIndex: entry.key,
+                    text: entry.value.aiText,
+                    generatedItem: entry.value.generatedItem,
+                  ),
               ],
             ],
           ],
