@@ -4256,6 +4256,61 @@ app.use("/api", (req, res) => {
   });
 });
 
+// KORLIX_AI_OUTPUT_REPORT_ROUTE_BEGIN
+const korlixAiOutputReports = [];
+
+app.post(['/api/report-output', '/api/reports/content', '/api/report'], async (req, res) => {
+  try {
+    const body = req.body || {};
+    const reportId = `korlix_report_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+    const report = {
+      id: reportId,
+      contentType: String(body.contentType || 'ai_output'),
+      reason: String(body.reason || 'Other'),
+      details: String(body.details || ''),
+      prompt: String(body.prompt || ''),
+      outputSummary: String(body.outputSummary || ''),
+      contentId: String(body.contentId || ''),
+      language: String(body.language || ''),
+      platform: String(body.platform || ''),
+      appArea: String(body.appArea || 'ai_generated_content_report'),
+      createdAt: new Date().toISOString(),
+      ip: req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '',
+      userAgent: req.headers['user-agent'] || ''
+    };
+
+    korlixAiOutputReports.push(report);
+
+    if (korlixAiOutputReports.length > 1000) {
+      korlixAiOutputReports.shift();
+    }
+
+    console.log('[KORLIX_AI_OUTPUT_REPORT]', JSON.stringify(report));
+
+    res.status(201).json({
+      ok: true,
+      reportId,
+      message: 'AI output report received.'
+    });
+  } catch (error) {
+    console.error('[KORLIX_AI_OUTPUT_REPORT_ERROR]', error);
+    res.status(500).json({
+      ok: false,
+      error: 'Could not submit AI output report.'
+    });
+  }
+});
+
+app.get('/api/report-output/health', (req, res) => {
+  res.json({
+    ok: true,
+    feature: 'ai_output_reporting',
+    reportCount: korlixAiOutputReports.length
+  });
+});
+// KORLIX_AI_OUTPUT_REPORT_ROUTE_END
+
 app.listen(port, () => {
   console.log(`Korlix AI backend running on port ${port}`);
 });

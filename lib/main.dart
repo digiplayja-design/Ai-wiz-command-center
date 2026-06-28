@@ -7802,6 +7802,7 @@ Make the entire output professional, well-structured using Markdown, and product
                     _buildMockupHomeHeader(),
                     _buildMockupLanguageTabs(),
                     _buildMockupFeaturedCharacterCard(),
+                    _buildReportCurrentAiOutputButton(),
                     _buildThemeShortcutCircles(),
                     _buildPersistentSavedTopicsMenuRow(),
                     const SizedBox(height: 18),
@@ -12665,6 +12666,429 @@ Make the entire output professional, well-structured using Markdown, and product
           ),
         );
       },
+    );
+  }
+
+  List<String> _googlePlayAiReportReasons() {
+    return const <String>[
+      'Offensive or abusive',
+      'Unsafe or harmful',
+      'False or misleading',
+      'Hate or harassment',
+      'Sexual content',
+      'Other',
+    ];
+  }
+
+  GeneratedItem? _latestReportableAiOutput() {
+    if (_results.isEmpty) {
+      return null;
+    }
+
+    for (final item in _results) {
+      final hasContent =
+          item.content.trim().isNotEmpty ||
+          item.hasImageResult ||
+          (item.imageDataUrl != null && item.imageDataUrl!.isNotEmpty) ||
+          (item.imageUrl != null && item.imageUrl!.isNotEmpty);
+
+      if (hasContent) {
+        return item;
+      }
+    }
+
+    return null;
+  }
+
+  String _reportableOutputSummary(GeneratedItem item) {
+    final cleaned = _cleanDisplayText(item.content).trim();
+
+    if (cleaned.isNotEmpty) {
+      return cleaned;
+    }
+
+    if (item.hasImageResult) {
+      return 'Generated image output';
+    }
+
+    return 'Generated AI output';
+  }
+
+  Future<bool> _submitGooglePlayAiReport({
+    required String contentType,
+    required String prompt,
+    required String outputSummary,
+    required String reason,
+    required String details,
+    String? contentId,
+  }) async {
+    final payload = <String, dynamic>{
+      'contentType': contentType,
+      'reason': reason,
+      'details': details,
+      'prompt': prompt,
+      'outputSummary': outputSummary,
+      'contentId': contentId,
+      'language': _selectedLanguage,
+      'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
+      'appArea': 'google_play_ai_generated_content_report',
+      'createdAt': DateTime.now().toIso8601String(),
+    };
+
+    final endpoints = <String>[
+      '$kKorlixBackendBaseUrl/api/report-output',
+      '$kKorlixBackendBaseUrl/api/reports/content',
+      '$kKorlixBackendBaseUrl/api/report',
+    ];
+
+    for (final endpoint in endpoints) {
+      try {
+        final response = await http
+            .post(
+              Uri.parse(endpoint),
+              headers: _authHeaders(),
+              body: jsonEncode(payload),
+            )
+            .timeout(const Duration(seconds: 18));
+
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          return true;
+        }
+      } catch (_) {
+        // Try next endpoint.
+      }
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final pending =
+          prefs.getStringList('korlix_pending_ai_output_reports') ?? <String>[];
+      pending.add(jsonEncode(payload));
+      await prefs.setStringList('korlix_pending_ai_output_reports', pending);
+    } catch (_) {
+      // Local fallback should never crash the app.
+    }
+
+    return false;
+  }
+
+  Future<void> _showGooglePlayAiReportSheet({
+    required String contentType,
+    required String prompt,
+    required String outputSummary,
+    String? contentId,
+  }) async {
+    final detailsController = TextEditingController();
+    var selectedReason = _googlePlayAiReportReasons().first;
+
+    try {
+      final result = await showModalBottomSheet<Map<String, String>>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: const Color(0xFF07111F),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (sheetContext) {
+          return StatefulBuilder(
+            builder: (context, setSheetState) {
+              final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+              return SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(20, 18, 20, 22 + bottomInset),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFFA9C6CF,
+                            ).withValues(alpha: 0.42),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        const Icon(
+                          Icons.flag_rounded,
+                          color: Colors.redAccent,
+                          size: 36,
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Report AI Output',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Color(0xFFE4EBEE),
+                            fontSize: 21,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Report offensive, unsafe, misleading, or policy-violating AI-generated content without leaving the app.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Color(0xFFA9C6CF),
+                            fontSize: 13.5,
+                            height: 1.35,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          alignment: WrapAlignment.center,
+                          children: _googlePlayAiReportReasons().map((reason) {
+                            final selected = selectedReason == reason;
+
+                            return ChoiceChip(
+                              selected: selected,
+                              label: Text(reason),
+                              onSelected: (_) {
+                                setSheetState(() {
+                                  selectedReason = reason;
+                                });
+                              },
+                              selectedColor: Colors.redAccent.withValues(
+                                alpha: 0.22,
+                              ),
+                              backgroundColor: Colors.black.withValues(
+                                alpha: 0.20,
+                              ),
+                              side: BorderSide(
+                                color: selected
+                                    ? Colors.redAccent
+                                    : const Color(
+                                        0xFF69D9E8,
+                                      ).withValues(alpha: 0.30),
+                              ),
+                              labelStyle: TextStyle(
+                                color: selected
+                                    ? Colors.white
+                                    : const Color(
+                                        0xFFE4EBEE,
+                                      ).withValues(alpha: 0.86),
+                                fontWeight: FontWeight.w800,
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 14),
+                        TextField(
+                          controller: detailsController,
+                          minLines: 3,
+                          maxLines: 5,
+                          style: const TextStyle(color: Color(0xFFE4EBEE)),
+                          cursorColor: const Color(0xFF69D9E8),
+                          decoration: InputDecoration(
+                            hintText:
+                                'Optional details for the Korlix AI safety team...',
+                            hintStyle: TextStyle(
+                              color: const Color(
+                                0xFFA9C6CF,
+                              ).withValues(alpha: 0.72),
+                            ),
+                            filled: true,
+                            fillColor: Colors.black.withValues(alpha: 0.24),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(
+                                color: const Color(
+                                  0xFF69D9E8,
+                                ).withValues(alpha: 0.26),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF69D9E8),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: const Color(
+                                0xFF69D9E8,
+                              ).withValues(alpha: 0.20),
+                            ),
+                          ),
+                          child: Text(
+                            outputSummary.trim().isEmpty
+                                ? 'No generated output text available.'
+                                : outputSummary.trim(),
+                            maxLines: 5,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFFA9C6CF),
+                              fontSize: 12.5,
+                              height: 1.35,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () =>
+                                    Navigator.of(sheetContext).pop(),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFFE4EBEE),
+                                  side: BorderSide(
+                                    color: Colors.white.withValues(alpha: 0.22),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 13,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Cancel',
+                                  style: TextStyle(fontWeight: FontWeight.w900),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed: () {
+                                  Navigator.of(
+                                    sheetContext,
+                                  ).pop(<String, String>{
+                                    'reason': selectedReason,
+                                    'details': detailsController.text.trim(),
+                                  });
+                                },
+                                icon: const Icon(Icons.flag_rounded),
+                                label: const Text('Submit'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.redAccent,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 13,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+
+      if (result == null || !mounted) {
+        return;
+      }
+
+      final sent = await _submitGooglePlayAiReport(
+        contentType: contentType,
+        prompt: prompt,
+        outputSummary: outputSummary,
+        reason: result['reason'] ?? 'Other',
+        details: result['details'] ?? '',
+        contentId: contentId,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            sent
+                ? 'Report submitted. Thank you for helping improve Korlix AI safety.'
+                : 'Report saved in the app. It will be available for Korlix AI review.',
+          ),
+        ),
+      );
+    } finally {
+      detailsController.dispose();
+    }
+  }
+
+  Widget _buildReportAiOutputButton({
+    required String contentType,
+    required String prompt,
+    required String outputSummary,
+    String? contentId,
+    bool compact = false,
+  }) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: TextButton.icon(
+        onPressed: () => _showGooglePlayAiReportSheet(
+          contentType: contentType,
+          prompt: prompt,
+          outputSummary: outputSummary,
+          contentId: contentId,
+        ),
+        icon: const Icon(Icons.flag_outlined, size: 17),
+        label: const Text('Report AI Output'),
+        style: TextButton.styleFrom(
+          foregroundColor: Colors.redAccent,
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 10 : 12,
+            vertical: compact ? 7 : 9,
+          ),
+          textStyle: TextStyle(
+            fontSize: compact ? 11.5 : 12.5,
+            fontWeight: FontWeight.w900,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+            side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.52)),
+          ),
+          backgroundColor: Colors.black.withValues(alpha: 0.20),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReportCurrentAiOutputButton() {
+    final item = _latestReportableAiOutput();
+
+    if (item == null) {
+      return const SizedBox.shrink();
+    }
+
+    final isImage =
+        item.hasImageResult ||
+        (item.imageDataUrl != null && item.imageDataUrl!.isNotEmpty) ||
+        (item.imageUrl != null && item.imageUrl!.isNotEmpty);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 4, 22, 8),
+      child: _buildReportAiOutputButton(
+        contentType: isImage ? 'image' : 'text answer',
+        prompt: item.command,
+        outputSummary: _reportableOutputSummary(item),
+        contentId: item.title.trim().isEmpty ? item.command : item.title,
+      ),
     );
   }
 
