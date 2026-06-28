@@ -8797,55 +8797,140 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   Widget _buildUtilityButton() {
+    final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
     final isActive = _utilityPanelOpen || _selectedUtilityTool != null;
 
     return ActionChip(
       avatar: Icon(
         Icons.build_circle_outlined,
         size: 18,
-        color: isActive ? Colors.white : const Color(0xFF67E8F9),
+        color: isActive ? skin.textOnAccent : _korlixDefinitionBorder(skin),
       ),
       label: const Text('Utility'),
       labelStyle: TextStyle(
-        color: isActive ? Colors.white : const Color(0xFFE5E7EB),
-        fontWeight: FontWeight.w700,
+        color: isActive
+            ? skin.textOnAccent
+            : _korlixReadableToolForeground(skin),
+        fontWeight: FontWeight.w900,
       ),
       backgroundColor: isActive
-          ? const Color(0xFF16A34A)
-          : const Color(0xFF111827),
+          ? skin.success
+          : skin.buttonFill.withValues(alpha: skin.isLight ? 0.96 : 0.78),
       side: BorderSide(
-        color: isActive ? const Color(0xFF22C55E) : const Color(0xFF0891B2),
+        color: isActive
+            ? skin.success.withValues(alpha: 0.96)
+            : _korlixDefinitionBorder(skin),
+        width: 2.1,
       ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       onPressed: _loading ? null : _toggleUtilityPanel,
     );
   }
 
   Widget _buildUtilityPanel() {
+    final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
     final selectedTool = _selectedUtilityTool;
+
+    final guidedOnlyTools = <String>{
+      'Video splitter',
+      'Alarm',
+      'Weather',
+      'Outside temperature',
+      'GIF maker',
+      'Ringtone maker',
+      'Reel maker',
+    };
+
+    final uploadAssistedTools = <String>{
+      'Photo editor',
+      'Background remover',
+      'PDF editor',
+    };
+
+    String statusFor(String tool) {
+      if (guidedOnlyTools.contains(tool)) {
+        return 'Guided workflow — not a full native tool yet';
+      }
+
+      if (uploadAssistedTools.contains(tool)) {
+        return 'Upload-assisted workflow';
+      }
+
+      if (tool == 'Voice recorder') {
+        return 'Voice/dictation workflow';
+      }
+
+      return 'Prompt workflow';
+    }
+
+    Color statusColorFor(String tool) {
+      if (guidedOnlyTools.contains(tool)) {
+        return skin.premium;
+      }
+
+      if (uploadAssistedTools.contains(tool)) {
+        return skin.secondary;
+      }
+
+      return skin.success;
+    }
+
+    Widget statusPill(String text, Color color) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: skin.isLight ? 0.16 : 0.22),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: 0.92), width: 1.5),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            color: skin.isLight ? const Color(0xFF07111F) : color,
+            fontSize: 11.2,
+            fontWeight: FontWeight.w900,
+            height: 1.05,
+          ),
+        ),
+      );
+    }
 
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: const Color(0xFF071923),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF0891B2)),
+        color: skin.panelDeep.withValues(alpha: skin.isLight ? 0.96 : 0.94),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _korlixDefinitionBorder(skin), width: 2.7),
+        boxShadow: [
+          BoxShadow(
+            color: _korlixDefinitionShadow(skin),
+            blurRadius: 24,
+            spreadRadius: 1,
+            offset: const Offset(0, 10),
+          ),
+          BoxShadow(
+            color: skin.glow.withValues(alpha: skin.isLight ? 0.10 : 0.18),
+            blurRadius: 34,
+            spreadRadius: 1,
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.tune, color: Color(0xFF67E8F9), size: 20),
+              Icon(Icons.tune, color: skin.primary, size: 21),
               const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Utility',
                   style: TextStyle(
-                    color: Color(0xFFE5E7EB),
+                    color: _korlixReadableForeground(skin),
                     fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
@@ -8858,32 +8943,70 @@ Make the entire output professional, well-structured using Markdown, and product
                           _clearUtilitySelection();
                         });
                       },
-                icon: const Icon(Icons.close, color: Color(0xFFE5E7EB)),
+                icon: Icon(Icons.close, color: _korlixReadableForeground(skin)),
               ),
             ],
           ),
           const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(11),
+            decoration: BoxDecoration(
+              color: skin.panel.withValues(alpha: skin.isLight ? 0.92 : 0.68),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: _korlixDefinitionBorder(
+                  skin,
+                  secondary: true,
+                ).withValues(alpha: skin.isLight ? 0.70 : 0.90),
+                width: 1.8,
+              ),
+            ),
+            child: Text(
+              'Status note: Video splitter, Alarm, Weather, Outside temperature, GIF maker, Ringtone maker, and Reel maker are guided workflows right now — not full native tools yet. Weather and Outside temperature should be treated as request prompts unless a live weather backend is connected.',
+              style: TextStyle(
+                color: _korlixReadableForeground(skin, muted: true),
+                fontSize: 12.4,
+                height: 1.35,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: _utilityTools.map((tool) {
               final selected = selectedTool == tool;
+              final status = statusFor(tool);
+              final statusColor = statusColorFor(tool);
 
-              return ActionChip(
-                label: Text(tool),
-                labelStyle: TextStyle(
-                  color: selected ? Colors.white : const Color(0xFFE5E7EB),
-                  fontWeight: FontWeight.w700,
+              return Tooltip(
+                message: status,
+                child: ActionChip(
+                  label: Text(tool),
+                  labelStyle: TextStyle(
+                    color: selected
+                        ? skin.textOnAccent
+                        : _korlixReadableForeground(skin),
+                    fontWeight: FontWeight.w900,
+                  ),
+                  backgroundColor: selected
+                      ? skin.success
+                      : skin.buttonFill.withValues(
+                          alpha: skin.isLight ? 0.94 : 0.76,
+                        ),
+                  side: BorderSide(
+                    color: selected
+                        ? skin.success.withValues(alpha: 0.96)
+                        : statusColor.withValues(alpha: 0.88),
+                    width: selected ? 2.25 : 1.75,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  onPressed: _loading ? null : () => _selectUtilityTool(tool),
                 ),
-                backgroundColor: selected
-                    ? const Color(0xFF16A34A)
-                    : const Color(0xFF111827),
-                side: BorderSide(
-                  color: selected
-                      ? const Color(0xFF22C55E)
-                      : const Color(0xFF0891B2),
-                ),
-                onPressed: _loading ? null : () => _selectUtilityTool(tool),
               );
             }).toList(),
           ),
@@ -8891,19 +9014,40 @@ Make the entire output professional, well-structured using Markdown, and product
             const SizedBox(height: 12),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF145369)),
-              ),
-              child: Text(
-                _utilityToolDescription(selectedTool),
-                style: const TextStyle(
-                  color: Color(0xFFE5E7EB),
-                  fontSize: 13,
-                  height: 1.35,
+                color: skin.panel.withValues(alpha: skin.isLight ? 0.96 : 0.76),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: statusColorFor(selectedTool).withValues(alpha: 0.96),
+                  width: 2.1,
                 ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      statusPill(
+                        statusFor(selectedTool),
+                        statusColorFor(selectedTool),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 9),
+                  Text(
+                    _utilityToolDescription(selectedTool),
+                    style: TextStyle(
+                      color: _korlixReadableForeground(skin),
+                      fontSize: 13,
+                      height: 1.35,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -10240,6 +10384,12 @@ Make the entire output professional, well-structured using Markdown, and product
                   searchText: 'gas station',
                 ),
                 option(
+                  icon: Icons.account_balance_outlined,
+                  title: 'Find me an ATM',
+                  queryType: 'atm',
+                  searchText: 'ATM',
+                ),
+                option(
                   icon: Icons.church_rounded,
                   title: 'Find me a church',
                   queryType: 'church',
@@ -11158,8 +11308,8 @@ Make the entire output professional, well-structured using Markdown, and product
                       ),
                 borderRadius: radius,
                 border: Border.all(
-                  color: accent.withValues(alpha: 0.76),
-                  width: 1.05,
+                  color: accent.withValues(alpha: 0.96),
+                  width: 2.05,
                 ),
                 boxShadow: [
                   BoxShadow(
@@ -11200,7 +11350,7 @@ Make the entire output professional, well-structured using Markdown, and product
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: Colors.redAccent.withValues(alpha: 0.48),
-                                width: 0.9,
+                                width: 1.35,
                               ),
                             ),
                             child: Icon(
@@ -11224,13 +11374,62 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
+  Color _korlixReadableForeground(
+    KorlixSkinPalette skin, {
+    bool muted = false,
+    bool hint = false,
+  }) {
+    if (skin.isLight) {
+      if (hint) {
+        return const Color(0xFF2F3F4E);
+      }
+
+      if (muted) {
+        return const Color(0xFF243444);
+      }
+
+      return const Color(0xFF07111F);
+    }
+
+    if (hint) {
+      return const Color(0xFFE3F8FF);
+    }
+
+    if (muted) {
+      return const Color(0xFFD7F1F8);
+    }
+
+    return const Color(0xFFF7FCFF);
+  }
+
+  Color _korlixReadableToolForeground(KorlixSkinPalette skin) {
+    return skin.isLight ? const Color(0xFF07111F) : const Color(0xFFF7FCFF);
+  }
+
+  Color _korlixDefinitionBorder(
+    KorlixSkinPalette skin, {
+    bool secondary = false,
+  }) {
+    if (skin.isLight) {
+      return secondary ? const Color(0xFF334155) : const Color(0xFF07111F);
+    }
+
+    return (secondary ? skin.secondary : skin.primary).withValues(alpha: 0.96);
+  }
+
+  Color _korlixDefinitionShadow(KorlixSkinPalette skin) {
+    return skin.isLight
+        ? const Color(0xFF07111F).withValues(alpha: 0.18)
+        : Colors.black.withValues(alpha: 0.52);
+  }
+
   Widget _buildAnswerText(String value, {required bool compact}) {
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
 
     return Text(
       value,
       style: TextStyle(
-        color: skin.text,
+        color: _korlixReadableForeground(skin),
         fontSize: compact ? 13.5 : 14.5,
         height: 1.38,
         fontWeight: FontWeight.w600,
@@ -11260,11 +11459,11 @@ Make the entire output professional, well-structured using Markdown, and product
         ? entries.sublist(entries.length - 4)
         : entries;
 
-    // Show the latest question/answer first so users do not need to scroll
-    // down to see the newest response in a long thread.
-    final newestFirstEntries = recentEntries.reversed.toList(growable: false);
-    final newestAnswerTurnKey = newestFirstEntries.isNotEmpty
-        ? 'chat-${newestFirstEntries.first.key}'
+    // Keep the conversation timeline natural: older turns above, newest turn
+    // below. The scroll view starts at the bottom so the newest dialog is
+    // visible first and the user scrolls up for older messages.
+    final latestAnswerTurnKey = recentEntries.isNotEmpty
+        ? 'chat-${recentEntries.last.key}'
         : 'loose-${item.command.hashCode}-${item.content.hashCode}';
 
     Widget userBubble({required int? messageIndex, required String text}) {
@@ -11327,34 +11526,35 @@ Make the entire output professional, well-structured using Markdown, and product
     return Scrollbar(
       thumbVisibility: false,
       child: SingleChildScrollView(
-        key: ValueKey('answer-ready-$newestAnswerTurnKey'),
+        key: ValueKey('answer-ready-bottom-$latestAnswerTurnKey'),
+        reverse: true,
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.only(right: 2),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (newestFirstEntries.isEmpty) ...[
-              if (item.command.trim().isNotEmpty)
-                userBubble(messageIndex: null, text: item.command),
+            if (recentEntries.isEmpty) ...[
               if (item.content.trim().isNotEmpty || item.hasImageResult)
                 aiBubble(
                   messageIndex: null,
                   text: item.content,
                   generatedItem: item.hasImageResult ? item : null,
                 ),
+              if (item.command.trim().isNotEmpty)
+                userBubble(messageIndex: null, text: item.command),
             ] else ...[
-              for (final entry in newestFirstEntries) ...[
-                if (entry.value.userText.trim().isNotEmpty)
-                  userBubble(
-                    messageIndex: entry.key,
-                    text: entry.value.userText,
-                  ),
+              for (final entry in recentEntries) ...[
                 if (entry.value.aiText.trim().isNotEmpty ||
                     entry.value.generatedItem?.hasImageResult == true)
                   aiBubble(
                     messageIndex: entry.key,
                     text: entry.value.aiText,
                     generatedItem: entry.value.generatedItem,
+                  ),
+                if (entry.value.userText.trim().isNotEmpty)
+                  userBubble(
+                    messageIndex: entry.key,
+                    text: entry.value.userText,
                   ),
               ],
             ],
@@ -11413,7 +11613,9 @@ Make the entire output professional, well-structured using Markdown, and product
         ),
         label: Text(label),
         style: OutlinedButton.styleFrom(
-          foregroundColor: isGreen ? skin.textOnAccent : accent,
+          foregroundColor: isGreen
+              ? skin.textOnAccent
+              : _korlixReadableToolForeground(skin),
           backgroundColor: isGreen
               ? skin.success
               : skin.buttonFill.withOpacity(skin.isLight ? 0.78 : 0.72),
@@ -11462,12 +11664,35 @@ Make the entire output professional, well-structured using Markdown, and product
         onLongPress: activeResult == null
             ? null
             : () => _copyFeaturedResult(activeResult),
-        child: _KorlixCleanAnswerReadyBox(child: answerReadyBody()),
+        child: Container(
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(31),
+            border: Border.all(
+              color: _korlixDefinitionBorder(
+                skin,
+              ).withValues(alpha: skin.isLight ? 0.72 : 0.96),
+              width: 2.8,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _korlixDefinitionShadow(skin),
+                blurRadius: 22,
+                spreadRadius: 1,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: _KorlixCleanAnswerReadyBox(child: answerReadyBody()),
+        ),
       );
     }
 
     Widget singleInputBoard() {
       final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
+      final inputTextColor = _korlixReadableForeground(skin);
+      final inputHintColor = _korlixReadableForeground(skin, hint: true);
+
       return AnimatedSize(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
@@ -11476,11 +11701,13 @@ Make the entire output professional, well-structured using Markdown, and product
           width: double.infinity,
           padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.40),
+            color: skin.inputFill.withOpacity(skin.isLight ? 0.98 : 0.90),
             borderRadius: BorderRadius.circular(22),
             border: Border.all(
-              color: skin.primary.withOpacity(0.48),
-              width: 1.15,
+              color: _korlixDefinitionBorder(
+                skin,
+              ).withValues(alpha: skin.isLight ? 0.74 : 0.96),
+              width: 2.4,
             ),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -11522,14 +11749,14 @@ Make the entire output professional, well-structured using Markdown, and product
                   style: TextStyle(
                     fontSize: 16,
                     height: 1.28,
-                    color: skin.text,
+                    color: inputTextColor,
                     fontWeight: FontWeight.w700,
                     fontStyle: FontStyle.italic,
                   ),
                   decoration: InputDecoration(
                     hintText: hintText,
                     hintStyle: TextStyle(
-                      color: skin.mutedText.withOpacity(0.74),
+                      color: inputHintColor.withOpacity(0.96),
                       fontSize: 15.5,
                       fontStyle: FontStyle.italic,
                       fontWeight: FontWeight.w600,
@@ -11567,7 +11794,7 @@ Make the entire output professional, well-structured using Markdown, and product
                             height: 21,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: skin.text,
+                              color: inputTextColor,
                             ),
                           )
                         : Icon(
@@ -11575,7 +11802,7 @@ Make the entire output professional, well-structured using Markdown, and product
                             size: 25,
                             color: canSubmit
                                 ? const Color(0xFF69D9E8)
-                                : Colors.white38,
+                                : inputHintColor.withOpacity(0.64),
                           ),
                   ),
                 ),
@@ -11599,11 +11826,14 @@ Make the entire output professional, well-structured using Markdown, and product
           Container(
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
             decoration: BoxDecoration(
-              color: const Color(0xFF071B27).withOpacity(0.88),
+              color: skin.panel.withOpacity(skin.isLight ? 0.96 : 0.88),
               borderRadius: BorderRadius.circular(26),
               border: Border.all(
-                color: skin.border.withOpacity(0.46),
-                width: 1.1,
+                color: _korlixDefinitionBorder(
+                  skin,
+                  secondary: true,
+                ).withValues(alpha: skin.isLight ? 0.74 : 0.94),
+                width: 2.6,
               ),
               boxShadow: [
                 BoxShadow(
@@ -11646,11 +11876,11 @@ Make the entire output professional, well-structured using Markdown, and product
                       icon: Icon(Icons.location_on_outlined, size: 18),
                       label: Text('Locator'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: skin.primary,
+                        foregroundColor: _korlixReadableToolForeground(skin),
                         backgroundColor: skin.buttonFill.withOpacity(
-                          skin.isLight ? 0.78 : 0.72,
+                          skin.isLight ? 0.94 : 0.72,
                         ),
-                        side: BorderSide(color: skin.primary.withOpacity(0.42)),
+                        side: BorderSide(color: skin.primary.withOpacity(0.58)),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 9,
