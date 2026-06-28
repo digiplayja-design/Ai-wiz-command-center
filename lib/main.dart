@@ -35,6 +35,25 @@ bool kSupabaseReady = false;
 String? kKorlixAccessToken;
 String? kKorlixRefreshToken;
 String? kKorlixUserEmail;
+
+final ValueNotifier<int> kKorlixAuthRevision = ValueNotifier<int>(0);
+
+void korlixSetInMemorySession(KorlixAuthSession? session) {
+  kKorlixAccessToken = session?.accessToken;
+  kKorlixRefreshToken = session?.refreshToken;
+  kKorlixUserEmail = session?.email;
+  kKorlixAuthRevision.value = kKorlixAuthRevision.value + 1;
+}
+
+Future<void> korlixClearLocalAuthSession() async {
+  await KorlixSessionStore.clear();
+  korlixSetInMemorySession(null);
+}
+
+bool korlixIsSessionTimeoutStatus(int statusCode) {
+  return statusCode == 401 || statusCode == 419 || statusCode == 440;
+}
+
 String? kKorlixDeviceId;
 String? kKorlixDeviceLabel;
 
@@ -446,7 +465,20 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void initState() {
     super.initState();
+    kKorlixAuthRevision.addListener(_handleAuthRevisionChanged);
     _restoreSession();
+  }
+
+  @override
+  void dispose() {
+    kKorlixAuthRevision.removeListener(_handleAuthRevisionChanged);
+    super.dispose();
+  }
+
+  void _handleAuthRevisionChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _restoreSession() async {
@@ -459,17 +491,18 @@ class _AuthGateState extends State<AuthGate> {
         const Duration(seconds: 5),
       );
 
-      if (saved != null) {
+      if (saved == null) {
+        await korlixClearLocalAuthSession();
+      } else {
         final refreshed = await KorlixSessionStore.refresh(
           saved,
         ).timeout(const Duration(seconds: 8));
 
         if (refreshed != null) {
-          kKorlixAccessToken = refreshed.accessToken;
-          kKorlixRefreshToken = refreshed.refreshToken;
-          kKorlixUserEmail = refreshed.email;
+          await KorlixSessionStore.save(refreshed);
+          korlixSetInMemorySession(refreshed);
         } else {
-          await KorlixSessionStore.clear();
+          await korlixClearLocalAuthSession();
         }
       }
     } catch (error, stack) {
@@ -477,6 +510,10 @@ class _AuthGateState extends State<AuthGate> {
       kKorlixBootWarnings.add(warning);
       debugPrint('Korlix startup warning: $warning');
       debugPrintStack(stackTrace: stack);
+
+      // If restore/refresh fails, do not leave a stale token making the user
+      // appear signed in. Force a complete local signout.
+      await korlixClearLocalAuthSession();
     }
 
     if (mounted) {
@@ -489,10 +526,12 @@ class _AuthGateState extends State<AuthGate> {
   Future<void> _handleSignedIn(KorlixAuthSession session) async {
     await KorlixSessionStore.save(session);
 
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
-      kKorlixAccessToken = session.accessToken;
-      kKorlixRefreshToken = session.refreshToken;
-      kKorlixUserEmail = session.email;
+      korlixSetInMemorySession(session);
     });
   }
 
@@ -514,13 +553,11 @@ class _AuthGateState extends State<AuthGate> {
       // Local sign-out should still happen even if the server cleanup fails.
     }
 
-    await KorlixSessionStore.clear();
+    await korlixClearLocalAuthSession();
 
-    setState(() {
-      kKorlixAccessToken = null;
-      kKorlixRefreshToken = null;
-      kKorlixUserEmail = null;
-    });
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -4442,7 +4479,8 @@ class CommandCenterScreen extends StatefulWidget {
   State<CommandCenterScreen> createState() => _CommandCenterScreenState();
 }
 
-class _CommandCenterScreenState extends State<CommandCenterScreen> {
+class _CommandCenterScreenState extends State<CommandCenterScreen>
+    with WidgetsBindingObserver {
   bool _showSavedTopicsPanel = false;
   final ScrollController _savedTopicsScrollController = ScrollController();
   final TextEditingController _renameTopicController = TextEditingController();
@@ -4500,6 +4538,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   final Map<String, KorlixLocalChatTopic> _chatTopicsById =
       <String, KorlixLocalChatTopic>{};
   String? _activeChatTopicId;
+  static const String _pendingGenerationJobsPrefsKey =
+      'korlix_pending_generation_jobs_v1';
+  bool _appLifecyclePaused = false;
+  bool _resumePendingGenerationJobsRunning = false;
   OverlayEntry? _savedTopicsOverlayEntry;
   final LayerLink _savedTopicsMenuLayerLink = LayerLink();
   bool _chatHistoryLoaded = false;
@@ -4526,9 +4568,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadSavedKorlixTheme();
     _loadCurrentTier();
     _loadLocalChatTopics();
+    unawaited(_resumePendingGenerationJobs());
   }
 
   Future<void> _loadSavedKorlixTheme() async {
@@ -4542,6 +4586,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _savedTopicsOverlayEntry?.remove();
     _savedTopicsOverlayEntry = null;
     _renameTopicController.dispose();
@@ -5067,7 +5112,524 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     });
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final paused =
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden;
+
+    _appLifecyclePaused = paused;
+
+    if (state == AppLifecycleState.resumed) {
+      _appLifecyclePaused = false;
+      unawaited(_resumePendingGenerationJobs());
+    }
+  }
+
+  Future<void> _forceSignOutForSessionTimeout() async {
+    await korlixClearLocalAuthSession();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _loading = false;
+      _error = 'Your session timed out. Please sign in again.';
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Your session timed out. Please sign in again.'),
+        duration: Duration(seconds: 5),
+      ),
+    );
+  }
+
+  String _makePendingGenerationJobId(String kind) {
+    final safeKind = kind.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '-');
+    return 'korlix-$safeKind-${DateTime.now().microsecondsSinceEpoch}-${_chatMessages.length}-${_results.length}';
+  }
+
+  Future<List<Map<String, dynamic>>> _loadPendingGenerationJobs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_pendingGenerationJobsPrefsKey);
+
+      if (raw == null || raw.trim().isEmpty) {
+        return <Map<String, dynamic>>[];
+      }
+
+      final decoded = jsonDecode(raw);
+
+      if (decoded is! List) {
+        return <Map<String, dynamic>>[];
+      }
+
+      return decoded
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .where(
+            (item) => (item['localJobId'] ?? '').toString().trim().isNotEmpty,
+          )
+          .toList();
+    } catch (_) {
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  Future<void> _savePendingGenerationJobs(
+    List<Map<String, dynamic>> jobs,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_pendingGenerationJobsPrefsKey, jsonEncode(jobs));
+    } catch (_) {
+      // Pending job persistence should never block the app.
+    }
+  }
+
+  Future<void> _upsertPendingGenerationJob(Map<String, dynamic> job) async {
+    final localJobId = (job['localJobId'] ?? '').toString().trim();
+
+    if (localJobId.isEmpty) {
+      return;
+    }
+
+    final jobs = await _loadPendingGenerationJobs();
+    jobs.removeWhere((item) => item['localJobId'] == localJobId);
+    jobs.add(<String, dynamic>{
+      ...job,
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
+
+    await _savePendingGenerationJobs(jobs);
+  }
+
+  Future<void> _removePendingGenerationJob(String localJobId) async {
+    final safeId = localJobId.trim();
+
+    if (safeId.isEmpty) {
+      return;
+    }
+
+    final jobs = await _loadPendingGenerationJobs();
+    jobs.removeWhere((item) => item['localJobId'] == safeId);
+    await _savePendingGenerationJobs(jobs);
+  }
+
+  void _showBackgroundProcessingSnack(String message) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 5)),
+    );
+  }
+
+  Future<Map<String, dynamic>> _startKorlixBackendJsonJob({
+    required String localJobId,
+    required String kind,
+    required String endpoint,
+    required Map<String, dynamic> payload,
+    required String prompt,
+    required String language,
+    required String? topicId,
+    bool allowPdf = false,
+  }) async {
+    final pendingJob = <String, dynamic>{
+      'localJobId': localJobId,
+      'kind': kind,
+      'endpoint': endpoint,
+      'prompt': prompt,
+      'language': language,
+      'topicId': topicId,
+      'allowPdf': allowPdf,
+      'createdAt': DateTime.now().toIso8601String(),
+      'status': 'creating',
+    };
+
+    await _upsertPendingGenerationJob(pendingJob);
+
+    final response = await http
+        .post(
+          Uri.parse('$kKorlixBackendBaseUrl/api/korlix/jobs'),
+          headers: _authHeaders(),
+          body: jsonEncode({
+            'kind': kind,
+            'endpoint': endpoint,
+            'payload': payload,
+            'clientRequestId': localJobId,
+          }),
+        )
+        .timeout(const Duration(seconds: 18));
+
+    final data = _decodeKorlixJsonMap(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(data['details'] ?? data['error'] ?? response.body);
+    }
+
+    final backendJobId = (data['jobId'] ?? '').toString().trim();
+
+    if (backendJobId.isEmpty) {
+      throw Exception('Backend did not return a resumable job ID.');
+    }
+
+    await _upsertPendingGenerationJob(<String, dynamic>{
+      ...pendingJob,
+      'backendJobId': backendJobId,
+      'status': 'processing',
+    });
+
+    return data;
+  }
+
+  Future<Map<String, dynamic>> _fetchKorlixBackendJobStatus(
+    String backendJobId,
+  ) async {
+    final response = await http
+        .get(
+          Uri.parse('$kKorlixBackendBaseUrl/api/korlix/jobs/$backendJobId'),
+          headers: _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 18));
+
+    final data = _decodeKorlixJsonMap(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(data['details'] ?? data['error'] ?? response.body);
+    }
+
+    return data;
+  }
+
+  Future<Map<String, dynamic>?> _waitForKorlixBackendJob({
+    required String localJobId,
+    required String backendJobId,
+    int maxPolls = 90,
+    Duration pollEvery = const Duration(seconds: 5),
+  }) async {
+    for (var attempt = 0; attempt < maxPolls; attempt += 1) {
+      if (!mounted || _appLifecyclePaused) {
+        return null;
+      }
+
+      final statusData = await _fetchKorlixBackendJobStatus(backendJobId);
+      final status = (statusData['status'] ?? '').toString().toLowerCase();
+
+      if (status == 'completed') {
+        await _removePendingGenerationJob(localJobId);
+        return statusData;
+      }
+
+      if (status == 'failed') {
+        await _removePendingGenerationJob(localJobId);
+        throw Exception(
+          statusData['details'] ?? statusData['error'] ?? 'Korlix job failed.',
+        );
+      }
+
+      await Future<void>.delayed(pollEvery);
+    }
+
+    return null;
+  }
+
+  Map<String, dynamic> _jsonFromCompletedKorlixJob(
+    Map<String, dynamic> statusData,
+  ) {
+    final result =
+        (statusData['result'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{};
+
+    final statusCode =
+        int.tryParse((result['statusCode'] ?? 200).toString()) ?? 200;
+
+    if (korlixIsSessionTimeoutStatus(statusCode)) {
+      unawaited(_forceSignOutForSessionTimeout());
+      throw Exception('Your session timed out. Please sign in again.');
+    }
+
+    if (statusCode < 200 || statusCode >= 300) {
+      throw Exception(
+        result['body'] ??
+            result['error'] ??
+            'Backend job returned status $statusCode.',
+      );
+    }
+
+    final jsonResult = result['json'];
+
+    if (jsonResult is Map) {
+      return jsonResult.cast<String, dynamic>();
+    }
+
+    final body = (result['body'] ?? '').toString().trim();
+
+    if (body.isEmpty) {
+      return <String, dynamic>{};
+    }
+
+    final decoded = jsonDecode(body);
+
+    if (decoded is Map) {
+      return decoded.cast<String, dynamic>();
+    }
+
+    throw Exception('Backend job returned unexpected JSON.');
+  }
+
+  Future<Map<String, dynamic>?> _runResumableJsonPost({
+    required String localJobId,
+    required String kind,
+    required String endpoint,
+    required Map<String, dynamic> payload,
+    required String prompt,
+    required String language,
+    required String? topicId,
+    bool allowPdf = false,
+    Duration directTimeout = const Duration(seconds: 300),
+  }) async {
+    var submittedToBackendJob = false;
+
+    try {
+      final startData = await _startKorlixBackendJsonJob(
+        localJobId: localJobId,
+        kind: kind,
+        endpoint: endpoint,
+        payload: payload,
+        prompt: prompt,
+        language: language,
+        topicId: topicId,
+        allowPdf: allowPdf,
+      );
+
+      submittedToBackendJob = true;
+
+      final backendJobId = (startData['jobId'] ?? '').toString();
+
+      final completed = await _waitForKorlixBackendJob(
+        localJobId: localJobId,
+        backendJobId: backendJobId,
+      );
+
+      if (completed == null) {
+        return null;
+      }
+
+      return _jsonFromCompletedKorlixJob(completed);
+    } catch (error) {
+      if (submittedToBackendJob || _appLifecyclePaused) {
+        rethrow;
+      }
+
+      // Compatibility fallback for older backend deployments.
+      final response = await http
+          .post(
+            Uri.parse('$kKorlixBackendBaseUrl$endpoint'),
+            headers: _authHeaders(),
+            body: jsonEncode(payload),
+          )
+          .timeout(directTimeout);
+
+      final data = _decodeKorlixJsonMap(response);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(data['details'] ?? data['error'] ?? response.body);
+      }
+
+      await _removePendingGenerationJob(localJobId);
+      return data;
+    }
+  }
+
+  void _applyCompletedTextGeneration({
+    required String command,
+    required String content,
+    required String language,
+    required bool allowPdf,
+    String? topicId,
+    DateTime? createdAt,
+  }) {
+    final completedAt = createdAt ?? DateTime.now();
+
+    final newItem = GeneratedItem(
+      command: command,
+      title: _makeResultTitle(command),
+      content: content,
+      language: language,
+      allowPdf: allowPdf,
+    );
+
+    final message = ChatMessage(
+      userText: command,
+      aiText: content,
+      language: language,
+      allowPdf: allowPdf,
+      generatedItem: newItem,
+      createdAt: completedAt,
+    );
+
+    final safeTopicId = topicId?.trim();
+
+    if (safeTopicId != null &&
+        safeTopicId.isNotEmpty &&
+        safeTopicId != _activeChatTopicId &&
+        _chatTopicsById.containsKey(safeTopicId)) {
+      final topic = _chatTopicsById[safeTopicId]!;
+      final messages = List<ChatMessage>.from(topic.messages)..add(message);
+
+      _chatTopicsById[safeTopicId] = topic.copyWith(
+        messages: messages,
+        updatedAt: completedAt,
+        title: topic.title.trim().isEmpty || topic.title == 'New Chat'
+            ? _deriveTopicTitle(command)
+            : topic.title,
+      );
+
+      unawaited(_persistLocalChatTopics());
+      return;
+    }
+
+    _results.insert(0, newItem);
+    _addChatMessage(message);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_chatScrollController.hasClients) {
+        _chatScrollController.animateTo(
+          _chatScrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  Future<void> _resumePendingGenerationJobs() async {
+    if (_resumePendingGenerationJobsRunning) {
+      return;
+    }
+
+    _resumePendingGenerationJobsRunning = true;
+
+    try {
+      final jobs = await _loadPendingGenerationJobs();
+
+      if (jobs.isEmpty) {
+        return;
+      }
+
+      for (final job in jobs) {
+        if (!mounted || _appLifecyclePaused) {
+          return;
+        }
+
+        final kind = (job['kind'] ?? '').toString();
+        final localJobId = (job['localJobId'] ?? '').toString();
+        final backendJobId = (job['backendJobId'] ?? '').toString();
+
+        if (kind == 'video_status') {
+          final videoId = (job['videoId'] ?? '').toString().trim();
+          final prompt = (job['prompt'] ?? '').toString();
+
+          if (videoId.isNotEmpty && mounted) {
+            unawaited(
+              _showVideoProgressDialog(videoId: videoId, prompt: prompt),
+            );
+          }
+
+          continue;
+        }
+
+        if (backendJobId.isEmpty) {
+          continue;
+        }
+
+        try {
+          final statusData = await _fetchKorlixBackendJobStatus(backendJobId);
+          final status = (statusData['status'] ?? '').toString().toLowerCase();
+
+          if (status == 'failed') {
+            await _removePendingGenerationJob(localJobId);
+            continue;
+          }
+
+          if (status != 'completed') {
+            continue;
+          }
+
+          final data = _jsonFromCompletedKorlixJob(statusData);
+
+          if (kind == 'text') {
+            final command = (job['prompt'] ?? '').toString();
+            final content = (data['content'] ?? '').toString().trim();
+
+            if (command.isEmpty || content.isEmpty) {
+              await _removePendingGenerationJob(localJobId);
+              continue;
+            }
+
+            if (mounted) {
+              setState(() {
+                _loading = false;
+                _error = null;
+                _featuredAnswerDismissed = false;
+                _answerMinimized = false;
+                _applyCompletedTextGeneration(
+                  command: command,
+                  content: content,
+                  language: (job['language'] ?? _selectedLanguage).toString(),
+                  allowPdf: job['allowPdf'] == true,
+                  topicId: job['topicId']?.toString(),
+                  createdAt: DateTime.tryParse(
+                    (job['createdAt'] ?? '').toString(),
+                  ),
+                );
+              });
+
+              _showBackgroundProcessingSnack(
+                'Korlix finished your answer while the phone was locked.',
+              );
+            }
+
+            await _removePendingGenerationJob(localJobId);
+          }
+
+          if (kind == 'video_start') {
+            final videoId = (data['videoId'] ?? data['video']?['id'])
+                .toString();
+            final prompt = (job['prompt'] ?? '').toString();
+
+            await _removePendingGenerationJob(localJobId);
+
+            if (videoId.isNotEmpty && videoId != 'null' && mounted) {
+              _showBackgroundProcessingSnack(
+                'Korlix video generation resumed.',
+              );
+              unawaited(
+                _showVideoProgressDialog(videoId: videoId, prompt: prompt),
+              );
+            }
+          }
+        } catch (_) {
+          // Keep pending jobs. Resume can try again later.
+        }
+      }
+    } finally {
+      _resumePendingGenerationJobsRunning = false;
+    }
+  }
+
   Map<String, dynamic> _decodeKorlixJsonMap(http.Response response) {
+    if (korlixIsSessionTimeoutStatus(response.statusCode)) {
+      unawaited(_forceSignOutForSessionTimeout());
+      throw Exception('Your session timed out. Please sign in again.');
+    }
+
     final body = response.body.trim();
 
     if (body.isEmpty) {
@@ -5895,6 +6457,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     }
 
     final command = _controller.text.trim();
+
     if (command.isNotEmpty &&
         !_fixCreditReportMode &&
         !_improvePictureMode &&
@@ -5920,6 +6483,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     }
 
     final allowPdf = _shouldAllowPdf(command);
+    final localJobId = _makePendingGenerationJobId('text');
+    final topicId = _activeChatTopicId;
 
     setState(() {
       _featuredAnswerDismissed = false;
@@ -5931,60 +6496,69 @@ class _CommandCenterScreenState extends State<CommandCenterScreen> {
     _speakConsiderItDone();
 
     try {
-      final response = await http
-          .post(
-            Uri.parse(backendUrl()),
-            headers: _authHeaders(),
-            body: jsonEncode({
-              'command': command,
-              'language': _selectedLanguage,
-            }),
-          )
-          .timeout(const Duration(seconds: 300));
+      final data = await _runResumableJsonPost(
+        localJobId: localJobId,
+        kind: 'text',
+        endpoint: '/api/generate',
+        payload: {'command': command, 'language': _selectedLanguage},
+        prompt: command,
+        language: _selectedLanguage,
+        topicId: topicId,
+        allowPdf: allowPdf,
+        directTimeout: const Duration(seconds: 300),
+      );
 
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw Exception(response.body);
+      if (data == null) {
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _error = null;
+            _controller.clear();
+          });
+
+          _showBackgroundProcessingSnack(
+            'Korlix is still processing. If your phone locks, reopen the app and this answer will resume.',
+          );
+        }
+
+        return;
       }
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
       final content = (data['content'] ?? '').toString().trim();
 
       if (content.isEmpty) {
         throw Exception('No AI content returned.');
       }
 
+      await _removePendingGenerationJob(localJobId);
+
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
         _loading = false;
         _controller.clear();
-        final newItem = GeneratedItem(
+        _applyCompletedTextGeneration(
           command: command,
-          title: _makeResultTitle(command),
           content: content,
           language: _selectedLanguage,
           allowPdf: allowPdf,
+          topicId: topicId,
         );
-        _results.insert(0, newItem);
-        _addChatMessage(
-          ChatMessage(
-            userText: command,
-            aiText: content,
-            language: _selectedLanguage,
-            allowPdf: allowPdf,
-            generatedItem: newItem,
-            createdAt: DateTime.now(),
-          ),
-        );
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_chatScrollController.hasClients) {
-            _chatScrollController.animateTo(
-              _chatScrollController.position.maxScrollExtent,
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeOut,
-            );
-          }
-        });
       });
     } catch (error) {
+      if (_appLifecyclePaused) {
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _error = null;
+          });
+        }
+
+        return;
+      }
+
       setState(() {
         _loading = false;
         _error = '${_t.createError}\n\n${korlixFriendlyErrorMessage(error)}';
@@ -9017,6 +9591,9 @@ Make the entire output professional, well-structured using Markdown, and product
       return;
     }
 
+    final localJobId = _makePendingGenerationJobId('video-start');
+    final topicId = _activeChatTopicId;
+
     setState(() {
       _loading = true;
       _error = null;
@@ -9025,22 +9602,40 @@ Make the entire output professional, well-structured using Markdown, and product
     });
 
     try {
-      final response = await http
-          .post(
-            Uri.parse('$kKorlixBackendBaseUrl/api/video/generate'),
-            headers: _authHeaders(),
-            body: jsonEncode({
-              'prompt': _buildFullKorlixVideoPrompt(scene),
-              'language': _selectedLanguage,
-              'size': '1280x720',
-              'seconds': 8,
-            }),
-          )
-          .timeout(const Duration(seconds: 60));
+      final data = await _runResumableJsonPost(
+        localJobId: localJobId,
+        kind: 'video_start',
+        endpoint: '/api/video/generate',
+        payload: {
+          'prompt': _buildFullKorlixVideoPrompt(scene),
+          'language': _selectedLanguage,
+          'size': '1280x720',
+          'seconds': 8,
+        },
+        prompt: scene,
+        language: _selectedLanguage,
+        topicId: topicId,
+        directTimeout: const Duration(seconds: 60),
+      );
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (data == null) {
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _error = null;
+            _controller.clear();
+            _createVideoMode = false;
+          });
 
-      if (response.statusCode == 403 && data['upgradeRequired'] == true) {
+          _showBackgroundProcessingSnack(
+            'Korlix is still starting your video. Reopen the app and progress will resume.',
+          );
+        }
+
+        return;
+      }
+
+      if (data['upgradeRequired'] == true) {
         setState(() {
           _loading = false;
         });
@@ -9055,15 +9650,13 @@ Make the entire output professional, well-structured using Markdown, and product
         return;
       }
 
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw Exception(data['details'] ?? data['error'] ?? response.body);
-      }
-
       final videoId = (data['videoId'] ?? data['video']?['id']).toString();
 
       if (videoId.isEmpty || videoId == 'null') {
         throw Exception('No video ID returned.');
       }
+
+      await _removePendingGenerationJob(localJobId);
 
       setState(() {
         _loading = false;
@@ -9073,6 +9666,17 @@ Make the entire output professional, well-structured using Markdown, and product
 
       await _showVideoProgressDialog(videoId: videoId, prompt: scene);
     } catch (error) {
+      if (_appLifecyclePaused) {
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _error = null;
+          });
+        }
+
+        return;
+      }
+
       setState(() {
         _loading = false;
         _error = korlixFriendlyErrorMessage(error);
@@ -9134,7 +9738,26 @@ Make the entire output professional, well-structured using Markdown, and product
     String? errorMessage;
     bool completed = false;
 
+    final videoStatusJobId = 'video-status-$videoId';
+
+    await _upsertPendingGenerationJob({
+      'localJobId': videoStatusJobId,
+      'kind': 'video_status',
+      'videoId': videoId,
+      'prompt': prompt,
+      'language': _selectedLanguage,
+      'topicId': _activeChatTopicId,
+      'createdAt': DateTime.now().toIso8601String(),
+      'status': 'processing',
+    });
+
     Future<void> poll() async {
+      if (_appLifecyclePaused) {
+        status = 'processing while phone is locked';
+        updateDialog?.call(() {});
+        return;
+      }
+
       try {
         final response = await http.get(
           Uri.parse('$kKorlixBackendBaseUrl/api/video/status/$videoId'),
@@ -9161,12 +9784,14 @@ Make the entire output professional, well-structured using Markdown, and product
         if (status == 'completed') {
           completed = true;
           timer?.cancel();
+          unawaited(_removePendingGenerationJob(videoStatusJobId));
         }
 
         if (status == 'failed') {
           errorMessage =
               video['error']?.toString() ?? 'Video generation failed.';
           timer?.cancel();
+          unawaited(_removePendingGenerationJob(videoStatusJobId));
         }
 
         updateDialog?.call(() {});

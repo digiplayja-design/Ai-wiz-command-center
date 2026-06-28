@@ -4311,6 +4311,196 @@ app.get('/api/report-output/health', (req, res) => {
 });
 // KORLIX_AI_OUTPUT_REPORT_ROUTE_END
 
+// KORLIX_RESUMABLE_JSON_JOBS_BEGIN
+const korlixResumableJsonJobs =
+  global.__korlixResumableJsonJobs || new Map();
+global.__korlixResumableJsonJobs = korlixResumableJsonJobs;
+
+const korlixResumableJsonJobTtlMs = 1000 * 60 * 60 * 6;
+
+function makeKorlixResumableJobId() {
+  return `korlix_job_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function cleanKorlixResumableJobs() {
+  const now = Date.now();
+
+  for (const [jobId, job] of korlixResumableJsonJobs.entries()) {
+    const updatedAtMs = Date.parse(job.updatedAt || job.createdAt || "");
+
+    if (Number.isFinite(updatedAtMs) && now - updatedAtMs > korlixResumableJsonJobTtlMs) {
+      korlixResumableJsonJobs.delete(jobId);
+    }
+  }
+}
+
+function korlixForwardHeaders(req) {
+  const headers = {
+    "Content-Type": "application/json",
+  };
+
+  for (const [name, value] of Object.entries(req.headers || {})) {
+    const lower = name.toLowerCase();
+
+    if (
+      lower === "authorization" ||
+      lower === "x-korlix-device-id" ||
+      lower === "x-korlix-device-label" ||
+      lower === "x-korlix-platform"
+    ) {
+      headers[name] = Array.isArray(value) ? value.join(",") : String(value || "");
+    }
+  }
+
+  return headers;
+}
+
+function korlixJobPublicView(job) {
+  return {
+    jobId: job.jobId,
+    clientRequestId: job.clientRequestId,
+    kind: job.kind,
+    endpoint: job.endpoint,
+    status: job.status,
+    error: job.error || null,
+    details: job.details || null,
+    result: job.result || null,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+  };
+}
+
+async function runKorlixResumableJsonProxyJob({ jobId, headers, endpoint, payload }) {
+  const job = korlixResumableJsonJobs.get(jobId);
+
+  if (!job) {
+    return;
+  }
+
+  job.status = "processing";
+  job.updatedAt = new Date().toISOString();
+
+  try {
+    const port = process.env.PORT || "8787";
+    const baseUrl = process.env.KORLIX_SELF_BASE_URL || `http://127.0.0.1:${port}`;
+    const url = `${baseUrl}${endpoint}`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload || {}),
+    });
+
+    const body = await response.text();
+    let json = null;
+
+    try {
+      json = body ? JSON.parse(body) : null;
+    } catch (_) {
+      json = null;
+    }
+
+    job.result = {
+      statusCode: response.status,
+      body,
+      json,
+    };
+
+    if (response.status >= 200 && response.status < 300) {
+      job.status = "completed";
+    } else {
+      job.status = "failed";
+      job.error =
+        (json && (json.details || json.error)) ||
+        body ||
+        `Backend endpoint returned status ${response.status}.`;
+    }
+
+    job.updatedAt = new Date().toISOString();
+  } catch (error) {
+    job.status = "failed";
+    job.error = "Resumable job failed.";
+    job.details = sanitize(error?.message || error);
+    job.updatedAt = new Date().toISOString();
+  }
+}
+
+app.post("/api/korlix/jobs", async (req, res) => {
+  try {
+    cleanKorlixResumableJobs();
+
+    const endpoint = String(req.body?.endpoint || "").trim();
+    const kind = String(req.body?.kind || "json").trim() || "json";
+    const payload =
+      req.body?.payload && typeof req.body.payload === "object"
+        ? req.body.payload
+        : {};
+    const clientRequestId = String(req.body?.clientRequestId || "").trim();
+
+    const allowedEndpoints = new Set([
+      "/api/generate",
+      "/api/video/generate",
+      "/api/image/create",
+    ]);
+
+    if (!allowedEndpoints.has(endpoint)) {
+      return res.status(400).json({
+        error: "Unsupported resumable job endpoint.",
+      });
+    }
+
+    const jobId = makeKorlixResumableJobId();
+    const now = new Date().toISOString();
+
+    const job = {
+      jobId,
+      clientRequestId,
+      kind,
+      endpoint,
+      status: "queued",
+      result: null,
+      error: null,
+      details: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    korlixResumableJsonJobs.set(jobId, job);
+
+    res.status(202).json(korlixJobPublicView(job));
+
+    setImmediate(() => {
+      runKorlixResumableJsonProxyJob({
+        jobId,
+        headers: korlixForwardHeaders(req),
+        endpoint,
+        payload,
+      });
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: "Could not create resumable Korlix job.",
+      details: sanitize(error?.message || error),
+    });
+  }
+});
+
+app.get("/api/korlix/jobs/:jobId", async (req, res) => {
+  cleanKorlixResumableJobs();
+
+  const jobId = String(req.params.jobId || "").trim();
+  const job = korlixResumableJsonJobs.get(jobId);
+
+  if (!job) {
+    return res.status(404).json({
+      error: "Korlix job not found.",
+    });
+  }
+
+  return res.json(korlixJobPublicView(job));
+});
+// KORLIX_RESUMABLE_JSON_JOBS_END
+
 app.listen(port, () => {
   console.log(`Korlix AI backend running on port ${port}`);
 });
