@@ -82,3 +82,99 @@ workflows:
         auth: integration
         submit_to_testflight: true
         submit_to_app_store: false
+
+  android-release:
+    name: Android Release AAB
+    max_build_duration: 120
+    instance_type: linux_x2
+    environment:
+      flutter: stable
+    scripts:
+      - name: Install Android SDK 36
+        script: |
+          SDKMANAGER=""
+          if command -v sdkmanager >/dev/null 2>&1; then
+            SDKMANAGER="$(command -v sdkmanager)"
+          elif [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          elif [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          fi
+
+          if [ -n "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" || true
+          else
+            echo "sdkmanager not found; continuing with installed Android SDKs"
+          fi
+      - name: Show project files
+        script: |
+          pwd
+          ls -la
+          grep '^version:' pubspec.yaml
+      - name: Flutter pub get
+        script: |
+          flutter pub get
+      - name: Force Flutter plugin compileSdk 36
+        script: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          roots = [
+              Path.home() / ".pub-cache",
+              Path("/Users/builder/.pub-cache"),
+              Path("/root/.pub-cache"),
+          ]
+
+          patterns = [
+              (r"(?m)^(\s*)compileSdk\s*=\s*(?:flutter\.compileSdkVersion|\d+)\s*$", r"\1compileSdk = 36"),
+              (r"(?m)^(\s*)compileSdk\s+(?:flutter\.compileSdkVersion|\d+)\s*$", r"\1compileSdk 36"),
+              (r"(?m)^(\s*)compileSdkVersion\s+(?:flutter\.compileSdkVersion|\d+)\s*$", r"\1compileSdkVersion 36"),
+              (r"(?m)^(\s*)compileSdkVersion\s*\((?:flutter\.compileSdkVersion|\d+)\)\s*$", r"\1compileSdk = 36"),
+          ]
+
+          patched = 0
+
+          for root in roots:
+              if not root.exists():
+                  continue
+
+              for file in root.rglob("build.gradle*"):
+                  path_text = str(file)
+                  if "/android/" not in path_text and "\\android\\" not in path_text:
+                      continue
+
+                  try:
+                      text = file.read_text()
+                  except Exception:
+                      continue
+
+                  original = text
+
+                  for pattern, replacement in patterns:
+                      text = re.sub(pattern, replacement, text)
+
+                  if text != original:
+                      file.write_text(text)
+                      patched += 1
+                      print(f"patched {file}")
+
+          print(f"Flutter plugin Gradle files patched: {patched}")
+          PY
+
+      - name: Analyze Flutter
+        script: |
+          flutter analyze
+      - name: Build Android App Bundle
+        script: |
+          VERSION_LINE="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
+          BUILD_NAME="${VERSION_LINE%%+*}"
+          BUILD_NUMBER="${VERSION_LINE##*+}"
+          echo "Building Android AAB version $BUILD_NAME ($BUILD_NUMBER)..."
+          flutter build appbundle --release --build-name="$BUILD_NAME" --build-number="$BUILD_NUMBER"
+          mkdir -p artifacts
+          cp build/app/outputs/bundle/release/app-release.aab artifacts/KorlixAI.aab
+          echo "Android artifacts:"
+          ls -lah artifacts
+    artifacts:
+      - artifacts/*.aab

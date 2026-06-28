@@ -15,8 +15,12 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.korlixdeveloper.korlixai"
-    compileSdk = flutter.compileSdkVersion
+    
+    
+    compileSdk = 36
+compileSdk = 36
+namespace = "com.korlixdeveloper.korlixai"
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
