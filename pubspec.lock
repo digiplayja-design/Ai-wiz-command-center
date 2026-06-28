@@ -769,12 +769,11 @@ packages:
     source: hosted
     version: "2.6.0"
   passkeys_web:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: passkeys_web
-      sha256: aa32224b289601f6894f243b24d21e56f90d632711bb4db1dedf4ea29f562de4
-      url: "https://pub.dev"
-    source: hosted
+      path: "third_party/passkeys_web_noop"
+      relative: true
+    source: path
     version: "2.9.0"
   passkeys_windows:
     dependency: transitive

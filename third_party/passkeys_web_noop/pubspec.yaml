@@ -1,0 +1,21 @@
+name: passkeys_web
+description: Korlix local no-op web shim to prevent missing Passkeys SDK init crashes.
+version: 2.9.0
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+  flutter: '>=3.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      web:
+        pluginClass: PasskeysWeb
+        fileName: passkeys_web.dart

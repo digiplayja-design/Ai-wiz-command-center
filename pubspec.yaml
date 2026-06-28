@@ -142,3 +142,7 @@ flutter_native_splash:
   android_12:
     color: "#071B27"
     image: assets/branding/korlix_splash_logo.png
+
+dependency_overrides:
+  passkeys_web:
+    path: third_party/passkeys_web_noop
