@@ -58,33 +58,52 @@ Future<void> main() async {
       WidgetsFlutterBinding.ensureInitialized();
       _installKorlixErrorSurface();
 
-      await _korlixRunBootStep('Device setup', () async {
-        await KorlixDeviceStore.ensureLoaded();
-      });
-
-      await _korlixRunBootStep('Supabase setup', () async {
-        const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-        const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
-
-        if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
-          await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
-          kSupabaseReady = true;
-        }
-      });
-
-      await _korlixRunBootStep('Mobile ads setup', () async {
-        if (!kIsWeb &&
-            (defaultTargetPlatform == TargetPlatform.android ||
-                defaultTargetPlatform == TargetPlatform.iOS)) {
-          try {
-            await MobileAds.instance.initialize();
-          } catch (e) {
-            debugPrint("AdMob init failed: $e");
-          }
-        }
-      });
-
+      // Paint the app immediately. On web, waiting for startup services before
+      // runApp can create a white screen if a plugin/storage/network step stalls.
       runApp(const CheeChaiCheeApp());
+
+      Future<void>.microtask(() async {
+        try {
+          await _korlixRunBootStep('Device setup', () async {
+            await KorlixDeviceStore.ensureLoaded().timeout(
+              const Duration(seconds: 5),
+            );
+          });
+
+          await _korlixRunBootStep('Supabase setup', () async {
+            const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+            const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+
+            if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
+              await Supabase.initialize(
+                url: supabaseUrl,
+                anonKey: supabaseAnonKey,
+              ).timeout(const Duration(seconds: 8));
+
+              kSupabaseReady = true;
+            }
+          });
+
+          await _korlixRunBootStep('Mobile ads setup', () async {
+            if (!kIsWeb &&
+                (defaultTargetPlatform == TargetPlatform.android ||
+                    defaultTargetPlatform == TargetPlatform.iOS)) {
+              try {
+                await MobileAds.instance.initialize().timeout(
+                  const Duration(seconds: 8),
+                );
+              } catch (e) {
+                debugPrint("AdMob init failed: $e");
+              }
+            }
+          });
+        } catch (error, stack) {
+          final message = 'Background startup warning: $error';
+          kKorlixBootWarnings.add(message);
+          debugPrint(message);
+          debugPrintStack(stackTrace: stack);
+        }
+      });
     },
     (error, stack) {
       debugPrint('Korlix uncaught startup/runtime error: $error');
@@ -10616,6 +10635,13 @@ Make the entire output professional, well-structured using Markdown, and product
         ? entries.sublist(entries.length - 4)
         : entries;
 
+    // Show the latest question/answer first so users do not need to scroll
+    // down to see the newest response in a long thread.
+    final newestFirstEntries = recentEntries.reversed.toList(growable: false);
+    final newestAnswerTurnKey = newestFirstEntries.isNotEmpty
+        ? 'chat-${newestFirstEntries.first.key}'
+        : 'loose-${item.command.hashCode}-${item.content.hashCode}';
+
     Widget userBubble({required int? messageIndex, required String text}) {
       return _buildAnswerTurnBubble(
         isUser: true,
@@ -10676,12 +10702,13 @@ Make the entire output professional, well-structured using Markdown, and product
     return Scrollbar(
       thumbVisibility: false,
       child: SingleChildScrollView(
+        key: ValueKey('answer-ready-$newestAnswerTurnKey'),
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.only(right: 2),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (recentEntries.isEmpty) ...[
+            if (newestFirstEntries.isEmpty) ...[
               if (item.command.trim().isNotEmpty)
                 userBubble(messageIndex: null, text: item.command),
               if (item.content.trim().isNotEmpty || item.hasImageResult)
@@ -10691,7 +10718,7 @@ Make the entire output professional, well-structured using Markdown, and product
                   generatedItem: item.hasImageResult ? item : null,
                 ),
             ] else ...[
-              for (final entry in recentEntries) ...[
+              for (final entry in newestFirstEntries) ...[
                 if (entry.value.userText.trim().isNotEmpty)
                   userBubble(
                     messageIndex: entry.key,
