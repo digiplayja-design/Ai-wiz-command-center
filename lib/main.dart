@@ -2387,7 +2387,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       ),
                     ),
                     child: const Text(
-                      'Music Production is a coming soon paid add-on. It is not included automatically in any tier unless purchased separately or included in an Enterprise agreement.',
+                      'Music Production is a paid add-on available to any Korlix tier, including Basic. Plans: \$25/mo for 75 generations, \$120/mo for 580 generations, \$450/mo for 4,000 generations, and \$950/mo for 10,000 generations. One generation means one MusicAPI.ai create request.',
                       style: TextStyle(
                         color: Color(0xFFA9C6CF),
                         fontSize: 12.5,
@@ -8812,6 +8812,1023 @@ Make the entire output professional, well-structured using Markdown, and product
     });
   }
 
+  // KORLIX_MUSIC_STUDIO_PHASE1_BEGIN
+  List<Map<String, dynamic>> _korlixMusicAddonPlans() {
+    return <Map<String, dynamic>>[
+      {
+        'id': 'music_starter_75_monthly',
+        'name': 'Music Starter',
+        'priceMonthly': 25,
+        'monthlyGenerations': 75,
+        'description': 'Best for light creators testing hooks and song ideas.',
+      },
+      {
+        'id': 'music_creator_580_monthly',
+        'name': 'Music Creator',
+        'priceMonthly': 120,
+        'monthlyGenerations': 580,
+        'description': 'For steady creators making music every week.',
+      },
+      {
+        'id': 'music_studio_4000_monthly',
+        'name': 'Music Studio',
+        'priceMonthly': 450,
+        'monthlyGenerations': 4000,
+        'description': 'For high-volume content teams and agencies.',
+      },
+      {
+        'id': 'music_producer_10000_monthly',
+        'name': 'Music Producer',
+        'priceMonthly': 950,
+        'monthlyGenerations': 10000,
+        'description': 'For serious production-scale music generation.',
+      },
+    ];
+  }
+
+  String _korlixMusicPlanLine(Map<String, dynamic> plan) {
+    final name = (plan['name'] ?? 'Music Plan').toString();
+    final price = (plan['priceMonthly'] ?? 0).toString();
+    final generations = (plan['monthlyGenerations'] ?? 0).toString();
+
+    return '$name • \$$price/mo • $generations generations';
+  }
+
+  Future<Map<String, dynamic>> _fetchMusicAddonStatus() async {
+    final response = await http.get(
+      Uri.parse('$kKorlixBackendBaseUrl/api/music/addon'),
+      headers: _authHeaders(),
+    );
+
+    final data = _decodeKorlixJsonMap(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(data['details'] ?? data['error'] ?? response.body);
+    }
+
+    return data;
+  }
+
+  Future<Map<String, dynamic>> _startMusicGeneration({
+    required String prompt,
+    required String title,
+    required String tags,
+    required bool customMode,
+    required String lyrics,
+    required String vocalGender,
+    required bool instrumentalOnly,
+    required String model,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$kKorlixBackendBaseUrl/api/music/generate'),
+      headers: _authHeaders(),
+      body: jsonEncode({
+        'prompt': prompt,
+        'title': title,
+        'tags': tags,
+        'customMode': customMode,
+        'lyrics': lyrics,
+        'vocalGender': vocalGender,
+        'instrumentalOnly': instrumentalOnly,
+        'model': model,
+      }),
+    );
+
+    final data = _decodeKorlixJsonMap(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(data['details'] ?? data['error'] ?? response.body);
+    }
+
+    return data;
+  }
+
+  Future<Map<String, dynamic>> _fetchMusicGenerationStatus(String jobId) async {
+    final response = await http.get(
+      Uri.parse('$kKorlixBackendBaseUrl/api/music/status/$jobId'),
+      headers: _authHeaders(),
+    );
+
+    final data = _decodeKorlixJsonMap(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(data['details'] ?? data['error'] ?? response.body);
+    }
+
+    return data;
+  }
+
+  Future<void> _openMusicTrackUrl(String audioUrl) async {
+    final trimmed = audioUrl.trim();
+
+    if (trimmed.isEmpty) {
+      return;
+    }
+
+    final uri = Uri.tryParse(trimmed);
+
+    if (uri == null) {
+      return;
+    }
+
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open the music track.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  Widget _buildMusicPlanCard(
+    KorlixSkinPalette skin,
+    Map<String, dynamic> plan,
+  ) {
+    final name = (plan['name'] ?? 'Music Plan').toString();
+    final price = (plan['priceMonthly'] ?? 0).toString();
+    final generations = (plan['monthlyGenerations'] ?? 0).toString();
+    final description = (plan['description'] ?? '').toString();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: skin.panel.withValues(alpha: skin.isLight ? 0.92 : 0.70),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: skin.primary.withValues(alpha: skin.isLight ? 0.55 : 0.70),
+          width: 1.25,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: skin.isLight ? 0.12 : 0.34),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: skin.primary.withValues(alpha: 0.16),
+              border: Border.all(color: skin.primary.withValues(alpha: 0.68)),
+            ),
+            child: Icon(Icons.music_note_rounded, color: skin.primary),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: TextStyle(
+                    color: _korlixReadableForeground(skin),
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '\$$price/month • $generations generations',
+                  style: TextStyle(
+                    color: skin.secondary,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      color: _korlixReadableForeground(skin, muted: true),
+                      fontSize: 12,
+                      height: 1.24,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMusicTrackCard({
+    required KorlixSkinPalette skin,
+    required Map<String, dynamic> track,
+    required String prompt,
+    required AudioPlayer player,
+  }) {
+    final title = (track['title'] ?? 'Generated track').toString();
+    final tags = (track['tags'] ?? '').toString();
+    final lyrics = (track['lyrics'] ?? '').toString();
+    final audioUrl = (track['audio_url'] ?? track['audioUrl'] ?? '').toString();
+    final imageUrl = (track['image_url'] ?? track['imageUrl'] ?? '').toString();
+    final clipId = (track['clip_id'] ?? track['clipId'] ?? '').toString();
+    final duration = (track['duration'] ?? '').toString();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: skin.panelDeep.withValues(alpha: skin.isLight ? 0.94 : 0.82),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: skin.secondary.withValues(alpha: 0.75)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: imageUrl.startsWith('http')
+                    ? Image.network(
+                        imageUrl,
+                        width: 64,
+                        height: 64,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 64,
+                          height: 64,
+                          color: skin.buttonFill,
+                          child: Icon(Icons.album_rounded, color: skin.primary),
+                        ),
+                      )
+                    : Container(
+                        width: 64,
+                        height: 64,
+                        color: skin.buttonFill,
+                        child: Icon(Icons.album_rounded, color: skin.primary),
+                      ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _korlixReadableForeground(skin),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    if (tags.trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        tags,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _korlixReadableForeground(skin, muted: true),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                    if (duration.trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        '$duration seconds',
+                        style: TextStyle(
+                          color: skin.primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (lyrics.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              lyrics,
+              maxLines: 5,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: _korlixReadableForeground(skin, muted: true),
+                fontSize: 12.4,
+                height: 1.32,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          const SizedBox(height: 11),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                onPressed: audioUrl.trim().isEmpty
+                    ? null
+                    : () async {
+                        try {
+                          await player.stop();
+                          await player.play(UrlSource(audioUrl));
+                        } catch (_) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Could not play this track.'),
+                                backgroundColor: Colors.redAccent,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                icon: const Icon(Icons.play_arrow_rounded),
+                label: const Text('Play'),
+              ),
+              OutlinedButton.icon(
+                onPressed: audioUrl.trim().isEmpty
+                    ? null
+                    : () => _openMusicTrackUrl(audioUrl),
+                icon: const Icon(Icons.open_in_new_rounded),
+                label: const Text('Open'),
+              ),
+              _buildReportGeneratedContentPill(
+                contentType: 'music',
+                prompt: prompt,
+                outputSummary:
+                    'Generated music track: $title${clipId.isEmpty ? '' : ' • Clip ID: $clipId'}',
+                contentId: clipId.isEmpty ? title : clipId,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMusicStudioButton() {
+    final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
+
+    return ActionChip(
+      avatar: Icon(
+        Icons.library_music_rounded,
+        size: 18,
+        color: skin.isLight ? const Color(0xFF07111F) : skin.secondary,
+      ),
+      label: const Text('Music Studio'),
+      labelStyle: TextStyle(
+        color: _korlixReadableToolForeground(skin),
+        fontWeight: FontWeight.w900,
+      ),
+      backgroundColor: skin.buttonFill.withValues(
+        alpha: skin.isLight ? 0.96 : 0.78,
+      ),
+      side: BorderSide(
+        color: skin.secondary.withValues(alpha: skin.isLight ? 0.70 : 0.88),
+        width: 1.6,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+      onPressed: _loading ? null : _showMusicStudio,
+    );
+  }
+
+  Future<void> _showMusicStudio() async {
+    final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
+    final promptController = TextEditingController();
+    final titleController = TextEditingController();
+    final tagsController = TextEditingController(
+      text: 'dancehall, reggae, pop, polished, radio-ready',
+    );
+    final lyricsController = TextEditingController();
+    final musicPlayer = AudioPlayer();
+
+    var customMode = false;
+    var instrumentalOnly = false;
+    var vocalGender = 'auto';
+    var model = 'sonic-v5';
+
+    var startedLoad = false;
+    var loadingAddon = true;
+    var generating = false;
+    var polling = false;
+    var statusText = 'Checking Music Production add-on…';
+    String? errorText;
+    Map<String, dynamic>? addonStatus;
+    String? jobId;
+    List<Map<String, dynamic>> tracks = <Map<String, dynamic>>[];
+
+    Future<void> loadAddon(StateSetter setDialogState) async {
+      try {
+        final data = await _fetchMusicAddonStatus();
+
+        setDialogState(() {
+          addonStatus = data;
+          loadingAddon = false;
+          statusText = data['active'] == true
+              ? 'Music Production add-on active.'
+              : 'Music Production add-on required.';
+        });
+      } catch (error) {
+        setDialogState(() {
+          loadingAddon = false;
+          errorText = korlixFriendlyErrorMessage(error);
+          statusText = 'Could not check Music Production access.';
+        });
+      }
+    }
+
+    Future<void> pollMusicJob(
+      StateSetter setDialogState,
+      String safeJobId,
+    ) async {
+      polling = true;
+
+      for (var attempt = 0; attempt < 36; attempt += 1) {
+        await Future<void>.delayed(const Duration(seconds: 5));
+
+        if (!mounted) {
+          return;
+        }
+
+        try {
+          final data = await _fetchMusicGenerationStatus(safeJobId);
+          final status = (data['status'] ?? 'processing').toString();
+          final rawTracks = (data['tracks'] as List?) ?? <dynamic>[];
+
+          setDialogState(() {
+            statusText = 'Status: $status';
+            tracks = rawTracks
+                .whereType<Map>()
+                .map((item) => item.cast<String, dynamic>())
+                .toList();
+          });
+
+          if (status == 'completed' || status == 'failed') {
+            setDialogState(() {
+              generating = false;
+              polling = false;
+              if (status == 'failed') {
+                errorText =
+                    data['error']?.toString() ?? 'Music generation failed.';
+              }
+            });
+            return;
+          }
+        } catch (error) {
+          setDialogState(() {
+            generating = false;
+            polling = false;
+            errorText = korlixFriendlyErrorMessage(error);
+          });
+          return;
+        }
+      }
+
+      if (mounted) {
+        setDialogState(() {
+          generating = false;
+          polling = false;
+          statusText =
+              'Still processing. Reopen Music Studio and check the task later.';
+        });
+      }
+    }
+
+    Future<void> generateMusic(StateSetter setDialogState) async {
+      final prompt = promptController.text.trim();
+      final title = titleController.text.trim();
+      final tags = tagsController.text.trim();
+      final lyrics = lyricsController.text.trim();
+
+      if (prompt.isEmpty && lyrics.isEmpty) {
+        setDialogState(() {
+          errorText = 'Describe the song, or paste lyrics first.';
+        });
+        return;
+      }
+
+      setDialogState(() {
+        generating = true;
+        errorText = null;
+        tracks = <Map<String, dynamic>>[];
+        statusText = 'Submitting MusicAPI.ai generation…';
+      });
+
+      try {
+        final data = await _startMusicGeneration(
+          prompt: prompt,
+          title: title,
+          tags: tags,
+          customMode: customMode,
+          lyrics: lyrics,
+          vocalGender: vocalGender,
+          instrumentalOnly: instrumentalOnly,
+          model: model,
+        );
+
+        final safeJobId = (data['jobId'] ?? '').toString();
+
+        if (safeJobId.trim().isEmpty) {
+          throw Exception('Music job ID was not returned.');
+        }
+
+        setDialogState(() {
+          jobId = safeJobId;
+          statusText = 'Music job submitted. Waiting for tracks…';
+        });
+
+        await pollMusicJob(setDialogState, safeJobId);
+      } catch (error) {
+        setDialogState(() {
+          generating = false;
+          polling = false;
+          errorText = korlixFriendlyErrorMessage(error);
+          statusText = 'Music generation could not start.';
+        });
+      }
+    }
+
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.72),
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            if (!startedLoad) {
+              startedLoad = true;
+              Future.microtask(() => loadAddon(setDialogState));
+            }
+
+            final addon = addonStatus ?? <String, dynamic>{};
+            final active = addon['active'] == true;
+            final providerReady = addon['providerReady'] == true;
+            final usage =
+                (addon['usage'] as Map?)?.cast<String, dynamic>() ??
+                <String, dynamic>{};
+            final used = (usage['usedThisCycle'] ?? 0).toString();
+            final limit = (usage['monthlyLimit'] ?? 0).toString();
+            final plans =
+                ((addon['plans'] as List?) ?? _korlixMusicAddonPlans())
+                    .whereType<Map>()
+                    .map((item) => item.cast<String, dynamic>())
+                    .toList();
+
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 20,
+              ),
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 650),
+                decoration: BoxDecoration(
+                  color: skin.panelDeep.withValues(
+                    alpha: skin.isLight ? 0.98 : 0.96,
+                  ),
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: skin.secondary.withValues(alpha: 0.80),
+                    width: 2.2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: skin.secondary.withValues(alpha: 0.20),
+                      blurRadius: 35,
+                      spreadRadius: 2,
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.40),
+                      blurRadius: 24,
+                      offset: const Offset(0, 14),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  colors: [
+                                    skin.primary,
+                                    skin.secondary,
+                                    skin.premium,
+                                  ],
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.library_music_rounded,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Korlix Music Studio',
+                                    style: TextStyle(
+                                      color: _korlixReadableForeground(skin),
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Powered by MusicAPI.ai • Paid add-on for any Korlix tier.',
+                                    style: TextStyle(
+                                      color: _korlixReadableForeground(
+                                        skin,
+                                        muted: true,
+                                      ),
+                                      fontSize: 12.8,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () async {
+                                await musicPlayer.stop();
+                                if (dialogContext.mounted) {
+                                  Navigator.of(dialogContext).pop();
+                                }
+                              },
+                              icon: Icon(
+                                Icons.close_rounded,
+                                color: _korlixReadableForeground(skin),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(13),
+                          decoration: BoxDecoration(
+                            color: skin.panel.withValues(
+                              alpha: skin.isLight ? 0.94 : 0.72,
+                            ),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: active
+                                  ? skin.success.withValues(alpha: 0.80)
+                                  : skin.premium.withValues(alpha: 0.80),
+                            ),
+                          ),
+                          child: Text(
+                            loadingAddon
+                                ? 'Checking Music Production access…'
+                                : active
+                                ? 'Add-on active • $used / $limit generations used this cycle.'
+                                : 'Music Production add-on required. Choose a monthly add-on plan to unlock generation.',
+                            style: TextStyle(
+                              color: _korlixReadableForeground(skin),
+                              fontWeight: FontWeight.w800,
+                              height: 1.32,
+                            ),
+                          ),
+                        ),
+                        if (!active) ...[
+                          const SizedBox(height: 14),
+                          for (final plan in plans)
+                            _buildMusicPlanCard(skin, plan),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Payment connection note: Android should map these plans to Google Play Billing subscriptions, iOS to Apple subscriptions, and web to Stripe or your payment provider. Backend entitlement is already prepared for plan activation.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: _korlixReadableForeground(
+                                skin,
+                                muted: true,
+                              ),
+                              fontSize: 12.2,
+                              height: 1.35,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ] else ...[
+                          const SizedBox(height: 14),
+                          if (!providerReady)
+                            Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.redAccent.withValues(
+                                    alpha: 0.55,
+                                  ),
+                                ),
+                              ),
+                              child: const Text(
+                                'Backend is missing MUSICAPI_KEY or MUSICAPI_API_KEY. Add the key to the backend environment before generating.',
+                                style: TextStyle(
+                                  color: Colors.redAccent,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          TextField(
+                            controller: promptController,
+                            minLines: 2,
+                            maxLines: 4,
+                            style: TextStyle(
+                              color: _korlixReadableForeground(skin),
+                              fontWeight: FontWeight.w700,
+                            ),
+                            decoration: InputDecoration(
+                              labelText: 'Song prompt',
+                              hintText:
+                                  'Example: upbeat dancehall anthem about winning, clean radio vocals, powerful chorus',
+                              labelStyle: TextStyle(color: skin.primary),
+                              hintStyle: TextStyle(
+                                color: _korlixReadableForeground(
+                                  skin,
+                                  hint: true,
+                                ).withValues(alpha: 0.72),
+                              ),
+                              filled: true,
+                              fillColor: skin.inputFill.withValues(alpha: 0.86),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: titleController,
+                                  style: TextStyle(
+                                    color: _korlixReadableForeground(skin),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  decoration: InputDecoration(
+                                    labelText: 'Title optional',
+                                    labelStyle: TextStyle(color: skin.primary),
+                                    filled: true,
+                                    fillColor: skin.inputFill.withValues(
+                                      alpha: 0.86,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextField(
+                                  controller: tagsController,
+                                  style: TextStyle(
+                                    color: _korlixReadableForeground(skin),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  decoration: InputDecoration(
+                                    labelText: 'Genres / tags',
+                                    labelStyle: TextStyle(color: skin.primary),
+                                    filled: true,
+                                    fillColor: skin.inputFill.withValues(
+                                      alpha: 0.86,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          SwitchListTile(
+                            value: customMode,
+                            activeThumbColor: skin.secondary,
+                            title: Text(
+                              'Use my lyrics',
+                              style: TextStyle(
+                                color: _korlixReadableForeground(skin),
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            subtitle: Text(
+                              'Turn on to paste structured lyrics with [Verse] and [Chorus].',
+                              style: TextStyle(
+                                color: _korlixReadableForeground(
+                                  skin,
+                                  muted: true,
+                                ),
+                              ),
+                            ),
+                            onChanged: generating
+                                ? null
+                                : (value) => setDialogState(() {
+                                    customMode = value;
+                                  }),
+                          ),
+                          if (customMode) ...[
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: lyricsController,
+                              minLines: 4,
+                              maxLines: 8,
+                              style: TextStyle(
+                                color: _korlixReadableForeground(skin),
+                                fontWeight: FontWeight.w700,
+                              ),
+                              decoration: InputDecoration(
+                                labelText: 'Lyrics',
+                                hintText: '[Verse]\n...\n\n[Chorus]\n...',
+                                labelStyle: TextStyle(color: skin.primary),
+                                filled: true,
+                                fillColor: skin.inputFill.withValues(
+                                  alpha: 0.86,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            alignment: WrapAlignment.center,
+                            children: [
+                              ChoiceChip(
+                                selected: model == 'sonic-v5',
+                                label: const Text('Sonic v5'),
+                                onSelected: generating
+                                    ? null
+                                    : (_) => setDialogState(() {
+                                        model = 'sonic-v5';
+                                      }),
+                              ),
+                              ChoiceChip(
+                                selected: vocalGender == 'auto',
+                                label: const Text('Auto vocal'),
+                                onSelected: generating
+                                    ? null
+                                    : (_) => setDialogState(() {
+                                        vocalGender = 'auto';
+                                      }),
+                              ),
+                              ChoiceChip(
+                                selected: vocalGender == 'm',
+                                label: const Text('Male vocal'),
+                                onSelected: generating
+                                    ? null
+                                    : (_) => setDialogState(() {
+                                        vocalGender = 'm';
+                                      }),
+                              ),
+                              ChoiceChip(
+                                selected: vocalGender == 'f',
+                                label: const Text('Female vocal'),
+                                onSelected: generating
+                                    ? null
+                                    : (_) => setDialogState(() {
+                                        vocalGender = 'f';
+                                      }),
+                              ),
+                              ChoiceChip(
+                                selected: instrumentalOnly,
+                                label: const Text('Instrumental direction'),
+                                onSelected: generating
+                                    ? null
+                                    : (_) => setDialogState(() {
+                                        instrumentalOnly = !instrumentalOnly;
+                                      }),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: generating || !providerReady
+                                  ? null
+                                  : () => generateMusic(setDialogState),
+                              icon: generating
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.auto_awesome_rounded),
+                              label: Text(
+                                generating || polling
+                                    ? 'Generating music…'
+                                    : 'Generate Music',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            statusText,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: _korlixReadableForeground(
+                                skin,
+                                muted: true,
+                              ),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          if (jobId != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              'Job: $jobId',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: _korlixReadableForeground(
+                                  skin,
+                                  muted: true,
+                                ),
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                          if (errorText != null) ...[
+                            const SizedBox(height: 10),
+                            Text(
+                              errorText!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.redAccent,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                          for (final track in tracks)
+                            _buildMusicTrackCard(
+                              skin: skin,
+                              track: track,
+                              prompt: promptController.text,
+                              player: musicPlayer,
+                            ),
+                        ],
+                        const SizedBox(height: 14),
+                        Text(
+                          'AI-generated music may contain mistakes or unintended similarities. Review lyrics, rights, and commercial-use terms before publishing.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: _korlixReadableForeground(skin, muted: true),
+                            fontSize: 11.8,
+                            height: 1.35,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    await musicPlayer.dispose();
+    promptController.dispose();
+    titleController.dispose();
+    tagsController.dispose();
+    lyricsController.dispose();
+  }
+  // KORLIX_MUSIC_STUDIO_PHASE1_END
+
   Widget _buildUtilityButton() {
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
     final isActive = _utilityPanelOpen || _selectedUtilityTool != null;
@@ -12071,6 +13088,7 @@ Make the entire output professional, well-structured using Markdown, and product
                         ),
                       ),
                     ),
+                    _buildMusicStudioButton(),
                     _buildUtilityButton(),
                     if (_currentTier == 'basic')
                       _korlixBeveledButtonSurface(

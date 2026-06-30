@@ -4501,6 +4501,510 @@ app.get("/api/korlix/jobs/:jobId", async (req, res) => {
 });
 // KORLIX_RESUMABLE_JSON_JOBS_END
 
+// KORLIX_MUSICAPI_PHASE1_BEGIN
+const KORLIX_MUSIC_ADDON_PLANS = [
+  {
+    id: "music_starter_75_monthly",
+    name: "Music Starter",
+    priceMonthly: 25,
+    monthlyGenerations: 75,
+    description: "Best for light creators testing hooks and song ideas.",
+  },
+  {
+    id: "music_creator_580_monthly",
+    name: "Music Creator",
+    priceMonthly: 120,
+    monthlyGenerations: 580,
+    description: "For steady creators making music every week.",
+  },
+  {
+    id: "music_studio_4000_monthly",
+    name: "Music Studio",
+    priceMonthly: 450,
+    monthlyGenerations: 4000,
+    description: "For high-volume content teams and agencies.",
+  },
+  {
+    id: "music_producer_10000_monthly",
+    name: "Music Producer",
+    priceMonthly: 950,
+    monthlyGenerations: 10000,
+    description: "For serious production-scale music generation.",
+  },
+];
+
+const korlixMusicJobs = global.__korlixMusicJobs || new Map();
+global.__korlixMusicJobs = korlixMusicJobs;
+
+const korlixMusicUsage = global.__korlixMusicUsage || new Map();
+global.__korlixMusicUsage = korlixMusicUsage;
+
+function korlixMusicRandomId(prefix = "korlix_music") {
+  try {
+    return `${prefix}_${require("crypto").randomUUID()}`;
+  } catch (_) {
+    return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+  }
+}
+
+function korlixMusicApiKey() {
+  return (
+    process.env.MUSICAPI_KEY ||
+    process.env.MUSICAPI_API_KEY ||
+    process.env.MUSICAPI_AI_KEY ||
+    ""
+  ).trim();
+}
+
+function korlixMusicApiBaseUrl() {
+  return (
+    process.env.MUSICAPI_BASE_URL ||
+    "https://api.musicapi.ai/api/v1"
+  ).replace(/\/+$/, "");
+}
+
+function korlixMusicSafeString(value, fallback = "") {
+  return String(value ?? fallback).trim();
+}
+
+function korlixMusicPlanById(planId) {
+  return (
+    KORLIX_MUSIC_ADDON_PLANS.find((plan) => plan.id === planId) ||
+    KORLIX_MUSIC_ADDON_PLANS[0]
+  );
+}
+
+function korlixMusicMonthlyWindowKey() {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function korlixMusicUsageKey(identity) {
+  return `${korlixMusicMonthlyWindowKey()}:${identity || "anonymous"}`;
+}
+
+function korlixMusicGetUsage(identity, plan) {
+  const key = korlixMusicUsageKey(identity);
+  const used = Number(korlixMusicUsage.get(key) || 0);
+
+  return {
+    usedThisCycle: used,
+    monthlyLimit: plan ? plan.monthlyGenerations : 0,
+    remainingThisCycle: plan
+      ? Math.max(0, Number(plan.monthlyGenerations || 0) - used)
+      : 0,
+    cycle: korlixMusicMonthlyWindowKey(),
+  };
+}
+
+function korlixMusicIncrementUsage(identity, amount = 1) {
+  const key = korlixMusicUsageKey(identity);
+  const used = Number(korlixMusicUsage.get(key) || 0);
+  korlixMusicUsage.set(key, used + amount);
+}
+
+async function korlixMusicGetUser(req) {
+  if (typeof getAuthenticatedUser !== "function") {
+    return null;
+  }
+
+  try {
+    return await getAuthenticatedUser(req);
+  } catch (_) {
+    try {
+      return await getAuthenticatedUser(req, null);
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+function korlixMusicUserIdentity(user, req) {
+  const email =
+    korlixMusicSafeString(user && (user.email || user.user_email || user.username)) ||
+    korlixMusicSafeString(req.headers["x-korlix-user-email"]) ||
+    korlixMusicSafeString(req.body && req.body.email) ||
+    "anonymous";
+
+  return email.toLowerCase();
+}
+
+function korlixMusicAddonForIdentity(identity) {
+  const allowlist = String(process.env.KORLIX_MUSIC_ADDON_ALLOWLIST || "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+
+  const devActive =
+    String(process.env.KORLIX_MUSIC_ADDON_DEV_ACTIVE || "").toLowerCase() ===
+    "true";
+
+  const active = devActive || allowlist.includes(identity);
+  const planId = active
+    ? String(
+        process.env.KORLIX_MUSIC_ADDON_PLAN ||
+          process.env.KORLIX_MUSIC_ADDON_DEFAULT_PLAN ||
+          "music_starter_75_monthly"
+      )
+    : null;
+
+  const plan = planId ? korlixMusicPlanById(planId) : null;
+  const usage = korlixMusicGetUsage(identity, plan);
+
+  return {
+    active,
+    planId,
+    plan,
+    usage,
+    provider: "musicapi.ai",
+    providerReady: Boolean(korlixMusicApiKey()),
+    plans: KORLIX_MUSIC_ADDON_PLANS,
+    billingRequired: !active,
+    note: active
+      ? "Music Production add-on entitlement is active."
+      : "Music Production is a paid add-on available to any Korlix tier, including Basic.",
+  };
+}
+
+function korlixMusicProviderPayload(body) {
+  const customMode = body.customMode === true;
+  const model = korlixMusicSafeString(body.model, "sonic-v5") || "sonic-v5";
+  const tags = korlixMusicSafeString(body.tags);
+  const title = korlixMusicSafeString(body.title);
+  const vocalGender = korlixMusicSafeString(body.vocalGender);
+  const instrumentalOnly = body.instrumentalOnly === true;
+
+  let prompt = korlixMusicSafeString(body.prompt);
+  const lyrics = korlixMusicSafeString(body.lyrics);
+
+  if (instrumentalOnly) {
+    prompt = `${prompt}\nInstrumental direction: instrumental only, no vocals.`;
+  }
+
+  const payload = {
+    task_type: "create_music",
+    custom_mode: customMode,
+    mv: model,
+  };
+
+  if (customMode) {
+    payload.prompt = lyrics || prompt;
+    if (title) payload.title = title;
+    if (tags) payload.tags = tags;
+  } else {
+    payload.gpt_description_prompt = [prompt, tags ? `Style/tags: ${tags}` : ""]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  if (vocalGender === "f" || vocalGender === "m") {
+    payload.vocal_gender = vocalGender;
+  }
+
+  return payload;
+}
+
+async function korlixMusicProviderCreate(payload) {
+  const key = korlixMusicApiKey();
+
+  if (!key) {
+    const error = new Error("MUSICAPI_KEY or MUSICAPI_API_KEY is not configured.");
+    error.statusCode = 503;
+    throw error;
+  }
+
+  const response = await fetch(`${korlixMusicApiBaseUrl()}/sonic/create`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await response.text();
+  let json = null;
+
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch (_) {
+    json = null;
+  }
+
+  if (!response.ok) {
+    const error = new Error(
+      (json && (json.error || json.message || json.details)) ||
+        text ||
+        `MusicAPI.ai returned status ${response.status}`
+    );
+    error.statusCode = response.status;
+    error.details = json || text;
+    throw error;
+  }
+
+  return json || {};
+}
+
+async function korlixMusicProviderStatus(taskId) {
+  const key = korlixMusicApiKey();
+
+  if (!key) {
+    const error = new Error("MUSICAPI_KEY or MUSICAPI_API_KEY is not configured.");
+    error.statusCode = 503;
+    throw error;
+  }
+
+  const response = await fetch(
+    `${korlixMusicApiBaseUrl()}/sonic/task/${encodeURIComponent(taskId)}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${key}`,
+      },
+    }
+  );
+
+  const text = await response.text();
+  let json = null;
+
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch (_) {
+    json = null;
+  }
+
+  if (!response.ok) {
+    const error = new Error(
+      (json && (json.error || json.message || json.details)) ||
+        text ||
+        `MusicAPI.ai status returned ${response.status}`
+    );
+    error.statusCode = response.status;
+    error.details = json || text;
+    throw error;
+  }
+
+  return json || {};
+}
+
+app.get("/api/music/addon", async (req, res) => {
+  try {
+    const user = await korlixMusicGetUser(req);
+    const identity = korlixMusicUserIdentity(user, req);
+    const addon = korlixMusicAddonForIdentity(identity);
+
+    return res.json({
+      ...addon,
+      identity,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: "Could not load Music Production add-on status.",
+      details: String(error && error.message ? error.message : error),
+      plans: KORLIX_MUSIC_ADDON_PLANS,
+    });
+  }
+});
+
+app.post("/api/music/generate", async (req, res) => {
+  try {
+    const authHeader = String(req.headers.authorization || "");
+
+    if (!authHeader.trim()) {
+      return res.status(401).json({
+        error: "Sign in required for Music Studio.",
+      });
+    }
+
+    const user = await korlixMusicGetUser(req);
+    const identity = korlixMusicUserIdentity(user, req);
+    const addon = korlixMusicAddonForIdentity(identity);
+
+    if (!addon.active || !addon.plan) {
+      return res.status(403).json({
+        error: "Music Production add-on required.",
+        upgradeRequired: true,
+        plans: KORLIX_MUSIC_ADDON_PLANS,
+      });
+    }
+
+    if (addon.usage.remainingThisCycle <= 0) {
+      return res.status(402).json({
+        error: "Music Production monthly generation limit reached.",
+        upgradeRequired: true,
+        plans: KORLIX_MUSIC_ADDON_PLANS,
+      });
+    }
+
+    const prompt = korlixMusicSafeString(req.body && req.body.prompt);
+    const lyrics = korlixMusicSafeString(req.body && req.body.lyrics);
+
+    if (!prompt && !lyrics) {
+      return res.status(400).json({
+        error: "Describe the song or provide lyrics first.",
+      });
+    }
+
+    const providerPayload = korlixMusicProviderPayload(req.body || {});
+    const providerResult = await korlixMusicProviderCreate(providerPayload);
+    const taskId = korlixMusicSafeString(providerResult.task_id);
+
+    if (!taskId) {
+      return res.status(502).json({
+        error: "MusicAPI.ai did not return a task_id.",
+        providerResult,
+      });
+    }
+
+    korlixMusicIncrementUsage(identity, 1);
+
+    const jobId = korlixMusicRandomId("korlix_music_job");
+    const now = new Date().toISOString();
+
+    const job = {
+      jobId,
+      taskId,
+      identity,
+      prompt,
+      title: korlixMusicSafeString(req.body && req.body.title),
+      tags: korlixMusicSafeString(req.body && req.body.tags),
+      status: "submitted",
+      tracks: [],
+      providerPayload,
+      providerResult,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    korlixMusicJobs.set(jobId, job);
+
+    return res.status(202).json({
+      jobId,
+      taskId,
+      status: job.status,
+      usage: korlixMusicGetUsage(identity, addon.plan),
+      message: "Music generation submitted.",
+    });
+  } catch (error) {
+    const statusCode = Number(error && error.statusCode) || 500;
+
+    return res.status(statusCode).json({
+      error: "Could not start MusicAPI.ai generation.",
+      details: String(error && error.message ? error.message : error),
+      providerDetails: error && error.details ? error.details : undefined,
+    });
+  }
+});
+
+app.get("/api/music/status/:jobId", async (req, res) => {
+  try {
+    const jobId = String(req.params.jobId || "").trim();
+    const job =
+      korlixMusicJobs.get(jobId) ||
+      Array.from(korlixMusicJobs.values()).find((item) => item.taskId === jobId);
+
+    if (!job) {
+      return res.status(404).json({
+        error: "Music job not found.",
+      });
+    }
+
+    if (job.status !== "completed" && job.status !== "failed") {
+      const providerStatus = await korlixMusicProviderStatus(job.taskId);
+      const tracks = Array.isArray(providerStatus.data) ? providerStatus.data : [];
+
+      const states = tracks.map((track) => String(track.state || "").toLowerCase());
+      const hasSucceeded = states.includes("succeeded");
+      const hasFailed = states.includes("failed");
+
+      job.tracks = tracks;
+      job.providerStatus = providerStatus;
+
+      if (hasFailed) {
+        job.status = "failed";
+        job.error = "One or more MusicAPI.ai tracks failed.";
+      } else if (hasSucceeded || (providerStatus.code === 200 && tracks.length > 0)) {
+        job.status = "completed";
+      } else {
+        job.status = "processing";
+      }
+
+      job.updatedAt = new Date().toISOString();
+      korlixMusicJobs.set(job.jobId, job);
+    }
+
+    return res.json({
+      jobId: job.jobId,
+      taskId: job.taskId,
+      status: job.status,
+      tracks: job.tracks || [],
+      error: job.error || null,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+    });
+  } catch (error) {
+    const statusCode = Number(error && error.statusCode) || 500;
+
+    return res.status(statusCode).json({
+      error: "Could not fetch MusicAPI.ai generation status.",
+      details: String(error && error.message ? error.message : error),
+      providerDetails: error && error.details ? error.details : undefined,
+    });
+  }
+});
+
+app.get("/api/music/content/:trackId", async (req, res) => {
+  const trackId = String(req.params.trackId || "").trim();
+
+  for (const job of korlixMusicJobs.values()) {
+    const tracks = Array.isArray(job.tracks) ? job.tracks : [];
+    const found = tracks.find((track) => {
+      return (
+        String(track.clip_id || "") === trackId ||
+        String(track.id || "") === trackId ||
+        String(track.title || "") === trackId
+      );
+    });
+
+    if (found) {
+      return res.json({
+        track: found,
+        jobId: job.jobId,
+        taskId: job.taskId,
+      });
+    }
+  }
+
+  return res.status(404).json({
+    error: "Music track not found.",
+  });
+});
+
+app.post("/api/music/webhook", async (req, res) => {
+  try {
+    const taskId = korlixMusicSafeString(req.body && req.body.task_id);
+    const job = Array.from(korlixMusicJobs.values()).find(
+      (item) => item.taskId === taskId
+    );
+
+    if (job) {
+      job.providerWebhook = req.body;
+      job.tracks = Array.isArray(req.body && req.body.data) ? req.body.data : job.tracks;
+      job.status = "completed";
+      job.updatedAt = new Date().toISOString();
+      korlixMusicJobs.set(job.jobId, job);
+    }
+
+    return res.json({ ok: true });
+  } catch (error) {
+    return res.status(500).json({
+      error: "Could not process MusicAPI.ai webhook.",
+      details: String(error && error.message ? error.message : error),
+    });
+  }
+});
+// KORLIX_MUSICAPI_PHASE1_END
+
 app.listen(port, () => {
   console.log(`Korlix AI backend running on port ${port}`);
 });
