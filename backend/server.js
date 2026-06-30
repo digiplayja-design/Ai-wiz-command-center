@@ -4247,15 +4247,6 @@ IMPORTANT RULES:
   }
 });
 
-app.use("/api", (req, res) => {
-  return res.status(404).json({
-    error: `API route not found: ${req.method} ${req.originalUrl}`,
-    routeNotDeployed: true,
-    method: req.method,
-    path: req.originalUrl,
-  });
-});
-
 // KORLIX_AI_OUTPUT_REPORT_ROUTE_BEGIN
 const korlixAiOutputReports = [];
 
@@ -5004,6 +4995,17 @@ app.post("/api/music/webhook", async (req, res) => {
   }
 });
 // KORLIX_MUSICAPI_PHASE1_END
+
+// KORLIX_API_NOT_FOUND_FALLBACK_FINAL_BEGIN
+app.use("/api", (req, res) => {
+  return res.status(404).json({
+    error: `API route not found: ${req.method} ${req.originalUrl}`,
+    routeNotDeployed: true,
+    method: req.method,
+    path: req.originalUrl,
+  });
+});
+// KORLIX_API_NOT_FOUND_FALLBACK_FINAL_END
 
 app.listen(port, () => {
   console.log(`Korlix AI backend running on port ${port}`);
