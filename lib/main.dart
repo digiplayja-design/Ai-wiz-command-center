@@ -8000,29 +8000,50 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         ? Icons.app_shortcut_rounded
         : null;
 
+    final lightQuickActionFill =
+        Color.lerp(skin.buttonFill, const Color(0xFFFFFFFF), 0.82) ??
+        const Color(0xFFFFFFFF);
+
     final enabledTextColor = isHighlighted
         ? const Color(0xFF061008)
-        : _korlixReadableToolForeground(skin);
+        : skin.isLight
+        ? skin.text
+        : const Color(0xFFF7FCFF);
+
+    final disabledTextColor = skin.isLight
+        ? skin.text.withValues(alpha: 0.78)
+        : const Color(0xFFE4EBEE).withValues(alpha: 0.72);
 
     final enabledBackgroundColor = isHighlighted
         ? const Color(0xFFB7FF00)
         : skin.isLight
-        ? const Color(0xFF07111F)
+        ? lightQuickActionFill
         : const Color(0xFF120D18);
+
+    final disabledBackgroundColor = skin.isLight
+        ? (Color.lerp(lightQuickActionFill, skin.panel, 0.18) ??
+              lightQuickActionFill)
+        : const Color(0xFF120D18).withValues(alpha: 0.92);
 
     final enabledBorderColor = isHighlighted
         ? const Color(0xFFD9FF5A)
+        : skin.isLight
+        ? skin.border.withValues(alpha: 0.92)
         : skin.primary.withValues(alpha: 0.88);
+
+    final disabledBorderColor = skin.isLight
+        ? skin.border.withValues(alpha: 0.72)
+        : skin.primary.withValues(alpha: 0.42);
 
     return _korlixBeveledButtonSurface(
       skin: skin,
-      fill: enabledBackgroundColor,
-      border: enabledBorderColor,
+      fill: _loading ? disabledBackgroundColor : enabledBackgroundColor,
+      border: _loading ? disabledBorderColor : enabledBorderColor,
       active: isHighlighted,
-      disabled: _loading,
+      disabled: false,
       borderRadius: BorderRadius.circular(13),
       borderWidth: isHighlighted ? 2.0 : 1.65,
-      depth: _loading ? 0.40 : 1.0,
+      depth: _loading ? 0.82 : 1.0,
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
@@ -8037,18 +8058,14 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
                   Icon(
                     icon,
                     size: 17,
-                    color: _loading
-                        ? skin.mutedText.withValues(alpha: 0.52)
-                        : enabledTextColor,
+                    color: _loading ? disabledTextColor : enabledTextColor,
                   ),
                   const SizedBox(width: 6),
                 ],
                 Text(
                   label,
                   style: TextStyle(
-                    color: _loading
-                        ? skin.mutedText.withValues(alpha: 0.52)
-                        : enabledTextColor,
+                    color: _loading ? disabledTextColor : enabledTextColor,
                     fontWeight: FontWeight.w900,
                     fontSize: 12.5,
                   ),
@@ -12621,7 +12638,8 @@ Make the entire output professional, well-structured using Markdown, and product
     EdgeInsetsGeometry padding = EdgeInsets.zero,
   }) {
     final radius = borderRadius ?? BorderRadius.circular(999);
-    final safeFill = fill.withValues(alpha: disabled ? 0.50 : 1.0);
+    final disabledFillAlpha = skin.isLight ? 0.92 : 0.58;
+    final safeFill = fill.withValues(alpha: disabled ? disabledFillAlpha : 1.0);
     final topFace =
         Color.lerp(safeFill, Colors.white, skin.isLight ? 0.42 : 0.18) ??
         safeFill;
@@ -12631,7 +12649,9 @@ Make the entire output professional, well-structured using Markdown, and product
         safeFill;
 
     final edgeColor = disabled
-        ? skin.mutedText.withValues(alpha: 0.34)
+        ? (skin.isLight
+              ? border.withValues(alpha: 0.72)
+              : skin.mutedText.withValues(alpha: 0.46))
         : border.withValues(alpha: active ? 0.98 : 0.78);
 
     return Container(
@@ -12855,18 +12875,29 @@ Make the entire output professional, well-structured using Markdown, and product
       final accent = locked ? skin.premium : skin.primary;
       final isGreen = active || success;
       final disabled = onPressed == null;
+      final normalToolFill = skin.isLight
+          ? (Color.lerp(skin.buttonFill, const Color(0xFFFFFFFF), 0.74) ??
+                const Color(0xFFFFFFFF))
+          : skin.buttonFill.withValues(alpha: 0.78);
+      final toolFill = isGreen ? skin.success : normalToolFill;
+      final toolTextColor = isGreen
+          ? skin.textOnAccent
+          : skin.isLight
+          ? skin.text
+          : _korlixReadableToolForeground(skin);
+      final disabledToolTextColor = skin.isLight
+          ? skin.text.withValues(alpha: 0.72)
+          : skin.mutedText.withValues(alpha: 0.70);
 
       return _korlixBeveledButtonSurface(
         skin: skin,
-        fill: isGreen
-            ? skin.success
-            : skin.buttonFill.withValues(alpha: skin.isLight ? 0.98 : 0.78),
+        fill: toolFill,
         border: isGreen ? skin.success : accent,
         active: isGreen,
-        disabled: disabled,
+        disabled: false,
         borderRadius: BorderRadius.circular(20),
         borderWidth: isGreen ? 2.0 : 1.65,
-        depth: disabled ? 0.45 : 1.0,
+        depth: disabled ? 0.82 : 1.0,
         child: OutlinedButton.icon(
           onPressed: onPressed,
           icon: Stack(
@@ -12888,9 +12919,8 @@ Make the entire output professional, well-structured using Markdown, and product
           ),
           label: Text(label),
           style: OutlinedButton.styleFrom(
-            foregroundColor: isGreen
-                ? skin.textOnAccent
-                : _korlixReadableToolForeground(skin),
+            foregroundColor: disabled ? disabledToolTextColor : toolTextColor,
+            disabledForegroundColor: disabledToolTextColor,
             backgroundColor: Colors.transparent,
             disabledBackgroundColor: Colors.transparent,
             shadowColor: Colors.transparent,
@@ -13203,6 +13233,9 @@ Make the entire output professional, well-structured using Markdown, and product
                         label: Text('Locator'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: _korlixReadableToolForeground(skin),
+                          disabledForegroundColor: skin.isLight
+                              ? skin.text.withValues(alpha: 0.72)
+                              : skin.mutedText.withValues(alpha: 0.70),
                           backgroundColor: Colors.transparent,
                           disabledBackgroundColor: Colors.transparent,
                           shadowColor: Colors.transparent,
