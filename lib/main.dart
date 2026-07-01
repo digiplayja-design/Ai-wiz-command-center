@@ -27,6 +27,7 @@ import 'korlix_video_downloader.dart';
 import 'korlix_image_saver.dart';
 import 'korlix_video_preview_source.dart';
 import 'korlix_cyber_widgets.dart';
+import 'improve_picture/screens/portrait_studio_home.dart';
 
 const String kKorlixImaginePicturePrompt =
     'Describe the picture you want Korlix AI to create.';
@@ -251,7 +252,8 @@ class CheeChaiCheeApp extends StatelessWidget {
   const CheeChaiCheeApp({super.key});
 
   @override
-  Widget build(BuildContext context) {    return MaterialApp(
+  Widget build(BuildContext context) {
+    return MaterialApp(
       title: 'Korlix AI',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -271,8 +273,7 @@ class CheeChaiCheeApp extends StatelessWidget {
       ),
       home: const AuthGate(),
     );
-  }    
-
+  }
 }
 
 class KorlixDeviceStore {
@@ -4499,6 +4500,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   bool _featuredAnswerDismissed = false;
   bool _createVideoMode = false;
   bool _improvePictureMode = false;
+  String? _portraitStudioPromptOverride;
   bool _imaginePictureMode = false;
   bool _fixCreditReportMode = false;
 
@@ -5771,9 +5773,15 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       return;
     }
 
-    final prompt = command.isEmpty
+    final prompt =
+        (_portraitStudioPromptOverride != null &&
+            _portraitStudioPromptOverride!.trim().isNotEmpty)
+        ? _portraitStudioPromptOverride!.trim()
+        : command.isEmpty
         ? 'Improve this picture and return an enhanced professional version.'
         : command;
+
+    _portraitStudioPromptOverride = null;
 
     setState(() {
       _loading = true;
@@ -8788,14 +8796,30 @@ Make the entire output professional, well-structured using Markdown, and product
       return;
     }
 
+    if (tool == 'Improve My Picture') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PortraitStudioHome(
+            onGeneratePrompt: (prompt) {
+              setState(() {
+                _portraitStudioPromptOverride = prompt;
+                _improvePictureMode = true;
+              });
+            },
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       if (_selectedUtilityTool == tool) {
         _clearUtilitySelection();
         return;
-      } else {
-        _selectedUtilityTool = tool;
-        _applyUtilityToolPrompt(tool);
       }
+
+      _selectedUtilityTool = tool;
+      _applyUtilityToolPrompt(tool);
 
       _utilityPanelOpen = true;
 
