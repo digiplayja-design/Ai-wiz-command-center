@@ -4500,6 +4500,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   bool _featuredAnswerDismissed = false;
   bool _createVideoMode = false;
   bool _improvePictureMode = false;
+  String? _portraitStudioPromptOverride;
   bool _imaginePictureMode = false;
   bool _fixCreditReportMode = false;
 
@@ -5772,9 +5773,15 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       return;
     }
 
-    final prompt = command.isEmpty
+    final prompt =
+        (_portraitStudioPromptOverride != null &&
+            _portraitStudioPromptOverride!.trim().isNotEmpty)
+        ? _portraitStudioPromptOverride!.trim()
+        : command.isEmpty
         ? 'Improve this picture and return an enhanced professional version.'
         : command;
+
+    _portraitStudioPromptOverride = null;
 
     setState(() {
       _loading = true;
@@ -8790,9 +8797,18 @@ Make the entire output professional, well-structured using Markdown, and product
     }
 
     if (tool == 'Improve My Picture') {
-      Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (_) => const PortraitStudioHome()));
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PortraitStudioHome(
+            onGeneratePrompt: (prompt) {
+              setState(() {
+                _portraitStudioPromptOverride = prompt;
+                _improvePictureMode = true;
+              });
+            },
+          ),
+        ),
+      );
       return;
     }
 
