@@ -2,12 +2,6 @@
 {{flutter_build_config}}
 
 (function () {
-  const korlixFlutterConfig = {
-    renderer: "canvaskit",
-    useLocalCanvasKit: true,
-    canvasKitBaseUrl: "canvaskit/"
-  };
-
   function korlixBootStatus(message, isError) {
     let box = document.getElementById("korlix-web-boot-status");
 
@@ -39,7 +33,6 @@
   function korlixRemoveBootStatusSoon() {
     window.setTimeout(function () {
       const box = document.getElementById("korlix-web-boot-status");
-
       if (box && box.parentNode) {
         box.parentNode.removeChild(box);
       }
@@ -71,13 +64,10 @@
 
   _flutter.loader
     .load({
-      config: korlixFlutterConfig,
       onEntrypointLoaded: async function (engineInitializer) {
         korlixBootStatus("Loading Korlix AI engine…", false);
 
-        const appRunner = await engineInitializer.initializeEngine(
-          korlixFlutterConfig
-        );
+        const appRunner = await engineInitializer.initializeEngine();
 
         korlixBootStatus("Painting Korlix AI…", false);
 
@@ -106,9 +96,8 @@
       korlixBootStatus(
         "KORLIX WEB STILL WAITING\n\n" +
           "The HTML and JavaScript loaded, but Flutter has not painted yet.\n" +
-          "This usually means the engine renderer failed before the app frame.\n\n" +
-          "Renderer: local CanvasKit\n" +
-          "CanvasKit path: /canvaskit/\n" +
+          "This usually means the Flutter engine failed before the app frame.\n\n" +
+          "Renderer: Flutter default\n" +
           "URL: " + window.location.href,
         true
       );
