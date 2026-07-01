@@ -4,7 +4,9 @@ import '../models/template_model.dart';
 import 'template_gallery.dart';
 
 class PortraitStudioHome extends StatefulWidget {
-  const PortraitStudioHome({super.key});
+  const PortraitStudioHome({super.key, this.onGeneratePrompt});
+
+  final void Function(String prompt)? onGeneratePrompt;
 
   @override
   State<PortraitStudioHome> createState() => _PortraitStudioHomeState();
