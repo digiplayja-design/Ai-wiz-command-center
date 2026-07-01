@@ -251,8 +251,7 @@ class CheeChaiCheeApp extends StatelessWidget {
   const CheeChaiCheeApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+  Widget build(BuildContext context) {    return MaterialApp(
       title: 'Korlix AI',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -272,7 +271,8 @@ class CheeChaiCheeApp extends StatelessWidget {
       ),
       home: const AuthGate(),
     );
-  }
+  }    
+
 }
 
 class KorlixDeviceStore {
@@ -9207,6 +9207,53 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
+  Widget _buildMusicDistributionButton() {
+    final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
+
+    return ActionChip(
+      avatar: Icon(
+        Icons.public_rounded,
+        size: 18,
+        color: skin.isLight ? const Color(0xFF07111F) : skin.secondary,
+      ),
+      label: const Text('Music Distribution'),
+      labelStyle: TextStyle(
+        color: _korlixReadableToolForeground(skin),
+        fontWeight: FontWeight.w900,
+      ),
+      backgroundColor: skin.buttonFill.withValues(
+        alpha: skin.isLight ? 0.96 : 0.78,
+      ),
+      side: BorderSide(
+        color: skin.secondary.withValues(alpha: skin.isLight ? 0.70 : 0.88),
+        width: 1.6,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+      onPressed: _loading ? null : _showMusicDistribution,
+    );
+  }
+
+  Future<void> _showMusicDistribution() async {
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Music Distribution'),
+        content: const Text(
+          'Welcome to Korlix Music Distribution.\n\n'
+          'The new dashboard will be added in Build 90.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _showMusicStudio() async {
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
     final promptController = TextEditingController();
@@ -13089,6 +13136,7 @@ Make the entire output professional, well-structured using Markdown, and product
                       ),
                     ),
                     _buildMusicStudioButton(),
+                    _buildMusicDistributionButton(),
                     _buildUtilityButton(),
                     if (_currentTier == 'basic')
                       _korlixBeveledButtonSurface(
