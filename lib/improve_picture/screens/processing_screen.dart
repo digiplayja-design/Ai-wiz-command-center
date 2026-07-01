@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../controllers/portrait_studio_controller.dart';
+import '../controllers/portrait_studio_controller.dart';
 import '../models/template_model.dart';
 import 'result_screen.dart';
 
@@ -26,9 +28,18 @@ class ProcessingScreen extends StatefulWidget {
 }
 
 class _ProcessingScreenState extends State<ProcessingScreen> {
+  final PortraitStudioController _controller = PortraitStudioController();
   @override
   void initState() {
     super.initState();
+    final prompt = _controller.buildGenerationPrompt(
+      gender: widget.gender,
+      template: widget.template,
+      variation: widget.variation,
+      strength: widget.strength,
+      ratio: widget.ratio,
+    );
+    debugPrint('Portrait Studio prompt ready: $prompt');
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
