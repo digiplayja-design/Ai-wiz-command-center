@@ -25,6 +25,8 @@ class _PortraitStudioHomeState extends State<PortraitStudioHome> {
   Uint8List? _previewBytes;
   String? _error;
   bool _picking = false;
+  bool _bestResults = true;
+  bool _identityLock = true;
 
   bool get _hasPhoto => _pickedFile != null;
 
@@ -43,9 +45,7 @@ class _PortraitStudioHomeState extends State<PortraitStudioHome> {
         maxWidth: 2400,
       );
 
-      if (image == null) {
-        return;
-      }
+      if (image == null) return;
 
       final bytes = await image.readAsBytes();
       final fallbackName =
@@ -96,6 +96,8 @@ class _PortraitStudioHomeState extends State<PortraitStudioHome> {
           gender: _gender,
           hasUploadedPhoto: _hasPhoto,
           uploadedFile: _pickedFile,
+          bestResults: _bestResults,
+          identityLock: _identityLock,
           onGeneratePrompt: widget.onGeneratePrompt,
         ),
       ),
@@ -145,9 +147,20 @@ class _PortraitStudioHomeState extends State<PortraitStudioHome> {
               ),
             ],
             const SizedBox(height: 18),
-            const _TipsCard(),
+            _PromptOptionsCard(
+              bestResults: _bestResults,
+              identityLock: _identityLock,
+              onBestResultsChanged: (value) =>
+                  setState(() => _bestResults = value),
+              onIdentityLockChanged: (value) =>
+                  setState(() => _identityLock = value),
+            ),
             const SizedBox(height: 18),
-            _IdentityLockCard(gender: _gender),
+            _IdentityLockCard(
+              gender: _gender,
+              identityLock: _identityLock,
+              bestResults: _bestResults,
+            ),
             const SizedBox(height: 22),
             _ContinueButton(
               label: _hasPhoto ? 'Continue to Templates' : 'Choose Photo First',
@@ -193,7 +206,7 @@ class _HeroCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            'Upload one portrait, choose a premium template, then send the generated prompt and photo into KORLIX AI.',
+            'Upload one portrait, choose a premium template, then generate that selected look with KORLIX AI.',
             style: TextStyle(
               color: Colors.white.withOpacity(0.72),
               height: 1.35,
@@ -446,27 +459,92 @@ class _UploadAction extends StatelessWidget {
   }
 }
 
-class _TipsCard extends StatelessWidget {
-  const _TipsCard();
+class _PromptOptionsCard extends StatelessWidget {
+  const _PromptOptionsCard({
+    required this.bestResults,
+    required this.identityLock,
+    required this.onBestResultsChanged,
+    required this.onIdentityLockChanged,
+  });
+
+  final bool bestResults;
+  final bool identityLock;
+  final ValueChanged<bool> onBestResultsChanged;
+  final ValueChanged<bool> onIdentityLockChanged;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: _studioBox(),
       padding: const EdgeInsets.all(16),
-      child: const _BlockTitle(
-        title: 'Best Results',
-        subtitle:
-            'Use a clear portrait, good lighting, and one visible face. KORLIX AI will preserve identity while applying the selected style.',
+      child: Column(
+        children: [
+          _OptionSwitch(
+            title: 'Best Results',
+            subtitle:
+                'Premium lighting, skin polish, clarity, sharpness, color, and background finish.',
+            value: bestResults,
+            onChanged: onBestResultsChanged,
+          ),
+          const Divider(color: Color(0x22FFFFFF), height: 24),
+          _OptionSwitch(
+            title: 'Identity Lock',
+            subtitle:
+                'Preserve the same face, age range, skin tone, hairline, and recognizable features.',
+            value: identityLock,
+            onChanged: onIdentityLockChanged,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OptionSwitch extends StatelessWidget {
+  const _OptionSwitch({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile.adaptive(
+      contentPadding: EdgeInsets.zero,
+      value: value,
+      onChanged: onChanged,
+      activeColor: const Color(0xFFB6FF2E),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(color: Colors.white.withOpacity(0.62), height: 1.35),
       ),
     );
   }
 }
 
 class _IdentityLockCard extends StatelessWidget {
-  const _IdentityLockCard({required this.gender});
+  const _IdentityLockCard({
+    required this.gender,
+    required this.identityLock,
+    required this.bestResults,
+  });
 
   final ImproveGender gender;
+  final bool identityLock;
+  final bool bestResults;
 
   @override
   Widget build(BuildContext context) {
@@ -476,9 +554,9 @@ class _IdentityLockCard extends StatelessWidget {
       decoration: _studioBox(),
       padding: const EdgeInsets.all(16),
       child: _BlockTitle(
-        title: 'Identity Lock',
+        title: 'Prompt Summary',
         subtitle:
-            'Realistic templates preserve the same $label while changing only the selected style.',
+            '${bestResults ? 'Best Results ON' : 'Best Results OFF'} • ${identityLock ? 'Identity Lock ON' : 'Identity Lock OFF'} • Realistic templates preserve the same $label while applying the selected style.',
       ),
     );
   }

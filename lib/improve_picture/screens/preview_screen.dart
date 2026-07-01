@@ -13,6 +13,8 @@ class PreviewScreen extends StatefulWidget {
     required this.template,
     required this.variation,
     required this.hasUploadedPhoto,
+    required this.bestResults,
+    required this.identityLock,
     this.uploadedFile,
     this.onGeneratePrompt,
   });
@@ -21,6 +23,8 @@ class PreviewScreen extends StatefulWidget {
   final ImproveTemplate template;
   final String variation;
   final bool hasUploadedPhoto;
+  final bool bestResults;
+  final bool identityLock;
   final fp.PlatformFile? uploadedFile;
   final ImprovePicturePromptCallback? onGeneratePrompt;
 
@@ -31,22 +35,24 @@ class PreviewScreen extends StatefulWidget {
 class _PreviewScreenState extends State<PreviewScreen> {
   final PortraitStudioController _promptController = PortraitStudioController();
 
-  double _strength = 0.8;
+  double _strength = 0.85;
   String _ratio = '9:16';
 
   void _generate() {
+    final prompt = _promptController.buildGenerationPrompt(
+      gender: widget.gender,
+      template: widget.template,
+      variation: widget.variation,
+      strength: _strength,
+      ratio: _ratio,
+      bestResults: widget.bestResults,
+      identityLock: widget.identityLock,
+    );
+
     final callback = widget.onGeneratePrompt;
 
     if (callback != null) {
-      final prompt = _promptController.buildGenerationPrompt(
-        gender: widget.gender,
-        template: widget.template,
-        variation: widget.variation,
-        strength: _strength,
-        ratio: _ratio,
-      );
-
-      callback(prompt, widget.uploadedFile);
+      callback(prompt, widget.uploadedFile, true);
       return;
     }
 
@@ -77,7 +83,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
         backgroundColor: const Color(0xFF05070D),
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text('Preview'),
+        title: const Text('Template Preview'),
       ),
       body: SafeArea(
         child: ListView(
@@ -98,9 +104,17 @@ class _PreviewScreenState extends State<PreviewScreen> {
                 fontWeight: FontWeight.w800,
               ),
             ),
+            const SizedBox(height: 8),
+            Text(
+              '${widget.bestResults ? 'Best Results ON' : 'Best Results OFF'} • ${widget.identityLock ? 'Identity Lock ON' : 'Identity Lock OFF'}',
+              style: const TextStyle(
+                color: Color(0xFFB6FF2E),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: 18),
             Container(
-              height: 420,
+              height: 430,
               decoration: BoxDecoration(
                 color: const Color(0xFF0B0E17),
                 borderRadius: BorderRadius.circular(28),
@@ -108,53 +122,33 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   color: const Color(0xFF7B3CFF).withOpacity(0.30),
                 ),
               ),
-              child: Stack(
+              child: Row(
                 children: [
-                  Positioned.fill(
-                    child: bytes == null
-                        ? Center(
-                            child: Icon(
-                              widget.template.icon,
-                              color: Colors.white.withOpacity(0.18),
-                              size: 140,
-                            ),
-                          )
-                        : ClipRRect(
-                            borderRadius: BorderRadius.circular(28),
-                            child: Image.memory(bytes, fit: BoxFit.cover),
-                          ),
-                  ),
-                  Positioned.fill(
-                    child: Center(
-                      child: Container(
-                        width: 1.5,
-                        color: const Color(0xFFB266FF),
-                      ),
+                  Expanded(
+                    child: _BeforePreview(
+                      imageBytes: bytes,
+                      hasUploadedPhoto: widget.hasUploadedPhoto,
                     ),
                   ),
-                  Positioned(
-                    left: 18,
-                    top: 18,
-                    child: _Tag(
-                      label: widget.hasUploadedPhoto ? 'Before' : 'Demo Before',
-                    ),
-                  ),
-                  const Positioned(
-                    right: 18,
-                    top: 18,
-                    child: _Tag(label: 'After'),
-                  ),
-                  Positioned(
-                    left: 18,
-                    right: 18,
-                    bottom: 18,
-                    child: Text(
-                      'Ready to generate with KORLIX AI',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white.withOpacity(0.72)),
+                  Container(width: 1.5, color: const Color(0xFFB266FF)),
+                  Expanded(
+                    child: _AfterTemplatePreview(
+                      template: widget.template,
+                      variation: widget.variation,
+                      bestResults: widget.bestResults,
+                      identityLock: widget.identityLock,
                     ),
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Preview shows the selected template direction. Tap generate to create the real finished image with KORLIX AI.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.66),
+                height: 1.35,
               ),
             ),
             const SizedBox(height: 18),
@@ -213,9 +207,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
               child: ElevatedButton.icon(
                 onPressed: _generate,
                 icon: const Icon(Icons.auto_awesome_rounded),
-                label: const Text(
-                  'Use This Look',
-                  style: TextStyle(fontWeight: FontWeight.w900),
+                label: Text(
+                  'Generate ${widget.template.name} Template',
+                  style: const TextStyle(fontWeight: FontWeight.w900),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF8B3DFF),
@@ -230,6 +224,151 @@ class _PreviewScreenState extends State<PreviewScreen> {
         ),
       ),
     );
+  }
+}
+
+class _BeforePreview extends StatelessWidget {
+  const _BeforePreview({
+    required this.imageBytes,
+    required this.hasUploadedPhoto,
+  });
+
+  final dynamic imageBytes;
+  final bool hasUploadedPhoto;
+
+  @override
+  Widget build(BuildContext context) {
+    final bytes = imageBytes;
+
+    return ClipRRect(
+      borderRadius: const BorderRadius.horizontal(left: Radius.circular(28)),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (bytes == null)
+            Center(
+              child: Icon(
+                Icons.person_rounded,
+                color: Colors.white.withOpacity(0.18),
+                size: 120,
+              ),
+            )
+          else
+            Image.memory(bytes, fit: BoxFit.cover),
+          const Positioned(left: 12, top: 12, child: _Tag(label: 'Before')),
+        ],
+      ),
+    );
+  }
+}
+
+class _AfterTemplatePreview extends StatelessWidget {
+  const _AfterTemplatePreview({
+    required this.template,
+    required this.variation,
+    required this.bestResults,
+    required this.identityLock,
+  });
+
+  final ImproveTemplate template;
+  final String variation;
+  final bool bestResults;
+  final bool identityLock;
+
+  @override
+  Widget build(BuildContext context) {
+    final isMask = template.name.toLowerCase() == 'mask';
+
+    return ClipRRect(
+      borderRadius: const BorderRadius.horizontal(right: Radius.circular(28)),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isMask
+                ? const [Color(0xFF261A08), Color(0xFF05070D)]
+                : const [Color(0xFF271747), Color(0xFF05070D)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        padding: const EdgeInsets.all(18),
+        child: Stack(
+          children: [
+            const Positioned(right: 0, top: 0, child: _Tag(label: 'After')),
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    template.icon,
+                    color: isMask
+                        ? const Color(0xFFFFD166)
+                        : const Color(0xFFC07CFF),
+                    size: 92,
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    template.name,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 24,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    variation,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFFB6FF2E),
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    _templatePreviewText(template.name, variation),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.75),
+                      height: 1.35,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    '${bestResults ? 'Best Results' : 'Natural'} • ${identityLock ? 'Identity Lock' : 'Creative Identity'}',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.62),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _templatePreviewText(String templateName, String variation) {
+    final lower = templateName.toLowerCase();
+
+    if (lower == 'mask') {
+      return 'The generated result will add a visible $variation mask style while preserving the same face.';
+    }
+
+    if (lower == 'gothic') {
+      return 'The generated result will add gothic mood, fashion, lighting, and styling.';
+    }
+
+    if (lower == 'cartoon' || lower == 'caricature') {
+      return 'The generated result will apply the selected stylized look while keeping the person recognizable.';
+    }
+
+    return 'The generated result will apply the selected $variation look clearly, not just brighten the original.';
   }
 }
 

@@ -29,7 +29,7 @@ class TemplateCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                '✦ 3 ideas',
+                '✦ 3 looks',
                 style: TextStyle(
                   color: Color(0xFFC07CFF),
                   fontWeight: FontWeight.w800,

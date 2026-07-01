@@ -11,12 +11,16 @@ class TemplateGalleryScreen extends StatelessWidget {
     super.key,
     required this.gender,
     required this.hasUploadedPhoto,
+    required this.bestResults,
+    required this.identityLock,
     this.uploadedFile,
     this.onGeneratePrompt,
   });
 
   final ImproveGender gender;
   final bool hasUploadedPhoto;
+  final bool bestResults;
+  final bool identityLock;
   final fp.PlatformFile? uploadedFile;
   final ImprovePicturePromptCallback? onGeneratePrompt;
 
@@ -45,21 +49,30 @@ class TemplateGalleryScreen extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Choose 1 of 12 categories. Each category includes 3 premium ideas.',
+              'Choose one template category. The selected template will be used in the final AI generation prompt.',
               style: TextStyle(
                 color: Colors.white.withOpacity(0.65),
                 height: 1.35,
               ),
             ),
-            const SizedBox(height: 10),
-            if (uploadedFile != null)
+            const SizedBox(height: 8),
+            Text(
+              'Options: ${bestResults ? 'Best Results' : 'Natural'} • ${identityLock ? 'Identity Lock' : 'Creative Identity'}',
+              style: const TextStyle(
+                color: Color(0xFFB6FF2E),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            if (uploadedFile != null) ...[
+              const SizedBox(height: 6),
               Text(
                 'Photo ready: ${uploadedFile!.name}',
                 style: const TextStyle(
-                  color: Color(0xFFB6FF2E),
+                  color: Color(0xFF69D9E8),
                   fontWeight: FontWeight.w800,
                 ),
               ),
+            ],
             const SizedBox(height: 16),
             GridView.builder(
               itemCount: kImprovePictureTemplates.length,
@@ -84,6 +97,8 @@ class TemplateGalleryScreen extends StatelessWidget {
                           template: template,
                           hasUploadedPhoto: hasUploadedPhoto,
                           uploadedFile: uploadedFile,
+                          bestResults: bestResults,
+                          identityLock: identityLock,
                           onGeneratePrompt: onGeneratePrompt,
                         ),
                       ),

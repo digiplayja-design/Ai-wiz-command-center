@@ -406,7 +406,7 @@ class KorlixSessionStore {
 
     try {
       final response = await http.post(
-        Uri.parse('$kKorlixBackendBaseUrl/api/auth/refresh'),
+        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/auth/refresh'),
         headers: const {'Content-Type': 'application/json'},
         body: jsonEncode({'refresh_token': refreshToken}),
       );
@@ -456,6 +456,24 @@ class AuthGate extends StatefulWidget {
 
   @override
   State<AuthGate> createState() => _AuthGateState();
+}
+
+Uri _assertValidKorlixBackendUri(String rawUri) {
+  final placeholder = String.fromCharCode(36) + 'kKorlixBackendBaseUrl';
+
+  if (rawUri.contains(placeholder)) {
+    throw ArgumentError(
+      'Korlix backend URL was not interpolated before request: $rawUri',
+    );
+  }
+
+  final uri = Uri.parse(rawUri);
+
+  if (!uri.hasScheme || !uri.hasAuthority) {
+    throw ArgumentError('Korlix backend URL is missing host: $rawUri');
+  }
+
+  return uri;
 }
 
 class _AuthGateState extends State<AuthGate> {
@@ -542,7 +560,7 @@ class _AuthGateState extends State<AuthGate> {
       await KorlixDeviceStore.ensureLoaded();
 
       await http.post(
-        Uri.parse('$kKorlixBackendBaseUrl/api/auth/signout'),
+        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/auth/signout'),
         headers: {
           'Content-Type': 'application/json',
           if (kKorlixAccessToken != null && kKorlixAccessToken!.isNotEmpty)
@@ -713,7 +731,9 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('$kKorlixBackendBaseUrl/api/auth/password-reset'),
+        _assertValidKorlixBackendUri(
+          '$kKorlixBackendBaseUrl/api/auth/password-reset',
+        ),
         headers: const {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email}),
       );
@@ -1644,7 +1664,7 @@ class _KorlixBasicAdBannerState extends State<KorlixBasicAdBanner> {
 
     try {
       final response = await http.get(
-        Uri.parse('$kKorlixBackendBaseUrl/api/me'),
+        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/me'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $kKorlixAccessToken',
@@ -2061,7 +2081,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('$kKorlixBackendBaseUrl/api/reports'),
+        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/reports'),
         headers: _headers(),
         body: jsonEncode({
           'generation_id': generationId,
@@ -2126,7 +2146,9 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
 
     try {
       final response = await http.post(
-        Uri.parse('$kKorlixBackendBaseUrl/api/account/delete-request'),
+        _assertValidKorlixBackendUri(
+          '$kKorlixBackendBaseUrl/api/account/delete-request',
+        ),
         headers: _headers(),
         body: jsonEncode({
           'email': kKorlixUserEmail,
@@ -2484,7 +2506,9 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
 
     try {
       final response = await http.post(
-        Uri.parse('$kKorlixBackendBaseUrl/api/characters/select'),
+        _assertValidKorlixBackendUri(
+          '$kKorlixBackendBaseUrl/api/characters/select',
+        ),
         headers: _headers(),
         body: jsonEncode({'character_id': normalizedCharacterId}),
       );
@@ -2825,7 +2849,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
 
     try {
       await http.post(
-        Uri.parse('$kKorlixBackendBaseUrl/api/theme/set'),
+        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/theme/set'),
         headers: KorlixDeviceStore.headers(),
         body: jsonEncode({'theme': korlixNormalizeSkinId(theme)}),
       );
@@ -2984,12 +3008,12 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
 
     try {
       final meResponse = await http.get(
-        Uri.parse('$kKorlixBackendBaseUrl/api/me'),
+        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/me'),
         headers: _headers(),
       );
 
       final historyResponse = await http.get(
-        Uri.parse('$kKorlixBackendBaseUrl/api/history'),
+        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/history'),
         headers: _headers(),
       );
 
@@ -5259,7 +5283,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
 
     final response = await http
         .post(
-          Uri.parse('$kKorlixBackendBaseUrl/api/korlix/jobs'),
+          _assertValidKorlixBackendUri(
+            '$kKorlixBackendBaseUrl/api/korlix/jobs',
+          ),
           headers: _authHeaders(),
           body: jsonEncode({
             'kind': kind,
@@ -5296,7 +5322,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   ) async {
     final response = await http
         .get(
-          Uri.parse('$kKorlixBackendBaseUrl/api/korlix/jobs/$backendJobId'),
+          _assertValidKorlixBackendUri(
+            '$kKorlixBackendBaseUrl/api/korlix/jobs/$backendJobId',
+          ),
           headers: _authHeaders(),
         )
         .timeout(const Duration(seconds: 18));
@@ -5686,7 +5714,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     try {
       final response = await http
           .post(
-            Uri.parse('$kKorlixBackendBaseUrl/api/image/create'),
+            _assertValidKorlixBackendUri(
+              '$kKorlixBackendBaseUrl/api/image/create',
+            ),
             headers: _authHeaders(),
             body: jsonEncode({'prompt': prompt, 'language': _selectedLanguage}),
           )
@@ -5796,7 +5826,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     try {
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('$kKorlixBackendBaseUrl/api/image/improve'),
+        _assertValidKorlixBackendUri(
+          '$kKorlixBackendBaseUrl/api/image/improve',
+        ),
       );
 
       final headers = Map<String, String>.from(_authHeaders())
@@ -5912,7 +5944,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         // ── CREDIT DISPUTE MODE: call /api/credit-dispute-letters ──
         final request = http.MultipartRequest(
           'POST',
-          Uri.parse('$kKorlixBackendBaseUrl/api/credit-dispute-letters'),
+          _assertValidKorlixBackendUri(
+            '$kKorlixBackendBaseUrl/api/credit-dispute-letters',
+          ),
         );
         final headers = Map<String, String>.from(_authHeaders())
           ..remove('Content-Type');
@@ -5993,7 +6027,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
 
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('\$kKorlixBackendBaseUrl/api/analyze-documents'),
+        _assertValidKorlixBackendUri(
+          '$kKorlixBackendBaseUrl/api/analyze-documents',
+        ),
       );
 
       final headers = Map<String, String>.from(_authHeaders())
@@ -8033,7 +8069,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PortraitStudioHome(
-          onGeneratePrompt: (prompt, pickedImageFile) {
+          onGeneratePrompt: (prompt, pickedImageFile, autoSubmit) {
             final cleanedPrompt = prompt.trim();
 
             if (cleanedPrompt.isEmpty) {
@@ -8052,6 +8088,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
               _fixCreditReportMode = false;
               _createAppMode = false;
               _error = null;
+
               if (pickedImageFile != null) {
                 _pickedUploadFile = pickedImageFile;
                 _pickedUploadFiles
@@ -8066,12 +8103,24 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
             });
 
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
+              SnackBar(
                 content: Text(
-                  'Portrait Studio prompt ready. Upload one image, then tap submit.',
+                  autoSubmit
+                      ? 'Generating selected Portrait Studio template...'
+                      : 'Portrait Studio prompt ready. Upload one image, then tap submit.',
                 ),
               ),
             );
+
+            if (autoSubmit) {
+              Future<void>.delayed(const Duration(milliseconds: 350), () async {
+                if (!mounted || _loading) {
+                  return;
+                }
+
+                await _generateImprovedPicture();
+              });
+            }
           },
         ),
       ),
@@ -8631,7 +8680,7 @@ Make the entire output professional, well-structured using Markdown, and product
 
     try {
       final response = await http.get(
-        Uri.parse('$kKorlixBackendBaseUrl/api/me'),
+        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/me'),
         headers: _authHeaders(),
       );
 
@@ -8667,7 +8716,7 @@ Make the entire output professional, well-structured using Markdown, and product
     if (_chatHistoryLoaded) return;
     try {
       final response = await http.get(
-        Uri.parse('$kKorlixBackendBaseUrl/api/history'),
+        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/history'),
         headers: _authHeaders(),
       );
       if (response.statusCode >= 400) return;
@@ -8885,7 +8934,7 @@ Make the entire output professional, well-structured using Markdown, and product
 
   Future<Map<String, dynamic>> _fetchMusicAddonStatus() async {
     final response = await http.get(
-      Uri.parse('$kKorlixBackendBaseUrl/api/music/addon'),
+      _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/music/addon'),
       headers: _authHeaders(),
     );
 
@@ -8909,7 +8958,7 @@ Make the entire output professional, well-structured using Markdown, and product
     required String model,
   }) async {
     final response = await http.post(
-      Uri.parse('$kKorlixBackendBaseUrl/api/music/generate'),
+      _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/music/generate'),
       headers: _authHeaders(),
       body: jsonEncode({
         'prompt': prompt,
@@ -8934,7 +8983,9 @@ Make the entire output professional, well-structured using Markdown, and product
 
   Future<Map<String, dynamic>> _fetchMusicGenerationStatus(String jobId) async {
     final response = await http.get(
-      Uri.parse('$kKorlixBackendBaseUrl/api/music/status/$jobId'),
+      _assertValidKorlixBackendUri(
+        '$kKorlixBackendBaseUrl/api/music/status/$jobId',
+      ),
       headers: _authHeaders(),
     );
 
@@ -10693,7 +10744,7 @@ Make the entire output professional, well-structured using Markdown, and product
 
     try {
       final response = await http.get(
-        Uri.parse('$kKorlixBackendBaseUrl/api/me'),
+        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/me'),
         headers: _authHeaders(),
       );
 
@@ -11033,7 +11084,9 @@ Make the entire output professional, well-structured using Markdown, and product
 
       try {
         final response = await http.get(
-          Uri.parse('$kKorlixBackendBaseUrl/api/video/status/$videoId'),
+          _assertValidKorlixBackendUri(
+            '$kKorlixBackendBaseUrl/api/video/status/$videoId',
+          ),
           headers: _authHeaders(),
         );
 
@@ -11334,7 +11387,9 @@ Make the entire output professional, well-structured using Markdown, and product
   }) async {
     try {
       await http.post(
-        Uri.parse('$kKorlixBackendBaseUrl/api/location/record'),
+        _assertValidKorlixBackendUri(
+          '$kKorlixBackendBaseUrl/api/location/record',
+        ),
         headers: _authHeaders(),
         body: jsonEncode({
           'latitude': position.latitude,
@@ -14710,7 +14765,9 @@ Make the entire output professional, well-structured using Markdown, and product
     try {
       await http
           .post(
-            Uri.parse('$kKorlixBackendBaseUrl/api/theme/set'),
+            _assertValidKorlixBackendUri(
+              '$kKorlixBackendBaseUrl/api/theme/set',
+            ),
             headers: KorlixDeviceStore.headers(),
             body: jsonEncode({'theme': normalizedTheme}),
           )

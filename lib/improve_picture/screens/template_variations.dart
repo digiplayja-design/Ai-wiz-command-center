@@ -11,6 +11,8 @@ class TemplateVariationsScreen extends StatelessWidget {
     required this.gender,
     required this.template,
     required this.hasUploadedPhoto,
+    required this.bestResults,
+    required this.identityLock,
     this.uploadedFile,
     this.onGeneratePrompt,
   });
@@ -18,6 +20,8 @@ class TemplateVariationsScreen extends StatelessWidget {
   final ImproveGender gender;
   final ImproveTemplate template;
   final bool hasUploadedPhoto;
+  final bool bestResults;
+  final bool identityLock;
   final fp.PlatformFile? uploadedFile;
   final ImprovePicturePromptCallback? onGeneratePrompt;
 
@@ -36,7 +40,7 @@ class TemplateVariationsScreen extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 26),
           children: [
             Text(
-              '${template.name} Ideas',
+              '${template.name} Looks',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 color: Colors.white,
                 fontWeight: FontWeight.w900,
@@ -48,6 +52,14 @@ class TemplateVariationsScreen extends StatelessWidget {
               style: TextStyle(
                 color: Colors.white.withOpacity(0.65),
                 height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '${bestResults ? 'Best Results ON' : 'Best Results OFF'} • ${identityLock ? 'Identity Lock ON' : 'Identity Lock OFF'}',
+              style: const TextStyle(
+                color: Color(0xFFB6FF2E),
+                fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(height: 18),
@@ -68,6 +80,8 @@ class TemplateVariationsScreen extends StatelessWidget {
                             variation: variation,
                             hasUploadedPhoto: hasUploadedPhoto,
                             uploadedFile: uploadedFile,
+                            bestResults: bestResults,
+                            identityLock: identityLock,
                             onGeneratePrompt: onGeneratePrompt,
                           ),
                         ),
@@ -87,13 +101,25 @@ class TemplateVariationsScreen extends StatelessWidget {
                           Icon(template.icon, color: const Color(0xFFC07CFF)),
                           const SizedBox(width: 14),
                           Expanded(
-                            child: Text(
-                              variation,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 16,
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  variation,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Tap to preview and generate this look.',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.58),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           const Icon(
