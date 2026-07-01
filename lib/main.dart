@@ -8033,7 +8033,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PortraitStudioHome(
-          onGeneratePrompt: (prompt) {
+          onGeneratePrompt: (prompt, pickedImageFile) {
             final cleanedPrompt = prompt.trim();
 
             if (cleanedPrompt.isEmpty) {
@@ -8052,6 +8052,13 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
               _fixCreditReportMode = false;
               _createAppMode = false;
               _error = null;
+              if (pickedImageFile != null) {
+                _pickedUploadFile = pickedImageFile;
+                _pickedUploadFiles
+                  ..clear()
+                  ..add(pickedImageFile);
+              }
+
               _controller.text = cleanedPrompt;
               _controller.selection = TextSelection.fromPosition(
                 TextPosition(offset: cleanedPrompt.length),

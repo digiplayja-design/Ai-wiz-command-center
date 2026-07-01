@@ -1,27 +1,102 @@
-import 'package:flutter/material.dart';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart' as fp;
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart' as ip;
+
+import '../models/portrait_studio_callback.dart';
 import '../models/template_model.dart';
 import 'template_gallery.dart';
 
 class PortraitStudioHome extends StatefulWidget {
   const PortraitStudioHome({super.key, this.onGeneratePrompt});
 
-  final void Function(String prompt)? onGeneratePrompt;
+  final ImprovePicturePromptCallback? onGeneratePrompt;
 
   @override
   State<PortraitStudioHome> createState() => _PortraitStudioHomeState();
 }
 
 class _PortraitStudioHomeState extends State<PortraitStudioHome> {
+  final ip.ImagePicker _picker = ip.ImagePicker();
+
   ImproveGender _gender = ImproveGender.female;
-  bool _photoSelected = false;
+  fp.PlatformFile? _pickedFile;
+  Uint8List? _previewBytes;
+  String? _error;
+  bool _picking = false;
+
+  bool get _hasPhoto => _pickedFile != null;
+
+  Future<void> _pickImage(ip.ImageSource source) async {
+    if (_picking) return;
+
+    setState(() {
+      _picking = true;
+      _error = null;
+    });
+
+    try {
+      final image = await _picker.pickImage(
+        source: source,
+        imageQuality: 92,
+        maxWidth: 2400,
+      );
+
+      if (image == null) {
+        return;
+      }
+
+      final bytes = await image.readAsBytes();
+      final fallbackName =
+          'korlix_portrait_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final imageName = image.name.trim().isEmpty ? fallbackName : image.name;
+
+      setState(() {
+        _pickedFile = fp.PlatformFile(
+          name: imageName,
+          size: bytes.length,
+          bytes: bytes,
+          path: image.path,
+        );
+        _previewBytes = bytes;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Selected $imageName')));
+    } catch (error) {
+      setState(() {
+        _error =
+            'Could not open your photos. Check iOS Photos permission, then try again.';
+      });
+
+      debugPrint('Portrait Studio image picker failed: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _picking = false);
+      }
+    }
+  }
 
   void _continueToGallery() {
+    if (!_hasPhoto) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Choose a portrait from Gallery or Camera first.'),
+        ),
+      );
+      return;
+    }
+
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => TemplateGalleryScreen(
           gender: _gender,
-          hasUploadedPhoto: _photoSelected,
+          hasUploadedPhoto: _hasPhoto,
+          uploadedFile: _pickedFile,
+          onGeneratePrompt: widget.onGeneratePrompt,
         ),
       ),
     );
@@ -52,18 +127,30 @@ class _PortraitStudioHomeState extends State<PortraitStudioHome> {
             ),
             const SizedBox(height: 18),
             _UploadCard(
-              photoSelected: _photoSelected,
-              onPick: () => setState(() => _photoSelected = true),
+              picking: _picking,
+              photoSelected: _hasPhoto,
+              fileName: _pickedFile?.name,
+              previewBytes: _previewBytes,
+              onPickGallery: () => _pickImage(ip.ImageSource.gallery),
+              onPickCamera: () => _pickImage(ip.ImageSource.camera),
             ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                style: const TextStyle(
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
             const SizedBox(height: 18),
             const _TipsCard(),
             const SizedBox(height: 18),
             _IdentityLockCard(gender: _gender),
             const SizedBox(height: 22),
             _ContinueButton(
-              label: _photoSelected
-                  ? 'Continue to Templates'
-                  : 'Explore Templates',
+              label: _hasPhoto ? 'Continue to Templates' : 'Choose Photo First',
               onPressed: _continueToGallery,
             ),
           ],
@@ -106,76 +193,11 @@ class _HeroCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            'Transform one portrait into realistic HD results with 12 premium template categories and 3 ideas each.',
+            'Upload one portrait, choose a premium template, then send the generated prompt and photo into KORLIX AI.',
             style: TextStyle(
               color: Colors.white.withOpacity(0.72),
               height: 1.35,
               fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: const [
-              Expanded(
-                child: _HeroStat(
-                  icon: Icons.grid_view_rounded,
-                  label: '12 Templates',
-                ),
-              ),
-              SizedBox(width: 10),
-              Expanded(
-                child: _HeroStat(
-                  icon: Icons.filter_3_rounded,
-                  label: '36 Looks',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: const [
-              Expanded(
-                child: _HeroStat(icon: Icons.hd_rounded, label: 'HD Preview'),
-              ),
-              SizedBox(width: 10),
-              Expanded(
-                child: _HeroStat(icon: Icons.compare_rounded, label: 'Compare'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroStat extends StatelessWidget {
-  const _HeroStat({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.055),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: const Color(0xFFC07CFF), size: 19),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 12,
-              ),
             ),
           ),
         ],
@@ -258,22 +280,18 @@ class _GenderPill extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
+            color: active ? const Color(0xFF8B3DFF) : Colors.transparent,
             borderRadius: BorderRadius.circular(999),
-            gradient: active
-                ? const LinearGradient(
-                    colors: [Color(0xFF6D3BFF), Color(0xFFD83BFF)],
-                  )
-                : null,
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: active ? Colors.white : Colors.white54),
-              const SizedBox(width: 8),
+              Icon(icon, color: Colors.white, size: 19),
+              const SizedBox(width: 6),
               Text(
                 label,
-                style: TextStyle(
-                  color: active ? Colors.white : Colors.white54,
+                style: const TextStyle(
+                  color: Colors.white,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -286,13 +304,26 @@ class _GenderPill extends StatelessWidget {
 }
 
 class _UploadCard extends StatelessWidget {
-  const _UploadCard({required this.photoSelected, required this.onPick});
+  const _UploadCard({
+    required this.picking,
+    required this.photoSelected,
+    required this.onPickGallery,
+    required this.onPickCamera,
+    this.fileName,
+    this.previewBytes,
+  });
 
+  final bool picking;
   final bool photoSelected;
-  final VoidCallback onPick;
+  final String? fileName;
+  final Uint8List? previewBytes;
+  final VoidCallback onPickGallery;
+  final VoidCallback onPickCamera;
 
   @override
   Widget build(BuildContext context) {
+    final bytes = previewBytes;
+
     return Container(
       decoration: _studioBox(),
       padding: const EdgeInsets.all(16),
@@ -301,58 +332,65 @@ class _UploadCard extends StatelessWidget {
         children: [
           const _BlockTitle(
             title: 'Upload Portrait',
-            subtitle: 'Use a clear front-facing photo for the best result.',
+            subtitle: 'Pick one clear face photo from Gallery or Camera.',
           ),
           const SizedBox(height: 14),
+          if (bytes != null) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: Image.memory(
+                bytes,
+                height: 220,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           InkWell(
-            borderRadius: BorderRadius.circular(22),
-            onTap: onPick,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              height: 160,
+            borderRadius: BorderRadius.circular(18),
+            onTap: picking ? null : onPickGallery,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: photoSelected
-                    ? const Color(0xFF151827)
-                    : const Color(0xFF111426),
-                borderRadius: BorderRadius.circular(22),
+                color: const Color(0xFF0D101A),
+                borderRadius: BorderRadius.circular(18),
                 border: Border.all(
                   color: photoSelected
-                      ? const Color(0xFF35D07F)
-                      : const Color(0xFF8B5CFF),
-                  width: 1.4,
+                      ? const Color(0xFFB6FF2E)
+                      : const Color(0xFF7B3CFF).withOpacity(0.45),
                 ),
               ),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
+              child: Row(
+                children: [
+                  Icon(
+                    photoSelected
+                        ? Icons.check_circle_rounded
+                        : Icons.photo_library_rounded,
+                    color: photoSelected
+                        ? const Color(0xFFB6FF2E)
+                        : const Color(0xFFB266FF),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
                       photoSelected
-                          ? Icons.check_circle_rounded
-                          : Icons.upload_rounded,
-                      color: photoSelected
-                          ? const Color(0xFF35D07F)
-                          : const Color(0xFFA970FF),
-                      size: 46,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      photoSelected ? 'Portrait Selected' : 'Upload Your Photo',
+                          ? 'Selected: ${fileName ?? 'portrait'}'
+                          : 'Tap to choose from Gallery',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w900,
-                        fontSize: 16,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      photoSelected
-                          ? 'Ready for template preview'
-                          : 'JPG, PNG • Max 20MB',
-                      style: const TextStyle(color: Colors.white54),
+                  ),
+                  if (picking)
+                    const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
-                  ],
-                ),
+                ],
               ),
             ),
           ),
@@ -360,18 +398,18 @@ class _UploadCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _PickerButton(
-                  icon: Icons.camera_alt_rounded,
-                  label: 'Camera',
-                  onTap: onPick,
+                child: _UploadAction(
+                  icon: Icons.photo_library_rounded,
+                  label: 'Gallery',
+                  onTap: picking ? null : onPickGallery,
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: _PickerButton(
-                  icon: Icons.photo_library_rounded,
-                  label: 'Gallery',
-                  onTap: onPick,
+                child: _UploadAction(
+                  icon: Icons.photo_camera_rounded,
+                  label: 'Camera',
+                  onTap: picking ? null : onPickCamera,
                 ),
               ),
             ],
@@ -382,8 +420,8 @@ class _UploadCard extends StatelessWidget {
   }
 }
 
-class _PickerButton extends StatelessWidget {
-  const _PickerButton({
+class _UploadAction extends StatelessWidget {
+  const _UploadAction({
     required this.icon,
     required this.label,
     required this.onTap,
@@ -391,19 +429,18 @@ class _PickerButton extends StatelessWidget {
 
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return OutlinedButton.icon(
       onPressed: onTap,
-      icon: Icon(icon, size: 18),
+      icon: Icon(icon),
       label: Text(label),
       style: OutlinedButton.styleFrom(
         foregroundColor: Colors.white,
-        side: const BorderSide(color: Color(0xFF7B3CFF)),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        side: BorderSide(color: Colors.white.withOpacity(0.18)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
     );
   }
@@ -414,50 +451,13 @@ class _TipsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tips = [
-      'Face centered and visible',
-      'Good lighting works best',
-      'Avoid sunglasses or heavy blur',
-      'Use high-resolution portraits',
-      'Portrait format is recommended',
-    ];
-
     return Container(
       decoration: _studioBox(),
       padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _BlockTitle(
-            title: 'Best Results Tips',
-            subtitle: 'Small photo choices make the output more realistic.',
-          ),
-          const SizedBox(height: 12),
-          ...tips.map(
-            (tip) => Padding(
-              padding: const EdgeInsets.only(bottom: 9),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.check_circle_rounded,
-                    color: Color(0xFF35D07F),
-                    size: 18,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      tip,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.75),
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+      child: const _BlockTitle(
+        title: 'Best Results',
+        subtitle:
+            'Use a clear portrait, good lighting, and one visible face. KORLIX AI will preserve identity while applying the selected style.',
       ),
     );
   }
@@ -470,52 +470,15 @@ class _IdentityLockCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final label = gender == ImproveGender.female ? 'woman' : 'man';
+
     return Container(
       decoration: _studioBox(),
       padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Container(
-            height: 48,
-            width: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFF251A38),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: const Color(0xFFB266FF).withOpacity(0.55),
-              ),
-            ),
-            child: const Icon(
-              Icons.verified_user_rounded,
-              color: Color(0xFFC07CFF),
-            ),
-          ),
-          const SizedBox(width: 13),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Identity Lock',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 15,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Realistic templates preserve the same ${gender == ImproveGender.female ? 'woman' : 'man'} while changing only the selected style.',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.62),
-                    fontSize: 12,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+      child: _BlockTitle(
+        title: 'Identity Lock',
+        subtitle:
+            'Realistic templates preserve the same $label while changing only the selected style.',
       ),
     );
   }
@@ -531,21 +494,16 @@ class _ContinueButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       height: 58,
-      width: double.infinity,
       child: ElevatedButton.icon(
         onPressed: onPressed,
         icon: const Icon(Icons.arrow_forward_rounded),
-        label: Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
-        ),
+        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF8B3DFF),
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(999),
           ),
-          elevation: 0,
         ),
       ),
     );
@@ -568,13 +526,13 @@ class _BlockTitle extends StatelessWidget {
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w900,
-            fontSize: 18,
+            fontSize: 16,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         Text(
           subtitle,
-          style: TextStyle(color: Colors.white.withOpacity(0.58), fontSize: 12),
+          style: TextStyle(color: Colors.white.withOpacity(0.62), height: 1.35),
         ),
       ],
     );
@@ -590,7 +548,7 @@ BoxDecoration _studioBox() {
       BoxShadow(
         color: const Color(0xFF7B3CFF).withOpacity(0.12),
         blurRadius: 24,
-        offset: const Offset(0, 12),
+        offset: const Offset(0, 14),
       ),
     ],
   );

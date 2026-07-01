@@ -67,17 +67,17 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Korlix AI uses the microphone for voice input.</string>
+	<string>Korlix AI needs microphone access for voice input.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Korlix AI uses speech recognition to convert your voice to text.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Korlix AI uses your location only when you request location-aware responses.</string>
+	<string>Korlix AI uses your location only when you choose location-based tools.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Korlix AI needs camera access so you can take or upload pictures for image features.</string>
+	<string>Korlix AI needs camera access so you can capture images for Improve My Picture.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Korlix AI needs access to your photo library so you can select images to enhance.</string>
+	<string>Korlix AI needs photo library access so you can choose images for Improve My Picture and other creative tools.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Korlix AI can save enhanced images to your photo library when you choose to save them.</string>
+	<string>Korlix AI needs permission to save generated images to your photo library.</string>
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-1549134869666707~2553349019</string>
 	<key>SKAdNetworkItems</key>

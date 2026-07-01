@@ -1,5 +1,8 @@
+import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
 
+import '../controllers/portrait_studio_controller.dart';
+import '../models/portrait_studio_callback.dart';
 import '../models/template_model.dart';
 import 'processing_screen.dart';
 
@@ -10,22 +13,43 @@ class PreviewScreen extends StatefulWidget {
     required this.template,
     required this.variation,
     required this.hasUploadedPhoto,
+    this.uploadedFile,
+    this.onGeneratePrompt,
   });
 
   final ImproveGender gender;
   final ImproveTemplate template;
   final String variation;
   final bool hasUploadedPhoto;
+  final fp.PlatformFile? uploadedFile;
+  final ImprovePicturePromptCallback? onGeneratePrompt;
 
   @override
   State<PreviewScreen> createState() => _PreviewScreenState();
 }
 
 class _PreviewScreenState extends State<PreviewScreen> {
+  final PortraitStudioController _promptController = PortraitStudioController();
+
   double _strength = 0.8;
   String _ratio = '9:16';
 
   void _generate() {
+    final callback = widget.onGeneratePrompt;
+
+    if (callback != null) {
+      final prompt = _promptController.buildGenerationPrompt(
+        gender: widget.gender,
+        template: widget.template,
+        variation: widget.variation,
+        strength: _strength,
+        ratio: _ratio,
+      );
+
+      callback(prompt, widget.uploadedFile);
+      return;
+    }
+
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ProcessingScreen(
@@ -45,6 +69,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
     final genderLabel = widget.gender == ImproveGender.female
         ? 'Female'
         : 'Male';
+    final bytes = widget.uploadedFile?.bytes;
 
     return Scaffold(
       backgroundColor: const Color(0xFF05070D),
@@ -86,13 +111,18 @@ class _PreviewScreenState extends State<PreviewScreen> {
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: Center(
-                      child: Icon(
-                        widget.template.icon,
-                        color: Colors.white.withOpacity(0.18),
-                        size: 140,
-                      ),
-                    ),
+                    child: bytes == null
+                        ? Center(
+                            child: Icon(
+                              widget.template.icon,
+                              color: Colors.white.withOpacity(0.18),
+                              size: 140,
+                            ),
+                          )
+                        : ClipRRect(
+                            borderRadius: BorderRadius.circular(28),
+                            child: Image.memory(bytes, fit: BoxFit.cover),
+                          ),
                   ),
                   Positioned.fill(
                     child: Center(
@@ -109,19 +139,19 @@ class _PreviewScreenState extends State<PreviewScreen> {
                       label: widget.hasUploadedPhoto ? 'Before' : 'Demo Before',
                     ),
                   ),
-                  Positioned(
+                  const Positioned(
                     right: 18,
                     top: 18,
-                    child: const _Tag(label: 'After'),
+                    child: _Tag(label: 'After'),
                   ),
                   Positioned(
                     left: 18,
                     right: 18,
                     bottom: 18,
                     child: Text(
-                      'Before / After split preview placeholder',
+                      'Ready to generate with KORLIX AI',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white.withOpacity(0.62)),
+                      style: TextStyle(color: Colors.white.withOpacity(0.72)),
                     ),
                   ),
                 ],
@@ -184,7 +214,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                 onPressed: _generate,
                 icon: const Icon(Icons.auto_awesome_rounded),
                 label: const Text(
-                  'Generate Result',
+                  'Use This Look',
                   style: TextStyle(fontWeight: FontWeight.w900),
                 ),
                 style: ElevatedButton.styleFrom(

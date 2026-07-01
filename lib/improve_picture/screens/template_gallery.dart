@@ -1,6 +1,9 @@
+import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
 
+import '../models/portrait_studio_callback.dart';
 import '../models/template_model.dart';
+import '../widgets/template_card.dart';
 import 'template_variations.dart';
 
 class TemplateGalleryScreen extends StatelessWidget {
@@ -8,10 +11,14 @@ class TemplateGalleryScreen extends StatelessWidget {
     super.key,
     required this.gender,
     required this.hasUploadedPhoto,
+    this.uploadedFile,
+    this.onGeneratePrompt,
   });
 
   final ImproveGender gender;
   final bool hasUploadedPhoto;
+  final fp.PlatformFile? uploadedFile;
+  final ImprovePicturePromptCallback? onGeneratePrompt;
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +51,15 @@ class TemplateGalleryScreen extends StatelessWidget {
                 height: 1.35,
               ),
             ),
+            const SizedBox(height: 10),
+            if (uploadedFile != null)
+              Text(
+                'Photo ready: ${uploadedFile!.name}',
+                style: const TextStyle(
+                  color: Color(0xFFB6FF2E),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             const SizedBox(height: 16),
             GridView.builder(
               itemCount: kImprovePictureTemplates.length,
@@ -57,8 +73,9 @@ class TemplateGalleryScreen extends StatelessWidget {
               ),
               itemBuilder: (context, index) {
                 final template = kImprovePictureTemplates[index];
-                return InkWell(
-                  borderRadius: BorderRadius.circular(22),
+
+                return TemplateCard(
+                  template: template,
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -66,53 +83,12 @@ class TemplateGalleryScreen extends StatelessWidget {
                           gender: gender,
                           template: template,
                           hasUploadedPhoto: hasUploadedPhoto,
+                          uploadedFile: uploadedFile,
+                          onGeneratePrompt: onGeneratePrompt,
                         ),
                       ),
                     );
                   },
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0B0E17),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(
-                        color: const Color(0xFF7B3CFF).withOpacity(0.24),
-                      ),
-                    ),
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          '✦ 3 ideas',
-                          style: TextStyle(
-                            color: Color(0xFFC07CFF),
-                            fontWeight: FontWeight.w800,
-                            fontSize: 11,
-                          ),
-                        ),
-                        const Spacer(),
-                        Icon(template.icon, color: Colors.white, size: 42),
-                        const SizedBox(height: 12),
-                        Text(
-                          template.name.toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          template.description,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.62),
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 );
               },
             ),
