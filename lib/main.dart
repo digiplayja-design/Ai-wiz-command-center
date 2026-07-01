@@ -26,6 +26,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'korlix_video_downloader.dart';
 import 'korlix_image_saver.dart';
 import 'korlix_video_preview_source.dart';
+import 'korlix_ai_quality_policy.dart';
 import 'korlix_cyber_widgets.dart';
 
 import 'improve_picture/screens/portrait_studio_home.dart';
@@ -340,6 +341,7 @@ class KorlixDeviceStore {
 
     headers['X-Korlix-Platform'] = kIsWeb ? 'web' : defaultTargetPlatform.name;
 
+    headers.addAll(korlixOpenAIQualityHeaders());
     return headers;
   }
 
@@ -1962,6 +1964,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
 
     headers.addAll(KorlixDeviceStore.headers());
 
+    headers.addAll(korlixOpenAIQualityHeaders());
     return headers;
   }
 
@@ -4589,6 +4592,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
 
     headers.addAll(KorlixDeviceStore.headers());
 
+    headers.addAll(korlixOpenAIQualityHeaders());
     return headers;
   }
 
@@ -5695,7 +5699,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   Future<void> _generateImaginedPicture() async {
     await _stopAiCharacterTalkingForQuery();
 
-    final prompt = _controller.text.trim();
+    final prompt = korlixApplyProductionQualityDirective(
+      _controller.text.trim(),
+    );
 
     if (prompt.isEmpty) {
       setState(() {
@@ -5779,7 +5785,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     }
 
     final file = files.isEmpty ? null : files.first;
-    final command = _controller.text.trim();
+    final command = korlixApplyProductionQualityDirective(
+      _controller.text.trim(),
+    );
 
     if (file == null) {
       setState(() {
@@ -5928,7 +5936,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       return;
     }
 
-    final command = _controller.text.trim();
+    final command = korlixApplyProductionQualityDirective(
+      _controller.text.trim(),
+    );
     final isCreditMode = _fixCreditReportMode;
 
     setState(() {
@@ -6501,7 +6511,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       return;
     }
 
-    final command = _controller.text.trim();
+    final command = korlixApplyProductionQualityDirective(
+      _controller.text.trim(),
+    );
 
     if (command.isNotEmpty &&
         !_fixCreditReportMode &&
