@@ -63,6 +63,9 @@ Generation requirements:
 - If the template is Fiery, Smoky, Wet, Mirror, Smooth, White, Black, or Asian, apply that visual direction clearly.
 - Preserve realism unless the selected template is intentionally stylized.
 - Do not return the original unchanged.
+- The after preview and final generation must visibly differ from the before image.
+- The selected template and variation must be obvious in the output.
+- Do not produce a plain enhancement when the user selected Cartoon, Mask, Gothic, Fiery, Wet, Smoky, Mirror, or another template.
 - Do not only enhance brightness; apply the selected template.
 - Keep the final output polished, premium, and high quality.
 '''

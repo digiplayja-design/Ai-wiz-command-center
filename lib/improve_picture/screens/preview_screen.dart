@@ -1,10 +1,18 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import '../controllers/portrait_studio_controller.dart';
 import '../models/portrait_studio_callback.dart';
 import '../models/template_model.dart';
 import 'processing_screen.dart';
+
+const String _kKorlixPortraitPreviewEndpoint =
+    'https://chee-chai-chee-backend.onrender.com/api/image/improve';
 
 class PreviewScreen extends StatefulWidget {
   const PreviewScreen({
@@ -38,8 +46,26 @@ class _PreviewScreenState extends State<PreviewScreen> {
   double _strength = 0.85;
   String _ratio = '9:16';
 
-  void _generate() {
-    final prompt = _promptController.buildGenerationPrompt(
+  bool _previewLoading = false;
+  String? _previewError;
+  Uint8List? _generatedPreviewBytes;
+  bool _hasAttemptedPreview = false;
+
+  Uint8List? get _uploadedBytes => widget.uploadedFile?.bytes;
+
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_generateAfterPreview());
+      }
+    });
+  }
+
+  String _buildPrompt() {
+    return _promptController.buildGenerationPrompt(
       gender: widget.gender,
       template: widget.template,
       variation: widget.variation,
@@ -48,8 +74,229 @@ class _PreviewScreenState extends State<PreviewScreen> {
       bestResults: widget.bestResults,
       identityLock: widget.identityLock,
     );
+  }
 
+  Future<void> _generateAfterPreview() async {
+    final bytes = _uploadedBytes;
+
+    if (bytes == null || bytes.isEmpty) {
+      setState(() {
+        _hasAttemptedPreview = true;
+        _previewLoading = false;
+        _previewError = 'Upload a portrait first to generate an after preview.';
+      });
+      return;
+    }
+
+    if (_previewLoading) {
+      return;
+    }
+
+    setState(() {
+      _hasAttemptedPreview = true;
+      _previewLoading = true;
+      _previewError = null;
+    });
+
+    try {
+      final prompt = _buildPrompt();
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse(_kKorlixPortraitPreviewEndpoint),
+      );
+
+      request.fields.addAll({
+        'prompt': prompt,
+        'mode': 'portrait_studio_preview',
+        'source': 'ios_testflight',
+        'template': widget.template.name,
+        'variation': widget.variation,
+        'gender': widget.gender.name,
+        'ratio': _ratio,
+        'strength': _strength.toStringAsFixed(2),
+        'bestResults': widget.bestResults.toString(),
+        'identityLock': widget.identityLock.toString(),
+      });
+
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'image',
+          bytes,
+          filename: widget.uploadedFile?.name ?? 'portrait.jpg',
+        ),
+      );
+
+      final streamed = await request.send().timeout(
+        const Duration(seconds: 90),
+      );
+      final response = await http.Response.fromStream(streamed);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(
+          'Preview server returned ${response.statusCode}: ${response.body}',
+        );
+      }
+
+      final previewBytes = await _extractPreviewBytes(response.body);
+
+      if (previewBytes == null || previewBytes.isEmpty) {
+        throw Exception('Preview server did not return an image.');
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _generatedPreviewBytes = previewBytes;
+        _previewError = null;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _previewError =
+            'Live after preview could not be generated yet. Showing styled preview fallback.';
+      });
+
+      debugPrint('Portrait Studio after preview failed: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _previewLoading = false);
+      }
+    }
+  }
+
+  Future<Uint8List?> _extractPreviewBytes(String body) async {
+    Object? decoded;
+
+    try {
+      decoded = jsonDecode(body);
+    } catch (_) {
+      final trimmed = body.trim();
+
+      if (_looksLikeImageString(trimmed)) {
+        return _bytesFromImageString(trimmed);
+      }
+
+      return null;
+    }
+
+    final imageValue = _findImageString(decoded);
+
+    if (imageValue == null) {
+      return null;
+    }
+
+    return _bytesFromImageString(imageValue);
+  }
+
+  String? _findImageString(Object? value) {
+    const preferredKeys = [
+      'imageDataUrl',
+      'image_data_url',
+      'dataUrl',
+      'data_url',
+      'imageUrl',
+      'image_url',
+      'url',
+      'outputUrl',
+      'output_url',
+      'resultUrl',
+      'result_url',
+      'image',
+      'output',
+      'result',
+      'base64',
+      'b64',
+    ];
+
+    if (value is String) {
+      return _looksLikeImageString(value) ? value : null;
+    }
+
+    if (value is Map) {
+      for (final key in preferredKeys) {
+        if (value.containsKey(key)) {
+          final found = _findImageString(value[key]);
+          if (found != null) {
+            return found;
+          }
+        }
+      }
+
+      for (final entry in value.entries) {
+        final found = _findImageString(entry.value);
+        if (found != null) {
+          return found;
+        }
+      }
+    }
+
+    if (value is Iterable) {
+      for (final item in value) {
+        final found = _findImageString(item);
+        if (found != null) {
+          return found;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  bool _looksLikeImageString(String value) {
+    final trimmed = value.trim();
+
+    if (trimmed.startsWith('data:image/')) {
+      return true;
+    }
+
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return true;
+    }
+
+    if (trimmed.length > 120 &&
+        RegExp(r'^[A-Za-z0-9+/=\r\n]+$').hasMatch(trimmed)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  Future<Uint8List?> _bytesFromImageString(String value) async {
+    final trimmed = value.trim();
+
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      final response = await http.get(Uri.parse(trimmed));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return response.bodyBytes;
+      }
+
+      return null;
+    }
+
+    if (trimmed.startsWith('data:image/')) {
+      final comma = trimmed.indexOf(',');
+      if (comma == -1) {
+        return null;
+      }
+
+      return base64Decode(trimmed.substring(comma + 1));
+    }
+
+    try {
+      return base64Decode(trimmed);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _generate() {
     final callback = widget.onGeneratePrompt;
+    final prompt = _buildPrompt();
 
     if (callback != null) {
       callback(prompt, widget.uploadedFile, true);
@@ -75,7 +322,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
     final genderLabel = widget.gender == ImproveGender.female
         ? 'Female'
         : 'Male';
-    final bytes = widget.uploadedFile?.bytes;
+    final bytes = _uploadedBytes;
 
     return Scaffold(
       backgroundColor: const Color(0xFF05070D),
@@ -133,6 +380,10 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   Container(width: 1.5, color: const Color(0xFFB266FF)),
                   Expanded(
                     child: _AfterTemplatePreview(
+                      originalBytes: bytes,
+                      generatedBytes: _generatedPreviewBytes,
+                      previewLoading: _previewLoading,
+                      hasAttemptedPreview: _hasAttemptedPreview,
                       template: widget.template,
                       variation: widget.variation,
                       bestResults: widget.bestResults,
@@ -144,11 +395,48 @@ class _PreviewScreenState extends State<PreviewScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Preview shows the selected template direction. Tap generate to create the real finished image with KORLIX AI.',
+              _generatedPreviewBytes != null
+                  ? 'Live after preview generated. Tap Generate to use this selected template with KORLIX AI.'
+                  : 'After preview is loading. If the server preview is unavailable, the styled fallback still shows the selected template direction.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white.withOpacity(0.66),
                 height: 1.35,
+              ),
+            ),
+            if (_previewError != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _previewError!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFFFFD166),
+                  fontWeight: FontWeight.w700,
+                  height: 1.3,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _previewLoading ? null : _generateAfterPreview,
+              icon: _previewLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded),
+              label: Text(
+                _previewLoading
+                    ? 'Generating After Preview...'
+                    : 'Refresh After Preview',
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: BorderSide(color: Colors.white.withOpacity(0.18)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
             ),
             const SizedBox(height: 18),
@@ -162,7 +450,12 @@ class _PreviewScreenState extends State<PreviewScreen> {
             Slider(
               value: _strength,
               activeColor: const Color(0xFFB266FF),
-              onChanged: (value) => setState(() => _strength = value),
+              onChanged: (value) {
+                setState(() => _strength = value);
+              },
+              onChangeEnd: (_) {
+                unawaited(_generateAfterPreview());
+              },
             ),
             const SizedBox(height: 8),
             Row(
@@ -173,7 +466,10 @@ class _PreviewScreenState extends State<PreviewScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(13),
-                      onTap: () => setState(() => _ratio = ratio),
+                      onTap: () {
+                        setState(() => _ratio = ratio);
+                        unawaited(_generateAfterPreview());
+                      },
                       child: Container(
                         alignment: Alignment.center,
                         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -233,7 +529,7 @@ class _BeforePreview extends StatelessWidget {
     required this.hasUploadedPhoto,
   });
 
-  final dynamic imageBytes;
+  final Uint8List? imageBytes;
   final bool hasUploadedPhoto;
 
   @override
@@ -255,7 +551,11 @@ class _BeforePreview extends StatelessWidget {
             )
           else
             Image.memory(bytes, fit: BoxFit.cover),
-          const Positioned(left: 12, top: 12, child: _Tag(label: 'Before')),
+          Positioned(
+            left: 12,
+            top: 12,
+            child: _Tag(label: hasUploadedPhoto ? 'Before' : 'Demo Before'),
+          ),
         ],
       ),
     );
@@ -264,12 +564,20 @@ class _BeforePreview extends StatelessWidget {
 
 class _AfterTemplatePreview extends StatelessWidget {
   const _AfterTemplatePreview({
+    required this.originalBytes,
+    required this.generatedBytes,
+    required this.previewLoading,
+    required this.hasAttemptedPreview,
     required this.template,
     required this.variation,
     required this.bestResults,
     required this.identityLock,
   });
 
+  final Uint8List? originalBytes;
+  final Uint8List? generatedBytes;
+  final bool previewLoading;
+  final bool hasAttemptedPreview;
   final ImproveTemplate template;
   final String variation;
   final bool bestResults;
@@ -277,98 +585,215 @@ class _AfterTemplatePreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isMask = template.name.toLowerCase() == 'mask';
+    final generated = generatedBytes;
 
     return ClipRRect(
       borderRadius: const BorderRadius.horizontal(right: Radius.circular(28)),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: isMask
-                ? const [Color(0xFF261A08), Color(0xFF05070D)]
-                : const [Color(0xFF271747), Color(0xFF05070D)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (generated != null)
+            Image.memory(generated, fit: BoxFit.cover)
+          else
+            _StyledAfterFallback(
+              imageBytes: originalBytes,
+              template: template,
+              variation: variation,
+              bestResults: bestResults,
+              identityLock: identityLock,
+            ),
+          Positioned(
+            right: 12,
+            top: 12,
+            child: _Tag(
+              label: generated != null
+                  ? 'After Preview'
+                  : previewLoading
+                  ? 'Generating'
+                  : 'After Style',
+            ),
           ),
-        ),
-        padding: const EdgeInsets.all(18),
-        child: Stack(
-          children: [
-            const Positioned(right: 0, top: 0, child: _Tag(label: 'After')),
-            Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    template.icon,
-                    color: isMask
-                        ? const Color(0xFFFFD166)
-                        : const Color(0xFFC07CFF),
-                    size: 92,
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    template.name,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 24,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    variation,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Color(0xFFB6FF2E),
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    _templatePreviewText(template.name, variation),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.75),
-                      height: 1.35,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    '${bestResults ? 'Best Results' : 'Natural'} • ${identityLock ? 'Identity Lock' : 'Creative Identity'}',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.62),
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
+          if (previewLoading)
+            Container(
+              color: Colors.black.withOpacity(0.24),
+              child: const Center(
+                child: CircularProgressIndicator(color: Color(0xFFC07CFF)),
               ),
             ),
-          ],
-        ),
+          if (generated == null && !previewLoading && hasAttemptedPreview)
+            Positioned(
+              left: 14,
+              right: 14,
+              bottom: 14,
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.42),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Text(
+                  'Styled fallback shown until live preview returns.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
+}
 
-  String _templatePreviewText(String templateName, String variation) {
-    final lower = templateName.toLowerCase();
+class _StyledAfterFallback extends StatelessWidget {
+  const _StyledAfterFallback({
+    required this.imageBytes,
+    required this.template,
+    required this.variation,
+    required this.bestResults,
+    required this.identityLock,
+  });
 
-    if (lower == 'mask') {
-      return 'The generated result will add a visible $variation mask style while preserving the same face.';
+  final Uint8List? imageBytes;
+  final ImproveTemplate template;
+  final String variation;
+  final bool bestResults;
+  final bool identityLock;
+
+  Color get _overlayColor {
+    switch (template.id) {
+      case 'mask':
+        return const Color(0xFFFFD166);
+      case 'cartoon':
+      case 'caricature':
+        return const Color(0xFFC07CFF);
+      case 'gothic':
+        return const Color(0xFF5B2E91);
+      case 'fiery':
+        return const Color(0xFFFF5C2E);
+      case 'wet':
+        return const Color(0xFF69D9E8);
+      case 'smoky':
+        return const Color(0xFFB0B7C3);
+      default:
+        return const Color(0xFFB266FF);
     }
+  }
 
-    if (lower == 'gothic') {
-      return 'The generated result will add gothic mood, fashion, lighting, and styling.';
+  @override
+  Widget build(BuildContext context) {
+    final bytes = imageBytes;
+    final overlay = _overlayColor;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (bytes == null)
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [overlay.withOpacity(0.52), const Color(0xFF05070D)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          )
+        else
+          ColorFiltered(
+            colorFilter: ColorFilter.mode(
+              overlay.withOpacity(0.42),
+              BlendMode.overlay,
+            ),
+            child: Image.memory(bytes, fit: BoxFit.cover),
+          ),
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.black.withOpacity(0.10),
+                overlay.withOpacity(0.34),
+                Colors.black.withOpacity(0.62),
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+        ),
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(template.icon, color: Colors.white, size: 58),
+                const SizedBox(height: 12),
+                Text(
+                  template.name,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 23,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  variation,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xFFB6FF2E),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _templatePreviewText(template.id, template.name, variation),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    height: 1.25,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '${bestResults ? 'Best Results' : 'Natural'} • ${identityLock ? 'Identity Lock' : 'Creative Identity'}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.78),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _templatePreviewText(
+    String templateId,
+    String templateName,
+    String variation,
+  ) {
+    switch (templateId) {
+      case 'mask':
+        return 'Mask overlay preview: the live result should add a visible $variation mask while preserving the same face.';
+      case 'cartoon':
+        return 'Cartoon preview: the live result should visibly stylize the portrait, not just brighten it.';
+      case 'caricature':
+        return 'Caricature preview: the live result should exaggerate expression and style while keeping identity.';
+      case 'gothic':
+        return 'Gothic preview: the live result should add fashion, mood, makeup, and dramatic lighting.';
+      default:
+        return '$templateName preview: the live result should clearly apply $variation.';
     }
-
-    if (lower == 'cartoon' || lower == 'caricature') {
-      return 'The generated result will apply the selected stylized look while keeping the person recognizable.';
-    }
-
-    return 'The generated result will apply the selected $variation look clearly, not just brighten the original.';
   }
 }
 
