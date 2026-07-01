@@ -28,6 +28,8 @@ import 'korlix_image_saver.dart';
 import 'korlix_video_preview_source.dart';
 import 'korlix_cyber_widgets.dart';
 
+import 'improve_picture/screens/portrait_studio_home.dart';
+
 const String kKorlixImaginePicturePrompt =
     'Describe the picture you want Korlix AI to create.';
 
@@ -251,7 +253,8 @@ class CheeChaiCheeApp extends StatelessWidget {
   const CheeChaiCheeApp({super.key});
 
   @override
-  Widget build(BuildContext context) {    return MaterialApp(
+  Widget build(BuildContext context) {
+    return MaterialApp(
       title: 'Korlix AI',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -271,8 +274,7 @@ class CheeChaiCheeApp extends StatelessWidget {
       ),
       home: const AuthGate(),
     );
-  }    
-
+  }
 }
 
 class KorlixDeviceStore {
@@ -4499,6 +4501,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   bool _featuredAnswerDismissed = false;
   bool _createVideoMode = false;
   bool _improvePictureMode = false;
+  String? _portraitStudioPromptOverride;
   bool _imaginePictureMode = false;
   bool _fixCreditReportMode = false;
 
@@ -5771,9 +5774,15 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       return;
     }
 
-    final prompt = command.isEmpty
+    final prompt =
+        (_portraitStudioPromptOverride != null &&
+            _portraitStudioPromptOverride!.trim().isNotEmpty)
+        ? _portraitStudioPromptOverride!.trim()
+        : command.isEmpty
         ? 'Improve this picture and return an enhanced professional version.'
         : command;
+
+    _portraitStudioPromptOverride = null;
 
     setState(() {
       _loading = true;
@@ -8016,6 +8025,52 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     );
   }
 
+  Future<void> _openImprovePictureStudio() async {
+    if (_loading) {
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PortraitStudioHome(
+          onGeneratePrompt: (prompt) {
+            final cleanedPrompt = prompt.trim();
+
+            if (cleanedPrompt.isEmpty) {
+              return;
+            }
+
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            }
+
+            setState(() {
+              _portraitStudioPromptOverride = cleanedPrompt;
+              _improvePictureMode = true;
+              _createVideoMode = false;
+              _imaginePictureMode = false;
+              _fixCreditReportMode = false;
+              _createAppMode = false;
+              _error = null;
+              _controller.text = cleanedPrompt;
+              _controller.selection = TextSelection.fromPosition(
+                TextPosition(offset: cleanedPrompt.length),
+              );
+            });
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Portrait Studio prompt ready. Upload one image, then tap submit.',
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   void _useQuickAction(QuickAction action) {
     if (_isCreditReportActionSafeUi(action)) {
       // Toggle off if already active
@@ -8063,40 +8118,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     }
 
     if (_isImprovePictureQuickAction(action)) {
-      // Toggle off if already active
-      if (_improvePictureMode) {
-        setState(() {
-          _improvePictureMode = false;
-          _error = null;
-          _controller.text = '';
-          _controller.selection = const TextSelection.collapsed(offset: 0);
-        });
-        return;
-      }
-
-      const defaultImprovePrompt =
-          'Enhance this photo with professional quality: improve lighting, sharpness, color, contrast, and background polish. Preserve the subject identity, face, and overall realism. Make it look like a high-end professional photograph.';
-      setState(() {
-        _improvePictureMode = true;
-        _createVideoMode = false;
-        _imaginePictureMode = false;
-        _fixCreditReportMode = false;
-        _createAppMode = false;
-        _error = null;
-        _controller.text = defaultImprovePrompt;
-        _controller.selection = TextSelection.fromPosition(
-          TextPosition(offset: defaultImprovePrompt.length),
-        );
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Upload an image, then tap submit — or edit the prompt first.',
-          ),
-        ),
-      );
-
+      _openImprovePictureStudio();
       return;
     }
 
