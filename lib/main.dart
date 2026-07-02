@@ -15653,9 +15653,7 @@ Make the entire output professional, well-structured using Markdown, and product
                       bottomLeft: Radius.circular(18),
                       bottomRight: Radius.circular(18),
                     ),
-                    border: Border.all(
-                      color: const Color(0xFF69D9E8).withOpacity(0.4),
-                    ),
+                    border: null,
                   ),
                   child: Text(
                     msg.userText,
