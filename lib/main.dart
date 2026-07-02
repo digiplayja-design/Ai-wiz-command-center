@@ -8109,8 +8109,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       active: isHighlighted,
       disabled: false,
       borderRadius: BorderRadius.circular(13),
-      borderWidth: isHighlighted ? 2.0 : 1.65,
-      depth: _loading ? 0.82 : 1.0,
+      borderWidth: isHighlighted ? 2.2 : 1.85,
+      depth: _loading ? 0.84 : 1.16,
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
@@ -9346,55 +9346,108 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
+  Widget _buildKorlixBelowInputBeveledButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onPressed,
+    bool locked = false,
+    bool active = false,
+    bool success = false,
+    Color? accentColor,
+    bool showStopIconWhenActive = false,
+  }) {
+    final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
+    final disabled = onPressed == null;
+    final isGreen = active || success;
+    final accent =
+        accentColor ?? (locked ? skin.premium : _korlixDefinitionBorder(skin));
+
+    final normalFill = skin.isLight
+        ? (Color.lerp(skin.buttonFill, const Color(0xFFFFFFFF), 0.76) ??
+              const Color(0xFFFFFFFF))
+        : skin.buttonFill.withValues(alpha: 0.80);
+
+    final fill = isGreen ? skin.success : normalFill;
+    final foreground = isGreen
+        ? skin.textOnAccent
+        : skin.isLight
+        ? skin.text
+        : _korlixReadableToolForeground(skin);
+
+    final disabledForeground = skin.isLight
+        ? skin.text.withValues(alpha: 0.72)
+        : skin.mutedText.withValues(alpha: 0.70);
+
+    final borderColor = isGreen ? skin.success : accent.withValues(alpha: 0.94);
+
+    return _korlixBeveledButtonSurface(
+      skin: skin,
+      fill: fill,
+      border: borderColor,
+      active: isGreen,
+      disabled: false,
+      borderRadius: BorderRadius.circular(999),
+      borderWidth: isGreen ? 2.2 : 1.85,
+      depth: disabled ? 0.84 : 1.18,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            Icon(
+              showStopIconWhenActive && active
+                  ? Icons.stop_circle_outlined
+                  : icon,
+              size: 18,
+            ),
+            if (locked)
+              Positioned(
+                right: -7,
+                top: -7,
+                child: Icon(Icons.lock_rounded, size: 10, color: skin.premium),
+              ),
+          ],
+        ),
+        label: Text(label),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: disabled ? disabledForeground : foreground,
+          disabledForegroundColor: disabledForeground,
+          backgroundColor: Colors.transparent,
+          disabledBackgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          side: BorderSide.none,
+          padding: EdgeInsets.symmetric(
+            horizontal: label.length > 18 ? 12 : 14,
+            vertical: 10,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMusicStudioButton() {
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
 
-    return ActionChip(
-      avatar: Icon(
-        Icons.library_music_rounded,
-        size: 18,
-        color: skin.isLight ? const Color(0xFF07111F) : skin.secondary,
-      ),
-      label: const Text('Music Studio'),
-      labelStyle: TextStyle(
-        color: _korlixReadableToolForeground(skin),
-        fontWeight: FontWeight.w900,
-      ),
-      backgroundColor: skin.buttonFill.withValues(
-        alpha: skin.isLight ? 0.96 : 0.78,
-      ),
-      side: BorderSide(
-        color: skin.secondary.withValues(alpha: skin.isLight ? 0.70 : 0.88),
-        width: 1.6,
-      ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+    return _buildKorlixBelowInputBeveledButton(
+      icon: Icons.library_music_rounded,
+      label: 'Music Studio',
       onPressed: _loading ? null : _showMusicStudio,
+      accentColor: skin.secondary,
     );
   }
 
   Widget _buildMusicDistributionButton() {
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
 
-    return ActionChip(
-      avatar: Icon(
-        Icons.public_rounded,
-        size: 18,
-        color: skin.isLight ? const Color(0xFF07111F) : skin.secondary,
-      ),
-      label: const Text('Music Distribution'),
-      labelStyle: TextStyle(
-        color: _korlixReadableToolForeground(skin),
-        fontWeight: FontWeight.w900,
-      ),
-      backgroundColor: skin.buttonFill.withValues(
-        alpha: skin.isLight ? 0.96 : 0.78,
-      ),
-      side: BorderSide(
-        color: skin.secondary.withValues(alpha: skin.isLight ? 0.70 : 0.88),
-        width: 1.6,
-      ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+    return _buildKorlixBelowInputBeveledButton(
+      icon: Icons.public_rounded,
+      label: 'Music Distribution',
       onPressed: _loading ? null : _showMusicDistribution,
+      accentColor: skin.secondary,
     );
   }
 
@@ -10044,51 +10097,14 @@ Make the entire output professional, well-structured using Markdown, and product
   Widget _buildUtilityButton() {
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
     final isActive = _utilityPanelOpen || _selectedUtilityTool != null;
-    final disabled = _loading;
 
-    return _korlixBeveledButtonSurface(
-      skin: skin,
-      fill: isActive
-          ? skin.success
-          : skin.buttonFill.withValues(alpha: skin.isLight ? 0.98 : 0.78),
-      border: isActive ? skin.success : _korlixDefinitionBorder(skin),
+    return _buildKorlixBelowInputBeveledButton(
+      icon: Icons.build_circle_outlined,
+      label: 'Utility',
+      onPressed: _loading ? null : _toggleUtilityPanel,
       active: isActive,
-      disabled: disabled,
-      borderRadius: BorderRadius.circular(999),
-      borderWidth: isActive ? 2.1 : 1.75,
-      depth: disabled ? 0.45 : 1.0,
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: disabled ? null : _toggleUtilityPanel,
-          borderRadius: BorderRadius.circular(999),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.build_circle_outlined,
-                  size: 18,
-                  color: isActive
-                      ? skin.textOnAccent
-                      : _korlixDefinitionBorder(skin),
-                ),
-                const SizedBox(width: 7),
-                Text(
-                  'Utility',
-                  style: TextStyle(
-                    color: isActive
-                        ? skin.textOnAccent
-                        : _korlixReadableToolForeground(skin),
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+      success: isActive,
+      accentColor: _korlixDefinitionBorder(skin),
     );
   }
 
@@ -12940,65 +12956,16 @@ Make the entire output professional, well-structured using Markdown, and product
       bool success = false,
     }) {
       final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
-      final accent = locked ? skin.premium : skin.primary;
-      final isGreen = active || success;
-      final disabled = onPressed == null;
-      final normalToolFill = skin.isLight
-          ? (Color.lerp(skin.buttonFill, const Color(0xFFFFFFFF), 0.74) ??
-                const Color(0xFFFFFFFF))
-          : skin.buttonFill.withValues(alpha: 0.78);
-      final toolFill = isGreen ? skin.success : normalToolFill;
-      final toolTextColor = isGreen
-          ? skin.textOnAccent
-          : skin.isLight
-          ? skin.text
-          : _korlixReadableToolForeground(skin);
-      final disabledToolTextColor = skin.isLight
-          ? skin.text.withValues(alpha: 0.72)
-          : skin.mutedText.withValues(alpha: 0.70);
 
-      return _korlixBeveledButtonSurface(
-        skin: skin,
-        fill: toolFill,
-        border: isGreen ? skin.success : accent,
-        active: isGreen,
-        disabled: false,
-        borderRadius: BorderRadius.circular(20),
-        borderWidth: isGreen ? 2.0 : 1.65,
-        depth: disabled ? 0.82 : 1.0,
-        child: OutlinedButton.icon(
-          onPressed: onPressed,
-          icon: Stack(
-            clipBehavior: Clip.none,
-            alignment: Alignment.center,
-            children: [
-              Icon(active ? Icons.stop_circle_outlined : icon, size: 18),
-              if (locked)
-                Positioned(
-                  right: -7,
-                  top: -7,
-                  child: Icon(
-                    Icons.lock_rounded,
-                    size: 10,
-                    color: skin.premium,
-                  ),
-                ),
-            ],
-          ),
-          label: Text(label),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: disabled ? disabledToolTextColor : toolTextColor,
-            disabledForegroundColor: disabledToolTextColor,
-            backgroundColor: Colors.transparent,
-            disabledBackgroundColor: Colors.transparent,
-            shadowColor: Colors.transparent,
-            side: BorderSide.none,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-          ),
-        ),
+      return _buildKorlixBelowInputBeveledButton(
+        icon: icon,
+        label: label,
+        onPressed: onPressed,
+        locked: locked,
+        active: active,
+        success: success,
+        accentColor: locked ? skin.premium : skin.primary,
+        showStopIconWhenActive: active,
       );
     }
 
@@ -13286,72 +13253,21 @@ Make the entire output professional, well-structured using Markdown, and product
                       active: _voiceListening,
                       onPressed: _loading ? null : _handleVoiceInput,
                     ),
-                    _korlixBeveledButtonSurface(
-                      skin: skin,
-                      fill: skin.buttonFill.withValues(
-                        alpha: skin.isLight ? 0.98 : 0.78,
-                      ),
-                      border: Colors.transparent,
-                      disabled: _loading,
-                      borderRadius: BorderRadius.circular(999),
-                      borderWidth: 0,
-                      child: OutlinedButton.icon(
-                        onPressed: _loading ? null : _showLocatorOptions,
-                        icon: Icon(Icons.location_on_outlined, size: 18),
-                        label: Text('Locator'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: _korlixReadableToolForeground(skin),
-                          disabledForegroundColor: skin.isLight
-                              ? skin.text.withValues(alpha: 0.72)
-                              : skin.mutedText.withValues(alpha: 0.70),
-                          backgroundColor: Colors.transparent,
-                          disabledBackgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          side: BorderSide(
-                            color: skin.primary.withOpacity(0.58),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 9,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                        ),
-                      ),
+                    _buildKorlixBelowInputBeveledButton(
+                      icon: Icons.location_on_outlined,
+                      label: 'Locator',
+                      onPressed: _loading ? null : _showLocatorOptions,
+                      accentColor: skin.primary,
                     ),
                     _buildMusicStudioButton(),
                     _buildMusicDistributionButton(),
                     _buildUtilityButton(),
                     if (_currentTier == 'basic')
-                      _korlixBeveledButtonSurface(
-                        skin: skin,
-                        fill: skin.buttonFill.withValues(
-                          alpha: skin.isLight ? 0.98 : 0.78,
-                        ),
-                        border: skin.premium,
-                        disabled: _loading,
-                        borderRadius: BorderRadius.circular(999),
-                        borderWidth: 1.75,
-                        child: OutlinedButton.icon(
-                          onPressed: _loading ? null : _openDonateCashApp,
-                          icon: Icon(Icons.favorite_rounded, size: 18),
-                          label: Text(r'$cashapp'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: skin.premium,
-                            backgroundColor: Colors.transparent,
-                            disabledBackgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            side: BorderSide.none,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 9,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                          ),
-                        ),
+                      _buildKorlixBelowInputBeveledButton(
+                        icon: Icons.favorite_rounded,
+                        label: r'$cashapp',
+                        onPressed: _loading ? null : _openDonateCashApp,
+                        accentColor: skin.premium,
                       ),
                   ],
                 ),
