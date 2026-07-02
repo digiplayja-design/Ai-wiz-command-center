@@ -115,6 +115,14 @@ class _PreviewScreenState extends State<PreviewScreen> {
         (key, _) => key.toLowerCase() == 'content-type',
       );
 
+      if (!previewHeaders.keys.any(
+        (key) => key.toLowerCase() == 'authorization',
+      )) {
+        throw Exception(
+          'Sign in required before generating a live after preview.',
+        );
+      }
+
       request.headers.addAll(previewHeaders);
       request.headers['Accept'] = 'application/json';
       request.headers['X-Korlix-Portrait-Preview'] = 'true';

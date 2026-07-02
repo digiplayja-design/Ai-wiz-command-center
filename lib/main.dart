@@ -453,6 +453,61 @@ class KorlixAuthSession {
   });
 }
 
+Future<Map<String, String>> korlixAuthenticatedBackendHeaders() async {
+  KorlixAuthSession? session;
+
+  final inMemoryAccessToken = kKorlixAccessToken?.trim();
+
+  if (inMemoryAccessToken != null && inMemoryAccessToken.isNotEmpty) {
+    session = KorlixAuthSession(
+      accessToken: inMemoryAccessToken,
+      refreshToken: kKorlixRefreshToken,
+      email: kKorlixUserEmail,
+    );
+  }
+
+  if (session == null) {
+    try {
+      session = await KorlixSessionStore.load().timeout(
+        const Duration(seconds: 3),
+      );
+    } catch (_) {
+      session = null;
+    }
+  }
+
+  if (session != null) {
+    try {
+      final refreshed = await KorlixSessionStore.refresh(
+        session,
+      ).timeout(const Duration(seconds: 8));
+
+      if (refreshed != null) {
+        await KorlixSessionStore.save(refreshed);
+        korlixSetInMemorySession(refreshed);
+      } else {
+        korlixSetInMemorySession(session);
+      }
+    } catch (_) {
+      korlixSetInMemorySession(session);
+    }
+  }
+
+  final headers = KorlixDeviceStore.headers();
+  final accessToken = kKorlixAccessToken?.trim();
+  final email = kKorlixUserEmail?.trim();
+
+  if (accessToken != null && accessToken.isNotEmpty) {
+    headers['Authorization'] = 'Bearer $accessToken';
+  }
+
+  if (email != null && email.isNotEmpty) {
+    headers['X-Korlix-User-Email'] = email;
+  }
+
+  return headers;
+}
+
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -8098,7 +8153,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PortraitStudioHome(
-          previewHeadersBuilder: () => KorlixDeviceStore.headers(),
+          previewHeadersBuilder: korlixAuthenticatedBackendHeaders,
           onGeneratePrompt: (prompt, pickedImageFile, autoSubmit) {
             final cleanedPrompt = prompt.trim();
 
@@ -13236,10 +13291,10 @@ Make the entire output professional, well-structured using Markdown, and product
                       fill: skin.buttonFill.withValues(
                         alpha: skin.isLight ? 0.98 : 0.78,
                       ),
-                      border: skin.primary,
+                      border: Colors.transparent,
                       disabled: _loading,
                       borderRadius: BorderRadius.circular(999),
-                      borderWidth: 1.75,
+                      borderWidth: 0,
                       child: OutlinedButton.icon(
                         onPressed: _loading ? null : _showLocatorOptions,
                         icon: Icon(Icons.location_on_outlined, size: 18),
