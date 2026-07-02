@@ -8098,6 +8098,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PortraitStudioHome(
+          previewHeadersBuilder: () => KorlixDeviceStore.headers(),
           onGeneratePrompt: (prompt, pickedImageFile, autoSubmit) {
             final cleanedPrompt = prompt.trim();
 

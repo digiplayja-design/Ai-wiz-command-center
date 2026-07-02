@@ -25,6 +25,7 @@ class PreviewScreen extends StatefulWidget {
     required this.identityLock,
     this.uploadedFile,
     this.onGeneratePrompt,
+    this.previewHeadersBuilder,
   });
 
   final ImproveGender gender;
@@ -35,6 +36,7 @@ class PreviewScreen extends StatefulWidget {
   final bool identityLock;
   final fp.PlatformFile? uploadedFile;
   final ImprovePicturePromptCallback? onGeneratePrompt;
+  final KorlixPreviewHeadersBuilder? previewHeadersBuilder;
 
   @override
   State<PreviewScreen> createState() => _PreviewScreenState();
@@ -105,9 +107,24 @@ class _PreviewScreenState extends State<PreviewScreen> {
         Uri.parse(_kKorlixPortraitPreviewEndpoint),
       );
 
+      final previewHeaders = Map<String, String>.from(
+        await widget.previewHeadersBuilder?.call() ?? const <String, String>{},
+      );
+
+      previewHeaders.removeWhere(
+        (key, _) => key.toLowerCase() == 'content-type',
+      );
+
+      request.headers.addAll(previewHeaders);
+      request.headers['Accept'] = 'application/json';
+      request.headers['X-Korlix-Portrait-Preview'] = 'true';
+      request.headers['X-Korlix-Preview-Mode'] = 'portrait_studio';
+
       request.fields.addAll({
         'prompt': prompt,
+        'command': prompt,
         'mode': 'portrait_studio_preview',
+        'preview': 'true',
         'source': 'ios_testflight',
         'template': widget.template.name,
         'variation': widget.variation,
@@ -137,7 +154,10 @@ class _PreviewScreenState extends State<PreviewScreen> {
         );
       }
 
-      final previewBytes = await _extractPreviewBytes(response.body);
+      final contentType = response.headers['content-type'] ?? '';
+      final previewBytes = contentType.toLowerCase().startsWith('image/')
+          ? response.bodyBytes
+          : await _extractPreviewBytes(response.body);
 
       if (previewBytes == null || previewBytes.isEmpty) {
         throw Exception('Preview server did not return an image.');
@@ -158,7 +178,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
       setState(() {
         _previewError =
-            'Live after preview could not be generated yet. Showing styled preview fallback.';
+            'Live after preview did not return an image yet. Tap Generate to create the final image. Details: ${_shortPreviewError(error)}';
       });
 
       debugPrint('Portrait Studio after preview failed: $error');
@@ -167,6 +187,16 @@ class _PreviewScreenState extends State<PreviewScreen> {
         setState(() => _previewLoading = false);
       }
     }
+  }
+
+  String _shortPreviewError(Object error) {
+    final raw = error.toString().replaceFirst('Exception: ', '').trim();
+
+    if (raw.isEmpty) {
+      return 'Unknown preview error.';
+    }
+
+    return raw.length > 180 ? '${raw.substring(0, 180)}...' : raw;
   }
 
   Future<Uint8List?> _extractPreviewBytes(String body) async {

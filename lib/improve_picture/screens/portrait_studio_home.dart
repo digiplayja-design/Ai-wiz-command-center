@@ -9,9 +9,14 @@ import '../models/template_model.dart';
 import 'template_gallery.dart';
 
 class PortraitStudioHome extends StatefulWidget {
-  const PortraitStudioHome({super.key, this.onGeneratePrompt});
+  const PortraitStudioHome({
+    super.key,
+    this.onGeneratePrompt,
+    this.previewHeadersBuilder,
+  });
 
   final ImprovePicturePromptCallback? onGeneratePrompt;
+  final KorlixPreviewHeadersBuilder? previewHeadersBuilder;
 
   @override
   State<PortraitStudioHome> createState() => _PortraitStudioHomeState();
@@ -99,6 +104,7 @@ class _PortraitStudioHomeState extends State<PortraitStudioHome> {
           bestResults: _bestResults,
           identityLock: _identityLock,
           onGeneratePrompt: widget.onGeneratePrompt,
+          previewHeadersBuilder: widget.previewHeadersBuilder,
         ),
       ),
     );

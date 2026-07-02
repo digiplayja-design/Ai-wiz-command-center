@@ -15,6 +15,7 @@ class TemplateGalleryScreen extends StatelessWidget {
     required this.identityLock,
     this.uploadedFile,
     this.onGeneratePrompt,
+    this.previewHeadersBuilder,
   });
 
   final ImproveGender gender;
@@ -23,6 +24,7 @@ class TemplateGalleryScreen extends StatelessWidget {
   final bool identityLock;
   final fp.PlatformFile? uploadedFile;
   final ImprovePicturePromptCallback? onGeneratePrompt;
+  final KorlixPreviewHeadersBuilder? previewHeadersBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -100,6 +102,7 @@ class TemplateGalleryScreen extends StatelessWidget {
                           bestResults: bestResults,
                           identityLock: identityLock,
                           onGeneratePrompt: onGeneratePrompt,
+                          previewHeadersBuilder: previewHeadersBuilder,
                         ),
                       ),
                     );
