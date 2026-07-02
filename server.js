@@ -11,6 +11,125 @@ import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Bord
 dotenv.config();
 
 const app = express();
+
+const KORLIX_SUPPORT_REPORT_EMAIL =
+  process.env.KORLIX_SUPPORT_REPORT_EMAIL ||
+  "support@korlixdeveloper.com";
+
+function korlixSupportReportText(payload) {
+  const safe = payload && typeof payload === "object" ? payload : {};
+
+  return [
+    "KORLIX AI REPORTED OUTPUT",
+    "",
+    `Created: ${new Date().toISOString()}`,
+    `Support email: ${KORLIX_SUPPORT_REPORT_EMAIL}`,
+    `User email: ${safe.userEmail || safe.email || "unknown"}`,
+    `Content type: ${safe.contentType || safe.type || "unknown"}`,
+    `Reason: ${safe.reason || "unspecified"}`,
+    "",
+    "Additional details:",
+    safe.details || safe.message || "[No extra details provided]",
+    "",
+    "Prompt / User request:",
+    safe.prompt || safe.command || "[No prompt provided]",
+    "",
+    "Output summary:",
+    safe.outputSummary || safe.output || safe.content || "[No output summary provided]",
+    "",
+    `Content ID: ${safe.contentId || ""}`,
+    `Image URL: ${safe.imageUrl || ""}`,
+    `Video ID: ${safe.videoId || ""}`,
+    `App version: ${safe.appVersion || ""}`,
+  ].join("\n");
+}
+
+async function korlixSendSupportReport(payload) {
+  const text = korlixSupportReportText(payload);
+  const subject = "Korlix AI reported output";
+
+  console.log("KORLIX_SUPPORT_REPORTED_OUTPUT\n" + text);
+
+  const resendKey = process.env.RESEND_API_KEY || "";
+  const fromEmail =
+    process.env.KORLIX_SUPPORT_FROM_EMAIL ||
+    "Korlix AI <onboarding@resend.dev>";
+
+  if (!resendKey) {
+    return {
+      delivered: false,
+      provider: "none",
+      reason: "RESEND_API_KEY is not configured",
+      supportEmail: KORLIX_SUPPORT_REPORT_EMAIL,
+    };
+  }
+
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resendKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: [KORLIX_SUPPORT_REPORT_EMAIL],
+        subject,
+        text,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      return {
+        delivered: false,
+        provider: "resend",
+        reason: `Resend returned ${response.status}: ${body.slice(0, 300)}`,
+        supportEmail: KORLIX_SUPPORT_REPORT_EMAIL,
+      };
+    }
+
+    return {
+      delivered: true,
+      provider: "resend",
+      supportEmail: KORLIX_SUPPORT_REPORT_EMAIL,
+    };
+  } catch (error) {
+    return {
+      delivered: false,
+      provider: "resend",
+      reason: error && error.message ? error.message : String(error),
+      supportEmail: KORLIX_SUPPORT_REPORT_EMAIL,
+    };
+  }
+}
+
+app.post(
+  ["/api/reports/content", "/api/report-output", "/api/report"],
+  async (req, res) => {
+    try {
+      const payload = req.body && typeof req.body === "object" ? req.body : {};
+      const supportNotification = await korlixSendSupportReport(payload);
+
+      return res.status(supportNotification.delivered ? 200 : 202).json({
+        ok: true,
+        received: true,
+        supportEmail: KORLIX_SUPPORT_REPORT_EMAIL,
+        supportNotification,
+      });
+    } catch (error) {
+      console.error("KORLIX_SUPPORT_REPORT_ERROR", error);
+
+      return res.status(500).json({
+        ok: false,
+        error: "Could not process report.",
+        supportEmail: KORLIX_SUPPORT_REPORT_EMAIL,
+      });
+    }
+  }
+);
+
+
 const port = process.env.PORT || 8787;
 
 app.use(cors());
