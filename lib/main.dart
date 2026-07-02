@@ -4586,6 +4586,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   String? _portraitStudioPromptOverride;
   bool _imaginePictureMode = false;
   bool _fixCreditReportMode = false;
+  bool _creditDebtValidationRoundsVisible = false;
+  int? _creditDebtValidationRound;
 
   bool _utilityPanelOpen = false;
   bool _enterpriseCopyboxArmed = false;
@@ -6002,6 +6004,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       _error = null;
       _featuredAnswerDismissed = true;
       _fixCreditReportMode = false;
+
+      _creditDebtValidationRoundsVisible = false;
+
+      _creditDebtValidationRound = null;
       _createAppMode = false;
     });
 
@@ -7925,8 +7931,188 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         prompt.contains('consumer rights');
   }
 
+  String _creditDebtValidationRoundTitle(int round) {
+    switch (round) {
+      case 1:
+        return 'Validation of debt, round 1';
+      case 2:
+        return 'Validation of debt round 2';
+      case 3:
+        return 'Validation of debt round 3';
+      default:
+        return 'Validation of debt';
+    }
+  }
+
+  String _creditDebtValidationRoundPromptSafeUi({
+    required int round,
+    required String userNotes,
+  }) {
+    final notes = userNotes.trim();
+    final title = _creditDebtValidationRoundTitle(round);
+
+    final shared = <String>[
+      'Korlix AI $title request.',
+      '',
+      'Important disclaimer:',
+      'Korlix AI does not guarantee deletion of any credit-report item, collection, account, inquiry, late payment, charge-off, or debt. Korlix AI does not provide legal advice, financial advice, or credit repair guarantees. This output is educational drafting assistance only. The user must verify all facts, dates, account numbers, addresses, laws, and claims before sending anything to a debt collector, creditor, furnisher, credit bureau, CFPB, attorney general, or court.',
+      '',
+      'User notes:',
+      notes.isEmpty ? 'No extra user notes provided.' : notes,
+      '',
+      'Uploaded documents to review:',
+      'Use any attached credit reports, collection letters, notices, contracts, account statements, screenshots, or debt documents. If anything needed is missing, clearly list what is missing before drafting final letters.',
+      '',
+    ];
+
+    switch (round) {
+      case 1:
+        return <String>[
+          ...shared,
+          'ROUND 1 OBJECTIVE: Initial debt validation / debt verification package.',
+          '',
+          'Create a strong but compliant first-round validation package for a debt collector or furnisher.',
+          '',
+          'Required output:',
+          '1. Start with a plain-language reminder that this is not legal advice and results are not guaranteed.',
+          '2. Identify every collector, furnisher, creditor, account, balance, date, and bureau reference found in the uploaded documents.',
+          '3. Create a Round 1 validation letter asking the collector to validate the alleged debt under FDCPA principles, including but not limited to itemization, original creditor, current owner, chain of assignment, contract/application, payment history, date of first delinquency, account number, and authority to collect.',
+          '4. Request proof of licensing/authority to collect where applicable.',
+          '5. Request that collection activity and credit reporting be paused or corrected until validation is provided where legally appropriate.',
+          '6. Provide separate bullet-point mailing instructions and evidence the user should attach.',
+          '7. Create a checklist of missing information the user should gather before sending.',
+          '8. Keep the tone professional, firm, and compliant.',
+        ].join('\n');
+
+      case 2:
+        return <String>[
+          ...shared,
+          'ROUND 2 OBJECTIVE: Follow-up validation after no response or inadequate response.',
+          '',
+          'Create a stronger second-round validation package assuming the user already sent Round 1 or previously requested validation.',
+          '',
+          'Required output:',
+          '1. Start with a plain-language reminder that this is not legal advice and results are not guaranteed.',
+          '2. Ask the user to insert the Round 1 sent date, delivery method, tracking number, and any response received if missing.',
+          '3. Analyze whether the response appears incomplete, generic, unverifiable, inconsistent, or missing material validation documents.',
+          '4. Draft a Round 2 follow-up letter demanding complete validation and identifying exactly what remains missing.',
+          '5. Include requests for itemized accounting, original contract/application, purchase/assignment documents, original creditor details, date of first delinquency, payment history, balance calculation, and reporting authority.',
+          '6. Add a section requesting correction, deletion, or cease reporting of unverifiable information where legally appropriate.',
+          '7. Prepare optional credit bureau dispute language tied to the unresolved validation gaps.',
+          '8. Prepare optional CFPB complaint language if the collector continues collection/reporting without sufficient validation.',
+          '9. Include a clean evidence checklist and next-step timeline.',
+        ].join('\n');
+
+      case 3:
+        return <String>[
+          ...shared,
+          'ROUND 3 OBJECTIVE: Final validation / escalation package.',
+          '',
+          'Create a final-round package for persistent unverifiable, inaccurate, incomplete, or disputed debt reporting.',
+          '',
+          'Required output:',
+          '1. Start with a plain-language reminder that this is not legal advice and results are not guaranteed.',
+          '2. Summarize the Round 1 and Round 2 timeline if the user provided dates, tracking numbers, and responses.',
+          '3. Identify every unresolved validation failure, inconsistency, missing document, disputed balance, questionable ownership issue, or reporting problem.',
+          '4. Draft a final notice letter requesting deletion/correction/cease collection of unverifiable or inaccurate information where legally appropriate.',
+          '5. Draft separate credit bureau dispute language referencing the unresolved validation defects and requesting reinvestigation/correction.',
+          '6. Draft CFPB complaint language and state attorney general complaint language in a professional factual tone.',
+          '7. Include a litigation-readiness evidence checklist the user can review with a qualified attorney if they choose.',
+          '8. Include a mailing and documentation checklist: certified mail, copies only, keep originals, proof of delivery, deadline calendar, and response tracking.',
+          '9. Keep all language firm, factual, professional, and compliant. Avoid threats the user is not prepared to follow through on.',
+        ].join('\n');
+
+      default:
+        return _creditReportPromptSafeUi(notes);
+    }
+  }
+
+  void _activateCreditDebtValidationRoundSafeUi(int round) {
+    setState(() {
+      _creditDebtValidationRoundsVisible = true;
+      _creditDebtValidationRound = round;
+      _fixCreditReportMode = true;
+      _createVideoMode = false;
+      _improvePictureMode = false;
+      _imaginePictureMode = false;
+      _createAppMode = false;
+      _error = null;
+      _controller.text =
+          '${_creditDebtValidationRoundTitle(round)} selected. Attach the debt letter, collection notice, credit report, or other proof using Upload. Add any dates, account notes, tracking numbers, or prior responses here before submitting.';
+      _controller.selection = TextSelection.fromPosition(
+        TextPosition(offset: _controller.text.length),
+      );
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${_creditDebtValidationRoundTitle(round)} selected. Attach documents, then tap submit.',
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCreditDebtValidationRoundChip(int round) {
+    final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
+    final selected =
+        _fixCreditReportMode && _creditDebtValidationRound == round;
+    final title = _creditDebtValidationRoundTitle(round);
+
+    return ActionChip(
+      avatar: Icon(
+        selected ? Icons.check_circle_rounded : Icons.gavel_rounded,
+        color: selected ? skin.textOnAccent : skin.premium,
+        size: 18,
+      ),
+      label: Text(
+        title,
+        style: TextStyle(
+          color: selected ? skin.textOnAccent : skin.text,
+          fontWeight: FontWeight.w900,
+          fontSize: 12.5,
+        ),
+      ),
+      backgroundColor: selected
+          ? skin.success
+          : skin.panel.withValues(alpha: skin.isLight ? 0.96 : 0.76),
+      side: BorderSide(
+        color: selected
+            ? skin.success.withValues(alpha: 0.98)
+            : skin.premium.withValues(alpha: 0.78),
+        width: selected ? 2.0 : 1.4,
+      ),
+      onPressed: _loading
+          ? null
+          : () => _activateCreditDebtValidationRoundSafeUi(round),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    );
+  }
+
+  Widget _buildCreditDebtValidationRoundsPanel() {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 680),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          _buildCreditDebtValidationRoundChip(1),
+          _buildCreditDebtValidationRoundChip(2),
+          _buildCreditDebtValidationRoundChip(3),
+        ],
+      ),
+    );
+  }
+
   String _creditReportPromptSafeUi(String userNotes) {
     final notes = userNotes.trim();
+
+    if (_creditDebtValidationRound != null) {
+      return _creditDebtValidationRoundPromptSafeUi(
+        round: _creditDebtValidationRound!,
+        userNotes: notes,
+      );
+    }
 
     return <String>[
       'Korlix AI credit report review request.',
@@ -7948,68 +8134,71 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       '5. Create a prioritized action plan.',
       '6. Draft dispute-letter language the user can review and customize.',
       '7. Flag missing information needed before sending letters.',
-      '8. Use cautious wording. Do not claim guaranteed deletion, guaranteed approval, or guaranteed score increase.',
-      '9. Do not invent account numbers, dates, balances, addresses, or bureau names that are not visible in the uploaded files.',
     ].join('\n');
   }
 
-  Future<void> _showCreditReportDisclaimerSafeUi() async {
-    if (!mounted) {
-      return;
-    }
-
-    await showDialog<void>(
+  Future<bool> _showCreditReportDisclaimerSafeUi() async {
+    final accepted = await showDialog<bool>(
       context: context,
-      barrierDismissible: true,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Credit report disclaimer'),
+          title: const Text('Credit report tool disclaimer'),
           content: const SingleChildScrollView(
             child: Text(
               'Korlix AI does not guarantee deletion of any credit-report item and does not guarantee a credit score increase.\n\n'
               'This tool helps review uploaded credit report files, organize possible issues, and draft educational dispute-preparation language. It is not a guarantee, legal advice, financial advice, or a substitute for reviewing your own reports carefully.\n\n'
               'How to use it:\n'
               '1. Tap Fix My Credit Report.\n'
-              '2. Tap Upload.\n'
-              '3. Attach your credit report file or files.\n'
-              '4. Tap submit.\n\n'
-              'You can close this popup and continue.',
+              '2. Tap I understand and agree.\n'
+              '3. Choose Validation of debt round 1, round 2, or round 3.\n'
+              '4. Tap Upload and attach your debt notice, collection letter, credit report, or related files.\n'
+              '5. Add any dates, account notes, tracking numbers, or prior responses.\n'
+              '6. Tap submit.\n\n'
+              'You are responsible for reviewing every generated letter before sending it.',
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Close'),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('I understand'),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('I understand and agree'),
             ),
           ],
         );
       },
     );
+
+    return accepted == true;
   }
 
-  void _activateCreditReportModeSafeUi() {
+  Future<void> _activateCreditReportModeSafeUi() async {
+    final accepted = await _showCreditReportDisclaimerSafeUi();
+
+    if (!accepted || !mounted) {
+      return;
+    }
+
     setState(() {
-      _fixCreditReportMode = true;
+      _creditDebtValidationRoundsVisible = true;
+      _creditDebtValidationRound = null;
+      _fixCreditReportMode = false;
       _createVideoMode = false;
       _improvePictureMode = false;
       _imaginePictureMode = false;
+      _createAppMode = false;
       _error = null;
-      _controller.text =
-          'Please analyze my attached credit report and generate 3 separate dispute letters (Equifax, Experian, TransUnion) for any negative or inaccurate items.';
-      _controller.selection = TextSelection.fromPosition(
-        TextPosition(offset: _controller.text.length),
-      );
+      _controller.text = '';
+      _controller.selection = const TextSelection.collapsed(offset: 0);
     });
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _showCreditReportDisclaimerSafeUi();
-      }
-    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Choose Validation of debt round 1, 2, or 3.'),
+      ),
+    );
   }
 
   Widget _buildSafeUiQuickActionChip(QuickAction action) {
@@ -8018,6 +8207,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     final isImproveAction = _isImprovePictureQuickAction(action);
     final isImagineAction = _isImaginePictureQuickAction(action);
     final isCreditAction = _isCreditReportActionSafeUi(action);
+
+    if (isCreditAction && _creditDebtValidationRoundsVisible) {
+      return _buildCreditDebtValidationRoundsPanel();
+    }
+
     final isAppAction = _isCreateAppQuickAction(action);
 
     final attachedImageForImprove = _pickedUploadFile;
@@ -8172,6 +8366,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
               _createVideoMode = false;
               _imaginePictureMode = false;
               _fixCreditReportMode = false;
+
+              _creditDebtValidationRoundsVisible = false;
+
+              _creditDebtValidationRound = null;
               _createAppMode = false;
               _error = null;
 
@@ -8219,13 +8417,17 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       if (_fixCreditReportMode) {
         setState(() {
           _fixCreditReportMode = false;
+
+          _creditDebtValidationRoundsVisible = false;
+
+          _creditDebtValidationRound = null;
           _error = null;
           _controller.text = '';
           _controller.selection = const TextSelection.collapsed(offset: 0);
         });
         return;
       }
-      _activateCreditReportModeSafeUi();
+      unawaited(_activateCreditReportModeSafeUi());
       return;
     }
 
@@ -8240,6 +8442,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         _improvePictureMode = false;
         _imaginePictureMode = false;
         _fixCreditReportMode = false;
+
+        _creditDebtValidationRoundsVisible = false;
+
+        _creditDebtValidationRound = null;
         _createAppMode = false;
         _error = null;
         _controller.text = '';
@@ -8281,6 +8487,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         _createVideoMode = false;
         _improvePictureMode = false;
         _fixCreditReportMode = false;
+
+        _creditDebtValidationRoundsVisible = false;
+
+        _creditDebtValidationRound = null;
         _createAppMode = false;
         _error = null;
         _controller.text = '';
@@ -8305,6 +8515,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       _improvePictureMode = false;
       _imaginePictureMode = false;
       _fixCreditReportMode = false;
+
+      _creditDebtValidationRoundsVisible = false;
+
+      _creditDebtValidationRound = null;
       _createAppMode = false;
       _controller.text = action.prompt;
       _controller.selection = TextSelection.fromPosition(
@@ -8889,6 +9103,10 @@ Make the entire output professional, well-structured using Markdown, and product
     _utilityPanelOpen = false;
     _improvePictureMode = false;
     _fixCreditReportMode = false;
+
+    _creditDebtValidationRoundsVisible = false;
+
+    _creditDebtValidationRound = null;
   }
 
   void _toggleUtilityPanel() {
@@ -8966,12 +9184,24 @@ Make the entire output professional, well-structured using Markdown, and product
       if (tool == 'Photo editor' || tool == 'Background remover') {
         _improvePictureMode = true;
         _fixCreditReportMode = false;
+
+        _creditDebtValidationRoundsVisible = false;
+
+        _creditDebtValidationRound = null;
       } else if (tool == 'PDF editor') {
         _improvePictureMode = false;
         _fixCreditReportMode = false;
+
+        _creditDebtValidationRoundsVisible = false;
+
+        _creditDebtValidationRound = null;
       } else {
         _improvePictureMode = false;
         _fixCreditReportMode = false;
+
+        _creditDebtValidationRoundsVisible = false;
+
+        _creditDebtValidationRound = null;
       }
     });
   }
@@ -14193,6 +14423,10 @@ Make the entire output professional, well-structured using Markdown, and product
       _improvePictureMode = false;
       _imaginePictureMode = false;
       _fixCreditReportMode = false;
+
+      _creditDebtValidationRoundsVisible = false;
+
+      _creditDebtValidationRound = null;
       _createAppMode = false;
 
       _utilityPanelOpen = false;
