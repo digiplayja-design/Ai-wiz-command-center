@@ -4588,6 +4588,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   bool _fixCreditReportMode = false;
 
   bool _utilityPanelOpen = false;
+  bool _enterpriseCopyboxArmed = false;
   String? _selectedUtilityTool;
 
   static const List<String> _utilityTools = <String>[
@@ -9429,6 +9430,350 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
+  static const String _enterpriseCopyboxStorageKey =
+      'korlix_enterprise_copybox_entries_v1';
+
+  List<String> _normalizeEnterpriseCopyboxEntries(List<String> entries) {
+    final normalized = List<String>.from(entries);
+
+    while (normalized.length < 12) {
+      normalized.add('');
+    }
+
+    return normalized;
+  }
+
+  Future<List<String>> _loadEnterpriseCopyboxEntries() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final entries =
+          prefs.getStringList(_enterpriseCopyboxStorageKey) ?? const <String>[];
+
+      return _normalizeEnterpriseCopyboxEntries(entries);
+    } catch (_) {
+      return _normalizeEnterpriseCopyboxEntries(const <String>[]);
+    }
+  }
+
+  Future<void> _saveEnterpriseCopyboxEntries(List<String> entries) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setStringList(
+      _enterpriseCopyboxStorageKey,
+      entries.map((entry) => entry.trimRight()).toList(growable: false),
+    );
+  }
+
+  Future<void> _openEnterpriseCopyboxSheet() async {
+    final loadedEntries = await _loadEnterpriseCopyboxEntries();
+
+    if (!mounted) {
+      return;
+    }
+
+    final controllers = loadedEntries
+        .map((entry) => TextEditingController(text: entry))
+        .toList();
+
+    List<String> currentEntries() {
+      return controllers
+          .map((controller) => controller.text.trimRight())
+          .toList(growable: false);
+    }
+
+    Future<void> saveEntries({bool showSnack = true}) async {
+      await _saveEnterpriseCopyboxEntries(currentEntries());
+
+      if (!mounted || !showSnack) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Copybox saved.')));
+    }
+
+    Future<void> copyEntry(int index) async {
+      final value = controllers[index].text.trimRight();
+
+      await Clipboard.setData(ClipboardData(text: value));
+      await _saveEnterpriseCopyboxEntries(currentEntries());
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            value.trim().isEmpty
+                ? 'Blank Copybox ${index + 1} copied.'
+                : 'Copybox ${index + 1} copied.',
+          ),
+        ),
+      );
+    }
+
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: const Color(0xFF07111F),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        builder: (sheetContext) {
+          return StatefulBuilder(
+            builder: (sheetContext, setSheetState) {
+              final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
+              final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
+
+              return SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(16, 14, 16, 16 + bottomInset),
+                  child: DraggableScrollableSheet(
+                    expand: false,
+                    initialChildSize: 0.88,
+                    minChildSize: 0.52,
+                    maxChildSize: 0.96,
+                    builder: (context, scrollController) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Center(
+                            child: Container(
+                              width: 48,
+                              height: 5,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.22),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.business_center_rounded,
+                                color: skin.premium,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Enterprise Copybox',
+                                  style: TextStyle(
+                                    color: skin.text,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Close',
+                                onPressed: () =>
+                                    Navigator.of(sheetContext).pop(),
+                                icon: const Icon(Icons.close_rounded),
+                                color: skin.text,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Paste or type reusable text into separate boxes. Save them, then copy any box instantly.',
+                            style: TextStyle(
+                              color: skin.mutedText,
+                              fontSize: 13,
+                              height: 1.35,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    setSheetState(() {
+                                      controllers.add(TextEditingController());
+                                    });
+                                  },
+                                  icon: const Icon(Icons.add_box_outlined),
+                                  label: const Text('Add Box'),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: FilledButton.icon(
+                                  onPressed: () => saveEntries(),
+                                  icon: const Icon(Icons.save_rounded),
+                                  label: const Text('Save All'),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          Expanded(
+                            child: ListView.builder(
+                              controller: scrollController,
+                              itemCount: controllers.length,
+                              itemBuilder: (context, index) {
+                                final controller = controllers[index];
+
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 14),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: skin.panel.withValues(
+                                      alpha: skin.isLight ? 0.94 : 0.76,
+                                    ),
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: skin.premium.withValues(
+                                        alpha: 0.44,
+                                      ),
+                                      width: 1.15,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: skin.premium.withValues(
+                                          alpha: 0.10,
+                                        ),
+                                        blurRadius: 16,
+                                        offset: const Offset(0, 8),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Text(
+                                            'Box ${index + 1}',
+                                            style: TextStyle(
+                                              color: skin.premium,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w900,
+                                              letterSpacing: 0.35,
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          IconButton(
+                                            tooltip: 'Copy Box ${index + 1}',
+                                            onPressed: () => copyEntry(index),
+                                            icon: const Icon(
+                                              Icons.copy_rounded,
+                                            ),
+                                            color: skin.premium,
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      TextField(
+                                        controller: controller,
+                                        minLines: 2,
+                                        maxLines: 7,
+                                        onChanged: (_) {
+                                          // Keep the controller state live. The
+                                          // Save All button persists every box.
+                                        },
+                                        style: TextStyle(
+                                          color: skin.text,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.35,
+                                        ),
+                                        decoration: InputDecoration(
+                                          hintText:
+                                              'Type or paste text here...',
+                                          hintStyle: TextStyle(
+                                            color: skin.hintText.withValues(
+                                              alpha: 0.76,
+                                            ),
+                                          ),
+                                          filled: true,
+                                          fillColor: skin.inputFill.withValues(
+                                            alpha: skin.isLight ? 0.96 : 0.72,
+                                          ),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              14,
+                                            ),
+                                          ),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              14,
+                                            ),
+                                            borderSide: BorderSide(
+                                              color: skin.border.withValues(
+                                                alpha: 0.46,
+                                              ),
+                                            ),
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              14,
+                                            ),
+                                            borderSide: BorderSide(
+                                              color: skin.premium,
+                                              width: 1.8,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+
+      await saveEntries(showSnack: false);
+    } finally {
+      for (final controller in controllers) {
+        controller.dispose();
+      }
+    }
+  }
+
+  Widget _buildEnterpriseCopyboxButton() {
+    final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
+    final label = _enterpriseCopyboxArmed ? 'Copybox' : 'Enterprise';
+
+    return _buildKorlixBelowInputBeveledButton(
+      icon: _enterpriseCopyboxArmed
+          ? Icons.copy_all_rounded
+          : Icons.business_center_outlined,
+      label: label,
+      onPressed: _loading
+          ? null
+          : () {
+              if (_enterpriseCopyboxArmed) {
+                unawaited(_openEnterpriseCopyboxSheet());
+                return;
+              }
+
+              setState(() {
+                _enterpriseCopyboxArmed = true;
+              });
+            },
+      active: _enterpriseCopyboxArmed,
+      success: _enterpriseCopyboxArmed,
+      accentColor: skin.premium,
+    );
+  }
+
   Widget _buildMusicStudioButton() {
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
 
@@ -13259,6 +13604,7 @@ Make the entire output professional, well-structured using Markdown, and product
                       onPressed: _loading ? null : _showLocatorOptions,
                       accentColor: skin.primary,
                     ),
+                    _buildEnterpriseCopyboxButton(),
                     _buildMusicStudioButton(),
                     _buildMusicDistributionButton(),
                     _buildUtilityButton(),
