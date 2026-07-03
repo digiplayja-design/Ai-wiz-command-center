@@ -6536,10 +6536,21 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   }
 
   Future<void> _generate() async {
-    if (_fixCreditReportMode && _activeUploadFiles.isEmpty) {
+    // KORLIX_CREDIT_ALL_THREE_REPORTS_GUARD
+    if (_fixCreditReportMode && !_hasRequiredCreditReportsUploaded) {
+      setState(() {
+        _error = _creditReportUploadRequirementMessage;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_creditReportUploadRequirementMessage)),
+      );
+      return;
+    }
+
+    if (_fixCreditReportMode && !_hasRequiredCreditReportsUploaded) {
       setState(() {
         _error =
-            'Attach your credit report first using the Upload button, then tap submit.';
+            'Upload all 3 credit reports first: Equifax, Experian, and TransUnion. Then tap submit.';
       });
       return;
     }
@@ -7935,14 +7946,26 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   String _creditDebtValidationRoundTitle(int round) {
     switch (round) {
       case 1:
-        return 'Validation of debt, round 1';
+        return 'Validation of Debt Round 1';
       case 2:
-        return 'Validation of debt round 2';
+        return 'Validation of Debt Round 2';
       case 3:
-        return 'Validation of debt round 3';
+        return 'Validation of Debt Round 3';
       default:
-        return 'Validation of debt';
+        return 'Validation of Debt';
     }
+  }
+
+  bool get _hasRequiredCreditReportsUploaded {
+    if (!_fixCreditReportMode) {
+      return true;
+    }
+
+    return _activeUploadFiles.length >= 3;
+  }
+
+  String get _creditReportUploadRequirementMessage {
+    return 'Upload all 3 credit reports first: Equifax, Experian, and TransUnion. Add collector letters, notices, or prior responses too if you have them.';
   }
 
   String _creditDebtValidationRoundPromptSafeUi({
@@ -7950,19 +7973,32 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     required String userNotes,
   }) {
     final notes = userNotes.trim();
-    final title = _creditDebtValidationRoundTitle(round);
+    final roundTitle = _creditDebtValidationRoundTitle(round);
 
     final shared = <String>[
-      'Korlix AI $title request.',
+      'KORLIX AI CREDIT VALIDATION WORKFLOW: $roundTitle',
       '',
-      'Important disclaimer:',
-      'Korlix AI does not guarantee deletion of any credit-report item, collection, account, inquiry, late payment, charge-off, or debt. Korlix AI does not provide legal advice, financial advice, or credit repair guarantees. This output is educational drafting assistance only. The user must verify all facts, dates, account numbers, addresses, laws, and claims before sending anything to a debt collector, creditor, furnisher, credit bureau, CFPB, attorney general, or court.',
+      'IMPORTANT SAFETY AND COMPLIANCE RULES:',
+      'This output is educational drafting assistance only. Do not guarantee deletion, score increases, settlement, legal victory, or any particular outcome. The user must verify all facts, account numbers, dates, addresses, laws, deadlines, balances, creditor identities, bureau names, and debt collector information before sending anything. Recommend review by a qualified attorney or licensed professional when legal advice is needed.',
       '',
-      'User notes:',
+      'REQUIRED USER UPLOADS:',
+      'The user should upload all three complete credit reports: Equifax, Experian, and TransUnion. If one or more bureau reports are missing, clearly label which bureau is missing and draft only from available evidence. Also use any uploaded collection letters, validation notices, account statements, contracts, screenshots, prior dispute letters, prior responses, certified-mail receipts, tracking numbers, and identity-theft documents.',
+      '',
+      'USER NOTES:',
       notes.isEmpty ? 'No extra user notes provided.' : notes,
       '',
-      'Uploaded documents to review:',
-      'Use any attached credit reports, collection letters, notices, contracts, account statements, screenshots, or debt documents. If anything needed is missing, clearly list what is missing before drafting final letters.',
+      'OUTPUT FORMAT REQUIREMENTS:',
+      'Produce print-ready editable letter documents. Use clean document titles, recipient blocks, applicant/consumer blocks with placeholders, date placeholders, subject lines, account tables, evidence exhibits, body text, signature blocks, certified-mail instructions, and attachment checklists. Keep language professional, firm, factual, and legally grounded. Do not invent facts. Use placeholders where facts are missing.',
+      '',
+      'DOCUMENT SET REQUIRED:',
+      '1. Applicant master case summary and action checklist.',
+      '2. Equifax-ready editable letter, if Equifax data is available.',
+      '3. Experian-ready editable letter, if Experian data is available.',
+      '4. TransUnion-ready editable letter, if TransUnion data is available.',
+      '5. Debt collector / collection agency validation letter.',
+      '6. Furnisher / original creditor investigation letter where appropriate.',
+      '7. Mailing and tracking checklist.',
+      '8. Missing evidence checklist.',
       '',
     ];
 
@@ -7970,57 +8006,84 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       case 1:
         return <String>[
           ...shared,
-          'ROUND 1 OBJECTIVE: Initial debt validation / debt verification package.',
-          '',
-          'Create a strong but compliant first-round validation package for a debt collector or furnisher.',
-          '',
-          'Required output:',
-          '1. Start with a plain-language reminder that this is not legal advice and results are not guaranteed.',
-          '2. Identify every collector, furnisher, creditor, account, balance, date, and bureau reference found in the uploaded documents.',
-          '3. Create a Round 1 validation letter asking the collector to validate the alleged debt under FDCPA principles, including but not limited to itemization, original creditor, current owner, chain of assignment, contract/application, payment history, date of first delinquency, account number, and authority to collect.',
-          '4. Request proof of licensing/authority to collect where applicable.',
-          '5. Request that collection activity and credit reporting be paused or corrected until validation is provided where legally appropriate.',
-          '6. Provide separate bullet-point mailing instructions and evidence the user should attach.',
-          '7. Create a checklist of missing information the user should gather before sending.',
-          '8. Keep the tone professional, firm, and compliant.',
+          '''ROUND 1 OBJECTIVE - INITIAL VALIDATION AND INVESTIGATION PACKAGE
+
+Act as an elite consumer-rights credit report strategist preparing the first aggressive but compliant validation round.
+
+Analyze every uploaded Equifax, Experian, and TransUnion report and every uploaded debt/collection document.
+
+Round 1 strategy:
+- Identify every negative, inaccurate, incomplete, outdated, unverifiable, duplicate, suspicious, mixed-file, identity-theft-related, balance-inconsistent, date-inconsistent, ownership-inconsistent, status-inconsistent, or questionable account.
+- Separate items by bureau and compare differences between Equifax, Experian, and TransUnion.
+- Identify collection agencies, furnishers, original creditors, account numbers, partial account numbers, balances, open dates, last reported dates, date of first delinquency, payment status, charge-off language, collection status, dispute comments, and any missing fields.
+- Prioritize debts/accounts where validation, ownership, amount, chain of assignment, date of first delinquency, reporting authority, or itemization is weak or missing.
+- Prepare the strongest first-round paper trail.
+
+Round 1 documents to draft:
+A. Applicant Master Strategy Memo
+B. Debt Collector Validation Letter
+C. Furnisher Investigation Letter
+D. Separate Equifax, Experian, and TransUnion dispute letters
+E. Mailing packet instructions
+
+Tone:
+Aggressive, precise, professional, and compliant. No legal threats without a factual basis. No guaranteed deletion claims.''',
         ].join('\n');
 
       case 2:
         return <String>[
           ...shared,
-          'ROUND 2 OBJECTIVE: Follow-up validation after no response or inadequate response.',
-          '',
-          'Create a stronger second-round validation package assuming the user already sent Round 1 or previously requested validation.',
-          '',
-          'Required output:',
-          '1. Start with a plain-language reminder that this is not legal advice and results are not guaranteed.',
-          '2. Ask the user to insert the Round 1 sent date, delivery method, tracking number, and any response received if missing.',
-          '3. Analyze whether the response appears incomplete, generic, unverifiable, inconsistent, or missing material validation documents.',
-          '4. Draft a Round 2 follow-up letter demanding complete validation and identifying exactly what remains missing.',
-          '5. Include requests for itemized accounting, original contract/application, purchase/assignment documents, original creditor details, date of first delinquency, payment history, balance calculation, and reporting authority.',
-          '6. Add a section requesting correction, deletion, or cease reporting of unverifiable information where legally appropriate.',
-          '7. Prepare optional credit bureau dispute language tied to the unresolved validation gaps.',
-          '8. Prepare optional CFPB complaint language if the collector continues collection/reporting without sufficient validation.',
-          '9. Include a clean evidence checklist and next-step timeline.',
+          '''ROUND 2 OBJECTIVE - INADEQUATE RESPONSE / NON-RESPONSE ESCALATION PACKAGE
+
+Act as an elite credit-repair litigation-prep strategist preparing a second-round validation attack after Round 1 was ignored, answered generically, answered incompletely, or produced weak/unverifiable documents.
+
+Analyze all uploaded credit reports plus any Round 1 letters, certified-mail receipts, delivery confirmations, debt collector responses, creditor responses, and bureau responses.
+
+Round 2 strategy:
+- Build a timeline: Round 1 send date, delivery date, response date, response content, missing validation, bureau dispute results, and continued reporting.
+- Compare the collector/furnisher/bureau response against the specific documents requested.
+- Identify unresolved defects: missing itemization, missing original creditor, missing contract, missing chain of title, balance mismatch, DOFD mismatch, ownership mismatch, duplicate reporting, stale reporting, re-aging risk, generic verification, failure to mark disputed, or continued collection/reporting without sufficient support.
+
+Round 2 documents to draft:
+A. Round 2 Master Escalation Memo
+B. Second Demand for Validation / Inadequate Validation Letter
+C. Separate Equifax, Experian, and TransUnion reinvestigation dispute letters
+D. Furnisher direct dispute letter
+E. CFPB and state complaint-ready factual drafts
+F. Mailing packet instructions
+
+Tone:
+More forceful than Round 1, but factual, professional, and compliant.''',
         ].join('\n');
 
       case 3:
         return <String>[
           ...shared,
-          'ROUND 3 OBJECTIVE: Final validation / escalation package.',
-          '',
-          'Create a final-round package for persistent unverifiable, inaccurate, incomplete, or disputed debt reporting.',
-          '',
-          'Required output:',
-          '1. Start with a plain-language reminder that this is not legal advice and results are not guaranteed.',
-          '2. Summarize the Round 1 and Round 2 timeline if the user provided dates, tracking numbers, and responses.',
-          '3. Identify every unresolved validation failure, inconsistency, missing document, disputed balance, questionable ownership issue, or reporting problem.',
-          '4. Draft a final notice letter requesting deletion/correction/cease collection of unverifiable or inaccurate information where legally appropriate.',
-          '5. Draft separate credit bureau dispute language referencing the unresolved validation defects and requesting reinvestigation/correction.',
-          '6. Draft CFPB complaint language and state attorney general complaint language in a professional factual tone.',
-          '7. Include a litigation-readiness evidence checklist the user can review with a qualified attorney if they choose.',
-          '8. Include a mailing and documentation checklist: certified mail, copies only, keep originals, proof of delivery, deadline calendar, and response tracking.',
-          '9. Keep all language firm, factual, professional, and compliant. Avoid threats the user is not prepared to follow through on.',
+          '''ROUND 3 OBJECTIVE - FINAL NOTICE, REGULATORY ESCALATION, AND LITIGATION-READY RECORD PACKAGE
+
+Act as a high-level consumer-rights strategist preparing the final round after Round 1 and Round 2 did not produce adequate validation, correction, deletion, or reasonable reinvestigation.
+
+Analyze all uploaded documents, especially all three bureau reports, Round 1 and Round 2 letters, certified-mail receipts, debt collector responses, creditor/furnisher responses, bureau reinvestigation results, CFPB/state complaint drafts, and any identity-theft, payment, settlement, account closure, statute-of-limitations, or mixed-file evidence.
+
+Round 3 strategy:
+- Create a litigation-ready paper trail summary.
+- Identify every party: collector, furnisher, current creditor, original creditor, Equifax, Experian, TransUnion.
+- Identify every unresolved failure after Round 1 and Round 2.
+- Separate facts from assumptions.
+- Prepare final notices and regulatory complaint packages.
+
+Round 3 documents to draft:
+A. Final Case Summary and Evidence Index
+B. Final Notice to Debt Collector
+C. Final Furnisher Direct Dispute
+D. Separate final Equifax, Experian, and TransUnion dispute letters
+E. CFPB complaint package
+F. State attorney general / regulator complaint package
+G. Attorney review packet
+H. Mailing packet instructions
+
+Tone:
+Maximum pressure while staying accurate, professional, evidence-based, and compliant. Avoid guaranteeing deletion or claiming legal violations as fact unless the uploaded documents clearly prove them.''',
         ].join('\n');
 
       default:
@@ -8029,6 +8092,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   }
 
   void _activateCreditDebtValidationRoundSafeUi(int round) {
+    final title = _creditDebtValidationRoundTitle(round);
+
     setState(() {
       _creditDebtValidationRoundsVisible = true;
       _creditDebtValidationRound = round;
@@ -8039,7 +8104,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       _createAppMode = false;
       _error = null;
       _controller.text =
-          '${_creditDebtValidationRoundTitle(round)} selected. Attach the debt letter, collection notice, credit report, or other proof using Upload. Add any dates, account notes, tracking numbers, or prior responses here before submitting.';
+          '$title selected. Upload all 3 credit reports - Equifax, Experian, and TransUnion - plus any debt letters, collector notices, prior disputes, responses, certified-mail receipts, or account statements. Add applicant notes here, then tap submit.';
       _controller.selection = TextSelection.fromPosition(
         TextPosition(offset: _controller.text.length),
       );
@@ -8048,7 +8113,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '${_creditDebtValidationRoundTitle(round)} selected. Attach documents, then tap submit.',
+          '$title selected. Upload all 3 bureau reports, then submit.',
         ),
       ),
     );
@@ -8060,46 +8125,46 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         _fixCreditReportMode && _creditDebtValidationRound == round;
     final title = _creditDebtValidationRoundTitle(round);
 
-    return ActionChip(
-      avatar: Icon(
-        selected ? Icons.check_circle_rounded : Icons.gavel_rounded,
-        color: selected ? skin.textOnAccent : skin.premium,
-        size: 18,
-      ),
-      label: Text(
-        title,
-        style: TextStyle(
-          color: selected ? skin.textOnAccent : skin.text,
-          fontWeight: FontWeight.w900,
-          fontSize: 12.5,
-        ),
-      ),
-      backgroundColor: selected
-          ? skin.success
-          : skin.panel.withValues(alpha: skin.isLight ? 0.96 : 0.76),
-      side: BorderSide(
-        color: selected
-            ? skin.success.withValues(alpha: 0.98)
-            : skin.premium.withValues(alpha: 0.78),
-        width: selected ? 2.0 : 1.4,
-      ),
+    return _buildKorlixBelowInputBeveledButton(
+      icon: selected ? Icons.check_circle_rounded : Icons.gavel_rounded,
+      label: title,
       onPressed: _loading
           ? null
           : () => _activateCreditDebtValidationRoundSafeUi(round),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      active: selected,
+      success: selected,
+      accentColor: selected ? skin.success : skin.premium,
     );
   }
 
   Widget _buildCreditDebtValidationRoundsPanel() {
+    final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
+
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 680),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
+      constraints: const BoxConstraints(maxWidth: 720),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildCreditDebtValidationRoundChip(1),
-          _buildCreditDebtValidationRoundChip(2),
-          _buildCreditDebtValidationRoundChip(3),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _buildCreditDebtValidationRoundChip(1),
+              _buildCreditDebtValidationRoundChip(2),
+              _buildCreditDebtValidationRoundChip(3),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Choose a round, upload Equifax + Experian + TransUnion, then submit to create print-ready editable letters.',
+            style: TextStyle(
+              color: skin.mutedText,
+              fontSize: 12.5,
+              height: 1.25,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -8122,7 +8187,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       'Korlix AI does not guarantee deletion of accounts, collections, inquiries, late payments, charge-offs, bankruptcies, repossessions, judgments, or any other credit-report item. Korlix AI also does not guarantee a credit score increase. This tool provides educational, organizational, and drafting assistance only. The user is responsible for reviewing all letters, facts, account details, addresses, dates, and legal claims before sending anything to a credit bureau, creditor, furnisher, or collection agency.',
       '',
       'User instruction:',
-      'The user attached one or more credit report files. Analyze the uploaded credit report files and create a practical credit-report review and dispute-preparation package.',
+      'The user attached credit report files. Analyze the uploaded credit report files and create a practical credit-report review and dispute-preparation package.',
       '',
       'User notes:',
       notes.isEmpty ? 'No extra user notes provided.' : notes,
@@ -8143,19 +8208,18 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Credit report tool disclaimer'),
+          title: const Text('Credit validation disclaimer'),
           content: const SingleChildScrollView(
             child: Text(
-              'Korlix AI does not guarantee deletion of any credit-report item and does not guarantee a credit score increase.\n\n'
-              'This tool helps review uploaded credit report files, organize possible issues, and draft educational dispute-preparation language. It is not a guarantee, legal advice, financial advice, or a substitute for reviewing your own reports carefully.\n\n'
-              'How to use it:\n'
-              '1. Tap Fix My Credit Report.\n'
-              '2. Tap I understand and agree.\n'
-              '3. Choose Validation of debt round 1, round 2, or round 3.\n'
-              '4. Tap Upload and attach your debt notice, collection letter, credit report, or related files.\n'
-              '5. Add any dates, account notes, tracking numbers, or prior responses.\n'
-              '6. Tap submit.\n\n'
-              'You are responsible for reviewing every generated letter before sending it.',
+              'Korlix AI does not guarantee deletion of any credit-report item, debt, collection, inquiry, late payment, charge-off, or account. Korlix AI does not guarantee a credit score increase.\n\n'
+              'This tool provides educational drafting, organization, and document-preparation assistance only. It is not legal advice or financial advice.\n\n'
+              'How to use this feature:\n'
+              '1. Tap I understand and agree.\n'
+              '2. Choose Validation of Debt Round 1, 2, or 3.\n'
+              '3. Upload all 3 credit reports: Equifax, Experian, and TransUnion.\n'
+              '4. Add any collection letters, debt notices, prior dispute letters, responses, certified-mail receipts, or applicant notes.\n'
+              '5. Tap submit.\n\n'
+              'The app will draft print-ready editable letters and checklists that you must review before sending.',
             ),
           ),
           actions: [
@@ -8197,7 +8261,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Choose Validation of debt round 1, 2, or 3.'),
+        content: Text('Choose Validation of Debt Round 1, 2, or 3.'),
       ),
     );
   }
