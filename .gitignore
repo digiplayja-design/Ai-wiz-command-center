@@ -87,3 +87,5 @@ patch_*.py
 patch_*.js
 setup_*_safe.sh
 fix_*_bundle_id.sh
+# Generated during Render Option A web deploy
+website/app/

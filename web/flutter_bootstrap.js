@@ -34,12 +34,10 @@
   }
 
   function korlixErrorDetails(prefix, eventOrError) {
-    const userAgent = window.navigator && window.navigator.userAgent
-      ? window.navigator.userAgent
-      : "";
-    const locationText = window.location ? window.location.href : "";
-    const baseText = document.baseURI || "";
     const elapsed = Date.now() - bootStartedAt;
+    const url = window.location ? window.location.href : "";
+    const baseUri = document.baseURI || "";
+    const userAgent = navigator.userAgent || "";
 
     if (eventOrError && eventOrError.message !== undefined) {
       return [
@@ -54,11 +52,9 @@
         (eventOrError.error && eventOrError.error.stack) || "",
         "",
         "elapsedMs: " + elapsed,
-        "url: " + locationText,
-        "baseURI: " + baseText,
-        "userAgent: " + userAgent,
-        "",
-        "Note: If the message is only 'Script error.', the browser hid the cross-origin stack. This boot file no longer forces local CanvasKit; rebuild and hard-refresh."
+        "url: " + url,
+        "baseURI: " + baseUri,
+        "userAgent: " + userAgent
       ].join("\n");
     }
 
@@ -70,8 +66,8 @@
         : String(eventOrError || "Unknown error"),
       "",
       "elapsedMs: " + elapsed,
-      "url: " + locationText,
-      "baseURI: " + baseText,
+      "url: " + url,
+      "baseURI: " + baseUri,
       "userAgent: " + userAgent
     ].join("\n");
   }
@@ -94,15 +90,12 @@
   });
 
   window.addEventListener("unhandledrejection", function (event) {
-    const reason = event.reason;
     korlixBootStatus(
-      korlixErrorDetails("KORLIX WEB BOOT PROMISE ERROR", reason),
+      korlixErrorDetails("KORLIX WEB BOOT PROMISE ERROR", event.reason),
       true
     );
   });
 
-  // Prevent old Flutter web service workers from serving mismatched JS/WASM files
-  // during Codespaces/Render testing. KORLIX does not need offline PWA caching yet.
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker
       .getRegistrations()
@@ -118,9 +111,6 @@
 
   const urlParams = new URLSearchParams(window.location.search);
   const requestedRenderer = urlParams.get("renderer");
-
-  // Do not force local CanvasKit. Let Flutter choose the safest release renderer.
-  // For testing only, use ?renderer=canvaskit or ?renderer=skwasm if needed.
   const engineConfig = {};
 
   if (requestedRenderer) {
