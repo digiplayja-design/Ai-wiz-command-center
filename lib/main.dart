@@ -4591,6 +4591,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
 
   bool _utilityPanelOpen = false;
   bool _enterpriseCopyboxArmed = false;
+  bool _enterpriseToolsOpen = false;
   String? _selectedUtilityTool;
 
   static const List<String> _utilityTools = <String>[
@@ -9977,30 +9978,563 @@ Make the entire output professional, well-structured using Markdown, and product
     }
   }
 
+  static const String _enterpriseVoiceScribeStorageKey =
+      'korlix_enterprise_voice_scribe_boxes_v1';
+
+  List<String> _normalizeEnterpriseVoiceBoxEntries(List<String> entries) {
+    final normalized = List<String>.from(entries);
+
+    while (normalized.length < 8) {
+      normalized.add('');
+    }
+
+    return normalized;
+  }
+
+  Future<List<String>> _loadEnterpriseVoiceBoxes() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final entries =
+          prefs.getStringList(_enterpriseVoiceScribeStorageKey) ??
+          const <String>[];
+
+      return _normalizeEnterpriseVoiceBoxEntries(entries);
+    } catch (_) {
+      return _normalizeEnterpriseVoiceBoxEntries(const <String>[]);
+    }
+  }
+
+  Future<void> _saveEnterpriseVoiceBoxes(List<String> entries) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setStringList(
+      _enterpriseVoiceScribeStorageKey,
+      entries.map((entry) => entry.trimRight()).toList(growable: false),
+    );
+  }
+
+  Future<void> _openEnterpriseVoiceScribeSheet() async {
+    final loadedEntries = await _loadEnterpriseVoiceBoxes();
+
+    if (!mounted) {
+      return;
+    }
+
+    final controllers = loadedEntries
+        .map((entry) => TextEditingController(text: entry))
+        .toList();
+
+    final voice = speech_to_text.SpeechToText();
+    int? listeningIndex;
+    bool voiceReady = false;
+    bool voiceInitAttempted = false;
+    String statusText = 'Tap a Voice Box microphone, speak, then press Stop.';
+    String activeSessionBaseText = '';
+
+    List<String> currentEntries() {
+      return controllers
+          .map((controller) => controller.text.trimRight())
+          .toList(growable: false);
+    }
+
+    Future<void> saveEntries({bool showSnack = false}) async {
+      await _saveEnterpriseVoiceBoxes(currentEntries());
+
+      if (!mounted || !showSnack) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Voice-scribe saved.')));
+    }
+
+    Future<void> copyEntry(int index) async {
+      final value = controllers[index].text.trimRight();
+
+      await Clipboard.setData(ClipboardData(text: value));
+      await _saveEnterpriseVoiceBoxes(currentEntries());
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Voice Box ${index + 1} copied.')));
+    }
+
+    Future<void> stopListening(StateSetter setSheetState) async {
+      try {
+        await voice.stop();
+      } catch (_) {
+        // Stop failures should not block saving the voice box text.
+      }
+
+      listeningIndex = null;
+      statusText = 'Voice-scribe stopped. Text auto-saved.';
+      await saveEntries();
+
+      setSheetState(() {});
+    }
+
+    Future<void> startListening(int index, StateSetter setSheetState) async {
+      if (listeningIndex != null && listeningIndex != index) {
+        await stopListening(setSheetState);
+      }
+
+      if (listeningIndex == index) {
+        await stopListening(setSheetState);
+        return;
+      }
+
+      if (!voiceInitAttempted) {
+        voiceInitAttempted = true;
+        voiceReady = await voice.initialize(
+          onStatus: (status) {
+            if (status == 'done' || status == 'notListening') {
+              listeningIndex = null;
+              statusText = 'Voice-scribe paused. Tap the mic to continue.';
+              unawaited(saveEntries());
+              try {
+                setSheetState(() {});
+              } catch (_) {}
+            }
+          },
+          onError: (error) {
+            listeningIndex = null;
+            statusText = 'Voice-scribe error: ${error.errorMsg}';
+            unawaited(saveEntries());
+            try {
+              setSheetState(() {});
+            } catch (_) {}
+          },
+        );
+      }
+
+      if (!voiceReady) {
+        if (!mounted) {
+          return;
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Voice-scribe microphone is not available. Check microphone and speech permissions.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      activeSessionBaseText = controllers[index].text.trimRight();
+      listeningIndex = index;
+      statusText = 'Listening to Voice Box ${index + 1}. Press Stop when done.';
+      setSheetState(() {});
+
+      try {
+        await voice.listen(
+          partialResults: true,
+          cancelOnError: false,
+          onResult: (result) {
+            final recognized = result.recognizedWords.trim();
+
+            if (recognized.isEmpty) {
+              return;
+            }
+
+            final combined = activeSessionBaseText.isEmpty
+                ? recognized
+                : '$activeSessionBaseText\n$recognized';
+
+            controllers[index].value = TextEditingValue(
+              text: combined,
+              selection: TextSelection.collapsed(offset: combined.length),
+            );
+
+            unawaited(saveEntries());
+
+            try {
+              setSheetState(() {});
+            } catch (_) {}
+          },
+        );
+      } catch (_) {
+        listeningIndex = null;
+        statusText =
+            'Voice-scribe could not start. Check microphone permission.';
+        setSheetState(() {});
+      }
+    }
+
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: const Color(0xFF07111F),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        builder: (sheetContext) {
+          return StatefulBuilder(
+            builder: (sheetContext, setSheetState) {
+              final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
+              final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
+
+              return SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(16, 14, 16, 16 + bottomInset),
+                  child: DraggableScrollableSheet(
+                    expand: false,
+                    initialChildSize: 0.90,
+                    minChildSize: 0.55,
+                    maxChildSize: 0.97,
+                    builder: (context, scrollController) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Center(
+                            child: Container(
+                              width: 48,
+                              height: 5,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.22),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Icon(Icons.mic_rounded, color: skin.premium),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Enterprise Voice-scribe',
+                                  style: TextStyle(
+                                    color: skin.text,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Close',
+                                onPressed: () =>
+                                    Navigator.of(sheetContext).pop(),
+                                icon: const Icon(Icons.close_rounded),
+                                color: skin.text,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Each Voice Box can be typed, pasted, dictated, edited, copied, and auto-saved.',
+                            style: TextStyle(
+                              color: skin.mutedText,
+                              fontSize: 13,
+                              height: 1.35,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: skin.panel.withValues(
+                                alpha: skin.isLight ? 0.92 : 0.62,
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: skin.premium.withValues(alpha: 0.42),
+                              ),
+                            ),
+                            child: Text(
+                              statusText,
+                              style: TextStyle(
+                                color: skin.text,
+                                fontSize: 12.8,
+                                height: 1.35,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    setSheetState(() {
+                                      controllers.add(TextEditingController());
+                                    });
+                                    unawaited(saveEntries());
+                                  },
+                                  icon: const Icon(Icons.add_box_outlined),
+                                  label: const Text('Add Voice Box'),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: FilledButton.icon(
+                                  onPressed: () => saveEntries(showSnack: true),
+                                  icon: const Icon(Icons.save_rounded),
+                                  label: const Text('Save All'),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          Expanded(
+                            child: ListView.builder(
+                              controller: scrollController,
+                              itemCount: controllers.length,
+                              itemBuilder: (context, index) {
+                                final controller = controllers[index];
+                                final isListening = listeningIndex == index;
+
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 14),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: skin.panel.withValues(
+                                      alpha: skin.isLight ? 0.95 : 0.74,
+                                    ),
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: isListening
+                                          ? skin.success.withValues(alpha: 0.86)
+                                          : skin.premium.withValues(
+                                              alpha: 0.42,
+                                            ),
+                                      width: isListening ? 1.9 : 1.15,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color:
+                                            (isListening
+                                                    ? skin.success
+                                                    : skin.premium)
+                                                .withValues(alpha: 0.12),
+                                        blurRadius: 18,
+                                        offset: const Offset(0, 8),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Text(
+                                            'Voice Box ${index + 1}',
+                                            style: TextStyle(
+                                              color: isListening
+                                                  ? skin.success
+                                                  : skin.premium,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w900,
+                                              letterSpacing: 0.35,
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          IconButton(
+                                            tooltip:
+                                                'Copy Voice Box ${index + 1}',
+                                            onPressed: () => copyEntry(index),
+                                            icon: const Icon(
+                                              Icons.copy_rounded,
+                                            ),
+                                            color: skin.premium,
+                                          ),
+                                          IconButton(
+                                            tooltip:
+                                                'Clear Voice Box ${index + 1}',
+                                            onPressed: () {
+                                              controller.clear();
+                                              unawaited(saveEntries());
+                                              setSheetState(() {});
+                                            },
+                                            icon: const Icon(
+                                              Icons.clear_rounded,
+                                            ),
+                                            color: skin.mutedText,
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      TextField(
+                                        controller: controller,
+                                        minLines: 3,
+                                        maxLines: 9,
+                                        onChanged: (_) =>
+                                            unawaited(saveEntries()),
+                                        style: TextStyle(
+                                          color: skin.text,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.35,
+                                        ),
+                                        decoration: InputDecoration(
+                                          hintText:
+                                              'Speak, type, or paste script text here...',
+                                          hintStyle: TextStyle(
+                                            color: skin.hintText.withValues(
+                                              alpha: 0.76,
+                                            ),
+                                          ),
+                                          filled: true,
+                                          fillColor: skin.inputFill.withValues(
+                                            alpha: skin.isLight ? 0.96 : 0.72,
+                                          ),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              14,
+                                            ),
+                                          ),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              14,
+                                            ),
+                                            borderSide: BorderSide(
+                                              color: skin.border.withValues(
+                                                alpha: 0.46,
+                                              ),
+                                            ),
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              14,
+                                            ),
+                                            borderSide: BorderSide(
+                                              color: skin.premium,
+                                              width: 1.8,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Center(
+                                        child: FilledButton.icon(
+                                          onPressed: () => startListening(
+                                            index,
+                                            setSheetState,
+                                          ),
+                                          icon: Icon(
+                                            isListening
+                                                ? Icons.stop_circle_rounded
+                                                : Icons.mic_rounded,
+                                          ),
+                                          label: Text(
+                                            isListening
+                                                ? 'Stop Voice Box ${index + 1}'
+                                                : 'Start Mic',
+                                          ),
+                                          style: FilledButton.styleFrom(
+                                            backgroundColor: isListening
+                                                ? skin.success
+                                                : skin.premium,
+                                            foregroundColor: skin.textOnAccent,
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 20,
+                                              vertical: 13,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+
+      await saveEntries();
+    } finally {
+      try {
+        await voice.stop();
+      } catch (_) {}
+
+      for (final controller in controllers) {
+        controller.dispose();
+      }
+    }
+  }
+
   Widget _buildEnterpriseCopyboxButton() {
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
-    final label = _enterpriseCopyboxArmed ? 'Copybox' : 'Enterprise';
 
-    return _buildKorlixBelowInputBeveledButton(
-      icon: _enterpriseCopyboxArmed
-          ? Icons.copy_all_rounded
-          : Icons.business_center_outlined,
-      label: label,
-      onPressed: _loading
-          ? null
-          : () {
-              if (_enterpriseCopyboxArmed) {
-                unawaited(_openEnterpriseCopyboxSheet());
-                return;
-              }
+    Widget enterpriseMainButton() {
+      return _buildKorlixBelowInputBeveledButton(
+        icon: _enterpriseToolsOpen
+            ? Icons.keyboard_arrow_up_rounded
+            : Icons.business_center_outlined,
+        label: 'Enterprise',
+        onPressed: _loading
+            ? null
+            : () {
+                setState(() {
+                  _enterpriseToolsOpen = !_enterpriseToolsOpen;
+                  _enterpriseCopyboxArmed = _enterpriseToolsOpen;
+                });
+              },
+        active: _enterpriseToolsOpen,
+        success: _enterpriseToolsOpen,
+        accentColor: skin.premium,
+      );
+    }
 
-              setState(() {
-                _enterpriseCopyboxArmed = true;
-              });
-            },
-      active: _enterpriseCopyboxArmed,
-      success: _enterpriseCopyboxArmed,
-      accentColor: skin.premium,
+    if (!_enterpriseToolsOpen) {
+      return enterpriseMainButton();
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        enterpriseMainButton(),
+        _buildKorlixBelowInputBeveledButton(
+          icon: Icons.copy_all_rounded,
+          label: 'Copybox',
+          onPressed: _loading
+              ? null
+              : () {
+                  unawaited(_openEnterpriseCopyboxSheet());
+                },
+          active: true,
+          success: true,
+          accentColor: skin.premium,
+        ),
+        _buildKorlixBelowInputBeveledButton(
+          icon: Icons.mic_rounded,
+          label: 'Voice-scribe',
+          onPressed: _loading
+              ? null
+              : () {
+                  unawaited(_openEnterpriseVoiceScribeSheet());
+                },
+          active: true,
+          success: false,
+          accentColor: skin.secondary,
+        ),
+      ],
     );
   }
 
