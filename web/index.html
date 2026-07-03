@@ -49,6 +49,21 @@
       box-sizing: border-box;
     }
   </style>
+
+  <!-- KORLIX_WEB_CACHE_BUST_BEGIN -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistrations()
+        .then(function (registrations) {
+          registrations.forEach(function (registration) {
+            registration.unregister().catch(function () {});
+          });
+        })
+        .catch(function () {});
+    }
+  </script>
+  <!-- KORLIX_WEB_CACHE_BUST_END -->
+
 </head>
 <body>
   <pre id="korlix-web-boot-status">Starting Korlix AI web app…</pre>
@@ -60,6 +75,6 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
-  <script src="flutter_bootstrap.js" async></script>
+  <script src="flutter_bootstrap.js?v=korlix-web-boot-20260702" defer crossorigin="anonymous"></script>
 </body>
 </html>

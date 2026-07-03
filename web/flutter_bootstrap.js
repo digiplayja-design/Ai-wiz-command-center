@@ -2,6 +2,8 @@
 {{flutter_build_config}}
 
 (function () {
+  const bootStartedAt = Date.now();
+
   function korlixBootStatus(message, isError) {
     let box = document.getElementById("korlix-web-boot-status");
 
@@ -14,14 +16,15 @@
         "right:0",
         "top:0",
         "z-index:2147483647",
-        "max-height:55vh",
+        "max-height:62vh",
         "overflow:auto",
         "white-space:pre-wrap",
         "background:" + (isError ? "#160207" : "#050b16"),
         "color:#ffffff",
-        "font:13px/1.35 system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+        "font:13px/1.38 system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif",
         "padding:14px 16px",
-        "border-bottom:3px solid " + (isError ? "#ff4d6d" : "#69d9e8")
+        "border-bottom:3px solid " + (isError ? "#ff4d6d" : "#69d9e8"),
+        "box-sizing:border-box"
       ].join(";");
 
       document.documentElement.appendChild(box);
@@ -30,23 +33,62 @@
     box.textContent = message;
   }
 
+  function korlixErrorDetails(prefix, eventOrError) {
+    const userAgent = window.navigator && window.navigator.userAgent
+      ? window.navigator.userAgent
+      : "";
+    const locationText = window.location ? window.location.href : "";
+    const baseText = document.baseURI || "";
+    const elapsed = Date.now() - bootStartedAt;
+
+    if (eventOrError && eventOrError.message !== undefined) {
+      return [
+        prefix,
+        "",
+        eventOrError.message || "Script error.",
+        "",
+        "source: " + (eventOrError.filename || ""),
+        "line: " + (eventOrError.lineno || ""),
+        "column: " + (eventOrError.colno || ""),
+        "",
+        (eventOrError.error && eventOrError.error.stack) || "",
+        "",
+        "elapsedMs: " + elapsed,
+        "url: " + locationText,
+        "baseURI: " + baseText,
+        "userAgent: " + userAgent,
+        "",
+        "Note: If the message is only 'Script error.', the browser hid the cross-origin stack. This boot file no longer forces local CanvasKit; rebuild and hard-refresh."
+      ].join("\n");
+    }
+
+    return [
+      prefix,
+      "",
+      eventOrError && eventOrError.stack
+        ? eventOrError.stack
+        : String(eventOrError || "Unknown error"),
+      "",
+      "elapsedMs: " + elapsed,
+      "url: " + locationText,
+      "baseURI: " + baseText,
+      "userAgent: " + userAgent
+    ].join("\n");
+  }
+
   function korlixRemoveBootStatusSoon() {
     window.setTimeout(function () {
       const box = document.getElementById("korlix-web-boot-status");
+
       if (box && box.parentNode) {
         box.parentNode.removeChild(box);
       }
-    }, 700);
+    }, 900);
   }
 
   window.addEventListener("error", function (event) {
     korlixBootStatus(
-      "KORLIX WEB BOOT ERROR\n\n" +
-        (event.message || "Unknown JavaScript error") +
-        "\n\nsource: " + (event.filename || "") +
-        "\nline: " + (event.lineno || "") +
-        "\ncolumn: " + (event.colno || "") +
-        "\n\n" + ((event.error && event.error.stack) || ""),
+      korlixErrorDetails("KORLIX WEB BOOT ERROR", event),
       true
     );
   });
@@ -54,35 +96,74 @@
   window.addEventListener("unhandledrejection", function (event) {
     const reason = event.reason;
     korlixBootStatus(
-      "KORLIX WEB BOOT PROMISE ERROR\n\n" +
-        (reason && reason.stack ? reason.stack : String(reason)),
+      korlixErrorDetails("KORLIX WEB BOOT PROMISE ERROR", reason),
       true
     );
   });
 
+  // Prevent old Flutter web service workers from serving mismatched JS/WASM files
+  // during Codespaces/Render testing. KORLIX does not need offline PWA caching yet.
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker
+      .getRegistrations()
+      .then(function (registrations) {
+        registrations.forEach(function (registration) {
+          registration.unregister().catch(function () {});
+        });
+      })
+      .catch(function () {});
+  }
+
   korlixBootStatus("Starting Korlix AI web app…", false);
 
-  _flutter.loader
-    .load({
-      onEntrypointLoaded: async function (engineInitializer) {
-        korlixBootStatus("Loading Korlix AI engine…", false);
+  const urlParams = new URLSearchParams(window.location.search);
+  const requestedRenderer = urlParams.get("renderer");
 
-        const appRunner = await engineInitializer.initializeEngine();
+  // Do not force local CanvasKit. Let Flutter choose the safest release renderer.
+  // For testing only, use ?renderer=canvaskit or ?renderer=skwasm if needed.
+  const engineConfig = {};
 
-        korlixBootStatus("Painting Korlix AI…", false);
+  if (requestedRenderer) {
+    engineConfig.renderer = requestedRenderer;
+  }
 
-        await appRunner.runApp();
+  async function startKorlixFlutter(engineInitializer) {
+    korlixBootStatus("Loading Korlix AI engine…", false);
 
-        korlixRemoveBootStatusSoon();
-      }
-    })
-    .catch(function (error) {
-      korlixBootStatus(
-        "KORLIX WEB LOADER FAILED\n\n" +
-          (error && error.stack ? error.stack : String(error)),
-        true
-      );
-    });
+    const appRunner = await engineInitializer.initializeEngine(engineConfig);
+
+    korlixBootStatus("Painting Korlix AI…", false);
+
+    await appRunner.runApp();
+
+    korlixRemoveBootStatusSoon();
+  }
+
+  try {
+    const loadOptions = {
+      onEntrypointLoaded: startKorlixFlutter
+    };
+
+    if (Object.keys(engineConfig).length > 0) {
+      loadOptions.config = engineConfig;
+    }
+
+    const loadResult = _flutter.loader.load(loadOptions);
+
+    if (loadResult && typeof loadResult.catch === "function") {
+      loadResult.catch(function (error) {
+        korlixBootStatus(
+          korlixErrorDetails("KORLIX WEB LOADER FAILED", error),
+          true
+        );
+      });
+    }
+  } catch (error) {
+    korlixBootStatus(
+      korlixErrorDetails("KORLIX WEB LOADER THREW", error),
+      true
+    );
+  }
 
   window.setTimeout(function () {
     const hasFlutterView =
@@ -94,13 +175,21 @@
 
     if (!hasFlutterView && bootBox) {
       korlixBootStatus(
-        "KORLIX WEB STILL WAITING\n\n" +
-          "The HTML and JavaScript loaded, but Flutter has not painted yet.\n" +
-          "This usually means the Flutter engine failed before the app frame.\n\n" +
-          "Renderer: Flutter default\n" +
+        [
+          "KORLIX WEB STILL WAITING",
+          "",
+          "The HTML and JavaScript loaded, but Flutter has not painted yet.",
+          "This usually means the web runtime failed before the first app frame.",
+          "",
+          "Renderer: Flutter default" + (requestedRenderer ? " / requested " + requestedRenderer : ""),
           "URL: " + window.location.href,
+          "Base URI: " + document.baseURI,
+          "User agent: " + navigator.userAgent,
+          "",
+          "Try a hard refresh. If this remains, send this full screen text."
+        ].join("\n"),
         true
       );
     }
-  }, 10000);
+  }, 12000);
 })();
