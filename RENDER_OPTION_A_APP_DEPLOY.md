@@ -24,12 +24,13 @@ Environment variables:
 KORLIX_WEB_BASE_HREF=/app/
 KORLIX_FLUTTER_CHANNEL=stable
 
-Optional Supabase public web values:
+Optional public Supabase web values:
 
 SUPABASE_URL
 SUPABASE_ANON_KEY
 
 Do not put backend-only secrets in the static site:
+
 OPENAI_API_KEY
 RESEND_API_KEY
 SUPABASE_SERVICE_ROLE_KEY
