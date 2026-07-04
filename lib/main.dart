@@ -14491,7 +14491,7 @@ Make the entire output professional, well-structured using Markdown, and product
                     if (_currentTier == 'basic')
                       _buildKorlixBelowInputBeveledButton(
                         icon: Icons.favorite_rounded,
-                        label: r'$cashapp',
+                        label: 'Tip the developer',
                         onPressed: _loading ? null : _openDonateCashApp,
                         accentColor: skin.premium,
                       ),
