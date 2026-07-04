@@ -1,0 +1,42 @@
+name: Build Korlix Flutter Web
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - build90-integrated-improve-picture
+    paths:
+      - "lib/**"
+      - "web/**"
+      - "website/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - ".github/workflows/build-web.yml"
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Korlix source
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze Flutter app
+        run: flutter analyze
+
+      - name: Build Flutter web under /app/
+        run: flutter build web --release --base-href=/app/
+
+      - name: Upload Flutter web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: korlix-flutter-web-app
+          path: build/web

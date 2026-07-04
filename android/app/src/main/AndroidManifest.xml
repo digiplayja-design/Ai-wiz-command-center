@@ -1,16 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <!-- KORLIX_GOOGLE_PLAY_PHOTO_VIDEO_POLICY_BEGIN -->
-    <!-- KORLIX uses user-selected upload/photo-picker flows only; no broad media library access. -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" tools:node="remove" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:node="remove" />
-    <!-- KORLIX_GOOGLE_PLAY_PHOTO_VIDEO_POLICY_END -->
-
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- Android 14 (SDK 34 ) required: foreground service type permissions -->
@@ -25,6 +15,54 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
 <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+
+    <!-- KORLIX_ANDROID_IOS_PARITY_PERMISSIONS_BEGIN -->
+    <!-- Shared iOS/Android feature parity:
+         internet/backend, voice input, Voice-scribe, camera/image capture,
+         Locator, maps/deep-links, Image-to-Video upload, and external video URLs. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <!-- KORLIX_ANDROID_IOS_PARITY_PERMISSIONS_END -->
+
+    <!-- KORLIX_GOOGLE_PLAY_PHOTO_VIDEO_POLICY_BEGIN -->
+    <!-- KORLIX uses Android system pickers / SAF style access for selected files.
+         Do not request broad photo/video library permissions unless Google Play
+         policy declarations are intentionally updated. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:node="remove" />
+    <!-- KORLIX_GOOGLE_PLAY_PHOTO_VIDEO_POLICY_END -->
+
+    <!-- KORLIX_ANDROID_WEB_QUERY_PARITY_BEGIN -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="http" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="geo" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="google.navigation" />
+        </intent>
+    </queries>
+    <!-- KORLIX_ANDROID_WEB_QUERY_PARITY_END -->
 
 <application
         android:label="Korlix AI"
