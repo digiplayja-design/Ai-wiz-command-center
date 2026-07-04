@@ -4595,21 +4595,29 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   bool _enterpriseToolsOpen = false;
   String? _selectedUtilityTool;
 
+  // KORLIX_BUILD109_VISIBLE_UTILITY_TOOLS_BEGIN
+  // Build 109 product decision:
+  // Hide inactive Utility tools until full native workflows are ready.
+  // Keep active Utility tools visible.
   static const List<String> _utilityTools = <String>[
-    'Photo editor',
-    'Video splitter',
     'Background remover',
-    'PDF editor',
     'Songwriter',
+  ];
+
+  static const Set<String> _hiddenInactiveUtilityTools = <String>{
     'Voice recorder',
+    'Video splitter',
     'Notebook',
     'Alarm',
     'Weather',
     'Outside temperature',
     'GIF maker',
-    'Ringtone maker',
     'Reel maker',
-  ];
+    'Ringtone maker',
+    'PDF editor',
+    'Photo editor',
+  };
+  // KORLIX_BUILD109_VISIBLE_UTILITY_TOOLS_END
 
   bool _createAppMode = false;
   bool _voiceListening = false;
@@ -9267,6 +9275,14 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   void _selectUtilityTool(String tool) {
+    // KORLIX_BUILD109_HIDE_INACTIVE_UTILITY_GUARD
+    if (_hiddenInactiveUtilityTools.contains(tool)) {
+      setState(() {
+        _clearUtilitySelection();
+      });
+      return;
+    }
+
     if (_loading) {
       return;
     }
@@ -11453,7 +11469,7 @@ Make the entire output professional, well-structured using Markdown, and product
               ),
             ),
             child: Text(
-              'Status note: Video splitter, Alarm, Weather, Outside temperature, GIF maker, Ringtone maker, and Reel maker are guided workflows right now — not full native tools yet. Weather and Outside temperature should be treated as request prompts unless a live weather backend is connected.',
+              'Status note: Only active Utility tools are shown. Inactive tools are hidden until their full workflows are ready.',
               style: TextStyle(
                 color: _korlixReadableForeground(skin, muted: true),
                 fontSize: 12.4,
