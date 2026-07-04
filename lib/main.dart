@@ -30,6 +30,7 @@ import 'korlix_ai_quality_policy.dart';
 import 'korlix_cyber_widgets.dart';
 
 import 'improve_picture/screens/portrait_studio_home.dart';
+import 'image_to_video/image_to_video_screen.dart';
 
 const String kKorlixImaginePicturePrompt =
     'Describe the picture you want Korlix AI to create.';
@@ -7878,6 +7879,18 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     return label.contains('video') || action.prompt == kKorlixCreateVideoPrompt;
   }
 
+  bool _isImageToVideoQuickAction(QuickAction action) {
+    final label = action.label.toLowerCase();
+    final prompt = action.prompt.toLowerCase();
+
+    return label.contains('image to video') ||
+        label.contains('image → video') ||
+        label.contains('photo to video') ||
+        prompt.contains('image to video') ||
+        prompt.contains('photo to video') ||
+        prompt.contains('animate this still image');
+  }
+
   bool _isImprovePictureQuickAction(QuickAction action) {
     final label = action.label.toLowerCase();
     final prompt = action.prompt.toLowerCase();
@@ -8405,6 +8418,17 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     );
   }
 
+  Future<void> _openImageToVideoStudio() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => KorlixImageToVideoScreen(
+          backendBaseUrl: kKorlixBackendBaseUrl,
+          headersBuilder: () async => KorlixDeviceStore.headers(),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openImprovePictureStudio() async {
     if (_loading) {
       return;
@@ -8477,6 +8501,18 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   void _useQuickAction(QuickAction action) {
+    // KORLIX_IMAGE_TO_VIDEO_CREATE_VIDEO_V1_GATE
+    // Build 106: route the visible Create Video action into Image to Video V1.
+    if (_isCreateVideoQuickAction(action)) {
+      unawaited(_openImageToVideoStudio());
+      return;
+    }
+
+    if (_isImageToVideoQuickAction(action)) {
+      unawaited(_openImageToVideoStudio());
+      return;
+    }
+
     if (_isCreditReportActionSafeUi(action)) {
       // Toggle off if already active
       if (_fixCreditReportMode) {
