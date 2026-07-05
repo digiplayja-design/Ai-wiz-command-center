@@ -105,7 +105,6 @@ async function korlixSendSupportReport(payload) {
 }
 
 
-
 const port = process.env.PORT || 8787;
 
 app.use(cors());
@@ -451,7 +450,6 @@ function renderKorlixPasswordResetPage() {
 </body>
 </html>`;
 }
-
 
 
 function normalizeKorlixCharacterId(characterId) {
@@ -1269,7 +1267,6 @@ function getUploadMimeType(file) {
 }
 
 
-
 async function loadPdfParse() {
   try {
     const mod = await import("pdf-parse/lib/pdf-parse.js");
@@ -1483,7 +1480,6 @@ async function createAdvancedFileResponse({
 }
 
 
-
 function getOpenAIModelForTier(profile, options = {}) {
   const tier = String(profile?.tier || "basic").toLowerCase();
 
@@ -1513,8 +1509,6 @@ function getOpenAIModelForTier(profile, options = {}) {
     "gpt-4o-mini"
   );
 }
-
-
 
 
 function getUploadedImageMime(file) {
@@ -2157,7 +2151,6 @@ app.post("/api/auth/signin", async (req, res) => {
 });
 
 
-
 app.get("/api/supabase-diagnostics", async (req, res) => {
   try {
     const healthUrl = `${supabaseUrl}/auth/v1/health`;
@@ -2190,7 +2183,6 @@ app.get("/api/supabase-diagnostics", async (req, res) => {
     });
   }
 });
-
 
 
 app.post("/api/auth/refresh", async (req, res) => {
@@ -2255,7 +2247,6 @@ app.post("/api/auth/refresh", async (req, res) => {
     });
   }
 });
-
 
 
 app.post("/api/characters/select", async (req, res) => {
@@ -2341,7 +2332,6 @@ app.post("/api/characters/select", async (req, res) => {
 });
 
 
-
 app.post("/api/auth/signout", async (req, res) => {
   try {
     const user = await requireUser(req);
@@ -2364,7 +2354,6 @@ app.post("/api/auth/signout", async (req, res) => {
     });
   }
 });
-
 
 
 app.get("/api/video-credits", async (req, res) => {
@@ -2629,7 +2618,6 @@ app.get("/api/video/content/:videoId", async (req, res) => {
     });
   }
 });
-
 
 
 app.post("/api/location/record", async (req, res) => {
@@ -3187,7 +3175,6 @@ app.post("/api/image/create", async (req, res) => {
 });
 
 
-
 app.post("/api/image/improve", documentUpload.single("image"), async (req, res) => {
   try {
     if (!process.env.OPENAI_API_KEY) {
@@ -3289,7 +3276,6 @@ app.post("/api/image/improve", documentUpload.single("image"), async (req, res) 
     });
   }
 });
-
 
 
 function extractKorlixResponseText(response) {
@@ -3519,7 +3505,6 @@ Instructions:
     });
   }
 });
-
 
 
 app.post("/api/analyze-document", documentUpload.single("file"), async (req, res) => {
@@ -4367,395 +4352,6 @@ async function runKorlixResumableJsonProxyJob({ jobId, headers, endpoint, payloa
   jo
 
 
-
-// KORLIX_REPORT_DELIVERY_V2_BEGIN
-const korlixReportDeliveryV2Reports =
-  global.__korlixReportDeliveryV2Reports || [];
-global.__korlixReportDeliveryV2Reports = korlixReportDeliveryV2Reports;
-
-const KORLIX_REPORT_DELIVERY_V2_MAX_MEMORY =
-  Number(process.env.KORLIX_REPORT_MAX_MEMORY || 1000) || 1000;
-
-const KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL =
-  process.env.KORLIX_SUPPORT_REPORT_EMAIL ||
-  process.env.KORLIX_SUPPORT_EMAIL ||
-  "support@korlixdeveloper.com";
-
-const KORLIX_REPORT_DELIVERY_V2_FROM_EMAIL =
-  process.env.KORLIX_SUPPORT_FROM_EMAIL ||
-  process.env.KORLIX_REPORT_FROM_EMAIL ||
-  "";
-
-const KORLIX_REPORT_DELIVERY_V2_ADMIN_TOKEN =
-  process.env.KORLIX_REPORT_ADMIN_TOKEN ||
-  process.env.KORLIX_ADMIN_REPORT_TOKEN ||
-  "";
-
-function korlixReportDeliveryV2String(value, fallback = "") {
-  if (value === undefined || value === null) {
-    return fallback;
-  }
-
-  if (typeof value === "string") {
-    return value;
-  }
-
-  try {
-    return JSON.stringify(value);
-  } catch (_) {
-    return String(value);
-  }
-}
-
-function korlixReportDeliveryV2ClientIp(req) {
-  const forwarded = req.headers && req.headers["x-forwarded-for"];
-
-  if (Array.isArray(forwarded) && forwarded.length > 0) {
-    return String(forwarded[0]).split(",")[0].trim();
-  }
-
-  if (typeof forwarded === "string" && forwarded.trim()) {
-    return forwarded.split(",")[0].trim();
-  }
-
-  return req.socket && req.socket.remoteAddress ? String(req.socket.remoteAddress) : "";
-}
-
-function korlixReportDeliveryV2Normalize(req) {
-  const body = req.body || {};
-  const reportId =
-    korlixReportDeliveryV2String(body.id).trim() ||
-    `korlix_report_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-
-  return {
-    id: reportId,
-    reportId,
-    contentType: korlixReportDeliveryV2String(body.contentType || body.type, "ai_output"),
-    reason: korlixReportDeliveryV2String(body.reason, "Other"),
-    details: korlixReportDeliveryV2String(body.details || body.message || body.notes, ""),
-    prompt: korlixReportDeliveryV2String(body.prompt, ""),
-    outputSummary: korlixReportDeliveryV2String(
-      body.outputSummary || body.output || body.summary,
-      "",
-    ),
-    contentId: korlixReportDeliveryV2String(body.contentId || body.generationId, ""),
-    imageUrl: korlixReportDeliveryV2String(body.imageUrl || body.image_url, ""),
-    videoId: korlixReportDeliveryV2String(body.videoId || body.video_id, ""),
-    videoUrl: korlixReportDeliveryV2String(body.videoUrl || body.video_url, ""),
-    language: korlixReportDeliveryV2String(body.language, ""),
-    appVersion: korlixReportDeliveryV2String(body.appVersion || body.version, ""),
-    platform: korlixReportDeliveryV2String(
-      body.platform || req.headers["x-korlix-platform"],
-      "",
-    ),
-    appArea: korlixReportDeliveryV2String(body.appArea, "ai_generated_content_report"),
-    userEmail: korlixReportDeliveryV2String(
-      body.userEmail || body.email || req.headers["x-korlix-user-email"],
-      "",
-    ),
-    userId: korlixReportDeliveryV2String(body.userId || body.user_id, ""),
-    deviceId: korlixReportDeliveryV2String(
-      body.deviceId || body.device_id || req.headers["x-korlix-device-id"],
-      "",
-    ),
-    deviceLabel: korlixReportDeliveryV2String(
-      body.deviceLabel || body.device_label || req.headers["x-korlix-device-label"],
-      "",
-    ),
-    createdAt: new Date().toISOString(),
-    ip: korlixReportDeliveryV2ClientIp(req),
-    userAgent: korlixReportDeliveryV2String(req.headers["user-agent"], ""),
-    raw: body,
-  };
-}
-
-function korlixReportDeliveryV2Text(report) {
-  const lines = [
-    "KORLIX AI USER REPORT",
-    "=====================",
-    "",
-    `Report ID: ${report.id}`,
-    `Created At: ${report.createdAt}`,
-    `Reason: ${report.reason}`,
-    `Content Type: ${report.contentType}`,
-    `App Area: ${report.appArea}`,
-    `App Version: ${report.appVersion}`,
-    `Platform: ${report.platform}`,
-    `Language: ${report.language}`,
-    `User Email: ${report.userEmail}`,
-    `User ID: ${report.userId}`,
-    `Device ID: ${report.deviceId}`,
-    `Device Label: ${report.deviceLabel}`,
-    `IP: ${report.ip}`,
-    `User Agent: ${report.userAgent}`,
-    "",
-    "USER DETAILS:",
-    report.details || "[No details provided]",
-    "",
-    "PROMPT:",
-    report.prompt || "[No prompt provided]",
-    "",
-    "OUTPUT SUMMARY:",
-    report.outputSummary || "[No output summary provided]",
-    "",
-    "CONTENT REFERENCES:",
-    `Content ID: ${report.contentId}`,
-    `Image URL: ${report.imageUrl}`,
-    `Video ID: ${report.videoId}`,
-    `Video URL: ${report.videoUrl}`,
-    "",
-    "RAW PAYLOAD:",
-    JSON.stringify(report.raw || {}, null, 2),
-  ];
-
-  return lines.join("\n");
-}
-
-function korlixReportDeliveryV2Html(report) {
-  const escape = (value) =>
-    korlixReportDeliveryV2String(value)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-
-  return `
-    <h2>KORLIX AI User Report</h2>
-    <p><strong>Report ID:</strong> ${escape(report.id)}</p>
-    <p><strong>Created At:</strong> ${escape(report.createdAt)}</p>
-    <p><strong>Reason:</strong> ${escape(report.reason)}</p>
-    <p><strong>Content Type:</strong> ${escape(report.contentType)}</p>
-    <p><strong>App Area:</strong> ${escape(report.appArea)}</p>
-    <p><strong>App Version:</strong> ${escape(report.appVersion)}</p>
-    <p><strong>Platform:</strong> ${escape(report.platform)}</p>
-    <p><strong>User Email:</strong> ${escape(report.userEmail)}</p>
-    <h3>User Details</h3>
-    <pre>${escape(report.details || "[No details provided]")}</pre>
-    <h3>Prompt</h3>
-    <pre>${escape(report.prompt || "[No prompt provided]")}</pre>
-    <h3>Output Summary</h3>
-    <pre>${escape(report.outputSummary || "[No output summary provided]")}</pre>
-    <h3>References</h3>
-    <pre>${escape(
-      [
-        `Content ID: ${report.contentId}`,
-        `Image URL: ${report.imageUrl}`,
-        `Video ID: ${report.videoId}`,
-        `Video URL: ${report.videoUrl}`,
-      ].join("\n"),
-    )}</pre>
-    <h3>Raw Payload</h3>
-    <pre>${escape(JSON.stringify(report.raw || {}, null, 2))}</pre>
-  `;
-}
-
-async function korlixReportDeliveryV2Persist(report) {
-  const defaultPath = `${process.cwd()}/logs/korlix-ai-output-reports.jsonl`;
-  const targetPath = process.env.KORLIX_REPORTS_JSONL_PATH || defaultPath;
-
-  try {
-    const fs = await import("node:fs/promises");
-    const path = await import("node:path");
-    await fs.mkdir(path.dirname(targetPath), { recursive: true });
-    await fs.appendFile(targetPath, JSON.stringify(report) + "\n", "utf8");
-
-    return {
-      saved: true,
-      path: targetPath,
-    };
-  } catch (error) {
-    console.error("[KORLIX_REPORT_DELIVERY_V2_PERSIST_ERROR]", error);
-
-    return {
-      saved: false,
-      path: targetPath,
-      error: error && error.message ? error.message : String(error),
-    };
-  }
-}
-
-async function korlixReportDeliveryV2SendEmail(report) {
-  const resendKey = process.env.RESEND_API_KEY || "";
-
-  if (!resendKey) {
-    return {
-      delivered: false,
-      reason: "RESEND_API_KEY is not configured",
-      supportEmail: KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL,
-    };
-  }
-
-  if (!KORLIX_REPORT_DELIVERY_V2_FROM_EMAIL) {
-    return {
-      delivered: false,
-      reason:
-        "KORLIX_SUPPORT_FROM_EMAIL is not configured. Use a verified sender in Resend.",
-      supportEmail: KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL,
-    };
-  }
-
-  const subjectReason = report.reason || "AI output report";
-  const subject = `[Korlix AI Report] ${subjectReason} — ${report.id}`;
-
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${resendKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: KORLIX_REPORT_DELIVERY_V2_FROM_EMAIL,
-        to: [KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL],
-        subject,
-        text: korlixReportDeliveryV2Text(report),
-        html: korlixReportDeliveryV2Html(report),
-      }),
-    });
-
-    const responseText = await response.text();
-    let responseJson = null;
-
-    try {
-      responseJson = responseText ? JSON.parse(responseText) : null;
-    } catch (_) {
-      responseJson = null;
-    }
-
-    if (!response.ok) {
-      return {
-        delivered: false,
-        status: response.status,
-        supportEmail: KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL,
-        response: responseJson || responseText,
-      };
-    }
-
-    return {
-      delivered: true,
-      status: response.status,
-      supportEmail: KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL,
-      response: responseJson || responseText,
-    };
-  } catch (error) {
-    console.error("[KORLIX_REPORT_DELIVERY_V2_EMAIL_ERROR]", error);
-
-    return {
-      delivered: false,
-      supportEmail: KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL,
-      error: error && error.message ? error.message : String(error),
-    };
-  }
-}
-
-function korlixReportDeliveryV2AdminAuthorized(req) {
-  if (!KORLIX_REPORT_DELIVERY_V2_ADMIN_TOKEN) {
-    return false;
-  }
-
-  const authorization = korlixReportDeliveryV2String(req.headers.authorization, "");
-  const bearer = authorization.startsWith("Bearer ")
-    ? authorization.slice("Bearer ".length).trim()
-    : "";
-
-  const headerToken = korlixReportDeliveryV2String(
-    req.headers["x-korlix-report-admin-token"],
-    "",
-  );
-
-  const queryToken = korlixReportDeliveryV2String(
-    req.query && req.query.token,
-    "",
-  );
-
-  return [bearer, headerToken, queryToken].includes(
-    KORLIX_REPORT_DELIVERY_V2_ADMIN_TOKEN,
-  );
-}
-
-app.post(
-  ["/api/report-output", "/api/reports/content", "/api/report"],
-  async (req, res) => {
-    try {
-      const report = korlixReportDeliveryV2Normalize(req);
-
-      korlixReportDeliveryV2Reports.unshift(report);
-
-      if (korlixReportDeliveryV2Reports.length > KORLIX_REPORT_DELIVERY_V2_MAX_MEMORY) {
-        korlixReportDeliveryV2Reports.splice(KORLIX_REPORT_DELIVERY_V2_MAX_MEMORY);
-      }
-
-      const text = korlixReportDeliveryV2Text(report);
-      console.log("[KORLIX_AI_OUTPUT_REPORT]", JSON.stringify(report));
-      console.log("KORLIX_SUPPORT_REPORTED_OUTPUT\n" + text);
-
-      const persistence = await korlixReportDeliveryV2Persist(report);
-      const supportNotification = await korlixReportDeliveryV2SendEmail(report);
-
-      return res.status(supportNotification.delivered ? 200 : 202).json({
-        ok: true,
-        reportId: report.id,
-        message: supportNotification.delivered
-          ? "AI output report received and emailed to support."
-          : "AI output report received. Support email not delivered; check backend configuration.",
-        supportEmail: KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL,
-        supportNotification,
-        persistence,
-      });
-    } catch (error) {
-      console.error("[KORLIX_AI_OUTPUT_REPORT_ERROR]", error);
-
-      return res.status(500).json({
-        ok: false,
-        error: "Could not submit AI output report.",
-        details: error && error.message ? error.message : String(error),
-      });
-    }
-  },
-);
-
-app.get("/api/report-output/health", (req, res) => {
-  res.json({
-    ok: true,
-    feature: "ai_output_reporting",
-    reportDeliveryVersion: "v2",
-    reportCount: korlixReportDeliveryV2Reports.length,
-    supportEmail: KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL,
-    supportEmailConfigured: Boolean(KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL),
-    supportFromEmailConfigured: Boolean(KORLIX_REPORT_DELIVERY_V2_FROM_EMAIL),
-    resendConfigured: Boolean(process.env.RESEND_API_KEY || ""),
-    adminTokenConfigured: Boolean(KORLIX_REPORT_DELIVERY_V2_ADMIN_TOKEN),
-    jsonlPath:
-      process.env.KORLIX_REPORTS_JSONL_PATH ||
-      `${process.cwd()}/logs/korlix-ai-output-reports.jsonl`,
-  });
-});
-
-app.get("/api/report-output/recent", (req, res) => {
-  if (!korlixReportDeliveryV2AdminAuthorized(req)) {
-    return res.status(403).json({
-      ok: false,
-      error:
-        "Report admin access is not configured or token is invalid. Set KORLIX_REPORT_ADMIN_TOKEN and pass it as a Bearer token.",
-    });
-  }
-
-  const limitRaw = Number(req.query && req.query.limit);
-  const limit = Number.isFinite(limitRaw)
-    ? Math.max(1, Math.min(100, Math.floor(limitRaw)))
-    : 25;
-
-  return res.json({
-    ok: true,
-    reportCount: korlixReportDeliveryV2Reports.length,
-    reports: korlixReportDeliveryV2Reports.slice(0, limit),
-  });
-});
-// KORLIX_REPORT_DELIVERY_V2_END
-
-
-
-
 b.updatedAt = new Date().toISOString();
 
   try {
@@ -5384,6 +4980,392 @@ app.post("/api/music/webhook", async (req, res) => {
 // KORLIX_MUSICAPI_PHASE1_END
 
 // KORLIX_API_NOT_FOUND_FALLBACK_FINAL_BEGIN
+
+// KORLIX_REPORT_DELIVERY_V2_BEGIN
+const korlixReportDeliveryV2Reports =
+  global.__korlixReportDeliveryV2Reports || [];
+global.__korlixReportDeliveryV2Reports = korlixReportDeliveryV2Reports;
+
+const KORLIX_REPORT_DELIVERY_V2_MAX_MEMORY =
+  Number(process.env.KORLIX_REPORT_MAX_MEMORY || 1000) || 1000;
+
+const KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL =
+  process.env.KORLIX_SUPPORT_REPORT_EMAIL ||
+  process.env.KORLIX_SUPPORT_EMAIL ||
+  "support@korlixdeveloper.com";
+
+const KORLIX_REPORT_DELIVERY_V2_FROM_EMAIL =
+  process.env.KORLIX_SUPPORT_FROM_EMAIL ||
+  process.env.KORLIX_REPORT_FROM_EMAIL ||
+  "";
+
+const KORLIX_REPORT_DELIVERY_V2_ADMIN_TOKEN =
+  process.env.KORLIX_REPORT_ADMIN_TOKEN ||
+  process.env.KORLIX_ADMIN_REPORT_TOKEN ||
+  "";
+
+function korlixReportDeliveryV2String(value, fallback = "") {
+  if (value === undefined || value === null) {
+    return fallback;
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch (_) {
+    return String(value);
+  }
+}
+
+function korlixReportDeliveryV2ClientIp(req) {
+  const forwarded = req.headers && req.headers["x-forwarded-for"];
+
+  if (Array.isArray(forwarded) && forwarded.length > 0) {
+    return String(forwarded[0]).split(",")[0].trim();
+  }
+
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    return forwarded.split(",")[0].trim();
+  }
+
+  return req.socket && req.socket.remoteAddress ? String(req.socket.remoteAddress) : "";
+}
+
+function korlixReportDeliveryV2Normalize(req) {
+  const body = req.body || {};
+  const reportId =
+    korlixReportDeliveryV2String(body.id).trim() ||
+    `korlix_report_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+  return {
+    id: reportId,
+    reportId,
+    contentType: korlixReportDeliveryV2String(body.contentType || body.type, "ai_output"),
+    reason: korlixReportDeliveryV2String(body.reason, "Other"),
+    details: korlixReportDeliveryV2String(body.details || body.message || body.notes, ""),
+    prompt: korlixReportDeliveryV2String(body.prompt, ""),
+    outputSummary: korlixReportDeliveryV2String(
+      body.outputSummary || body.output || body.summary,
+      "",
+    ),
+    contentId: korlixReportDeliveryV2String(body.contentId || body.generationId, ""),
+    imageUrl: korlixReportDeliveryV2String(body.imageUrl || body.image_url, ""),
+    videoId: korlixReportDeliveryV2String(body.videoId || body.video_id, ""),
+    videoUrl: korlixReportDeliveryV2String(body.videoUrl || body.video_url, ""),
+    language: korlixReportDeliveryV2String(body.language, ""),
+    appVersion: korlixReportDeliveryV2String(body.appVersion || body.version, ""),
+    platform: korlixReportDeliveryV2String(
+      body.platform || req.headers["x-korlix-platform"],
+      "",
+    ),
+    appArea: korlixReportDeliveryV2String(body.appArea, "ai_generated_content_report"),
+    userEmail: korlixReportDeliveryV2String(
+      body.userEmail || body.email || req.headers["x-korlix-user-email"],
+      "",
+    ),
+    userId: korlixReportDeliveryV2String(body.userId || body.user_id, ""),
+    deviceId: korlixReportDeliveryV2String(
+      body.deviceId || body.device_id || req.headers["x-korlix-device-id"],
+      "",
+    ),
+    deviceLabel: korlixReportDeliveryV2String(
+      body.deviceLabel || body.device_label || req.headers["x-korlix-device-label"],
+      "",
+    ),
+    createdAt: new Date().toISOString(),
+    ip: korlixReportDeliveryV2ClientIp(req),
+    userAgent: korlixReportDeliveryV2String(req.headers["user-agent"], ""),
+    raw: body,
+  };
+}
+
+function korlixReportDeliveryV2Text(report) {
+  const lines = [
+    "KORLIX AI USER REPORT",
+    "=====================",
+    "",
+    `Report ID: ${report.id}`,
+    `Created At: ${report.createdAt}`,
+    `Reason: ${report.reason}`,
+    `Content Type: ${report.contentType}`,
+    `App Area: ${report.appArea}`,
+    `App Version: ${report.appVersion}`,
+    `Platform: ${report.platform}`,
+    `Language: ${report.language}`,
+    `User Email: ${report.userEmail}`,
+    `User ID: ${report.userId}`,
+    `Device ID: ${report.deviceId}`,
+    `Device Label: ${report.deviceLabel}`,
+    `IP: ${report.ip}`,
+    `User Agent: ${report.userAgent}`,
+    "",
+    "USER DETAILS:",
+    report.details || "[No details provided]",
+    "",
+    "PROMPT:",
+    report.prompt || "[No prompt provided]",
+    "",
+    "OUTPUT SUMMARY:",
+    report.outputSummary || "[No output summary provided]",
+    "",
+    "CONTENT REFERENCES:",
+    `Content ID: ${report.contentId}`,
+    `Image URL: ${report.imageUrl}`,
+    `Video ID: ${report.videoId}`,
+    `Video URL: ${report.videoUrl}`,
+    "",
+    "RAW PAYLOAD:",
+    JSON.stringify(report.raw || {}, null, 2),
+  ];
+
+  return lines.join("\n");
+}
+
+function korlixReportDeliveryV2Html(report) {
+  const escape = (value) =>
+    korlixReportDeliveryV2String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+  return `
+    <h2>KORLIX AI User Report</h2>
+    <p><strong>Report ID:</strong> ${escape(report.id)}</p>
+    <p><strong>Created At:</strong> ${escape(report.createdAt)}</p>
+    <p><strong>Reason:</strong> ${escape(report.reason)}</p>
+    <p><strong>Content Type:</strong> ${escape(report.contentType)}</p>
+    <p><strong>App Area:</strong> ${escape(report.appArea)}</p>
+    <p><strong>App Version:</strong> ${escape(report.appVersion)}</p>
+    <p><strong>Platform:</strong> ${escape(report.platform)}</p>
+    <p><strong>User Email:</strong> ${escape(report.userEmail)}</p>
+    <h3>User Details</h3>
+    <pre>${escape(report.details || "[No details provided]")}</pre>
+    <h3>Prompt</h3>
+    <pre>${escape(report.prompt || "[No prompt provided]")}</pre>
+    <h3>Output Summary</h3>
+    <pre>${escape(report.outputSummary || "[No output summary provided]")}</pre>
+    <h3>References</h3>
+    <pre>${escape(
+      [
+        `Content ID: ${report.contentId}`,
+        `Image URL: ${report.imageUrl}`,
+        `Video ID: ${report.videoId}`,
+        `Video URL: ${report.videoUrl}`,
+      ].join("\n"),
+    )}</pre>
+    <h3>Raw Payload</h3>
+    <pre>${escape(JSON.stringify(report.raw || {}, null, 2))}</pre>
+  `;
+}
+
+async function korlixReportDeliveryV2Persist(report) {
+  const defaultPath = `${process.cwd()}/logs/korlix-ai-output-reports.jsonl`;
+  const targetPath = process.env.KORLIX_REPORTS_JSONL_PATH || defaultPath;
+
+  try {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    await fs.mkdir(path.dirname(targetPath), { recursive: true });
+    await fs.appendFile(targetPath, JSON.stringify(report) + "\n", "utf8");
+
+    return {
+      saved: true,
+      path: targetPath,
+    };
+  } catch (error) {
+    console.error("[KORLIX_REPORT_DELIVERY_V2_PERSIST_ERROR]", error);
+
+    return {
+      saved: false,
+      path: targetPath,
+      error: error && error.message ? error.message : String(error),
+    };
+  }
+}
+
+async function korlixReportDeliveryV2SendEmail(report) {
+  const resendKey = process.env.RESEND_API_KEY || "";
+
+  if (!resendKey) {
+    return {
+      delivered: false,
+      reason: "RESEND_API_KEY is not configured",
+      supportEmail: KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL,
+    };
+  }
+
+  if (!KORLIX_REPORT_DELIVERY_V2_FROM_EMAIL) {
+    return {
+      delivered: false,
+      reason:
+        "KORLIX_SUPPORT_FROM_EMAIL is not configured. Use a verified sender in Resend.",
+      supportEmail: KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL,
+    };
+  }
+
+  const subjectReason = report.reason || "AI output report";
+  const subject = `[Korlix AI Report] ${subjectReason} — ${report.id}`;
+
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resendKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: KORLIX_REPORT_DELIVERY_V2_FROM_EMAIL,
+        to: [KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL],
+        subject,
+        text: korlixReportDeliveryV2Text(report),
+        html: korlixReportDeliveryV2Html(report),
+      }),
+    });
+
+    const responseText = await response.text();
+    let responseJson = null;
+
+    try {
+      responseJson = responseText ? JSON.parse(responseText) : null;
+    } catch (_) {
+      responseJson = null;
+    }
+
+    if (!response.ok) {
+      return {
+        delivered: false,
+        status: response.status,
+        supportEmail: KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL,
+        response: responseJson || responseText,
+      };
+    }
+
+    return {
+      delivered: true,
+      status: response.status,
+      supportEmail: KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL,
+      response: responseJson || responseText,
+    };
+  } catch (error) {
+    console.error("[KORLIX_REPORT_DELIVERY_V2_EMAIL_ERROR]", error);
+
+    return {
+      delivered: false,
+      supportEmail: KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL,
+      error: error && error.message ? error.message : String(error),
+    };
+  }
+}
+
+function korlixReportDeliveryV2AdminAuthorized(req) {
+  if (!KORLIX_REPORT_DELIVERY_V2_ADMIN_TOKEN) {
+    return false;
+  }
+
+  const authorization = korlixReportDeliveryV2String(req.headers.authorization, "");
+  const bearer = authorization.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length).trim()
+    : "";
+
+  const headerToken = korlixReportDeliveryV2String(
+    req.headers["x-korlix-report-admin-token"],
+    "",
+  );
+
+  const queryToken = korlixReportDeliveryV2String(
+    req.query && req.query.token,
+    "",
+  );
+
+  return [bearer, headerToken, queryToken].includes(
+    KORLIX_REPORT_DELIVERY_V2_ADMIN_TOKEN,
+  );
+}
+
+app.post(
+  ["/api/report-output", "/api/reports/content", "/api/report"],
+  async (req, res) => {
+    try {
+      const report = korlixReportDeliveryV2Normalize(req);
+
+      korlixReportDeliveryV2Reports.unshift(report);
+
+      if (korlixReportDeliveryV2Reports.length > KORLIX_REPORT_DELIVERY_V2_MAX_MEMORY) {
+        korlixReportDeliveryV2Reports.splice(KORLIX_REPORT_DELIVERY_V2_MAX_MEMORY);
+      }
+
+      const text = korlixReportDeliveryV2Text(report);
+      console.log("[KORLIX_AI_OUTPUT_REPORT]", JSON.stringify(report));
+      console.log("KORLIX_SUPPORT_REPORTED_OUTPUT\n" + text);
+
+      const persistence = await korlixReportDeliveryV2Persist(report);
+      const supportNotification = await korlixReportDeliveryV2SendEmail(report);
+
+      return res.status(supportNotification.delivered ? 200 : 202).json({
+        ok: true,
+        reportId: report.id,
+        message: supportNotification.delivered
+          ? "AI output report received and emailed to support."
+          : "AI output report received. Support email not delivered; check backend configuration.",
+        supportEmail: KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL,
+        supportNotification,
+        persistence,
+      });
+    } catch (error) {
+      console.error("[KORLIX_AI_OUTPUT_REPORT_ERROR]", error);
+
+      return res.status(500).json({
+        ok: false,
+        error: "Could not submit AI output report.",
+        details: error && error.message ? error.message : String(error),
+      });
+    }
+  },
+);
+
+app.get("/api/report-output/health", (req, res) => {
+  res.json({
+    ok: true,
+    feature: "ai_output_reporting",
+    reportDeliveryVersion: "v2",
+    reportCount: korlixReportDeliveryV2Reports.length,
+    supportEmail: KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL,
+    supportEmailConfigured: Boolean(KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL),
+    supportFromEmailConfigured: Boolean(KORLIX_REPORT_DELIVERY_V2_FROM_EMAIL),
+    resendConfigured: Boolean(process.env.RESEND_API_KEY || ""),
+    adminTokenConfigured: Boolean(KORLIX_REPORT_DELIVERY_V2_ADMIN_TOKEN),
+    jsonlPath:
+      process.env.KORLIX_REPORTS_JSONL_PATH ||
+      `${process.cwd()}/logs/korlix-ai-output-reports.jsonl`,
+  });
+});
+
+app.get("/api/report-output/recent", (req, res) => {
+  if (!korlixReportDeliveryV2AdminAuthorized(req)) {
+    return res.status(403).json({
+      ok: false,
+      error:
+        "Report admin access is not configured or token is invalid. Set KORLIX_REPORT_ADMIN_TOKEN and pass it as a Bearer token.",
+    });
+  }
+
+  const limitRaw = Number(req.query && req.query.limit);
+  const limit = Number.isFinite(limitRaw)
+    ? Math.max(1, Math.min(100, Math.floor(limitRaw)))
+    : 25;
+
+  return res.json({
+    ok: true,
+    reportCount: korlixReportDeliveryV2Reports.length,
+    reports: korlixReportDeliveryV2Reports.slice(0, limit),
+  });
+});
+// KORLIX_REPORT_DELIVERY_V2_END
+
 app.use("/api", (req, res) => {
   return res.status(404).json({
     error: `API route not found: ${req.method} ${req.originalUrl}`,
