@@ -106,6 +106,8 @@ async function korlixSendSupportReport(payload) {
 
 
 
+
+
 // KORLIX_REPORT_DELIVERY_V2_BEGIN
 const korlixReportDeliveryV2Reports =
   global.__korlixReportDeliveryV2Reports || [];
@@ -490,6 +492,8 @@ app.get("/api/report-output/recent", (req, res) => {
   });
 });
 // KORLIX_REPORT_DELIVERY_V2_END
+
+
 
 
 
