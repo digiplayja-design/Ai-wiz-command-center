@@ -35,6 +35,10 @@ import 'image_to_video/image_to_video_screen.dart';
 const String kKorlixImaginePicturePrompt =
     'Describe the picture you want Korlix AI to create.';
 
+// Music Distribution is intentionally hidden until Korlix AI is live.
+// Flip this to true after launch to re-enable the existing dormant UI.
+const bool kKorlixMusicDistributionPrelaunchVisible = false;
+
 bool kSupabaseReady = false;
 String? kKorlixAccessToken;
 String? kKorlixRefreshToken;
@@ -10711,6 +10715,16 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
+  // KORLIX_MUSIC_DISTRIBUTION_PRELAUNCH_SLOT_BEGIN
+  List<Widget> _korlixMusicDistributionPrelaunchButtonSlots() {
+    if (!kKorlixMusicDistributionPrelaunchVisible) {
+      return const <Widget>[];
+    }
+
+    return <Widget>[Builder(builder: (_) => _buildMusicDistributionButton())];
+  }
+  // KORLIX_MUSIC_DISTRIBUTION_PRELAUNCH_SLOT_END
+
   Widget _buildMusicDistributionButton() {
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
 
@@ -10723,6 +10737,10 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   Future<void> _showMusicDistribution() async {
+    if (!kKorlixMusicDistributionPrelaunchVisible) {
+      return;
+    }
+
     if (!mounted) return;
 
     await showDialog<void>(
@@ -14539,7 +14557,7 @@ Make the entire output professional, well-structured using Markdown, and product
                     ),
                     _buildEnterpriseCopyboxButton(),
                     _buildMusicStudioButton(),
-                    _buildMusicDistributionButton(),
+                    ..._korlixMusicDistributionPrelaunchButtonSlots(),
                     _buildUtilityButton(),
                     if (_currentTier == 'basic')
                       _buildKorlixBelowInputBeveledButton(
