@@ -39,6 +39,9 @@ const String kKorlixImaginePicturePrompt =
 // Flip this to true after launch to re-enable the existing dormant UI.
 const bool kKorlixMusicDistributionPrelaunchVisible = false;
 
+bool get kKorlixHideTipDeveloperOnIos =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
 bool kSupabaseReady = false;
 String? kKorlixAccessToken;
 String? kKorlixRefreshToken;
@@ -8338,6 +8341,19 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   Widget _buildSafeUiQuickActionChip(QuickAction action) {
+    // KORLIX_BUILD112_FIX_CREDIT_LOCATOR_STYLE_BEGIN
+    if (_isCreditReportActionSafeUi(action)) {
+      final fixCreditSkin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
+      return _buildKorlixBelowInputBeveledButton(
+        icon: Icons.credit_score_rounded,
+        label: action.label,
+        onPressed: _loading ? null : () => _useQuickAction(action),
+        active: _fixCreditReportMode,
+        success: _fixCreditReportMode,
+        accentColor: fixCreditSkin.primary,
+      );
+    }
+    // KORLIX_BUILD112_FIX_CREDIT_LOCATOR_STYLE_END
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
     final isVideoAction = _isCreateVideoQuickAction(action);
     final isImproveAction = _isImprovePictureQuickAction(action);
@@ -14559,7 +14575,8 @@ Make the entire output professional, well-structured using Markdown, and product
                     _buildMusicStudioButton(),
                     ..._korlixMusicDistributionPrelaunchButtonSlots(),
                     _buildUtilityButton(),
-                    if (_currentTier == 'basic')
+                    if (_currentTier == 'basic' &&
+                        !kKorlixHideTipDeveloperOnIos)
                       _buildKorlixBelowInputBeveledButton(
                         icon: Icons.favorite_rounded,
                         label: 'Tip the developer',
