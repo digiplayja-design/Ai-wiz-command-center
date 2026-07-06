@@ -6706,6 +6706,52 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     }
   }
 
+  // KORLIX_POLICY_LEAK_VISIBLE_HELPERS_BEGIN
+  String _korlixVisibleUserText(String text) {
+    return korlixStripProductionQualityDirective(
+      text,
+    ).replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
+  }
+
+  GeneratedItem _korlixVisibleGeneratedItem(GeneratedItem item) {
+    final visibleCommand = _korlixVisibleUserText(item.command);
+    final titleSource = item.title.trim().isNotEmpty
+        ? item.title
+        : visibleCommand;
+
+    return GeneratedItem(
+      command: visibleCommand,
+      title: _makeResultTitle(titleSource),
+      content: item.content,
+      language: item.language,
+      allowPdf: item.allowPdf,
+      imageDataUrl: item.imageDataUrl,
+      imageUrl: item.imageUrl,
+    );
+  }
+
+  ChatMessage _korlixVisibleChatMessage(ChatMessage message) {
+    return ChatMessage(
+      userText: _korlixVisibleUserText(message.userText),
+      aiText: message.aiText,
+      isImage: message.isImage,
+      imageDataUrl: message.imageDataUrl,
+      imageUrl: message.imageUrl,
+      language: message.language,
+      allowPdf: message.allowPdf,
+      generatedItem: message.generatedItem == null
+          ? null
+          : _korlixVisibleGeneratedItem(message.generatedItem!),
+      createdAt: message.createdAt,
+      isCreditDispute: message.isCreditDispute,
+      equifaxDocxBase64: message.equifaxDocxBase64,
+      experianDocxBase64: message.experianDocxBase64,
+      transunionDocxBase64: message.transunionDocxBase64,
+      consumerName: message.consumerName,
+    );
+  }
+  // KORLIX_POLICY_LEAK_VISIBLE_HELPERS_END
+
   String _makeResultTitle(String text) {
     final clean = _cleanMarkdown(text.trim());
 
@@ -7649,7 +7695,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   }) {
     final bytes = _imageBytesFromDataUrl(item.imageDataUrl);
     final imageUrl = item.imageUrl;
-    final prompt = item.command.trim();
+    final prompt = _korlixVisibleUserText(item.command).trim();
     final outputSummary = item.content.trim().isEmpty
         ? 'Generated image'
         : _cleanDisplayText(item.content).trim();
@@ -13439,13 +13485,15 @@ Make the entire output professional, well-structured using Markdown, and product
 
   GeneratedItem _answerPanelGeneratedItemFromChatMessage(ChatMessage message) {
     if (message.generatedItem != null) {
-      return message.generatedItem!;
+      return _korlixVisibleGeneratedItem(message.generatedItem!);
     }
 
     return GeneratedItem(
-      command: message.userText,
+      command: _korlixVisibleUserText(message.userText),
       title: _makeResultTitle(
-        message.userText.trim().isNotEmpty ? message.userText : message.aiText,
+        _korlixVisibleUserText(message.userText).isNotEmpty
+            ? _korlixVisibleUserText(message.userText)
+            : message.aiText,
       ),
       content: message.aiText,
       language: message.language,
@@ -14055,6 +14103,8 @@ Make the entire output professional, well-structured using Markdown, and product
         : 'loose-${item.command.hashCode}-${item.content.hashCode}';
 
     Widget userBubble({required int? messageIndex, required String text}) {
+      final visibleText = _korlixVisibleUserText(text);
+
       return _buildAnswerTurnBubble(
         isUser: true,
         icon: Icons.person_rounded,
@@ -14067,7 +14117,7 @@ Make the entire output professional, well-structured using Markdown, and product
                 messageIndex: messageIndex,
                 deleteUser: true,
               ),
-        child: _buildAnswerText(text, compact: compact),
+        child: _buildAnswerText(visibleText, compact: compact),
       );
     }
 
@@ -14128,8 +14178,11 @@ Make the entire output professional, well-structured using Markdown, and product
                   text: item.content,
                   generatedItem: item.hasImageResult ? item : null,
                 ),
-              if (item.command.trim().isNotEmpty)
-                userBubble(messageIndex: null, text: item.command),
+              if (_korlixVisibleUserText(item.command).isNotEmpty)
+                userBubble(
+                  messageIndex: null,
+                  text: _korlixVisibleUserText(item.command),
+                ),
             ] else ...[
               for (final entry in recentEntries) ...[
                 if (entry.value.aiText.trim().isNotEmpty ||
@@ -14139,10 +14192,10 @@ Make the entire output professional, well-structured using Markdown, and product
                     text: entry.value.aiText,
                     generatedItem: entry.value.generatedItem,
                   ),
-                if (entry.value.userText.trim().isNotEmpty)
+                if (_korlixVisibleUserText(entry.value.userText).isNotEmpty)
                   userBubble(
                     messageIndex: entry.key,
-                    text: entry.value.userText,
+                    text: _korlixVisibleUserText(entry.value.userText),
                   ),
               ],
             ],
@@ -14545,8 +14598,8 @@ Make the entire output professional, well-structured using Markdown, and product
 
   Map<String, dynamic> _encodeGeneratedItem(GeneratedItem item) {
     return <String, dynamic>{
-      'command': item.command,
-      'title': item.title,
+      'command': _korlixVisibleUserText(item.command),
+      'title': _makeResultTitle(item.title),
       'content': item.content,
       'language': item.language,
       'allowPdf': item.allowPdf,
@@ -14557,8 +14610,8 @@ Make the entire output professional, well-structured using Markdown, and product
 
   GeneratedItem _decodeGeneratedItem(Map<String, dynamic> data) {
     return GeneratedItem(
-      command: (data['command'] ?? '').toString(),
-      title: (data['title'] ?? 'Korlix AI').toString(),
+      command: _korlixVisibleUserText((data['command'] ?? '').toString()),
+      title: _makeResultTitle((data['title'] ?? 'Korlix AI').toString()),
       content: (data['content'] ?? '').toString(),
       language: (data['language'] ?? 'en').toString(),
       allowPdf: data['allowPdf'] == true,
@@ -14569,7 +14622,7 @@ Make the entire output professional, well-structured using Markdown, and product
 
   Map<String, dynamic> _encodeChatMessage(ChatMessage message) {
     return <String, dynamic>{
-      'userText': message.userText,
+      'userText': _korlixVisibleUserText(message.userText),
       'aiText': message.aiText,
       'isImage': message.isImage,
       'imageDataUrl': message.imageDataUrl,
@@ -14606,7 +14659,7 @@ Make the entire output professional, well-structured using Markdown, and product
             (imageDataUrl != null && imageDataUrl.isNotEmpty) ||
             (imageUrl != null && imageUrl.isNotEmpty))) {
       generatedItem = GeneratedItem(
-        command: (data['userText'] ?? '').toString(),
+        command: _korlixVisibleUserText((data['userText'] ?? '').toString()),
         title: 'Image',
         content: (data['aiText'] ?? '').toString(),
         language: (data['language'] ?? 'en').toString(),
@@ -14621,7 +14674,7 @@ Make the entire output professional, well-structured using Markdown, and product
         DateTime.now();
 
     return ChatMessage(
-      userText: (data['userText'] ?? '').toString(),
+      userText: _korlixVisibleUserText((data['userText'] ?? '').toString()),
       aiText: (data['aiText'] ?? '').toString(),
       isImage: isImage,
       imageDataUrl: imageDataUrl,
@@ -14824,12 +14877,12 @@ Make the entire output professional, well-structured using Markdown, and product
 
   GeneratedItem _generatedItemFromChatMessage(ChatMessage message) {
     if (message.generatedItem != null) {
-      return message.generatedItem!;
+      return _korlixVisibleGeneratedItem(message.generatedItem!);
     }
 
     return GeneratedItem(
-      command: message.userText,
-      title: _makeResultTitle(message.userText),
+      command: _korlixVisibleUserText(message.userText),
+      title: _makeResultTitle(_korlixVisibleUserText(message.userText)),
       content: message.aiText,
       language: message.language,
       allowPdf: message.allowPdf,
@@ -14839,6 +14892,7 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   void _addChatMessage(ChatMessage message) {
+    message = _korlixVisibleChatMessage(message);
     _ensureActiveChatTopicForPrompt(message.userText);
 
     _chatMessages.add(message);
@@ -14929,7 +14983,7 @@ Make the entire output professional, well-structured using Markdown, and product
           : List<ChatMessage>.from(messages);
 
       for (final message in recentMessages) {
-        final userText = message.userText.trim();
+        final userText = _korlixVisibleUserText(message.userText);
         final aiText = _cleanDisplayText(message.aiText).trim();
 
         if (userText.isNotEmpty) {
@@ -15457,7 +15511,7 @@ Make the entire output professional, well-structured using Markdown, and product
     } else {
       for (var index = 0; index < topic.messages.length; index++) {
         final message = topic.messages[index];
-        final userText = message.userText.trim();
+        final userText = _korlixVisibleUserText(message.userText);
         final aiText = _cleanDisplayText(message.aiText).trim();
         final hasImage =
             message.generatedItem?.hasImageResult == true ||
@@ -16555,9 +16609,11 @@ Make the entire output professional, well-structured using Markdown, and product
       padding: const EdgeInsets.fromLTRB(22, 4, 22, 8),
       child: _buildReportAiOutputButton(
         contentType: isImage ? 'image' : 'text answer',
-        prompt: item.command,
+        prompt: _korlixVisibleUserText(item.command),
         outputSummary: _reportableOutputSummary(item),
-        contentId: item.title.trim().isEmpty ? item.command : item.title,
+        contentId: item.title.trim().isEmpty
+            ? _korlixVisibleUserText(item.command)
+            : _makeResultTitle(item.title),
       ),
     );
   }
@@ -16886,7 +16942,7 @@ Make the entire output professional, well-structured using Markdown, and product
                     border: null,
                   ),
                   child: Text(
-                    msg.userText,
+                    _korlixVisibleUserText(msg.userText),
                     style: const TextStyle(color: Colors.white, fontSize: 14),
                   ),
                 ),
@@ -17191,7 +17247,10 @@ Make the entire output professional, well-structured using Markdown, and product
             ],
           ),
           const SizedBox(height: 8),
-          Text(item.command, style: const TextStyle(color: Colors.white60)),
+          Text(
+            _korlixVisibleUserText(item.command),
+            style: const TextStyle(color: Colors.white60),
+          ),
           const SizedBox(height: 10),
           if (isImage) ...[
             _buildGeneratedImagePreview(item, height: 260),

@@ -63,3 +63,36 @@ String korlixApplyProductionQualityDirective(String prompt) {
 
   return '$kKorlixProductionQualityDirective\n\nUSER REQUEST:\n$trimmed';
 }
+
+// KORLIX_POLICY_LEAK_STRIPPER_BEGIN
+String korlixStripProductionQualityDirective(String input) {
+  var clean = input.replaceAll('\r\n', '\n').replaceAll('\r', '\n').trim();
+
+  if (clean.isEmpty) {
+    return clean;
+  }
+
+  clean = clean.replaceAll(
+    RegExp(
+      r'KORLIX AI PRODUCTION QUALITY POLICY:[\s\S]*?\bUSER REQUEST:\s*',
+      caseSensitive: false,
+    ),
+    '',
+  );
+
+  clean = clean.replaceAll(
+    RegExp(
+      r'''^\s*(KORLIX AI PRODUCTION QUALITY POLICY:?.*|Use the highest-quality.*|Preferred text/reasoning model:.*|Preferred streaming fallback model:.*|Preferred streaming fallback:.*|Preferred image model:.*|Reasoning effort:.*|Create production-ready.*|Never give shallow.*|For app creation,.*|For writing,.*|For documents,.*|For images,.*|For code,.*|USER REQUEST:\s*)\s*$''',
+      caseSensitive: false,
+      multiLine: true,
+    ),
+    '',
+  );
+
+  return clean
+      .replaceAll(RegExp(r'\n[ \t]+\n'), '\n\n')
+      .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+      .trim();
+}
+
+// KORLIX_POLICY_LEAK_STRIPPER_END
