@@ -4981,99 +4981,47 @@ app.post("/api/music/webhook", async (req, res) => {
 // KORLIX_API_NOT_FOUND_FALLBACK_FINAL_BEGIN
 
 // KORLIX_IMAGE_TO_VIDEO_ROUTE_BEGIN
-const korlixImageToVideoUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 30 * 1024 * 1024 },
-});
-
-function korlixImageToVideoStringAt(data, keys) {
-  if (!data || typeof data !== "object") return "";
-
-  for (const key of keys) {
-    const value = data[key];
-    if (typeof value === "string" && value.trim()) {
-      return value.trim();
-    }
-  }
-
-  for (const value of Object.values(data)) {
-    if (value && typeof value === "object") {
-      if (Array.isArray(value)) {
-        for (const item of value) {
-          const nested = korlixImageToVideoStringAt(item, keys);
-          if (nested) return nested;
-        }
-      } else {
-        const nested = korlixImageToVideoStringAt(value, keys);
-        if (nested) return nested;
-      }
-    }
-  }
-
-  return "";
+// KORLIX_IMAGE_TO_VIDEO_OPENAI_ADAPTER_V2
+function korlixI2vEnvStringV2(name, fallback = "") {
+  const value = process.env[name];
+  if (value === undefined || value === null) return fallback;
+  return String(value).trim();
 }
 
-function korlixNormalizeImageToVideoProviderJson(data) {
-  const videoUrl = korlixImageToVideoStringAt(data, [
-    "videoUrl",
-    "video_url",
-    "outputUrl",
-    "output_url",
-    "downloadUrl",
-    "download_url",
-    "fileUrl",
-    "file_url",
-    "url",
-  ]);
-
-  const jobId = korlixImageToVideoStringAt(data, [
-    "jobId",
-    "job_id",
-    "id",
-    "taskId",
-    "task_id",
-    "predictionId",
-    "prediction_id",
-  ]);
-
-  const status = korlixImageToVideoStringAt(data, [
-    "status",
-    "state",
-    "phase",
-  ]);
-
-  return {
-    ok: Boolean(videoUrl || jobId || status),
-    status: status || (videoUrl ? "succeeded" : jobId ? "processing" : "submitted"),
-    jobId: jobId || null,
-    videoUrl: videoUrl || null,
-    providerResponse: data,
-  };
+function korlixI2vProviderUrlV2() {
+  return (
+    korlixI2vEnvStringV2("KORLIX_IMAGE_TO_VIDEO_PROVIDER_URL") ||
+    korlixI2vEnvStringV2("KORLIX_IMAGE_TO_VIDEO_API_URL")
+  );
 }
 
-async function korlixParseProviderResponse(response) {
-  const text = await response.text();
+function korlixI2vApiKeyV2() {
+  return (
+    korlixI2vEnvStringV2("KORLIX_IMAGE_TO_VIDEO_API_KEY") ||
+    korlixI2vEnvStringV2("OPENAI_API_KEY") ||
+    korlixI2vEnvStringV2("OPENAI_API_TOKEN")
+  );
+}
 
+function korlixI2vIsOpenAiUrlV2(url) {
   try {
-    return JSON.parse(text);
+    const parsed = new URL(url);
+    return parsed.hostname === "api.openai.com" || parsed.hostname.endsWith(".openai.com");
   } catch (_) {
-    return { raw: text };
+    return false;
   }
 }
 
-function korlixImageToVideoProviderHeaders() {
-  const headers = { Accept: "application/json" };
-  const key =
-    process.env.KORLIX_IMAGE_TO_VIDEO_API_KEY ||
-    process.env.KORLIX_VIDEO_API_KEY ||
-    "";
+function korlixI2vAuthHeadersV2() {
+  const headers = {};
+  const apiKey = korlixI2vApiKeyV2();
 
-  if (key) {
-    headers.Authorization = `Bearer ${key}`;
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
   }
 
-  const customHeaderName = process.env.KORLIX_IMAGE_TO_VIDEO_API_HEADER || "";
-  const customHeaderValue = process.env.KORLIX_IMAGE_TO_VIDEO_API_HEADER_VALUE || "";
+  const customHeaderName = korlixI2vEnvStringV2("KORLIX_IMAGE_TO_VIDEO_API_HEADER");
+  const customHeaderValue = korlixI2vEnvStringV2("KORLIX_IMAGE_TO_VIDEO_API_HEADER_VALUE");
 
   if (customHeaderName && customHeaderValue) {
     headers[customHeaderName] = customHeaderValue;
@@ -5082,120 +5030,319 @@ function korlixImageToVideoProviderHeaders() {
   return headers;
 }
 
+function korlixI2vCleanStringV2(value, fallback = "") {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function korlixI2vOpenAiSecondsV2(value) {
+  const raw = String(value ?? "").trim();
+  const numeric = Number.parseFloat(raw.replace(/[^\d.]/g, ""));
+
+  if (!Number.isFinite(numeric)) return "4";
+  if (numeric <= 4) return "4";
+  if (numeric <= 8) return "8";
+  return "12";
+}
+
+function korlixI2vOpenAiSizeV2(aspectRatio, quality) {
+  const ratio = String(aspectRatio ?? "").toLowerCase();
+  const high = String(quality ?? "").toLowerCase().includes("high");
+
+  if (ratio.includes("9:16") || ratio.includes("portrait") || ratio.includes("vertical")) {
+    return high ? "1024x1792" : "720x1280";
+  }
+
+  if (ratio.includes("16:9") || ratio.includes("landscape") || ratio.includes("wide")) {
+    return high ? "1792x1024" : "1280x720";
+  }
+
+  return high ? "1792x1024" : "1280x720";
+}
+
+function korlixI2vPromptForOpenAiV2(body) {
+  const prompt = korlixI2vCleanStringV2(
+    body?.prompt,
+    "Create a cinematic image-to-video shot from the supplied reference image."
+  );
+
+  const extras = [];
+
+  const negativePrompt = korlixI2vCleanStringV2(body?.negativePrompt);
+  if (negativePrompt) {
+    extras.push(`Avoid: ${negativePrompt}`);
+  }
+
+  const motionStrength = korlixI2vCleanStringV2(body?.motionStrength);
+  if (motionStrength) {
+    extras.push(`Motion strength: ${motionStrength}.`);
+  }
+
+  const cameraMotion = korlixI2vCleanStringV2(body?.cameraMotion);
+  if (cameraMotion) {
+    extras.push(`Camera motion: ${cameraMotion}.`);
+  }
+
+  return [prompt, extras.join("\n")].filter(Boolean).join("\n\n");
+}
+
+function korlixI2vFileBufferV2(file) {
+  if (file?.buffer) return file.buffer;
+  if (file?.path) return require("fs").readFileSync(file.path);
+  return null;
+}
+
+async function korlixI2vProviderBodyV2(response) {
+  const raw = await response.text();
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch (_) {
+    return { raw };
+  }
+}
+
+function korlixI2vExtractJobIdV2(providerResponse) {
+  return (
+    providerResponse?.id ||
+    providerResponse?.jobId ||
+    providerResponse?.job_id ||
+    providerResponse?.videoId ||
+    providerResponse?.video_id ||
+    providerResponse?.data?.id ||
+    null
+  );
+}
+
+function korlixI2vPublicBaseV2(req) {
+  const configured = korlixI2vEnvStringV2("KORLIX_PUBLIC_BACKEND_URL");
+  if (configured) return configured.replace(/\/+$/, "");
+  return `${req.protocol}://${req.get("host")}`;
+}
+
 app.post(
   "/api/video/image-to-video",
-  korlixImageToVideoUpload.single("image"),
+  documentUpload.single("image"),
   async (req, res) => {
     try {
-      const providerUrl =
-        process.env.KORLIX_IMAGE_TO_VIDEO_PROVIDER_URL ||
-        process.env.KORLIX_IMAGE_TO_VIDEO_API_URL ||
-        "";
+      const providerUrl = korlixI2vProviderUrlV2();
+      const apiKey = korlixI2vApiKeyV2();
 
-      if (!req.file || !req.file.buffer || !req.file.buffer.length) {
-        return res.status(400).json({
-          error: "Upload an image first.",
-        });
-      }
-
-      if (!providerUrl) {
+      if (!providerUrl || !apiKey) {
         return res.status(501).json({
+          ok: false,
           error: "Image to Video provider is not configured.",
+          code: "provider_not_configured",
           details:
             "Set KORLIX_IMAGE_TO_VIDEO_PROVIDER_URL and KORLIX_IMAGE_TO_VIDEO_API_KEY on the backend service.",
-          status: "provider_not_configured",
         });
       }
 
-      const form = new FormData();
-      const mime = req.file.mimetype || "application/octet-stream";
+      if (!req.file) {
+        return res.status(400).json({
+          ok: false,
+          error: "Image file is required.",
+          code: "image_required",
+        });
+      }
+
+      const fileBuffer = korlixI2vFileBufferV2(req.file);
+      if (!fileBuffer) {
+        return res.status(400).json({
+          ok: false,
+          error: "Uploaded image could not be read.",
+          code: "image_unreadable",
+        });
+      }
+
+      const { Blob: KorlixNodeBlob } = require("buffer");
       const filename = req.file.originalname || "korlix-image-to-video.png";
+      const contentType = req.file.mimetype || "image/png";
+      const blob = new KorlixNodeBlob([fileBuffer], { type: contentType });
+      const form = new FormData();
 
-      form.append("image", new Blob([req.file.buffer], { type: mime }), filename);
-      form.append("prompt", req.body.prompt || "");
-      form.append("negative_prompt", req.body.negativePrompt || req.body.negative_prompt || "");
-      form.append("duration", req.body.duration || "5");
-      form.append("aspect_ratio", req.body.aspectRatio || req.body.aspect_ratio || "9:16");
-      form.append("motion_strength", req.body.motionStrength || req.body.motion_strength || "medium");
-      form.append("camera_motion", req.body.cameraMotion || req.body.camera_motion || "cinematic drift");
-      form.append("quality", req.body.quality || "high");
-      form.append("source", "korlix_image_to_video_v1");
+      if (korlixI2vIsOpenAiUrlV2(providerUrl)) {
+        form.append(
+          "prompt",
+          korlixI2vPromptForOpenAiV2(req.body || {})
+        );
+        form.append(
+          "model",
+          korlixI2vEnvStringV2("KORLIX_IMAGE_TO_VIDEO_MODEL", "sora-2")
+        );
+        form.append(
+          "seconds",
+          korlixI2vOpenAiSecondsV2(req.body?.duration || req.body?.seconds)
+        );
+        form.append(
+          "size",
+          korlixI2vOpenAiSizeV2(req.body?.aspectRatio, req.body?.quality)
+        );
 
-      const response = await fetch(providerUrl, {
+        // OpenAI expects the reference image field to be input_reference, not image.
+        form.append("input_reference", blob, filename);
+      } else {
+        // Generic provider fallback keeps older non-OpenAI integrations working.
+        form.append("image", blob, filename);
+        form.append("prompt", korlixI2vCleanStringV2(req.body?.prompt));
+        form.append("negativePrompt", korlixI2vCleanStringV2(req.body?.negativePrompt));
+        form.append("duration", korlixI2vCleanStringV2(req.body?.duration));
+        form.append("aspectRatio", korlixI2vCleanStringV2(req.body?.aspectRatio));
+        form.append("motionStrength", korlixI2vCleanStringV2(req.body?.motionStrength));
+        form.append("cameraMotion", korlixI2vCleanStringV2(req.body?.cameraMotion));
+        form.append("quality", korlixI2vCleanStringV2(req.body?.quality));
+        form.append("source", "korlix_image_to_video_v1");
+      }
+
+      const providerResponse = await fetch(providerUrl, {
         method: "POST",
-        headers: korlixImageToVideoProviderHeaders(),
+        headers: korlixI2vAuthHeadersV2(),
         body: form,
       });
 
-      const data = await korlixParseProviderResponse(response);
+      const providerBody = await korlixI2vProviderBodyV2(providerResponse);
 
-      if (!response.ok) {
-        return res.status(response.status || 502).json({
+      if (!providerResponse.ok) {
+        return res.status(providerResponse.status).json({
+          ok: false,
           error: "Image to Video provider request failed.",
-          status: response.status,
-          providerResponse: data,
+          status: providerResponse.status,
+          providerResponse: providerBody,
         });
       }
 
-      return res.json(korlixNormalizeImageToVideoProviderJson(data));
+      const jobId = korlixI2vExtractJobIdV2(providerBody);
+      const contentUrl =
+        jobId && korlixI2vIsOpenAiUrlV2(providerUrl)
+          ? `${korlixI2vPublicBaseV2(req)}/api/video/image-to-video/content/${encodeURIComponent(jobId)}`
+          : null;
+
+      return res.json({
+        ok: true,
+        jobId,
+        id: jobId,
+        status: providerBody?.status || "queued",
+        videoUrl: providerBody?.videoUrl || providerBody?.url || null,
+        contentUrl,
+        providerResponse: providerBody,
+      });
     } catch (error) {
       console.error("KORLIX_IMAGE_TO_VIDEO_ERROR", error);
-
       return res.status(500).json({
-        error: "Image to Video failed.",
-        details: error && error.message ? error.message : String(error),
+        ok: false,
+        error: "Image to Video provider request failed.",
+        details: error?.message || String(error),
       });
     }
-  },
+  }
 );
 
 app.get("/api/video/image-to-video/status/:jobId", async (req, res) => {
   try {
-    const jobId = req.params.jobId || "";
-    const statusTemplate =
-      process.env.KORLIX_IMAGE_TO_VIDEO_STATUS_URL ||
-      process.env.KORLIX_VIDEO_STATUS_URL ||
-      "";
+    const providerUrl = korlixI2vProviderUrlV2();
+    const statusBase =
+      korlixI2vEnvStringV2("KORLIX_IMAGE_TO_VIDEO_STATUS_URL") ||
+      providerUrl;
 
-    if (!jobId) {
-      return res.status(400).json({ error: "Missing job ID." });
-    }
-
-    if (!statusTemplate) {
-      return res.status(202).json({
-        status: "processing",
-        jobId,
-        message:
-          "No KORLIX_IMAGE_TO_VIDEO_STATUS_URL is configured. Provider may still be processing.",
+    if (!statusBase || !korlixI2vApiKeyV2()) {
+      return res.status(501).json({
+        ok: false,
+        error: "Image to Video status provider is not configured.",
+        code: "status_provider_not_configured",
       });
     }
 
-    const statusUrl = statusTemplate.includes("{jobId}")
-      ? statusTemplate.replaceAll("{jobId}", encodeURIComponent(jobId))
-      : `${statusTemplate.replace(/\/$/, "")}/${encodeURIComponent(jobId)}`;
+    const jobId = String(req.params.jobId || "").trim();
+    if (!jobId) {
+      return res.status(400).json({
+        ok: false,
+        error: "Image to Video job id is required.",
+        code: "job_id_required",
+      });
+    }
 
-    const response = await fetch(statusUrl, {
+    const statusUrl = `${statusBase.replace(/\/+$/, "")}/${encodeURIComponent(jobId)}`;
+    const providerResponse = await fetch(statusUrl, {
       method: "GET",
-      headers: korlixImageToVideoProviderHeaders(),
+      headers: korlixI2vAuthHeadersV2(),
     });
 
-    const data = await korlixParseProviderResponse(response);
+    const providerBody = await korlixI2vProviderBodyV2(providerResponse);
+    const contentUrl =
+      korlixI2vIsOpenAiUrlV2(statusBase)
+        ? `${korlixI2vPublicBaseV2(req)}/api/video/image-to-video/content/${encodeURIComponent(jobId)}`
+        : null;
 
-    if (!response.ok) {
-      return res.status(response.status || 502).json({
-        error: "Image to Video status request failed.",
-        status: response.status,
-        providerResponse: data,
+    return res.status(providerResponse.ok ? 200 : providerResponse.status).json({
+      ok: providerResponse.ok,
+      jobId,
+      id: jobId,
+      status: providerBody?.status || null,
+      videoUrl:
+        providerBody?.status === "completed"
+          ? contentUrl
+          : providerBody?.videoUrl || providerBody?.url || null,
+      contentUrl,
+      providerResponse: providerBody,
+    });
+  } catch (error) {
+    console.error("KORLIX_IMAGE_TO_VIDEO_STATUS_ERROR", error);
+    return res.status(500).json({
+      ok: false,
+      error: "Image to Video status request failed.",
+      details: error?.message || String(error),
+    });
+  }
+});
+
+app.get("/api/video/image-to-video/content/:jobId", async (req, res) => {
+  try {
+    const providerUrl = korlixI2vProviderUrlV2();
+
+    if (!providerUrl || !korlixI2vIsOpenAiUrlV2(providerUrl)) {
+      return res.status(501).json({
+        ok: false,
+        error: "Image to Video content proxy is only configured for OpenAI video jobs.",
+        code: "content_proxy_not_configured",
       });
     }
 
-    return res.json(korlixNormalizeImageToVideoProviderJson(data));
-  } catch (error) {
-    console.error("KORLIX_IMAGE_TO_VIDEO_STATUS_ERROR", error);
+    const jobId = String(req.params.jobId || "").trim();
+    if (!jobId) {
+      return res.status(400).json({
+        ok: false,
+        error: "Image to Video job id is required.",
+        code: "job_id_required",
+      });
+    }
 
+    const contentUrl = `${providerUrl.replace(/\/+$/, "")}/${encodeURIComponent(jobId)}/content`;
+    const providerResponse = await fetch(contentUrl, {
+      method: "GET",
+      headers: korlixI2vAuthHeadersV2(),
+    });
+
+    if (!providerResponse.ok) {
+      const providerBody = await korlixI2vProviderBodyV2(providerResponse);
+      return res.status(providerResponse.status).json({
+        ok: false,
+        error: "Image to Video content request failed.",
+        status: providerResponse.status,
+        providerResponse: providerBody,
+      });
+    }
+
+    const contentType = providerResponse.headers.get("content-type") || "video/mp4";
+    const arrayBuffer = await providerResponse.arrayBuffer();
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "private, max-age=300");
+    return res.send(Buffer.from(arrayBuffer));
+  } catch (error) {
+    console.error("KORLIX_IMAGE_TO_VIDEO_CONTENT_ERROR", error);
     return res.status(500).json({
-      error: "Image to Video status failed.",
-      details: error && error.message ? error.message : String(error),
+      ok: false,
+      error: "Image to Video content request failed.",
+      details: error?.message || String(error),
     });
   }
 });
