@@ -8323,7 +8323,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     setState(() {
       _creditDebtValidationRoundsVisible = true;
       _creditDebtValidationRound = null;
-      _fixCreditReportMode = false;
+      _fixCreditReportMode = true;
       _createVideoMode = false;
       _improvePictureMode = false;
       _imaginePictureMode = false;
@@ -8341,10 +8341,10 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   Widget _buildSafeUiQuickActionChip(QuickAction action) {
-    // KORLIX_BUILD112_FIX_CREDIT_LOCATOR_STYLE_BEGIN
+    // KORLIX_BUILD113_FIX_CREDIT_TOGGLE_BEGIN
     if (_isCreditReportActionSafeUi(action)) {
       final fixCreditSkin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
-      return _buildKorlixBelowInputBeveledButton(
+      final creditButton = _buildKorlixBelowInputBeveledButton(
         icon: Icons.credit_score_rounded,
         label: action.label,
         onPressed: _loading ? null : () => _useQuickAction(action),
@@ -8352,8 +8352,25 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         success: _fixCreditReportMode,
         accentColor: fixCreditSkin.primary,
       );
+
+      if (!_fixCreditReportMode || !_creditDebtValidationRoundsVisible) {
+        return creditButton;
+      }
+
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 720),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            creditButton,
+            const SizedBox(height: 8),
+            _buildCreditDebtValidationRoundsPanel(),
+          ],
+        ),
+      );
     }
-    // KORLIX_BUILD112_FIX_CREDIT_LOCATOR_STYLE_END
+    // KORLIX_BUILD113_FIX_CREDIT_TOGGLE_END
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
     final isVideoAction = _isCreateVideoQuickAction(action);
     final isImproveAction = _isImprovePictureQuickAction(action);
