@@ -5172,6 +5172,182 @@ async function korlixI2vOpenAiReferenceImageDataUrlV2(fileBuffer, contentType, s
   return dataUrl;
 }
 
+
+function korlixI2vIsKlingUrlV2(url) {
+  const forcedProvider = korlixI2vEnvStringV2("KORLIX_IMAGE_TO_VIDEO_PROVIDER").toLowerCase();
+  if (forcedProvider.includes("kling")) return true;
+
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.toLowerCase();
+
+    return (
+      host.includes("klingai.com") ||
+      host.includes("kling") ||
+      path.includes("image2video")
+    );
+  } catch (_) {
+    return false;
+  }
+}
+
+function korlixI2vKlingModelNameV2() {
+  return (
+    korlixI2vEnvStringV2("KORLIX_KLING_MODEL_NAME") ||
+    korlixI2vEnvStringV2("KORLIX_IMAGE_TO_VIDEO_MODEL") ||
+    "kling-v3"
+  );
+}
+
+function korlixI2vKlingModeV2(quality) {
+  const configured = korlixI2vEnvStringV2("KORLIX_KLING_MODE").toLowerCase();
+  if (["std", "pro", "4k"].includes(configured)) return configured;
+
+  const q = String(quality ?? "").toLowerCase();
+  return q.includes("high") ? "pro" : "std";
+}
+
+function korlixI2vKlingSoundV2() {
+  const configured = korlixI2vEnvStringV2("KORLIX_KLING_SOUND", "off").toLowerCase();
+  return configured === "on" ? "on" : "off";
+}
+
+function korlixI2vKlingAspectRatioV2(aspectRatio) {
+  const ratio = String(aspectRatio ?? "").toLowerCase();
+
+  if (ratio.includes("9:16") || ratio.includes("portrait") || ratio.includes("vertical")) {
+    return "9:16";
+  }
+
+  if (ratio.includes("1:1") || ratio.includes("square")) {
+    return "1:1";
+  }
+
+  return "16:9";
+}
+
+function korlixI2vKlingDurationV2(value) {
+  const raw = String(value ?? "").trim();
+  const parsed = Number.parseInt(raw.replace(/[^\d]/g, ""), 10);
+
+  if (!Number.isFinite(parsed)) return "5";
+  if (parsed < 3) return "3";
+  if (parsed > 15) return "15";
+
+  return String(parsed);
+}
+
+function korlixI2vKlingPromptV2(body) {
+  const prompt = korlixI2vCleanStringV2(
+    body?.prompt,
+    "Animate this image into a cinematic short video with natural motion, smooth camera movement, and realistic lighting."
+  );
+
+  const extras = [];
+
+  const motionStrength = korlixI2vCleanStringV2(body?.motionStrength);
+  if (motionStrength) {
+    extras.push(`Motion strength: ${motionStrength}.`);
+  }
+
+  const cameraMotion = korlixI2vCleanStringV2(body?.cameraMotion);
+  if (cameraMotion && cameraMotion.toLowerCase() !== "none") {
+    extras.push(`Camera motion: ${cameraMotion}.`);
+  }
+
+  return [prompt, extras.join("\n")].filter(Boolean).join("\n\n");
+}
+
+async function korlixI2vKlingImageBase64V2(fileBuffer) {
+  let outputBuffer = Buffer.from(fileBuffer);
+
+  try {
+    const sharpModule = await import("sharp");
+    const sharp = sharpModule.default || sharpModule;
+
+    outputBuffer = await sharp(Buffer.from(fileBuffer), { failOn: "none" })
+      .rotate()
+      .resize({
+        width: 1920,
+        height: 1920,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: 92 })
+      .toBuffer();
+  } catch (error) {
+    console.warn(
+      "KORLIX_KLING_IMAGE_RESIZE_FALLBACK",
+      error?.message || String(error)
+    );
+  }
+
+  return Buffer.from(outputBuffer).toString("base64");
+}
+
+function korlixI2vKlingJobIdV2(providerBody) {
+  return (
+    providerBody?.data?.task_id ||
+    providerBody?.task_id ||
+    providerBody?.id ||
+    providerBody?.jobId ||
+    providerBody?.job_id ||
+    null
+  );
+}
+
+function korlixI2vKlingStatusV2(providerBody) {
+  const raw = String(
+    providerBody?.data?.task_status ||
+      providerBody?.task_status ||
+      providerBody?.status ||
+      ""
+  ).toLowerCase();
+
+  if (["succeed", "success", "completed", "complete"].includes(raw)) {
+    return "completed";
+  }
+
+  if (["failed", "fail", "error"].includes(raw)) {
+    return "failed";
+  }
+
+  if (["submitted", "queued", "created", "pending"].includes(raw)) {
+    return "queued";
+  }
+
+  if (["processing", "running", "in_progress"].includes(raw)) {
+    return "in_progress";
+  }
+
+  return raw || null;
+}
+
+function korlixI2vKlingVideoUrlV2(providerBody) {
+  const videos = providerBody?.data?.task_result?.videos;
+
+  if (Array.isArray(videos) && videos.length > 0) {
+    return (
+      videos[0]?.url ||
+      videos[0]?.video_url ||
+      videos[0]?.content_url ||
+      null
+    );
+  }
+
+  return (
+    providerBody?.data?.task_result?.url ||
+    providerBody?.data?.task_result?.video_url ||
+    providerBody?.data?.video_url ||
+    providerBody?.data?.url ||
+    providerBody?.videoUrl ||
+    providerBody?.video_url ||
+    providerBody?.url ||
+    null
+  );
+}
+
 app.post(
   "/api/video/image-to-video",
   documentUpload.single("image"),
@@ -5284,6 +5460,66 @@ app.post(
           contentUrl,
           providerResponse: providerBody,
         });
+      } else if (korlixI2vIsKlingUrlV2(providerUrl)) {
+        const klingImageBase64 = await korlixI2vKlingImageBase64V2(fileBuffer);
+
+        const klingRequestBody = {
+          model_name: korlixI2vKlingModelNameV2(),
+          image: klingImageBase64,
+          prompt: korlixI2vKlingPromptV2(req.body || {}),
+          negative_prompt: korlixI2vCleanStringV2(
+            req.body?.negativePrompt,
+            "warped face, flicker, extra limbs, distorted hands, blurry, low quality"
+          ),
+          duration: korlixI2vKlingDurationV2(req.body?.duration || req.body?.seconds),
+          mode: korlixI2vKlingModeV2(req.body?.quality),
+          aspect_ratio: korlixI2vKlingAspectRatioV2(req.body?.aspectRatio),
+          sound: korlixI2vKlingSoundV2(),
+        };
+
+        const callbackUrl = korlixI2vEnvStringV2("KORLIX_KLING_CALLBACK_URL");
+        if (callbackUrl) {
+          klingRequestBody.callback_url = callbackUrl;
+        }
+
+        const externalTaskId = korlixI2vEnvStringV2("KORLIX_KLING_EXTERNAL_TASK_ID");
+        if (externalTaskId) {
+          klingRequestBody.external_task_id = externalTaskId;
+        }
+
+        const providerResponse = await fetch(providerUrl, {
+          method: "POST",
+          headers: {
+            ...korlixI2vAuthHeadersV2(),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(klingRequestBody),
+        });
+
+        const providerBody = await korlixI2vProviderBodyV2(providerResponse);
+
+        if (!providerResponse.ok) {
+          return res.status(providerResponse.status).json({
+            ok: false,
+            error: "Image to Video provider request failed.",
+            status: providerResponse.status,
+            providerResponse: providerBody,
+          });
+        }
+
+        const jobId = korlixI2vKlingJobIdV2(providerBody);
+        const status = korlixI2vKlingStatusV2(providerBody) || "queued";
+
+        return res.json({
+          ok: true,
+          provider: "kling",
+          jobId,
+          id: jobId,
+          status,
+          videoUrl: null,
+          contentUrl: null,
+          providerResponse: providerBody,
+        });
       } else {
         // Generic provider fallback keeps older non-OpenAI integrations working.
         form.append("image", blob, filename);
@@ -5371,20 +5607,28 @@ app.get("/api/video/image-to-video/status/:jobId", async (req, res) => {
     });
 
     const providerBody = await korlixI2vProviderBodyV2(providerResponse);
-    const contentUrl =
-      korlixI2vIsOpenAiUrlV2(statusBase)
+    const isOpenAiStatus = korlixI2vIsOpenAiUrlV2(statusBase);
+    const isKlingStatus = korlixI2vIsKlingUrlV2(statusBase);
+    const mappedStatus = isKlingStatus
+      ? korlixI2vKlingStatusV2(providerBody)
+      : providerBody?.status || null;
+    const klingVideoUrl = isKlingStatus ? korlixI2vKlingVideoUrlV2(providerBody) : null;
+    const openAiContentUrl =
+      isOpenAiStatus
         ? `${korlixI2vPublicBaseV2(req)}/api/video/image-to-video/content/${encodeURIComponent(jobId)}`
         : null;
+    const contentUrl = klingVideoUrl || openAiContentUrl || null;
 
     return res.status(providerResponse.ok ? 200 : providerResponse.status).json({
       ok: providerResponse.ok,
+      provider: isKlingStatus ? "kling" : isOpenAiStatus ? "openai" : "generic",
       jobId,
       id: jobId,
-      status: providerBody?.status || null,
+      status: mappedStatus,
       videoUrl:
-        providerBody?.status === "completed"
+        mappedStatus === "completed"
           ? contentUrl
-          : providerBody?.videoUrl || providerBody?.url || null,
+          : providerBody?.videoUrl || providerBody?.url || klingVideoUrl || null,
       contentUrl,
       providerResponse: providerBody,
     });
