@@ -4499,12 +4499,29 @@ function korlixI2vIsKlingUrlV2(url) {
   }
 }
 
+
 function korlixI2vKlingModelNameV2() {
-  return (
+  const configured =
     korlixI2vEnvStringV2("KORLIX_KLING_MODEL_NAME") ||
     korlixI2vEnvStringV2("KORLIX_IMAGE_TO_VIDEO_MODEL") ||
-    "kling-v3"
-  );
+    "kling-v3";
+
+  const model = String(configured || "").trim();
+
+  // Official Kling image2video endpoint accepts kling-v3.
+  // Some third-party wrappers use kling-v3-0, but the official endpoint rejects it.
+  if (model === "kling-v3-0" || model === "kling-v3.0") {
+    return "kling-v3";
+  }
+
+  return model || "kling-v3";
+}
+
+
+
+function korlixI2vKlingIsV3ModelV2(modelName) {
+  const model = String(modelName ?? "").toLowerCase().replace(/_/g, "-");
+  return model === "kling-v3" || model.includes("v3");
 }
 
 function korlixI2vKlingModeV2(quality) {
@@ -4515,10 +4532,23 @@ function korlixI2vKlingModeV2(quality) {
   return q.includes("high") ? "pro" : "std";
 }
 
-function korlixI2vKlingSoundV2() {
-  const configured = korlixI2vEnvStringV2("KORLIX_KLING_SOUND", "off").toLowerCase();
-  return configured === "on" ? "on" : "off";
+
+function korlixI2vKlingEnableAudioV2() {
+  const raw = (
+    korlixI2vEnvStringV2("KORLIX_KLING_ENABLE_AUDIO") ||
+    korlixI2vEnvStringV2("KORLIX_KLING_GENERATE_AUDIO")
+  ).toLowerCase();
+
+  // Omit audio control by default. This prevents invalid-parameter failures
+  // when the selected Kling route/model does not support explicit audio flags.
+  if (!raw) return null;
+
+  if (["1", "true", "yes", "on"].includes(raw)) return true;
+  if (["0", "false", "no", "off"].includes(raw)) return false;
+
+  return null;
 }
+
 
 function korlixI2vKlingAspectRatioV2(aspectRatio) {
   const ratio = String(aspectRatio ?? "").toLowerCase();
@@ -4534,16 +4564,23 @@ function korlixI2vKlingAspectRatioV2(aspectRatio) {
   return "16:9";
 }
 
-function korlixI2vKlingDurationV2(value) {
+
+function korlixI2vKlingDurationV2(value, modelName) {
   const raw = String(value ?? "").trim();
   const parsed = Number.parseInt(raw.replace(/[^\d]/g, ""), 10);
 
-  if (!Number.isFinite(parsed)) return "5";
-  if (parsed < 3) return "3";
-  if (parsed > 15) return "15";
+  if (korlixI2vKlingIsV3ModelV2(modelName)) {
+    if (!Number.isFinite(parsed)) return "5";
+    if (parsed < 3) return "3";
+    if (parsed > 15) return "15";
+    return String(parsed);
+  }
 
-  return String(parsed);
+  // Older Kling image-to-video models commonly accept 5 or 10 seconds.
+  if (!Number.isFinite(parsed)) return "5";
+  return parsed <= 5 ? "5" : "10";
 }
+
 
 function korlixI2vKlingPromptV2(body) {
   const prompt = korlixI2vCleanStringV2(
@@ -4768,21 +4805,42 @@ app.post(
           providerResponse: providerBody,
         });
       } else if (korlixI2vIsKlingUrlV2(providerUrl)) {
-        const klingImageBase64 = await korlixI2vKlingImageBase64V2(fileBuffer);
+        
+const klingImageBase64 = await korlixI2vKlingImageBase64V2(fileBuffer);
+        const klingModelName = korlixI2vKlingModelNameV2();
+        const klingIsV3 = korlixI2vKlingIsV3ModelV2(klingModelName);
 
+        // Keep official Kling v3 requests minimal:
+        // model_name, image, prompt, duration, and mode.
+        // Do not send aspect_ratio, negative_prompt, or sound to v3 unless Kling explicitly requires it.
         const klingRequestBody = {
-          model_name: korlixI2vKlingModelNameV2(),
+          model_name: klingModelName,
           image: klingImageBase64,
           prompt: korlixI2vKlingPromptV2(req.body || {}),
-          negative_prompt: korlixI2vCleanStringV2(
+          duration: korlixI2vKlingDurationV2(
+            req.body?.duration || req.body?.seconds,
+            klingModelName
+          ),
+          mode: korlixI2vKlingModeV2(req.body?.quality),
+        };
+
+        if (!klingIsV3) {
+          const klingNegativePrompt = korlixI2vCleanStringV2(
             req.body?.negativePrompt,
             "warped face, flicker, extra limbs, distorted hands, blurry, low quality"
-          ),
-          duration: korlixI2vKlingDurationV2(req.body?.duration || req.body?.seconds),
-          mode: korlixI2vKlingModeV2(req.body?.quality),
-          aspect_ratio: korlixI2vKlingAspectRatioV2(req.body?.aspectRatio),
-          sound: korlixI2vKlingSoundV2(),
-        };
+          );
+
+          if (klingNegativePrompt) {
+            klingRequestBody.negative_prompt = klingNegativePrompt;
+          }
+
+          klingRequestBody.aspect_ratio = korlixI2vKlingAspectRatioV2(req.body?.aspectRatio);
+        }
+
+        const klingEnableAudio = korlixI2vKlingEnableAudioV2();
+        if (typeof klingEnableAudio === "boolean") {
+          klingRequestBody.enable_audio = klingEnableAudio;
+        }
 
         const callbackUrl = korlixI2vEnvStringV2("KORLIX_KLING_CALLBACK_URL");
         if (callbackUrl) {
