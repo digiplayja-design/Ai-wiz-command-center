@@ -5385,6 +5385,198 @@ function korlixI2vKlingVideoUrlV2(providerBody) {
   );
 }
 
+
+// KORLIX_MONTHLY_VIDEO_LIMITS_V1_BEGIN
+function korlixI2vSupabaseClientV1() {
+  if (typeof supabaseAdmin !== "undefined" && supabaseAdmin) return supabaseAdmin;
+  if (typeof supabase !== "undefined" && supabase) return supabase;
+  return null;
+}
+
+function korlixI2vBearerTokenV1(req) {
+  const header = String(req.headers?.authorization || "");
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : "";
+}
+
+function korlixI2vNormalizeTierV1(value) {
+  const text = String(value || "").toLowerCase();
+
+  if (text.includes("ultra")) return "ultra_premium";
+  if (text.includes("premium") && text.includes("ultra")) return "ultra_premium";
+  if (text.includes("pro") || text.includes("professional")) return "pro";
+  if (text.includes("basic") || text.includes("free")) return "basic";
+
+  return "basic";
+}
+
+function korlixI2vTierFromObjectV1(value) {
+  if (!value || typeof value !== "object") return "";
+
+  const keys = [
+    "tier",
+    "plan",
+    "subscription_tier",
+    "subscriptionTier",
+    "account_tier",
+    "accountTier",
+    "membership_tier",
+    "membershipTier",
+    "role",
+    "product_tier",
+    "productTier",
+  ];
+
+  for (const key of keys) {
+    const raw = value[key];
+    if (raw !== undefined && raw !== null && String(raw).trim()) {
+      return String(raw).trim();
+    }
+  }
+
+  if (value.is_ultra_premium === true || value.ultra_premium === true) {
+    return "ultra_premium";
+  }
+
+  if (value.is_pro === true || value.pro === true) {
+    return "pro";
+  }
+
+  return "";
+}
+
+async function korlixI2vResolveUserV1(req) {
+  const client = korlixI2vSupabaseClientV1();
+  const token = korlixI2vBearerTokenV1(req);
+
+  if (!client || !token || !client.auth || typeof client.auth.getUser !== "function") {
+    return null;
+  }
+
+  try {
+    const result = await client.auth.getUser(token);
+    return result?.data?.user || null;
+  } catch (error) {
+    console.warn("KORLIX_I2V_AUTH_LOOKUP_FAILED", error?.message || String(error));
+    return null;
+  }
+}
+
+async function korlixI2vResolveTierV1(user) {
+  const client = korlixI2vSupabaseClientV1();
+
+  const metadataTier =
+    korlixI2vTierFromObjectV1(user?.app_metadata) ||
+    korlixI2vTierFromObjectV1(user?.user_metadata);
+
+  if (metadataTier) return korlixI2vNormalizeTierV1(metadataTier);
+
+  if (!client || !user?.id || typeof client.from !== "function") {
+    return "basic";
+  }
+
+  const tableChecks = [
+    ["profiles", "id"],
+    ["profiles", "user_id"],
+    ["user_profiles", "id"],
+    ["user_profiles", "user_id"],
+    ["crm_profiles", "id"],
+    ["crm_profiles", "user_id"],
+    ["subscriptions", "user_id"],
+  ];
+
+  for (const [tableName, columnName] of tableChecks) {
+    try {
+      const response = await client
+        .from(tableName)
+        .select("*")
+        .eq(columnName, user.id)
+        .maybeSingle();
+
+      const data = response?.data;
+      const tier = korlixI2vTierFromObjectV1(data);
+
+      if (tier) return korlixI2vNormalizeTierV1(tier);
+    } catch (_) {
+      // Ignore missing tables/columns and keep trying known profile locations.
+    }
+  }
+
+  return "basic";
+}
+
+async function korlixI2vClaimMonthlyVideoAccessV1(req) {
+  const client = korlixI2vSupabaseClientV1();
+
+  if (!client || typeof client.rpc !== "function") {
+    return {
+      ok: false,
+      statusCode: 503,
+      error: "Monthly video limits are not configured on the backend.",
+      code: "video_limits_backend_not_configured",
+    };
+  }
+
+  const user = await korlixI2vResolveUserV1(req);
+
+  if (!user?.id) {
+    return {
+      ok: false,
+      statusCode: 401,
+      error: "Please sign in to use Create a Video.",
+      code: "sign_in_required_for_video",
+    };
+  }
+
+  const tier = await korlixI2vResolveTierV1(user);
+
+  try {
+    const result = await client.rpc("korlix_claim_monthly_video_generation", {
+      p_user_id: user.id,
+      p_tier: tier,
+      p_job_kind: "image_to_video",
+    });
+
+    if (result?.error) {
+      return {
+        ok: false,
+        statusCode: 500,
+        error: "Could not verify your monthly Create a Video limit.",
+        code: "video_limit_check_failed",
+        details: result.error.message || String(result.error),
+      };
+    }
+
+    const data = result?.data || {};
+
+    if (data.ok === false) {
+      return {
+        ok: false,
+        statusCode: 429,
+        error:
+          data.message ||
+          "You have reached your monthly Create a Video limit for your plan.",
+        code: data.code || "monthly_video_limit_reached",
+        usage: data,
+      };
+    }
+
+    return {
+      ok: true,
+      usage: data,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      statusCode: 500,
+      error: "Could not verify your monthly Create a Video limit.",
+      code: "video_limit_check_failed",
+      details: error?.message || String(error),
+    };
+  }
+}
+// KORLIX_MONTHLY_VIDEO_LIMITS_V1_END
+
 app.post(
   "/api/video/image-to-video",
   documentUpload.single("image"),
