@@ -4430,6 +4430,55 @@ function korlixI2vPublicBaseV2(req) {
   return `${req.protocol}://${req.get("host")}`;
 }
 
+
+async function korlixI2vOpenAiReferenceImageDataUrlV2(fileBuffer, contentType, size) {
+  const match = String(size || "").match(/^(\d+)x(\d+)$/);
+  if (!match) {
+    const error = new Error(`Invalid OpenAI video size: ${size}`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const targetWidth = Number.parseInt(match[1], 10);
+  const targetHeight = Number.parseInt(match[2], 10);
+
+  let outputBuffer = Buffer.from(fileBuffer);
+  let outputType = contentType || "image/png";
+
+  try {
+    const sharpModule = await import("sharp");
+    const sharp = sharpModule.default || sharpModule;
+
+    outputBuffer = await sharp(Buffer.from(fileBuffer), { failOn: "none" })
+      .rotate()
+      .resize(targetWidth, targetHeight, {
+        fit: "cover",
+        position: "center",
+      })
+      .png()
+      .toBuffer();
+
+    outputType = "image/png";
+  } catch (error) {
+    console.warn(
+      "KORLIX_IMAGE_TO_VIDEO_RESIZE_FALLBACK",
+      error?.message || String(error)
+    );
+  }
+
+  const dataUrl = `data:${outputType};base64,${Buffer.from(outputBuffer).toString("base64")}`;
+
+  if (dataUrl.length > 20971520) {
+    const error = new Error(
+      "Image reference is too large for OpenAI video generation after encoding."
+    );
+    error.statusCode = 413;
+    throw error;
+  }
+
+  return dataUrl;
+}
+
 app.post(
   "/api/video/image-to-video",
   documentUpload.single("image"),
@@ -4490,7 +4539,58 @@ app.post(
         );
 
         // OpenAI expects the reference image field to be input_reference, not image.
-        form.append("input_reference", blob, filename);
+        const openAiVideoSize = korlixI2vOpenAiSizeV2(req.body?.aspectRatio, req.body?.quality);
+        const openAiImageDataUrl = await korlixI2vOpenAiReferenceImageDataUrlV2(
+          fileBuffer,
+          contentType,
+          openAiVideoSize
+        );
+
+        const openAiRequestBody = {
+          prompt: korlixI2vPromptForOpenAiV2(req.body || {}),
+          model: korlixI2vEnvStringV2("KORLIX_IMAGE_TO_VIDEO_MODEL", "sora-2"),
+          seconds: korlixI2vOpenAiSecondsV2(req.body?.duration || req.body?.seconds),
+          size: openAiVideoSize,
+          input_reference: {
+            image_url: openAiImageDataUrl,
+          },
+        };
+
+        const providerResponse = await fetch(providerUrl, {
+          method: "POST",
+          headers: {
+            ...korlixI2vAuthHeadersV2(),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(openAiRequestBody),
+        });
+
+        const providerBody = await korlixI2vProviderBodyV2(providerResponse);
+
+        if (!providerResponse.ok) {
+          return res.status(providerResponse.status).json({
+            ok: false,
+            error: "Image to Video provider request failed.",
+            status: providerResponse.status,
+            providerResponse: providerBody,
+          });
+        }
+
+        const jobId = korlixI2vExtractJobIdV2(providerBody);
+        const contentUrl =
+          jobId && korlixI2vIsOpenAiUrlV2(providerUrl)
+            ? `${korlixI2vPublicBaseV2(req)}/api/video/image-to-video/content/${encodeURIComponent(jobId)}`
+            : null;
+
+        return res.json({
+          ok: true,
+          jobId,
+          id: jobId,
+          status: providerBody?.status || "queued",
+          videoUrl: providerBody?.videoUrl || providerBody?.url || null,
+          contentUrl,
+          providerResponse: providerBody,
+        });
       } else {
         // Generic provider fallback keeps older non-OpenAI integrations working.
         form.append("image", blob, filename);

@@ -16,7 +16,8 @@
     "multer": "^2.1.1",
     "openai": "latest",
     "pdf-lib": "^1.17.1",
-    "pdf-parse": "^2.4.5"
+    "pdf-parse": "^2.4.5",
+    "sharp": "^0.35.3"
   },
   "start": "node server.js"
 }
