@@ -4393,9 +4393,12 @@ function korlixI2vPromptForOpenAiV2(body) {
   return [prompt, extras.join("\n")].filter(Boolean).join("\n\n");
 }
 
-function korlixI2vFileBufferV2(file) {
+async function korlixI2vFileBufferV2(file) {
   if (file?.buffer) return file.buffer;
-  if (file?.path) return require("fs").readFileSync(file.path);
+  if (file?.path) {
+    const fsModule = await import("node:fs");
+    return fsModule.readFileSync(file.path);
+  }
   return null;
 }
 
@@ -4453,7 +4456,7 @@ app.post(
         });
       }
 
-      const fileBuffer = korlixI2vFileBufferV2(req.file);
+      const fileBuffer = await korlixI2vFileBufferV2(req.file);
       if (!fileBuffer) {
         return res.status(400).json({
           ok: false,
@@ -4462,7 +4465,7 @@ app.post(
         });
       }
 
-      const { Blob: KorlixNodeBlob } = require("buffer");
+      const { Blob: KorlixNodeBlob } = await import("node:buffer");
       const filename = req.file.originalname || "korlix-image-to-video.png";
       const contentType = req.file.mimetype || "image/png";
       const blob = new KorlixNodeBlob([fileBuffer], { type: contentType });
