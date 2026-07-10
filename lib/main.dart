@@ -4680,6 +4680,157 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     return headers;
   }
 
+  // KORLIX_ENTERPRISE_COPYALL_REWRITE_SAFE_V1_BEGIN
+  String _enterpriseBoxCopyAllText({
+    required List<String> entries,
+    required String boxPrefix,
+  }) {
+    final pieces = <String>[];
+
+    for (var i = 0; i < entries.length; i++) {
+      final value = entries[i].trimRight();
+
+      if (value.trim().isEmpty) {
+        continue;
+      }
+
+      pieces.add('$boxPrefix ${i + 1}\n$value');
+    }
+
+    return pieces.join('\n\n---\n\n');
+  }
+
+  String? _enterpriseBoxFirstStringValue(dynamic value, {Set<dynamic>? seen}) {
+    final visited = seen ?? <dynamic>{};
+
+    if (value == null) {
+      return null;
+    }
+
+    if (value is String) {
+      final trimmed = value.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+
+    if (value is Map) {
+      if (visited.contains(value)) {
+        return null;
+      }
+
+      visited.add(value);
+
+      const keys = <String>[
+        'response',
+        'content',
+        'text',
+        'answer',
+        'message',
+        'output',
+        'result',
+      ];
+
+      for (final key in keys) {
+        if (value.containsKey(key)) {
+          final found = _enterpriseBoxFirstStringValue(
+            value[key],
+            seen: visited,
+          );
+
+          if (found != null && found.trim().isNotEmpty) {
+            return found.trim();
+          }
+        }
+      }
+
+      for (final entry in value.entries) {
+        final found = _enterpriseBoxFirstStringValue(
+          entry.value,
+          seen: visited,
+        );
+
+        if (found != null && found.trim().isNotEmpty) {
+          return found.trim();
+        }
+      }
+    }
+
+    if (value is List) {
+      if (visited.contains(value)) {
+        return null;
+      }
+
+      visited.add(value);
+
+      for (final item in value) {
+        final found = _enterpriseBoxFirstStringValue(item, seen: visited);
+
+        if (found != null && found.trim().isNotEmpty) {
+          return found.trim();
+        }
+      }
+    }
+
+    return null;
+  }
+
+  Future<String> _rewriteEnterpriseBoxWithAi({
+    required String boxLabel,
+    required String text,
+  }) async {
+    final original = text.trimRight();
+
+    if (original.trim().isEmpty) {
+      throw Exception('Add text to this box before using AI rewrite.');
+    }
+
+    final prompt = <String>[
+      'Rewrite the following Korlix Enterprise box text.',
+      '',
+      'Rules:',
+      '- Keep the original meaning and important details.',
+      '- Make it clearer, more professional, and easier to reuse.',
+      '- Do not add fake facts.',
+      '- Do not add markdown fences.',
+      '- Return only the rewritten text.',
+      '',
+      'Box label: $boxLabel',
+      '',
+      'Original text:',
+      original,
+    ].join('\n');
+
+    final response = await http
+        .post(
+          _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/generate'),
+          headers: _authHeaders(),
+          body: jsonEncode(<String, dynamic>{
+            'prompt': prompt,
+            'language': _selectedLanguage,
+            'source': 'enterprise_box_ai_rewrite',
+          }),
+        )
+        .timeout(const Duration(seconds: 90));
+
+    final data = _decodeKorlixJsonMap(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        data['error']?.toString() ??
+            data['details']?.toString() ??
+            'AI rewrite failed.',
+      );
+    }
+
+    final rewritten = _enterpriseBoxFirstStringValue(data);
+
+    if (rewritten == null || rewritten.trim().isEmpty) {
+      throw Exception('AI rewrite returned an empty response.');
+    }
+
+    return rewritten.trimRight();
+  }
+  // KORLIX_ENTERPRISE_COPYALL_REWRITE_SAFE_V1_END
+
   @override
   void initState() {
     super.initState();
@@ -9914,6 +10065,9 @@ Make the entire output professional, well-structured using Markdown, and product
         .map((entry) => TextEditingController(text: entry))
         .toList();
 
+    // KORLIX_COPYBOX_COPYALL_REWRITE_SAFE_V1
+    final rewritingCopyboxIndexes = <int>{};
+
     List<String> currentEntries() {
       return controllers
           .map((controller) => controller.text.trimRight())
@@ -9951,6 +10105,87 @@ Make the entire output professional, well-structured using Markdown, and product
           ),
         ),
       );
+    }
+
+    Future<void> copyAllEntries() async {
+      final value = _enterpriseBoxCopyAllText(
+        entries: currentEntries(),
+        boxPrefix: 'Copybox',
+      );
+
+      if (value.trim().isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No Copybox text to copy yet.')),
+          );
+        }
+        return;
+      }
+
+      await Clipboard.setData(ClipboardData(text: value));
+      await _saveEnterpriseCopyboxEntries(currentEntries());
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All Copybox boxes copied.')),
+      );
+    }
+
+    Future<void> rewriteEntry(int index, StateSetter setSheetState) async {
+      final original = controllers[index].text.trimRight();
+
+      if (original.trim().isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Add text to Copybox ${index + 1} before rewriting.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      setSheetState(() {
+        rewritingCopyboxIndexes.add(index);
+      });
+
+      try {
+        final rewritten = await _rewriteEnterpriseBoxWithAi(
+          boxLabel: 'Copybox ${index + 1}',
+          text: original,
+        );
+
+        controllers[index].text = rewritten;
+        controllers[index].selection = TextSelection.collapsed(
+          offset: controllers[index].text.length,
+        );
+
+        await _saveEnterpriseCopyboxEntries(currentEntries());
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Copybox ${index + 1} rewritten.')),
+          );
+        }
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(korlixFriendlyErrorMessage(error)),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      } finally {
+        setSheetState(() {
+          rewritingCopyboxIndexes.remove(index);
+        });
+      }
     }
 
     try {
@@ -10019,7 +10254,7 @@ Make the entire output professional, well-structured using Markdown, and product
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Paste or type reusable text into separate boxes. Save them, then copy any box instantly.',
+                            'Paste or type reusable text into separate boxes. Save them, copy every box at once, or use AI rewrite on any box.',
                             style: TextStyle(
                               color: skin.mutedText,
                               fontSize: 13,
@@ -10028,6 +10263,17 @@ Make the entire output professional, well-structured using Markdown, and product
                             ),
                           ),
                           const SizedBox(height: 14),
+
+                          // KORLIX_COPYBOX_COPY_ALL_BUTTON_SAFE_V1
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: OutlinedButton.icon(
+                              onPressed: copyAllEntries,
+                              icon: const Icon(Icons.copy_all_rounded),
+                              label: const Text('Copy All Boxes'),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
                           Row(
                             children: [
                               Expanded(
@@ -10099,6 +10345,34 @@ Make the entire output professional, well-structured using Markdown, and product
                                             ),
                                           ),
                                           const Spacer(),
+                                          // KORLIX_COPYBOX_AI_REWRITE_ICON_SAFE_V1
+                                          IconButton(
+                                            tooltip:
+                                                'AI rewrite Copybox ${index + 1}',
+                                            onPressed:
+                                                rewritingCopyboxIndexes
+                                                    .contains(index)
+                                                ? null
+                                                : () => rewriteEntry(
+                                                    index,
+                                                    setSheetState,
+                                                  ),
+                                            icon:
+                                                rewritingCopyboxIndexes
+                                                    .contains(index)
+                                                ? const SizedBox(
+                                                    width: 18,
+                                                    height: 18,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                        ),
+                                                  )
+                                                : const Icon(
+                                                    Icons.auto_fix_high_rounded,
+                                                  ),
+                                            color: skin.premium,
+                                          ),
                                           IconButton(
                                             tooltip: 'Copy Box ${index + 1}',
                                             onPressed: () => copyEntry(index),
@@ -10232,6 +10506,9 @@ Make the entire output professional, well-structured using Markdown, and product
         .map((entry) => TextEditingController(text: entry))
         .toList();
 
+    // KORLIX_VOICE_SCRIBE_COPYALL_REWRITE_SAFE_V1
+    final rewritingVoiceBoxIndexes = <int>{};
+
     final voice = speech_to_text.SpeechToText();
     int? listeningIndex;
     bool voiceReady = false;
@@ -10272,6 +10549,33 @@ Make the entire output professional, well-structured using Markdown, and product
       ).showSnackBar(SnackBar(content: Text('Voice Box ${index + 1} copied.')));
     }
 
+    Future<void> copyAllEntries() async {
+      final value = _enterpriseBoxCopyAllText(
+        entries: currentEntries(),
+        boxPrefix: 'Voice Box',
+      );
+
+      if (value.trim().isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No Voice Box text to copy yet.')),
+          );
+        }
+        return;
+      }
+
+      await Clipboard.setData(ClipboardData(text: value));
+      await _saveEnterpriseVoiceBoxes(currentEntries());
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('All Voice Boxes copied.')));
+    }
+
     Future<void> stopListening(StateSetter setSheetState) async {
       try {
         await voice.stop();
@@ -10284,6 +10588,68 @@ Make the entire output professional, well-structured using Markdown, and product
       await saveEntries();
 
       setSheetState(() {});
+    }
+
+    Future<void> rewriteEntry(int index, StateSetter setSheetState) async {
+      if (listeningIndex != null) {
+        await stopListening(setSheetState);
+      }
+
+      final original = controllers[index].text.trimRight();
+
+      if (original.trim().isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Add text to Voice Box ${index + 1} before rewriting.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      setSheetState(() {
+        rewritingVoiceBoxIndexes.add(index);
+        statusText = 'AI rewriting Voice Box ${index + 1}…';
+      });
+
+      try {
+        final rewritten = await _rewriteEnterpriseBoxWithAi(
+          boxLabel: 'Voice Box ${index + 1}',
+          text: original,
+        );
+
+        controllers[index].text = rewritten;
+        controllers[index].selection = TextSelection.collapsed(
+          offset: controllers[index].text.length,
+        );
+
+        statusText = 'Voice Box ${index + 1} rewritten.';
+        await _saveEnterpriseVoiceBoxes(currentEntries());
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Voice Box ${index + 1} rewritten.')),
+          );
+        }
+      } catch (error) {
+        statusText = 'AI rewrite failed. Try again.';
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(korlixFriendlyErrorMessage(error)),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      } finally {
+        setSheetState(() {
+          rewritingVoiceBoxIndexes.remove(index);
+        });
+      }
     }
 
     Future<void> startListening(int index, StateSetter setSheetState) async {
@@ -10438,12 +10804,23 @@ Make the entire output professional, well-structured using Markdown, and product
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Each Voice Box can be typed, pasted, dictated, edited, copied, and auto-saved.',
+                            'Each Voice Box can be typed, pasted, dictated, edited, copied, auto-saved, copied all at once, or polished with AI rewrite.',
                             style: TextStyle(
                               color: skin.mutedText,
                               fontSize: 13,
                               height: 1.35,
                               fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+
+                          // KORLIX_VOICE_SCRIBE_COPY_ALL_BUTTON_SAFE_V1
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: OutlinedButton.icon(
+                              onPressed: copyAllEntries,
+                              icon: const Icon(Icons.copy_all_rounded),
+                              label: const Text('Copy All Boxes'),
                             ),
                           ),
                           const SizedBox(height: 10),
@@ -10549,6 +10926,34 @@ Make the entire output professional, well-structured using Markdown, and product
                                             ),
                                           ),
                                           const Spacer(),
+                                          // KORLIX_VOICE_SCRIBE_AI_REWRITE_ICON_SAFE_V1
+                                          IconButton(
+                                            tooltip:
+                                                'AI rewrite Voice Box ${index + 1}',
+                                            onPressed:
+                                                rewritingVoiceBoxIndexes
+                                                    .contains(index)
+                                                ? null
+                                                : () => rewriteEntry(
+                                                    index,
+                                                    setSheetState,
+                                                  ),
+                                            icon:
+                                                rewritingVoiceBoxIndexes
+                                                    .contains(index)
+                                                ? const SizedBox(
+                                                    width: 18,
+                                                    height: 18,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                        ),
+                                                  )
+                                                : const Icon(
+                                                    Icons.auto_fix_high_rounded,
+                                                  ),
+                                            color: skin.premium,
+                                          ),
                                           IconButton(
                                             tooltip:
                                                 'Copy Voice Box ${index + 1}',
