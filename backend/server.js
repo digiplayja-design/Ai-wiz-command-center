@@ -4978,6 +4978,381 @@ app.post("/api/music/webhook", async (req, res) => {
 });
 // KORLIX_MUSICAPI_PHASE1_END
 
+
+// KORLIX_CUSTOM_ACCESS_ROUTES_V1_BEGIN
+function korlixCustomAccessStringV1(value, fallback = "") {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function korlixCustomAccessEmailNormV1(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function korlixCustomAccessSupabaseClientV1() {
+  if (typeof supabaseAdmin !== "undefined" && supabaseAdmin) return supabaseAdmin;
+  if (typeof supabase !== "undefined" && supabase) return supabase;
+  return null;
+}
+
+function korlixCustomAccessBearerTokenV1(req) {
+  const header = String(req.headers?.authorization || "");
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : "";
+}
+
+async function korlixCustomAccessResolveUserV1(req) {
+  const client = korlixCustomAccessSupabaseClientV1();
+  const token = korlixCustomAccessBearerTokenV1(req);
+
+  if (!client || !token || !client.auth || typeof client.auth.getUser !== "function") {
+    return null;
+  }
+
+  try {
+    const result = await client.auth.getUser(token);
+    return result?.data?.user || null;
+  } catch (error) {
+    console.warn("KORLIX_CUSTOM_ACCESS_AUTH_LOOKUP_FAILED", error?.message || String(error));
+    return null;
+  }
+}
+
+function korlixCustomAccessSupportEmailV1() {
+  return (
+    korlixCustomAccessStringV1(process.env.KORLIX_CUSTOM_ACCESS_SUPPORT_EMAIL) ||
+    korlixCustomAccessStringV1(process.env.KORLIX_SUPPORT_REPORT_EMAIL) ||
+    "support@korlixdeveloper.com"
+  );
+}
+
+function korlixCustomAccessFromEmailV1() {
+  return (
+    korlixCustomAccessStringV1(process.env.KORLIX_SUPPORT_FROM_EMAIL) ||
+    korlixCustomAccessStringV1(process.env.KORLIX_REPORT_FROM_EMAIL) ||
+    ""
+  );
+}
+
+function korlixCustomAccessAdminTokenV1() {
+  return (
+    korlixCustomAccessStringV1(process.env.KORLIX_CUSTOM_ACCESS_ADMIN_TOKEN) ||
+    korlixCustomAccessStringV1(process.env.KORLIX_REPORT_ADMIN_TOKEN)
+  );
+}
+
+async function korlixCustomAccessSendSupportEmailV1({ user, requestId, email }) {
+  const resendKey = korlixCustomAccessStringV1(process.env.RESEND_API_KEY);
+  const fromEmail = korlixCustomAccessFromEmailV1();
+  const toEmail = korlixCustomAccessSupportEmailV1();
+
+  if (!resendKey || !fromEmail || !toEmail) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: "resend_not_configured",
+    };
+  }
+
+  const subject = "Korlix Custom Access code request";
+  const userEmail = email || user?.email || "";
+  const bodyLines = [
+    "A Korlix user requested free 7-day Custom Access.",
+    "",
+    `Email: ${userEmail}`,
+    `User ID: ${user?.id || "unknown"}`,
+    `Request ID: ${requestId || "unknown"}`,
+    "",
+    "Included free features requested:",
+    "- Copybox",
+    "- Voice-scribe",
+    "",
+    "Create a code in Supabase with:",
+    `select public.korlix_create_custom_access_code_for_email('${String(userEmail).replace(/'/g, "''")}', 7, array['copybox','voice_scribe']);`,
+    "",
+    "Email the generated code to the user. The code is tied to their email address.",
+  ];
+
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resendKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: [toEmail],
+        subject,
+        text: bodyLines.join("\n"),
+      }),
+    });
+
+    const raw = await response.text();
+    let parsed = null;
+
+    try {
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch (_) {
+      parsed = { raw };
+    }
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      response: parsed,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error?.message || String(error),
+    };
+  }
+}
+
+async function korlixCustomAccessRequireUserV1(req, res) {
+  const user = await korlixCustomAccessResolveUserV1(req);
+
+  if (!user?.id) {
+    res.status(401).json({
+      ok: false,
+      error: "Please sign in to use Custom Access.",
+      code: "sign_in_required_for_custom_access",
+    });
+    return null;
+  }
+
+  return user;
+}
+
+app.get("/api/custom-access/me", async (req, res) => {
+  try {
+    const user = await korlixCustomAccessRequireUserV1(req, res);
+    if (!user) return;
+
+    const client = korlixCustomAccessSupabaseClientV1();
+    if (!client || typeof client.rpc !== "function") {
+      return res.status(503).json({
+        ok: false,
+        error: "Custom Access is not configured on the backend.",
+        code: "custom_access_backend_not_configured",
+      });
+    }
+
+    const result = await client.rpc("korlix_get_custom_access", {
+      p_user_id: user.id,
+      p_email: user.email || null,
+    });
+
+    if (result?.error) {
+      return res.status(500).json({
+        ok: false,
+        error: "Could not load Custom Access status.",
+        code: "custom_access_status_failed",
+        details: result.error.message || String(result.error),
+      });
+    }
+
+    return res.json(result.data || { ok: true, features: [], catalog: [] });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: "Custom Access status request failed.",
+      details: error?.message || String(error),
+    });
+  }
+});
+
+app.post("/api/custom-access/request-code", async (req, res) => {
+  try {
+    const user = await korlixCustomAccessRequireUserV1(req, res);
+    if (!user) return;
+
+    const client = korlixCustomAccessSupabaseClientV1();
+    if (!client || typeof client.from !== "function") {
+      return res.status(503).json({
+        ok: false,
+        error: "Custom Access is not configured on the backend.",
+        code: "custom_access_backend_not_configured",
+      });
+    }
+
+    const email = korlixCustomAccessEmailNormV1(user.email || req.body?.email);
+    if (!email) {
+      return res.status(400).json({
+        ok: false,
+        error: "Your account email is required to request a Custom Access code.",
+        code: "missing_email",
+      });
+    }
+
+    const insertBody = {
+      user_id: user.id,
+      email,
+      email_norm: email,
+      request_type: "basic_7_day",
+      requested_features: ["copybox", "voice_scribe"],
+      status: "requested",
+      notes: korlixCustomAccessStringV1(req.body?.notes),
+    };
+
+    const inserted = await client
+      .from("korlix_custom_access_requests")
+      .insert(insertBody)
+      .select("id")
+      .single();
+
+    if (inserted?.error) {
+      return res.status(500).json({
+        ok: false,
+        error: "Could not save your Custom Access request.",
+        code: "custom_access_request_failed",
+        details: inserted.error.message || String(inserted.error),
+      });
+    }
+
+    const emailResult = await korlixCustomAccessSendSupportEmailV1({
+      user,
+      email,
+      requestId: inserted?.data?.id,
+    });
+
+    return res.json({
+      ok: true,
+      code: "custom_access_request_received",
+      message:
+        "Request received. A Korlix access code will be sent to your account email within 24 hours.",
+      requestId: inserted?.data?.id || null,
+      supportEmail: korlixCustomAccessSupportEmailV1(),
+      supportEmailNotified: emailResult.ok === true,
+      emailDelivery: {
+        ok: emailResult.ok === true,
+        skipped: emailResult.skipped === true,
+        status: emailResult.status || null,
+        reason: emailResult.reason || emailResult.error || null,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: "Custom Access request failed.",
+      details: error?.message || String(error),
+    });
+  }
+});
+
+app.post("/api/custom-access/redeem-code", async (req, res) => {
+  try {
+    const user = await korlixCustomAccessRequireUserV1(req, res);
+    if (!user) return;
+
+    const client = korlixCustomAccessSupabaseClientV1();
+    if (!client || typeof client.rpc !== "function") {
+      return res.status(503).json({
+        ok: false,
+        error: "Custom Access is not configured on the backend.",
+        code: "custom_access_backend_not_configured",
+      });
+    }
+
+    const code = korlixCustomAccessStringV1(req.body?.code);
+    if (!code) {
+      return res.status(400).json({
+        ok: false,
+        error: "Enter your Custom Access code.",
+        code: "missing_custom_access_code",
+      });
+    }
+
+    const result = await client.rpc("korlix_redeem_custom_access_code", {
+      p_user_id: user.id,
+      p_email: user.email || "",
+      p_code: code,
+    });
+
+    if (result?.error) {
+      return res.status(500).json({
+        ok: false,
+        error: "Could not redeem Custom Access code.",
+        code: "custom_access_redeem_failed",
+        details: result.error.message || String(result.error),
+      });
+    }
+
+    const data = result?.data || {};
+
+    if (data.ok === false) {
+      return res.status(400).json(data);
+    }
+
+    return res.json(data);
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: "Custom Access code redemption failed.",
+      details: error?.message || String(error),
+    });
+  }
+});
+
+app.post("/api/custom-access/admin/create-code", async (req, res) => {
+  try {
+    const expected = korlixCustomAccessAdminTokenV1();
+    const supplied =
+      korlixCustomAccessStringV1(req.headers["x-korlix-admin-token"]) ||
+      korlixCustomAccessStringV1(req.headers["x-admin-token"]);
+
+    if (!expected || supplied !== expected) {
+      return res.status(403).json({
+        ok: false,
+        error: "Admin token is required.",
+        code: "custom_access_admin_forbidden",
+      });
+    }
+
+    const client = korlixCustomAccessSupabaseClientV1();
+    if (!client || typeof client.rpc !== "function") {
+      return res.status(503).json({
+        ok: false,
+        error: "Custom Access is not configured on the backend.",
+        code: "custom_access_backend_not_configured",
+      });
+    }
+
+    const email = korlixCustomAccessEmailNormV1(req.body?.email);
+    const accessDays = Number.parseInt(String(req.body?.accessDays || "7"), 10);
+    const features = Array.isArray(req.body?.features) && req.body.features.length > 0
+      ? req.body.features.map((item) => String(item).trim()).filter(Boolean)
+      : ["copybox", "voice_scribe"];
+
+    const result = await client.rpc("korlix_create_custom_access_code_for_email", {
+      p_email: email,
+      p_access_days: Number.isFinite(accessDays) ? accessDays : 7,
+      p_features: features,
+      p_expires_at: null,
+    });
+
+    if (result?.error) {
+      return res.status(500).json({
+        ok: false,
+        error: "Could not create Custom Access code.",
+        code: "custom_access_code_create_failed",
+        details: result.error.message || String(result.error),
+      });
+    }
+
+    return res.json(result.data);
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: "Custom Access admin code creation failed.",
+      details: error?.message || String(error),
+    });
+  }
+});
+// KORLIX_CUSTOM_ACCESS_ROUTES_V1_END
+
+
 // KORLIX_API_NOT_FOUND_FALLBACK_FINAL_BEGIN
 
 // KORLIX_IMAGE_TO_VIDEO_ROUTE_BEGIN
