@@ -4600,6 +4600,14 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   bool _utilityPanelOpen = false;
   bool _enterpriseCopyboxArmed = false;
   bool _enterpriseToolsOpen = false;
+
+  // KORLIX_CUSTOM_ACCESS_FRONTEND_V1_STATE_BEGIN
+  bool _customAccessLoading = false;
+  String? _customAccessMessage;
+  List<Map<String, dynamic>> _customAccessFeatures = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _customAccessCatalog = <Map<String, dynamic>>[];
+  // KORLIX_CUSTOM_ACCESS_FRONTEND_V1_STATE_END
+
   String? _selectedUtilityTool;
 
   // KORLIX_BUILD109_VISIBLE_UTILITY_TOOLS_BEGIN
@@ -10676,64 +10684,812 @@ Make the entire output professional, well-structured using Markdown, and product
     }
   }
 
-  Widget _buildEnterpriseCopyboxButton() {
+  // KORLIX_CUSTOM_ACCESS_FRONTEND_V1_BEGIN
+  List<Map<String, dynamic>> _customAccessMapList(dynamic value) {
+    if (value is! List) {
+      return <Map<String, dynamic>>[];
+    }
+
+    return value
+        .whereType<Map>()
+        .map(
+          (item) => item.map<String, dynamic>(
+            (key, itemValue) => MapEntry(key.toString(), itemValue),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  String _customAccessFeatureKey(Map<String, dynamic> item) {
+    return (item['featureKey'] ?? item['feature_key'] ?? '').toString().trim();
+  }
+
+  bool _customAccessItemBool(
+    Map<String, dynamic> item,
+    String camel,
+    String snake,
+  ) {
+    return item[camel] == true || item[snake] == true;
+  }
+
+  bool _customAccessFeatureExpired(Map<String, dynamic> item) {
+    final raw = (item['expiresAt'] ?? item['expires_at'] ?? '')
+        .toString()
+        .trim();
+
+    if (raw.isEmpty || raw.toLowerCase() == 'null') {
+      return false;
+    }
+
+    final expiresAt = DateTime.tryParse(raw);
+
+    if (expiresAt == null) {
+      return false;
+    }
+
+    return !expiresAt.toUtc().isAfter(DateTime.now().toUtc());
+  }
+
+  bool _customAccessHasFeature(String featureKey) {
+    final normalizedFeature = featureKey.trim().toLowerCase();
+
+    if (normalizedFeature.isEmpty) {
+      return false;
+    }
+
+    return _customAccessFeatures.any((item) {
+      final key = _customAccessFeatureKey(item).toLowerCase();
+      final status = (item['status'] ?? 'active').toString().toLowerCase();
+
+      return key == normalizedFeature &&
+          status == 'active' &&
+          !_customAccessFeatureExpired(item);
+    });
+  }
+
+  String _customAccessFeatureLabel(String featureKey) {
+    switch (featureKey.trim().toLowerCase()) {
+      case 'copybox':
+        return 'Copybox';
+      case 'voice_scribe':
+      case 'voice-scribe':
+      case 'voiceScribe':
+        return 'Voice-scribe';
+      case 'image_to_video':
+      case 'image-to-video':
+        return 'Image to Video';
+      case 'music_studio':
+      case 'music-studio':
+        return 'Music Studio';
+      case 'document_upload':
+      case 'document-upload':
+        return 'Advanced Document Upload';
+      default:
+        return featureKey.replaceAll('_', ' ').replaceAll('-', ' ').trim();
+    }
+  }
+
+  String _customAccessFeatureDescription(String featureKey) {
+    switch (featureKey.trim().toLowerCase()) {
+      case 'copybox':
+        return 'Reusable saved text blocks for business workflows.';
+      case 'voice_scribe':
+      case 'voice-scribe':
+      case 'voiceScribe':
+        return 'Voice transcription saved into reusable boxes.';
+      case 'image_to_video':
+      case 'image-to-video':
+        return 'Turn a still image into a generated video.';
+      case 'music_studio':
+      case 'music-studio':
+        return 'Music workflow and creation support.';
+      case 'document_upload':
+      case 'document-upload':
+        return 'Custom document workflow add-on.';
+      default:
+        return 'Custom Korlix add-on.';
+    }
+  }
+
+  IconData _customAccessFeatureIcon(String featureKey) {
+    switch (featureKey.trim().toLowerCase()) {
+      case 'copybox':
+        return Icons.content_copy_rounded;
+      case 'voice_scribe':
+      case 'voice-scribe':
+      case 'voiceScribe':
+        return Icons.mic_rounded;
+      case 'image_to_video':
+      case 'image-to-video':
+        return Icons.movie_creation_outlined;
+      case 'music_studio':
+      case 'music-studio':
+        return Icons.music_note_rounded;
+      case 'document_upload':
+      case 'document-upload':
+        return Icons.upload_file_rounded;
+      default:
+        return Icons.extension_rounded;
+    }
+  }
+
+  List<Map<String, dynamic>> _customAccessFallbackCatalog() {
+    return <Map<String, dynamic>>[
+      <String, dynamic>{
+        'featureKey': 'copybox',
+        'label': 'Copybox',
+        'description': 'Reusable saved text blocks for business workflows.',
+        'includedInTrial': true,
+        'requiresPayment': false,
+      },
+      <String, dynamic>{
+        'featureKey': 'voice_scribe',
+        'label': 'Voice-scribe',
+        'description': 'Voice transcription saved into reusable boxes.',
+        'includedInTrial': true,
+        'requiresPayment': false,
+      },
+      <String, dynamic>{
+        'featureKey': 'image_to_video',
+        'label': 'Image to Video',
+        'description': 'Turn a still image into a generated video.',
+        'includedInTrial': false,
+        'requiresPayment': true,
+      },
+      <String, dynamic>{
+        'featureKey': 'music_studio',
+        'label': 'Music Studio',
+        'description': 'Music workflow and creation support.',
+        'includedInTrial': false,
+        'requiresPayment': true,
+      },
+    ];
+  }
+
+  List<Map<String, dynamic>> get _customAccessCatalogOrFallback {
+    if (_customAccessCatalog.isNotEmpty) {
+      return _customAccessCatalog;
+    }
+
+    return _customAccessFallbackCatalog();
+  }
+
+  Future<void> _showKorlixNotice({
+    required String title,
+    required String message,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
 
-    Widget enterpriseMainButton() {
-      return _buildKorlixBelowInputBeveledButton(
-        icon: _enterpriseToolsOpen
-            ? Icons.keyboard_arrow_up_rounded
-            : Icons.business_center_outlined,
-        label: 'Enterprise',
-        onPressed: _loading
-            ? null
-            : () {
-                setState(() {
-                  _enterpriseToolsOpen = !_enterpriseToolsOpen;
-                  _enterpriseCopyboxArmed = _enterpriseToolsOpen;
-                });
-              },
-        active: _enterpriseToolsOpen,
-        success: _enterpriseToolsOpen,
-        accentColor: skin.premium,
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: skin.panelDeep,
+          title: Text(
+            title,
+            style: TextStyle(color: skin.text, fontWeight: FontWeight.w900),
+          ),
+          content: Text(
+            message,
+            style: TextStyle(
+              color: skin.mutedText,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> _customAccessPostJson(
+    String path, {
+    Map<String, dynamic>? body,
+  }) async {
+    final response = await http
+        .post(
+          _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl$path'),
+          headers: _authHeaders(),
+          body: jsonEncode(body ?? const <String, dynamic>{}),
+        )
+        .timeout(const Duration(seconds: 35));
+
+    final data = _decodeKorlixJsonMap(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        data['message']?.toString() ??
+            data['error']?.toString() ??
+            'Custom Access request failed.',
       );
     }
 
-    if (!_enterpriseToolsOpen) {
-      return enterpriseMainButton();
+    return data;
+  }
+
+  Future<void> _refreshCustomAccess({
+    StateSetter? sheetSetState,
+    bool showErrors = false,
+  }) async {
+    if (mounted) {
+      setState(() {
+        _customAccessLoading = true;
+        _customAccessMessage = null;
+      });
+    }
+    sheetSetState?.call(() {});
+
+    try {
+      final response = await http
+          .get(
+            _assertValidKorlixBackendUri(
+              '$kKorlixBackendBaseUrl/api/custom-access/me',
+            ),
+            headers: _authHeaders(),
+          )
+          .timeout(const Duration(seconds: 35));
+
+      final data = _decodeKorlixJsonMap(response);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(
+          data['message']?.toString() ??
+              data['error']?.toString() ??
+              'Could not load Custom Access.',
+        );
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _customAccessFeatures = _customAccessMapList(data['features']);
+        _customAccessCatalog = _customAccessMapList(data['catalog']);
+        _customAccessLoading = false;
+        _customAccessMessage = null;
+      });
+      sheetSetState?.call(() {});
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      final message = korlixFriendlyErrorMessage(error);
+
+      setState(() {
+        _customAccessLoading = false;
+        _customAccessMessage = message;
+      });
+      sheetSetState?.call(() {});
+
+      if (showErrors) {
+        await _showKorlixNotice(title: 'Custom Access', message: message);
+      }
+    }
+  }
+
+  Future<void> _requestCustomAccessCode(StateSetter sheetSetState) async {
+    if (mounted) {
+      setState(() {
+        _customAccessLoading = true;
+        _customAccessMessage = null;
+      });
+    }
+    sheetSetState(() {});
+
+    try {
+      final data = await _customAccessPostJson(
+        '/api/custom-access/request-code',
+      );
+
+      final message =
+          data['message']?.toString() ??
+          'Request received. A Korlix access code will be sent to your account email within 24 hours.';
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _customAccessLoading = false;
+        _customAccessMessage = message;
+      });
+      sheetSetState(() {});
+
+      await _showKorlixNotice(title: 'Request received', message: message);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      final message = korlixFriendlyErrorMessage(error);
+
+      setState(() {
+        _customAccessLoading = false;
+        _customAccessMessage = message;
+      });
+      sheetSetState(() {});
+
+      await _showKorlixNotice(
+        title: 'Custom Access request failed',
+        message: message,
+      );
+    }
+  }
+
+  Future<void> _promptAndRedeemCustomAccessCode(
+    StateSetter sheetSetState,
+  ) async {
+    final controller = TextEditingController();
+
+    final code = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF071B27),
+          title: const Text(
+            'Enter Custom Access Code',
+            style: TextStyle(color: Color(0xFFE4EBEE)),
+          ),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            textInputAction: TextInputAction.done,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(
+              labelText: 'Access code',
+              hintText: 'KX-AB12-CD34-EF56',
+            ),
+            onSubmitted: (value) =>
+                Navigator.of(dialogContext).pop(value.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(controller.text.trim()),
+              child: const Text('Redeem'),
+            ),
+          ],
+        );
+      },
+    );
+
+    controller.dispose();
+
+    if (code == null || code.trim().isEmpty) {
+      return;
     }
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        enterpriseMainButton(),
-        _buildKorlixBelowInputBeveledButton(
-          icon: Icons.copy_all_rounded,
-          label: 'Copybox',
-          onPressed: _loading
-              ? null
-              : () {
-                  unawaited(_openEnterpriseCopyboxSheet());
-                },
-          active: true,
-          success: true,
-          accentColor: skin.premium,
+    await _redeemCustomAccessCode(code.trim(), sheetSetState);
+  }
+
+  Future<void> _redeemCustomAccessCode(
+    String code,
+    StateSetter sheetSetState,
+  ) async {
+    if (mounted) {
+      setState(() {
+        _customAccessLoading = true;
+        _customAccessMessage = null;
+      });
+    }
+    sheetSetState(() {});
+
+    try {
+      final data = await _customAccessPostJson(
+        '/api/custom-access/redeem-code',
+        body: <String, dynamic>{'code': code},
+      );
+
+      final message = data['message']?.toString() ?? 'Custom Access unlocked.';
+
+      await _refreshCustomAccess(sheetSetState: sheetSetState);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _customAccessLoading = false;
+        _customAccessMessage = message;
+      });
+      sheetSetState(() {});
+
+      await _showKorlixNotice(
+        title: 'Custom Access unlocked',
+        message: message,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      final message = korlixFriendlyErrorMessage(error);
+
+      setState(() {
+        _customAccessLoading = false;
+        _customAccessMessage = message;
+      });
+      sheetSetState(() {});
+
+      await _showKorlixNotice(title: 'Code not accepted', message: message);
+    }
+  }
+
+  Future<void> _openCustomAccessFeature(String featureKey) async {
+    switch (featureKey.trim().toLowerCase()) {
+      case 'copybox':
+        await _openEnterpriseCopyboxSheet();
+        return;
+      case 'voice_scribe':
+      case 'voice-scribe':
+      case 'voicescribe':
+        await _openEnterpriseVoiceScribeSheet();
+        return;
+      case 'image_to_video':
+      case 'image-to-video':
+        await _openImageToVideoStudio();
+        return;
+      case 'music_studio':
+      case 'music-studio':
+        await _showMusicStudio();
+        return;
+      default:
+        await _showKorlixNotice(
+          title: 'Custom add-on active',
+          message:
+              '${_customAccessFeatureLabel(featureKey)} is active for your account.',
+        );
+    }
+  }
+
+  Widget _buildCustomAccessFeatureTile({
+    required BuildContext sheetContext,
+    required Map<String, dynamic> item,
+    required bool included,
+  }) {
+    final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
+    final featureKey = _customAccessFeatureKey(item);
+    final label = (item['label'] ?? _customAccessFeatureLabel(featureKey))
+        .toString();
+    final description =
+        (item['description'] ?? _customAccessFeatureDescription(featureKey))
+            .toString();
+    final requiresPayment = _customAccessItemBool(
+      item,
+      'requiresPayment',
+      'requires_payment',
+    );
+    final unlocked = _customAccessHasFeature(featureKey);
+
+    final statusLabel = unlocked
+        ? 'Active'
+        : included
+        ? 'Included with code'
+        : requiresPayment
+        ? 'Paid add-on'
+        : 'Available';
+
+    final statusColor = unlocked
+        ? const Color(0xFFB7FF00)
+        : included
+        ? skin.primary
+        : skin.premium;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: skin.panel.withValues(alpha: skin.isLight ? 0.92 : 0.72),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: statusColor.withValues(alpha: unlocked ? 0.70 : 0.38),
+          width: unlocked ? 1.6 : 1.1,
         ),
-        _buildKorlixBelowInputBeveledButton(
-          icon: Icons.mic_rounded,
-          label: 'Voice-scribe',
-          onPressed: _loading
-              ? null
-              : () {
-                  unawaited(_openEnterpriseVoiceScribeSheet());
-                },
-          active: true,
-          success: false,
-          accentColor: skin.secondary,
-        ),
-      ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(_customAccessFeatureIcon(featureKey), color: statusColor),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: skin.text,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14.5,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: TextStyle(
+                    color: skin.mutedText,
+                    fontSize: 12.5,
+                    height: 1.25,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  statusLabel,
+                  style: TextStyle(
+                    color: statusColor,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          FilledButton(
+            onPressed: unlocked
+                ? () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(_openCustomAccessFeature(featureKey));
+                  }
+                : null,
+            child: Text(unlocked ? 'Open' : 'Locked'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showCustomAccessSheet() async {
+    await _refreshCustomAccess();
+
+    if (!mounted) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF07111F),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
+            final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
+            final catalog = _customAccessCatalogOrFallback;
+            final included = catalog
+                .where(
+                  (item) => _customAccessItemBool(
+                    item,
+                    'includedInTrial',
+                    'included_in_trial',
+                  ),
+                )
+                .toList(growable: false);
+            final paidAddons = catalog
+                .where(
+                  (item) => !_customAccessItemBool(
+                    item,
+                    'includedInTrial',
+                    'included_in_trial',
+                  ),
+                )
+                .toList(growable: false);
+
+            final hasIncludedAccess =
+                _customAccessHasFeature('copybox') ||
+                _customAccessHasFeature('voice_scribe');
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(16, 14, 16, 16 + bottomInset),
+                child: DraggableScrollableSheet(
+                  expand: false,
+                  initialChildSize: 0.90,
+                  minChildSize: 0.56,
+                  maxChildSize: 0.96,
+                  builder: (context, scrollController) {
+                    return ListView(
+                      controller: scrollController,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 48,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.22),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Icon(
+                              hasIncludedAccess
+                                  ? Icons.verified_user_rounded
+                                  : Icons.business_center_rounded,
+                              color: hasIncludedAccess
+                                  ? const Color(0xFFB7FF00)
+                                  : skin.premium,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Custom Access',
+                                style: TextStyle(
+                                  color: skin.text,
+                                  fontSize: 23,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Close',
+                              onPressed: () => Navigator.of(sheetContext).pop(),
+                              icon: const Icon(Icons.close_rounded),
+                              color: skin.text,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Request a 7-day access code or enter a code sent by Korlix support. Codes unlock Copybox and Voice-scribe for your account email. Paid add-ons appear here and become openable only after payment/entitlement is active.',
+                          style: TextStyle(
+                            color: skin.mutedText,
+                            fontSize: 13,
+                            height: 1.35,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed: _customAccessLoading
+                                    ? null
+                                    : () => unawaited(
+                                        _requestCustomAccessCode(setSheetState),
+                                      ),
+                                icon: const Icon(Icons.mail_outline_rounded),
+                                label: const Text('Request a Code'),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _customAccessLoading
+                                    ? null
+                                    : () => unawaited(
+                                        _promptAndRedeemCustomAccessCode(
+                                          setSheetState,
+                                        ),
+                                      ),
+                                icon: const Icon(Icons.password_rounded),
+                                label: const Text('Enter a Code'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (_customAccessLoading) ...[
+                          const SizedBox(height: 12),
+                          const LinearProgressIndicator(),
+                        ],
+                        if (_customAccessMessage != null &&
+                            _customAccessMessage!.trim().isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: skin.panelDeep.withValues(alpha: 0.78),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: skin.primary.withValues(alpha: 0.34),
+                              ),
+                            ),
+                            child: Text(
+                              _customAccessMessage!,
+                              style: TextStyle(
+                                color: skin.text,
+                                fontSize: 12.5,
+                                height: 1.3,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 18),
+                        Text(
+                          'Included with free 7-day access',
+                          style: TextStyle(
+                            color: skin.text,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        for (final item in included)
+                          _buildCustomAccessFeatureTile(
+                            sheetContext: sheetContext,
+                            item: item,
+                            included: true,
+                          ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Paid add-ons',
+                          style: TextStyle(
+                            color: skin.text,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'A paid add-on button becomes active only after payment or support grants that specific add-on to your account.',
+                          style: TextStyle(
+                            color: skin.mutedText,
+                            fontSize: 12.5,
+                            height: 1.28,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        for (final item in paidAddons)
+                          _buildCustomAccessFeatureTile(
+                            sheetContext: sheetContext,
+                            item: item,
+                            included: false,
+                          ),
+                        const SizedBox(height: 10),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+  // KORLIX_CUSTOM_ACCESS_FRONTEND_V1_END
+
+  // KORLIX_CUSTOM_ACCESS_GATE_BUTTON_V1
+  Widget _buildEnterpriseCopyboxButton() {
+    final hasCustomAccess =
+        _customAccessHasFeature('copybox') ||
+        _customAccessHasFeature('voice_scribe');
+
+    return _buildKorlixBelowInputBeveledButton(
+      icon: hasCustomAccess
+          ? Icons.verified_user_rounded
+          : Icons.business_center_rounded,
+      label: 'Custom Access',
+      onPressed: _loading ? null : () => unawaited(_showCustomAccessSheet()),
+      active: hasCustomAccess,
+      success: hasCustomAccess,
+      locked: false,
     );
   }
 
