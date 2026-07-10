@@ -2415,14 +2415,14 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       'Access to 1 character',
                       'Ads included',
                       'Limited saved settings',
-                      'No video generation',
+                      '1 Create Video per month',
                       'No music production',
                     ],
                   ),
                   _planCard(
                     title: 'Pro',
                     subtitle: 'For regular creators and daily productivity.',
-                    price: '\$9.99 / month',
+                    price: '\$34.99 / month',
                     accent: const Color(0xFFB794F4),
                     current: currentTier == 'pro',
                     features: const [
@@ -2438,14 +2438,14 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                     title: 'Ultra Premium',
                     subtitle:
                         'For power users who want the full Korlix experience.',
-                    price: '\$39.99 / month',
+                    price: '\$124.99 / month',
                     accent: const Color(0xFFFFD166),
                     current: currentTier == 'ultra',
                     features: const [
                       'Access to all 9+ characters',
                       'Highest personal generation limits',
                       'Beta feature access',
-                      'Limited video generation',
+                      '30 Create Video credits per month',
                       'OCR / handwriting / scanned image reading',
                       'Eligible for paid Music Production add-on when released',
                       'No ads',
@@ -2453,16 +2453,17 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                   ),
                   _planCard(
                     title: 'Enterprise',
-                    subtitle: 'For teams, businesses, schools, and agencies.',
-                    price: 'Contact Sales',
+                    subtitle:
+                        'For teams, schools, agencies, and custom business access.',
+                    price: 'support@korlixdeveloper.com',
                     accent: const Color(0xFFE4EBEE),
                     current: currentTier == 'enterprise',
                     features: const [
                       'All available characters',
                       'Team seats and admin controls',
                       'Custom text, video, and usage limits',
-                      'Custom Music Production add-on options',
-                      'Priority support',
+                      'Custom add-on options by account',
+                      'Email support@korlixdeveloper.com',
                       'Enterprise onboarding',
                     ],
                   ),
@@ -2477,7 +2478,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       ),
                     ),
                     child: const Text(
-                      'Music Production is a paid add-on available to any Korlix tier, including Basic. Plans: \$25/mo for 75 generations, \$120/mo for 580 generations, \$450/mo for 4,000 generations, and \$950/mo for 10,000 generations. One generation means one MusicAPI.ai create request.',
+                      'Music Production add-ons are optional monthly add-ons available to any Korlix tier: \$25/mo for 75 generations, \$120/mo for 580 generations, \$450/mo for 4,000 generations, and \$950/mo for 10,000 generations. One generation equals one MusicAPI.ai create request. Add-ons do not change your base plan.',
                       style: TextStyle(
                         color: Color(0xFFA9C6CF),
                         fontSize: 12.5,
