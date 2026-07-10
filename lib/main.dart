@@ -5284,6 +5284,80 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     }
   }
 
+  // KORLIX_BUILD120_CAMERA_ASK_BEGIN
+  Future<void> _capturePhotoAndAskShortcut() async {
+    if (_loading) {
+      return;
+    }
+
+    // Browsers do not expose the same native camera workflow.
+    // On web, use the existing upload picker.
+    if (kIsWeb) {
+      await _handleUploadPressed();
+      return;
+    }
+
+    try {
+      final pickedImage = await ip.ImagePicker().pickImage(
+        source: ip.ImageSource.camera,
+        requestFullMetadata: false,
+        imageQuality: 95,
+        maxWidth: 2048,
+        maxHeight: 2048,
+      );
+
+      if (pickedImage == null) {
+        return;
+      }
+
+      final bytes = await pickedImage.readAsBytes();
+
+      if (!mounted) {
+        return;
+      }
+
+      final fileName = pickedImage.name.trim().isNotEmpty
+          ? pickedImage.name.trim()
+          : 'korlix-camera-${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+      final platformFile = fp.PlatformFile(
+        name: fileName,
+        size: bytes.length,
+        bytes: bytes,
+        path: pickedImage.path,
+      );
+
+      setState(() {
+        _error = null;
+        _pickedUploadFile = platformFile;
+        _pickedUploadFiles
+          ..clear()
+          ..add(platformFile);
+
+        if (_controller.text.trim().isEmpty) {
+          _controller.text =
+              'Analyze this picture and give me a clear, useful answer with important details and next steps.';
+          _controller.selection = TextSelection.collapsed(
+            offset: _controller.text.length,
+          );
+        }
+      });
+
+      // Submit through the existing Korlix image/document answer pipeline.
+      await _generateWithUpload();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _error =
+            'Could not capture or submit the picture. ${korlixFriendlyErrorMessage(error)}';
+      });
+    }
+  }
+  // KORLIX_BUILD120_CAMERA_ASK_END
+
   Future<void> _handleUploadPressed() async {
     if (Theme.of(context).platform == TargetPlatform.iOS) {
       final source = await _showIosUploadSourceSheet();
@@ -15736,6 +15810,15 @@ Make the entire output professional, well-structured using Markdown, and product
                       success: _activeUploadFiles.isNotEmpty,
                       active: false,
                       onPressed: _loading ? null : _handleUploadPressed,
+                    ),
+                    // KORLIX_BUILD120_CAMERA_ASK_BUTTON
+                    toolButton(
+                      icon: Icons.photo_camera_rounded,
+                      label: 'Camera Ask',
+                      locked: !_hasDocumentUploadAccess,
+                      success: false,
+                      active: false,
+                      onPressed: _loading ? null : _capturePhotoAndAskShortcut,
                     ),
                     toolButton(
                       icon: Icons.mic_rounded,
