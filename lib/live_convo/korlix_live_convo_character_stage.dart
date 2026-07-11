@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:video_player/video_player.dart';
 
+import 'korlix_live_convo_camera_sheet.dart';
 // KORLIX_LIVE_CONVO_CHARACTER_STAGE_V1_BEGIN
 
 enum _KorlixLiveVisualPhase {
@@ -36,6 +37,7 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
     required this.onStart,
     required this.onToggleMute,
     required this.onSendText,
+    required this.onSendImage,
     required this.onEnd,
   });
 
@@ -58,6 +60,7 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
   final Future<void> Function()? onStart;
   final Future<void> Function()? onToggleMute;
   final Future<void> Function(String text)? onSendText;
+  final KorlixLiveConvoImageSender? onSendImage;
   final Future<void> Function()? onEnd;
 
   @override
@@ -956,6 +959,25 @@ class _KorlixLiveConvoCharacterStageState
                             _showTranscript = !_showTranscript;
                           });
                         },
+                      ),
+                      // KORLIX_LIVE_CONVO_CAMERA_UI_V1
+                      _circleAction(
+                        icon: Icons.photo_camera_rounded,
+                        label: 'Camera',
+                        color: const Color(0xFFFFD166),
+                        onPressed:
+                            widget.onSendImage == null ||
+                                phase == _KorlixLiveVisualPhase.speaking ||
+                                phase == _KorlixLiveVisualPhase.thinking
+                            ? null
+                            : () => unawaited(
+                                showKorlixLiveConvoCameraSheet(
+                                  context: context,
+                                  currentlyMuted: widget.muted,
+                                  onToggleMute: widget.onToggleMute,
+                                  onSendImage: widget.onSendImage!,
+                                ),
+                              ),
                       ),
                       _circleAction(
                         icon: Icons.keyboard_rounded,

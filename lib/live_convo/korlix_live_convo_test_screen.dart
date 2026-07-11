@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -646,6 +647,92 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
     }
   }
 
+  // KORLIX_LIVE_CONVO_CAMERA_SEND_V1
+  Future<void> _sendCameraSnapshot(
+    Uint8List bytes,
+    String mimeType,
+    String rawInstruction,
+  ) async {
+    final instruction = rawInstruction.trim().isEmpty
+        ? 'What do you notice in this picture?'
+        : rawInstruction.trim();
+
+    final dataChannel = _dataChannel;
+
+    if (!_connected ||
+        dataChannel == null ||
+        !_isDataChannelOpen(dataChannel)) {
+      throw StateError(
+        'LIVE CONVO is not connected. '
+        'Reconnect before sending a camera picture.',
+      );
+    }
+
+    const supportedMimeTypes = <String>{'image/jpeg', 'image/png'};
+
+    if (!supportedMimeTypes.contains(mimeType)) {
+      throw StateError('The camera picture must be JPEG or PNG.');
+    }
+
+    if (bytes.isEmpty) {
+      throw StateError('The camera returned an empty picture.');
+    }
+
+    // The image is intentionally kept small because the complete
+    // Realtime event travels through the WebRTC data channel.
+    if (bytes.length > 110000) {
+      throw StateError(
+        'The camera picture is too large for LIVE CONVO. '
+        'Please retake it and try again.',
+      );
+    }
+
+    final imageDataUrl = 'data:$mimeType;base64,${base64Encode(bytes)}';
+
+    final eventSuffix = DateTime.now().microsecondsSinceEpoch.toString();
+
+    _update(() {
+      _error = null;
+      _userTranscript = 'Camera: $instruction';
+      _assistantTranscript = '';
+      _status = 'Thinking…';
+    });
+
+    await dataChannel.send(
+      rtc.RTCDataChannelMessage(
+        jsonEncode(<String, dynamic>{
+          'event_id': 'korlix_camera_item_$eventSuffix',
+          'type': 'conversation.item.create',
+          'item': <String, dynamic>{
+            'type': 'message',
+            'role': 'user',
+            'content': <Map<String, dynamic>>[
+              <String, dynamic>{'type': 'input_text', 'text': instruction},
+              <String, dynamic>{
+                'type': 'input_image',
+                'image_url': imageDataUrl,
+              },
+            ],
+          },
+        }),
+      ),
+    );
+
+    await dataChannel.send(
+      rtc.RTCDataChannelMessage(
+        jsonEncode(<String, dynamic>{
+          'event_id': 'korlix_camera_response_$eventSuffix',
+          'type': 'response.create',
+        }),
+      ),
+    );
+
+    _addEvent(
+      'Camera snapshot sent '
+      '(${bytes.length} bytes)',
+    );
+  }
+
   // KORLIX_LIVE_CONVO_KEYBOARD_SEND_V1
   Future<void> _sendTypedMessage(String rawText) async {
     final text = rawText.trim();
@@ -841,6 +928,9 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
       remoteRenderer: _remoteRenderer,
       onStart: _startSession,
       onToggleMute: _localStream == null ? null : _toggleMute,
+      onSendImage: (_connected && _isDataChannelOpen(_dataChannel))
+          ? _sendCameraSnapshot
+          : null,
       onSendText: (_connected && _isDataChannelOpen(_dataChannel))
           ? _sendTypedMessage
           : null,
