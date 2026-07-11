@@ -84,6 +84,7 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
 
     const prefixes = <String>[
       'RTCDataChannelState',
+      'RTCDataChannel',
       'RTCPeerConnectionState',
       'RTCIceConnectionState',
       'RTCIceGatheringState',
@@ -98,6 +99,26 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
     }
 
     return text.trim().toLowerCase();
+  }
+
+  // KORLIX_LIVE_CONVO_DATA_CHANNEL_STATE_FIX_V1
+  bool _isDataChannelOpen(rtc.RTCDataChannel? channel) {
+    if (channel == null) {
+      return false;
+    }
+
+    final normalized = _stateName(channel.state);
+
+    if (normalized == 'open') {
+      return true;
+    }
+
+    // Supports enum strings such as:
+    // RTCDataChannelState.RTCDataChannelOpen
+    // RTCDataChannelOpen
+    final rawState = channel.state.toString().trim().toLowerCase();
+
+    return rawState.endsWith('open');
   }
 
   void _addEvent(String text) {
@@ -459,7 +480,7 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
 
     final dataChannel = _dataChannel;
 
-    if (dataChannel == null || _stateName(dataChannel.state) != 'open') {
+    if (dataChannel == null || !_isDataChannelOpen(dataChannel)) {
       return;
     }
 
@@ -637,7 +658,7 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
 
     if (!_connected ||
         dataChannel == null ||
-        _stateName(dataChannel.state) != 'open') {
+        !_isDataChannelOpen(dataChannel)) {
       throw StateError(
         'LIVE CONVO is not connected. '
         'Reconnect before sending a typed message.',
@@ -820,7 +841,9 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
       remoteRenderer: _remoteRenderer,
       onStart: _startSession,
       onToggleMute: _localStream == null ? null : _toggleMute,
-      onSendText: _connected ? _sendTypedMessage : null,
+      onSendText: (_connected && _isDataChannelOpen(_dataChannel))
+          ? _sendTypedMessage
+          : null,
       onEnd: (_connected || _connecting || _localStream != null)
           ? _endSession
           : null,
