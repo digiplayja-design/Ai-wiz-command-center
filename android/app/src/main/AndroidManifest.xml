@@ -64,6 +64,8 @@
     </queries>
     <!-- KORLIX_ANDROID_WEB_QUERY_PARITY_END -->
 
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 <application
         android:label="Korlix AI"
         android:name="${applicationName}"
