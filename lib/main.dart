@@ -32,6 +32,8 @@ import 'korlix_cyber_widgets.dart';
 import 'improve_picture/screens/portrait_studio_home.dart';
 import 'image_to_video/image_to_video_screen.dart';
 
+import 'live_convo/korlix_live_convo_test_screen.dart';
+
 const String kKorlixImaginePicturePrompt =
     'Describe the picture you want Korlix AI to create.';
 
@@ -15492,6 +15494,37 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
+  // KORLIX_LIVE_CONVO_PHASE2B_OPEN_BEGIN
+  Future<void> _openLiveConvoAudioTest() async {
+    final token = kKorlixAccessToken?.trim() ?? '';
+
+    if (token.isEmpty) {
+      await _showKorlixNotice(
+        title: 'Sign in required',
+        message: 'Please sign in before starting LIVE CONVO.',
+      );
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (context) => KorlixLiveConvoTestScreen(
+          backendBaseUrl: kKorlixBackendBaseUrl,
+          headersBuilder: _authHeaders,
+          characterId: normalizeKorlixCharacterId(
+            kKorlixSelectedCharacterNotifier.value,
+          ),
+          language: _t.label,
+        ),
+      ),
+    );
+  }
+  // KORLIX_LIVE_CONVO_PHASE2B_OPEN_END
+
   Widget _buildCommandPanel() {
     final t = _t;
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
@@ -15819,6 +15852,14 @@ Make the entire output professional, well-structured using Markdown, and product
                       success: false,
                       active: false,
                       onPressed: _loading ? null : _capturePhotoAndAskShortcut,
+                    ),
+                    // KORLIX_LIVE_CONVO_PHASE2B_BUTTON
+                    toolButton(
+                      icon: Icons.graphic_eq_rounded,
+                      label: 'LIVE CONVO',
+                      active: false,
+                      success: false,
+                      onPressed: _loading ? null : _openLiveConvoAudioTest,
                     ),
                     toolButton(
                       icon: Icons.mic_rounded,
