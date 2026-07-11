@@ -6310,11 +6310,29 @@ app.post(
         });
       }
 
-      const sdpOffer =
+      // KORLIX_LIVE_CONVO_SDP_CRLF_FIX_V1
+      // Preserve the complete SDP offer, including its final CRLF.
+      const rawSdpOffer =
         typeof req.body === "string"
-          ? req.body.trim()
+          ? req.body
           : "";
 
+      const normalizedSdpLineEndings = rawSdpOffer
+        .replace(/^\uFEFF/, "")
+        .replace(/\r\n|\r|\n/g, "\r\n");
+
+      const sdpOffer = normalizedSdpLineEndings.endsWith("\r\n")
+        ? normalizedSdpLineEndings
+        : `${normalizedSdpLineEndings}\r\n`;
+
+      console.log("KORLIX_LIVE_CONVO_SDP_DIAGNOSTIC", {
+        length: sdpOffer.length,
+        firstLine: sdpOffer.split("\r\n", 1)[0],
+        endsWithCrLf: sdpOffer.endsWith("\r\n"),
+        hasAudio: sdpOffer.includes("m=audio "),
+        hasFingerprint: sdpOffer.includes("a=fingerprint:"),
+        hasIceUfrag: sdpOffer.includes("a=ice-ufrag:"),
+      });
       if (
         !sdpOffer ||
         !sdpOffer.startsWith("v=") ||
