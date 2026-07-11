@@ -625,6 +625,56 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
     }
   }
 
+  // KORLIX_LIVE_CONVO_KEYBOARD_SEND_V1
+  Future<void> _sendTypedMessage(String rawText) async {
+    final text = rawText.trim();
+
+    if (text.isEmpty) {
+      return;
+    }
+
+    final dataChannel = _dataChannel;
+
+    if (!_connected ||
+        dataChannel == null ||
+        _stateName(dataChannel.state) != 'open') {
+      throw StateError(
+        'LIVE CONVO is not connected. '
+        'Reconnect before sending a typed message.',
+      );
+    }
+
+    _update(() {
+      _error = null;
+      _userTranscript = text;
+      _assistantTranscript = '';
+      _status = 'Thinking…';
+    });
+
+    await dataChannel.send(
+      rtc.RTCDataChannelMessage(
+        jsonEncode(<String, dynamic>{
+          'type': 'conversation.item.create',
+          'item': <String, dynamic>{
+            'type': 'message',
+            'role': 'user',
+            'content': <Map<String, dynamic>>[
+              <String, dynamic>{'type': 'input_text', 'text': text},
+            ],
+          },
+        }),
+      ),
+    );
+
+    await dataChannel.send(
+      rtc.RTCDataChannelMessage(
+        jsonEncode(<String, dynamic>{'type': 'response.create'}),
+      ),
+    );
+
+    _addEvent('Typed message sent');
+  }
+
   Future<void> _toggleMute() async {
     final stream = _localStream;
 
@@ -770,6 +820,7 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
       remoteRenderer: _remoteRenderer,
       onStart: _startSession,
       onToggleMute: _localStream == null ? null : _toggleMute,
+      onSendText: _connected ? _sendTypedMessage : null,
       onEnd: (_connected || _connecting || _localStream != null)
           ? _endSession
           : null,

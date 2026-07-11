@@ -35,6 +35,7 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
     required this.remoteRenderer,
     required this.onStart,
     required this.onToggleMute,
+    required this.onSendText,
     required this.onEnd,
   });
 
@@ -56,6 +57,7 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
 
   final Future<void> Function()? onStart;
   final Future<void> Function()? onToggleMute;
+  final Future<void> Function(String text)? onSendText;
   final Future<void> Function()? onEnd;
 
   @override
@@ -78,6 +80,9 @@ class _KorlixLiveConvoCharacterStageState
 
   bool _showTranscript = true;
   bool _showDiagnostics = false;
+
+  // KORLIX_LIVE_CONVO_KEYBOARD_UI_V1
+  final TextEditingController _typedMessageController = TextEditingController();
 
   @override
   void initState() {
@@ -389,6 +394,187 @@ class _KorlixLiveConvoCharacterStageState
                 color: Color(0xFF69D9E8),
               ),
             ),
+    );
+  }
+
+  Future<void> _openKeyboardComposer() async {
+    final sendText = widget.onSendText;
+
+    if (sendText == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Connect LIVE CONVO before typing a message.'),
+        ),
+      );
+      return;
+    }
+
+    _typedMessageController.clear();
+
+    var sending = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: const Color(0xFF06131C),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            Future<void> submitTypedMessage() async {
+              final text = _typedMessageController.text.trim();
+
+              if (text.isEmpty || sending) {
+                return;
+              }
+
+              setSheetState(() {
+                sending = true;
+              });
+
+              try {
+                await sendText(text);
+
+                _typedMessageController.clear();
+
+                if (sheetContext.mounted) {
+                  Navigator.of(sheetContext).pop();
+                }
+              } catch (error) {
+                if (!sheetContext.mounted) {
+                  return;
+                }
+
+                setSheetState(() {
+                  sending = false;
+                });
+
+                final message = error
+                    .toString()
+                    .replaceFirst('Bad state: ', '')
+                    .replaceFirst('StateError: ', '');
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(message),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
+              }
+            }
+
+            final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
+
+            return Padding(
+              padding: EdgeInsets.fromLTRB(18, 18, 18, 18 + bottomInset),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.keyboard_rounded,
+                        color: Color(0xFFB794F4),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'Type to Korlix',
+                          style: TextStyle(
+                            color: Color(0xFFE4EBEE),
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Close keyboard message',
+                        onPressed: sending
+                            ? null
+                            : () => Navigator.of(sheetContext).pop(),
+                        icon: const Icon(Icons.close_rounded),
+                        color: const Color(0xFFA9C6CF),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Your typed message will join the same '
+                    'LIVE CONVO and Korlix will answer aloud.',
+                    style: TextStyle(color: Color(0xFFA9C6CF), height: 1.35),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _typedMessageController,
+                    autofocus: true,
+                    enabled: !sending,
+                    minLines: 1,
+                    maxLines: 5,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) {
+                      unawaited(submitTypedMessage());
+                    },
+                    style: const TextStyle(
+                      color: Color(0xFFE4EBEE),
+                      fontSize: 15,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Type your message to Korlix…',
+                      hintStyle: const TextStyle(color: Color(0xFF78909B)),
+                      filled: true,
+                      fillColor: const Color(0xFF020A10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(17),
+                        borderSide: const BorderSide(color: Color(0xFF345467)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(17),
+                        borderSide: const BorderSide(color: Color(0xFF345467)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(17),
+                        borderSide: const BorderSide(
+                          color: Color(0xFFB794F4),
+                          width: 1.7,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  FilledButton.icon(
+                    onPressed: sending
+                        ? null
+                        : () => unawaited(submitTypedMessage()),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFB794F4),
+                      foregroundColor: const Color(0xFF081019),
+                      minimumSize: const Size.fromHeight(54),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(17),
+                      ),
+                    ),
+                    icon: sending
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send_rounded),
+                    label: Text(
+                      sending ? 'Sending…' : 'Send to Korlix',
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -772,6 +958,14 @@ class _KorlixLiveConvoCharacterStageState
                         },
                       ),
                       _circleAction(
+                        icon: Icons.keyboard_rounded,
+                        label: 'Keyboard',
+                        color: const Color(0xFFB794F4),
+                        onPressed: widget.onSendText == null
+                            ? null
+                            : () => unawaited(_openKeyboardComposer()),
+                      ),
+                      _circleAction(
                         icon: Icons.stop_rounded,
                         label: 'End',
                         color: const Color(0xFFFF5E73),
@@ -867,6 +1061,7 @@ class _KorlixLiveConvoCharacterStageState
 
   @override
   void dispose() {
+    _typedMessageController.dispose();
     _timer?.cancel();
     _pulseController.dispose();
     unawaited(_characterController?.dispose());
