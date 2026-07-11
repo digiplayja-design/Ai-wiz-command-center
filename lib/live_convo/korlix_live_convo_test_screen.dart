@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:http/http.dart' as http;
 
+import 'korlix_live_convo_character_stage.dart';
+
 typedef KorlixLiveConvoHeadersBuilder = Map<String, String> Function();
 
 // KORLIX_LIVE_CONVO_PHASE2B_SCREEN_BEGIN
@@ -750,229 +752,27 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
     );
   }
 
+  // KORLIX_LIVE_CONVO_CHARACTER_STAGE_V1
   @override
   Widget build(BuildContext context) {
-    final statusColor = _error != null
-        ? Colors.redAccent
-        : _connected
-        ? const Color(0xFF69D9E8)
-        : _connecting
-        ? const Color(0xFFB794F4)
-        : const Color(0xFFA9C6CF);
-
-    return Scaffold(
-      backgroundColor: const Color(0xFF02070C),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF06121B),
-        foregroundColor: const Color(0xFFE4EBEE),
-        title: const Text(
-          'LIVE CONVO — AUDIO TEST',
-          style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.2),
-        ),
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 32),
-          children: [
-            _panel(
-              borderColor: statusColor,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          color: statusColor,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: statusColor.withValues(alpha: 0.55),
-                              blurRadius: 12,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          _status,
-                          style: TextStyle(
-                            color: statusColor,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Character: ${widget.characterId}'
-                    '  •  Language: ${widget.language}',
-                    style: const TextStyle(
-                      color: Color(0xFFA9C6CF),
-                      fontSize: 12.5,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'This beta screen proves the live '
-                    'microphone → WebRTC → Korlix voice '
-                    'connection before the full Character '
-                    'Stage is added.',
-                    style: TextStyle(color: Color(0xFFC4D8DE), height: 1.4),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                FilledButton.icon(
-                  onPressed: (_connecting || _connected) ? null : _startSession,
-                  icon: _connecting
-                      ? const SizedBox(
-                          width: 17,
-                          height: 17,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.play_circle_fill_rounded),
-                  label: Text(_connecting ? 'Connecting…' : 'Start LIVE CONVO'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _localStream == null ? null : _toggleMute,
-                  icon: Icon(
-                    _muted ? Icons.mic_off_rounded : Icons.mic_rounded,
-                  ),
-                  label: Text(_muted ? 'Unmute' : 'Mute'),
-                ),
-                FilledButton.icon(
-                  onPressed: (_connected || _connecting || _localStream != null)
-                      ? _endSession
-                      : null,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF8E2430),
-                  ),
-                  icon: const Icon(Icons.stop_circle_rounded),
-                  label: const Text('End'),
-                ),
-              ],
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 14),
-              _panel(
-                borderColor: Colors.redAccent,
-                child: Text(
-                  _error!,
-                  style: const TextStyle(
-                    color: Color(0xFFFF9EA8),
-                    height: 1.4,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 14),
-            _panel(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'YOU SAID',
-                    style: TextStyle(
-                      color: Color(0xFF69D9E8),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SelectableText(
-                    _userTranscript.isEmpty
-                        ? 'Your live transcript will '
-                              'appear here.'
-                        : _userTranscript,
-                    style: const TextStyle(
-                      color: Color(0xFFE4EBEE),
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            _panel(
-              borderColor: const Color(0xFF6E4FB3),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'KORLIX SAID',
-                    style: TextStyle(
-                      color: Color(0xFFB794F4),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SelectableText(
-                    _assistantTranscript.isEmpty
-                        ? 'Korlix’s live transcript will '
-                              'appear here.'
-                        : _assistantTranscript,
-                    style: const TextStyle(
-                      color: Color(0xFFE4EBEE),
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            _panel(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'REALTIME EVENT LOG',
-                    style: TextStyle(
-                      color: Color(0xFFFFD166),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SelectableText(
-                    _eventLog.isEmpty ? 'No events yet.' : _eventLog.join('\n'),
-                    style: const TextStyle(
-                      color: Color(0xFFA9C6CF),
-                      fontSize: 11.5,
-                      height: 1.45,
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (_rendererReady)
-              Opacity(
-                opacity: 0.01,
-                child: SizedBox(
-                  width: 1,
-                  height: 1,
-                  child: rtc.RTCVideoView(_remoteRenderer),
-                ),
-              ),
-          ],
-        ),
-      ),
+    return KorlixLiveConvoCharacterStage(
+      characterId: widget.characterId,
+      language: widget.language,
+      status: _status,
+      connecting: _connecting,
+      connected: _connected,
+      muted: _muted,
+      error: _error,
+      userTranscript: _userTranscript,
+      assistantTranscript: _assistantTranscript,
+      eventLog: List<String>.unmodifiable(_eventLog),
+      rendererReady: _rendererReady,
+      remoteRenderer: _remoteRenderer,
+      onStart: _startSession,
+      onToggleMute: _localStream == null ? null : _toggleMute,
+      onEnd: (_connected || _connecting || _localStream != null)
+          ? _endSession
+          : null,
     );
   }
 
