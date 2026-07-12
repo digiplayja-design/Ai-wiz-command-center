@@ -6,6 +6,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:video_player/video_player.dart';
 
 import 'korlix_live_convo_camera_sheet.dart';
+import 'korlix_live_convo_transcript_export.dart';
 // KORLIX_LIVE_CONVO_CHARACTER_STAGE_V1_BEGIN
 
 enum _KorlixLiveVisualPhase {
@@ -31,6 +32,8 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
     required this.error,
     required this.userTranscript,
     required this.assistantTranscript,
+    required this.transcriptEntries,
+    required this.sessionStartedAt,
     required this.eventLog,
     required this.rendererReady,
     required this.remoteRenderer,
@@ -52,6 +55,8 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
   final String? error;
   final String userTranscript;
   final String assistantTranscript;
+  final List<KorlixLiveConvoTranscriptEntry> transcriptEntries;
+  final DateTime? sessionStartedAt;
   final List<String> eventLog;
 
   final bool rendererReady;
@@ -677,6 +682,284 @@ class _KorlixLiveConvoCharacterStageState
     );
   }
 
+  String _transcriptClock(DateTime timestamp) {
+    final local = timestamp.toLocal();
+
+    return '${local.hour.toString().padLeft(2, '0')}:'
+        '${local.minute.toString().padLeft(2, '0')}:'
+        '${local.second.toString().padLeft(2, '0')}';
+  }
+
+  DateTime get _effectiveSessionStartedAt {
+    return widget.sessionStartedAt ??
+        DateTime.now().subtract(Duration(seconds: _elapsedSeconds));
+  }
+
+  Widget _fullConversationHistory() {
+    final entries = widget.transcriptEntries;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: const Color(0xFF071722),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFF31566A)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.forum_rounded,
+                color: Color(0xFF69D9E8),
+                size: 19,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'FULL CONVERSATION',
+                  style: TextStyle(
+                    color: Color(0xFF69D9E8),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.9,
+                  ),
+                ),
+              ),
+              Text(
+                '${entries.length} '
+                '${entries.length == 1 ? 'turn' : 'turns'}',
+                style: const TextStyle(
+                  color: Color(0xFF78909B),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (entries.isEmpty)
+            const Text(
+              'The complete conversation will appear '
+              'here as you speak, type, use the camera, '
+              'and receive Korlix replies.',
+              style: TextStyle(color: Color(0xFF78909B), height: 1.4),
+            )
+          else
+            for (final entry in entries) ...[
+              Builder(
+                builder: (context) {
+                  final isUser =
+                      entry.role == KorlixLiveConvoTranscriptRole.user;
+
+                  final accent = isUser
+                      ? const Color(0xFF69D9E8)
+                      : const Color(0xFFFFD166);
+
+                  final label = isUser ? 'YOU' : _character.name.toUpperCase();
+
+                  final source = korlixLiveConvoSourceLabel(entry.source);
+
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(13),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF020A10),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: accent.withValues(alpha: 0.28)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              label,
+                              style: TextStyle(
+                                color: accent,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.7,
+                              ),
+                            ),
+                            if (isUser && source.isNotEmpty) ...[
+                              const SizedBox(width: 7),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: accent.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  source,
+                                  style: TextStyle(
+                                    color: accent,
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            const Spacer(),
+                            Text(
+                              _transcriptClock(entry.timestamp),
+                              style: const TextStyle(
+                                color: Color(0xFF78909B),
+                                fontSize: 10.5,
+                                fontFeatures: [FontFeature.tabularFigures()],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 7),
+                        SelectableText(
+                          entry.text.trim(),
+                          style: const TextStyle(
+                            color: Color(0xFFE4EBEE),
+                            fontSize: 14,
+                            height: 1.42,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 10),
+            ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _copyAllConversation() async {
+    if (widget.transcriptEntries.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('There is no LIVE CONVO transcript to copy yet.'),
+        ),
+      );
+
+      return;
+    }
+
+    try {
+      await copyKorlixLiveConvoTranscript(
+        characterName: _character.name,
+        startedAt: _effectiveSessionStartedAt,
+        durationSeconds: _elapsedSeconds,
+        entries: widget.transcriptEntries,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Full LIVE CONVO transcript copied.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not copy transcript: $error'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  Future<void> _shareFullConversation() async {
+    if (widget.transcriptEntries.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('There is no LIVE CONVO transcript to share yet.'),
+        ),
+      );
+
+      return;
+    }
+
+    try {
+      await shareKorlixLiveConvoTranscript(
+        context: context,
+        characterName: _character.name,
+        startedAt: _effectiveSessionStartedAt,
+        durationSeconds: _elapsedSeconds,
+        entries: widget.transcriptEntries,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not share transcript: $error'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  Widget _transcriptExportActions() {
+    final hasEntries = widget.transcriptEntries.isNotEmpty;
+
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: hasEntries
+                ? () => unawaited(_copyAllConversation())
+                : null,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF69D9E8),
+              side: const BorderSide(color: Color(0xFF31566A)),
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            icon: const Icon(Icons.copy_all_rounded),
+            label: const Text(
+              'Copy All',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: FilledButton.icon(
+            onPressed: hasEntries
+                ? () => unawaited(_shareFullConversation())
+                : null,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFB794F4),
+              foregroundColor: const Color(0xFF081019),
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            icon: const Icon(Icons.ios_share_rounded),
+            label: const Text(
+              'Save / Share',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final phase = _phase;
@@ -1024,6 +1307,13 @@ class _KorlixLiveConvoCharacterStageState
                   ),
                   secondChild: const SizedBox.shrink(),
                 ),
+                // KORLIX_LIVE_CONVO_FULL_TRANSCRIPT_UI_V1
+                if (_showTranscript) ...[
+                  const SizedBox(height: 12),
+                  _fullConversationHistory(),
+                  const SizedBox(height: 12),
+                  _transcriptExportActions(),
+                ],
                 const SizedBox(height: 12),
                 TextButton.icon(
                   onPressed: () {

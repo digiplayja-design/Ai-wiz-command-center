@@ -9,6 +9,8 @@ import 'package:http/http.dart' as http;
 
 import 'korlix_live_convo_character_stage.dart';
 
+import 'korlix_live_convo_transcript_export.dart';
+
 typedef KorlixLiveConvoHeadersBuilder = Map<String, String> Function();
 
 // KORLIX_LIVE_CONVO_PHASE2B_SCREEN_BEGIN
@@ -53,6 +55,15 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
   String? _error;
 
   final List<String> _eventLog = <String>[];
+
+  // KORLIX_LIVE_CONVO_FULL_TRANSCRIPT_STATE_V1
+  final List<KorlixLiveConvoTranscriptEntry> _transcriptEntries =
+      <KorlixLiveConvoTranscriptEntry>[];
+
+  final Set<String> _processedTranscriptEventIds = <String>{};
+
+  DateTime? _sessionStartedAt;
+  int? _activeAssistantTranscriptIndex;
 
   @override
   void initState() {
@@ -120,6 +131,101 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
     final rawState = channel.state.toString().trim().toLowerCase();
 
     return rawState.endsWith('open');
+  }
+
+  String _nextTranscriptEntryId(String prefix) {
+    return '$prefix-'
+        '${DateTime.now().microsecondsSinceEpoch}-'
+        '${_transcriptEntries.length}';
+  }
+
+  void _appendUserTranscript(
+    String rawText, {
+    required String source,
+    String? eventId,
+  }) {
+    final text = rawText.trim();
+
+    if (text.isEmpty) {
+      return;
+    }
+
+    final cleanEventId = eventId?.trim() ?? '';
+
+    if (cleanEventId.isNotEmpty) {
+      if (_processedTranscriptEventIds.contains(cleanEventId)) {
+        return;
+      }
+
+      _processedTranscriptEventIds.add(cleanEventId);
+    }
+
+    _update(() {
+      _userTranscript = text;
+
+      _transcriptEntries.add(
+        KorlixLiveConvoTranscriptEntry(
+          id: cleanEventId.isEmpty
+              ? _nextTranscriptEntryId('user')
+              : cleanEventId,
+          role: KorlixLiveConvoTranscriptRole.user,
+          text: text,
+          source: source,
+          timestamp: DateTime.now(),
+        ),
+      );
+    });
+  }
+
+  void _beginAssistantTranscriptTurn() {
+    _activeAssistantTranscriptIndex = null;
+
+    _update(() {
+      _assistantTranscript = '';
+    });
+  }
+
+  void _upsertAssistantTranscript(
+    String rawText, {
+    required String source,
+    bool finalText = false,
+  }) {
+    if (rawText.trim().isEmpty) {
+      return;
+    }
+
+    final text = finalText ? rawText.trim() : rawText.trimLeft();
+
+    _update(() {
+      _assistantTranscript = text;
+
+      final index = _activeAssistantTranscriptIndex;
+
+      if (index != null &&
+          index >= 0 &&
+          index < _transcriptEntries.length &&
+          _transcriptEntries[index].role ==
+              KorlixLiveConvoTranscriptRole.assistant) {
+        _transcriptEntries[index] = _transcriptEntries[index].copyWith(
+          text: text,
+          source: source,
+        );
+
+        return;
+      }
+
+      _transcriptEntries.add(
+        KorlixLiveConvoTranscriptEntry(
+          id: _nextTranscriptEntryId('assistant'),
+          role: KorlixLiveConvoTranscriptRole.assistant,
+          text: text,
+          source: source,
+          timestamp: DateTime.now(),
+        ),
+      );
+
+      _activeAssistantTranscriptIndex = _transcriptEntries.length - 1;
+    });
   }
 
   void _addEvent(String text) {
@@ -225,6 +331,10 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
       _userTranscript = '';
       _error = null;
       _eventLog.clear();
+      _transcriptEntries.clear();
+      _processedTranscriptEventIds.clear();
+      _activeAssistantTranscriptIndex = null;
+      _sessionStartedAt = DateTime.now();
     });
 
     await _releaseSessionResources();
@@ -556,18 +666,19 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
         case 'conversation.item.input_audio_transcription.completed':
           final transcript = (event['transcript'] ?? '').toString();
 
-          if (transcript.trim().isNotEmpty) {
-            _update(() {
-              _userTranscript = transcript.trim();
-            });
-          }
+          final itemId = (event['item_id'] ?? event['event_id'] ?? '')
+              .toString();
+
+          _appendUserTranscript(
+            transcript,
+            source: 'voice',
+            eventId: itemId.trim().isEmpty ? null : itemId,
+          );
           break;
 
         case 'response.created':
-          _update(() {
-            _assistantTranscript = '';
-            _status = 'Korlix is speaking…';
-          });
+          _beginAssistantTranscriptTurn();
+          _setStatus('Korlix is speaking…');
           break;
 
         case 'response.audio_transcript.delta':
@@ -576,9 +687,10 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
           final delta = (event['delta'] ?? '').toString();
 
           if (delta.isNotEmpty) {
-            _update(() {
-              _assistantTranscript += delta;
-            });
+            _upsertAssistantTranscript(
+              '$_assistantTranscript$delta',
+              source: 'realtime',
+            );
           }
           break;
 
@@ -586,22 +698,26 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
         case 'response.output_audio_transcript.done':
           final transcript = (event['transcript'] ?? '').toString();
 
-          _update(() {
-            if (transcript.trim().isNotEmpty) {
-              _assistantTranscript = transcript.trim();
-            }
+          if (transcript.trim().isNotEmpty) {
+            _upsertAssistantTranscript(
+              transcript,
+              source: 'realtime',
+              finalText: true,
+            );
+          }
 
-            _status = 'Listening…';
-          });
+          _setStatus('Listening…');
           break;
 
         case 'response.text.done':
           final text = (event['text'] ?? '').toString();
 
           if (text.trim().isNotEmpty) {
-            _update(() {
-              _assistantTranscript = text.trim();
-            });
+            _upsertAssistantTranscript(
+              text,
+              source: 'realtime',
+              finalText: true,
+            );
           }
           break;
 
@@ -727,6 +843,8 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
       ),
     );
 
+    _appendUserTranscript('Camera: $instruction', source: 'camera');
+
     _addEvent(
       'Camera snapshot sent '
       '(${bytes.length} bytes)',
@@ -779,6 +897,8 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
         jsonEncode(<String, dynamic>{'type': 'response.create'}),
       ),
     );
+
+    _appendUserTranscript(text, source: 'keyboard');
 
     _addEvent('Typed message sent');
   }
@@ -923,6 +1043,10 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
       error: _error,
       userTranscript: _userTranscript,
       assistantTranscript: _assistantTranscript,
+      transcriptEntries: List<KorlixLiveConvoTranscriptEntry>.unmodifiable(
+        _transcriptEntries,
+      ),
+      sessionStartedAt: _sessionStartedAt,
       eventLog: List<String>.unmodifiable(_eventLog),
       rendererReady: _rendererReady,
       remoteRenderer: _remoteRenderer,
