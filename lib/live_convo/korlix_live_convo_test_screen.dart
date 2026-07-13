@@ -11,6 +11,8 @@ import 'korlix_live_convo_character_stage.dart';
 
 import 'korlix_live_convo_transcript_export.dart';
 
+import 'korlix_live_convo_usage_guard.dart';
+
 typedef KorlixLiveConvoHeadersBuilder = Map<String, String> Function();
 
 // KORLIX_LIVE_CONVO_PHASE2B_SCREEN_BEGIN
@@ -34,6 +36,35 @@ class KorlixLiveConvoTestScreen extends StatefulWidget {
 }
 
 class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
+  // KORLIX_LIVE_CONVO_BUILD129_CLIENT_GUARD_BEGIN
+  final KorlixLiveConvoUsageGuard _korlixBuild129UsageGuard =
+      KorlixLiveConvoUsageGuard();
+
+  Future<void> _korlixBuild129HandleLimit(String message) async {
+    await _releaseSessionResources();
+
+    _update(() {
+      _connecting = false;
+      _connected = false;
+      _muted = false;
+      _status = 'Session limit reached';
+      _error = message;
+    });
+
+    _addEvent('LIVE CONVO fair-use limit reached');
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: const Color(0xFFFF5A6E),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    }
+  }
+  // KORLIX_LIVE_CONVO_BUILD129_CLIENT_GUARD_END
+
   final rtc.RTCVideoRenderer _remoteRenderer = rtc.RTCVideoRenderer();
 
   rtc.RTCPeerConnection? _peerConnection;
@@ -372,6 +403,7 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
             _status = 'Connected — speak naturally';
           });
         } else if (name == 'failed') {
+          unawaited(_korlixBuild129UsageGuard.end(reason: 'peer_failed'));
           _update(() {
             _connecting = false;
             _connected = false;
@@ -384,6 +416,7 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
             _status = 'Disconnected';
           });
         } else if (name == 'closed') {
+          unawaited(_korlixBuild129UsageGuard.end(reason: 'peer_closed'));
           _update(() {
             _connected = false;
           });
@@ -532,6 +565,10 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
             body: sdp,
           )
           .timeout(const Duration(seconds: 45));
+      await _korlixBuild129UsageGuard.beginFromSessionResponse(
+        response,
+        onLimitReached: _korlixBuild129HandleLimit,
+      );
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw StateError(_httpErrorMessage(response));
@@ -649,6 +686,7 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
         _addEvent(type.isEmpty ? 'Unknown event' : type);
       }
 
+      unawaited(_korlixBuild129UsageGuard.observeServerEvent(event));
       switch (type) {
         case 'session.created':
         case 'session.updated':
@@ -949,6 +987,7 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
   }
 
   Future<void> _releaseSessionResources() async {
+    await _korlixBuild129UsageGuard.end(reason: 'session_resources_released');
     final dataChannel = _dataChannel;
     final localStream = _localStream;
     final connection = _peerConnection;
