@@ -34,6 +34,8 @@ import 'image_to_video/image_to_video_screen.dart';
 
 import 'live_convo/korlix_live_convo_test_screen.dart';
 
+import 'billing/korlix_apple_billing.dart';
+
 const String kKorlixImaginePicturePrompt =
     'Describe the picture you want Korlix AI to create.';
 
@@ -2356,146 +2358,21 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     );
   }
 
+  // KORLIX_APPLE_SUBSCRIPTIONS_BUILD130_PLANS_BEGIN
+  Future<void> _handleAppleSubscriptionTierChanged(String _) async {
+    if (!mounted) return;
+  }
+
   Future<void> _openPlansPanel({required String currentTier}) async {
-    await showModalBottomSheet<void>(
+    await showKorlixAppleSubscriptionSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF071B27),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: DraggableScrollableSheet(
-            expand: false,
-            initialChildSize: 0.86,
-            minChildSize: 0.45,
-            maxChildSize: 0.95,
-            builder: (context, controller) {
-              return ListView(
-                controller: controller,
-                padding: const EdgeInsets.all(22),
-                children: [
-                  Row(
-                    children: [
-                      Image.asset(
-                        'assets/branding/korlix_mini_mark.png',
-                        height: 38,
-                        fit: BoxFit.contain,
-                      ),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Text(
-                          'Korlix AI Plans',
-                          style: TextStyle(
-                            color: Color(0xFFE4EBEE),
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Choose your character access, generation limits, and premium tools. Payments will be connected later through Google Play Billing.',
-                    style: TextStyle(
-                      color: Color(0xFFA9C6CF),
-                      fontSize: 13,
-                      height: 1.35,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  _planCard(
-                    title: 'Basic',
-                    subtitle: 'Free entry plan for light use.',
-                    price: 'Free',
-                    accent: const Color(0xFF69D9E8),
-                    current: currentTier == 'basic',
-                    features: const [
-                      '3 generations per day',
-                      'Access to 1 character',
-                      'Ads included',
-                      'Limited saved settings',
-                      '1 Create Video per month',
-                      'No music production',
-                    ],
-                  ),
-                  _planCard(
-                    title: 'Pro',
-                    subtitle: 'For regular creators and daily productivity.',
-                    price: '\$34.99 / month',
-                    accent: const Color(0xFFB794F4),
-                    current: currentTier == 'pro',
-                    features: const [
-                      'Higher text generation limits',
-                      'Access to up to 3 characters',
-                      'PDF/export access',
-                      'Saved settings access',
-                      'Reduced or no ads',
-                      'Voice input and document upload',
-                    ],
-                  ),
-                  _planCard(
-                    title: 'Ultra Premium',
-                    subtitle:
-                        'For power users who want the full Korlix experience.',
-                    price: '\$124.99 / month',
-                    accent: const Color(0xFFFFD166),
-                    current: currentTier == 'ultra',
-                    features: const [
-                      'Access to all 9+ characters',
-                      'Highest personal generation limits',
-                      'Beta feature access',
-                      '30 Create Video credits per month',
-                      'OCR / handwriting / scanned image reading',
-                      'Eligible for paid Music Production add-on when released',
-                      'No ads',
-                    ],
-                  ),
-                  _planCard(
-                    title: 'Enterprise',
-                    subtitle:
-                        'For teams, schools, agencies, and custom business access.',
-                    price: 'support@korlixdeveloper.com',
-                    accent: const Color(0xFFE4EBEE),
-                    current: currentTier == 'enterprise',
-                    features: const [
-                      'All available characters',
-                      'Team seats and admin controls',
-                      'Custom text, video, and usage limits',
-                      'Custom add-on options by account',
-                      'Email support@korlixdeveloper.com',
-                      'Enterprise onboarding',
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0A2B3D).withOpacity(0.72),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: const Color(0xFF2EC7DF).withOpacity(0.28),
-                      ),
-                    ),
-                    child: const Text(
-                      'Music Production add-ons are optional monthly add-ons available to any Korlix tier: \$25/mo for 75 generations, \$120/mo for 580 generations, \$450/mo for 4,000 generations, and \$950/mo for 10,000 generations. One generation equals one MusicAPI.ai create request. Add-ons do not change your base plan.',
-                      style: TextStyle(
-                        color: Color(0xFFA9C6CF),
-                        fontSize: 12.5,
-                        height: 1.35,
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        );
-      },
+      backendBaseUrl: kKorlixBackendBaseUrl,
+      headersBuilder: _headers,
+      currentTier: currentTier,
+      onTierChanged: _handleAppleSubscriptionTierChanged,
     );
   }
+  // KORLIX_APPLE_SUBSCRIPTIONS_BUILD130_PLANS_END
 
   int _tierRank(String tier) {
     switch (tier) {
@@ -4833,10 +4710,35 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   }
   // KORLIX_ENTERPRISE_COPYALL_REWRITE_SAFE_V1_END
 
+  // KORLIX_APPLE_SUBSCRIPTIONS_BUILD130_TIER_CALLBACK_BEGIN
+  Future<void> _handleAppleSubscriptionTierChanged(String tier) async {
+    final normalizedTier = tier.trim().toLowerCase();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _currentTier = normalizedTier.isEmpty ? 'basic' : normalizedTier;
+    });
+
+    await _loadCurrentTier();
+  }
+  // KORLIX_APPLE_SUBSCRIPTIONS_BUILD130_TIER_CALLBACK_END
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    unawaited(
+      KorlixAppleBillingService.instance.configure(
+        backendBaseUrl: kKorlixBackendBaseUrl,
+        headersBuilder: _authHeaders,
+        currentTier: _currentTier,
+        onTierChanged: _handleAppleSubscriptionTierChanged,
+      ),
+    );
+
     _loadSavedKorlixTheme();
     _loadCurrentTier();
     _loadLocalChatTopics();

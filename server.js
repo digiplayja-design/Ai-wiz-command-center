@@ -6819,6 +6819,818 @@ app.post(
 // KORLIX_LIVE_CONVO_BACKEND_V1_END
 
 
+// KORLIX_APPLE_SUBSCRIPTIONS_BUILD130_BEGIN
+const KORLIX_APPLE_BUILD130_BUNDLE_ID =
+  String(process.env.KORLIX_APPLE_BUNDLE_ID || "com.korlixdeveloper.korlixai").trim();
+
+const KORLIX_APPLE_BUILD130_PRODUCTS = Object.freeze({
+  "com.korlixdeveloper.korlixai.pro.monthly": "pro",
+  "com.korlixdeveloper.korlixai.ultra.monthly": "ultra",
+});
+
+let korlixAppleBuild130ConfigPromise = null;
+
+function korlixAppleBuild130Env(name) {
+  return String(process.env[name] || "").trim();
+}
+
+function korlixAppleBuild130PrivateKey() {
+  const base64Value = korlixAppleBuild130Env(
+    "KORLIX_APPLE_PRIVATE_KEY_BASE64"
+  );
+
+  if (base64Value) {
+    try {
+      return Buffer.from(base64Value, "base64").toString("utf8").trim();
+    } catch (_) {
+      return "";
+    }
+  }
+
+  return korlixAppleBuild130Env("KORLIX_APPLE_PRIVATE_KEY")
+    .replace(/\\n/g, "\n")
+    .trim();
+}
+
+function korlixAppleBuild130IsJws(value) {
+  const text = String(value || "").trim();
+  return text.length > 40 && text.split(".").length === 3;
+}
+
+function korlixAppleBuild130Iso(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+  return new Date(numeric).toISOString();
+}
+
+function korlixAppleBuild130ProductTier(productId) {
+  return KORLIX_APPLE_BUILD130_PRODUCTS[String(productId || "").trim()] || null;
+}
+
+async function korlixAppleBuild130ReadFirstExisting(urls) {
+  const { readFile } = await import("node:fs/promises");
+
+  for (const url of urls) {
+    try {
+      return await readFile(url);
+    } catch (_) {
+      // Try the next known location.
+    }
+  }
+
+  return null;
+}
+
+async function korlixAppleBuild130RootCertificates() {
+  const names = [
+    "AppleIncRootCertificate.cer",
+    "AppleRootCA-G2.cer",
+    "AppleRootCA-G3.cer",
+  ];
+
+  const certificates = [];
+
+  for (const name of names) {
+    const certificate = await korlixAppleBuild130ReadFirstExisting([
+      new URL(`./apple_root_certs/${name}`, import.meta.url),
+      new URL(`./backend/apple_root_certs/${name}`, import.meta.url),
+    ]);
+
+    if (!certificate) {
+      throw new Error(`Apple root certificate is missing: ${name}`);
+    }
+
+    certificates.push(certificate);
+  }
+
+  return certificates;
+}
+
+async function korlixAppleBuild130Config() {
+  if (korlixAppleBuild130ConfigPromise) {
+    return korlixAppleBuild130ConfigPromise;
+  }
+
+  korlixAppleBuild130ConfigPromise = (async () => {
+    const library = await import("@apple/app-store-server-library");
+    const issuerId = korlixAppleBuild130Env("KORLIX_APPLE_ISSUER_ID");
+    const keyId = korlixAppleBuild130Env("KORLIX_APPLE_KEY_ID");
+    const privateKey = korlixAppleBuild130PrivateKey();
+    const appAppleIdRaw = korlixAppleBuild130Env("KORLIX_APPLE_APP_ID");
+    const appAppleId = Number(appAppleIdRaw);
+    const rootCertificates = await korlixAppleBuild130RootCertificates();
+
+    const signingConfigured = Boolean(issuerId && keyId && privateKey);
+    const productionVerifierConfigured =
+      Number.isSafeInteger(appAppleId) && appAppleId > 0;
+
+    const sandboxVerifier = new library.SignedDataVerifier(
+      rootCertificates,
+      true,
+      library.Environment.SANDBOX,
+      KORLIX_APPLE_BUILD130_BUNDLE_ID
+    );
+
+    const productionVerifier = productionVerifierConfigured
+      ? new library.SignedDataVerifier(
+          rootCertificates,
+          true,
+          library.Environment.PRODUCTION,
+          KORLIX_APPLE_BUILD130_BUNDLE_ID,
+          appAppleId
+        )
+      : null;
+
+    const sandboxClient = signingConfigured
+      ? new library.AppStoreServerAPIClient(
+          privateKey,
+          keyId,
+          issuerId,
+          KORLIX_APPLE_BUILD130_BUNDLE_ID,
+          library.Environment.SANDBOX
+        )
+      : null;
+
+    const productionClient =
+      signingConfigured && productionVerifierConfigured
+        ? new library.AppStoreServerAPIClient(
+            privateKey,
+            keyId,
+            issuerId,
+            KORLIX_APPLE_BUILD130_BUNDLE_ID,
+            library.Environment.PRODUCTION
+          )
+        : null;
+
+    return {
+      library,
+      appAppleId: productionVerifierConfigured ? appAppleId : null,
+      signingConfigured,
+      productionVerifierConfigured,
+      productionConfigured: Boolean(
+        productionVerifierConfigured && signingConfigured
+      ),
+      sandboxVerifier,
+      productionVerifier,
+      sandboxClient,
+      productionClient,
+    };
+  })();
+
+  try {
+    return await korlixAppleBuild130ConfigPromise;
+  } catch (error) {
+    korlixAppleBuild130ConfigPromise = null;
+    throw error;
+  }
+}
+
+function korlixAppleBuild130VerifierAttempts(config, preferredEnvironment) {
+  const preferred = String(preferredEnvironment || "").toLowerCase();
+  const sandbox = {
+    label: "Sandbox",
+    verifier: config.sandboxVerifier,
+    client: config.sandboxClient,
+  };
+  const production = {
+    label: "Production",
+    verifier: config.productionVerifier,
+    client: config.productionClient,
+  };
+
+  return preferred.includes("sandbox")
+    ? [sandbox, production]
+    : [production, sandbox];
+}
+
+async function korlixAppleBuild130VerifyTransactionJws(
+  signedTransactionInfo,
+  preferredEnvironment
+) {
+  const config = await korlixAppleBuild130Config();
+  let lastError = null;
+
+  for (const attempt of korlixAppleBuild130VerifierAttempts(
+    config,
+    preferredEnvironment
+  )) {
+    if (!attempt.verifier) continue;
+
+    try {
+      const decoded = await attempt.verifier.verifyAndDecodeTransaction(
+        signedTransactionInfo
+      );
+
+      return {
+        decoded,
+        signedTransactionInfo,
+        environment: attempt.label,
+        verifier: attempt.verifier,
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("Apple transaction verification failed.");
+}
+
+async function korlixAppleBuild130VerifyNotification(signedPayload) {
+  const config = await korlixAppleBuild130Config();
+  let lastError = null;
+
+  for (const attempt of korlixAppleBuild130VerifierAttempts(config, "")) {
+    if (!attempt.verifier) continue;
+
+    try {
+      const decoded = await attempt.verifier.verifyAndDecodeNotification(
+        signedPayload
+      );
+
+      return {
+        decoded,
+        environment: attempt.label,
+        verifier: attempt.verifier,
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("Apple notification verification failed.");
+}
+
+async function korlixAppleBuild130TransactionFromHistory({
+  transactionId,
+  expectedProductId,
+}) {
+  const config = await korlixAppleBuild130Config();
+
+  if (!config.signingConfigured) {
+    throw makeHttpError(
+      "Apple server verification is not configured.",
+      503
+    );
+  }
+
+  let lastError = null;
+
+  for (const attempt of korlixAppleBuild130VerifierAttempts(config, "")) {
+    if (!attempt.client || !attempt.verifier) continue;
+
+    try {
+      const request = {
+        sort: config.library.Order.DESCENDING,
+        revoked: false,
+        productIds: expectedProductId ? [expectedProductId] : undefined,
+        productTypes: [config.library.ProductType.AUTO_RENEWABLE],
+      };
+
+      let response = null;
+      let revision = null;
+      const signedTransactions = [];
+
+      do {
+        response = await attempt.client.getTransactionHistory(
+          transactionId,
+          revision,
+          request,
+          config.library.GetTransactionHistoryVersion.V2
+        );
+
+        if (Array.isArray(response?.signedTransactions)) {
+          signedTransactions.push(...response.signedTransactions);
+        }
+
+        revision = response?.revision || null;
+      } while (response?.hasMore === true);
+
+      const verified = [];
+
+      for (const signedTransactionInfo of signedTransactions) {
+        try {
+          const decoded = await attempt.verifier.verifyAndDecodeTransaction(
+            signedTransactionInfo
+          );
+
+          if (
+            decoded?.bundleId === KORLIX_APPLE_BUILD130_BUNDLE_ID &&
+            (!expectedProductId || decoded?.productId === expectedProductId)
+          ) {
+            verified.push({
+              decoded,
+              signedTransactionInfo,
+              environment: attempt.label,
+              verifier: attempt.verifier,
+            });
+          }
+        } catch (_) {
+          // Ignore a single invalid item and continue through the history.
+        }
+      }
+
+      verified.sort((a, b) => {
+        const aDate = Number(
+          a?.decoded?.expiresDate || a?.decoded?.purchaseDate || 0
+        );
+        const bDate = Number(
+          b?.decoded?.expiresDate || b?.decoded?.purchaseDate || 0
+        );
+        return bDate - aDate;
+      });
+
+      if (verified.length > 0) {
+        return verified[0];
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("No verified Apple transaction was found.");
+}
+
+async function korlixAppleBuild130ResolveTransaction({
+  purchaseId,
+  verificationData,
+  expectedProductId,
+  preferredEnvironment,
+}) {
+  const data = String(verificationData || "").trim();
+
+  if (korlixAppleBuild130IsJws(data)) {
+    return korlixAppleBuild130VerifyTransactionJws(
+      data,
+      preferredEnvironment
+    );
+  }
+
+  const config = await korlixAppleBuild130Config();
+  let transactionId = String(purchaseId || "").trim();
+
+  if (!transactionId && data) {
+    try {
+      const utility = new config.library.ReceiptUtility();
+      transactionId =
+        utility.extractTransactionIdFromAppReceipt(data) || "";
+    } catch (_) {
+      transactionId = "";
+    }
+  }
+
+  if (!transactionId) {
+    throw makeHttpError(
+      "Apple transaction data did not include a transaction ID.",
+      400
+    );
+  }
+
+  return korlixAppleBuild130TransactionFromHistory({
+    transactionId,
+    expectedProductId,
+  });
+}
+
+function korlixAppleBuild130NormalizeTransaction(result) {
+  const decoded = result?.decoded || {};
+  const productId = String(decoded.productId || "").trim();
+  const tier = korlixAppleBuild130ProductTier(productId);
+
+  if (!tier) {
+    throw makeHttpError("Unsupported Apple subscription product.", 400);
+  }
+
+  if (decoded.bundleId !== KORLIX_APPLE_BUILD130_BUNDLE_ID) {
+    throw makeHttpError("Apple transaction bundle ID mismatch.", 400);
+  }
+
+  const expiresMs = Number(decoded.expiresDate || 0);
+  const revokedMs = Number(decoded.revocationDate || 0);
+  const active =
+    (!Number.isFinite(revokedMs) || revokedMs <= 0) &&
+    Number.isFinite(expiresMs) &&
+    expiresMs > Date.now();
+
+  return {
+    productId,
+    tier,
+    status: active ? "active" : revokedMs > 0 ? "revoked" : "expired",
+    active,
+    environment:
+      String(decoded.environment || result?.environment || "").trim() ||
+      result?.environment ||
+      null,
+    originalTransactionId: String(
+      decoded.originalTransactionId || decoded.transactionId || ""
+    ).trim(),
+    transactionId: String(decoded.transactionId || "").trim() || null,
+    purchaseDate: korlixAppleBuild130Iso(decoded.purchaseDate),
+    expiresAt: korlixAppleBuild130Iso(decoded.expiresDate),
+    revokedAt: korlixAppleBuild130Iso(decoded.revocationDate),
+    appAccountToken: String(decoded.appAccountToken || "").trim() || null,
+    ownershipType:
+      String(decoded.inAppOwnershipType || "").trim() || null,
+    signedTransactionInfo:
+      String(result?.signedTransactionInfo || "").trim() || null,
+    decoded,
+  };
+}
+
+async function korlixAppleBuild130ApplyEntitlement({
+  userId,
+  transaction,
+  renewalInfo = null,
+  signedRenewalInfo = null,
+  notificationType = null,
+  rawPayload = {},
+}) {
+  if (!supabaseAdmin) {
+    throw makeHttpError("Supabase is not configured on the backend.", 503);
+  }
+
+  const autoRenewStatus =
+    renewalInfo?.autoRenewStatus === undefined ||
+    renewalInfo?.autoRenewStatus === null
+      ? null
+      : Number(renewalInfo.autoRenewStatus) === 1;
+
+  const { data, error } = await supabaseAdmin.rpc(
+    "korlix_apply_apple_subscription_entitlement",
+    {
+      p_user_id: userId,
+      p_product_id: transaction.productId,
+      p_tier: transaction.tier,
+      p_status: transaction.status,
+      p_environment: transaction.environment,
+      p_original_transaction_id: transaction.originalTransactionId,
+      p_transaction_id: transaction.transactionId,
+      p_purchase_date: transaction.purchaseDate,
+      p_expires_at: transaction.expiresAt,
+      p_revoked_at: transaction.revokedAt,
+      p_app_account_token: transaction.appAccountToken,
+      p_ownership_type: transaction.ownershipType,
+      p_auto_renew_status: autoRenewStatus,
+      p_signed_transaction_info: transaction.signedTransactionInfo,
+      p_signed_renewal_info:
+        String(signedRenewalInfo || "").trim() || null,
+      p_last_notification_type:
+        String(notificationType || "").trim() || null,
+      p_raw_payload: rawPayload && typeof rawPayload === "object"
+        ? rawPayload
+        : {},
+    }
+  );
+
+  if (error) {
+    const wrapped = new Error(
+      String(error.message || "Apple entitlement update failed.")
+    );
+
+    if (
+      String(error.message || "")
+        .toLowerCase()
+        .includes("does not exist")
+    ) {
+      wrapped.message =
+        "Apple subscription database migration is not installed.";
+      wrapped.statusCode = 503;
+    }
+
+    throw wrapped;
+  }
+
+  return data;
+}
+
+async function korlixAppleBuild130StatusForUser(user) {
+  const profile = await getOrCreateProfile(user);
+
+  if (!supabaseAdmin) {
+    return {
+      profile,
+      entitlement: null,
+    };
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("apple_subscription_entitlements")
+    .select(
+      "product_id,tier,status,environment,original_transaction_id,transaction_id,purchase_date,expires_at,revoked_at,auto_renew_status,last_notification_type,updated_at"
+    )
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    if (
+      String(error.message || "")
+        .toLowerCase()
+        .includes("does not exist")
+    ) {
+      throw makeHttpError(
+        "Apple subscription database migration is not installed.",
+        503
+      );
+    }
+
+    throw error;
+  }
+
+  return {
+    profile,
+    entitlement: data || null,
+  };
+}
+
+app.get("/api/billing/apple/health", async (req, res) => {
+  try {
+    const config = await korlixAppleBuild130Config();
+
+    return res.json({
+      ok: true,
+      feature: "apple_subscriptions",
+      version: "build130",
+      bundleId: KORLIX_APPLE_BUILD130_BUNDLE_ID,
+      products: KORLIX_APPLE_BUILD130_PRODUCTS,
+      supabaseConfigured: Boolean(supabaseAdmin),
+      signingConfigured: config.signingConfigured,
+      productionConfigured: config.productionConfigured,
+      sandboxVerificationReady: Boolean(config.sandboxVerifier),
+      productionVerificationReady: Boolean(config.productionVerifier),
+    });
+  } catch (error) {
+    return res.status(503).json({
+      ok: false,
+      feature: "apple_subscriptions",
+      version: "build130",
+      error: getKorlixUserFacingError(error),
+    });
+  }
+});
+
+app.get("/api/billing/apple/status", async (req, res) => {
+  try {
+    const user = await requireUser(req);
+    let { profile, entitlement } =
+      await korlixAppleBuild130StatusForUser(user);
+    let refreshWarning = null;
+
+    if (
+      String(req.query?.refresh || "") === "1" &&
+      entitlement?.product_id &&
+      (entitlement?.transaction_id ||
+        entitlement?.original_transaction_id)
+    ) {
+      try {
+        const result = await korlixAppleBuild130TransactionFromHistory({
+          transactionId:
+            entitlement.transaction_id ||
+            entitlement.original_transaction_id,
+          expectedProductId: entitlement.product_id,
+        });
+        const transaction =
+          korlixAppleBuild130NormalizeTransaction(result);
+
+        await korlixAppleBuild130ApplyEntitlement({
+          userId: user.id,
+          transaction,
+          rawPayload: {
+            source: "status_refresh",
+            transaction: transaction.decoded,
+          },
+        });
+
+        ({ profile, entitlement } =
+          await korlixAppleBuild130StatusForUser(user));
+      } catch (error) {
+        refreshWarning = sanitize(error?.message);
+      }
+    }
+
+    return res.json({
+      ok: true,
+      tier: String(profile?.tier || "basic").toLowerCase(),
+      entitlement,
+      refreshWarning,
+    });
+  } catch (error) {
+    return res.status(error?.statusCode || 500).json({
+      ok: false,
+      error: getKorlixUserFacingError(error),
+    });
+  }
+});
+
+app.post("/api/billing/apple/verify", async (req, res) => {
+  try {
+    const user = await requireUser(req);
+    await getOrCreateProfile(user);
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const expectedProductId = String(body.productId || "").trim();
+    const expectedTier = korlixAppleBuild130ProductTier(expectedProductId);
+
+    if (!expectedTier) {
+      return res.status(400).json({
+        ok: false,
+        verified: false,
+        error: "Unsupported Apple subscription product.",
+      });
+    }
+
+    const result = await korlixAppleBuild130ResolveTransaction({
+      purchaseId: body.purchaseId,
+      verificationData: body.verificationData,
+      expectedProductId,
+      preferredEnvironment: body.source,
+    });
+
+    const transaction = korlixAppleBuild130NormalizeTransaction(result);
+
+    if (transaction.productId !== expectedProductId) {
+      return res.status(400).json({
+        ok: false,
+        verified: false,
+        error: "Apple product ID mismatch.",
+      });
+    }
+
+    if (
+      transaction.appAccountToken &&
+      transaction.appAccountToken.toLowerCase() !==
+        String(user.id || "").toLowerCase()
+    ) {
+      return res.status(409).json({
+        ok: false,
+        verified: false,
+        error:
+          "This Apple subscription is linked to a different Korlix account.",
+      });
+    }
+
+    const applied = await korlixAppleBuild130ApplyEntitlement({
+      userId: user.id,
+      transaction,
+      rawPayload: {
+        source: String(body.source || ""),
+        transaction: transaction.decoded,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      verified: true,
+      active: transaction.active,
+      tier: applied?.tier || transaction.tier,
+      productId: transaction.productId,
+      status: transaction.status,
+      expiresAt: transaction.expiresAt,
+      transactionId: transaction.transactionId,
+      originalTransactionId: transaction.originalTransactionId,
+      environment: transaction.environment,
+    });
+  } catch (error) {
+    console.error(
+      "KORLIX_APPLE_BUILD130_VERIFY_FAILED",
+      sanitize(error?.message)
+    );
+
+    return res.status(error?.statusCode || 500).json({
+      ok: false,
+      verified: false,
+      error: getKorlixUserFacingError(error),
+    });
+  }
+});
+
+app.post("/api/billing/apple/notifications", async (req, res) => {
+  try {
+    const signedPayload = String(req.body?.signedPayload || "").trim();
+
+    if (!signedPayload) {
+      return res.status(400).json({
+        ok: false,
+        error: "signedPayload is required.",
+      });
+    }
+
+    const verifiedNotification =
+      await korlixAppleBuild130VerifyNotification(signedPayload);
+
+    const notification = verifiedNotification.decoded || {};
+    const notificationData = notification.data || {};
+    const signedTransactionInfo = String(
+      notificationData.signedTransactionInfo || ""
+    ).trim();
+    const signedRenewalInfo = String(
+      notificationData.signedRenewalInfo || ""
+    ).trim();
+
+    if (!signedTransactionInfo) {
+      return res.json({
+        ok: true,
+        ignored: true,
+        reason: "Notification did not include transaction data.",
+      });
+    }
+
+    const transactionResult =
+      await korlixAppleBuild130VerifyTransactionJws(
+        signedTransactionInfo,
+        notificationData.environment || verifiedNotification.environment
+      );
+    const transaction =
+      korlixAppleBuild130NormalizeTransaction(transactionResult);
+
+    let renewalInfo = null;
+
+    if (signedRenewalInfo) {
+      try {
+        renewalInfo =
+          await verifiedNotification.verifier.verifyAndDecodeRenewalInfo(
+            signedRenewalInfo
+          );
+      } catch (error) {
+        console.warn(
+          "KORLIX_APPLE_BUILD130_RENEWAL_WARNING",
+          sanitize(error?.message)
+        );
+      }
+    }
+
+    const gracePeriodExpiresMs = Number(
+      renewalInfo?.gracePeriodExpiresDate || 0
+    );
+
+    if (
+      transaction.status === "expired" &&
+      Number.isFinite(gracePeriodExpiresMs) &&
+      gracePeriodExpiresMs > Date.now()
+    ) {
+      transaction.active = true;
+      transaction.status = "grace_period";
+      transaction.expiresAt = korlixAppleBuild130Iso(
+        gracePeriodExpiresMs
+      );
+    }
+
+    let userId = transaction.appAccountToken;
+
+    if (!userId && supabaseAdmin) {
+      const { data } = await supabaseAdmin
+        .from("apple_subscription_entitlements")
+        .select("user_id")
+        .eq(
+          "original_transaction_id",
+          transaction.originalTransactionId
+        )
+        .maybeSingle();
+
+      userId = data?.user_id || null;
+    }
+
+    if (!userId) {
+      return res.json({
+        ok: true,
+        ignored: true,
+        reason:
+          "No Korlix account is linked to this Apple subscription yet.",
+      });
+    }
+
+    await korlixAppleBuild130ApplyEntitlement({
+      userId,
+      transaction,
+      renewalInfo,
+      signedRenewalInfo,
+      notificationType: notification.notificationType,
+      rawPayload: {
+        notificationType: notification.notificationType,
+        subtype: notification.subtype,
+        notificationUUID: notification.notificationUUID,
+        transaction: transaction.decoded,
+        renewalInfo,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      processed: true,
+      notificationType: notification.notificationType || null,
+      transactionId: transaction.transactionId,
+    });
+  } catch (error) {
+    console.error(
+      "KORLIX_APPLE_BUILD130_NOTIFICATION_FAILED",
+      sanitize(error?.message)
+    );
+
+    return res.status(400).json({
+      ok: false,
+      error: "Apple notification could not be verified.",
+    });
+  }
+});
+// KORLIX_APPLE_SUBSCRIPTIONS_BUILD130_END
+
 app.use("/api", (req, res) => {
   return res.status(404).json({
     error: `API route not found: ${req.method} ${req.originalUrl}`,
