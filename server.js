@@ -7631,6 +7631,670 @@ app.post("/api/billing/apple/notifications", async (req, res) => {
 });
 // KORLIX_APPLE_SUBSCRIPTIONS_BUILD130_END
 
+// KORLIX_LIVE_DOCS_GENERATION_BUILD131_BEGIN
+const korlixLiveDocsJobs =
+  global.__korlixLiveDocsJobs || new Map();
+
+global.__korlixLiveDocsJobs = korlixLiveDocsJobs;
+
+const KORLIX_LIVE_DOCS_JOB_TTL_MS =
+  1000 * 60 * 60 * 6;
+
+function korlixLiveDocsCleanJobs() {
+  const now = Date.now();
+
+  for (const [jobId, job] of korlixLiveDocsJobs.entries()) {
+    const updatedAt = Date.parse(
+      job.updatedAt || job.createdAt || "",
+    );
+
+    if (
+      Number.isFinite(updatedAt) &&
+      now - updatedAt > KORLIX_LIVE_DOCS_JOB_TTL_MS
+    ) {
+      korlixLiveDocsJobs.delete(jobId);
+    }
+  }
+}
+
+function korlixLiveDocsParseJsonField(value, fallback) {
+  if (value && typeof value === "object") {
+    return value;
+  }
+
+  const source = String(value || "").trim();
+
+  if (!source) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(source);
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function korlixLiveDocsPublicJob(job) {
+  return {
+    success: job.status === "completed",
+    jobId: job.jobId,
+    status: job.status,
+    revision: job.revision,
+    title: job.title,
+    language: job.language,
+    formats: job.formats,
+    sourceFiles: job.sourceFileMetadata,
+    report: job.report,
+    artifacts: job.artifacts,
+    creditsUsed: job.creditsUsed,
+    generationId: job.generationId || null,
+    tier: job.tier,
+    error: job.error || null,
+    details: job.details || null,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+  };
+}
+
+function korlixLiveDocsJobForUser(jobId, userId) {
+  korlixLiveDocsCleanJobs();
+
+  const job = korlixLiveDocsJobs.get(
+    String(jobId || "").trim(),
+  );
+
+  if (!job) {
+    const error = new Error("LIVE DOCS job not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (String(job.userId) !== String(userId)) {
+    const error = new Error(
+      "This LIVE DOCS job belongs to another account.",
+    );
+    error.statusCode = 403;
+    throw error;
+  }
+
+  return job;
+}
+
+async function korlixLiveDocsGenerator() {
+  return import("./backend/korlix_live_docs_generation.js");
+}
+
+async function korlixLiveDocsBuildReport({
+  sourceDossier,
+  sourceFileMetadata,
+  sourceFiles,
+  brief,
+  title,
+  instructions,
+  formats,
+  language,
+  previousReport = null,
+  revisionInstruction = "",
+}) {
+  const generator = await korlixLiveDocsGenerator();
+
+  const client = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+
+  const prompt =
+    generator.buildKorlixLiveDocsReportPrompt({
+      title,
+      instructions,
+      brief,
+      sourceDossier,
+      sourceFiles: sourceFileMetadata.map(
+        (file) => file.name,
+      ),
+      formats,
+      language,
+      previousReport,
+      revisionInstruction,
+    });
+
+  const content = [
+    {
+      type: "input_text",
+      text: prompt,
+    },
+  ];
+
+  for (const file of sourceFiles || []) {
+    const mimeType = getUploadMimeType(file);
+
+    if (mimeType === "application/octet-stream") {
+      throw new Error(
+        `Unsupported LIVE DOCS source type: ${file.originalname}`,
+      );
+    }
+
+    const dataUrl =
+      `data:${mimeType};base64,${file.buffer.toString("base64")}`;
+
+    if (isImageUpload(file)) {
+      content.push({
+        type: "input_image",
+        image_url: dataUrl,
+      });
+    } else {
+      content.push({
+        type: "input_file",
+        filename: file.originalname || "source-file",
+        file_data: dataUrl,
+      });
+    }
+  }
+
+  const response = await client.responses.create({
+    model:
+      process.env.OPENAI_DOCUMENT_MODEL ||
+      process.env.OPENAI_FILE_MODEL ||
+      process.env.OPENAI_MODEL ||
+      process.env.OPENAI_CHAT_MODEL ||
+      "gpt-4o-mini",
+    input: [
+      {
+        role: "user",
+        content,
+      },
+    ],
+    max_output_tokens: 12000,
+    text: {
+      format: {
+        type: "json_object",
+      },
+    },
+  });
+
+  const raw = extractKorlixResponseText(response);
+
+  return generator.parseKorlixLiveDocsReportJson(
+    raw,
+    {
+      title,
+      audience: brief?.audience,
+      sourceFiles: sourceFileMetadata.map(
+        (file) => file.name,
+      ),
+    },
+  );
+}
+
+async function korlixLiveDocsCreateArtifacts({
+  report,
+  formats,
+  sourceFiles,
+  sourceDossier,
+}) {
+  const generator = await korlixLiveDocsGenerator();
+
+  return generator.createKorlixLiveDocsArtifacts({
+    report,
+    formats,
+    sourceFiles,
+    sourceDossier,
+  });
+}
+
+app.get("/api/live-docs/health", async (_req, res) => {
+  try {
+    const generator = await korlixLiveDocsGenerator();
+
+    return res.json({
+      ok: true,
+      feature: "live_docs_generation",
+      version: "build131",
+      formats:
+        generator.normalizeKorlixLiveDocsFormats([
+          "xlsx",
+          "docx",
+          "pdf",
+        ]),
+      authenticatedGeneration: true,
+      revisions: true,
+      storage: "temporary_in_memory",
+    });
+  } catch (error) {
+    return res.status(503).json({
+      ok: false,
+      feature: "live_docs_generation",
+      error: sanitize(error?.message || error),
+    });
+  }
+});
+
+app.post(
+  "/api/live-docs/jobs",
+  documentUpload.array("files", 8),
+  async (req, res) => {
+    try {
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(400).json({
+          error: "Missing OPENAI_API_KEY on backend.",
+        });
+      }
+
+      const user = await requireUser(req);
+      const profile = await getOrCreateProfile(user);
+      const usageCounter =
+        await getOrCreateUsageCounter(user.id);
+
+      const files = getKorlixUploadedFiles(req);
+
+      if (!files.length) {
+        return res.status(400).json({
+          error:
+            "Submit at least one LIVE DOCS source file.",
+        });
+      }
+
+      if (files.length > 8) {
+        return res.status(400).json({
+          error: "LIVE DOCS supports up to 8 files.",
+        });
+      }
+
+      for (const file of files) {
+        assertKorlixSupportedUpload(file);
+      }
+
+      const brief = korlixLiveDocsParseJsonField(
+        req.body?.brief,
+        {},
+      );
+
+      const rawFormats = korlixLiveDocsParseJsonField(
+        req.body?.formats,
+        String(req.body?.formats || "")
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+      );
+
+      const generator = await korlixLiveDocsGenerator();
+
+      const formats =
+        generator.normalizeKorlixLiveDocsFormats(
+          rawFormats,
+        );
+
+      const title = String(
+        req.body?.title ||
+          brief?.title ||
+          "Korlix LIVE DOCS Report",
+      )
+        .trim()
+        .slice(0, 300);
+
+      const instructions = String(
+        req.body?.instructions ||
+          brief?.goal ||
+          brief?.instructions ||
+          "Create a professional report from the processed sources.",
+      )
+        .trim()
+        .slice(0, 12000);
+
+      const sourceDossier = String(
+        req.body?.sourceDossier || "",
+      )
+        .trim()
+        .slice(0, 60000);
+
+      const language = String(
+        req.body?.language || "en",
+      )
+        .trim()
+        .slice(0, 40);
+
+      if (!sourceDossier) {
+        return res.status(400).json({
+          error:
+            "Process the LIVE DOCS files before generating a report.",
+        });
+      }
+
+      const creditsNeeded = 3;
+
+      const usageCheck = checkUsageAllowed({
+        profile,
+        usageCounter,
+        creditsNeeded,
+      });
+
+      if (!usageCheck.allowed) {
+        return res.status(429).json({
+          error: usageCheck.reason,
+          tier: profile?.tier || "basic",
+        });
+      }
+
+      const sourceFileMetadata = files.map((file) => ({
+        name:
+          String(file.originalname || "Source file")
+            .trim()
+            .slice(0, 300),
+        mimeType: getUploadMimeType(file),
+        size: Number(
+          file.size || file.buffer?.length || 0,
+        ),
+      }));
+
+      const report = await korlixLiveDocsBuildReport({
+        sourceDossier,
+        sourceFileMetadata,
+        sourceFiles: files,
+        brief,
+        title,
+        instructions,
+        formats,
+        language,
+      });
+
+      const generated =
+        await korlixLiveDocsCreateArtifacts({
+          report,
+          formats,
+          sourceFiles: files,
+          sourceDossier,
+        });
+
+      if (!generated.artifacts.length) {
+        throw new Error(
+          "LIVE DOCS did not create any report files.",
+        );
+      }
+
+      const now = new Date().toISOString();
+      const jobId =
+        `korlix_live_docs_${crypto.randomUUID()}`;
+
+      const summary = [
+        `LIVE DOCS report generated: ${generated.report.title}`,
+        `Formats: ${generated.artifacts
+          .map((artifact) => artifact.format.toUpperCase())
+          .join(", ")}`,
+        `Sources: ${sourceFileMetadata
+          .map((file) => file.name)
+          .join(", ")}`,
+        "",
+        generated.report.executiveSummary,
+      ].join("\n");
+
+      const historyItem = await saveGenerationHistory({
+        user,
+        profile,
+        command:
+          `LIVE DOCS report: ${title}\n${instructions}`,
+        content: summary,
+        languageCode: language,
+        fileRequested: true,
+        searched: false,
+        creditsNeeded,
+      });
+
+      const updatedUsage = await incrementUsage({
+        usageCounter,
+        liveSearchUsed: false,
+        fileRequested: true,
+        creditsNeeded,
+      });
+
+      const job = {
+        jobId,
+        userId: user.id,
+        status: "completed",
+        revision: 1,
+        title: generated.report.title,
+        language,
+        formats,
+        sourceDossier,
+        sourceFileMetadata,
+        sourceFiles: files.map((file) => ({
+          originalname: file.originalname,
+          mimetype: file.mimetype,
+          size: file.size,
+          buffer: Buffer.from(file.buffer),
+        })),
+        brief,
+        instructions,
+        report: generated.report,
+        artifacts: generated.artifacts,
+        creditsUsed: creditsNeeded,
+        generationId: historyItem?.id || null,
+        tier: profile?.tier || "basic",
+        usage: updatedUsage,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      korlixLiveDocsJobs.set(jobId, job);
+
+      return res.status(201).json({
+        ...korlixLiveDocsPublicJob(job),
+        usage: updatedUsage,
+      });
+    } catch (error) {
+      console.error(
+        "KORLIX_LIVE_DOCS_GENERATION_FAILED",
+        sanitize(error?.message || error),
+      );
+
+      return res
+        .status(error?.statusCode || 500)
+        .json({
+          error: "LIVE DOCS report generation failed.",
+          details: getKorlixUserFacingError(error),
+        });
+    }
+  },
+);
+
+app.get("/api/live-docs/jobs/:jobId", async (req, res) => {
+  try {
+    const user = await requireUser(req);
+
+    const job = korlixLiveDocsJobForUser(
+      req.params.jobId,
+      user.id,
+    );
+
+    return res.json(korlixLiveDocsPublicJob(job));
+  } catch (error) {
+    return res
+      .status(error?.statusCode || 500)
+      .json({
+        error: getKorlixUserFacingError(error),
+      });
+  }
+});
+
+app.post(
+  "/api/live-docs/jobs/:jobId/revisions",
+  async (req, res) => {
+    try {
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(400).json({
+          error: "Missing OPENAI_API_KEY on backend.",
+        });
+      }
+
+      const user = await requireUser(req);
+      const profile = await getOrCreateProfile(user);
+      const usageCounter =
+        await getOrCreateUsageCounter(user.id);
+
+      const job = korlixLiveDocsJobForUser(
+        req.params.jobId,
+        user.id,
+      );
+
+      const instruction = String(
+        req.body?.instruction ||
+          req.body?.instructions ||
+          "",
+      )
+        .trim()
+        .slice(0, 10000);
+
+      if (!instruction) {
+        return res.status(400).json({
+          error: "Describe the report revision first.",
+        });
+      }
+
+      const generator = await korlixLiveDocsGenerator();
+
+      const formats =
+        generator.normalizeKorlixLiveDocsFormats(
+          req.body?.formats || job.formats,
+        );
+
+      const creditsNeeded = 2;
+
+      const usageCheck = checkUsageAllowed({
+        profile,
+        usageCounter,
+        creditsNeeded,
+      });
+
+      if (!usageCheck.allowed) {
+        return res.status(429).json({
+          error: usageCheck.reason,
+          tier: profile?.tier || "basic",
+        });
+      }
+
+      const revisedReport =
+        await korlixLiveDocsBuildReport({
+          sourceDossier: job.sourceDossier,
+          sourceFileMetadata:
+            job.sourceFileMetadata,
+          sourceFiles: job.sourceFiles,
+          brief: job.brief,
+          title: job.title,
+          instructions: job.instructions,
+          formats,
+          language: job.language,
+          previousReport: job.report,
+          revisionInstruction: instruction,
+        });
+
+      const generated =
+        await korlixLiveDocsCreateArtifacts({
+          report: revisedReport,
+          formats,
+          sourceFiles: job.sourceFiles,
+          sourceDossier: job.sourceDossier,
+        });
+
+      if (!generated.artifacts.length) {
+        throw new Error(
+          "LIVE DOCS did not create revised files.",
+        );
+      }
+
+      const summary = [
+        `LIVE DOCS report revised: ${generated.report.title}`,
+        `Revision: ${job.revision + 1}`,
+        `Instruction: ${instruction}`,
+        "",
+        generated.report.executiveSummary,
+      ].join("\n");
+
+      const historyItem = await saveGenerationHistory({
+        user,
+        profile,
+        command:
+          `Revise LIVE DOCS report ${job.jobId}: ${instruction}`,
+        content: summary,
+        languageCode: job.language,
+        fileRequested: true,
+        searched: false,
+        creditsNeeded,
+      });
+
+      const updatedUsage = await incrementUsage({
+        usageCounter,
+        liveSearchUsed: false,
+        fileRequested: true,
+        creditsNeeded,
+      });
+
+      job.status = "completed";
+      job.revision += 1;
+      job.formats = formats;
+      job.report = generated.report;
+      job.artifacts = generated.artifacts;
+      job.creditsUsed += creditsNeeded;
+      job.generationId =
+        historyItem?.id || job.generationId;
+      job.tier = profile?.tier || job.tier;
+      job.updatedAt = new Date().toISOString();
+
+      korlixLiveDocsJobs.set(job.jobId, job);
+
+      return res.json({
+        ...korlixLiveDocsPublicJob(job),
+        revisionCreditsUsed: creditsNeeded,
+        usage: updatedUsage,
+      });
+    } catch (error) {
+      console.error(
+        "KORLIX_LIVE_DOCS_REVISION_FAILED",
+        sanitize(error?.message || error),
+      );
+
+      return res
+        .status(error?.statusCode || 500)
+        .json({
+          error: "LIVE DOCS report revision failed.",
+          details: getKorlixUserFacingError(error),
+        });
+    }
+  },
+);
+
+app.post(
+  "/api/live-docs/jobs/:jobId/cancel",
+  async (req, res) => {
+    try {
+      const user = await requireUser(req);
+
+      const job = korlixLiveDocsJobForUser(
+        req.params.jobId,
+        user.id,
+      );
+
+      if (job.status === "completed") {
+        return res.status(409).json({
+          error:
+            "The report is already complete and cannot be cancelled.",
+          job: korlixLiveDocsPublicJob(job),
+        });
+      }
+
+      job.status = "cancelled";
+      job.updatedAt = new Date().toISOString();
+
+      return res.json(korlixLiveDocsPublicJob(job));
+    } catch (error) {
+      return res
+        .status(error?.statusCode || 500)
+        .json({
+          error: getKorlixUserFacingError(error),
+        });
+    }
+  },
+);
+// KORLIX_LIVE_DOCS_GENERATION_BUILD131_END
+
 app.use("/api", (req, res) => {
   return res.status(404).json({
     error: `API route not found: ${req.method} ${req.originalUrl}`,
