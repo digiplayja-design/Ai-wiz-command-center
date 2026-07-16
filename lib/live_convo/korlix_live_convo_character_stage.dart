@@ -8,6 +8,7 @@ import 'package:video_player/video_player.dart';
 import 'korlix_live_convo_attachment.dart';
 import 'korlix_live_convo_attachment_tray.dart';
 import 'korlix_live_convo_camera_sheet.dart';
+import 'korlix_live_convo_file_submission.dart';
 import 'korlix_live_convo_transcript_export.dart';
 // KORLIX_LIVE_CONVO_CHARACTER_STAGE_V1_BEGIN
 
@@ -52,6 +53,10 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
     this.onPickLiveDocsAttachments,
     this.onRemoveLiveDocsAttachment,
     this.onClearLiveDocsAttachments,
+    this.liveDocsFileSubmissionState =
+        KorlixLiveConvoFileSubmissionState.localOnly,
+    this.liveDocsFileSubmissionError,
+    this.onSubmitLiveDocsAttachments,
   });
 
   final String characterId;
@@ -87,6 +92,11 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
   final Future<void> Function()? onPickLiveDocsAttachments;
   final void Function(String attachmentId)? onRemoveLiveDocsAttachment;
   final VoidCallback? onClearLiveDocsAttachments;
+
+  final KorlixLiveConvoFileSubmissionState liveDocsFileSubmissionState;
+
+  final String? liveDocsFileSubmissionError;
+  final Future<void> Function()? onSubmitLiveDocsAttachments;
 
   @override
   State<KorlixLiveConvoCharacterStage> createState() =>
@@ -1297,7 +1307,9 @@ class _KorlixLiveConvoCharacterStageState
                             ? 'Upload'
                             : 'Files ${widget.liveDocsAttachments.length}',
                         color: const Color(0xFF69D9E8),
-                        onPressed: widget.onPickLiveDocsAttachments == null
+                        onPressed:
+                            widget.liveDocsFileSubmissionState.isSubmitting ||
+                                widget.onPickLiveDocsAttachments == null
                             ? null
                             : () => unawaited(
                                 widget.onPickLiveDocsAttachments!(),
@@ -1333,9 +1345,12 @@ class _KorlixLiveConvoCharacterStageState
                 if (widget.liveDocsAttachments.isNotEmpty) ...[
                   KorlixLiveConvoAttachmentTray(
                     attachments: widget.liveDocsAttachments,
+                    submissionState: widget.liveDocsFileSubmissionState,
+                    submissionError: widget.liveDocsFileSubmissionError,
                     onAddFiles: widget.onPickLiveDocsAttachments,
                     onRemoveFile: widget.onRemoveLiveDocsAttachment,
                     onClearFiles: widget.onClearLiveDocsAttachments,
+                    onSubmitFiles: widget.onSubmitLiveDocsAttachments,
                   ),
                   const SizedBox(height: 14),
                 ],

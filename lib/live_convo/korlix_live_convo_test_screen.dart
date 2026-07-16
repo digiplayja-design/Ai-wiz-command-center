@@ -14,6 +14,7 @@ import 'package:ai_wiz_command_center/live_docs/korlix_live_docs_live_convo_brid
 
 import 'korlix_live_convo_attachment.dart';
 import 'korlix_live_convo_character_stage.dart';
+import 'korlix_live_convo_file_submission.dart';
 import 'korlix_live_convo_response_queue.dart';
 
 import 'korlix_live_convo_transcript_export.dart';
@@ -115,6 +116,17 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
 
   int _liveDocsAttachmentRevision = 0;
   bool _flushingResponseQueue = false;
+
+  // KORLIX_LIVE_CONVO_SUBMIT_FILES_V1
+  KorlixLiveConvoFileSubmissionState _liveDocsFileSubmissionState =
+      KorlixLiveConvoFileSubmissionState.localOnly;
+
+  String? _liveDocsFileSubmissionError;
+  String? _liveDocsProcessedContext;
+
+  int _liveDocsProcessedRevision = -1;
+  int _liveDocsContextSharedRevision = -1;
+  int _liveDocsSubmissionGeneration = 0;
 
   DateTime? _sessionStartedAt;
   int? _activeAssistantTranscriptIndex;
@@ -284,7 +296,10 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
   Future<void> _handleRealtimeChannelOpen() async {
     await _trySendGreeting();
 
-    if (_liveDocsAttachments.isNotEmpty) {
+    if (_liveDocsFileSubmissionState.isReady &&
+        _liveDocsProcessedContext?.trim().isNotEmpty == true) {
+      await _shareProcessedLiveDocsContextToRealtime();
+    } else if (_liveDocsAttachments.isNotEmpty) {
       await _announceLiveDocsAttachmentsToRealtime();
     }
   }
@@ -367,11 +382,20 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
     }
 
     if (accepted.isNotEmpty) {
+      final hadProcessedContext =
+          _liveDocsProcessedContext?.trim().isNotEmpty == true;
+
       _update(() {
         _liveDocsAttachments.addAll(accepted);
         _liveDocsAttachmentRevision += 1;
         _liveDocsApprovedBrief = null;
+
+        _invalidateLiveDocsFileSubmissionState();
       });
+
+      if (hadProcessedContext) {
+        await _sendProcessedContextInvalidationToRealtime();
+      }
 
       await _announceLiveDocsAttachmentsToRealtime();
     }
@@ -403,6 +427,9 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
   void _removeLiveDocsAttachment(String attachmentId) {
     final before = _liveDocsAttachments.length;
 
+    final hadProcessedContext =
+        _liveDocsProcessedContext?.trim().isNotEmpty == true;
+
     _update(() {
       _liveDocsAttachments.removeWhere(
         (attachment) => attachment.id == attachmentId,
@@ -411,10 +438,16 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
       if (_liveDocsAttachments.length != before) {
         _liveDocsAttachmentRevision += 1;
         _liveDocsApprovedBrief = null;
+
+        _invalidateLiveDocsFileSubmissionState();
       }
     });
 
     if (_liveDocsAttachments.length != before) {
+      if (hadProcessedContext) {
+        unawaited(_sendProcessedContextInvalidationToRealtime());
+      }
+
       unawaited(_announceLiveDocsAttachmentsToRealtime());
     }
   }
@@ -424,11 +457,20 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
       return;
     }
 
+    final hadProcessedContext =
+        _liveDocsProcessedContext?.trim().isNotEmpty == true;
+
     _update(() {
       _liveDocsAttachments.clear();
       _liveDocsAttachmentRevision += 1;
       _liveDocsApprovedBrief = null;
+
+      _invalidateLiveDocsFileSubmissionState();
     });
+
+    if (hadProcessedContext) {
+      unawaited(_sendProcessedContextInvalidationToRealtime());
+    }
 
     unawaited(_announceLiveDocsAttachmentsToRealtime());
   }
@@ -499,6 +541,319 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
       _addEvent('LIVE DOCS filename context failed');
 
       return false;
+    }
+  }
+
+  void _invalidateLiveDocsFileSubmissionState() {
+    _liveDocsSubmissionGeneration += 1;
+
+    _liveDocsFileSubmissionState = KorlixLiveConvoFileSubmissionState.localOnly;
+
+    _liveDocsFileSubmissionError = null;
+    _liveDocsProcessedContext = null;
+
+    _liveDocsProcessedRevision = -1;
+    _liveDocsContextSharedRevision = -1;
+  }
+
+  Future<bool> _confirmLiveDocsFileSubmission() async {
+    final fileCount = _liveDocsAttachments.length;
+    final noun = fileCount == 1 ? 'file' : 'files';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF071722),
+          title: Row(
+            children: [
+              const Icon(Icons.cloud_upload_rounded, color: Color(0xFF62D6A7)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Send $fileCount $noun to Ji-A?',
+                  style: const TextStyle(color: Color(0xFFF0F7F8)),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Text(
+              'The selected $noun will be uploaded to Korlix’s '
+              'authenticated file-analysis service and processed '
+              'by AI. The resulting source dossier will be added '
+              'to this LIVE CONVO session so Ji-A can answer from '
+              'the file contents.\n\n'
+              'This analysis may use one Korlix generation credit. '
+              'Do not submit files containing information you are '
+              'not authorized to process.',
+              style: const TextStyle(color: Color(0xFFBBD0D6), height: 1.45),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(true);
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF62D6A7),
+                foregroundColor: const Color(0xFF03110E),
+              ),
+              icon: const Icon(Icons.send_rounded),
+              label: const Text(
+                'Send Files',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    return confirmed == true;
+  }
+
+  Future<void> _submitLiveDocsAttachments() async {
+    if (_liveDocsAttachments.isEmpty ||
+        _liveDocsFileSubmissionState.isSubmitting) {
+      return;
+    }
+
+    final confirmed = await _confirmLiveDocsFileSubmission();
+
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    final attachmentSnapshot = List<KorlixLiveConvoAttachment>.unmodifiable(
+      _liveDocsAttachments,
+    );
+
+    final revision = _liveDocsAttachmentRevision;
+    final generation = _liveDocsSubmissionGeneration;
+
+    _update(() {
+      _liveDocsFileSubmissionState =
+          KorlixLiveConvoFileSubmissionState.submitting;
+
+      _liveDocsFileSubmissionError = null;
+    });
+
+    _addEvent(
+      'Submitting ${attachmentSnapshot.length} '
+      'LIVE DOCS file(s)',
+    );
+
+    final client = KorlixLiveConvoFileSubmissionClient(
+      backendBaseUrl: widget.backendBaseUrl,
+      headersBuilder: widget.headersBuilder,
+    );
+
+    late final KorlixLiveConvoFileSubmissionResult result;
+
+    try {
+      result = await client.submit(
+        attachments: attachmentSnapshot,
+        language: widget.language,
+      );
+    } catch (error) {
+      if (!mounted ||
+          generation != _liveDocsSubmissionGeneration ||
+          revision != _liveDocsAttachmentRevision) {
+        return;
+      }
+
+      final message = error
+          .toString()
+          .replaceFirst('Exception: ', '')
+          .replaceFirst('Bad state: ', '')
+          .replaceFirst('StateError: ', '');
+
+      _update(() {
+        _liveDocsFileSubmissionState =
+            KorlixLiveConvoFileSubmissionState.failed;
+
+        _liveDocsFileSubmissionError = message;
+      });
+
+      _addEvent('LIVE DOCS file submission failed');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: const Color(0xFF8D3344),
+          duration: const Duration(seconds: 7),
+        ),
+      );
+
+      return;
+    } finally {
+      client.close();
+    }
+
+    if (!mounted ||
+        generation != _liveDocsSubmissionGeneration ||
+        revision != _liveDocsAttachmentRevision) {
+      return;
+    }
+
+    final processedContext = korlixLiveConvoBuildProcessedFileContext(
+      result: result,
+      attachments: attachmentSnapshot,
+    );
+
+    _update(() {
+      _liveDocsFileSubmissionState = KorlixLiveConvoFileSubmissionState.ready;
+
+      _liveDocsFileSubmissionError = null;
+      _liveDocsProcessedContext = processedContext;
+
+      _liveDocsProcessedRevision = revision;
+      _liveDocsContextSharedRevision = -1;
+
+      // The source interpretation changed, so require a fresh
+      // local document-brief review before approval.
+      _liveDocsApprovedBrief = null;
+    });
+
+    _addEvent(
+      '${attachmentSnapshot.length} LIVE DOCS '
+      'file(s) processed',
+    );
+
+    final shared = await _shareProcessedLiveDocsContextToRealtime();
+
+    if (!mounted) {
+      return;
+    }
+
+    final message = shared
+        ? '${attachmentSnapshot.length} '
+              '${attachmentSnapshot.length == 1 ? 'file is' : 'files are'} '
+              'ready. Ji-A can now answer from the processed content.'
+        : '${attachmentSnapshot.length} '
+              '${attachmentSnapshot.length == 1 ? 'file was' : 'files were'} '
+              'processed. Start or reconnect LIVE CONVO and Ji-A '
+              'will receive the source dossier.';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF17644D),
+        duration: const Duration(seconds: 7),
+      ),
+    );
+  }
+
+  Future<bool> _shareProcessedLiveDocsContextToRealtime() async {
+    final contextText = _liveDocsProcessedContext?.trim() ?? '';
+    final revision = _liveDocsProcessedRevision;
+
+    if (contextText.isEmpty ||
+        revision < 0 ||
+        revision != _liveDocsAttachmentRevision) {
+      return false;
+    }
+
+    if (_liveDocsContextSharedRevision == revision) {
+      return true;
+    }
+
+    final dataChannel = _dataChannel;
+
+    if (!_connected ||
+        dataChannel == null ||
+        !_isDataChannelOpen(dataChannel)) {
+      return false;
+    }
+
+    final eventSuffix = DateTime.now().microsecondsSinceEpoch.toString();
+
+    try {
+      await dataChannel.send(
+        rtc.RTCDataChannelMessage(
+          jsonEncode(<String, dynamic>{
+            'event_id': 'korlix_live_docs_processed_$eventSuffix',
+            'type': 'conversation.item.create',
+            'item': <String, dynamic>{
+              'type': 'message',
+              'role': 'user',
+              'content': <Map<String, dynamic>>[
+                <String, dynamic>{'type': 'input_text', 'text': contextText},
+              ],
+            },
+          }),
+        ),
+      );
+
+      _liveDocsContextSharedRevision = revision;
+
+      await _requestKorlixResponse(
+        source: 'LIVE DOCS processed files',
+        dedupeKey: 'live-docs-processed-$revision',
+        instructions:
+            'Acknowledge briefly that the submitted files have '
+            'now been processed and that you can answer from the '
+            'source dossier. Mention the filenames when useful. '
+            'Invite the user to ask a question or continue defining '
+            'the document. Do not repeat the entire dossier and do '
+            'not claim access to facts that are absent from it.',
+      );
+
+      _addEvent('Processed file context shared with Ji-A');
+
+      return true;
+    } catch (_) {
+      _addEvent('Processed file context handoff failed');
+
+      return false;
+    }
+  }
+
+  Future<void> _sendProcessedContextInvalidationToRealtime() async {
+    final dataChannel = _dataChannel;
+
+    if (!_connected ||
+        dataChannel == null ||
+        !_isDataChannelOpen(dataChannel)) {
+      return;
+    }
+
+    try {
+      await dataChannel.send(
+        rtc.RTCDataChannelMessage(
+          jsonEncode(<String, dynamic>{
+            'event_id':
+                'korlix_live_docs_context_invalidated_'
+                '${DateTime.now().microsecondsSinceEpoch}',
+            'type': 'conversation.item.create',
+            'item': <String, dynamic>{
+              'type': 'message',
+              'role': 'user',
+              'content': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'type': 'input_text',
+                  'text':
+                      'The LIVE DOCS attachment set changed. '
+                      'Disregard previously supplied processed '
+                      'file context until the user submits the '
+                      'current attachments again.',
+                },
+              ],
+            },
+          }),
+        ),
+      );
+
+      _addEvent('Previous processed file context invalidated');
+    } catch (_) {
+      _addEvent('Processed context invalidation failed');
     }
   }
 
@@ -1642,9 +1997,20 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
       liveDocsAttachments: List<KorlixLiveConvoAttachment>.unmodifiable(
         _liveDocsAttachments,
       ),
-      onPickLiveDocsAttachments: _pickLiveDocsAttachments,
-      onRemoveLiveDocsAttachment: _removeLiveDocsAttachment,
-      onClearLiveDocsAttachments: _clearLiveDocsAttachments,
+      liveDocsFileSubmissionState: _liveDocsFileSubmissionState,
+      liveDocsFileSubmissionError: _liveDocsFileSubmissionError,
+      onPickLiveDocsAttachments: _liveDocsFileSubmissionState.isSubmitting
+          ? null
+          : _pickLiveDocsAttachments,
+      onRemoveLiveDocsAttachment: _liveDocsFileSubmissionState.isSubmitting
+          ? null
+          : _removeLiveDocsAttachment,
+      onClearLiveDocsAttachments: _liveDocsFileSubmissionState.isSubmitting
+          ? null
+          : _clearLiveDocsAttachments,
+      onSubmitLiveDocsAttachments: _liveDocsAttachments.isEmpty
+          ? null
+          : _submitLiveDocsAttachments,
       onEnd: (_connected || _connecting || _localStream != null)
           ? _endSession
           : null,
