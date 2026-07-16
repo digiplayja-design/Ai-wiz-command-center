@@ -26,6 +26,7 @@ Future<KorlixLiveDocsBriefSheetResult?> showKorlixLiveDocsBriefSheet({
   required KorlixLiveDocsConversationBridge bridge,
   required bool captureActive,
   required String clientBuild,
+  List<KorlixLiveDocSourceFile> sourceFiles = const <KorlixLiveDocSourceFile>[],
   KorlixLiveDocBrief? initialBrief,
 }) {
   return showModalBottomSheet<KorlixLiveDocsBriefSheetResult>(
@@ -43,6 +44,7 @@ Future<KorlixLiveDocsBriefSheetResult?> showKorlixLiveDocsBriefSheet({
           bridge: bridge,
           captureActive: captureActive,
           clientBuild: clientBuild,
+          sourceFiles: sourceFiles,
           initialBrief: initialBrief,
         ),
       );
@@ -56,12 +58,14 @@ class KorlixLiveDocsBriefSheet extends StatefulWidget {
     required this.bridge,
     required this.captureActive,
     required this.clientBuild,
+    this.sourceFiles = const <KorlixLiveDocSourceFile>[],
     this.initialBrief,
   });
 
   final KorlixLiveDocsConversationBridge bridge;
   final bool captureActive;
   final String clientBuild;
+  final List<KorlixLiveDocSourceFile> sourceFiles;
   final KorlixLiveDocBrief? initialBrief;
 
   @override
@@ -81,6 +85,8 @@ class _KorlixLiveDocsBriefSheetState extends State<KorlixLiveDocsBriefSheet> {
   late Set<KorlixLiveDocOutputFormat> _outputFormats;
   late bool _allowWebResearch;
 
+  late final List<KorlixLiveDocSourceFile> _sourceFiles;
+
   String? _validationMessage;
 
   @override
@@ -88,6 +94,26 @@ class _KorlixLiveDocsBriefSheetState extends State<KorlixLiveDocsBriefSheet> {
     super.initState();
 
     final initial = widget.initialBrief;
+
+    final mergedSourceFiles = <String, KorlixLiveDocSourceFile>{};
+
+    for (final sourceFile in <KorlixLiveDocSourceFile>[
+      ...widget.sourceFiles,
+      ...?initial?.sourceFiles,
+    ]) {
+      final sourceId = sourceFile.id.trim();
+
+      final key = sourceId.isNotEmpty
+          ? sourceId
+          : '${sourceFile.displayName.trim().toLowerCase()}'
+                '|${sourceFile.sizeBytes}';
+
+      mergedSourceFiles[key] = sourceFile;
+    }
+
+    _sourceFiles = List<KorlixLiveDocSourceFile>.unmodifiable(
+      mergedSourceFiles.values,
+    );
 
     _documentType = initial?.documentType ?? KorlixLiveDocType.custom;
 
@@ -158,6 +184,22 @@ class _KorlixLiveDocsBriefSheetState extends State<KorlixLiveDocsBriefSheet> {
     );
   }
 
+  String _formatSourceFileSize(int bytes) {
+    if (bytes <= 0) {
+      return 'Size unavailable';
+    }
+
+    if (bytes < 1024) {
+      return '$bytes B';
+    }
+
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    }
+
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
   Widget _sectionLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -220,6 +262,10 @@ class _KorlixLiveDocsBriefSheetState extends State<KorlixLiveDocsBriefSheet> {
 
     for (final section in sections) {
       builder.addRequiredSection(section);
+    }
+
+    for (final sourceFile in _sourceFiles) {
+      builder.addSourceFile(sourceFile);
     }
 
     if (widget.bridge.hasCapturedTurns) {
@@ -355,6 +401,86 @@ class _KorlixLiveDocsBriefSheetState extends State<KorlixLiveDocsBriefSheet> {
             ),
           ),
           const SizedBox(height: 16),
+          if (_sourceFiles.isNotEmpty) ...[
+            _sectionLabel('Selected source files — ${_sourceFiles.length}'),
+            Container(
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: const Color(0xFF06131C),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF244D5C)),
+              ),
+              child: Column(
+                children: [
+                  for (
+                    var index = 0;
+                    index < _sourceFiles.length;
+                    index += 1
+                  ) ...[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(top: 2),
+                          child: Icon(
+                            Icons.attach_file_rounded,
+                            color: Color(0xFF69D9E8),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _sourceFiles[index].displayName,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Color(0xFFE5F0F3),
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '${_sourceFiles[index].mimeType} • '
+                                '${_formatSourceFileSize(_sourceFiles[index].sizeBytes)}',
+                                style: const TextStyle(
+                                  color: Color(0xFF8FA9B3),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (index < _sourceFiles.length - 1)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 10),
+                        child: Divider(height: 1, color: Color(0xFF1D3944)),
+                      ),
+                  ],
+                  const SizedBox(height: 11),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'These references remain local in this patch. '
+                      'No source-file bytes are being transmitted.',
+                      style: TextStyle(
+                        color: Color(0xFF62D6A7),
+                        fontSize: 12,
+                        height: 1.35,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+          ],
           if (capturedTurns.isNotEmpty) ...[
             _sectionLabel(
               'Captured conversation — ${capturedTurns.length} '

@@ -188,4 +188,68 @@ void main() {
     expect(job.progressPercent, 100);
     expect(job.isTerminal, isFalse);
   });
+
+  test('selected upload metadata is retained in the local job payload', () {
+    final builder = KorlixLiveDocsBriefBuilder()
+      ..documentType = KorlixLiveDocType.businessReport
+      ..title = 'Operations Review'
+      ..audience = 'Leadership team'
+      ..goal = 'Summarize operational results and next actions.'
+      ..tone = 'professional and concise';
+
+    builder.addSourceFile(
+      KorlixLiveDocSourceFile(
+        id: 'local-1-2048-operations-csv',
+        displayName: 'operations.csv',
+        mimeType: 'text/csv',
+        sizeBytes: 2048,
+        uploadedAt: DateTime.utc(2026, 7, 16),
+      ),
+    );
+
+    builder.addSourceFile(
+      KorlixLiveDocSourceFile(
+        id: 'local-2-4096-notes-pdf',
+        displayName: 'notes.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: 4096,
+        uploadedAt: DateTime.utc(2026, 7, 16),
+      ),
+    );
+
+    final brief = builder.buildApproved(
+      id: 'brief-with-local-sources',
+      createdAt: DateTime.utc(2026, 7, 16, 1),
+      confirmedAt: DateTime.utc(2026, 7, 16, 1, 1),
+    );
+
+    expect(brief.canStartJob, isTrue);
+    expect(brief.sourceFiles, hasLength(2));
+
+    final payload = KorlixLiveDocsApiContract.createJobPayload(
+      brief: brief,
+      idempotencyKey: 'local-source-test',
+      clientBuild: '12.0.0+131',
+    );
+
+    final briefPayload = payload['brief'] as Map<String, dynamic>;
+
+    final sourcePayload = briefPayload['source_files'] as List<dynamic>;
+
+    expect(sourcePayload, hasLength(2));
+
+    expect(
+      sourcePayload
+          .map((entry) => (entry as Map<String, dynamic>)['display_name'])
+          .toList(growable: false),
+      <String>['operations.csv', 'notes.pdf'],
+    );
+
+    expect(
+      sourcePayload
+          .map((entry) => (entry as Map<String, dynamic>)['size_bytes'])
+          .toList(growable: false),
+      <int>[2048, 4096],
+    );
+  });
 }

@@ -33,6 +33,7 @@ import 'improve_picture/screens/portrait_studio_home.dart';
 import 'image_to_video/image_to_video_screen.dart';
 
 import 'live_convo/korlix_live_convo_test_screen.dart';
+import 'live_docs/korlix_live_docs.dart';
 
 import 'billing/korlix_apple_billing.dart';
 
@@ -15396,6 +15397,44 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
+  // KORLIX_LIVE_DOCS_EXISTING_UPLOAD_BRIDGE_V1
+  List<KorlixLiveDocSourceFile> _liveDocsSourceFilesFromCurrentUploads() {
+    final files = _activeUploadFiles;
+    final snapshotAt = DateTime.now().toUtc();
+
+    return List<KorlixLiveDocSourceFile>.unmodifiable(
+      files.asMap().entries.map((entry) {
+        final file = entry.value;
+
+        final cleanName = file.name.trim().isEmpty
+            ? 'Source file ${entry.key + 1}'
+            : file.name.trim();
+
+        var safeIdPart = cleanName
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+            .replaceAll(RegExp(r'^-+'), '')
+            .replaceAll(RegExp(r'-+$'), '');
+
+        if (safeIdPart.isEmpty) {
+          safeIdPart = 'source';
+        }
+
+        if (safeIdPart.length > 60) {
+          safeIdPart = safeIdPart.substring(0, 60);
+        }
+
+        return KorlixLiveDocSourceFile(
+          id: 'local-${entry.key + 1}-${file.size}-$safeIdPart',
+          displayName: cleanName,
+          mimeType: _mimeTypeForPickedFile(file),
+          sizeBytes: file.size < 0 ? 0 : file.size,
+          uploadedAt: snapshotAt,
+        );
+      }),
+    );
+  }
+
   // KORLIX_LIVE_CONVO_PHASE2B_OPEN_BEGIN
   Future<void> _openLiveConvoAudioTest() async {
     final token = kKorlixAccessToken?.trim() ?? '';
@@ -15421,6 +15460,7 @@ Make the entire output professional, well-structured using Markdown, and product
             kKorlixSelectedCharacterNotifier.value,
           ),
           language: _t.label,
+          initialLiveDocsSourceFiles: _liveDocsSourceFilesFromCurrentUploads(),
         ),
       ),
     );

@@ -27,12 +27,15 @@ class KorlixLiveConvoTestScreen extends StatefulWidget {
     required this.headersBuilder,
     required this.characterId,
     required this.language,
+    this.initialLiveDocsSourceFiles = const <KorlixLiveDocSourceFile>[],
   });
 
   final String backendBaseUrl;
   final KorlixLiveConvoHeadersBuilder headersBuilder;
   final String characterId;
   final String language;
+
+  final List<KorlixLiveDocSourceFile> initialLiveDocsSourceFiles;
 
   @override
   State<KorlixLiveConvoTestScreen> createState() =>
@@ -104,12 +107,19 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
   bool _liveDocsCaptureActive = false;
   KorlixLiveDocBrief? _liveDocsApprovedBrief;
 
+  late final List<KorlixLiveDocSourceFile> _liveDocsSourceFiles;
+
   DateTime? _sessionStartedAt;
   int? _activeAssistantTranscriptIndex;
 
   @override
   void initState() {
     super.initState();
+
+    _liveDocsSourceFiles = List<KorlixLiveDocSourceFile>.unmodifiable(
+      widget.initialLiveDocsSourceFiles,
+    );
+
     _rendererInitialization = _initializeRenderer();
   }
 
@@ -1056,6 +1066,7 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
       bridge: _liveDocsBridge,
       captureActive: _liveDocsCaptureActive,
       clientBuild: '12.0.0+131',
+      sourceFiles: _liveDocsSourceFiles,
       initialBrief: _liveDocsApprovedBrief,
     );
 
@@ -1136,6 +1147,7 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
               'Audience: ${brief.audience}\n'
               'Formats: $formats\n'
               'Captured turns: ${_liveDocsBridge.capturedTurnCount}\n'
+              'Source files: ${brief.sourceFiles.length}\n'
               'Schema: $schema\n\n'
               'The confirmation gate passed locally. No backend '
               'document job was started and no files were uploaded.',
