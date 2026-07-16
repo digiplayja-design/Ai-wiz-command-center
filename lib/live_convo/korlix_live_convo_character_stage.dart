@@ -42,6 +42,10 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
     required this.onSendText,
     required this.onSendImage,
     required this.onEnd,
+    this.liveDocsCaptureActive = false,
+    this.liveDocsCapturedTurnCount = 0,
+    this.liveDocsBriefReady = false,
+    this.onCreateDocument,
   });
 
   final String characterId;
@@ -67,6 +71,11 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
   final Future<void> Function(String text)? onSendText;
   final KorlixLiveConvoImageSender? onSendImage;
   final Future<void> Function()? onEnd;
+
+  final bool liveDocsCaptureActive;
+  final int liveDocsCapturedTurnCount;
+  final bool liveDocsBriefReady;
+  final Future<void> Function()? onCreateDocument;
 
   @override
   State<KorlixLiveConvoCharacterStage> createState() =>
@@ -1269,6 +1278,21 @@ class _KorlixLiveConvoCharacterStageState
                         onPressed: widget.onSendText == null
                             ? null
                             : () => unawaited(_openKeyboardComposer()),
+                      ),
+                      // KORLIX_LIVE_DOCS_ACTION_V1
+                      _circleAction(
+                        icon: Icons.description_rounded,
+                        label: widget.liveDocsCaptureActive
+                            ? (widget.liveDocsCapturedTurnCount == 0
+                                  ? 'Doc Brief'
+                                  : 'Doc ${widget.liveDocsCapturedTurnCount}')
+                            : (widget.liveDocsBriefReady
+                                  ? 'Doc Ready'
+                                  : 'Create Doc'),
+                        color: const Color(0xFF62D6A7),
+                        onPressed: widget.onCreateDocument == null
+                            ? null
+                            : () => unawaited(widget.onCreateDocument!()),
                       ),
                       _circleAction(
                         icon: Icons.stop_rounded,

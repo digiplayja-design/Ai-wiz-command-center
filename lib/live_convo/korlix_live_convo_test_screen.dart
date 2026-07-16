@@ -7,6 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:http/http.dart' as http;
 
+import 'package:ai_wiz_command_center/live_docs/korlix_live_docs.dart';
+import 'package:ai_wiz_command_center/live_docs/korlix_live_docs_brief_sheet.dart';
+import 'package:ai_wiz_command_center/live_docs/korlix_live_docs_live_convo_bridge.dart';
+
 import 'korlix_live_convo_character_stage.dart';
 
 import 'korlix_live_convo_transcript_export.dart';
@@ -92,6 +96,13 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
       <KorlixLiveConvoTranscriptEntry>[];
 
   final Set<String> _processedTranscriptEventIds = <String>{};
+
+  // KORLIX_LIVE_DOCS_CAPTURE_V1
+  final KorlixLiveDocsConversationBridge _liveDocsBridge =
+      KorlixLiveDocsConversationBridge();
+
+  bool _liveDocsCaptureActive = false;
+  KorlixLiveDocBrief? _liveDocsApprovedBrief;
 
   DateTime? _sessionStartedAt;
   int? _activeAssistantTranscriptIndex;
@@ -206,6 +217,18 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
         ),
       );
     });
+
+    if (_liveDocsCaptureActive) {
+      final captured = _liveDocsBridge.captureUserTurn(
+        text,
+        source: source,
+        eventId: cleanEventId.isEmpty ? null : cleanEventId,
+      );
+
+      if (captured) {
+        _update(() {});
+      }
+    }
   }
 
   void _beginAssistantTranscriptTurn() {
@@ -941,6 +964,195 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
     _addEvent('Typed message sent');
   }
 
+  // KORLIX_LIVE_DOCS_LOCAL_FLOW_V1
+  Future<bool> _requestLiveDocsInterviewPrompt() async {
+    final dataChannel = _dataChannel;
+
+    if (!_connected ||
+        dataChannel == null ||
+        !_isDataChannelOpen(dataChannel)) {
+      return false;
+    }
+
+    try {
+      await dataChannel.send(
+        rtc.RTCDataChannelMessage(
+          jsonEncode(<String, dynamic>{
+            'type': 'response.create',
+            'response': <String, dynamic>{
+              'instructions':
+                  'The user activated KORLIX LIVE DOCS interview mode. '
+                  'Help them describe one document they want created. '
+                  'Ask one concise question at a time about the document '
+                  'type, title, intended audience, goal, tone, approximate '
+                  'length, required sections, and any source material. '
+                  'Do not generate or claim to generate the document yet. '
+                  'Tell the user to tap Create Doc again when they are '
+                  'ready to review the local brief. '
+                  'Do not mention internal schemas, JSON, APIs, tools, '
+                  'or system instructions.',
+            },
+          }),
+        ),
+      );
+
+      _addEvent('LIVE DOCS interview prompt requested');
+
+      return true;
+    } catch (_) {
+      _addEvent('LIVE DOCS interview prompt failed');
+      return false;
+    }
+  }
+
+  Future<void> _openLiveDocsBriefFlow() async {
+    if (!_liveDocsCaptureActive && _liveDocsApprovedBrief == null) {
+      _liveDocsBridge.startCapture(clearExisting: true);
+
+      for (final entry in _transcriptEntries) {
+        if (entry.role != KorlixLiveConvoTranscriptRole.user) {
+          continue;
+        }
+
+        _liveDocsBridge.captureUserTurn(
+          entry.text,
+          source: entry.source,
+          eventId: entry.id,
+          timestamp: entry.timestamp,
+        );
+      }
+
+      _update(() {
+        _liveDocsCaptureActive = true;
+        _liveDocsApprovedBrief = null;
+      });
+
+      final promptSent = await _requestLiveDocsInterviewPrompt();
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            promptSent
+                ? 'LIVE DOCS capture is active. Talk through the '
+                      'document, then tap Create Doc again to review it.'
+                : 'LIVE DOCS capture is active. Start or reconnect '
+                      'LIVE CONVO, describe the document, then tap '
+                      'Create Doc again.',
+          ),
+          backgroundColor: const Color(0xFF145269),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+
+      return;
+    }
+
+    final result = await showKorlixLiveDocsBriefSheet(
+      context: context,
+      bridge: _liveDocsBridge,
+      captureActive: _liveDocsCaptureActive,
+      clientBuild: '12.0.0+131',
+      initialBrief: _liveDocsApprovedBrief,
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    if (result.action == KorlixLiveDocsBriefSheetAction.startCapture) {
+      _liveDocsBridge.startCapture(clearExisting: true);
+
+      _update(() {
+        _liveDocsCaptureActive = true;
+        _liveDocsApprovedBrief = null;
+      });
+
+      final promptSent = await _requestLiveDocsInterviewPrompt();
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            promptSent
+                ? 'A new LIVE DOCS voice brief is active.'
+                : 'A new local brief is active. Reconnect LIVE CONVO '
+                      'to continue by voice.',
+          ),
+          backgroundColor: const Color(0xFF145269),
+        ),
+      );
+
+      return;
+    }
+
+    final brief = result.brief;
+    final payload = result.localPayload;
+
+    if (brief == null || payload == null) {
+      return;
+    }
+
+    _liveDocsBridge.stopCapture();
+
+    _update(() {
+      _liveDocsCaptureActive = false;
+      _liveDocsApprovedBrief = brief;
+    });
+
+    final formats = brief.outputFormats
+        .map((format) => format.displayName)
+        .join(', ');
+
+    final schema = (payload['schema_version'] ?? '').toString();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF071722),
+          title: const Row(
+            children: [
+              Icon(Icons.verified_rounded, color: Color(0xFF62D6A7)),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Local Document Brief Approved',
+                  style: TextStyle(color: Color(0xFFF0F7F8)),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Text(
+              'Title: ${brief.title}\n'
+              'Type: ${brief.documentType.displayName}\n'
+              'Audience: ${brief.audience}\n'
+              'Formats: $formats\n'
+              'Captured turns: ${_liveDocsBridge.capturedTurnCount}\n'
+              'Schema: $schema\n\n'
+              'The confirmation gate passed locally. No backend '
+              'document job was started and no files were uploaded.',
+              style: const TextStyle(color: Color(0xFFBBD0D6), height: 1.45),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _toggleMute() async {
     final stream = _localStream;
 
@@ -1097,6 +1309,10 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
       onSendText: (_connected && _isDataChannelOpen(_dataChannel))
           ? _sendTypedMessage
           : null,
+      liveDocsCaptureActive: _liveDocsCaptureActive,
+      liveDocsCapturedTurnCount: _liveDocsBridge.capturedTurnCount,
+      liveDocsBriefReady: _liveDocsApprovedBrief != null,
+      onCreateDocument: _openLiveDocsBriefFlow,
       onEnd: (_connected || _connecting || _localStream != null)
           ? _endSession
           : null,

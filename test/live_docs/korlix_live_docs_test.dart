@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../lib/live_docs/korlix_live_docs.dart';
+import 'package:ai_wiz_command_center/live_docs/korlix_live_docs.dart';
 
 void main() {
   group('KorlixLiveDocBrief', () {
