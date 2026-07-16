@@ -9,6 +9,8 @@ import 'korlix_live_convo_attachment.dart';
 import 'korlix_live_convo_attachment_tray.dart';
 import 'korlix_live_convo_camera_sheet.dart';
 import 'korlix_live_convo_file_submission.dart';
+import 'package:ai_wiz_command_center/live_docs/korlix_live_docs_generation.dart';
+
 import 'korlix_live_convo_transcript_export.dart';
 // KORLIX_LIVE_CONVO_CHARACTER_STAGE_V1_BEGIN
 
@@ -57,6 +59,12 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
         KorlixLiveConvoFileSubmissionState.localOnly,
     this.liveDocsFileSubmissionError,
     this.onSubmitLiveDocsAttachments,
+    this.liveDocsGenerationState = KorlixLiveDocsGenerationState.idle,
+    this.liveDocsGenerationResult,
+    this.liveDocsGenerationError,
+    this.onShareLiveDocsArtifact,
+    this.onReviseLiveDocsReport,
+    this.onRetryLiveDocsReport,
   });
 
   final String characterId;
@@ -97,6 +105,14 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
 
   final String? liveDocsFileSubmissionError;
   final Future<void> Function()? onSubmitLiveDocsAttachments;
+
+  final KorlixLiveDocsGenerationState liveDocsGenerationState;
+  final KorlixLiveDocsGenerationResult? liveDocsGenerationResult;
+  final String? liveDocsGenerationError;
+  final Future<void> Function(KorlixLiveDocsArtifact artifact)?
+  onShareLiveDocsArtifact;
+  final Future<void> Function()? onReviseLiveDocsReport;
+  final Future<void> Function()? onRetryLiveDocsReport;
 
   @override
   State<KorlixLiveConvoCharacterStage> createState() =>
@@ -1317,16 +1333,27 @@ class _KorlixLiveConvoCharacterStageState
                       ),
                       // KORLIX_LIVE_DOCS_ACTION_V1
                       _circleAction(
-                        icon: Icons.description_rounded,
-                        label: widget.liveDocsCaptureActive
+                        icon: widget.liveDocsGenerationResult != null
+                            ? Icons.verified_rounded
+                            : Icons.description_rounded,
+                        label: widget.liveDocsGenerationState.isBusy
+                            ? (widget.liveDocsGenerationState ==
+                                      KorlixLiveDocsGenerationState.revising
+                                  ? 'Revising'
+                                  : 'Generating')
+                            : widget.liveDocsGenerationResult != null
+                            ? 'Report Ready'
+                            : widget.liveDocsCaptureActive
                             ? (widget.liveDocsCapturedTurnCount == 0
                                   ? 'Doc Brief'
                                   : 'Turns ${widget.liveDocsCapturedTurnCount}')
                             : (widget.liveDocsBriefReady
-                                  ? 'Doc Ready'
+                                  ? 'Generate Doc'
                                   : 'Create Doc'),
                         color: const Color(0xFF62D6A7),
-                        onPressed: widget.onCreateDocument == null
+                        onPressed:
+                            widget.liveDocsGenerationState.isBusy ||
+                                widget.onCreateDocument == null
                             ? null
                             : () => unawaited(widget.onCreateDocument!()),
                       ),
@@ -1351,6 +1378,19 @@ class _KorlixLiveConvoCharacterStageState
                     onRemoveFile: widget.onRemoveLiveDocsAttachment,
                     onClearFiles: widget.onClearLiveDocsAttachments,
                     onSubmitFiles: widget.onSubmitLiveDocsAttachments,
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                if (widget.liveDocsGenerationState !=
+                        KorlixLiveDocsGenerationState.idle ||
+                    widget.liveDocsGenerationResult != null) ...[
+                  KorlixLiveDocsReportCard(
+                    state: widget.liveDocsGenerationState,
+                    result: widget.liveDocsGenerationResult,
+                    error: widget.liveDocsGenerationError,
+                    onShareArtifact: widget.onShareLiveDocsArtifact,
+                    onRevise: widget.onReviseLiveDocsReport,
+                    onRetry: widget.onRetryLiveDocsReport,
                   ),
                   const SizedBox(height: 14),
                 ],

@@ -58,11 +58,13 @@ KorlixLiveDocType korlixLiveDocTypeFromWire(Object? value) {
   return KorlixLiveDocType.custom;
 }
 
-enum KorlixLiveDocOutputFormat { docx, pdf, plainText, markdown }
+enum KorlixLiveDocOutputFormat { xlsx, docx, pdf, plainText, markdown }
 
 extension KorlixLiveDocOutputFormatValues on KorlixLiveDocOutputFormat {
   String get wireValue {
     switch (this) {
+      case KorlixLiveDocOutputFormat.xlsx:
+        return 'xlsx';
       case KorlixLiveDocOutputFormat.docx:
         return 'docx';
       case KorlixLiveDocOutputFormat.pdf:
@@ -76,6 +78,8 @@ extension KorlixLiveDocOutputFormatValues on KorlixLiveDocOutputFormat {
 
   String get displayName {
     switch (this) {
+      case KorlixLiveDocOutputFormat.xlsx:
+        return 'Microsoft Excel';
       case KorlixLiveDocOutputFormat.docx:
         return 'Microsoft Word';
       case KorlixLiveDocOutputFormat.pdf:

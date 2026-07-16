@@ -743,7 +743,7 @@ class _KorlixLiveDocsBriefSheetState extends State<KorlixLiveDocsBriefSheet> {
               ),
               icon: const Icon(Icons.verified_rounded),
               label: const Text(
-                'Approve Local Brief',
+                'Approve & Generate Report',
                 style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w900),
               ),
             ),
