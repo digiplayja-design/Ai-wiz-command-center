@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:video_player/video_player.dart';
 
+import 'korlix_live_convo_attachment.dart';
+import 'korlix_live_convo_attachment_tray.dart';
 import 'korlix_live_convo_camera_sheet.dart';
 import 'korlix_live_convo_transcript_export.dart';
 // KORLIX_LIVE_CONVO_CHARACTER_STAGE_V1_BEGIN
@@ -46,6 +48,10 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
     this.liveDocsCapturedTurnCount = 0,
     this.liveDocsBriefReady = false,
     this.onCreateDocument,
+    this.liveDocsAttachments = const <KorlixLiveConvoAttachment>[],
+    this.onPickLiveDocsAttachments,
+    this.onRemoveLiveDocsAttachment,
+    this.onClearLiveDocsAttachments,
   });
 
   final String characterId;
@@ -76,6 +82,11 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
   final int liveDocsCapturedTurnCount;
   final bool liveDocsBriefReady;
   final Future<void> Function()? onCreateDocument;
+
+  final List<KorlixLiveConvoAttachment> liveDocsAttachments;
+  final Future<void> Function()? onPickLiveDocsAttachments;
+  final void Function(String attachmentId)? onRemoveLiveDocsAttachment;
+  final VoidCallback? onClearLiveDocsAttachments;
 
   @override
   State<KorlixLiveConvoCharacterStage> createState() =>
@@ -1279,13 +1290,26 @@ class _KorlixLiveConvoCharacterStageState
                             ? null
                             : () => unawaited(_openKeyboardComposer()),
                       ),
+                      // KORLIX_LIVE_CONVO_UPLOAD_ACTION_V1
+                      _circleAction(
+                        icon: Icons.attach_file_rounded,
+                        label: widget.liveDocsAttachments.isEmpty
+                            ? 'Upload'
+                            : 'Files ${widget.liveDocsAttachments.length}',
+                        color: const Color(0xFF69D9E8),
+                        onPressed: widget.onPickLiveDocsAttachments == null
+                            ? null
+                            : () => unawaited(
+                                widget.onPickLiveDocsAttachments!(),
+                              ),
+                      ),
                       // KORLIX_LIVE_DOCS_ACTION_V1
                       _circleAction(
                         icon: Icons.description_rounded,
                         label: widget.liveDocsCaptureActive
                             ? (widget.liveDocsCapturedTurnCount == 0
                                   ? 'Doc Brief'
-                                  : 'Doc ${widget.liveDocsCapturedTurnCount}')
+                                  : 'Turns ${widget.liveDocsCapturedTurnCount}')
                             : (widget.liveDocsBriefReady
                                   ? 'Doc Ready'
                                   : 'Create Doc'),
@@ -1306,6 +1330,15 @@ class _KorlixLiveConvoCharacterStageState
                     ],
                   ),
                 const SizedBox(height: 20),
+                if (widget.liveDocsAttachments.isNotEmpty) ...[
+                  KorlixLiveConvoAttachmentTray(
+                    attachments: widget.liveDocsAttachments,
+                    onAddFiles: widget.onPickLiveDocsAttachments,
+                    onRemoveFile: widget.onRemoveLiveDocsAttachment,
+                    onClearFiles: widget.onClearLiveDocsAttachments,
+                  ),
+                  const SizedBox(height: 14),
+                ],
                 AnimatedCrossFade(
                   duration: const Duration(milliseconds: 240),
                   crossFadeState: _showTranscript

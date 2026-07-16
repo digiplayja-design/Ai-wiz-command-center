@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:http/http.dart' as http;
@@ -11,7 +12,9 @@ import 'package:ai_wiz_command_center/live_docs/korlix_live_docs.dart';
 import 'package:ai_wiz_command_center/live_docs/korlix_live_docs_brief_sheet.dart';
 import 'package:ai_wiz_command_center/live_docs/korlix_live_docs_live_convo_bridge.dart';
 
+import 'korlix_live_convo_attachment.dart';
 import 'korlix_live_convo_character_stage.dart';
+import 'korlix_live_convo_response_queue.dart';
 
 import 'korlix_live_convo_transcript_export.dart';
 
@@ -27,15 +30,12 @@ class KorlixLiveConvoTestScreen extends StatefulWidget {
     required this.headersBuilder,
     required this.characterId,
     required this.language,
-    this.initialLiveDocsSourceFiles = const <KorlixLiveDocSourceFile>[],
   });
 
   final String backendBaseUrl;
   final KorlixLiveConvoHeadersBuilder headersBuilder;
   final String characterId;
   final String language;
-
-  final List<KorlixLiveDocSourceFile> initialLiveDocsSourceFiles;
 
   @override
   State<KorlixLiveConvoTestScreen> createState() =>
@@ -106,8 +106,15 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
 
   bool _liveDocsCaptureActive = false;
   KorlixLiveDocBrief? _liveDocsApprovedBrief;
+  // KORLIX_LIVE_CONVO_SESSION_UPLOADS_V1
+  final List<KorlixLiveConvoAttachment> _liveDocsAttachments =
+      <KorlixLiveConvoAttachment>[];
 
-  late final List<KorlixLiveDocSourceFile> _liveDocsSourceFiles;
+  final KorlixLiveConvoResponseQueue _responseQueue =
+      KorlixLiveConvoResponseQueue();
+
+  int _liveDocsAttachmentRevision = 0;
+  bool _flushingResponseQueue = false;
 
   DateTime? _sessionStartedAt;
   int? _activeAssistantTranscriptIndex;
@@ -115,11 +122,6 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
   @override
   void initState() {
     super.initState();
-
-    _liveDocsSourceFiles = List<KorlixLiveDocSourceFile>.unmodifiable(
-      widget.initialLiveDocsSourceFiles,
-    );
-
     _rendererInitialization = _initializeRenderer();
   }
 
@@ -183,6 +185,321 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
     final rawState = channel.state.toString().trim().toLowerCase();
 
     return rawState.endsWith('open');
+  }
+
+  List<KorlixLiveDocSourceFile> get _liveDocsSourceFiles {
+    return List<KorlixLiveDocSourceFile>.unmodifiable(
+      _liveDocsAttachments.map(
+        (attachment) => attachment.toLiveDocSourceFile(),
+      ),
+    );
+  }
+
+  Future<bool> _dispatchKorlixResponse(
+    KorlixLiveConvoResponseRequest request,
+  ) async {
+    final dataChannel = _dataChannel;
+
+    if (dataChannel == null || !_isDataChannelOpen(dataChannel)) {
+      return false;
+    }
+
+    final payload = <String, dynamic>{
+      'event_id': 'korlix_response_${DateTime.now().microsecondsSinceEpoch}',
+      'type': 'response.create',
+    };
+
+    final instructions = request.instructions?.trim() ?? '';
+
+    if (instructions.isNotEmpty) {
+      payload['response'] = <String, dynamic>{'instructions': instructions};
+    }
+
+    _responseQueue.markDispatched(request);
+
+    try {
+      await dataChannel.send(rtc.RTCDataChannelMessage(jsonEncode(payload)));
+
+      _addEvent('${request.source} response requested');
+
+      return true;
+    } catch (_) {
+      _responseQueue.markResponseDone();
+      _addEvent('${request.source} response request failed');
+
+      return false;
+    }
+  }
+
+  Future<bool> _requestKorlixResponse({
+    required String source,
+    required String dedupeKey,
+    String? instructions,
+  }) async {
+    final request = KorlixLiveConvoResponseRequest(
+      source: source,
+      dedupeKey: dedupeKey,
+      instructions: instructions,
+    );
+
+    if (_responseQueue.busy) {
+      final queued = _responseQueue.enqueue(request);
+
+      _addEvent(
+        queued ? '$source response queued' : '$source response already queued',
+      );
+
+      return true;
+    }
+
+    return _dispatchKorlixResponse(request);
+  }
+
+  Future<void> _flushKorlixResponseQueue() async {
+    if (_flushingResponseQueue || _responseQueue.busy) {
+      return;
+    }
+
+    _flushingResponseQueue = true;
+
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+
+      final next = _responseQueue.takeNextIfIdle();
+
+      if (next == null) {
+        return;
+      }
+
+      final sent = await _dispatchKorlixResponse(next);
+
+      if (!sent) {
+        _responseQueue.requeueFront(next);
+      }
+    } finally {
+      _flushingResponseQueue = false;
+    }
+  }
+
+  Future<void> _handleRealtimeChannelOpen() async {
+    await _trySendGreeting();
+
+    if (_liveDocsAttachments.isNotEmpty) {
+      await _announceLiveDocsAttachmentsToRealtime();
+    }
+  }
+
+  Future<void> _pickLiveDocsAttachments() async {
+    final result = await fp.FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      withData: true,
+      type: fp.FileType.custom,
+      allowedExtensions: KorlixLiveConvoAttachmentPolicy.allowedExtensions,
+    );
+
+    if (!mounted || result == null || result.files.isEmpty) {
+      return;
+    }
+
+    final accepted = <KorlixLiveConvoAttachment>[];
+    final messages = <String>[];
+
+    var existingCount = _liveDocsAttachments.length;
+    var existingBytes = _liveDocsAttachments.fold<int>(
+      0,
+      (total, attachment) => total + attachment.sizeBytes,
+    );
+
+    final selectionTime = DateTime.now().toUtc();
+
+    for (var index = 0; index < result.files.length; index += 1) {
+      final file = result.files[index];
+      final bytes = file.bytes;
+      final cleanName = file.name.trim().isEmpty
+          ? 'Source file ${existingCount + 1}'
+          : file.name.trim();
+
+      if (bytes == null || bytes.isEmpty) {
+        messages.add('$cleanName could not be read on this device.');
+        continue;
+      }
+
+      final duplicateKey = '${cleanName.toLowerCase()}|${bytes.length}';
+
+      final duplicate = <KorlixLiveConvoAttachment>[
+        ..._liveDocsAttachments,
+        ...accepted,
+      ].any((attachment) => attachment.dedupeKey == duplicateKey);
+
+      if (duplicate) {
+        messages.add('$cleanName is already attached.');
+        continue;
+      }
+
+      final validation = KorlixLiveConvoAttachmentPolicy.validateCandidate(
+        existingCount: existingCount,
+        existingBytes: existingBytes,
+        candidateBytes: bytes.length,
+      );
+
+      if (validation != null) {
+        messages.add('$cleanName: $validation');
+        continue;
+      }
+
+      final idPart = korlixLiveConvoAttachmentIdPart(cleanName);
+
+      accepted.add(
+        KorlixLiveConvoAttachment(
+          id:
+              'live-doc-${selectionTime.microsecondsSinceEpoch}-'
+              '$index-$idPart',
+          displayName: cleanName,
+          mimeType: korlixLiveConvoMimeTypeForName(cleanName),
+          sizeBytes: bytes.length,
+          bytes: bytes,
+          addedAt: selectionTime,
+        ),
+      );
+
+      existingCount += 1;
+      existingBytes += bytes.length;
+    }
+
+    if (accepted.isNotEmpty) {
+      _update(() {
+        _liveDocsAttachments.addAll(accepted);
+        _liveDocsAttachmentRevision += 1;
+        _liveDocsApprovedBrief = null;
+      });
+
+      await _announceLiveDocsAttachmentsToRealtime();
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    final acceptedMessage = accepted.isEmpty
+        ? 'No new LIVE DOCS files were attached.'
+        : '${accepted.length} LIVE DOCS '
+              '${accepted.length == 1 ? 'file' : 'files'} attached.';
+
+    final detail = messages.isEmpty
+        ? acceptedMessage
+        : '$acceptedMessage\n${messages.join('\n')}';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(detail),
+        backgroundColor: accepted.isEmpty
+            ? const Color(0xFF7B3344)
+            : const Color(0xFF145269),
+        duration: const Duration(seconds: 6),
+      ),
+    );
+  }
+
+  void _removeLiveDocsAttachment(String attachmentId) {
+    final before = _liveDocsAttachments.length;
+
+    _update(() {
+      _liveDocsAttachments.removeWhere(
+        (attachment) => attachment.id == attachmentId,
+      );
+
+      if (_liveDocsAttachments.length != before) {
+        _liveDocsAttachmentRevision += 1;
+        _liveDocsApprovedBrief = null;
+      }
+    });
+
+    if (_liveDocsAttachments.length != before) {
+      unawaited(_announceLiveDocsAttachmentsToRealtime());
+    }
+  }
+
+  void _clearLiveDocsAttachments() {
+    if (_liveDocsAttachments.isEmpty) {
+      return;
+    }
+
+    _update(() {
+      _liveDocsAttachments.clear();
+      _liveDocsAttachmentRevision += 1;
+      _liveDocsApprovedBrief = null;
+    });
+
+    unawaited(_announceLiveDocsAttachmentsToRealtime());
+  }
+
+  Future<bool> _announceLiveDocsAttachmentsToRealtime() async {
+    final dataChannel = _dataChannel;
+
+    if (dataChannel == null || !_isDataChannelOpen(dataChannel)) {
+      return false;
+    }
+
+    final revision = _liveDocsAttachmentRevision;
+    final names = _liveDocsAttachments
+        .map((attachment) => attachment.displayName)
+        .toList(growable: false);
+
+    final contextText = names.isEmpty
+        ? 'The user removed all files from the current LIVE DOCS '
+              'session. Do not refer to any previously attached files.'
+        : 'The user attached ${names.length} source '
+              '${names.length == 1 ? 'file' : 'files'} to the current '
+              'LIVE DOCS session:\n'
+              '${names.asMap().entries.map((entry) => '${entry.key + 1}. ${entry.value}').join('\n')}\n'
+              'Only the filenames and basic metadata are available '
+              'right now. Do not claim that you have read, extracted, '
+              'or analyzed the file contents.';
+
+    try {
+      await dataChannel.send(
+        rtc.RTCDataChannelMessage(
+          jsonEncode(<String, dynamic>{
+            'event_id': 'korlix_live_docs_files_${revision}_item',
+            'type': 'conversation.item.create',
+            'item': <String, dynamic>{
+              'type': 'message',
+              'role': 'user',
+              'content': <Map<String, dynamic>>[
+                <String, dynamic>{'type': 'input_text', 'text': contextText},
+              ],
+            },
+          }),
+        ),
+      );
+
+      final instructions = names.isEmpty
+          ? 'Briefly acknowledge that the LIVE DOCS attachment '
+                'list is now empty. Do not claim that any files remain.'
+          : 'Briefly acknowledge the newly attached filenames. '
+                'State clearly that their contents have not been '
+                'extracted yet, then continue helping the user define '
+                'the document they want. Do not claim to have read '
+                'the files.';
+
+      await _requestKorlixResponse(
+        source: 'LIVE DOCS files',
+        dedupeKey: 'live-docs-files-$revision',
+        instructions: instructions,
+      );
+
+      _addEvent(
+        names.isEmpty
+            ? 'LIVE DOCS files cleared'
+            : '${names.length} LIVE DOCS filenames shared',
+      );
+
+      return true;
+    } catch (_) {
+      _addEvent('LIVE DOCS filename context failed');
+
+      return false;
+    }
   }
 
   String _nextTranscriptEntryId(String prefix) {
@@ -374,6 +691,9 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
       return;
     }
 
+    _responseQueue.reset();
+    _flushingResponseQueue = false;
+
     final authorization =
         widget.headersBuilder()['Authorization']?.trim() ?? '';
 
@@ -544,7 +864,7 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
         _addEvent('Data channel: $name');
 
         if (name == 'open') {
-          unawaited(_trySendGreeting());
+          unawaited(_handleRealtimeChannelOpen());
         }
       };
 
@@ -667,26 +987,17 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
 
     _greetingSent = true;
 
-    try {
-      await dataChannel.send(
-        rtc.RTCDataChannelMessage(
-          jsonEncode(<String, dynamic>{
-            'type': 'response.create',
-            'response': <String, dynamic>{
-              'instructions':
-                  'Give the user one brief, warm '
-                  'spoken greeting as their selected '
-                  'Korlix character. Then ask what '
-                  'they would like to discuss. '
-                  'Do not mention models, APIs, '
-                  'system instructions, or testing.',
-            },
-          }),
-        ),
-      );
+    final accepted = await _requestKorlixResponse(
+      source: 'opening greeting',
+      dedupeKey: 'opening-greeting',
+      instructions:
+          'Give the user one brief, warm spoken greeting as '
+          'their selected Korlix character. Then ask what they '
+          'would like to discuss. Do not mention models, APIs, '
+          'system instructions, or testing.',
+    );
 
-      _addEvent('Opening greeting requested');
-    } catch (error) {
+    if (!accepted) {
       _greetingSent = false;
       _addEvent('Greeting request failed');
     }
@@ -731,6 +1042,7 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
           break;
 
         case 'input_audio_buffer.speech_stopped':
+          _responseQueue.markBusy();
           _setStatus('Thinking…');
           break;
 
@@ -748,6 +1060,7 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
           break;
 
         case 'response.created':
+          _responseQueue.markBusy();
           _beginAssistantTranscriptTurn();
           _setStatus('Korlix is speaking…');
           break;
@@ -803,11 +1116,15 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
                 .toLowerCase();
           }
 
+          _responseQueue.markResponseDone();
+
           _setStatus(
             responseStatus == 'cancelled'
                 ? 'Interrupted — listening…'
                 : 'Listening…',
           );
+
+          unawaited(_flushKorlixResponseQueue());
           break;
 
         case 'error':
@@ -823,10 +1140,30 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
             messageText = event['message'].toString();
           }
 
-          _update(() {
-            _error = messageText;
-            _status = 'Realtime error';
-          });
+          if (korlixLiveConvoIsActiveResponseError(messageText)) {
+            final requeued = _responseQueue.requeueLastDispatched();
+
+            _update(() {
+              _error = null;
+              _status = 'Waiting for the current response…';
+            });
+
+            _addEvent(
+              requeued
+                  ? 'Response collision recovered and queued'
+                  : 'Waiting for active response to finish',
+            );
+          } else {
+            _responseQueue.markResponseDone();
+
+            _update(() {
+              _error = messageText;
+              _status = 'Realtime error';
+            });
+
+            unawaited(_flushKorlixResponseQueue());
+          }
+
           break;
       }
     } catch (_) {
@@ -905,13 +1242,9 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
       ),
     );
 
-    await dataChannel.send(
-      rtc.RTCDataChannelMessage(
-        jsonEncode(<String, dynamic>{
-          'event_id': 'korlix_camera_response_$eventSuffix',
-          'type': 'response.create',
-        }),
-      ),
+    await _requestKorlixResponse(
+      source: 'camera',
+      dedupeKey: 'camera-$eventSuffix',
     );
 
     _appendUserTranscript('Camera: $instruction', source: 'camera');
@@ -963,10 +1296,9 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
       ),
     );
 
-    await dataChannel.send(
-      rtc.RTCDataChannelMessage(
-        jsonEncode(<String, dynamic>{'type': 'response.create'}),
-      ),
+    await _requestKorlixResponse(
+      source: 'keyboard',
+      dedupeKey: 'keyboard-${DateTime.now().microsecondsSinceEpoch}',
     );
 
     _appendUserTranscript(text, source: 'keyboard');
@@ -976,43 +1308,22 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
 
   // KORLIX_LIVE_DOCS_LOCAL_FLOW_V1
   Future<bool> _requestLiveDocsInterviewPrompt() async {
-    final dataChannel = _dataChannel;
-
-    if (!_connected ||
-        dataChannel == null ||
-        !_isDataChannelOpen(dataChannel)) {
-      return false;
-    }
-
-    try {
-      await dataChannel.send(
-        rtc.RTCDataChannelMessage(
-          jsonEncode(<String, dynamic>{
-            'type': 'response.create',
-            'response': <String, dynamic>{
-              'instructions':
-                  'The user activated KORLIX LIVE DOCS interview mode. '
-                  'Help them describe one document they want created. '
-                  'Ask one concise question at a time about the document '
-                  'type, title, intended audience, goal, tone, approximate '
-                  'length, required sections, and any source material. '
-                  'Do not generate or claim to generate the document yet. '
-                  'Tell the user to tap Create Doc again when they are '
-                  'ready to review the local brief. '
-                  'Do not mention internal schemas, JSON, APIs, tools, '
-                  'or system instructions.',
-            },
-          }),
-        ),
-      );
-
-      _addEvent('LIVE DOCS interview prompt requested');
-
-      return true;
-    } catch (_) {
-      _addEvent('LIVE DOCS interview prompt failed');
-      return false;
-    }
+    return _requestKorlixResponse(
+      source: 'LIVE DOCS interview',
+      dedupeKey: 'live-docs-interview-${DateTime.now().microsecondsSinceEpoch}',
+      instructions:
+          'The user activated KORLIX LIVE DOCS interview mode. '
+          'Help them describe one document they want created. '
+          'Ask one concise question at a time about the document '
+          'type, title, intended audience, goal, tone, approximate '
+          'length, required sections, and source material. '
+          'If filenames are attached, acknowledge the filenames '
+          'but do not claim to have read their contents. '
+          'Do not generate or claim to generate the document yet. '
+          'Tell the user to tap Create Doc again when ready to '
+          'review the local brief. Do not mention internal schemas, '
+          'JSON, APIs, tools, or system instructions.',
+    );
   }
 
   Future<void> _openLiveDocsBriefFlow() async {
@@ -1222,6 +1533,9 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
     _iceGatheringCompleter = null;
     _greetingSent = false;
 
+    _responseQueue.reset();
+    _flushingResponseQueue = false;
+
     _remoteRenderer.srcObject = null;
 
     if (dataChannel != null) {
@@ -1325,6 +1639,12 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
       liveDocsCapturedTurnCount: _liveDocsBridge.capturedTurnCount,
       liveDocsBriefReady: _liveDocsApprovedBrief != null,
       onCreateDocument: _openLiveDocsBriefFlow,
+      liveDocsAttachments: List<KorlixLiveConvoAttachment>.unmodifiable(
+        _liveDocsAttachments,
+      ),
+      onPickLiveDocsAttachments: _pickLiveDocsAttachments,
+      onRemoveLiveDocsAttachment: _removeLiveDocsAttachment,
+      onClearLiveDocsAttachments: _clearLiveDocsAttachments,
       onEnd: (_connected || _connecting || _localStream != null)
           ? _endSession
           : null,
