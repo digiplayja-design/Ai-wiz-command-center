@@ -319,6 +319,7 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
                 'korlix_live_docs_tools_${DateTime.now().microsecondsSinceEpoch}',
             'type': 'session.update',
             'session': <String, dynamic>{
+              'type': 'realtime',
               'tools': <Map<String, dynamic>>[
                 <String, dynamic>{
                   'type': 'function',
