@@ -1,7 +1,128 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'korlix_live_docs.dart';
 import 'korlix_live_docs_live_convo_bridge.dart';
+
+// KORLIX_LIVE_DOCS_VOICE_APPROVAL_V3
+enum KorlixLiveDocsVoiceApprovalDecision { approve, decline, unknown }
+
+String _korlixNormalizeLiveDocsVoiceApproval(String raw) {
+  return raw
+      .trim()
+      .toLowerCase()
+      .replaceAll('’', "'")
+      .replaceAll('á', 'a')
+      .replaceAll('é', 'e')
+      .replaceAll('í', 'i')
+      .replaceAll('ó', 'o')
+      .replaceAll('ú', 'u')
+      .replaceAll(RegExp(r"[^a-z0-9']+"), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+}
+
+KorlixLiveDocsVoiceApprovalDecision korlixLiveDocsClassifyVoiceApproval(
+  String raw,
+) {
+  final text = _korlixNormalizeLiveDocsVoiceApproval(raw);
+
+  if (text.isEmpty) {
+    return KorlixLiveDocsVoiceApprovalDecision.unknown;
+  }
+
+  const hardDeclines = <String>[
+    'not yet',
+    'not now',
+    'do not',
+    "don't",
+    'hold on',
+    'wait a minute',
+    'no thanks',
+    'never mind',
+    'nevermind',
+    'pas encore',
+    'no por ahora',
+    'todavia no',
+    'aun no',
+  ];
+
+  final padded = ' $text ';
+
+  for (final phrase in hardDeclines) {
+    if (padded.contains(' $phrase ')) {
+      return KorlixLiveDocsVoiceApprovalDecision.decline;
+    }
+  }
+
+  if (text == 'no problem' ||
+      text == 'why not' ||
+      text.startsWith('no problem go ahead')) {
+    return KorlixLiveDocsVoiceApprovalDecision.approve;
+  }
+
+  final firstWord = text.split(' ').first;
+
+  const declineWords = <String>{
+    'no',
+    'nope',
+    'nah',
+    'non',
+    'wait',
+    'stop',
+    'cancel',
+    'cancelar',
+    'annuler',
+    'espera',
+  };
+
+  if (declineWords.contains(firstWord)) {
+    return KorlixLiveDocsVoiceApprovalDecision.decline;
+  }
+
+  const approvals = <String>[
+    'yes',
+    'yes please',
+    'yeah',
+    'yeah please',
+    'yep',
+    'yup',
+    'ok',
+    'okay',
+    'sure',
+    'sure thing',
+    'go ahead',
+    'do it',
+    'proceed',
+    'sounds good',
+    'that is fine',
+    "that's fine",
+    'thats fine',
+    'confirm',
+    'approve',
+    'approve it',
+    'generate it',
+    'please do',
+    'si',
+    'si por favor',
+    'claro',
+    'adelante',
+    'vale',
+    'oui',
+    "d'accord",
+    'd accord',
+    'allez y',
+  ];
+
+  for (final phrase in approvals) {
+    if (text == phrase || text.startsWith('$phrase ')) {
+      return KorlixLiveDocsVoiceApprovalDecision.approve;
+    }
+  }
+
+  return KorlixLiveDocsVoiceApprovalDecision.unknown;
+}
 
 enum KorlixLiveDocsBriefSheetAction { startCapture, approved }
 
@@ -9,16 +130,19 @@ class KorlixLiveDocsBriefSheetResult {
   const KorlixLiveDocsBriefSheetResult.startCapture()
     : action = KorlixLiveDocsBriefSheetAction.startCapture,
       brief = null,
-      localPayload = null;
+      localPayload = null,
+      approvedByVoice = false;
 
   const KorlixLiveDocsBriefSheetResult.approved({
     required this.brief,
     required this.localPayload,
+    this.approvedByVoice = false,
   }) : action = KorlixLiveDocsBriefSheetAction.approved;
 
   final KorlixLiveDocsBriefSheetAction action;
   final KorlixLiveDocBrief? brief;
   final Map<String, dynamic>? localPayload;
+  final bool approvedByVoice;
 }
 
 Future<KorlixLiveDocsBriefSheetResult?> showKorlixLiveDocsBriefSheet({
@@ -28,6 +152,7 @@ Future<KorlixLiveDocsBriefSheetResult?> showKorlixLiveDocsBriefSheet({
   required String clientBuild,
   List<KorlixLiveDocSourceFile> sourceFiles = const <KorlixLiveDocSourceFile>[],
   KorlixLiveDocBrief? initialBrief,
+  Stream<KorlixLiveDocsVoiceApprovalDecision>? voiceApprovalDecisions,
 }) {
   return showModalBottomSheet<KorlixLiveDocsBriefSheetResult>(
     context: context,
@@ -46,6 +171,7 @@ Future<KorlixLiveDocsBriefSheetResult?> showKorlixLiveDocsBriefSheet({
           clientBuild: clientBuild,
           sourceFiles: sourceFiles,
           initialBrief: initialBrief,
+          voiceApprovalDecisions: voiceApprovalDecisions,
         ),
       );
     },
@@ -60,6 +186,7 @@ class KorlixLiveDocsBriefSheet extends StatefulWidget {
     required this.clientBuild,
     this.sourceFiles = const <KorlixLiveDocSourceFile>[],
     this.initialBrief,
+    this.voiceApprovalDecisions,
   });
 
   final KorlixLiveDocsConversationBridge bridge;
@@ -67,6 +194,7 @@ class KorlixLiveDocsBriefSheet extends StatefulWidget {
   final String clientBuild;
   final List<KorlixLiveDocSourceFile> sourceFiles;
   final KorlixLiveDocBrief? initialBrief;
+  final Stream<KorlixLiveDocsVoiceApprovalDecision>? voiceApprovalDecisions;
 
   @override
   State<KorlixLiveDocsBriefSheet> createState() =>
@@ -88,6 +216,8 @@ class _KorlixLiveDocsBriefSheetState extends State<KorlixLiveDocsBriefSheet> {
   late final List<KorlixLiveDocSourceFile> _sourceFiles;
 
   String? _validationMessage;
+  StreamSubscription<KorlixLiveDocsVoiceApprovalDecision>?
+  _voiceApprovalSubscription;
 
   @override
   void initState() {
@@ -148,10 +278,24 @@ class _KorlixLiveDocsBriefSheetState extends State<KorlixLiveDocsBriefSheet> {
     };
 
     _allowWebResearch = initial?.allowWebResearch ?? false;
+
+    final voiceApprovalDecisions = widget.voiceApprovalDecisions;
+
+    if (voiceApprovalDecisions != null) {
+      _voiceApprovalSubscription = voiceApprovalDecisions.listen(
+        _handleVoiceApprovalDecision,
+      );
+    }
   }
 
   @override
   void dispose() {
+    final voiceApprovalSubscription = _voiceApprovalSubscription;
+
+    if (voiceApprovalSubscription != null) {
+      unawaited(voiceApprovalSubscription.cancel());
+    }
+
     _titleController.dispose();
     _audienceController.dispose();
     _goalController.dispose();
@@ -214,7 +358,27 @@ class _KorlixLiveDocsBriefSheetState extends State<KorlixLiveDocsBriefSheet> {
     );
   }
 
-  void _approveBrief() {
+  void _handleVoiceApprovalDecision(
+    KorlixLiveDocsVoiceApprovalDecision decision,
+  ) {
+    if (!mounted) {
+      return;
+    }
+
+    if (decision == KorlixLiveDocsVoiceApprovalDecision.approve) {
+      _approveBrief(approvedByVoice: true);
+      return;
+    }
+
+    if (decision == KorlixLiveDocsVoiceApprovalDecision.decline) {
+      setState(() {
+        _validationMessage =
+            'Voice approval paused. Keep editing, then say yes when ready.';
+      });
+    }
+  }
+
+  void _approveBrief({bool approvedByVoice = false}) {
     setState(() {
       _validationMessage = null;
     });
@@ -299,6 +463,7 @@ class _KorlixLiveDocsBriefSheetState extends State<KorlixLiveDocsBriefSheet> {
         KorlixLiveDocsBriefSheetResult.approved(
           brief: brief,
           localPayload: localPayload,
+          approvedByVoice: approvedByVoice,
         ),
       );
     } catch (error) {
@@ -732,7 +897,7 @@ class _KorlixLiveDocsBriefSheetState extends State<KorlixLiveDocsBriefSheet> {
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: _approveBrief,
+              onPressed: () => _approveBrief(),
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF62D6A7),
                 foregroundColor: const Color(0xFF03110E),
