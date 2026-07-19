@@ -14,6 +14,11 @@ import {
 } from "docx";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import sharp from "sharp";
+import {
+  analyzeKorlixTechnicianAuditFiles,
+  createKorlixTechnicianAuditArtifacts,
+  tryCreateKorlixTechnicianAuditArtifacts,
+} from "./korlix_live_docs_audit.js";
 
 // KORLIX_LIVE_DOCS_GENERATOR_CORE_BUILD131_BEGIN
 
@@ -1409,5 +1414,46 @@ export async function createKorlixLiveDocsArtifacts({
 
   return { report: normalized, artifacts };
 }
+
+
+// KORLIX_LIVE_DOCS_AUDIT_CONTEXT_BUILD131_BEGIN
+export {
+  analyzeKorlixTechnicianAuditFiles,
+  createKorlixTechnicianAuditArtifacts,
+  tryCreateKorlixTechnicianAuditArtifacts,
+};
+
+export async function createKorlixLiveDocsArtifactsWithContext({
+  report = null,
+  formats,
+  sourceFiles,
+  sourceDossier,
+  brief = {},
+  instructions = "",
+  title = "",
+  allowDeterministic = true,
+}) {
+  if (allowDeterministic) {
+    const deterministic = await tryCreateKorlixTechnicianAuditArtifacts({
+      sourceFiles,
+      formats,
+      title,
+      instructions,
+      brief,
+    });
+
+    if (deterministic) return deterministic;
+  }
+
+  if (!report) return null;
+
+  return createKorlixLiveDocsArtifacts({
+    report,
+    formats,
+    sourceFiles,
+    sourceDossier,
+  });
+}
+// KORLIX_LIVE_DOCS_AUDIT_CONTEXT_BUILD131_END
 
 // KORLIX_LIVE_DOCS_GENERATOR_CORE_BUILD131_END

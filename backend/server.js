@@ -8419,6 +8419,69 @@ async function korlixLiveDocsGenerator() {
   return import("./korlix_live_docs_generation.js");
 }
 
+
+// KORLIX_LIVE_DOCS_DOCUMENT_MODEL_BUILD131_BEGIN
+function korlixLiveDocsValidDocumentModel(value) {
+  const model = String(value || "").trim();
+  if (!model) return false;
+
+  const upper = model.toUpperCase();
+  const placeholders = new Set([
+    "OPENAI_DOCUMENT_MODEL",
+    "OPENAI_FILE_MODEL",
+    "OPENAI_MODEL",
+    "OPENAI_CHAT_MODEL",
+    "MODEL",
+    "MODEL_NAME",
+    "YOUR_MODEL",
+    "YOUR_MODEL_NAME",
+    "CHANGEME",
+    "REPLACE_ME",
+  ]);
+
+  if (placeholders.has(upper)) return false;
+  if (model.includes("${") || model.includes("<") || model.includes(">")) return false;
+  return /^[a-z0-9][a-z0-9._:-]{1,127}$/i.test(model);
+}
+
+function korlixLiveDocsDocumentModel() {
+  const candidates = [
+    process.env.OPENAI_DOCUMENT_MODEL,
+    process.env.OPENAI_FILE_MODEL,
+    process.env.OPENAI_MODEL,
+    process.env.OPENAI_CHAT_MODEL,
+  ];
+
+  for (const candidate of candidates) {
+    if (korlixLiveDocsValidDocumentModel(candidate)) {
+      return String(candidate).trim();
+    }
+  }
+
+  return "gpt-5.6";
+}
+
+function korlixLiveDocsDocumentModelRequest({ input }) {
+  const model = korlixLiveDocsDocumentModel();
+  const request = {
+    model,
+    input,
+    max_output_tokens: 12000,
+    text: {
+      format: {
+        type: "json_object",
+      },
+    },
+  };
+
+  if (/^(gpt-5|o[1-9])/i.test(model)) {
+    request.reasoning = { effort: "high" };
+  }
+
+  return request;
+}
+// KORLIX_LIVE_DOCS_DOCUMENT_MODEL_BUILD131_END
+
 async function korlixLiveDocsBuildReport({
   sourceDossier,
   sourceFileMetadata,
@@ -8485,26 +8548,16 @@ async function korlixLiveDocsBuildReport({
     }
   }
 
-  const response = await client.responses.create({
-    model:
-      process.env.OPENAI_DOCUMENT_MODEL ||
-      process.env.OPENAI_FILE_MODEL ||
-      process.env.OPENAI_MODEL ||
-      process.env.OPENAI_CHAT_MODEL ||
-      "gpt-4o-mini",
-    input: [
-      {
-        role: "user",
-        content,
-      },
-    ],
-    max_output_tokens: 12000,
-    text: {
-      format: {
-        type: "json_object",
-      },
-    },
-  });
+  const response = await client.responses.create(
+    korlixLiveDocsDocumentModelRequest({
+      input: [
+        {
+          role: "user",
+          content,
+        },
+      ],
+    }),
+  );
 
   const raw = extractKorlixResponseText(response);
 
@@ -8521,18 +8574,26 @@ async function korlixLiveDocsBuildReport({
 }
 
 async function korlixLiveDocsCreateArtifacts({
-  report,
+  report = null,
   formats,
   sourceFiles,
   sourceDossier,
+  brief = {},
+  instructions = "",
+  title = "",
+  allowDeterministic = true,
 }) {
   const generator = await korlixLiveDocsGenerator();
 
-  return generator.createKorlixLiveDocsArtifacts({
+  return generator.createKorlixLiveDocsArtifactsWithContext({
     report,
     formats,
     sourceFiles,
     sourceDossier,
+    brief,
+    instructions,
+    title,
+    allowDeterministic,
   });
 }
 
@@ -8552,6 +8613,8 @@ app.get("/api/live-docs/health", async (_req, res) => {
         ]),
       authenticatedGeneration: true,
       revisions: true,
+      deterministicTechnicianAudits: true,
+      documentModelPlaceholderGuard: true,
       storage: "temporary_in_memory",
     });
   } catch (error) {
@@ -8568,12 +8631,6 @@ app.post(
   documentUpload.array("files", 8),
   async (req, res) => {
     try {
-      if (!process.env.OPENAI_API_KEY) {
-        return res.status(400).json({
-          error: "Missing OPENAI_API_KEY on backend.",
-        });
-      }
-
       const user = await requireUser(req);
       const profile = await getOrCreateProfile(user);
       const usageCounter =
@@ -8680,26 +8737,48 @@ app.post(
         ),
       }));
 
-      const report = await korlixLiveDocsBuildReport({
-        sourceDossier,
-        sourceFileMetadata,
-        sourceFiles: files,
-        brief,
-        title,
-        instructions,
+      let generated = await korlixLiveDocsCreateArtifacts({
         formats,
-        language,
+        sourceFiles: files,
+        sourceDossier,
+        brief,
+        instructions,
+        title,
+        allowDeterministic: true,
       });
 
-      const generated =
-        await korlixLiveDocsCreateArtifacts({
+      if (!generated) {
+        if (!process.env.OPENAI_API_KEY) {
+          return res.status(400).json({
+            error:
+              "Missing OPENAI_API_KEY for non-deterministic LIVE DOCS generation.",
+          });
+        }
+
+        const report = await korlixLiveDocsBuildReport({
+          sourceDossier,
+          sourceFileMetadata,
+          sourceFiles: files,
+          brief,
+          title,
+          instructions,
+          formats,
+          language,
+        });
+
+        generated = await korlixLiveDocsCreateArtifacts({
           report,
           formats,
           sourceFiles: files,
           sourceDossier,
+          brief,
+          instructions,
+          title,
+          allowDeterministic: false,
         });
+      }
 
-      if (!generated.artifacts.length) {
+      if (!generated?.artifacts?.length) {
         throw new Error(
           "LIVE DOCS did not create any report files.",
         );
@@ -8813,12 +8892,6 @@ app.post(
   "/api/live-docs/jobs/:jobId/revisions",
   async (req, res) => {
     try {
-      if (!process.env.OPENAI_API_KEY) {
-        return res.status(400).json({
-          error: "Missing OPENAI_API_KEY on backend.",
-        });
-      }
-
       const user = await requireUser(req);
       const profile = await getOrCreateProfile(user);
       const usageCounter =
@@ -8865,11 +8938,27 @@ app.post(
         });
       }
 
-      const revisedReport =
-        await korlixLiveDocsBuildReport({
+      let generated = await korlixLiveDocsCreateArtifacts({
+        formats,
+        sourceFiles: job.sourceFiles,
+        sourceDossier: job.sourceDossier,
+        brief: job.brief,
+        instructions: `${job.instructions}\n\nRevision: ${instruction}`,
+        title: job.title,
+        allowDeterministic: true,
+      });
+
+      if (!generated) {
+        if (!process.env.OPENAI_API_KEY) {
+          return res.status(400).json({
+            error:
+              "Missing OPENAI_API_KEY for non-deterministic LIVE DOCS revision.",
+          });
+        }
+
+        const revisedReport = await korlixLiveDocsBuildReport({
           sourceDossier: job.sourceDossier,
-          sourceFileMetadata:
-            job.sourceFileMetadata,
+          sourceFileMetadata: job.sourceFileMetadata,
           sourceFiles: job.sourceFiles,
           brief: job.brief,
           title: job.title,
@@ -8880,15 +8969,19 @@ app.post(
           revisionInstruction: instruction,
         });
 
-      const generated =
-        await korlixLiveDocsCreateArtifacts({
+        generated = await korlixLiveDocsCreateArtifacts({
           report: revisedReport,
           formats,
           sourceFiles: job.sourceFiles,
           sourceDossier: job.sourceDossier,
+          brief: job.brief,
+          instructions: `${job.instructions}\n\nRevision: ${instruction}`,
+          title: job.title,
+          allowDeterministic: false,
         });
+      }
 
-      if (!generated.artifacts.length) {
+      if (!generated?.artifacts?.length) {
         throw new Error(
           "LIVE DOCS did not create revised files.",
         );

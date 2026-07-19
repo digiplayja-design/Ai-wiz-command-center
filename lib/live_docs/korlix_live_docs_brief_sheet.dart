@@ -251,7 +251,9 @@ class _KorlixLiveDocsBriefSheetState extends State<KorlixLiveDocsBriefSheet> {
       text: initial?.title ?? widget.bridge.suggestedTitle,
     );
 
-    _audienceController = TextEditingController(text: initial?.audience ?? '');
+    _audienceController = TextEditingController(
+      text: initial?.audience ?? 'Internal operations',
+    );
 
     _goalController = TextEditingController(
       text: initial?.goal ?? widget.bridge.suggestedGoal,
