@@ -5,6 +5,25 @@ import dotenv from "dotenv";
 import OpenAI from "openai";
 import { toFile } from "openai/uploads";
 import { createClient } from "@supabase/supabase-js";
+import {
+  korlixAgentClearMemoriesV1,
+  korlixAgentCreateCustomProfileV1,
+  korlixAgentDeleteMemoryV1,
+  korlixAgentDeleteOrResetProfileV1,
+  korlixAgentForgetMatchingMemoriesV1,
+  korlixAgentListMemoriesV1,
+  korlixAgentListProfilesV1,
+  korlixAgentListVersionsV1,
+  korlixAgentLoadProfileV1,
+  korlixAgentLoadRuntimeMemoriesV1,
+  korlixAgentPublicView,
+  korlixAgentRestoreVersionV1,
+  korlixAgentRuntimePublicView,
+  korlixAgentRuntimeView,
+  korlixAgentSaveMemoryV1,
+  korlixAgentSaveTrainingV1,
+  korlixAgentUpdateProfileV1,
+} from "./korlix_live_convo_agents.js";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, Table, TableRow, TableCell, WidthType, ShadingType } from "docx";
 
 import multer from "multer";
@@ -5354,6 +5373,675 @@ app.post("/api/custom-access/admin/create-code", async (req, res) => {
 
 
 
+// KORLIX_LIVE_CONVO_TRAINABLE_AGENT_BACKEND_BUILD131_BEGIN
+
+const KORLIX_LIVE_CONVO_AGENT_TABLE_MARKERS_BUILD131 = Object.freeze([
+  "korlix_live_convo_agent_profiles",
+  "korlix_live_convo_agent_versions",
+  "korlix_live_convo_agent_memories",
+]);
+
+function korlixLiveConvoAgentPersistenceClientV1() {
+  if (
+    !supabaseAdmin ||
+    typeof supabaseAdmin.from !== "function"
+  ) {
+    const error = new Error(
+      "The Korlix Agent Hub persistence service is not configured.",
+    );
+
+    error.code = "agent_persistence_not_ready";
+    error.statusCode = 503;
+    throw error;
+  }
+
+  return supabaseAdmin;
+}
+
+function korlixLiveConvoAgentTextV1(
+  value,
+  maximum = 160,
+) {
+  return String(value ?? "")
+    .trim()
+    .slice(0, Math.max(1, Number(maximum) || 160));
+}
+
+function korlixLiveConvoAgentRequestIdV1(req) {
+  return korlixLiveConvoAgentTextV1(
+    req?.params?.agentId ??
+      req?.headers?.["x-korlix-live-convo-agent"] ??
+      req?.headers?.["x-korlix-agent-id"] ??
+      req?.query?.agentId ??
+      req?.query?.agent_id ??
+      "general",
+    120,
+  ) || "general";
+}
+
+function korlixLiveConvoAgentModelProofV1() {
+  const liveDocsDocumentModel =
+    typeof korlixLiveDocsDocumentModel === "function"
+      ? korlixLiveDocsDocumentModel()
+      : (
+          String(
+            process.env.OPENAI_DOCUMENT_MODEL ||
+            process.env.OPENAI_FILE_MODEL ||
+            process.env.OPENAI_MODEL ||
+            process.env.OPENAI_CHAT_MODEL ||
+            "gpt-5.6",
+          ).trim() || "gpt-5.6"
+        );
+
+  return {
+    liveConvoModel:
+      typeof korlixLiveConvoModelV1 === "function"
+        ? korlixLiveConvoModelV1()
+        : "",
+
+    liveDocsDocumentModel,
+
+    liveDocsReasoningEffort:
+      /^(gpt-5|o[1-9])/i.test(liveDocsDocumentModel)
+        ? "high"
+        : "",
+
+    deterministicAuditEngine: true,
+  };
+}
+
+function korlixLiveConvoAgentErrorV1(
+  res,
+  error,
+  fallback,
+) {
+  const statusCode = Number.isInteger(error?.statusCode)
+    ? error.statusCode
+    : 500;
+
+  const publicMessage = statusCode >= 500
+    ? fallback
+    : (
+        korlixLiveConvoAgentTextV1(
+          error?.message,
+          500,
+        ) || fallback
+      );
+
+  return res.status(statusCode).json({
+    ok: false,
+    code:
+      korlixLiveConvoAgentTextV1(
+        error?.code,
+        120,
+      ) || "agent_hub_failed",
+    error: publicMessage,
+  });
+}
+
+function korlixLiveConvoAgentRouteV1(
+  fallback,
+  handler,
+) {
+  return async (req, res) => {
+    try {
+      const user = await requireUser(req);
+      const client =
+        korlixLiveConvoAgentPersistenceClientV1();
+
+      return await handler({
+        req,
+        res,
+        user,
+        client,
+      });
+    } catch (error) {
+      return korlixLiveConvoAgentErrorV1(
+        res,
+        error,
+        fallback,
+      );
+    }
+  };
+}
+
+async function korlixLiveConvoAgentPublicProfileV1({
+  client,
+  userId,
+  profile,
+}) {
+  if (!profile) {
+    return null;
+  }
+
+  let memoryCount = 0;
+
+  if (profile.memoryEnabled === true) {
+    const memories = await korlixAgentListMemoriesV1({
+      client,
+      userId,
+      agentId: profile.id,
+      includeInactive: false,
+      maximumItems: 500,
+    });
+
+    memoryCount = memories.length;
+  }
+
+  return korlixAgentPublicView({
+    profile,
+    memoryCount,
+    persistenceConfigured: true,
+  });
+}
+
+async function korlixLiveConvoBuildAgentRuntimeV1({
+  req,
+  user,
+  agentId,
+  characterName,
+  language,
+}) {
+  const client =
+    korlixLiveConvoAgentPersistenceClientV1();
+
+  const selectedAgentId =
+    korlixLiveConvoAgentTextV1(agentId, 120) ||
+    korlixLiveConvoAgentRequestIdV1(req);
+
+  const profile = await korlixAgentLoadProfileV1({
+    client,
+    userId: user?.id,
+    agentId: selectedAgentId,
+  });
+
+  if (!profile) {
+    const error = new Error(
+      "The selected LIVE CONVO agent was not found.",
+    );
+
+    error.code = "agent_not_found";
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const memories = profile.memoryEnabled === true
+    ? await korlixAgentLoadRuntimeMemoriesV1({
+        client,
+        userId: user?.id,
+        agentId: profile.id,
+        maximumItems: 24,
+        maximumCharacters: 12000,
+      })
+    : [];
+
+  return korlixAgentRuntimeView({
+    profile,
+    memories,
+
+    characterName:
+      korlixLiveConvoAgentTextV1(
+        characterName,
+        80,
+      ) ||
+      (
+        typeof korlixLiveConvoCharacterNameV1 === "function"
+          ? korlixLiveConvoCharacterNameV1(
+              korlixLiveConvoCharacterIdV1(
+                req?.headers?.["x-korlix-character"],
+              ),
+            )
+          : "Korlix"
+      ),
+
+    language:
+      korlixLiveConvoAgentTextV1(
+        language,
+        80,
+      ) ||
+      korlixLiveConvoAgentTextV1(
+        req?.headers?.["x-korlix-language"],
+        80,
+      ) ||
+      "English",
+
+    modelProof:
+      korlixLiveConvoAgentModelProofV1(),
+
+    persistenceConfigured: true,
+  });
+}
+
+function korlixLiveConvoAgentInstructionsV1(req) {
+  const baseInstructions =
+    typeof korlixLiveConvoInstructionsV1 === "function"
+      ? korlixLiveConvoInstructionsV1(req)
+      : "";
+
+  const agentInstructions =
+    korlixLiveConvoAgentTextV1(
+      req?.korlixLiveConvoAgentRuntime?.instructions,
+      30000,
+    );
+
+  return [
+    baseInstructions,
+    agentInstructions,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+async function korlixLiveConvoAttachAgentSessionV1({
+  req,
+  user,
+}) {
+  const runtime =
+    await korlixLiveConvoBuildAgentRuntimeV1({
+      req,
+      user,
+      agentId:
+        korlixLiveConvoAgentRequestIdV1(req),
+
+      characterName:
+        typeof korlixLiveConvoCharacterNameV1 === "function"
+          ? korlixLiveConvoCharacterNameV1(
+              korlixLiveConvoCharacterIdV1(
+                req?.headers?.["x-korlix-character"],
+              ),
+            )
+          : "Korlix",
+
+      language:
+        req?.headers?.["x-korlix-language"] ||
+        "English",
+    });
+
+  req.korlixLiveConvoAgentRuntime = runtime;
+  req.korlixLiveConvoAgentId =
+    runtime?.agent?.id || "general";
+
+  return runtime;
+}
+
+app.get(
+  "/api/live-convo/agents/model-proof",
+  korlixLiveConvoAgentRouteV1(
+    "Could not verify the LIVE CONVO models.",
+    async ({ res }) => res.json({
+      ok: true,
+      modelProof:
+        korlixLiveConvoAgentModelProofV1(),
+    }),
+  ),
+);
+
+app.get(
+  "/api/live-convo/agents",
+  korlixLiveConvoAgentRouteV1(
+    "Could not load LIVE CONVO agents.",
+    async ({ res, user, client }) => {
+      const profiles =
+        await korlixAgentListProfilesV1({
+          client,
+          userId: user.id,
+        });
+
+      const agents = [];
+
+      for (const profile of profiles) {
+        const publicAgent =
+          await korlixLiveConvoAgentPublicProfileV1({
+            client,
+            userId: user.id,
+            profile,
+          });
+
+        if (publicAgent) {
+          agents.push(publicAgent);
+        }
+      }
+
+      return res.json({
+        ok: true,
+        agents,
+        persistenceConfigured: true,
+      });
+    },
+  ),
+);
+
+app.post(
+  "/api/live-convo/agents",
+  korlixLiveConvoAgentRouteV1(
+    "Could not create the custom agent.",
+    async ({ req, res, user, client }) => {
+      const result =
+        await korlixAgentCreateCustomProfileV1({
+          client,
+          userId: user.id,
+          body: req.body,
+        });
+
+      const agent =
+        await korlixLiveConvoAgentPublicProfileV1({
+          client,
+          userId: user.id,
+          profile: result.profile,
+        });
+
+      return res.status(201).json({
+        ok: true,
+        agent,
+        version: result.version || null,
+      });
+    },
+  ),
+);
+
+app.get(
+  "/api/live-convo/agents/:agentId/runtime",
+  korlixLiveConvoAgentRouteV1(
+    "Could not activate the selected LIVE CONVO agent.",
+    async ({ req, res, user }) => {
+      const runtime =
+        await korlixLiveConvoBuildAgentRuntimeV1({
+          req,
+          user,
+          agentId: req.params.agentId,
+          characterName:
+            req.query.characterName ??
+            req.query.character_name,
+          language: req.query.language,
+        });
+
+      return res.json({
+        ok: true,
+        runtime:
+          korlixAgentRuntimePublicView(runtime),
+      });
+    },
+  ),
+);
+
+app.post(
+  "/api/live-convo/agents/:agentId/training",
+  korlixLiveConvoAgentRouteV1(
+    "Could not save the agent training.",
+    async ({ req, res, user, client }) => {
+      const result =
+        await korlixAgentSaveTrainingV1({
+          client,
+          userId: user.id,
+          agentId: req.params.agentId,
+          body: req.body,
+        });
+
+      const agent =
+        await korlixLiveConvoAgentPublicProfileV1({
+          client,
+          userId: user.id,
+          profile: result.profile,
+        });
+
+      return res.json({
+        ok: true,
+        agent,
+        version: result.version || null,
+      });
+    },
+  ),
+);
+
+app.get(
+  "/api/live-convo/agents/:agentId/memories",
+  korlixLiveConvoAgentRouteV1(
+    "Could not load the agent memories.",
+    async ({ req, res, user, client }) => {
+      const memories =
+        await korlixAgentListMemoriesV1({
+          client,
+          userId: user.id,
+          agentId: req.params.agentId,
+          includeInactive: false,
+          maximumItems: 250,
+        });
+
+      return res.json({
+        ok: true,
+        memories,
+      });
+    },
+  ),
+);
+
+app.post(
+  "/api/live-convo/agents/:agentId/memories",
+  korlixLiveConvoAgentRouteV1(
+    "Could not save the long-term memory.",
+    async ({ req, res, user, client }) => {
+      const memory =
+        await korlixAgentSaveMemoryV1({
+          client,
+          userId: user.id,
+          agentId: req.params.agentId,
+          body: req.body,
+        });
+
+      return res.status(201).json({
+        ok: true,
+        memory,
+      });
+    },
+  ),
+);
+
+app.post(
+  "/api/live-convo/agents/:agentId/memories/forget",
+  korlixLiveConvoAgentRouteV1(
+    "Could not forget the matching memories.",
+    async ({ req, res, user, client }) => {
+      const result =
+        await korlixAgentForgetMatchingMemoriesV1({
+          client,
+          userId: user.id,
+          agentId: req.params.agentId,
+          body: req.body,
+        });
+
+      return res.json({
+        ok: true,
+        removed: result.removed,
+        memoryIds: result.memoryIds,
+      });
+    },
+  ),
+);
+
+app.delete(
+  "/api/live-convo/agents/:agentId/memories/:memoryId",
+  korlixLiveConvoAgentRouteV1(
+    "Could not delete the memory.",
+    async ({ req, res, user, client }) => {
+      const result =
+        await korlixAgentDeleteMemoryV1({
+          client,
+          userId: user.id,
+          agentId: req.params.agentId,
+          memoryId: req.params.memoryId,
+          body: req.body,
+        });
+
+      return res.json({
+        ok: true,
+        ...result,
+      });
+    },
+  ),
+);
+
+app.delete(
+  "/api/live-convo/agents/:agentId/memories",
+  korlixLiveConvoAgentRouteV1(
+    "Could not clear the agent memories.",
+    async ({ req, res, user, client }) => {
+      const result =
+        await korlixAgentClearMemoriesV1({
+          client,
+          userId: user.id,
+          agentId: req.params.agentId,
+          body: req.body,
+        });
+
+      return res.json({
+        ok: true,
+        cleared: result.clearedCount,
+        clearedCount: result.clearedCount,
+      });
+    },
+  ),
+);
+
+app.get(
+  "/api/live-convo/agents/:agentId/versions",
+  korlixLiveConvoAgentRouteV1(
+    "Could not load the agent training history.",
+    async ({ req, res, user, client }) => {
+      const versions =
+        await korlixAgentListVersionsV1({
+          client,
+          userId: user.id,
+          agentId: req.params.agentId,
+        });
+
+      return res.json({
+        ok: true,
+        versions,
+      });
+    },
+  ),
+);
+
+app.post(
+  "/api/live-convo/agents/:agentId/versions/:version/restore",
+  korlixLiveConvoAgentRouteV1(
+    "Could not restore the selected training version.",
+    async ({ req, res, user, client }) => {
+      const result =
+        await korlixAgentRestoreVersionV1({
+          client,
+          userId: user.id,
+          agentId: req.params.agentId,
+          version: req.params.version,
+          body: req.body,
+        });
+
+      const agent =
+        await korlixLiveConvoAgentPublicProfileV1({
+          client,
+          userId: user.id,
+          profile: result.profile,
+        });
+
+      return res.json({
+        ok: true,
+        agent,
+        version: result.version || null,
+      });
+    },
+  ),
+);
+
+app.get(
+  "/api/live-convo/agents/:agentId",
+  korlixLiveConvoAgentRouteV1(
+    "Could not load the selected LIVE CONVO agent.",
+    async ({ req, res, user, client }) => {
+      const profile = await korlixAgentLoadProfileV1({
+        client,
+        userId: user.id,
+        agentId: req.params.agentId,
+      });
+
+      if (!profile) {
+        const error = new Error(
+          "The selected LIVE CONVO agent was not found.",
+        );
+
+        error.code = "agent_not_found";
+        error.statusCode = 404;
+        throw error;
+      }
+
+      const agent =
+        await korlixLiveConvoAgentPublicProfileV1({
+          client,
+          userId: user.id,
+          profile,
+        });
+
+      return res.json({
+        ok: true,
+        agent,
+      });
+    },
+  ),
+);
+
+app.put(
+  "/api/live-convo/agents/:agentId",
+  korlixLiveConvoAgentRouteV1(
+    "Could not update the LIVE CONVO agent.",
+    async ({ req, res, user, client }) => {
+      const result =
+        await korlixAgentUpdateProfileV1({
+          client,
+          userId: user.id,
+          agentId: req.params.agentId,
+          body: req.body,
+        });
+
+      const agent =
+        await korlixLiveConvoAgentPublicProfileV1({
+          client,
+          userId: user.id,
+          profile: result.profile,
+        });
+
+      return res.json({
+        ok: true,
+        agent,
+        version: result.version || null,
+      });
+    },
+  ),
+);
+
+app.delete(
+  "/api/live-convo/agents/:agentId",
+  korlixLiveConvoAgentRouteV1(
+    "Could not reset or delete the selected agent.",
+    async ({ req, res, user, client }) => {
+      const result =
+        await korlixAgentDeleteOrResetProfileV1({
+          client,
+          userId: user.id,
+          agentId: req.params.agentId,
+          body: req.body,
+        });
+
+      return res.json({
+        ok: true,
+        ...result,
+      });
+    },
+  ),
+);
+
+void KORLIX_LIVE_CONVO_AGENT_TABLE_MARKERS_BUILD131;
+
+// KORLIX_LIVE_CONVO_TRAINABLE_AGENT_BACKEND_BUILD131_END
+
 // KORLIX_LIVE_CONVO_BACKEND_V1_BEGIN
 function korlixLiveConvoEnvStringV1(name, fallback = "") {
   const value = String(process.env[name] ?? "").trim();
@@ -5571,7 +6259,7 @@ function korlixLiveConvoSessionConfigV1(req) {
   return {
     type: "realtime",
     model: korlixLiveConvoModelV1(),
-    instructions: korlixLiveConvoInstructionsV1(req),
+    instructions: korlixLiveConvoAgentInstructionsV1(req),
     reasoning: {
       effort: korlixLiveConvoReasoningEffortV1(),
     },
@@ -6038,6 +6726,8 @@ app.post(
           error: "Please sign in to use LIVE CONVO.",
         });
       }
+
+      await korlixLiveConvoAttachAgentSessionV1({ req, user });
 
       // KORLIX_LIVE_CONVO_SDP_CRLF_FIX_V1
       // Preserve the complete SDP offer, including its final CRLF.

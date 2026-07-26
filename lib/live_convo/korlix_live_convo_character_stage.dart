@@ -8,6 +8,7 @@ import 'package:video_player/video_player.dart';
 import 'korlix_live_convo_attachment.dart';
 import 'korlix_live_convo_attachment_tray.dart';
 import 'korlix_live_convo_camera_sheet.dart';
+import 'korlix_live_convo_agent_sheet.dart';
 import 'korlix_live_convo_file_submission.dart';
 import 'package:ai_wiz_command_center/live_docs/korlix_live_docs_generation.dart';
 
@@ -47,6 +48,16 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
     required this.onSendText,
     required this.onSendImage,
     required this.onEnd,
+    // KORLIX_LIVE_CONVO_AGENT_HUB_STAGE_BUILD131_BEGIN
+    this.activeAgentName = 'My Assistant',
+    this.activeAgentDescription =
+        'General-purpose Korlix help with private training and memory.',
+    this.activeAgentIconName = 'auto_awesome',
+    this.activeAgentAccentHex = '21D4F4',
+    this.activeAgentMemoryEnabled = true,
+    this.activeAgentVersion = 1,
+    this.onOpenAgentHub,
+    // KORLIX_LIVE_CONVO_AGENT_HUB_STAGE_BUILD131_CONSTRUCTOR_END
     this.liveDocsCaptureActive = false,
     this.liveDocsCapturedTurnCount = 0,
     this.liveDocsBriefReady = false,
@@ -90,6 +101,14 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
   final Future<void> Function(String text)? onSendText;
   final KorlixLiveConvoImageSender? onSendImage;
   final Future<void> Function()? onEnd;
+
+  final String activeAgentName;
+  final String activeAgentDescription;
+  final String activeAgentIconName;
+  final String activeAgentAccentHex;
+  final bool activeAgentMemoryEnabled;
+  final int activeAgentVersion;
+  final Future<void> Function()? onOpenAgentHub;
 
   final bool liveDocsCaptureActive;
   final int liveDocsCapturedTurnCount;
@@ -166,6 +185,30 @@ class _KorlixLiveConvoCharacterStageState
 
   _KorlixStageCharacter get _character {
     return _korlixStageCharacterFor(widget.characterId);
+  }
+
+  Color get _activeAgentAccent {
+    return korlixLiveConvoAgentAccent(widget.activeAgentAccentHex);
+  }
+
+  IconData get _activeAgentIcon {
+    return korlixLiveConvoAgentIcon(widget.activeAgentIconName);
+  }
+
+  String get _activeAgentName {
+    final clean = widget.activeAgentName.trim();
+
+    return clean.isEmpty ? 'My Assistant' : clean;
+  }
+
+  String get _activeAgentDescription {
+    final clean = widget.activeAgentDescription.trim();
+
+    return clean.isEmpty ? 'Private, trainable LIVE CONVO agent.' : clean;
+  }
+
+  int get _activeAgentVersion {
+    return widget.activeAgentVersion < 1 ? 1 : widget.activeAgentVersion;
   }
 
   void _syncTimer({required bool previousConnected}) {
@@ -1006,6 +1049,163 @@ class _KorlixLiveConvoCharacterStageState
     );
   }
 
+  Widget _agentStatusPill({
+    required String text,
+    required Color color,
+    required IconData icon,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: color.withValues(alpha: 0.12),
+        border: Border.all(color: color.withValues(alpha: 0.54)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 5),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.35,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveAgentCard() {
+    final accent = _activeAgentAccent;
+
+    final enabled = widget.onOpenAgentHub != null;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: enabled
+            ? () {
+                unawaited(widget.onOpenAgentHub!());
+              }
+            : null,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            color: accent.withValues(alpha: 0.10),
+            border: Border.all(
+              color: accent.withValues(alpha: enabled ? 0.72 : 0.36),
+              width: enabled ? 1.4 : 1,
+            ),
+            boxShadow: [
+              BoxShadow(color: accent.withValues(alpha: 0.08), blurRadius: 20),
+            ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(15),
+                  color: accent.withValues(alpha: 0.16),
+                  border: Border.all(color: accent.withValues(alpha: 0.72)),
+                ),
+                child: Icon(_activeAgentIcon, color: accent),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _activeAgentName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFFF0F7F8),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'ACTIVE AGENT',
+                          style: TextStyle(
+                            color: accent,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.65,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _activeAgentDescription,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFFA9C6CF),
+                        height: 1.35,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                    const SizedBox(height: 9),
+                    Wrap(
+                      spacing: 7,
+                      runSpacing: 7,
+                      children: [
+                        _agentStatusPill(
+                          text:
+                              'TRAINABLE · '
+                              'V$_activeAgentVersion',
+                          color: accent,
+                          icon: Icons.school_rounded,
+                        ),
+                        _agentStatusPill(
+                          text: widget.activeAgentMemoryEnabled
+                              ? 'LONG-TERM MEMORY'
+                              : 'MEMORY OFF',
+                          color: widget.activeAgentMemoryEnabled
+                              ? const Color(0xFF62D6A7)
+                              : const Color(0xFF8299A2),
+                          icon: widget.activeAgentMemoryEnabled
+                              ? Icons.psychology_alt_rounded
+                              : Icons.memory_outlined,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                enabled
+                    ? Icons.chevron_right_rounded
+                    : Icons.lock_outline_rounded,
+                color: enabled ? accent : const Color(0xFF718A96),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final phase = _phase;
@@ -1210,7 +1410,9 @@ class _KorlixLiveConvoCharacterStageState
                     fontSize: 13.5,
                   ),
                 ),
-                const SizedBox(height: 22),
+                const SizedBox(height: 14),
+                _buildActiveAgentCard(),
+                const SizedBox(height: 18),
                 if (widget.error != null &&
                     widget.error!.trim().isNotEmpty) ...[
                   Container(
@@ -1288,6 +1490,17 @@ class _KorlixLiveConvoCharacterStageState
                             _showTranscript = !_showTranscript;
                           });
                         },
+                      ),
+                      // KORLIX_LIVE_CONVO_AGENT_HUB_ACTION_BUILD131
+                      _circleAction(
+                        icon: Icons.hub_rounded,
+                        label: 'Agents',
+                        color: _activeAgentAccent,
+                        onPressed: widget.onOpenAgentHub == null
+                            ? null
+                            : () {
+                                unawaited(widget.onOpenAgentHub!());
+                              },
                       ),
                       // KORLIX_LIVE_CONVO_CAMERA_UI_V1
                       _circleAction(
@@ -1668,4 +1881,5 @@ _KorlixStageCharacter _korlixStageCharacterFor(String rawId) {
   }
 }
 
+// KORLIX_LIVE_CONVO_AGENT_HUB_STAGE_BUILD131_END
 // KORLIX_LIVE_CONVO_CHARACTER_STAGE_V1_END
