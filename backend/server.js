@@ -940,7 +940,14 @@ async function getAuthenticatedUser(req) {
   const { data, error } = await supabaseAdmin.auth.getUser(token);
 
   if (error || !data?.user) {
-    throw new Error("Invalid or expired session. Please sign in again.");
+    const authError = new Error(
+      "Invalid or expired session. Please sign in again.",
+    );
+
+    authError.statusCode = 401;
+    authError.code = "invalid_session";
+
+    throw authError;
   }
 
   const deviceInfo = getRequestDeviceInfo(req);
