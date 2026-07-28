@@ -937,9 +937,7 @@ async function getAuthenticatedUser(req) {
     return null;
   }
 
-  const { data, error } = await supabaseAdmin.auth.getUser(token);
-
-  if (error || !data?.user) {
+  const createInvalidSessionError = () => {
     const authError = new Error(
       "Invalid or expired session. Please sign in again.",
     );
@@ -947,7 +945,46 @@ async function getAuthenticatedUser(req) {
     authError.statusCode = 401;
     authError.code = "invalid_session";
 
-    throw authError;
+    return authError;
+  };
+
+  let authResult;
+
+  try {
+    authResult = await supabaseAdmin.auth.getUser(token);
+  } catch (error) {
+    const authStatus = Number(
+      error?.statusCode
+      ?? error?.status
+      ?? 0,
+    );
+
+    const authMessage = String(
+      error?.message
+      ?? "",
+    ).toLowerCase();
+
+    const isInvalidSession = (
+      authStatus === 401
+      || authStatus === 403
+      || authMessage.includes("jwt")
+      || authMessage.includes("token")
+      || authMessage.includes("session")
+      || authMessage.includes("unauthorized")
+      || authMessage.includes("forbidden")
+    );
+
+    if (!isInvalidSession) {
+      throw error;
+    }
+
+    throw createInvalidSessionError();
+  }
+
+  const { data, error } = authResult ?? {};
+
+  if (error || !data?.user) {
+    throw createInvalidSessionError();
   }
 
   const deviceInfo = getRequestDeviceInfo(req);
