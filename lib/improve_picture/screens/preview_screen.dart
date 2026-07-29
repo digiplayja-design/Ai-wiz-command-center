@@ -11,8 +11,16 @@ import '../models/portrait_studio_callback.dart';
 import '../models/template_model.dart';
 import 'processing_screen.dart';
 
+const bool _kKorlixPortraitBackendOverrideDeclared =
+    bool.hasEnvironment('AI_WIZARD_BACKEND_URL');
+
+const String _kKorlixPortraitBackendOverrideUrl =
+    String.fromEnvironment('AI_WIZARD_BACKEND_URL');
+
 const String _kKorlixPortraitPreviewEndpoint =
-    'https://chee-chai-chee-backend.onrender.com/api/image/improve';
+    _kKorlixPortraitBackendOverrideDeclared
+        ? '${_kKorlixPortraitBackendOverrideUrl}/api/image/improve'
+        : 'https://chee-chai-chee-backend.onrender.com/api/image/improve';
 
 class PreviewScreen extends StatefulWidget {
   const PreviewScreen({

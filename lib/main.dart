@@ -83,9 +83,16 @@ void stopKorlixCharacterSpeechGlobally() {
 
 final List<String> kKorlixBootWarnings = <String>[];
 
-const String kKorlixBackendBaseUrl =
-    'https://chee-chai-chee-backend.onrender.com';
+const bool _kKorlixBackendOverrideDeclared =
+    bool.hasEnvironment('AI_WIZARD_BACKEND_URL');
 
+const String _kKorlixBackendOverrideUrl =
+    String.fromEnvironment('AI_WIZARD_BACKEND_URL');
+
+const String kKorlixBackendBaseUrl =
+    _kKorlixBackendOverrideDeclared
+        ? _kKorlixBackendOverrideUrl
+        : 'https://chee-chai-chee-backend.onrender.com';
 Future<void> main() async {
   await runZonedGuarded<Future<void>>(
     () async {
@@ -226,7 +233,7 @@ Future<void> _korlixRunBootStep(
 }
 
 String backendUrl() {
-  const overrideUrl = String.fromEnvironment('AI_WIZARD_BACKEND_URL');
+  const overrideUrl = kKorlixBackendBaseUrl;
 
   if (overrideUrl.isNotEmpty) {
     if (overrideUrl.endsWith('/api/generate')) {
@@ -235,8 +242,7 @@ String backendUrl() {
     return '$overrideUrl/api/generate';
   }
 
-  const productionBackendUrl = 'https://chee-chai-chee-backend.onrender.com';
-
+  const productionBackendUrl = kKorlixBackendBaseUrl;
   if (productionBackendUrl.isNotEmpty) {
     return '$productionBackendUrl/api/generate';
   }
