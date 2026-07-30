@@ -7020,6 +7020,384 @@ const KORLIX_LIVE_CONVO_BUILD129_DEFAULTS = Object.freeze({
   }),
 });
 
+// KORLIX_LIVE_CONVO_BUILD131_ENTITLEMENT_BEGIN
+const KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_ENV =
+  "KORLIX_LIVE_CONVO_UNLIMITED_USER_IDS";
+const KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_TIER = "developer_unlimited";
+const KORLIX_LIVE_CONVO_BUILD131_UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const KORLIX_LIVE_CONVO_BUILD131_COMPATIBILITY_LIMITS = Object.freeze({
+  monthlySessions: 2147483647,
+  monthlySeconds: 2147483647,
+  monthlyTokens: Number.MAX_SAFE_INTEGER,
+});
+
+function korlixLiveConvoBuild131EntitlementFields(entitlement) {
+  const unlimited = entitlement?.unlimited === true;
+  return {
+    unlimited,
+    developerAccess: unlimited,
+    entitlement: unlimited
+      ? KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_TIER
+      : "standard",
+    countsAgainstAllowance: !unlimited,
+  };
+}
+
+function korlixLiveConvoBuild131UnlimitedUserIds() {
+  return new Set(
+    String(process.env[KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_ENV] || "")
+      .split(",")
+      .map((value) => value.trim().toLowerCase())
+      .filter((value) => KORLIX_LIVE_CONVO_BUILD131_UUID_PATTERN.test(value))
+  );
+}
+
+function korlixLiveConvoBuild131EntitlementForUser(user) {
+  const userId = String(user?.id || "").trim().toLowerCase();
+  const unlimited = Boolean(
+    userId && korlixLiveConvoBuild131UnlimitedUserIds().has(userId)
+  );
+  return korlixLiveConvoBuild131EntitlementFields({ unlimited });
+}
+
+function korlixLiveConvoBuild131MonthKey() {
+  return `${new Date().toISOString().slice(0, 7)}-01`;
+}
+
+function korlixLiveConvoBuild131Number(
+  value,
+  maximum = Number.MAX_SAFE_INTEGER
+) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  return Math.min(Math.floor(parsed), maximum);
+}
+
+function korlixLiveConvoBuild131LimitsForEntitlement(profile, entitlement) {
+  const base = korlixLiveConvoBuild129LimitsForTier(profile?.tier);
+  const fields = korlixLiveConvoBuild131EntitlementFields(entitlement);
+  if (!fields.unlimited) return { ...base, ...fields };
+
+  return {
+    ...base,
+    tier: KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_TIER,
+    monthlySessions:
+      KORLIX_LIVE_CONVO_BUILD131_COMPATIBILITY_LIMITS.monthlySessions,
+    monthlySeconds:
+      KORLIX_LIVE_CONVO_BUILD131_COMPATIBILITY_LIMITS.monthlySeconds,
+    monthlyTokens:
+      KORLIX_LIVE_CONVO_BUILD131_COMPATIBILITY_LIMITS.monthlyTokens,
+    ...fields,
+  };
+}
+
+function korlixLiveConvoBuild131Decorate(value, entitlement) {
+  const base = value && typeof value === "object" ? value : {};
+  return {
+    ...base,
+    ...korlixLiveConvoBuild131EntitlementFields(entitlement),
+  };
+}
+
+async function korlixLiveConvoBuild131UnlimitedUsage({ user, limits }) {
+  const monthKey = korlixLiveConvoBuild131MonthKey();
+  const { data, error } = await supabaseAdmin
+    .from("korlix_live_convo_sessions")
+    .select(
+      "id,duration_seconds,response_count,total_tokens,transcription_tokens"
+    )
+    .eq("user_id", user.id)
+    .eq("month_key", monthKey)
+    .eq("tier", KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_TIER);
+
+  if (error) throw error;
+
+  const rows = Array.isArray(data) ? data : [];
+  const totals = rows.reduce(
+    (sum, row) => ({
+      durationSeconds:
+        sum.durationSeconds +
+        korlixLiveConvoBuild131Number(row?.duration_seconds),
+      responseCount:
+        sum.responseCount + korlixLiveConvoBuild131Number(row?.response_count),
+      totalTokens:
+        sum.totalTokens + korlixLiveConvoBuild131Number(row?.total_tokens),
+      transcriptionTokens:
+        sum.transcriptionTokens +
+        korlixLiveConvoBuild131Number(row?.transcription_tokens),
+    }),
+    {
+      durationSeconds: 0,
+      responseCount: 0,
+      totalTokens: 0,
+      transcriptionTokens: 0,
+    }
+  );
+
+  return {
+    tier: KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_TIER,
+    monthKey,
+    sessionCount: rows.length,
+    ...totals,
+    monthlySessionLimit: limits.monthlySessions,
+    monthlyDurationLimit: limits.monthlySeconds,
+    monthlyTokenLimit: limits.monthlyTokens,
+    remainingSessions: limits.monthlySessions,
+    remainingSeconds: limits.monthlySeconds,
+    remainingTokens: limits.monthlyTokens,
+    ...korlixLiveConvoBuild131EntitlementFields({ unlimited: true }),
+  };
+}
+
+async function korlixLiveConvoBuild131ReserveUnlimited({ user, limits }) {
+  if (!supabaseAdmin) {
+    const error = new Error(
+      "Supabase is not configured for LIVE CONVO usage logging."
+    );
+    error.statusCode = 503;
+    throw error;
+  }
+
+  const sessionId = crypto.randomUUID();
+  const monthKey = korlixLiveConvoBuild131MonthKey();
+  const { error } = await supabaseAdmin
+    .from("korlix_live_convo_sessions")
+    .insert({
+      id: sessionId,
+      user_id: user.id,
+      month_key: monthKey,
+      tier: KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_TIER,
+      status: "reserved",
+      max_duration_seconds: limits.maxSessionSeconds,
+      max_response_count: limits.maxResponses,
+    });
+
+  if (error) {
+    korlixLiveConvoBuild129LogError(
+      "KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_RESERVATION_FAILED",
+      error
+    );
+    const wrapped = new Error(
+      "LIVE CONVO usage logging is temporarily unavailable."
+    );
+    wrapped.statusCode = 503;
+    throw wrapped;
+  }
+
+  const reservation = {
+    allowed: true,
+    sessionId,
+    tier: KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_TIER,
+    monthKey,
+    maxSessionSeconds: limits.maxSessionSeconds,
+    maxResponses: limits.maxResponses,
+    monthlySessionLimit: limits.monthlySessions,
+    monthlyDurationLimit: limits.monthlySeconds,
+    monthlyTokenLimit: limits.monthlyTokens,
+    remainingSessions: limits.monthlySessions,
+    remainingSeconds: limits.monthlySeconds,
+    remainingTokens: limits.monthlyTokens,
+    ...korlixLiveConvoBuild131EntitlementFields({ unlimited: true }),
+  };
+
+  return { reservation, limits, sessionId };
+}
+
+async function korlixLiveConvoBuild131ReportUnlimitedUsage({
+  user,
+  body,
+  limits,
+}) {
+  const sessionId = String(body.sessionId || body.session_id || "").trim();
+  const { data: session, error: selectError } = await supabaseAdmin
+    .from("korlix_live_convo_sessions")
+    .select(
+      "id,user_id,month_key,tier,status,max_duration_seconds,max_response_count,ended_at,duration_seconds,response_count,total_tokens,input_tokens,output_tokens,input_audio_tokens,output_audio_tokens,image_tokens,transcription_tokens,end_reason"
+    )
+    .eq("id", sessionId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (selectError) throw selectError;
+  if (!session) {
+    return {
+      allowed: false,
+      limitReached: false,
+      code: "session_not_found",
+      message: "LIVE CONVO usage session was not found.",
+      ...korlixLiveConvoBuild131EntitlementFields({ unlimited: true }),
+    };
+  }
+  if (session.tier !== KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_TIER) {
+    return {
+      allowed: false,
+      limitReached: false,
+      code: "session_entitlement_mismatch",
+      message: "LIVE CONVO usage session does not match this entitlement.",
+      ...korlixLiveConvoBuild131EntitlementFields({ unlimited: true }),
+    };
+  }
+
+  const maxDuration = Math.max(
+    1,
+    korlixLiveConvoBuild131Number(session.max_duration_seconds, 86400)
+  );
+  const maxResponses = Math.max(
+    1,
+    korlixLiveConvoBuild131Number(session.max_response_count, 100000)
+  );
+  const durationSeconds = Math.max(
+    korlixLiveConvoBuild131Number(session.duration_seconds, maxDuration),
+    Math.min(
+      korlixLiveConvoBuild131Number(body.durationSeconds, 86400),
+      maxDuration
+    )
+  );
+  const responseCount = Math.max(
+    korlixLiveConvoBuild131Number(session.response_count, maxResponses),
+    Math.min(
+      korlixLiveConvoBuild131Number(body.responseCount, 100000),
+      maxResponses
+    )
+  );
+  const totalTokens = Math.max(
+    korlixLiveConvoBuild131Number(session.total_tokens),
+    korlixLiveConvoBuild131Number(body.totalTokens)
+  );
+  const inputTokens = Math.max(
+    korlixLiveConvoBuild131Number(session.input_tokens),
+    korlixLiveConvoBuild131Number(body.inputTokens)
+  );
+  const outputTokens = Math.max(
+    korlixLiveConvoBuild131Number(session.output_tokens),
+    korlixLiveConvoBuild131Number(body.outputTokens)
+  );
+  const inputAudioTokens = Math.max(
+    korlixLiveConvoBuild131Number(session.input_audio_tokens),
+    korlixLiveConvoBuild131Number(body.inputAudioTokens)
+  );
+  const outputAudioTokens = Math.max(
+    korlixLiveConvoBuild131Number(session.output_audio_tokens),
+    korlixLiveConvoBuild131Number(body.outputAudioTokens)
+  );
+  const imageTokens = Math.max(
+    korlixLiveConvoBuild131Number(session.image_tokens),
+    korlixLiveConvoBuild131Number(body.imageTokens)
+  );
+  const transcriptionTokens = Math.max(
+    korlixLiveConvoBuild131Number(session.transcription_tokens),
+    korlixLiveConvoBuild131Number(body.transcriptionTokens)
+  );
+  const sessionLimitReached =
+    durationSeconds >= maxDuration || responseCount >= maxResponses;
+  const ended =
+    session.status === "ended" || body.ended === true || sessionLimitReached;
+  const now = new Date().toISOString();
+  const requestedEndReason = String(body.endReason || "").trim();
+  const endReason = ended
+    ? session.end_reason ||
+      requestedEndReason ||
+      (sessionLimitReached ? "session_limit_reached" : "completed")
+    : session.end_reason || null;
+
+  const { data: updated, error: updateError } = await supabaseAdmin
+    .from("korlix_live_convo_sessions")
+    .update({
+      status: ended ? "ended" : "active",
+      last_seen_at: now,
+      ended_at: session.ended_at || (ended ? now : null),
+      duration_seconds: durationSeconds,
+      response_count: responseCount,
+      total_tokens: totalTokens,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      input_audio_tokens: inputAudioTokens,
+      output_audio_tokens: outputAudioTokens,
+      image_tokens: imageTokens,
+      transcription_tokens: transcriptionTokens,
+      end_reason: endReason,
+      updated_at: now,
+    })
+    .eq("id", sessionId)
+    .eq("user_id", user.id)
+    .eq("tier", KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_TIER)
+    .select("id")
+    .maybeSingle();
+
+  if (updateError) throw updateError;
+  if (!updated) {
+    return {
+      allowed: false,
+      limitReached: false,
+      code: "session_update_failed",
+      message: "LIVE CONVO usage session could not be updated.",
+      ...korlixLiveConvoBuild131EntitlementFields({ unlimited: true }),
+    };
+  }
+
+  console.info(
+    "KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_USAGE",
+    JSON.stringify({
+      sessionId,
+      durationSeconds,
+      responseCount,
+      totalTokens,
+      transcriptionTokens,
+      ended,
+    })
+  );
+
+  return {
+    allowed: !sessionLimitReached,
+    limitReached: sessionLimitReached,
+    sessionLimitReached,
+    monthlyLimitReached: false,
+    sessionId,
+    durationSeconds,
+    responseCount,
+    totalTokens,
+    transcriptionTokens,
+    remainingSessionSeconds: Math.max(maxDuration - durationSeconds, 0),
+    remainingResponses: Math.max(maxResponses - responseCount, 0),
+    remainingMonthlySeconds: limits.monthlySeconds,
+    remainingMonthlyTokens: limits.monthlyTokens,
+    message: sessionLimitReached
+      ? "This LIVE CONVO session reached its safety limit."
+      : null,
+    ...korlixLiveConvoBuild131EntitlementFields({ unlimited: true }),
+  };
+}
+
+async function korlixLiveConvoBuild131CancelUnlimited({
+  sessionId,
+  userId,
+  reason,
+}) {
+  if (!supabaseAdmin || !sessionId || !userId) return;
+  const now = new Date().toISOString();
+  const { error } = await supabaseAdmin
+    .from("korlix_live_convo_sessions")
+    .update({
+      status: "ended",
+      last_seen_at: now,
+      ended_at: now,
+      end_reason: reason || "provider_failed",
+      updated_at: now,
+    })
+    .eq("id", sessionId)
+    .eq("user_id", userId)
+    .eq("tier", KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_TIER);
+
+  if (error) {
+    korlixLiveConvoBuild129LogError(
+      "KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_CANCEL_WARNING",
+      error
+    );
+  }
+}
+// KORLIX_LIVE_CONVO_BUILD131_ENTITLEMENT_END
+
 function korlixLiveConvoBuild129Tier(value) {
   const tier = String(value || "basic").trim().toLowerCase();
   if (tier === "enterprise") return "enterprise";
@@ -7100,6 +7478,12 @@ function korlixLiveConvoBuild129ExposeHeaders(res, reservation) {
     "X-Korlix-Live-Convo-Remaining-Sessions": reservation.remainingSessions,
     "X-Korlix-Live-Convo-Remaining-Seconds": reservation.remainingSeconds,
     "X-Korlix-Live-Convo-Remaining-Tokens": reservation.remainingTokens,
+    "X-Korlix-Live-Convo-Unlimited": reservation.unlimited === true,
+    "X-Korlix-Live-Convo-Developer-Access":
+      reservation.developerAccess === true,
+    "X-Korlix-Live-Convo-Entitlement": reservation.entitlement || "standard",
+    "X-Korlix-Live-Convo-Counts-Against-Allowance":
+      reservation.countsAgainstAllowance !== false,
   };
 
   for (const [name, value] of Object.entries(values)) {
@@ -7187,7 +7571,12 @@ app.get("/api/live-convo/limits/health", (req, res) => {
     ok: true,
     feature: "live_convo_fair_use",
     version: "build129",
+    entitlementVersion: "build131",
     supabaseConfigured: Boolean(supabaseAdmin),
+    unlimitedEntitlementConfigured: Boolean(
+      String(process.env[KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_ENV] || "").trim()
+    ),
+    unlimitedEntitlementSource: "authenticated_supabase_user_id",
     defaults: KORLIX_LIVE_CONVO_BUILD129_DEFAULTS,
   });
 });
@@ -7203,25 +7592,37 @@ app.get("/api/live-convo/usage", async (req, res) => {
     }
 
     const user = await requireUser(req);
+    const entitlement = korlixLiveConvoBuild131EntitlementForUser(user);
     const profile = await getOrCreateProfile(user);
-    const limits = korlixLiveConvoBuild129LimitsForTier(profile?.tier);
-    const { data, error } = await supabaseAdmin.rpc(
-      "korlix_live_convo_get_usage",
-      {
-        p_user_id: user.id,
-        p_tier: limits.tier,
-        p_monthly_session_limit: limits.monthlySessions,
-        p_monthly_duration_limit: limits.monthlySeconds,
-        p_monthly_token_limit: limits.monthlyTokens,
-      }
+    const limits = korlixLiveConvoBuild131LimitsForEntitlement(
+      profile,
+      entitlement
     );
+    let usage;
 
-    if (error) throw error;
+    if (entitlement.unlimited) {
+      usage = await korlixLiveConvoBuild131UnlimitedUsage({ user, limits });
+    } else {
+      const { data, error } = await supabaseAdmin.rpc(
+        "korlix_live_convo_get_usage",
+        {
+          p_user_id: user.id,
+          p_tier: limits.tier,
+          p_monthly_session_limit: limits.monthlySessions,
+          p_monthly_duration_limit: limits.monthlySeconds,
+          p_monthly_token_limit: limits.monthlyTokens,
+        }
+      );
+
+      if (error) throw error;
+      usage = korlixLiveConvoBuild129RpcValue(data);
+    }
 
     return res.json({
       ok: true,
-      usage: korlixLiveConvoBuild129RpcValue(data),
+      usage: korlixLiveConvoBuild131Decorate(usage, entitlement),
       limits,
+      ...korlixLiveConvoBuild131EntitlementFields(entitlement),
     });
   } catch (error) {
     korlixLiveConvoBuild129LogError(
@@ -7250,8 +7651,12 @@ app.post("/api/live-convo/usage", async (req, res) => {
     }
 
     const user = await requireUser(req);
+    const entitlement = korlixLiveConvoBuild131EntitlementForUser(user);
     const profile = await getOrCreateProfile(user);
-    const limits = korlixLiveConvoBuild129LimitsForTier(profile?.tier);
+    const limits = korlixLiveConvoBuild131LimitsForEntitlement(
+      profile,
+      entitlement
+    );
     const body = req.body && typeof req.body === "object" ? req.body : {};
     const sessionId = String(body.sessionId || body.session_id || "").trim();
 
@@ -7260,39 +7665,50 @@ app.post("/api/live-convo/usage", async (req, res) => {
         ok: false,
         code: "live_convo_session_id_required",
         error: "LIVE CONVO session ID is required.",
+        ...korlixLiveConvoBuild131EntitlementFields(entitlement),
       });
     }
 
-    const number = (value, maximum = 2000000000) => {
-      const parsed = Number(value);
-      if (!Number.isFinite(parsed) || parsed <= 0) return 0;
-      return Math.min(Math.floor(parsed), maximum);
-    };
+    let usage;
+    if (entitlement.unlimited) {
+      usage = await korlixLiveConvoBuild131ReportUnlimitedUsage({
+        user,
+        body,
+        limits,
+      });
+    } else {
+      const number = (value, maximum = 2000000000) => {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+        return Math.min(Math.floor(parsed), maximum);
+      };
 
-    const { data, error } = await supabaseAdmin.rpc(
-      "korlix_live_convo_report_usage",
-      {
-        p_session_id: sessionId,
-        p_user_id: user.id,
-        p_duration_seconds: number(body.durationSeconds, 86400),
-        p_response_count: number(body.responseCount, 100000),
-        p_total_tokens: number(body.totalTokens),
-        p_input_tokens: number(body.inputTokens),
-        p_output_tokens: number(body.outputTokens),
-        p_input_audio_tokens: number(body.inputAudioTokens),
-        p_output_audio_tokens: number(body.outputAudioTokens),
-        p_image_tokens: number(body.imageTokens),
-        p_transcription_tokens: number(body.transcriptionTokens),
-        p_monthly_duration_limit: limits.monthlySeconds,
-        p_monthly_token_limit: limits.monthlyTokens,
-        p_ended: body.ended === true,
-        p_end_reason: String(body.endReason || "").trim() || null,
-      }
-    );
+      const { data, error } = await supabaseAdmin.rpc(
+        "korlix_live_convo_report_usage",
+        {
+          p_session_id: sessionId,
+          p_user_id: user.id,
+          p_duration_seconds: number(body.durationSeconds, 86400),
+          p_response_count: number(body.responseCount, 100000),
+          p_total_tokens: number(body.totalTokens),
+          p_input_tokens: number(body.inputTokens),
+          p_output_tokens: number(body.outputTokens),
+          p_input_audio_tokens: number(body.inputAudioTokens),
+          p_output_audio_tokens: number(body.outputAudioTokens),
+          p_image_tokens: number(body.imageTokens),
+          p_transcription_tokens: number(body.transcriptionTokens),
+          p_monthly_duration_limit: limits.monthlySeconds,
+          p_monthly_token_limit: limits.monthlyTokens,
+          p_ended: body.ended === true,
+          p_end_reason: String(body.endReason || "").trim() || null,
+        }
+      );
 
-    if (error) throw error;
+      if (error) throw error;
+      usage = korlixLiveConvoBuild129RpcValue(data) || {};
+    }
 
-    const usage = korlixLiveConvoBuild129RpcValue(data) || {};
+    usage = korlixLiveConvoBuild131Decorate(usage, entitlement);
     const limited = usage.allowed === false || usage.limitReached === true;
 
     return res.status(limited ? 429 : 200).json({
@@ -7302,6 +7718,7 @@ app.post("/api/live-convo/usage", async (req, res) => {
       usage,
       limits,
       error: usage.message || null,
+      ...korlixLiveConvoBuild131EntitlementFields(entitlement),
     });
   } catch (error) {
     korlixLiveConvoBuild129LogError(
@@ -7326,10 +7743,32 @@ app.use("/api/live-convo/session", async (req, res, next) => {
 
   try {
     const user = await requireUser(req);
+    const entitlement = korlixLiveConvoBuild131EntitlementForUser(user);
     const profile = await getOrCreateProfile(user);
-    const { reservation, limits, sessionId } =
-      await korlixLiveConvoBuild129Reserve({ user, profile });
+    let result;
 
+    if (entitlement.unlimited) {
+      const limits = korlixLiveConvoBuild131LimitsForEntitlement(
+        profile,
+        entitlement
+      );
+      result = await korlixLiveConvoBuild131ReserveUnlimited({ user, limits });
+    } else {
+      const ordinary = await korlixLiveConvoBuild129Reserve({ user, profile });
+      result = {
+        ...ordinary,
+        reservation: korlixLiveConvoBuild131Decorate(
+          ordinary.reservation,
+          entitlement
+        ),
+        limits: {
+          ...ordinary.limits,
+          ...korlixLiveConvoBuild131EntitlementFields(entitlement),
+        },
+      };
+    }
+
+    const { reservation, limits, sessionId } = result;
     if (!reservation || reservation.allowed !== true) {
       return res.status(429).json({
         ok: false,
@@ -7339,6 +7778,7 @@ app.use("/api/live-convo/session", async (req, res, next) => {
           "Your LIVE CONVO allowance is not available right now.",
         usage: reservation?.usage || null,
         limits,
+        ...korlixLiveConvoBuild131EntitlementFields(entitlement),
       });
     }
 
@@ -7346,17 +7786,26 @@ app.use("/api/live-convo/session", async (req, res, next) => {
       userId: user.id,
       sessionId,
       limits,
+      ...korlixLiveConvoBuild131EntitlementFields(entitlement),
     };
 
     korlixLiveConvoBuild129ExposeHeaders(res, reservation);
 
     res.once("finish", () => {
       if (res.statusCode >= 400) {
-        void korlixLiveConvoBuild129Cancel({
-          sessionId,
-          userId: user.id,
-          reason: `provider_http_${res.statusCode}`,
-        });
+        if (entitlement.unlimited) {
+          void korlixLiveConvoBuild131CancelUnlimited({
+            sessionId,
+            userId: user.id,
+            reason: `provider_http_${res.statusCode}`,
+          });
+        } else {
+          void korlixLiveConvoBuild129Cancel({
+            sessionId,
+            userId: user.id,
+            reason: `provider_http_${res.statusCode}`,
+          });
+        }
       }
     });
 
