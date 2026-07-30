@@ -7044,21 +7044,54 @@ function korlixLiveConvoBuild131EntitlementFields(entitlement) {
   };
 }
 
+// KORLIX_LIVE_CONVO_BUILD131_UID_EXTRACTION_V2
 function korlixLiveConvoBuild131UnlimitedUserIds() {
-  return new Set(
-    String(process.env[KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_ENV] || "")
-      .split(",")
-      .map((value) => value.trim().toLowerCase())
-      .filter((value) => KORLIX_LIVE_CONVO_BUILD131_UUID_PATTERN.test(value))
+  const raw = String(
+    process.env[
+      KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_ENV
+    ] || ""
+  ).toLowerCase();
+
+  const matches =
+    raw.match(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
+    ) || [];
+
+  return new Set(matches);
+}
+function korlixLiveConvoBuild131EntitlementForUser(user) {
+  const userId =
+    String(user?.id || "")
+      .trim()
+      .toLowerCase();
+
+  const unlimited = Boolean(
+    userId &&
+    korlixLiveConvoBuild131UnlimitedUserIds().has(
+      userId
+    )
   );
+
+  return korlixLiveConvoBuild131EntitlementFields({
+    unlimited,
+  });
 }
 
-function korlixLiveConvoBuild131EntitlementForUser(user) {
-  const userId = String(user?.id || "").trim().toLowerCase();
-  const unlimited = Boolean(
-    userId && korlixLiveConvoBuild131UnlimitedUserIds().has(userId)
-  );
-  return korlixLiveConvoBuild131EntitlementFields({ unlimited });
+function korlixLiveConvoBuild131UserFingerprint(user) {
+  const userId =
+    String(user?.id || "")
+      .trim()
+      .toLowerCase();
+
+  if (!userId) {
+    return "";
+  }
+
+  return crypto
+    .createHash("sha256")
+    .update(userId)
+    .digest("hex")
+    .slice(0, 16);
 }
 
 function korlixLiveConvoBuild131MonthKey() {
@@ -7566,20 +7599,110 @@ async function korlixLiveConvoBuild129Cancel({ sessionId, userId, reason }) {
   }
 }
 
-app.get("/api/live-convo/limits/health", (req, res) => {
-  return res.json({
-    ok: true,
-    feature: "live_convo_fair_use",
-    version: "build129",
-    entitlementVersion: "build131",
-    supabaseConfigured: Boolean(supabaseAdmin),
-    unlimitedEntitlementConfigured: Boolean(
-      String(process.env[KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_ENV] || "").trim()
-    ),
-    unlimitedEntitlementSource: "authenticated_supabase_user_id",
-    defaults: KORLIX_LIVE_CONVO_BUILD129_DEFAULTS,
-  });
-});
+app.get(
+  "/api/live-convo/limits/health",
+  (req, res) => {
+    const unlimitedUserIds =
+      korlixLiveConvoBuild131UnlimitedUserIds();
+
+    return res.json({
+      ok: true,
+      feature: "live_convo_fair_use",
+      version: "build129",
+      entitlementVersion:
+        "build131_uid_extraction_v2",
+      supabaseConfigured: Boolean(
+        supabaseAdmin
+      ),
+      unlimitedEntitlementConfigured:
+        unlimitedUserIds.size > 0,
+      unlimitedEntitlementUserCount:
+        unlimitedUserIds.size,
+      unlimitedEntitlementParser:
+        "uuid_extraction_v2",
+      unlimitedEntitlementSource:
+        "authenticated_supabase_user_id",
+      defaults:
+        KORLIX_LIVE_CONVO_BUILD129_DEFAULTS,
+    });
+  }
+);
+
+app.get(
+  "/api/live-convo/entitlement",
+  async (req, res) => {
+    try {
+      if (!supabaseAdmin) {
+        return res.status(503).json({
+          ok: false,
+          code:
+            "live_convo_entitlement_not_configured",
+          error:
+            "Supabase is not configured for LIVE CONVO entitlement verification.",
+        });
+      }
+
+      const user =
+        await requireUser(req);
+
+      const entitlement =
+        korlixLiveConvoBuild131EntitlementForUser(
+          user
+        );
+
+      const profile =
+        await getOrCreateProfile(user);
+
+      const limits =
+        korlixLiveConvoBuild131LimitsForEntitlement(
+          profile,
+          entitlement
+        );
+
+      const unlimitedUserIds =
+        korlixLiveConvoBuild131UnlimitedUserIds();
+
+      return res.json({
+        ok: true,
+        entitlementVersion:
+          "build131_uid_extraction_v2",
+        ...korlixLiveConvoBuild131EntitlementFields(
+          entitlement
+        ),
+        limits,
+        allowlistConfigured:
+          unlimitedUserIds.size > 0,
+        allowlistUserCount:
+          unlimitedUserIds.size,
+        authenticatedUserFingerprint:
+          korlixLiveConvoBuild131UserFingerprint(
+            user
+          ),
+        authenticatedUserIdSource:
+          "verified_supabase_bearer_token",
+      });
+    } catch (error) {
+      korlixLiveConvoBuild129LogError(
+        "KORLIX_LIVE_CONVO_BUILD131_ENTITLEMENT_CHECK_FAILED",
+        error
+      );
+
+      return res
+        .status(error?.statusCode || 500)
+        .json({
+          ok: false,
+          code:
+            "live_convo_entitlement_check_failed",
+          error:
+            error?.statusCode === 401
+              ? getKorlixUserFacingError(
+                  error
+                )
+              : "Could not verify the LIVE CONVO entitlement right now.",
+        });
+    }
+  }
+);
 
 app.get("/api/live-convo/usage", async (req, res) => {
   try {
