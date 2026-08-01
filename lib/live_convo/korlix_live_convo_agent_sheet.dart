@@ -7,8 +7,7 @@ import 'korlix_live_convo_agent_client.dart';
 
 // KORLIX_LIVE_CONVO_AGENT_SHEET_BUILD131_BEGIN
 
-Future<KorlixLiveConvoAgentRuntime?>
-showKorlixLiveConvoAgentHub({
+Future<KorlixLiveConvoAgentRuntime?> showKorlixLiveConvoAgentHub({
   required BuildContext context,
   required KorlixLiveConvoAgentClient client,
   required KorlixLiveConvoAgent activeAgent,
@@ -73,25 +72,16 @@ IconData korlixLiveConvoAgentIcon(String value) {
 }
 
 Color korlixLiveConvoAgentAccent(String value) {
-  final clean = value
-      .trim()
-      .replaceFirst('#', '')
-      .toUpperCase();
+  final clean = value.trim().replaceFirst('#', '').toUpperCase();
 
   if (!RegExp(r'^[0-9A-F]{6}$').hasMatch(clean)) {
     return const Color(0xFF21D4F4);
   }
 
-  return Color(
-    int.parse(
-      'FF$clean',
-      radix: 16,
-    ),
-  );
+  return Color(int.parse('FF$clean', radix: 16));
 }
 
-class KorlixLiveConvoAgentHubSheet
-    extends StatefulWidget {
+class KorlixLiveConvoAgentHubSheet extends StatefulWidget {
   const KorlixLiveConvoAgentHubSheet({
     super.key,
     required this.client,
@@ -106,16 +96,14 @@ class KorlixLiveConvoAgentHubSheet
   final String language;
 
   @override
-  State<KorlixLiveConvoAgentHubSheet>
-  createState() {
+  State<KorlixLiveConvoAgentHubSheet> createState() {
     return _KorlixLiveConvoAgentHubSheetState();
   }
 }
 
 class _KorlixLiveConvoAgentHubSheetState
     extends State<KorlixLiveConvoAgentHubSheet> {
-  KorlixLiveConvoAgentCatalog _catalog =
-      KorlixLiveConvoAgentCatalog.fallback;
+  KorlixLiveConvoAgentCatalog _catalog = KorlixLiveConvoAgentCatalog.fallback;
 
   KorlixLiveConvoAgentModelProof _modelProof =
       const KorlixLiveConvoAgentModelProof();
@@ -131,13 +119,9 @@ class _KorlixLiveConvoAgentHubSheetState
   void initState() {
     super.initState();
 
-    final activeId =
-        widget.activeAgent.id.trim();
+    final activeId = widget.activeAgent.id.trim();
 
-    _selectedAgentId =
-        activeId.isEmpty
-            ? 'general'
-            : activeId;
+    _selectedAgentId = activeId.isEmpty ? 'general' : activeId;
 
     unawaited(_load());
   }
@@ -145,22 +129,13 @@ class _KorlixLiveConvoAgentHubSheetState
   String _cleanError(Object error) {
     return error
         .toString()
-        .replaceFirst(
-          'KorlixLiveConvoAgentClientException: ',
-          '',
-        )
-        .replaceFirst(
-          'Exception: ',
-          '',
-        )
+        .replaceFirst('KorlixLiveConvoAgentClientException: ', '')
+        .replaceFirst('Exception: ', '')
         .trim();
   }
 
   KorlixLiveConvoAgent get _selectedAgent {
-    return _catalog.agentById(
-          _selectedAgentId,
-        ) ??
-        widget.activeAgent;
+    return _catalog.agentById(_selectedAgentId) ?? widget.activeAgent;
   }
 
   Future<void> _load() async {
@@ -173,25 +148,21 @@ class _KorlixLiveConvoAgentHubSheetState
       _error = null;
     });
 
-    var catalog =
-        KorlixLiveConvoAgentCatalog.fallback;
+    var catalog = KorlixLiveConvoAgentCatalog.fallback;
 
-    var modelProof =
-        const KorlixLiveConvoAgentModelProof();
+    var modelProof = const KorlixLiveConvoAgentModelProof();
 
     Object? catalogError;
     Object? proofError;
 
     try {
-      catalog =
-          await widget.client.loadCatalog();
+      catalog = await widget.client.loadCatalog();
     } catch (error) {
       catalogError = error;
     }
 
     try {
-      modelProof =
-          await widget.client.loadModelProof();
+      modelProof = await widget.client.loadModelProof();
     } catch (error) {
       proofError = error;
     }
@@ -200,11 +171,7 @@ class _KorlixLiveConvoAgentHubSheetState
       return;
     }
 
-    final selectedExists =
-        catalog.agentById(
-          _selectedAgentId,
-        ) !=
-        null;
+    final selectedExists = catalog.agentById(_selectedAgentId) != null;
 
     setState(() {
       _catalog = catalog;
@@ -225,11 +192,9 @@ class _KorlixLiveConvoAgentHubSheetState
       }
     });
   }
-  void _replaceAgent(
-    KorlixLiveConvoAgent updated,
-  ) {
-    final agents =
-        <KorlixLiveConvoAgent>[];
+
+  void _replaceAgent(KorlixLiveConvoAgent updated) {
+    final agents = <KorlixLiveConvoAgent>[];
 
     var replaced = false;
 
@@ -247,24 +212,17 @@ class _KorlixLiveConvoAgentHubSheetState
     }
 
     setState(() {
-      _catalog =
-          KorlixLiveConvoAgentCatalog(
-        agents:
-            List<KorlixLiveConvoAgent>.unmodifiable(
-          agents,
-        ),
+      _catalog = KorlixLiveConvoAgentCatalog(
+        agents: List<KorlixLiveConvoAgent>.unmodifiable(agents),
         persistenceConfigured:
-            _catalog.persistenceConfigured ||
-            updated.persistenceConfigured,
+            _catalog.persistenceConfigured || updated.persistenceConfigured,
       );
 
       _selectedAgentId = updated.id;
     });
   }
 
-  Future<T?> _runBusy<T>(
-    Future<T> Function() callback,
-  ) async {
+  Future<T?> _runBusy<T>(Future<T> Function() callback) async {
     if (_busy) {
       return null;
     }
@@ -293,10 +251,7 @@ class _KorlixLiveConvoAgentHubSheetState
     }
   }
 
-  void _showMessage(
-    String message, {
-    bool error = false,
-  }) {
+  void _showMessage(String message, {bool error = false}) {
     if (!mounted) {
       return;
     }
@@ -309,28 +264,19 @@ class _KorlixLiveConvoAgentHubSheetState
           backgroundColor: error
               ? const Color(0xFF8D3344)
               : const Color(0xFF17644D),
-          duration:
-              const Duration(seconds: 5),
+          duration: const Duration(seconds: 5),
         ),
       );
   }
 
-  Future<void> _activateAgent(
-    KorlixLiveConvoAgent agent,
-  ) async {
-    final runtime =
-        await _runBusy<
-            KorlixLiveConvoAgentRuntime>(
-      () {
-        return widget.client.loadRuntime(
-          agentId: agent.id,
-          characterName:
-              widget.characterName,
-          language:
-              widget.language,
-        );
-      },
-    );
+  Future<void> _activateAgent(KorlixLiveConvoAgent agent) async {
+    final runtime = await _runBusy<KorlixLiveConvoAgentRuntime>(() {
+      return widget.client.loadRuntime(
+        agentId: agent.id,
+        characterName: widget.characterName,
+        language: widget.language,
+      );
+    });
 
     if (!mounted || runtime == null) {
       return;
@@ -341,48 +287,30 @@ class _KorlixLiveConvoAgentHubSheetState
 
   Widget _buildHeader() {
     return Padding(
-      padding:
-          const EdgeInsets.fromLTRB(
-        18,
-        12,
-        12,
-        10,
-      ),
+      padding: const EdgeInsets.fromLTRB(18, 12, 12, 10),
       child: Row(
         children: [
           Container(
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              borderRadius:
-                  BorderRadius.circular(16),
-              color:
-                  const Color(0xFF123A47),
-              border: Border.all(
-                color:
-                    const Color(0xFF21D4F4),
-              ),
+              borderRadius: BorderRadius.circular(16),
+              color: const Color(0xFF123A47),
+              border: Border.all(color: const Color(0xFF21D4F4)),
             ),
-            child: const Icon(
-              Icons.hub_rounded,
-              color:
-                  Color(0xFF69D9E8),
-            ),
+            child: const Icon(Icons.hub_rounded, color: Color(0xFF69D9E8)),
           ),
           const SizedBox(width: 12),
           const Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'LIVE CONVO AGENTS',
                   style: TextStyle(
-                    color:
-                        Color(0xFFF0F7F8),
+                    color: Color(0xFFF0F7F8),
                     fontSize: 20,
-                    fontWeight:
-                        FontWeight.w900,
+                    fontWeight: FontWeight.w900,
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -390,11 +318,7 @@ class _KorlixLiveConvoAgentHubSheetState
                 Text(
                   'Select, train, and manage '
                   'private long-term memory.',
-                  style: TextStyle(
-                    color:
-                        Color(0xFFA9C6CF),
-                    height: 1.3,
-                  ),
+                  style: TextStyle(color: Color(0xFFA9C6CF), height: 1.3),
                 ),
               ],
             ),
@@ -406,11 +330,8 @@ class _KorlixLiveConvoAgentHubSheetState
                 : () {
                     Navigator.of(context).pop();
                   },
-            icon: const Icon(
-              Icons.close_rounded,
-            ),
-            color:
-                const Color(0xFFC7D7DC),
+            icon: const Icon(Icons.close_rounded),
+            color: const Color(0xFFC7D7DC),
           ),
         ],
       ),
@@ -418,75 +339,46 @@ class _KorlixLiveConvoAgentHubSheetState
   }
 
   Widget _buildModelProofCard() {
-    final provesGpt56 =
-        _modelProof
-            .provesGpt56DocumentReasoning;
+    final provesGpt56 = _modelProof.provesGpt56DocumentReasoning;
 
-    final liveConvoModel =
-        _modelProof.liveConvoModel
-                .trim()
-                .isEmpty
-            ? 'Unavailable'
-            : _modelProof.liveConvoModel;
+    final liveConvoModel = _modelProof.liveConvoModel.trim().isEmpty
+        ? 'Unavailable'
+        : _modelProof.liveConvoModel;
 
-    final documentModel =
-        _modelProof
-                .liveDocsDocumentModel
-                .trim()
-                .isEmpty
-            ? 'Unavailable'
-            : _modelProof
-                .liveDocsDocumentModel;
+    final documentModel = _modelProof.liveDocsDocumentModel.trim().isEmpty
+        ? 'Unavailable'
+        : _modelProof.liveDocsDocumentModel;
 
-    final reasoningEffort =
-        _modelProof
-            .liveDocsReasoningEffort
-            .trim();
+    final reasoningEffort = _modelProof.liveDocsReasoningEffort.trim();
 
-    final documentLine =
-        reasoningEffort.isEmpty
-            ? 'LIVE DOCS reasoning: '
-                '$documentModel'
-            : 'LIVE DOCS reasoning: '
-                '$documentModel · '
-                '$reasoningEffort';
+    final documentLine = reasoningEffort.isEmpty
+        ? 'LIVE DOCS reasoning: '
+              '$documentModel'
+        : 'LIVE DOCS reasoning: '
+              '$documentModel · '
+              '$reasoningEffort';
 
     final proofColor = provesGpt56
         ? const Color(0xFF62D6A7)
         : const Color(0xFFF2C14E);
 
     return Container(
-      margin:
-          const EdgeInsets.fromLTRB(
-        16,
-        4,
-        16,
-        12,
-      ),
-      padding:
-          const EdgeInsets.all(14),
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(18),
-        color:
-            const Color(0xFF081B25),
-        border: Border.all(
-          color: proofColor.withValues(
-            alpha: 0.64,
-          ),
-        ),
+        borderRadius: BorderRadius.circular(18),
+        color: const Color(0xFF081B25),
+        border: Border.all(color: proofColor.withValues(alpha: 0.64)),
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Icon(
                 provesGpt56
                     ? Icons.verified_rounded
-                    : Icons
-                        .info_outline_rounded,
+                    : Icons.info_outline_rounded,
                 color: proofColor,
               ),
               const SizedBox(width: 9),
@@ -494,12 +386,11 @@ class _KorlixLiveConvoAgentHubSheetState
                 child: Text(
                   provesGpt56
                       ? 'Runtime model '
-                          'proof verified'
+                            'proof verified'
                       : 'Runtime model proof',
                   style: TextStyle(
                     color: proofColor,
-                    fontWeight:
-                        FontWeight.w900,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
@@ -510,35 +401,27 @@ class _KorlixLiveConvoAgentHubSheetState
             'LIVE CONVO voice: '
             '$liveConvoModel',
             style: const TextStyle(
-              color:
-                  Color(0xFFD8E7EA),
-              fontWeight:
-                  FontWeight.w700,
+              color: Color(0xFFD8E7EA),
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             documentLine,
             style: const TextStyle(
-              color:
-                  Color(0xFFD8E7EA),
-              fontWeight:
-                  FontWeight.w700,
+              color: Color(0xFFD8E7EA),
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            _modelProof
-                    .deterministicAuditEngine
+            _modelProof.deterministicAuditEngine
                 ? 'Technician-audit '
-                    'calculations: '
-                    'deterministic engine'
+                      'calculations: '
+                      'deterministic engine'
                 : 'Deterministic audit '
-                    'proof unavailable',
-            style: const TextStyle(
-              color:
-                  Color(0xFFA9C6CF),
-            ),
+                      'proof unavailable',
+            style: const TextStyle(color: Color(0xFFA9C6CF)),
           ),
         ],
       ),
@@ -546,41 +429,25 @@ class _KorlixLiveConvoAgentHubSheetState
   }
 
   Widget _buildPersistenceNotice() {
-    final configured =
-        _catalog.persistenceConfigured;
+    final configured = _catalog.persistenceConfigured;
 
     final color = configured
         ? const Color(0xFF62D6A7)
         : const Color(0xFFF2C14E);
 
     return Container(
-      margin:
-          const EdgeInsets.fromLTRB(
-        16,
-        0,
-        16,
-        12,
-      ),
-      padding:
-          const EdgeInsets.all(13),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(16),
-        color: configured
-            ? const Color(0xFF0B2A24)
-            : const Color(0xFF332916),
-        border: Border.all(
-          color: color,
-        ),
+        borderRadius: BorderRadius.circular(16),
+        color: configured ? const Color(0xFF0B2A24) : const Color(0xFF332916),
+        border: Border.all(color: color),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            configured
-                ? Icons.cloud_done_rounded
-                : Icons.storage_rounded,
+            configured ? Icons.cloud_done_rounded : Icons.storage_rounded,
             color: color,
           ),
           const SizedBox(width: 10),
@@ -588,20 +455,18 @@ class _KorlixLiveConvoAgentHubSheetState
             child: Text(
               configured
                   ? 'Private agent training '
-                      'and long-term memory '
-                      'are connected.'
+                        'and long-term memory '
+                        'are connected.'
                   : 'Agent selection is '
-                      'available. Apply the '
-                      'included Supabase '
-                      'migration before '
-                      'saving training or '
-                      'long-term memory.',
+                        'available. Apply the '
+                        'included Supabase '
+                        'migration before '
+                        'saving training or '
+                        'long-term memory.',
               style: const TextStyle(
-                color:
-                    Color(0xFFD8E7EA),
+                color: Color(0xFFD8E7EA),
                 height: 1.35,
-                fontWeight:
-                    FontWeight.w700,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -609,6 +474,7 @@ class _KorlixLiveConvoAgentHubSheetState
       ),
     );
   }
+
   Widget _buildErrorBanner() {
     final error = _error?.trim() ?? '';
 
@@ -617,28 +483,17 @@ class _KorlixLiveConvoAgentHubSheetState
     }
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(
-        16,
-        0,
-        16,
-        12,
-      ),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         color: const Color(0xFF351923),
-        border: Border.all(
-          color: const Color(0xFFFF7185),
-        ),
+        border: Border.all(color: const Color(0xFFFF7185)),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.error_outline_rounded,
-            color: Color(0xFFFF8B9B),
-          ),
+          const Icon(Icons.error_outline_rounded, color: Color(0xFFFF8B9B)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -657,9 +512,7 @@ class _KorlixLiveConvoAgentHubSheetState
                 : () {
                     unawaited(_load());
                   },
-            icon: const Icon(
-              Icons.refresh_rounded,
-            ),
+            icon: const Icon(Icons.refresh_rounded),
             color: const Color(0xFFFFB2BE),
           ),
         ],
@@ -667,128 +520,86 @@ class _KorlixLiveConvoAgentHubSheetState
     );
   }
 
-  Widget _buildAgentCard(
-    KorlixLiveConvoAgent agent,
-  ) {
-    final accent =
-        korlixLiveConvoAgentAccent(
-      agent.accentHex,
-    );
+  Widget _buildAgentCard(KorlixLiveConvoAgent agent) {
+    final accent = korlixLiveConvoAgentAccent(agent.accentHex);
 
-    final selected =
-        agent.id == _selectedAgentId;
+    final selected = agent.id == _selectedAgentId;
 
-    final currentlyActive =
-        agent.id == widget.activeAgent.id;
+    final currentlyActive = agent.id == widget.activeAgent.id;
 
-    final enabled =
-        agent.active && !_busy;
+    final enabled = agent.active && !_busy;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        16,
-        0,
-        16,
-        12,
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius:
-              BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(20),
           onTap: enabled
               ? () {
                   setState(() {
-                    _selectedAgentId =
-                        agent.id;
+                    _selectedAgentId = agent.id;
                   });
                 }
               : null,
           child: AnimatedContainer(
-            duration:
-                const Duration(milliseconds: 180),
-            padding:
-                const EdgeInsets.all(14),
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              borderRadius:
-                  BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(20),
               color: selected
-                  ? accent.withValues(
-                      alpha: 0.13,
-                    )
+                  ? accent.withValues(alpha: 0.13)
                   : const Color(0xFF071722),
               border: Border.all(
-                color: selected
-                    ? accent
-                    : const Color(0xFF244D5C),
-                width:
-                    selected ? 1.6 : 1,
+                color: selected ? accent : const Color(0xFF244D5C),
+                width: selected ? 1.6 : 1,
               ),
               boxShadow: selected
                   ? <BoxShadow>[
                       BoxShadow(
-                        color: accent.withValues(
-                          alpha: 0.12,
-                        ),
+                        color: accent.withValues(alpha: 0.12),
                         blurRadius: 22,
                       ),
                     ]
                   : const <BoxShadow>[],
             ),
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
                       width: 46,
                       height: 46,
                       decoration: BoxDecoration(
-                        borderRadius:
-                            BorderRadius.circular(
-                          15,
-                        ),
-                        color: accent.withValues(
-                          alpha: 0.16,
-                        ),
+                        borderRadius: BorderRadius.circular(15),
+                        color: accent.withValues(alpha: 0.16),
                         border: Border.all(
-                          color: accent.withValues(
-                            alpha: 0.72,
-                          ),
+                          color: accent.withValues(alpha: 0.72),
                         ),
                       ),
                       child: Icon(
-                        korlixLiveConvoAgentIcon(
-                          agent.iconName,
-                        ),
+                        korlixLiveConvoAgentIcon(agent.iconName),
                         color: accent,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Wrap(
                             spacing: 7,
                             runSpacing: 6,
-                            crossAxisAlignment:
-                                WrapCrossAlignment
-                                    .center,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               Text(
                                 agent.name,
-                                style:
-                                    const TextStyle(
-                                  color:
-                                      Color(0xFFF0F7F8),
+                                style: const TextStyle(
+                                  color: Color(0xFFF0F7F8),
                                   fontSize: 17,
-                                  fontWeight:
-                                      FontWeight.w900,
+                                  fontWeight: FontWeight.w900,
                                 ),
                               ),
                               if (currentlyActive)
@@ -799,15 +610,12 @@ class _KorlixLiveConvoAgentHubSheetState
                               if (agent.isCustom)
                                 const _KorlixAgentBadge(
                                   text: 'CUSTOM',
-                                  color:
-                                      Color(0xFFB794F4),
+                                  color: Color(0xFFB794F4),
                                 ),
-                              if (agent
-                                  .hasPublishedTraining)
+                              if (agent.hasPublishedTraining)
                                 const _KorlixAgentBadge(
                                   text: 'TRAINED',
-                                  color:
-                                      Color(0xFF62D6A7),
+                                  color: Color(0xFF62D6A7),
                                 ),
                             ],
                           ),
@@ -815,8 +623,7 @@ class _KorlixLiveConvoAgentHubSheetState
                           Text(
                             agent.description,
                             style: const TextStyle(
-                              color:
-                                  Color(0xFFA9C6CF),
+                              color: Color(0xFFA9C6CF),
                               height: 1.35,
                             ),
                           ),
@@ -825,28 +632,18 @@ class _KorlixLiveConvoAgentHubSheetState
                     ),
                     const SizedBox(width: 8),
                     AnimatedSwitcher(
-                      duration: const Duration(
-                        milliseconds: 160,
-                      ),
+                      duration: const Duration(milliseconds: 160),
                       child: selected
                           ? Icon(
-                              Icons
-                                  .check_circle_rounded,
-                              key: ValueKey<String>(
-                                'selected-${agent.id}',
-                              ),
+                              Icons.check_circle_rounded,
+                              key: ValueKey<String>('selected-${agent.id}'),
                               color: accent,
                               size: 26,
                             )
                           : Icon(
-                              Icons
-                                  .radio_button_unchecked_rounded,
-                              key: ValueKey<String>(
-                                'idle-${agent.id}',
-                              ),
-                              color: const Color(
-                                0xFF66818A,
-                              ),
+                              Icons.radio_button_unchecked_rounded,
+                              key: ValueKey<String>('idle-${agent.id}'),
+                              color: const Color(0xFF66818A),
                               size: 26,
                             ),
                     ),
@@ -857,45 +654,31 @@ class _KorlixLiveConvoAgentHubSheetState
                   children: [
                     Icon(
                       agent.memoryEnabled
-                          ? Icons
-                              .psychology_alt_rounded
-                          : Icons
-                              .memory_outlined,
+                          ? Icons.psychology_alt_rounded
+                          : Icons.memory_outlined,
                       size: 19,
                       color: agent.memoryEnabled
-                          ? const Color(
-                              0xFF8CDDE8,
-                            )
-                          : const Color(
-                              0xFF9AA8AD,
-                            ),
+                          ? const Color(0xFF8CDDE8)
+                          : const Color(0xFF9AA8AD),
                     ),
                     const SizedBox(width: 7),
                     Expanded(
                       child: Text(
                         agent.memorySummary,
                         style: TextStyle(
-                          color:
-                              agent.memoryEnabled
-                              ? const Color(
-                                  0xFF8CDDE8,
-                                )
-                              : const Color(
-                                  0xFF9AA8AD,
-                                ),
-                          fontWeight:
-                              FontWeight.w800,
+                          color: agent.memoryEnabled
+                              ? const Color(0xFF8CDDE8)
+                              : const Color(0xFF9AA8AD),
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
                     Text(
                       'Version ${agent.version}',
                       style: const TextStyle(
-                        color:
-                            Color(0xFF8299A2),
+                        color: Color(0xFF8299A2),
                         fontSize: 12,
-                        fontWeight:
-                            FontWeight.w700,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
@@ -908,112 +691,64 @@ class _KorlixLiveConvoAgentHubSheetState
                     FilledButton.icon(
                       onPressed: enabled
                           ? () {
-                              unawaited(
-                                _activateAgent(
-                                  agent,
-                                ),
-                              );
+                              unawaited(_activateAgent(agent));
                             }
                           : null,
-                      style:
-                          FilledButton.styleFrom(
+                      style: FilledButton.styleFrom(
                         backgroundColor: accent,
-                        foregroundColor:
-                            const Color(
-                          0xFF03110E,
-                        ),
+                        foregroundColor: const Color(0xFF03110E),
                       ),
-                      icon: const Icon(
-                        Icons.play_arrow_rounded,
-                      ),
+                      icon: const Icon(Icons.play_arrow_rounded),
                       label: Text(
-                        currentlyActive
-                            ? 'Reload Agent'
-                            : 'Use Agent',
-                        style:
-                            const TextStyle(
-                          fontWeight:
-                              FontWeight.w900,
-                        ),
+                        currentlyActive ? 'Reload Agent' : 'Use Agent',
+                        style: const TextStyle(fontWeight: FontWeight.w900),
                       ),
                     ),
                     OutlinedButton.icon(
                       onPressed: enabled
                           ? () {
-                              unawaited(
-                                _openTraining(
-                                  agent,
-                                ),
-                              );
+                              unawaited(_openTraining(agent));
                             }
                           : null,
-                      icon: const Icon(
-                        Icons.school_rounded,
-                      ),
-                      label:
-                          const Text('Train'),
+                      icon: const Icon(Icons.school_rounded),
+                      label: const Text('Train'),
                     ),
                     OutlinedButton.icon(
                       onPressed: enabled
                           ? () {
-                              unawaited(
-                                _openMemoryManager(
-                                  agent,
-                                ),
-                              );
+                              unawaited(_openMemoryManager(agent));
                             }
                           : null,
-                      icon: const Icon(
-                        Icons
-                            .psychology_alt_rounded,
-                      ),
-                      label:
-                          const Text('Memory'),
+                      icon: const Icon(Icons.psychology_alt_rounded),
+                      label: const Text('Memory'),
                     ),
                     PopupMenuButton<String>(
                       enabled: enabled,
-                      tooltip:
-                          'More agent options',
-                      color:
-                          const Color(0xFF071722),
+                      tooltip: 'More agent options',
+                      color: const Color(0xFF071722),
                       icon: const Icon(
                         Icons.more_horiz_rounded,
-                        color:
-                            Color(0xFFC7D7DC),
+                        color: Color(0xFFC7D7DC),
                       ),
                       onSelected: (value) {
                         switch (value) {
                           case 'versions':
-                            unawaited(
-                              _openVersionHistory(
-                                agent,
-                              ),
-                            );
+                            unawaited(_openVersionHistory(agent));
                             break;
 
                           case 'reset':
-                            unawaited(
-                              _resetOrDeleteAgent(
-                                agent,
-                              ),
-                            );
+                            unawaited(_resetOrDeleteAgent(agent));
                             break;
                         }
                       },
                       itemBuilder: (context) {
-                        return <
-                            PopupMenuEntry<String>>[
-                          const PopupMenuItem<
-                              String>(
+                        return <PopupMenuEntry<String>>[
+                          const PopupMenuItem<String>(
                             value: 'versions',
                             child: ListTile(
                               dense: true,
-                              leading: Icon(
-                                Icons.history_rounded,
-                              ),
-                              title: Text(
-                                'Training history',
-                              ),
+                              leading: Icon(Icons.history_rounded),
+                              title: Text('Training history'),
                             ),
                           ),
                           PopupMenuItem<String>(
@@ -1022,10 +757,8 @@ class _KorlixLiveConvoAgentHubSheetState
                               dense: true,
                               leading: Icon(
                                 agent.isCustom
-                                    ? Icons
-                                        .delete_outline_rounded
-                                    : Icons
-                                        .restart_alt_rounded,
+                                    ? Icons.delete_outline_rounded
+                                    : Icons.restart_alt_rounded,
                               ),
                               title: Text(
                                 agent.isCustom
@@ -1049,101 +782,58 @@ class _KorlixLiveConvoAgentHubSheetState
 
   Widget _buildAgentCatalog() {
     final agents = _catalog.agents
-        .where(
-          (agent) => agent.active,
-        )
+        .where((agent) => agent.active)
         .toList(growable: false);
 
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (_loading)
           const Padding(
-            padding:
-                EdgeInsets.fromLTRB(
-              16,
-              6,
-              16,
-              14,
-            ),
+            padding: EdgeInsets.fromLTRB(16, 6, 16, 14),
             child: LinearProgressIndicator(
               minHeight: 3,
-              color:
-                  Color(0xFF69D9E8),
-              backgroundColor:
-                  Color(0xFF123A47),
+              color: Color(0xFF69D9E8),
+              backgroundColor: Color(0xFF123A47),
             ),
           ),
-        for (final agent in agents)
-          _buildAgentCard(agent),
+        for (final agent in agents) _buildAgentCard(agent),
         Padding(
-          padding:
-              const EdgeInsets.fromLTRB(
-            16,
-            2,
-            16,
-            10,
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
           child: OutlinedButton.icon(
             onPressed: _busy
                 ? null
                 : () {
-                    unawaited(
-                      _openCustomAgentCreator(),
-                    );
+                    unawaited(_openCustomAgentCreator());
                   },
-            style:
-                OutlinedButton.styleFrom(
-              padding:
-                  const EdgeInsets.symmetric(
-                vertical: 15,
-                horizontal: 16,
-              ),
-              side: const BorderSide(
-                color:
-                    Color(0xFFB794F4),
-              ),
-              foregroundColor:
-                  const Color(0xFFE0CBFF),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
+              side: const BorderSide(color: Color(0xFFB794F4)),
+              foregroundColor: const Color(0xFFE0CBFF),
             ),
-            icon: const Icon(
-              Icons.add_circle_outline_rounded,
-            ),
+            icon: const Icon(Icons.add_circle_outline_rounded),
             label: const Text(
               'Create Your Own Agent',
-              style: TextStyle(
-                fontWeight:
-                    FontWeight.w900,
-              ),
+              style: TextStyle(fontWeight: FontWeight.w900),
             ),
           ),
         ),
         Padding(
-          padding:
-              const EdgeInsets.fromLTRB(
-            16,
-            0,
-            16,
-            16,
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           child: TextButton.icon(
             onPressed: _busy
                 ? null
                 : () {
                     unawaited(_load());
                   },
-            icon: const Icon(
-              Icons.refresh_rounded,
-            ),
-            label: const Text(
-              'Refresh Agent Hub',
-            ),
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Refresh Agent Hub'),
           ),
         ),
       ],
     );
   }
+
   Future<bool> _confirmAction({
     required String title,
     required String message,
@@ -1159,8 +849,7 @@ class _KorlixLiveConvoAgentHubSheetState
             : const Color(0xFF62D6A7);
 
         return AlertDialog(
-          backgroundColor:
-              const Color(0xFF071722),
+          backgroundColor: const Color(0xFF071722),
           title: Text(
             title,
             style: const TextStyle(
@@ -1170,36 +859,26 @@ class _KorlixLiveConvoAgentHubSheetState
           ),
           content: Text(
             message,
-            style: const TextStyle(
-              color: Color(0xFFBBD0D6),
-              height: 1.45,
-            ),
+            style: const TextStyle(color: Color(0xFFBBD0D6), height: 1.45),
           ),
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(
-                  dialogContext,
-                ).pop(false);
+                Navigator.of(dialogContext).pop(false);
               },
               child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () {
-                Navigator.of(
-                  dialogContext,
-                ).pop(true);
+                Navigator.of(dialogContext).pop(true);
               },
               style: FilledButton.styleFrom(
                 backgroundColor: confirmColor,
-                foregroundColor:
-                    const Color(0xFF03110E),
+                foregroundColor: const Color(0xFF03110E),
               ),
               child: Text(
                 confirmLabel,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w900,
-                ),
+                style: const TextStyle(fontWeight: FontWeight.w900),
               ),
             ),
           ],
@@ -1210,36 +889,26 @@ class _KorlixLiveConvoAgentHubSheetState
     return result == true;
   }
 
-  Future<void> _openTraining(
-    KorlixLiveConvoAgent agent,
-  ) async {
-    final update = await showModalBottomSheet<
-        KorlixLiveConvoAgentTrainingUpdate>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: const Color(0xCC02070C),
-      builder: (sheetContext) {
-        return _KorlixAgentTrainingSheet(
-          agent: agent,
+  Future<void> _openTraining(KorlixLiveConvoAgent agent) async {
+    final update =
+        await showModalBottomSheet<KorlixLiveConvoAgentTrainingUpdate>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          backgroundColor: Colors.transparent,
+          barrierColor: const Color(0xCC02070C),
+          builder: (sheetContext) {
+            return _KorlixAgentTrainingSheet(agent: agent);
+          },
         );
-      },
-    );
 
     if (!mounted || update == null) {
       return;
     }
 
-    final updated =
-        await _runBusy<KorlixLiveConvoAgent>(
-      () {
-        return widget.client.saveTraining(
-          agentId: agent.id,
-          update: update,
-        );
-      },
-    );
+    final updated = await _runBusy<KorlixLiveConvoAgent>(() {
+      return widget.client.saveTraining(agentId: agent.id, update: update);
+    });
 
     if (!mounted || updated == null) {
       return;
@@ -1247,15 +916,23 @@ class _KorlixLiveConvoAgentHubSheetState
 
     _replaceAgent(updated);
 
+    // KORLIX_LIVE_CONVO_IMMEDIATE_AGENT_REFRESH_BUILD131_V1
+    final appliesToActiveAgent = updated.id == widget.activeAgent.id;
+    if (appliesToActiveAgent) {
+      _showMessage(
+        '${updated.name} training was saved as version '
+        '${updated.version} and is being applied now.',
+      );
+      await _activateAgent(updated);
+      return;
+    }
     _showMessage(
-      '${updated.name} training was saved '
-      'as version ${updated.version}.',
+      '${updated.name} training was saved as version '
+      '${updated.version}. Use Agent to activate it.',
     );
   }
 
-  Future<void> _openMemoryManager(
-    KorlixLiveConvoAgent agent,
-  ) async {
+  Future<void> _openMemoryManager(KorlixLiveConvoAgent agent) async {
     final changed = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -1275,20 +952,26 @@ class _KorlixLiveConvoAgentHubSheetState
     }
 
     await _load();
-
     if (!mounted) {
       return;
     }
-
+    final refreshedAgent = _catalog.agentById(agent.id) ?? agent;
+    if (refreshedAgent.id == widget.activeAgent.id) {
+      _showMessage(
+        '${refreshedAgent.name} long-term memory was updated '
+        'and is being applied now.',
+      );
+      await _activateAgent(refreshedAgent);
+      return;
+    }
     _showMessage(
-      '${agent.name} long-term memory was updated.',
+      '${refreshedAgent.name} long-term memory was updated. '
+      'Use Agent to activate it.',
     );
   }
 
   Future<void> _openCustomAgentCreator() async {
-    final draft =
-        await showModalBottomSheet<
-            KorlixLiveConvoCustomAgentDraft>(
+    final draft = await showModalBottomSheet<KorlixLiveConvoCustomAgentDraft>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -1303,14 +986,9 @@ class _KorlixLiveConvoAgentHubSheetState
       return;
     }
 
-    final created =
-        await _runBusy<KorlixLiveConvoAgent>(
-      () {
-        return widget.client.createCustomAgent(
-          draft,
-        );
-      },
-    );
+    final created = await _runBusy<KorlixLiveConvoAgent>(() {
+      return widget.client.createCustomAgent(draft);
+    });
 
     if (!mounted || created == null) {
       return;
@@ -1324,17 +1002,10 @@ class _KorlixLiveConvoAgentHubSheetState
     );
   }
 
-  Future<void> _openVersionHistory(
-    KorlixLiveConvoAgent agent,
-  ) async {
-    final versions = await _runBusy<
-        List<KorlixLiveConvoAgentVersion>>(
-      () {
-        return widget.client.loadVersions(
-          agentId: agent.id,
-        );
-      },
-    );
+  Future<void> _openVersionHistory(KorlixLiveConvoAgent agent) async {
+    final versions = await _runBusy<List<KorlixLiveConvoAgentVersion>>(() {
+      return widget.client.loadVersions(agentId: agent.id);
+    });
 
     if (!mounted || versions == null) {
       return;
@@ -1349,8 +1020,7 @@ class _KorlixLiveConvoAgentHubSheetState
       return;
     }
 
-    final selectedVersion =
-        await showModalBottomSheet<int>(
+    final selectedVersion = await showModalBottomSheet<int>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -1382,16 +1052,13 @@ class _KorlixLiveConvoAgentHubSheetState
       return;
     }
 
-    final restored =
-        await _runBusy<KorlixLiveConvoAgent>(
-      () {
-        return widget.client.restoreVersion(
-          agentId: agent.id,
-          version: selectedVersion,
-          confirmed: true,
-        );
-      },
-    );
+    final restored = await _runBusy<KorlixLiveConvoAgent>(() {
+      return widget.client.restoreVersion(
+        agentId: agent.id,
+        version: selectedVersion,
+        confirmed: true,
+      );
+    });
 
     if (!mounted || restored == null) {
       return;
@@ -1406,9 +1073,7 @@ class _KorlixLiveConvoAgentHubSheetState
     );
   }
 
-  Future<void> _resetOrDeleteAgent(
-    KorlixLiveConvoAgent agent,
-  ) async {
+  Future<void> _resetOrDeleteAgent(KorlixLiveConvoAgent agent) async {
     final deletingCustom = agent.isCustom;
 
     final confirmed = await _confirmAction(
@@ -1417,17 +1082,15 @@ class _KorlixLiveConvoAgentHubSheetState
           : 'Reset personal training?',
       message: deletingCustom
           ? 'Delete ${agent.name}, its private '
-              'training history, and all of its '
-              'long-term memories? This cannot '
-              'be undone.'
+                'training history, and all of its '
+                'long-term memories? This cannot '
+                'be undone.'
           : 'Remove your personal training, '
-              'training history, and long-term '
-              'memories from ${agent.name}? '
-              'The protected built-in agent '
-              'will remain available.',
-      confirmLabel: deletingCustom
-          ? 'Delete Agent'
-          : 'Reset Agent',
+                'training history, and long-term '
+                'memories from ${agent.name}? '
+                'The protected built-in agent '
+                'will remain available.',
+      confirmLabel: deletingCustom ? 'Delete Agent' : 'Reset Agent',
       destructive: true,
     );
 
@@ -1435,16 +1098,14 @@ class _KorlixLiveConvoAgentHubSheetState
       return;
     }
 
-    final completed = await _runBusy<bool>(
-      () async {
-        await widget.client.deleteOrResetAgent(
-          agentId: agent.id,
-          confirmed: true,
-        );
+    final completed = await _runBusy<bool>(() async {
+      await widget.client.deleteOrResetAgent(
+        agentId: agent.id,
+        confirmed: true,
+      );
 
-        return true;
-      },
-    );
+      return true;
+    });
 
     if (!mounted || completed != true) {
       return;
@@ -1466,9 +1127,10 @@ class _KorlixLiveConvoAgentHubSheetState
       deletingCustom
           ? '${agent.name} was deleted.'
           : '${agent.name} personal training '
-              'and memory were reset.',
+                'and memory were reset.',
     );
   }
+
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.sizeOf(context);
@@ -1487,9 +1149,7 @@ class _KorlixLiveConvoAgentHubSheetState
           margin: const EdgeInsets.only(top: 24),
           decoration: const BoxDecoration(
             color: Color(0xFF041019),
-            borderRadius: BorderRadius.vertical(
-              top: Radius.circular(28),
-            ),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
             boxShadow: <BoxShadow>[
               BoxShadow(
                 color: Color(0x66000000),
@@ -1514,9 +1174,7 @@ class _KorlixLiveConvoAgentHubSheetState
                   child: ListView(
                     keyboardDismissBehavior:
                         ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: EdgeInsets.only(
-                      bottom: 18 + bottomInset,
-                    ),
+                    padding: EdgeInsets.only(bottom: 18 + bottomInset),
                     children: [
                       _buildModelProofCard(),
                       _buildPersistenceNotice(),
@@ -1535,10 +1193,7 @@ class _KorlixLiveConvoAgentHubSheetState
 }
 
 class _KorlixAgentBadge extends StatelessWidget {
-  const _KorlixAgentBadge({
-    required this.text,
-    required this.color,
-  });
+  const _KorlixAgentBadge({required this.text, required this.color});
 
   final String text;
   final Color color;
@@ -1546,16 +1201,11 @@ class _KorlixAgentBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 4,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: color.withValues(alpha: 0.78),
-        ),
+        border: Border.all(color: color.withValues(alpha: 0.78)),
       ),
       child: Text(
         text,
@@ -1570,8 +1220,7 @@ class _KorlixAgentBadge extends StatelessWidget {
   }
 }
 
-const List<String> _korlixAgentAllToolIds =
-    <String>[
+const List<String> _korlixAgentAllToolIds = <String>[
   'general_chat',
   'live_docs',
   'file_analysis',
@@ -1582,9 +1231,7 @@ const List<String> _korlixAgentAllToolIds =
   'agent_training',
 ];
 
-String _korlixAgentToolLabel(
-  String toolId,
-) {
+String _korlixAgentToolLabel(String toolId) {
   switch (toolId) {
     case 'general_chat':
       return 'General conversation';
@@ -1613,9 +1260,7 @@ String _korlixAgentToolLabel(
     default:
       final words = toolId
           .split('_')
-          .where(
-            (word) => word.trim().isNotEmpty,
-          )
+          .where((word) => word.trim().isNotEmpty)
           .map(
             (word) =>
                 '${word[0].toUpperCase()}'
@@ -1626,9 +1271,7 @@ String _korlixAgentToolLabel(
   }
 }
 
-String _korlixAgentToolDescription(
-  String toolId,
-) {
+String _korlixAgentToolDescription(String toolId) {
   switch (toolId) {
     case 'general_chat':
       return 'Normal LIVE CONVO conversation and reasoning.';
@@ -1659,25 +1302,19 @@ String _korlixAgentToolDescription(
   }
 }
 
-class _KorlixAgentTrainingSheet
-    extends StatefulWidget {
-  const _KorlixAgentTrainingSheet({
-    required this.agent,
-  });
+class _KorlixAgentTrainingSheet extends StatefulWidget {
+  const _KorlixAgentTrainingSheet({required this.agent});
 
   final KorlixLiveConvoAgent agent;
 
   @override
-  State<_KorlixAgentTrainingSheet>
-  createState() {
+  State<_KorlixAgentTrainingSheet> createState() {
     return _KorlixAgentTrainingSheetState();
   }
 }
 
-class _KorlixAgentTrainingSheetState
-    extends State<_KorlixAgentTrainingSheet> {
-  late final TextEditingController
-      _instructionsController;
+class _KorlixAgentTrainingSheetState extends State<_KorlixAgentTrainingSheet> {
+  late final TextEditingController _instructionsController;
 
   late final List<String> _availableTools;
   late final Set<String> _selectedTools;
@@ -1692,63 +1329,38 @@ class _KorlixAgentTrainingSheetState
   void initState() {
     super.initState();
 
-    _instructionsController =
-        TextEditingController();
+    _instructionsController = TextEditingController();
 
-    _memoryEnabled =
-        widget.agent.memoryEnabled;
+    _memoryEnabled = widget.agent.memoryEnabled;
 
-    final protectedFallback =
-        KorlixLiveConvoAgent.fallbackForId(
+    final protectedFallback = KorlixLiveConvoAgent.fallbackForId(
       widget.agent.id,
     );
 
-    final allowedTools =
-        widget.agent.isBuiltIn
-            ? protectedFallback.toolIds
-            : _korlixAgentAllToolIds;
+    final allowedTools = widget.agent.isBuiltIn
+        ? protectedFallback.toolIds
+        : _korlixAgentAllToolIds;
 
-    _availableTools =
-        List<String>.unmodifiable(
-      _korlixAgentAllToolIds.where(
-        allowedTools.contains,
-      ),
+    _availableTools = List<String>.unmodifiable(
+      _korlixAgentAllToolIds.where(allowedTools.contains),
     );
 
-    _selectedTools =
-        widget.agent.toolIds
-            .where(
-              _availableTools.contains,
-            )
-            .toSet();
+    _selectedTools = widget.agent.toolIds
+        .where(_availableTools.contains)
+        .toSet();
 
-    if (_availableTools.contains(
-      'general_chat',
-    )) {
-      _selectedTools.add(
-        'general_chat',
-      );
+    if (_availableTools.contains('general_chat')) {
+      _selectedTools.add('general_chat');
     }
 
-    if (_availableTools.contains(
-      'agent_training',
-    )) {
-      _selectedTools.add(
-        'agent_training',
-      );
+    if (_availableTools.contains('agent_training')) {
+      _selectedTools.add('agent_training');
     }
 
-    if (_memoryEnabled &&
-        _availableTools.contains(
-          'memory',
-        )) {
-      _selectedTools.add(
-        'memory',
-      );
+    if (_memoryEnabled && _availableTools.contains('memory')) {
+      _selectedTools.add('memory');
     } else {
-      _selectedTools.remove(
-        'memory',
-      );
+      _selectedTools.remove('memory');
     }
   }
 
@@ -1759,29 +1371,21 @@ class _KorlixAgentTrainingSheetState
     super.dispose();
   }
 
-  bool _isRequiredTool(
-    String toolId,
-  ) {
-    if (toolId == 'general_chat' ||
-        toolId == 'agent_training') {
+  bool _isRequiredTool(String toolId) {
+    if (toolId == 'general_chat' || toolId == 'agent_training') {
       return true;
     }
 
-    return toolId == 'memory' &&
-        _memoryEnabled;
+    return toolId == 'memory' && _memoryEnabled;
   }
 
-  void _toggleTool(
-    String toolId,
-    bool selected,
-  ) {
+  void _toggleTool(String toolId, bool selected) {
     if (toolId == 'memory') {
       _toggleMemory(selected);
       return;
     }
 
-    if (!selected &&
-        _isRequiredTool(toolId)) {
+    if (!selected && _isRequiredTool(toolId)) {
       return;
     }
 
@@ -1796,23 +1400,14 @@ class _KorlixAgentTrainingSheetState
     });
   }
 
-  void _toggleMemory(
-    bool enabled,
-  ) {
+  void _toggleMemory(bool enabled) {
     setState(() {
       _memoryEnabled = enabled;
 
-      if (enabled &&
-          _availableTools.contains(
-            'memory',
-          )) {
-        _selectedTools.add(
-          'memory',
-        );
+      if (enabled && _availableTools.contains('memory')) {
+        _selectedTools.add('memory');
       } else {
-        _selectedTools.remove(
-          'memory',
-        );
+        _selectedTools.remove('memory');
       }
 
       _validationMessage = null;
@@ -1820,8 +1415,7 @@ class _KorlixAgentTrainingSheetState
   }
 
   void _submitTraining() {
-    final instructions =
-        _instructionsController.text.trim();
+    final instructions = _instructionsController.text.trim();
 
     if (instructions.isEmpty) {
       setState(() {
@@ -1843,30 +1437,19 @@ class _KorlixAgentTrainingSheetState
       return;
     }
 
-    final selectedTools =
-        Set<String>.from(
-      _selectedTools,
-    )
-          ..add('general_chat')
-          ..add('agent_training');
+    final selectedTools = Set<String>.from(_selectedTools)
+      ..add('general_chat')
+      ..add('agent_training');
 
-    if (_memoryEnabled &&
-        _availableTools.contains(
-          'memory',
-        )) {
+    if (_memoryEnabled && _availableTools.contains('memory')) {
       selectedTools.add('memory');
     } else {
       selectedTools.remove('memory');
     }
 
-    final orderedTools =
-        _availableTools
-            .where(
-              selectedTools.contains,
-            )
-            .toList(
-              growable: false,
-            );
+    final orderedTools = _availableTools
+        .where(selectedTools.contains)
+        .toList(growable: false);
 
     Navigator.of(context).pop(
       KorlixLiveConvoAgentTrainingUpdate(
@@ -1879,101 +1462,61 @@ class _KorlixAgentTrainingSheetState
     );
   }
 
-  InputDecoration _trainingDecoration({
-    required String label,
-    String? hint,
-  }) {
+  InputDecoration _trainingDecoration({required String label, String? hint}) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
       alignLabelWithHint: true,
       filled: true,
-      fillColor:
-          const Color(0xFF071722),
-      labelStyle:
-          const TextStyle(
+      fillColor: const Color(0xFF071722),
+      labelStyle: const TextStyle(
         color: Color(0xFF8CDDE8),
         fontWeight: FontWeight.w800,
       ),
-      hintStyle:
-          const TextStyle(
-        color: Color(0xFF718A96),
+      hintStyle: const TextStyle(color: Color(0xFF718A96)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0xFF244D5C)),
       ),
-      enabledBorder:
-          OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(16),
-        borderSide:
-            const BorderSide(
-          color: Color(0xFF244D5C),
-        ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0xFF69D9E8), width: 1.6),
       ),
-      focusedBorder:
-          OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(16),
-        borderSide:
-            const BorderSide(
-          color: Color(0xFF69D9E8),
-          width: 1.6,
-        ),
-      ),
-      errorBorder:
-          OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(16),
-        borderSide:
-            const BorderSide(
-          color: Color(0xFFFF7185),
-        ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0xFFFF7185)),
       ),
     );
   }
-  Widget _buildTrainingHeader(
-    Color accent,
-  ) {
+
+  Widget _buildTrainingHeader(Color accent) {
     return Row(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            borderRadius:
-                BorderRadius.circular(16),
-            color:
-                accent.withValues(
-              alpha: 0.14,
-            ),
-            border: Border.all(
-              color:
-                  accent.withValues(
-                alpha: 0.72,
-              ),
-            ),
+            borderRadius: BorderRadius.circular(16),
+            color: accent.withValues(alpha: 0.14),
+            border: Border.all(color: accent.withValues(alpha: 0.72)),
           ),
           child: Icon(
-            korlixLiveConvoAgentIcon(
-              widget.agent.iconName,
-            ),
+            korlixLiveConvoAgentIcon(widget.agent.iconName),
             color: accent,
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'TRAIN ${widget.agent.name.toUpperCase()}',
                 style: const TextStyle(
-                  color:
-                      Color(0xFFF0F7F8),
+                  color: Color(0xFFF0F7F8),
                   fontSize: 19,
-                  fontWeight:
-                      FontWeight.w900,
+                  fontWeight: FontWeight.w900,
                   letterSpacing: 0.4,
                 ),
               ),
@@ -1982,11 +1525,7 @@ class _KorlixAgentTrainingSheetState
                 'Add private instructions and '
                 'choose the tools this agent '
                 'may use.',
-                style: const TextStyle(
-                  color:
-                      Color(0xFFA9C6CF),
-                  height: 1.35,
-                ),
+                style: const TextStyle(color: Color(0xFFA9C6CF), height: 1.35),
               ),
             ],
           ),
@@ -1996,73 +1535,45 @@ class _KorlixAgentTrainingSheetState
           onPressed: () {
             Navigator.of(context).pop();
           },
-          icon: const Icon(
-            Icons.close_rounded,
-          ),
-          color:
-              const Color(0xFFC7D7DC),
+          icon: const Icon(Icons.close_rounded),
+          color: const Color(0xFFC7D7DC),
         ),
       ],
     );
   }
 
-  Widget _buildProtectedMissionNotice(
-    Color accent,
-  ) {
-    final isBuiltIn =
-        widget.agent.isBuiltIn;
+  Widget _buildProtectedMissionNotice(Color accent) {
+    final isBuiltIn = widget.agent.isBuiltIn;
 
     return Container(
-      padding:
-          const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(17),
-        color:
-            const Color(0xFF081B25),
-        border: Border.all(
-          color:
-              accent.withValues(
-            alpha: 0.52,
-          ),
-        ),
+        borderRadius: BorderRadius.circular(17),
+        color: const Color(0xFF081B25),
+        border: Border.all(color: accent.withValues(alpha: 0.52)),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            isBuiltIn
-                ? Icons
-                    .verified_user_rounded
-                : Icons
-                    .smart_toy_rounded,
+            isBuiltIn ? Icons.verified_user_rounded : Icons.smart_toy_rounded,
             color: accent,
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   isBuiltIn
                       ? 'Protected built-in mission'
                       : 'Custom-agent mission',
-                  style: TextStyle(
-                    color: accent,
-                    fontWeight:
-                        FontWeight.w900,
-                  ),
+                  style: TextStyle(color: accent, fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 5),
                 Text(
                   widget.agent.mission,
-                  style: const TextStyle(
-                    color:
-                        Color(0xFFD8E7EA),
-                    height: 1.4,
-                  ),
+                  style: const TextStyle(color: Color(0xFFD8E7EA), height: 1.4),
                 ),
                 if (isBuiltIn) ...[
                   const SizedBox(height: 8),
@@ -2073,8 +1584,7 @@ class _KorlixAgentTrainingSheetState
                     'tools that this agent is not '
                     'authorized to use.',
                     style: TextStyle(
-                      color:
-                          Color(0xFFA9C6CF),
+                      color: Color(0xFFA9C6CF),
                       height: 1.35,
                       fontSize: 12.5,
                     ),
@@ -2089,45 +1599,26 @@ class _KorlixAgentTrainingSheetState
   }
 
   Widget _buildCurrentTraining() {
-    final training =
-        widget.agent
-            .trainingInstructions
-            .trim();
+    final training = widget.agent.trainingInstructions.trim();
 
     if (training.isEmpty) {
       return Container(
-        padding:
-            const EdgeInsets.all(13),
+        padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
-          borderRadius:
-              BorderRadius.circular(16),
-          color:
-              const Color(0xFF071722),
-          border: Border.all(
-            color:
-                const Color(0xFF244D5C),
-          ),
+          borderRadius: BorderRadius.circular(16),
+          color: const Color(0xFF071722),
+          border: Border.all(color: const Color(0xFF244D5C)),
         ),
         child: const Row(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons
-                  .school_outlined,
-              color:
-                  Color(0xFF8CDDE8),
-            ),
+            Icon(Icons.school_outlined, color: Color(0xFF8CDDE8)),
             SizedBox(width: 10),
             Expanded(
               child: Text(
                 'No personal training has been '
                 'published for this agent yet.',
-                style: TextStyle(
-                  color:
-                      Color(0xFFBBD0D6),
-                  height: 1.35,
-                ),
+                style: TextStyle(color: Color(0xFFBBD0D6), height: 1.35),
               ),
             ),
           ],
@@ -2136,30 +1627,18 @@ class _KorlixAgentTrainingSheetState
     }
 
     return Container(
-      padding:
-          const EdgeInsets.all(13),
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(16),
-        color:
-            const Color(0xFF0B2A24),
-        border: Border.all(
-          color:
-              const Color(0xFF3A9778),
-        ),
+        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFF0B2A24),
+        border: Border.all(color: const Color(0xFF3A9778)),
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(
-                Icons
-                    .check_circle_rounded,
-                color:
-                    Color(0xFF62D6A7),
-              ),
+              const Icon(Icons.check_circle_rounded, color: Color(0xFF62D6A7)),
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
@@ -2167,10 +1646,8 @@ class _KorlixAgentTrainingSheetState
                   '· VERSION '
                   '${widget.agent.version}',
                   style: const TextStyle(
-                    color:
-                        Color(0xFF62D6A7),
-                    fontWeight:
-                        FontWeight.w900,
+                    color: Color(0xFF62D6A7),
+                    fontWeight: FontWeight.w900,
                     fontSize: 12,
                     letterSpacing: 0.5,
                   ),
@@ -2181,11 +1658,7 @@ class _KorlixAgentTrainingSheetState
           const SizedBox(height: 9),
           Text(
             training,
-            style: const TextStyle(
-              color:
-                  Color(0xFFD8E7EA),
-              height: 1.4,
-            ),
+            style: const TextStyle(color: Color(0xFFD8E7EA), height: 1.4),
           ),
         ],
       ),
@@ -2198,27 +1671,16 @@ class _KorlixAgentTrainingSheetState
     }
 
     return Container(
-      padding:
-          const EdgeInsets.all(13),
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(16),
-        color:
-            const Color(0xFF332916),
-        border: Border.all(
-          color:
-              const Color(0xFFF2C14E),
-        ),
+        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFF332916),
+        border: Border.all(color: const Color(0xFFF2C14E)),
       ),
       child: const Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.storage_rounded,
-            color:
-                Color(0xFFF2C14E),
-          ),
+          Icon(Icons.storage_rounded, color: Color(0xFFF2C14E)),
           SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -2228,11 +1690,9 @@ class _KorlixAgentTrainingSheetState
               'long-term-memory migration '
               'has been reviewed and applied.',
               style: TextStyle(
-                color:
-                    Color(0xFFFFE7A3),
+                color: Color(0xFFFFE7A3),
                 height: 1.4,
-                fontWeight:
-                    FontWeight.w700,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -2241,54 +1701,32 @@ class _KorlixAgentTrainingSheetState
     );
   }
 
-  Widget _buildMemoryControl(
-    Color accent,
-  ) {
+  Widget _buildMemoryControl(Color accent) {
     return Container(
-      padding:
-          const EdgeInsets.fromLTRB(
-        13,
-        10,
-        10,
-        10,
-      ),
+      padding: const EdgeInsets.fromLTRB(13, 10, 10, 10),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(16),
-        color:
-            const Color(0xFF071722),
-        border: Border.all(
-          color:
-              const Color(0xFF244D5C),
-        ),
+        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFF071722),
+        border: Border.all(color: const Color(0xFF244D5C)),
       ),
       child: Row(
         children: [
           Icon(
             _memoryEnabled
-                ? Icons
-                    .psychology_alt_rounded
-                : Icons
-                    .memory_outlined,
-            color: _memoryEnabled
-                ? accent
-                : const Color(
-                    0xFF8299A2,
-                  ),
+                ? Icons.psychology_alt_rounded
+                : Icons.memory_outlined,
+            color: _memoryEnabled ? accent : const Color(0xFF8299A2),
           ),
           const SizedBox(width: 10),
           const Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Long-term memory',
                   style: TextStyle(
-                    color:
-                        Color(0xFFF0F7F8),
-                    fontWeight:
-                        FontWeight.w900,
+                    color: Color(0xFFF0F7F8),
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
                 SizedBox(height: 3),
@@ -2297,8 +1735,7 @@ class _KorlixAgentTrainingSheetState
                   'and save private user-approved '
                   'memories across sessions.',
                   style: TextStyle(
-                    color:
-                        Color(0xFFA9C6CF),
+                    color: Color(0xFFA9C6CF),
                     height: 1.3,
                     fontSize: 12.5,
                   ),
@@ -2309,69 +1746,39 @@ class _KorlixAgentTrainingSheetState
           const SizedBox(width: 8),
           Switch(
             value: _memoryEnabled,
-            onChanged:
-                _availableTools.contains(
-              'memory',
-            )
+            onChanged: _availableTools.contains('memory')
                 ? _toggleMemory
                 : null,
             activeThumbColor: accent,
-            activeTrackColor:
-                accent.withValues(
-              alpha: 0.45,
-            ),
+            activeTrackColor: accent.withValues(alpha: 0.45),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildToolPermissions(
-    Color accent,
-  ) {
+  Widget _buildToolPermissions(Color accent) {
     final tools = _availableTools
-        .where(
-          (toolId) =>
-              toolId != 'memory',
-        )
-        .toList(
-          growable: false,
-        );
+        .where((toolId) => toolId != 'memory')
+        .toList(growable: false);
 
     return Container(
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(18),
-        color:
-            const Color(0xFF071722),
-        border: Border.all(
-          color:
-              const Color(0xFF244D5C),
-        ),
+        borderRadius: BorderRadius.circular(18),
+        color: const Color(0xFF071722),
+        border: Border.all(color: const Color(0xFF244D5C)),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          for (
-            var index = 0;
-            index < tools.length;
-            index += 1
-          ) ...[
+          for (var index = 0; index < tools.length; index += 1) ...[
             Builder(
               builder: (context) {
-                final toolId =
-                    tools[index];
+                final toolId = tools[index];
 
-                final required =
-                    _isRequiredTool(
-                  toolId,
-                );
+                final required = _isRequiredTool(toolId);
 
-                final selected =
-                    _selectedTools
-                        .contains(
-                  toolId,
-                );
+                final selected = _selectedTools.contains(toolId);
 
                 return CheckboxListTile(
                   value: selected,
@@ -2382,51 +1789,31 @@ class _KorlixAgentTrainingSheetState
                             return;
                           }
 
-                          _toggleTool(
-                            toolId,
-                            value,
-                          );
+                          _toggleTool(toolId, value);
                         },
-                  controlAffinity:
-                      ListTileControlAffinity
-                          .leading,
+                  controlAffinity: ListTileControlAffinity.leading,
                   activeColor: accent,
-                  checkColor:
-                      const Color(
-                    0xFF03110E,
-                  ),
-                  contentPadding:
-                      const EdgeInsets
-                          .symmetric(
+                  checkColor: const Color(0xFF03110E),
+                  contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 2,
                   ),
                   title: Text(
-                    _korlixAgentToolLabel(
-                      toolId,
-                    ),
+                    _korlixAgentToolLabel(toolId),
                     style: TextStyle(
                       color: selected
-                          ? const Color(
-                              0xFFF0F7F8,
-                            )
-                          : const Color(
-                              0xFF8299A2,
-                            ),
-                      fontWeight:
-                          FontWeight.w800,
+                          ? const Color(0xFFF0F7F8)
+                          : const Color(0xFF8299A2),
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                   subtitle: Text(
                     required
                         ? '${_korlixAgentToolDescription(toolId)} '
-                            'Required for this agent.'
-                        : _korlixAgentToolDescription(
-                            toolId,
-                          ),
+                              'Required for this agent.'
+                        : _korlixAgentToolDescription(toolId),
                     style: const TextStyle(
-                      color:
-                          Color(0xFFA9C6CF),
+                      color: Color(0xFFA9C6CF),
                       height: 1.3,
                       fontSize: 12.5,
                     ),
@@ -2434,13 +1821,8 @@ class _KorlixAgentTrainingSheetState
                 );
               },
             ),
-            if (index !=
-                tools.length - 1)
-              const Divider(
-                height: 1,
-                color:
-                    Color(0xFF173541),
-              ),
+            if (index != tools.length - 1)
+              const Divider(height: 1, color: Color(0xFF173541)),
           ],
         ],
       ),
@@ -2450,50 +1832,30 @@ class _KorlixAgentTrainingSheetState
   Widget _buildConsentControl() {
     return Container(
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(16),
-        color:
-            const Color(0xFF071722),
+        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFF071722),
         border: Border.all(
-          color: _confirmed
-              ? const Color(
-                  0xFF62D6A7,
-                )
-              : const Color(
-                  0xFF244D5C,
-                ),
+          color: _confirmed ? const Color(0xFF62D6A7) : const Color(0xFF244D5C),
         ),
       ),
       child: CheckboxListTile(
         value: _confirmed,
         onChanged: (value) {
           setState(() {
-            _confirmed =
-                value == true;
+            _confirmed = value == true;
 
-            _validationMessage =
-                null;
+            _validationMessage = null;
           });
         },
-        controlAffinity:
-            ListTileControlAffinity
-                .leading,
-        activeColor:
-            const Color(0xFF62D6A7),
-        checkColor:
-            const Color(0xFF03110E),
-        contentPadding:
-            const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 3,
-        ),
+        controlAffinity: ListTileControlAffinity.leading,
+        activeColor: const Color(0xFF62D6A7),
+        checkColor: const Color(0xFF03110E),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
         title: const Text(
           'Save as long-term agent training',
           style: TextStyle(
-            color:
-                Color(0xFFF0F7F8),
-            fontWeight:
-                FontWeight.w900,
+            color: Color(0xFFF0F7F8),
+            fontWeight: FontWeight.w900,
           ),
         ),
         subtitle: const Text(
@@ -2502,11 +1864,7 @@ class _KorlixAgentTrainingSheetState
           'for this agent across future '
           'sessions until I reset, replace, '
           'or restore its training.',
-          style: TextStyle(
-            color:
-                Color(0xFFA9C6CF),
-            height: 1.35,
-          ),
+          style: TextStyle(color: Color(0xFFA9C6CF), height: 1.35),
         ),
       ),
     );
@@ -2514,141 +1872,80 @@ class _KorlixAgentTrainingSheetState
 
   @override
   Widget build(BuildContext context) {
-    final screenSize =
-        MediaQuery.sizeOf(context);
+    final screenSize = MediaQuery.sizeOf(context);
 
-    final bottomInset =
-        MediaQuery.viewInsetsOf(
-      context,
-    ).bottom;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
-    final accent =
-        korlixLiveConvoAgentAccent(
-      widget.agent.accentHex,
-    );
+    final accent = korlixLiveConvoAgentAccent(widget.agent.accentHex);
 
-    final canSave =
-        widget.agent
-            .persistenceConfigured;
+    final canSave = widget.agent.persistenceConfigured;
 
     return Material(
       color: Colors.transparent,
       child: Align(
-        alignment:
-            Alignment.bottomCenter,
+        alignment: Alignment.bottomCenter,
         child: Container(
           width: double.infinity,
           constraints: BoxConstraints(
             maxWidth: 780,
-            maxHeight:
-                screenSize.height *
-                0.94,
+            maxHeight: screenSize.height * 0.94,
           ),
-          margin:
-              const EdgeInsets.only(
-            top: 24,
-          ),
-          decoration:
-              const BoxDecoration(
-            color:
-                Color(0xFF041019),
-            borderRadius:
-                BorderRadius.vertical(
-              top:
-                  Radius.circular(28),
-            ),
-            boxShadow:
-                <BoxShadow>[
+          margin: const EdgeInsets.only(top: 24),
+          decoration: const BoxDecoration(
+            color: Color(0xFF041019),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: <BoxShadow>[
               BoxShadow(
-                color:
-                    Color(0x66000000),
+                color: Color(0x66000000),
                 blurRadius: 34,
-                offset:
-                    Offset(0, -8),
+                offset: Offset(0, -8),
               ),
             ],
           ),
-          clipBehavior:
-              Clip.antiAlias,
+          clipBehavior: Clip.antiAlias,
           child: SafeArea(
             top: false,
             child: ListView(
-              keyboardDismissBehavior:
-                  ScrollViewKeyboardDismissBehavior
-                      .onDrag,
-              padding:
-                  EdgeInsets.fromLTRB(
-                18,
-                14,
-                18,
-                26 + bottomInset,
-              ),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: EdgeInsets.fromLTRB(18, 14, 18, 26 + bottomInset),
               children: [
-                _buildTrainingHeader(
-                  accent,
-                ),
-                const SizedBox(
-                  height: 14,
-                ),
-                _buildProtectedMissionNotice(
-                  accent,
-                ),
-                const SizedBox(
-                  height: 14,
-                ),
+                _buildTrainingHeader(accent),
+                const SizedBox(height: 14),
+                _buildProtectedMissionNotice(accent),
+                const SizedBox(height: 14),
                 _buildPersistenceWarning(),
-                if (!widget.agent
-                    .persistenceConfigured)
-                  const SizedBox(
-                    height: 14,
-                  ),
+                if (!widget.agent.persistenceConfigured)
+                  const SizedBox(height: 14),
                 const Text(
                   'CURRENT TRAINING',
                   style: TextStyle(
-                    color:
-                        Color(0xFF8CDDE8),
-                    fontWeight:
-                        FontWeight.w900,
+                    color: Color(0xFF8CDDE8),
+                    fontWeight: FontWeight.w900,
                     letterSpacing: 0.6,
                     fontSize: 12,
                   ),
                 ),
-                const SizedBox(
-                  height: 8,
-                ),
+                const SizedBox(height: 8),
                 _buildCurrentTraining(),
-                const SizedBox(
-                  height: 18,
-                ),
+                const SizedBox(height: 18),
                 const Text(
                   'NEW TRAINING TO ADD',
                   style: TextStyle(
-                    color:
-                        Color(0xFF8CDDE8),
-                    fontWeight:
-                        FontWeight.w900,
+                    color: Color(0xFF8CDDE8),
+                    fontWeight: FontWeight.w900,
                     letterSpacing: 0.6,
                     fontSize: 12,
                   ),
                 ),
-                const SizedBox(
-                  height: 8,
-                ),
+                const SizedBox(height: 8),
                 TextField(
-                  controller:
-                      _instructionsController,
+                  controller: _instructionsController,
                   minLines: 5,
                   maxLines: 12,
                   maxLength: 12000,
                   enabled: canSave,
-                  style:
-                      const TextStyle(
-                    color:
-                        Color(0xFFF0F7F8),
-                    height: 1.4,
-                  ),
-                  decoration:
-                      _trainingDecoration(
+                  style: const TextStyle(color: Color(0xFFF0F7F8), height: 1.4),
+                  decoration: _trainingDecoration(
                     label:
                         'Instructions for '
                         '${widget.agent.name}',
@@ -2659,52 +1956,36 @@ class _KorlixAgentTrainingSheetState
                         'the end.',
                   ),
                   onChanged: (_) {
-                    if (_validationMessage !=
-                        null) {
+                    if (_validationMessage != null) {
                       setState(() {
-                        _validationMessage =
-                            null;
+                        _validationMessage = null;
                       });
                     }
                   },
                 ),
-                const SizedBox(
-                  height: 16,
-                ),
+                const SizedBox(height: 16),
                 const Text(
                   'MEMORY',
                   style: TextStyle(
-                    color:
-                        Color(0xFF8CDDE8),
-                    fontWeight:
-                        FontWeight.w900,
+                    color: Color(0xFF8CDDE8),
+                    fontWeight: FontWeight.w900,
                     letterSpacing: 0.6,
                     fontSize: 12,
                   ),
                 ),
-                const SizedBox(
-                  height: 8,
-                ),
-                _buildMemoryControl(
-                  accent,
-                ),
-                const SizedBox(
-                  height: 18,
-                ),
+                const SizedBox(height: 8),
+                _buildMemoryControl(accent),
+                const SizedBox(height: 18),
                 const Text(
                   'AUTHORIZED TOOLS',
                   style: TextStyle(
-                    color:
-                        Color(0xFF8CDDE8),
-                    fontWeight:
-                        FontWeight.w900,
+                    color: Color(0xFF8CDDE8),
+                    fontWeight: FontWeight.w900,
                     letterSpacing: 0.6,
                     fontSize: 12,
                   ),
                 ),
-                const SizedBox(
-                  height: 5,
-                ),
+                const SizedBox(height: 5),
                 const Text(
                   'Built-in agents may use '
                   'only their protected tool '
@@ -2712,141 +1993,64 @@ class _KorlixAgentTrainingSheetState
                   'only tools explicitly enabled '
                   'here.',
                   style: TextStyle(
-                    color:
-                        Color(0xFFA9C6CF),
+                    color: Color(0xFFA9C6CF),
                     height: 1.35,
                     fontSize: 12.5,
                   ),
                 ),
-                const SizedBox(
-                  height: 9,
-                ),
-                _buildToolPermissions(
-                  accent,
-                ),
-                const SizedBox(
-                  height: 18,
-                ),
+                const SizedBox(height: 9),
+                _buildToolPermissions(accent),
+                const SizedBox(height: 18),
                 _buildConsentControl(),
-                if (_validationMessage !=
-                    null) ...[
-                  const SizedBox(
-                    height: 12,
-                  ),
+                if (_validationMessage != null) ...[
+                  const SizedBox(height: 12),
                   Container(
-                    padding:
-                        const EdgeInsets
-                            .all(12),
-                    decoration:
-                        BoxDecoration(
-                      borderRadius:
-                          BorderRadius
-                              .circular(14),
-                      color:
-                          const Color(
-                        0xFF351923,
-                      ),
-                      border:
-                          Border.all(
-                        color:
-                            const Color(
-                          0xFFFF7185,
-                        ),
-                      ),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      color: const Color(0xFF351923),
+                      border: Border.all(color: const Color(0xFFFF7185)),
                     ),
                     child: Text(
                       _validationMessage!,
-                      style:
-                          const TextStyle(
-                        color:
-                            Color(
-                          0xFFFFD8DE,
-                        ),
-                        fontWeight:
-                            FontWeight
-                                .w700,
+                      style: const TextStyle(
+                        color: Color(0xFFFFD8DE),
+                        fontWeight: FontWeight.w700,
                         height: 1.35,
                       ),
                     ),
                   ),
                 ],
-                const SizedBox(
-                  height: 18,
-                ),
+                const SizedBox(height: 18),
                 Row(
                   children: [
                     Expanded(
-                      child:
-                          OutlinedButton(
+                      child: OutlinedButton(
                         onPressed: () {
-                          Navigator.of(
-                            context,
-                          ).pop();
+                          Navigator.of(context).pop();
                         },
-                        style:
-                            OutlinedButton
-                                .styleFrom(
-                          padding:
-                              const EdgeInsets
-                                  .symmetric(
-                            vertical: 15,
-                          ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 15),
                         ),
-                        child:
-                            const Text(
-                          'Cancel',
-                        ),
+                        child: const Text('Cancel'),
                       ),
                     ),
-                    const SizedBox(
-                      width: 12,
-                    ),
+                    const SizedBox(width: 12),
                     Expanded(
                       flex: 2,
-                      child:
-                          FilledButton.icon(
-                        onPressed:
-                            canSave
-                            ? _submitTraining
-                            : null,
-                        style:
-                            FilledButton
-                                .styleFrom(
-                          backgroundColor:
-                              accent,
-                          foregroundColor:
-                              const Color(
-                            0xFF03110E,
-                          ),
-                          disabledBackgroundColor:
-                              const Color(
-                            0xFF33454B,
-                          ),
-                          disabledForegroundColor:
-                              const Color(
-                            0xFF83969C,
-                          ),
-                          padding:
-                              const EdgeInsets
-                                  .symmetric(
-                            vertical: 15,
-                          ),
+                      child: FilledButton.icon(
+                        onPressed: canSave ? _submitTraining : null,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: accent,
+                          foregroundColor: const Color(0xFF03110E),
+                          disabledBackgroundColor: const Color(0xFF33454B),
+                          disabledForegroundColor: const Color(0xFF83969C),
+                          padding: const EdgeInsets.symmetric(vertical: 15),
                         ),
-                        icon:
-                            const Icon(
-                          Icons
-                              .publish_rounded,
-                        ),
+                        icon: const Icon(Icons.publish_rounded),
                         label: Text(
-                          canSave
-                              ? 'Publish Training'
-                              : 'Migration Required',
-                          style:
-                              const TextStyle(
-                            fontWeight:
-                                FontWeight
-                                    .w900,
-                          ),
+                          canSave ? 'Publish Training' : 'Migration Required',
+                          style: const TextStyle(fontWeight: FontWeight.w900),
                         ),
                       ),
                     ),
@@ -2861,8 +2065,7 @@ class _KorlixAgentTrainingSheetState
   }
 }
 
-class _KorlixAgentMemoryManagerSheet
-    extends StatefulWidget {
+class _KorlixAgentMemoryManagerSheet extends StatefulWidget {
   const _KorlixAgentMemoryManagerSheet({
     required this.client,
     required this.agent,
@@ -2872,8 +2075,7 @@ class _KorlixAgentMemoryManagerSheet
   final KorlixLiveConvoAgent agent;
 
   @override
-  State<_KorlixAgentMemoryManagerSheet>
-  createState() {
+  State<_KorlixAgentMemoryManagerSheet> createState() {
     return _KorlixAgentMemoryManagerSheetState();
   }
 }
@@ -2893,80 +2095,44 @@ class _KorlixAgentMemoryManagerSheetState
   void initState() {
     super.initState();
 
-    unawaited(
-      _loadMemories(),
-    );
+    unawaited(_loadMemories());
   }
 
-  String _cleanMemoryError(
-    Object error,
-  ) {
+  String _cleanMemoryError(Object error) {
     return error
         .toString()
-        .replaceFirst(
-          'KorlixLiveConvoAgentClientException: ',
-          '',
-        )
-        .replaceFirst(
-          'Exception: ',
-          '',
-        )
+        .replaceFirst('KorlixLiveConvoAgentClientException: ', '')
+        .replaceFirst('Exception: ', '')
         .trim();
   }
 
-  List<KorlixLiveConvoAgentMemory>
-  _sortMemories(
+  List<KorlixLiveConvoAgentMemory> _sortMemories(
     Iterable<KorlixLiveConvoAgentMemory> source,
   ) {
-    final result =
-        source.toList(
-      growable: false,
-    );
+    final result = source.toList(growable: false);
 
-    result.sort(
-      (left, right) {
-        final importance =
-            right.importance.compareTo(
-          left.importance,
-        );
+    result.sort((left, right) {
+      final importance = right.importance.compareTo(left.importance);
 
-        if (importance != 0) {
-          return importance;
-        }
+      if (importance != 0) {
+        return importance;
+      }
 
-        final rightDate =
-            right.updatedAt ??
-            right.createdAt;
+      final rightDate = right.updatedAt ?? right.createdAt;
 
-        final leftDate =
-            left.updatedAt ??
-            left.createdAt;
+      final leftDate = left.updatedAt ?? left.createdAt;
 
-        final rightStamp =
-            rightDate
-                ?.millisecondsSinceEpoch ??
-            0;
+      final rightStamp = rightDate?.millisecondsSinceEpoch ?? 0;
 
-        final leftStamp =
-            leftDate
-                ?.millisecondsSinceEpoch ??
-            0;
+      final leftStamp = leftDate?.millisecondsSinceEpoch ?? 0;
 
-        return rightStamp.compareTo(
-          leftStamp,
-        );
-      },
-    );
+      return rightStamp.compareTo(leftStamp);
+    });
 
-    return List<
-        KorlixLiveConvoAgentMemory>.unmodifiable(
-      result,
-    );
+    return List<KorlixLiveConvoAgentMemory>.unmodifiable(result);
   }
 
-  Future<void> _loadMemories({
-    bool showLoading = true,
-  }) async {
+  Future<void> _loadMemories({bool showLoading = true}) async {
     if (!mounted) {
       return;
     }
@@ -2979,21 +2145,14 @@ class _KorlixAgentMemoryManagerSheetState
     }
 
     try {
-      final loaded =
-          await widget.client.loadMemories(
-        agentId:
-            widget.agent.id,
-      );
+      final loaded = await widget.client.loadMemories(agentId: widget.agent.id);
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _memories =
-            _sortMemories(
-          loaded,
-        );
+        _memories = _sortMemories(loaded);
 
         _loading = false;
         _error = null;
@@ -3005,17 +2164,12 @@ class _KorlixAgentMemoryManagerSheetState
 
       setState(() {
         _loading = false;
-        _error =
-            _cleanMemoryError(
-          error,
-        );
+        _error = _cleanMemoryError(error);
       });
     }
   }
 
-  Future<T?> _runMemoryBusy<T>(
-    Future<T> Function() callback,
-  ) async {
+  Future<T?> _runMemoryBusy<T>(Future<T> Function() callback) async {
     if (_busy) {
       return null;
     }
@@ -3030,10 +2184,7 @@ class _KorlixAgentMemoryManagerSheetState
     } catch (error) {
       if (mounted) {
         setState(() {
-          _error =
-              _cleanMemoryError(
-            error,
-          );
+          _error = _cleanMemoryError(error);
         });
       }
 
@@ -3047,10 +2198,7 @@ class _KorlixAgentMemoryManagerSheetState
     }
   }
 
-  void _showMemoryMessage(
-    String message, {
-    bool error = false,
-  }) {
+  void _showMemoryMessage(String message, {bool error = false}) {
     if (!mounted) {
       return;
     }
@@ -3061,16 +2209,9 @@ class _KorlixAgentMemoryManagerSheetState
         SnackBar(
           content: Text(message),
           backgroundColor: error
-              ? const Color(
-                  0xFF8D3344,
-                )
-              : const Color(
-                  0xFF17644D,
-                ),
-          duration:
-              const Duration(
-            seconds: 5,
-          ),
+              ? const Color(0xFF8D3344)
+              : const Color(0xFF17644D),
+          duration: const Duration(seconds: 5),
         ),
       );
   }
@@ -3081,84 +2222,45 @@ class _KorlixAgentMemoryManagerSheetState
     required String confirmLabel,
     bool destructive = false,
   }) async {
-    final result =
-        await showDialog<bool>(
+    final result = await showDialog<bool>(
       context: context,
-      barrierDismissible:
-          !_busy,
+      barrierDismissible: !_busy,
       builder: (dialogContext) {
-        final confirmColor =
-            destructive
-            ? const Color(
-                0xFFFF7185,
-              )
-            : const Color(
-                0xFF62D6A7,
-              );
+        final confirmColor = destructive
+            ? const Color(0xFFFF7185)
+            : const Color(0xFF62D6A7);
 
         return AlertDialog(
-          backgroundColor:
-              const Color(
-            0xFF071722,
-          ),
+          backgroundColor: const Color(0xFF071722),
           title: Text(
             title,
-            style:
-                const TextStyle(
-              color:
-                  Color(
-                0xFFF0F7F8,
-              ),
-              fontWeight:
-                  FontWeight.w900,
+            style: const TextStyle(
+              color: Color(0xFFF0F7F8),
+              fontWeight: FontWeight.w900,
             ),
           ),
           content: Text(
             message,
-            style:
-                const TextStyle(
-              color:
-                  Color(
-                0xFFBBD0D6,
-              ),
-              height: 1.45,
-            ),
+            style: const TextStyle(color: Color(0xFFBBD0D6), height: 1.45),
           ),
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(
-                  dialogContext,
-                ).pop(false);
+                Navigator.of(dialogContext).pop(false);
               },
-              child:
-                  const Text(
-                'Cancel',
-              ),
+              child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () {
-                Navigator.of(
-                  dialogContext,
-                ).pop(true);
+                Navigator.of(dialogContext).pop(true);
               },
-              style:
-                  FilledButton
-                      .styleFrom(
-                backgroundColor:
-                    confirmColor,
-                foregroundColor:
-                    const Color(
-                  0xFF03110E,
-                ),
+              style: FilledButton.styleFrom(
+                backgroundColor: confirmColor,
+                foregroundColor: const Color(0xFF03110E),
               ),
               child: Text(
                 confirmLabel,
-                style:
-                    const TextStyle(
-                  fontWeight:
-                      FontWeight.w900,
-                ),
+                style: const TextStyle(fontWeight: FontWeight.w900),
               ),
             ),
           ],
@@ -3174,14 +2276,11 @@ class _KorlixAgentMemoryManagerSheetState
       return;
     }
 
-    Navigator.of(context).pop(
-      _changed,
-    );
+    Navigator.of(context).pop(_changed);
   }
 
   Future<void> _openAddMemory() async {
-    if (!widget.agent
-        .persistenceConfigured) {
+    if (!widget.agent.persistenceConfigured) {
       _showMemoryMessage(
         'Apply the included Supabase '
         'long-term-memory migration before '
@@ -3203,23 +2302,14 @@ class _KorlixAgentMemoryManagerSheetState
       return;
     }
 
-    final draft =
-        await showModalBottomSheet<
-            KorlixLiveConvoMemoryDraft>(
+    final draft = await showModalBottomSheet<KorlixLiveConvoMemoryDraft>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor:
-          Colors.transparent,
-      barrierColor:
-          const Color(
-        0xCC02070C,
-      ),
+      backgroundColor: Colors.transparent,
+      barrierColor: const Color(0xCC02070C),
       builder: (sheetContext) {
-        return _KorlixAgentMemoryDraftSheet(
-          agent:
-              widget.agent,
-        );
+        return _KorlixAgentMemoryDraftSheet(agent: widget.agent);
       },
     );
 
@@ -3227,17 +2317,9 @@ class _KorlixAgentMemoryManagerSheetState
       return;
     }
 
-    final saved =
-        await _runMemoryBusy<
-            KorlixLiveConvoAgentMemory>(
-      () {
-        return widget.client.saveMemory(
-          agentId:
-              widget.agent.id,
-          draft: draft,
-        );
-      },
-    );
+    final saved = await _runMemoryBusy<KorlixLiveConvoAgentMemory>(() {
+      return widget.client.saveMemory(agentId: widget.agent.id, draft: draft);
+    });
 
     if (!mounted || saved == null) {
       return;
@@ -3246,40 +2328,30 @@ class _KorlixAgentMemoryManagerSheetState
     setState(() {
       _changed = true;
 
-      _memories =
-          _sortMemories(
-        <KorlixLiveConvoAgentMemory>[
-          for (final memory
-              in _memories)
-            if (memory.id !=
-                saved.id)
-              memory,
-          saved,
-        ],
-      );
+      _memories = _sortMemories(<KorlixLiveConvoAgentMemory>[
+        for (final memory in _memories)
+          if (memory.id != saved.id) memory,
+        saved,
+      ]);
     });
 
     _showMemoryMessage(
-      'Memory saved privately for '
-      '${widget.agent.name}.',
+      'Memory saved privately for ${widget.agent.name}. Applying it now.',
     );
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (mounted) {
+      _closeMemoryManager();
+    }
   }
 
-  Future<void> _deleteMemory(
-    KorlixLiveConvoAgentMemory memory,
-  ) async {
-    final label =
-        memory.label.trim().isEmpty
-        ? memory.content
-        : memory.label;
+  Future<void> _deleteMemory(KorlixLiveConvoAgentMemory memory) async {
+    final label = memory.label.trim().isEmpty ? memory.content : memory.label;
 
-    final preview =
-        label.length <= 120
+    final preview = label.length <= 120
         ? label
         : '${label.substring(0, 117)}...';
 
-    final confirmed =
-        await _confirmMemoryAction(
+    final confirmed = await _confirmMemoryAction(
       title: 'Delete this memory?',
       message:
           'Remove “$preview” from '
@@ -3293,43 +2365,33 @@ class _KorlixAgentMemoryManagerSheetState
       return;
     }
 
-    final completed =
-        await _runMemoryBusy<bool>(
-      () async {
-        await widget.client.deleteMemory(
-          agentId:
-              widget.agent.id,
-          memoryId:
-              memory.id,
-          confirmed: true,
-        );
+    final completed = await _runMemoryBusy<bool>(() async {
+      await widget.client.deleteMemory(
+        agentId: widget.agent.id,
+        memoryId: memory.id,
+        confirmed: true,
+      );
 
-        return true;
-      },
-    );
+      return true;
+    });
 
-    if (!mounted ||
-        completed != true) {
+    if (!mounted || completed != true) {
       return;
     }
 
     setState(() {
       _changed = true;
 
-      _memories =
-          List<
-              KorlixLiveConvoAgentMemory>.unmodifiable(
-        _memories.where(
-          (candidate) =>
-              candidate.id !=
-              memory.id,
-        ),
+      _memories = List<KorlixLiveConvoAgentMemory>.unmodifiable(
+        _memories.where((candidate) => candidate.id != memory.id),
       );
     });
 
-    _showMemoryMessage(
-      'Memory deleted.',
-    );
+    _showMemoryMessage('Memory deleted. Applying the change now.');
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (mounted) {
+      _closeMemoryManager();
+    }
   }
 
   Future<void> _clearAllMemories() async {
@@ -3342,8 +2404,7 @@ class _KorlixAgentMemoryManagerSheetState
       return;
     }
 
-    final confirmed =
-        await _confirmMemoryAction(
+    final confirmed = await _confirmMemoryAction(
       title: 'Clear all memories?',
       message:
           'Delete all ${_memories.length} '
@@ -3359,36 +2420,32 @@ class _KorlixAgentMemoryManagerSheetState
       return;
     }
 
-    final completed =
-        await _runMemoryBusy<bool>(
-      () async {
-        await widget.client.clearMemories(
-          agentId:
-              widget.agent.id,
-          confirmed: true,
-        );
+    final completed = await _runMemoryBusy<bool>(() async {
+      await widget.client.clearMemories(
+        agentId: widget.agent.id,
+        confirmed: true,
+      );
 
-        return true;
-      },
-    );
+      return true;
+    });
 
-    if (!mounted ||
-        completed != true) {
+    if (!mounted || completed != true) {
       return;
     }
 
     setState(() {
       _changed = true;
 
-      _memories =
-          const <
-              KorlixLiveConvoAgentMemory>[];
+      _memories = const <KorlixLiveConvoAgentMemory>[];
     });
 
     _showMemoryMessage(
-      '${widget.agent.name} memories '
-      'were cleared.',
+      '${widget.agent.name} memories were cleared. Applying the change now.',
     );
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (mounted) {
+      _closeMemoryManager();
+    }
   }
 
   Future<void> _forgetMatchingMemories() async {
@@ -3401,122 +2458,66 @@ class _KorlixAgentMemoryManagerSheetState
       return;
     }
 
-    final controller =
-        TextEditingController();
+    final controller = TextEditingController();
 
-    final query =
-        await showDialog<String>(
+    final query = await showDialog<String>(
       context: context,
-      barrierDismissible:
-          !_busy,
+      barrierDismissible: !_busy,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor:
-              const Color(
-            0xFF071722,
-          ),
-          title:
-              const Text(
+          backgroundColor: const Color(0xFF071722),
+          title: const Text(
             'Forget matching memories',
             style: TextStyle(
-              color:
-                  Color(
-                0xFFF0F7F8,
-              ),
-              fontWeight:
-                  FontWeight.w900,
+              color: Color(0xFFF0F7F8),
+              fontWeight: FontWeight.w900,
             ),
           ),
           content: Column(
-            mainAxisSize:
-                MainAxisSize.min,
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
                 'Describe the saved fact, '
                 'preference, goal, correction, '
                 'or style that this agent '
                 'should forget.',
-                style: TextStyle(
-                  color:
-                      Color(
-                    0xFFBBD0D6,
-                  ),
-                  height: 1.4,
-                ),
+                style: TextStyle(color: Color(0xFFBBD0D6), height: 1.4),
               ),
-              const SizedBox(
-                height: 14,
-              ),
+              const SizedBox(height: 14),
               TextField(
-                controller:
-                    controller,
+                controller: controller,
                 autofocus: true,
                 minLines: 2,
                 maxLines: 4,
                 maxLength: 400,
-                style:
-                    const TextStyle(
-                  color:
-                      Color(
-                    0xFFF0F7F8,
-                  ),
-                ),
-                decoration:
-                    InputDecoration(
-                  labelText:
-                      'Memory to forget',
+                style: const TextStyle(color: Color(0xFFF0F7F8)),
+                decoration: InputDecoration(
+                  labelText: 'Memory to forget',
                   hintText:
                       'Example: My old report '
                       'color preference',
                   filled: true,
-                  fillColor:
-                      const Color(
-                    0xFF041019,
+                  fillColor: const Color(0xFF041019),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(15),
+                    borderSide: const BorderSide(color: Color(0xFF244D5C)),
                   ),
-                  enabledBorder:
-                      OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(
-                      15,
-                    ),
-                    borderSide:
-                        const BorderSide(
-                      color:
-                          Color(
-                        0xFF244D5C,
-                      ),
-                    ),
-                  ),
-                  focusedBorder:
-                      OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(
-                      15,
-                    ),
-                    borderSide:
-                        const BorderSide(
-                      color:
-                          Color(
-                        0xFFFF7185,
-                      ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(15),
+                    borderSide: const BorderSide(
+                      color: Color(0xFFFF7185),
                       width: 1.6,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(
-                height: 6,
-              ),
+              const SizedBox(height: 6),
               const Text(
                 'All active memories containing '
                 'the matching text may be removed.',
                 style: TextStyle(
-                  color:
-                      Color(
-                    0xFFFFC2CB,
-                  ),
+                  color: Color(0xFFFFC2CB),
                   fontSize: 12.5,
                   height: 1.35,
                 ),
@@ -3526,53 +2527,28 @@ class _KorlixAgentMemoryManagerSheetState
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(
-                  dialogContext,
-                ).pop();
+                Navigator.of(dialogContext).pop();
               },
-              child:
-                  const Text(
-                'Cancel',
-              ),
+              child: const Text('Cancel'),
             ),
             FilledButton.icon(
               onPressed: () {
-                final clean =
-                    controller.text
-                        .trim();
+                final clean = controller.text.trim();
 
                 if (clean.isEmpty) {
                   return;
                 }
 
-                Navigator.of(
-                  dialogContext,
-                ).pop(clean);
+                Navigator.of(dialogContext).pop(clean);
               },
-              style:
-                  FilledButton
-                      .styleFrom(
-                backgroundColor:
-                    const Color(
-                  0xFFFF7185,
-                ),
-                foregroundColor:
-                    const Color(
-                  0xFF25030A,
-                ),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFFF7185),
+                foregroundColor: const Color(0xFF25030A),
               ),
-              icon:
-                  const Icon(
-                Icons
-                    .delete_sweep_rounded,
-              ),
-              label:
-                  const Text(
+              icon: const Icon(Icons.delete_sweep_rounded),
+              label: const Text(
                 'Forget Matches',
-                style: TextStyle(
-                  fontWeight:
-                      FontWeight.w900,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w900),
               ),
             ),
           ],
@@ -3582,42 +2558,31 @@ class _KorlixAgentMemoryManagerSheetState
 
     controller.dispose();
 
-    if (!mounted ||
-        query == null ||
-        query.trim().isEmpty) {
+    if (!mounted || query == null || query.trim().isEmpty) {
       return;
     }
 
-    final removed =
-        await _runMemoryBusy<int>(
-      () {
-        return widget.client.forgetMemories(
-          agentId:
-              widget.agent.id,
-          query:
-              query.trim(),
-          confirmed: true,
-        );
-      },
-    );
+    final removed = await _runMemoryBusy<int>(() {
+      return widget.client.forgetMemories(
+        agentId: widget.agent.id,
+        query: query.trim(),
+        confirmed: true,
+      );
+    });
 
     if (!mounted || removed == null) {
       return;
     }
 
     if (removed <= 0) {
-      _showMemoryMessage(
-        'No matching memories were found.',
-      );
+      _showMemoryMessage('No matching memories were found.');
 
       return;
     }
 
     _changed = true;
 
-    await _loadMemories(
-      showLoading: false,
-    );
+    await _loadMemories(showLoading: false);
 
     if (!mounted) {
       return;
@@ -3627,12 +2592,11 @@ class _KorlixAgentMemoryManagerSheetState
       removed == 1
           ? '1 matching memory was forgotten.'
           : '$removed matching memories '
-              'were forgotten.',
+                'were forgotten.',
     );
   }
-  String _memoryKindLabel(
-    String kind,
-  ) {
+
+  String _memoryKindLabel(String kind) {
     switch (kind.trim().toLowerCase()) {
       case 'fact':
         return 'Fact';
@@ -3658,9 +2622,7 @@ class _KorlixAgentMemoryManagerSheetState
     }
   }
 
-  IconData _memoryKindIcon(
-    String kind,
-  ) {
+  IconData _memoryKindIcon(String kind) {
     switch (kind.trim().toLowerCase()) {
       case 'fact':
         return Icons.fact_check_rounded;
@@ -3686,9 +2648,7 @@ class _KorlixAgentMemoryManagerSheetState
     }
   }
 
-  Color _memoryKindColor(
-    String kind,
-  ) {
+  Color _memoryKindColor(String kind) {
     switch (kind.trim().toLowerCase()) {
       case 'fact':
         return const Color(0xFF69D9E8);
@@ -3714,12 +2674,8 @@ class _KorlixAgentMemoryManagerSheetState
     }
   }
 
-  String _memorySourceLabel(
-    String source,
-  ) {
-    final clean = source
-        .trim()
-        .replaceAll('_', ' ');
+  String _memorySourceLabel(String source) {
+    final clean = source.trim().replaceAll('_', ' ');
 
     if (clean.isEmpty) {
       return 'User confirmed';
@@ -3727,9 +2683,7 @@ class _KorlixAgentMemoryManagerSheetState
 
     return clean
         .split(' ')
-        .where(
-          (word) => word.isNotEmpty,
-        )
+        .where((word) => word.isNotEmpty)
         .map(
           (word) =>
               '${word[0].toUpperCase()}'
@@ -3738,33 +2692,23 @@ class _KorlixAgentMemoryManagerSheetState
         .join(' ');
   }
 
-  String _formatMemoryDate(
-    DateTime? value,
-  ) {
+  String _formatMemoryDate(DateTime? value) {
     if (value == null) {
       return '';
     }
 
     final local = value.toLocal();
-    final hour = local.hour % 12 == 0
-        ? 12
-        : local.hour % 12;
+    final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
 
-    final minute = local.minute
-        .toString()
-        .padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
 
-    final period = local.hour >= 12
-        ? 'PM'
-        : 'AM';
+    final period = local.hour >= 12 ? 'PM' : 'AM';
 
     return '${local.month}/${local.day}/${local.year} '
         '$hour:$minute $period';
   }
 
-  Widget _buildMemoryHeader(
-    Color accent,
-  ) {
+  Widget _buildMemoryHeader(Color accent) {
     final memoryCount = _memories.length;
 
     final countLabel = memoryCount == 1
@@ -3772,42 +2716,24 @@ class _KorlixAgentMemoryManagerSheetState
         : '$memoryCount saved memories';
 
     return Padding(
-      padding:
-          const EdgeInsets.fromLTRB(
-        18,
-        12,
-        12,
-        10,
-      ),
+      padding: const EdgeInsets.fromLTRB(18, 12, 12, 10),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              borderRadius:
-                  BorderRadius.circular(16),
-              color: accent.withValues(
-                alpha: 0.14,
-              ),
-              border: Border.all(
-                color: accent.withValues(
-                  alpha: 0.72,
-                ),
-              ),
+              borderRadius: BorderRadius.circular(16),
+              color: accent.withValues(alpha: 0.14),
+              border: Border.all(color: accent.withValues(alpha: 0.72)),
             ),
-            child: Icon(
-              Icons.psychology_alt_rounded,
-              color: accent,
-            ),
+            child: Icon(Icons.psychology_alt_rounded, color: accent),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   '${widget.agent.name.toUpperCase()} MEMORY',
@@ -3831,14 +2757,9 @@ class _KorlixAgentMemoryManagerSheetState
           ),
           IconButton(
             tooltip: 'Close memory manager',
-            onPressed: _busy
-                ? null
-                : _closeMemoryManager,
-            icon: const Icon(
-              Icons.close_rounded,
-            ),
-            color:
-                const Color(0xFFC7D7DC),
+            onPressed: _busy ? null : _closeMemoryManager,
+            icon: const Icon(Icons.close_rounded),
+            color: const Color(0xFFC7D7DC),
           ),
         ],
       ),
@@ -3846,59 +2767,39 @@ class _KorlixAgentMemoryManagerSheetState
   }
 
   Widget _buildMemoryStatusNotice() {
-    final persistenceReady =
-        widget.agent.persistenceConfigured;
+    final persistenceReady = widget.agent.persistenceConfigured;
 
-    final memoryEnabled =
-        widget.agent.memoryEnabled;
+    final memoryEnabled = widget.agent.memoryEnabled;
 
-    final ready =
-        persistenceReady && memoryEnabled;
+    final ready = persistenceReady && memoryEnabled;
 
-    final color = ready
-        ? const Color(0xFF62D6A7)
-        : const Color(0xFFF2C14E);
+    final color = ready ? const Color(0xFF62D6A7) : const Color(0xFFF2C14E);
 
     final message = !persistenceReady
         ? 'Apply the included Supabase migration '
-            'before saving or deleting private '
-            'long-term memories.'
+              'before saving or deleting private '
+              'long-term memories.'
         : !memoryEnabled
-            ? 'Long-term memory is disabled for '
-                '${widget.agent.name}. Open Train '
-                'Agent to enable it.'
-            : 'These records are private to '
-                '${widget.agent.name} and are loaded '
-                'only when this agent is active.';
+        ? 'Long-term memory is disabled for '
+              '${widget.agent.name}. Open Train '
+              'Agent to enable it.'
+        : 'These records are private to '
+              '${widget.agent.name} and are loaded '
+              'only when this agent is active.';
 
     return Container(
-      margin:
-          const EdgeInsets.fromLTRB(
-        16,
-        0,
-        16,
-        12,
-      ),
-      padding:
-          const EdgeInsets.all(13),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(16),
-        color: ready
-            ? const Color(0xFF0B2A24)
-            : const Color(0xFF332916),
-        border: Border.all(
-          color: color,
-        ),
+        borderRadius: BorderRadius.circular(16),
+        color: ready ? const Color(0xFF0B2A24) : const Color(0xFF332916),
+        border: Border.all(color: color),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            ready
-                ? Icons.lock_rounded
-                : Icons.info_outline_rounded,
+            ready ? Icons.lock_rounded : Icons.info_outline_rounded,
             color: color,
           ),
           const SizedBox(width: 10),
@@ -3925,44 +2826,25 @@ class _KorlixAgentMemoryManagerSheetState
     }
 
     return Container(
-      margin:
-          const EdgeInsets.fromLTRB(
-        16,
-        0,
-        16,
-        12,
-      ),
-      padding:
-          const EdgeInsets.all(13),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(16),
-        color:
-            const Color(0xFF351923),
-        border: Border.all(
-          color:
-              const Color(0xFFFF7185),
-        ),
+        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFF351923),
+        border: Border.all(color: const Color(0xFFFF7185)),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.error_outline_rounded,
-            color:
-                Color(0xFFFF8B9B),
-          ),
+          const Icon(Icons.error_outline_rounded, color: Color(0xFFFF8B9B)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               error,
               style: const TextStyle(
-                color:
-                    Color(0xFFFFD8DE),
+                color: Color(0xFFFFD8DE),
                 height: 1.35,
-                fontWeight:
-                    FontWeight.w700,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -3971,15 +2853,10 @@ class _KorlixAgentMemoryManagerSheetState
             onPressed: _busy
                 ? null
                 : () {
-                    unawaited(
-                      _loadMemories(),
-                    );
+                    unawaited(_loadMemories());
                   },
-            icon: const Icon(
-              Icons.refresh_rounded,
-            ),
-            color:
-                const Color(0xFFFFB2BE),
+            icon: const Icon(Icons.refresh_rounded),
+            color: const Color(0xFFFFB2BE),
           ),
         ],
       ),
@@ -3993,45 +2870,34 @@ class _KorlixAgentMemoryManagerSheetState
     final safeImportance = importance < 1
         ? 1
         : importance > 5
-            ? 5
-            : importance;
+        ? 5
+        : importance;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         for (var index = 1; index <= 5; index += 1)
           Padding(
-            padding: EdgeInsets.only(
-              right: index == 5 ? 0 : 2,
-            ),
+            padding: EdgeInsets.only(right: index == 5 ? 0 : 2),
             child: Icon(
               index <= safeImportance
                   ? Icons.star_rounded
                   : Icons.star_border_rounded,
               size: 15,
-              color: index <= safeImportance
-                  ? color
-                  : const Color(0xFF607680),
+              color: index <= safeImportance ? color : const Color(0xFF607680),
             ),
           ),
       ],
     );
   }
 
-  Widget _buildMemoryTag(
-    String tag,
-  ) {
+  Widget _buildMemoryTag(String tag) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 4,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
         color: const Color(0xFF102B38),
-        border: Border.all(
-          color: const Color(0xFF28596A),
-        ),
+        border: Border.all(color: const Color(0xFF28596A)),
       ),
       child: Text(
         tag,
@@ -4044,12 +2910,8 @@ class _KorlixAgentMemoryManagerSheetState
     );
   }
 
-  Widget _buildMemoryCard(
-    KorlixLiveConvoAgentMemory memory,
-  ) {
-    final kindColor = _memoryKindColor(
-      memory.kind,
-    );
+  Widget _buildMemoryCard(KorlixLiveConvoAgentMemory memory) {
+    final kindColor = _memoryKindColor(memory.kind);
 
     final cleanLabel = memory.label.trim();
 
@@ -4057,30 +2919,17 @@ class _KorlixAgentMemoryManagerSheetState
         ? _memoryKindLabel(memory.kind)
         : cleanLabel;
 
-    final dateLabel = _formatMemoryDate(
-      memory.updatedAt ?? memory.createdAt,
-    );
+    final dateLabel = _formatMemoryDate(memory.updatedAt ?? memory.createdAt);
 
-    final sourceLabel = _memorySourceLabel(
-      memory.source,
-    );
+    final sourceLabel = _memorySourceLabel(memory.source);
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(
-        16,
-        0,
-        16,
-        12,
-      ),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         color: const Color(0xFF071722),
-        border: Border.all(
-          color: kindColor.withValues(
-            alpha: 0.52,
-          ),
-        ),
+        border: Border.all(color: kindColor.withValues(alpha: 0.52)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -4093,14 +2942,8 @@ class _KorlixAgentMemoryManagerSheetState
                 height: 42,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
-                  color: kindColor.withValues(
-                    alpha: 0.15,
-                  ),
-                  border: Border.all(
-                    color: kindColor.withValues(
-                      alpha: 0.68,
-                    ),
-                  ),
+                  color: kindColor.withValues(alpha: 0.15),
+                  border: Border.all(color: kindColor.withValues(alpha: 0.68)),
                 ),
                 child: Icon(
                   _memoryKindIcon(memory.kind),
@@ -4111,8 +2954,7 @@ class _KorlixAgentMemoryManagerSheetState
               const SizedBox(width: 11),
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
@@ -4126,13 +2968,10 @@ class _KorlixAgentMemoryManagerSheetState
                     Wrap(
                       spacing: 8,
                       runSpacing: 6,
-                      crossAxisAlignment:
-                          WrapCrossAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         _KorlixAgentBadge(
-                          text: _memoryKindLabel(
-                            memory.kind,
-                          ).toUpperCase(),
+                          text: _memoryKindLabel(memory.kind).toUpperCase(),
                           color: kindColor,
                         ),
                         if (memory.sensitive)
@@ -4150,13 +2989,9 @@ class _KorlixAgentMemoryManagerSheetState
                 onPressed: _busy
                     ? null
                     : () {
-                        unawaited(
-                          _deleteMemory(memory),
-                        );
+                        unawaited(_deleteMemory(memory));
                       },
-                icon: const Icon(
-                  Icons.delete_outline_rounded,
-                ),
+                icon: const Icon(Icons.delete_outline_rounded),
                 color: const Color(0xFFFF8B9B),
               ),
             ],
@@ -4175,23 +3010,16 @@ class _KorlixAgentMemoryManagerSheetState
             Wrap(
               spacing: 7,
               runSpacing: 7,
-              children: [
-                for (final tag in memory.tags)
-                  _buildMemoryTag(tag),
-              ],
+              children: [for (final tag in memory.tags) _buildMemoryTag(tag)],
             ),
           ],
           const SizedBox(height: 13),
-          const Divider(
-            height: 1,
-            color: Color(0xFF173541),
-          ),
+          const Divider(height: 1, color: Color(0xFF173541)),
           const SizedBox(height: 11),
           Wrap(
             spacing: 12,
             runSpacing: 9,
-            crossAxisAlignment:
-                WrapCrossAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -4257,68 +3085,41 @@ class _KorlixAgentMemoryManagerSheetState
     );
   }
 
-  Widget _buildMemoryActions(
-    Color accent,
-  ) {
-    final persistenceReady =
-        widget.agent.persistenceConfigured;
+  Widget _buildMemoryActions(Color accent) {
+    final persistenceReady = widget.agent.persistenceConfigured;
 
-    final memoryEnabled =
-        widget.agent.memoryEnabled;
+    final memoryEnabled = widget.agent.memoryEnabled;
 
-    final canAdd =
-        persistenceReady &&
-        memoryEnabled &&
-        !_busy;
+    final canAdd = persistenceReady && memoryEnabled && !_busy;
 
-    final hasMemories =
-        _memories.isNotEmpty;
+    final hasMemories = _memories.isNotEmpty;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        16,
-        0,
-        16,
-        14,
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           FilledButton.icon(
             onPressed: canAdd
                 ? () {
-                    unawaited(
-                      _openAddMemory(),
-                    );
+                    unawaited(_openAddMemory());
                   }
                 : null,
             style: FilledButton.styleFrom(
               backgroundColor: accent,
-              foregroundColor:
-                  const Color(0xFF03110E),
-              disabledBackgroundColor:
-                  const Color(0xFF33454B),
-              disabledForegroundColor:
-                  const Color(0xFF83969C),
-              padding:
-                  const EdgeInsets.symmetric(
-                vertical: 15,
-                horizontal: 16,
-              ),
+              foregroundColor: const Color(0xFF03110E),
+              disabledBackgroundColor: const Color(0xFF33454B),
+              disabledForegroundColor: const Color(0xFF83969C),
+              padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
             ),
-            icon: const Icon(
-              Icons.add_rounded,
-            ),
+            icon: const Icon(Icons.add_rounded),
             label: Text(
               !persistenceReady
                   ? 'Migration Required'
                   : !memoryEnabled
-                      ? 'Enable Memory First'
-                      : 'Add Confirmed Memory',
-              style: const TextStyle(
-                fontWeight: FontWeight.w900,
-              ),
+                  ? 'Enable Memory First'
+                  : 'Add Confirmed Memory',
+              style: const TextStyle(fontWeight: FontWeight.w900),
             ),
           ),
           const SizedBox(height: 9),
@@ -4327,55 +3128,34 @@ class _KorlixAgentMemoryManagerSheetState
             runSpacing: 8,
             children: [
               OutlinedButton.icon(
-                onPressed:
-                    _busy || !hasMemories
+                onPressed: _busy || !hasMemories
                     ? null
                     : () {
-                        unawaited(
-                          _forgetMatchingMemories(),
-                        );
+                        unawaited(_forgetMatchingMemories());
                       },
-                icon: const Icon(
-                  Icons.search_off_rounded,
-                ),
-                label: const Text(
-                  'Forget Matching',
-                ),
+                icon: const Icon(Icons.search_off_rounded),
+                label: const Text('Forget Matching'),
               ),
               TextButton.icon(
-                onPressed:
-                    _busy || !hasMemories
+                onPressed: _busy || !hasMemories
                     ? null
                     : () {
-                        unawaited(
-                          _clearAllMemories(),
-                        );
+                        unawaited(_clearAllMemories());
                       },
                 style: TextButton.styleFrom(
-                  foregroundColor:
-                      const Color(0xFFFF8B9B),
+                  foregroundColor: const Color(0xFFFF8B9B),
                 ),
-                icon: const Icon(
-                  Icons.delete_sweep_rounded,
-                ),
-                label: const Text(
-                  'Clear All',
-                ),
+                icon: const Icon(Icons.delete_sweep_rounded),
+                label: const Text('Clear All'),
               ),
               TextButton.icon(
                 onPressed: _busy
                     ? null
                     : () {
-                        unawaited(
-                          _loadMemories(),
-                        );
+                        unawaited(_loadMemories());
                       },
-                icon: const Icon(
-                  Icons.refresh_rounded,
-                ),
-                label: const Text(
-                  'Refresh',
-                ),
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Refresh'),
               ),
             ],
           ),
@@ -4384,49 +3164,34 @@ class _KorlixAgentMemoryManagerSheetState
     );
   }
 
-  Widget _buildEmptyMemoryState(
-    Color accent,
-  ) {
-    final persistenceReady =
-        widget.agent.persistenceConfigured;
+  Widget _buildEmptyMemoryState(Color accent) {
+    final persistenceReady = widget.agent.persistenceConfigured;
 
-    final memoryEnabled =
-        widget.agent.memoryEnabled;
+    final memoryEnabled = widget.agent.memoryEnabled;
 
     final title = !persistenceReady
         ? 'Memory setup is required'
         : !memoryEnabled
-            ? 'Long-term memory is disabled'
-            : 'No saved memories yet';
+        ? 'Long-term memory is disabled'
+        : 'No saved memories yet';
 
     final message = !persistenceReady
         ? 'Apply the included Supabase migration, '
-            'then reopen this memory manager.'
+              'then reopen this memory manager.'
         : !memoryEnabled
-            ? 'Open Train Agent and enable long-term '
-                'memory before adding private records.'
-            : 'Add a confirmed preference, fact, goal, '
-                'style, example, correction, or vocabulary '
-                'record for ${widget.agent.name}.';
+        ? 'Open Train Agent and enable long-term '
+              'memory before adding private records.'
+        : 'Add a confirmed preference, fact, goal, '
+              'style, example, correction, or vocabulary '
+              'record for ${widget.agent.name}.';
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(
-        16,
-        0,
-        16,
-        12,
-      ),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(20),
-        color:
-            const Color(0xFF071722),
-        border: Border.all(
-          color: accent.withValues(
-            alpha: 0.46,
-          ),
-        ),
+        borderRadius: BorderRadius.circular(20),
+        color: const Color(0xFF071722),
+        border: Border.all(color: accent.withValues(alpha: 0.46)),
       ),
       child: Column(
         children: [
@@ -4435,14 +3200,8 @@ class _KorlixAgentMemoryManagerSheetState
             height: 58,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: accent.withValues(
-                alpha: 0.13,
-              ),
-              border: Border.all(
-                color: accent.withValues(
-                  alpha: 0.62,
-                ),
-              ),
+              color: accent.withValues(alpha: 0.13),
+              border: Border.all(color: accent.withValues(alpha: 0.62)),
             ),
             child: Icon(
               memoryEnabled
@@ -4466,34 +3225,22 @@ class _KorlixAgentMemoryManagerSheetState
           Text(
             message,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFFA9C6CF),
-              height: 1.4,
-            ),
+            style: const TextStyle(color: Color(0xFFA9C6CF), height: 1.4),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildMemoryCollection(
-    Color accent,
-  ) {
+  Widget _buildMemoryCollection(Color accent) {
     if (_loading) {
       return const Padding(
-        padding: EdgeInsets.fromLTRB(
-          16,
-          30,
-          16,
-          30,
-        ),
+        padding: EdgeInsets.fromLTRB(16, 30, 16, 30),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(
-                color: Color(0xFF69D9E8),
-              ),
+              CircularProgressIndicator(color: Color(0xFF69D9E8)),
               SizedBox(height: 13),
               Text(
                 'Loading private memories…',
@@ -4509,27 +3256,16 @@ class _KorlixAgentMemoryManagerSheetState
     }
 
     if (_memories.isEmpty) {
-      return _buildEmptyMemoryState(
-        accent,
-      );
+      return _buildEmptyMemoryState(accent);
     }
 
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding:
-              const EdgeInsets.fromLTRB(
-            16,
-            2,
-            16,
-            9,
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 2, 16, 9),
           child: Text(
-            _memories.length == 1
-                ? 'SAVED MEMORY'
-                : 'SAVED MEMORIES',
+            _memories.length == 1 ? 'SAVED MEMORY' : 'SAVED MEMORIES',
             style: const TextStyle(
               color: Color(0xFF8CDDE8),
               fontWeight: FontWeight.w900,
@@ -4538,45 +3274,29 @@ class _KorlixAgentMemoryManagerSheetState
             ),
           ),
         ),
-        for (final memory in _memories)
-          _buildMemoryCard(memory),
+        for (final memory in _memories) _buildMemoryCard(memory),
       ],
     );
   }
 
-  Widget _buildMemoryPrivacyFooter(
-    Color accent,
-  ) {
+  Widget _buildMemoryPrivacyFooter(Color accent) {
     final statusMessage = _changed
         ? 'Your confirmed memory changes are saved. '
-            'Reload the active agent to use the latest records.'
+              'Reload the active agent to use the latest records.'
         : 'Only memories you explicitly confirm are saved. '
-            'Each record remains private to this agent.';
+              'Each record remains private to this agent.';
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(
-        16,
-        11,
-        12,
-        11,
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 11, 12, 11),
       decoration: const BoxDecoration(
         color: Color(0xFF06131C),
-        border: Border(
-          top: BorderSide(
-            color: Color(0xFF173541),
-          ),
-        ),
+        border: Border(top: BorderSide(color: Color(0xFF173541))),
       ),
       child: Row(
         children: [
           Icon(
-            _changed
-                ? Icons.cloud_done_rounded
-                : Icons.lock_outline_rounded,
-            color: _changed
-                ? const Color(0xFF62D6A7)
-                : accent,
+            _changed ? Icons.cloud_done_rounded : Icons.lock_outline_rounded,
+            color: _changed ? const Color(0xFF62D6A7) : accent,
             size: 21,
           ),
           const SizedBox(width: 9),
@@ -4593,31 +3313,18 @@ class _KorlixAgentMemoryManagerSheetState
           ),
           const SizedBox(width: 10),
           FilledButton.icon(
-            onPressed: _busy
-                ? null
-                : _closeMemoryManager,
+            onPressed: _busy ? null : _closeMemoryManager,
             style: FilledButton.styleFrom(
               backgroundColor: accent,
-              foregroundColor:
-                  const Color(0xFF03110E),
-              disabledBackgroundColor:
-                  const Color(0xFF33454B),
-              disabledForegroundColor:
-                  const Color(0xFF83969C),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 15,
-                vertical: 12,
-              ),
+              foregroundColor: const Color(0xFF03110E),
+              disabledBackgroundColor: const Color(0xFF33454B),
+              disabledForegroundColor: const Color(0xFF83969C),
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
             ),
-            icon: const Icon(
-              Icons.check_rounded,
-              size: 19,
-            ),
+            icon: const Icon(Icons.check_rounded, size: 19),
             label: const Text(
               'Done',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-              ),
+              style: TextStyle(fontWeight: FontWeight.w900),
             ),
           ),
         ],
@@ -4627,41 +3334,26 @@ class _KorlixAgentMemoryManagerSheetState
 
   @override
   Widget build(BuildContext context) {
-    final screenSize =
-        MediaQuery.sizeOf(context);
+    final screenSize = MediaQuery.sizeOf(context);
 
-    final bottomInset =
-        MediaQuery.viewInsetsOf(
-      context,
-    ).bottom;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
-    final accent =
-        korlixLiveConvoAgentAccent(
-      widget.agent.accentHex,
-    );
+    final accent = korlixLiveConvoAgentAccent(widget.agent.accentHex);
 
     return Material(
       color: Colors.transparent,
       child: Align(
-        alignment:
-            Alignment.bottomCenter,
+        alignment: Alignment.bottomCenter,
         child: Container(
           width: double.infinity,
           constraints: BoxConstraints(
             maxWidth: 860,
-            maxHeight:
-                screenSize.height * 0.94,
+            maxHeight: screenSize.height * 0.94,
           ),
-          margin: const EdgeInsets.only(
-            top: 24,
-          ),
-          decoration:
-              const BoxDecoration(
+          margin: const EdgeInsets.only(top: 24),
+          decoration: const BoxDecoration(
             color: Color(0xFF041019),
-            borderRadius:
-                BorderRadius.vertical(
-              top: Radius.circular(28),
-            ),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
             boxShadow: <BoxShadow>[
               BoxShadow(
                 color: Color(0x66000000),
@@ -4670,82 +3362,42 @@ class _KorlixAgentMemoryManagerSheetState
               ),
             ],
           ),
-          clipBehavior:
-              Clip.antiAlias,
+          clipBehavior: Clip.antiAlias,
           child: SafeArea(
             top: false,
             child: Column(
               children: [
-                _buildMemoryHeader(
-                  accent,
-                ),
+                _buildMemoryHeader(accent),
                 if (_busy)
                   const LinearProgressIndicator(
                     minHeight: 3,
-                    color:
-                        Color(0xFF69D9E8),
-                    backgroundColor:
-                        Color(0xFF123A47),
+                    color: Color(0xFF69D9E8),
+                    backgroundColor: Color(0xFF123A47),
                   ),
                 Expanded(
                   child: ListView(
                     keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior
-                            .onDrag,
-                    padding: EdgeInsets.only(
-                      bottom:
-                          18 + bottomInset,
-                    ),
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: EdgeInsets.only(bottom: 18 + bottomInset),
                     children: [
                       _buildMemoryStatusNotice(),
                       _buildMemoryErrorBanner(),
-                      _buildMemoryActions(
-                        accent,
-                      ),
-                      _buildMemoryCollection(
-                        accent,
-                      ),
+                      _buildMemoryActions(accent),
+                      _buildMemoryCollection(accent),
                       Container(
-                        margin:
-                            const EdgeInsets
-                                .fromLTRB(
-                          16,
-                          4,
-                          16,
-                          16,
-                        ),
-                        padding:
-                            const EdgeInsets
-                                .all(13),
-                        decoration:
-                            BoxDecoration(
-                          borderRadius:
-                              BorderRadius
-                                  .circular(16),
-                          color:
-                              const Color(
-                            0xFF081B25,
-                          ),
-                          border:
-                              Border.all(
-                            color:
-                                const Color(
-                              0xFF244D5C,
-                            ),
-                          ),
+                        margin: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                        padding: const EdgeInsets.all(13),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          color: const Color(0xFF081B25),
+                          border: Border.all(color: const Color(0xFF244D5C)),
                         ),
                         child: const Row(
-                          crossAxisAlignment:
-                              CrossAxisAlignment
-                                  .start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Icon(
-                              Icons
-                                  .verified_user_outlined,
-                              color:
-                                  Color(
-                                0xFF8CDDE8,
-                              ),
+                              Icons.verified_user_outlined,
+                              color: Color(0xFF8CDDE8),
                               size: 21,
                             ),
                             SizedBox(width: 9),
@@ -4759,10 +3411,7 @@ class _KorlixAgentMemoryManagerSheetState
                                 'tool, or confirmation '
                                 'rules.',
                                 style: TextStyle(
-                                  color:
-                                      Color(
-                                    0xFFA9C6CF,
-                                  ),
+                                  color: Color(0xFFA9C6CF),
                                   height: 1.4,
                                   fontSize: 12.5,
                                 ),
@@ -4774,9 +3423,7 @@ class _KorlixAgentMemoryManagerSheetState
                     ],
                   ),
                 ),
-                _buildMemoryPrivacyFooter(
-                  accent,
-                ),
+                _buildMemoryPrivacyFooter(accent),
               ],
             ),
           ),
@@ -4786,8 +3433,7 @@ class _KorlixAgentMemoryManagerSheetState
   }
 }
 
-const List<String> _korlixAgentMemoryKindIds =
-    <String>[
+const List<String> _korlixAgentMemoryKindIds = <String>[
   'preference',
   'fact',
   'goal',
@@ -4797,31 +3443,24 @@ const List<String> _korlixAgentMemoryKindIds =
   'vocabulary',
 ];
 
-class _KorlixAgentMemoryDraftSheet
-    extends StatefulWidget {
-  const _KorlixAgentMemoryDraftSheet({
-    required this.agent,
-  });
+class _KorlixAgentMemoryDraftSheet extends StatefulWidget {
+  const _KorlixAgentMemoryDraftSheet({required this.agent});
 
   final KorlixLiveConvoAgent agent;
 
   @override
-  State<_KorlixAgentMemoryDraftSheet>
-  createState() {
+  State<_KorlixAgentMemoryDraftSheet> createState() {
     return _KorlixAgentMemoryDraftSheetState();
   }
 }
 
 class _KorlixAgentMemoryDraftSheetState
     extends State<_KorlixAgentMemoryDraftSheet> {
-  final TextEditingController _labelController =
-      TextEditingController();
+  final TextEditingController _labelController = TextEditingController();
 
-  final TextEditingController _contentController =
-      TextEditingController();
+  final TextEditingController _contentController = TextEditingController();
 
-  final TextEditingController _tagsController =
-      TextEditingController();
+  final TextEditingController _tagsController = TextEditingController();
 
   String _kind = 'preference';
 
@@ -4841,9 +3480,7 @@ class _KorlixAgentMemoryDraftSheetState
     super.dispose();
   }
 
-  String _draftKindLabel(
-    String value,
-  ) {
+  String _draftKindLabel(String value) {
     switch (value.trim().toLowerCase()) {
       case 'fact':
         return 'Fact';
@@ -4869,9 +3506,7 @@ class _KorlixAgentMemoryDraftSheetState
     }
   }
 
-  String _draftKindDescription(
-    String value,
-  ) {
+  String _draftKindDescription(String value) {
     switch (value.trim().toLowerCase()) {
       case 'fact':
         return 'A confirmed name, detail, date, value, or other fact.';
@@ -4897,9 +3532,7 @@ class _KorlixAgentMemoryDraftSheetState
     }
   }
 
-  IconData _draftKindIcon(
-    String value,
-  ) {
+  IconData _draftKindIcon(String value) {
     switch (value.trim().toLowerCase()) {
       case 'fact':
         return Icons.fact_check_rounded;
@@ -4925,9 +3558,7 @@ class _KorlixAgentMemoryDraftSheetState
     }
   }
 
-  Color _draftKindColor(
-    String value,
-  ) {
+  Color _draftKindColor(String value) {
     switch (value.trim().toLowerCase()) {
       case 'fact':
         return const Color(0xFF69D9E8);
@@ -4958,15 +3589,9 @@ class _KorlixAgentMemoryDraftSheetState
     final seen = <String>{};
 
     final candidates = _tagsController.text
-        .split(
-          RegExp(r'[\n,;]+'),
-        )
-        .map(
-          (tag) => tag.trim(),
-        )
-        .where(
-          (tag) => tag.isNotEmpty,
-        );
+        .split(RegExp(r'[\n,;]+'))
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty);
 
     for (final candidate in candidates) {
       final clean = candidate.length <= 48
@@ -4986,9 +3611,7 @@ class _KorlixAgentMemoryDraftSheetState
       }
     }
 
-    return List<String>.unmodifiable(
-      result,
-    );
+    return List<String>.unmodifiable(result);
   }
 
   void _clearDraftValidation() {
@@ -5002,8 +3625,7 @@ class _KorlixAgentMemoryDraftSheetState
   }
 
   void _submitMemoryDraft() {
-    final content =
-        _contentController.text.trim();
+    final content = _contentController.text.trim();
 
     if (content.isEmpty) {
       setState(() {
@@ -5032,16 +3654,11 @@ class _KorlixAgentMemoryDraftSheetState
         content: content,
         confirmed: true,
         kind: _kind,
-        label:
-            _labelController.text.trim(),
-        tags:
-            _normalizedDraftTags(),
-        importance:
-            _importance,
-        sensitive:
-            _sensitive,
-        source:
-            'agent_hub_memory',
+        label: _labelController.text.trim(),
+        tags: _normalizedDraftTags(),
+        importance: _importance,
+        sensitive: _sensitive,
+        source: 'agent_hub_memory',
       ),
     );
   }
@@ -5057,103 +3674,53 @@ class _KorlixAgentMemoryDraftSheetState
       helperText: helper,
       alignLabelWithHint: true,
       filled: true,
-      fillColor:
-          const Color(0xFF071722),
-      labelStyle:
-          const TextStyle(
-        color:
-            Color(0xFF8CDDE8),
-        fontWeight:
-            FontWeight.w800,
+      fillColor: const Color(0xFF071722),
+      labelStyle: const TextStyle(
+        color: Color(0xFF8CDDE8),
+        fontWeight: FontWeight.w800,
       ),
-      hintStyle:
-          const TextStyle(
-        color:
-            Color(0xFF718A96),
+      hintStyle: const TextStyle(color: Color(0xFF718A96)),
+      helperStyle: const TextStyle(color: Color(0xFF8FA8B1), height: 1.3),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0xFF244D5C)),
       ),
-      helperStyle:
-          const TextStyle(
-        color:
-            Color(0xFF8FA8B1),
-        height: 1.3,
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0xFF69D9E8), width: 1.6),
       ),
-      enabledBorder:
-          OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(16),
-        borderSide:
-            const BorderSide(
-          color:
-              Color(0xFF244D5C),
-        ),
-      ),
-      focusedBorder:
-          OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(16),
-        borderSide:
-            const BorderSide(
-          color:
-              Color(0xFF69D9E8),
-          width: 1.6,
-        ),
-      ),
-      errorBorder:
-          OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(16),
-        borderSide:
-            const BorderSide(
-          color:
-              Color(0xFFFF7185),
-        ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0xFFFF7185)),
       ),
     );
   }
 
-  Widget _buildMemoryDraftHeader(
-    Color accent,
-  ) {
+  Widget _buildMemoryDraftHeader(Color accent) {
     return Row(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            borderRadius:
-                BorderRadius.circular(16),
-            color:
-                accent.withValues(
-              alpha: 0.14,
-            ),
-            border: Border.all(
-              color:
-                  accent.withValues(
-                alpha: 0.72,
-              ),
-            ),
+            borderRadius: BorderRadius.circular(16),
+            color: accent.withValues(alpha: 0.14),
+            border: Border.all(color: accent.withValues(alpha: 0.72)),
           ),
-          child: Icon(
-            Icons.add_task_rounded,
-            color: accent,
-          ),
+          child: Icon(Icons.add_task_rounded, color: accent),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
                 'ADD CONFIRMED MEMORY',
                 style: TextStyle(
-                  color:
-                      Color(0xFFF0F7F8),
+                  color: Color(0xFFF0F7F8),
                   fontSize: 19,
-                  fontWeight:
-                      FontWeight.w900,
+                  fontWeight: FontWeight.w900,
                   letterSpacing: 0.4,
                 ),
               ),
@@ -5161,11 +3728,7 @@ class _KorlixAgentMemoryDraftSheetState
               Text(
                 'Save a private record for '
                 '${widget.agent.name}.',
-                style: const TextStyle(
-                  color:
-                      Color(0xFFA9C6CF),
-                  height: 1.35,
-                ),
+                style: const TextStyle(color: Color(0xFFA9C6CF), height: 1.35),
               ),
             ],
           ),
@@ -5175,25 +3738,18 @@ class _KorlixAgentMemoryDraftSheetState
           onPressed: () {
             Navigator.of(context).pop();
           },
-          icon: const Icon(
-            Icons.close_rounded,
-          ),
-          color:
-              const Color(0xFFC7D7DC),
+          icon: const Icon(Icons.close_rounded),
+          color: const Color(0xFFC7D7DC),
         ),
       ],
     );
   }
 
-  Widget _buildMemoryKindSelector(
-    Color accent,
-  ) {
-    final selectedColor =
-        _draftKindColor(_kind);
+  Widget _buildMemoryKindSelector(Color accent) {
+    final selectedColor = _draftKindColor(_kind);
 
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'MEMORY TYPE',
@@ -5209,15 +3765,12 @@ class _KorlixAgentMemoryDraftSheetState
           spacing: 8,
           runSpacing: 8,
           children: [
-            for (final kind
-                in _korlixAgentMemoryKindIds)
+            for (final kind in _korlixAgentMemoryKindIds)
               Builder(
                 builder: (context) {
-                  final selected =
-                      kind == _kind;
+                  final selected = kind == _kind;
 
-                  final kindColor =
-                      _draftKindColor(kind);
+                  final kindColor = _draftKindColor(kind);
 
                   return ChoiceChip(
                     selected: selected,
@@ -5231,47 +3784,22 @@ class _KorlixAgentMemoryDraftSheetState
                     avatar: Icon(
                       _draftKindIcon(kind),
                       size: 18,
-                      color: selected
-                          ? kindColor
-                          : const Color(
-                              0xFF8FA8B1,
-                            ),
+                      color: selected ? kindColor : const Color(0xFF8FA8B1),
                     ),
-                    label: Text(
-                      _draftKindLabel(kind),
-                    ),
+                    label: Text(_draftKindLabel(kind)),
                     labelStyle: TextStyle(
                       color: selected
-                          ? const Color(
-                              0xFFF0F7F8,
-                            )
-                          : const Color(
-                              0xFFB1C4CA,
-                            ),
-                      fontWeight:
-                          FontWeight.w800,
+                          ? const Color(0xFFF0F7F8)
+                          : const Color(0xFFB1C4CA),
+                      fontWeight: FontWeight.w800,
                     ),
-                    selectedColor:
-                        kindColor.withValues(
-                      alpha: 0.20,
-                    ),
-                    backgroundColor:
-                        const Color(
-                      0xFF071722,
-                    ),
+                    selectedColor: kindColor.withValues(alpha: 0.20),
+                    backgroundColor: const Color(0xFF071722),
                     side: BorderSide(
-                      color: selected
-                          ? kindColor
-                          : const Color(
-                              0xFF244D5C,
-                            ),
+                      color: selected ? kindColor : const Color(0xFF244D5C),
                     ),
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(
-                        999,
-                      ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
                     ),
                   );
                 },
@@ -5283,37 +3811,20 @@ class _KorlixAgentMemoryDraftSheetState
           width: double.infinity,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            borderRadius:
-                BorderRadius.circular(15),
-            color:
-                selectedColor.withValues(
-              alpha: 0.10,
-            ),
-            border: Border.all(
-              color:
-                  selectedColor.withValues(
-                alpha: 0.46,
-              ),
-            ),
+            borderRadius: BorderRadius.circular(15),
+            color: selectedColor.withValues(alpha: 0.10),
+            border: Border.all(color: selectedColor.withValues(alpha: 0.46)),
           ),
           child: Row(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                _draftKindIcon(_kind),
-                color: selectedColor,
-                size: 20,
-              ),
+              Icon(_draftKindIcon(_kind), color: selectedColor, size: 20),
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
-                  _draftKindDescription(
-                    _kind,
-                  ),
+                  _draftKindDescription(_kind),
                   style: const TextStyle(
-                    color:
-                        Color(0xFFD8E7EA),
+                    color: Color(0xFFD8E7EA),
                     height: 1.4,
                     fontSize: 12.5,
                   ),
@@ -5326,9 +3837,7 @@ class _KorlixAgentMemoryDraftSheetState
     );
   }
 
-  String _importanceDescription(
-    int value,
-  ) {
+  String _importanceDescription(int value) {
     switch (value) {
       case 1:
         return 'Low priority. Use only when directly relevant.';
@@ -5348,32 +3857,23 @@ class _KorlixAgentMemoryDraftSheetState
     }
   }
 
-  Widget _buildImportanceSelector(
-    Color accent,
-  ) {
+  Widget _buildImportanceSelector(Color accent) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(17),
-        color:
-            const Color(0xFF071722),
-        border: Border.all(
-          color:
-              const Color(0xFF244D5C),
-        ),
+        borderRadius: BorderRadius.circular(17),
+        color: const Color(0xFF071722),
+        border: Border.all(color: const Color(0xFF244D5C)),
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               const Icon(
                 Icons.star_rounded,
-                color:
-                    Color(0xFFF2C14E),
+                color: Color(0xFFF2C14E),
                 size: 21,
               ),
               const SizedBox(width: 8),
@@ -5381,20 +3881,14 @@ class _KorlixAgentMemoryDraftSheetState
                 child: Text(
                   'Importance',
                   style: TextStyle(
-                    color:
-                        Color(0xFFF0F7F8),
-                    fontWeight:
-                        FontWeight.w900,
+                    color: Color(0xFFF0F7F8),
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
               Text(
                 '$_importance / 5',
-                style: TextStyle(
-                  color: accent,
-                  fontWeight:
-                      FontWeight.w900,
-                ),
+                style: TextStyle(color: accent, fontWeight: FontWeight.w900),
               ),
             ],
           ),
@@ -5403,14 +3897,9 @@ class _KorlixAgentMemoryDraftSheetState
             spacing: 8,
             runSpacing: 8,
             children: [
-              for (
-                var level = 1;
-                level <= 5;
-                level += 1
-              )
+              for (var level = 1; level <= 5; level += 1)
                 ChoiceChip(
-                  selected:
-                      _importance == level,
+                  selected: _importance == level,
                   showCheckmark: false,
                   onSelected: (_) {
                     setState(() {
@@ -5421,59 +3910,33 @@ class _KorlixAgentMemoryDraftSheetState
                   avatar: Icon(
                     level <= _importance
                         ? Icons.star_rounded
-                        : Icons
-                            .star_border_rounded,
+                        : Icons.star_border_rounded,
                     size: 17,
-                    color:
-                        const Color(
-                      0xFFF2C14E,
-                    ),
+                    color: const Color(0xFFF2C14E),
                   ),
-                  label: Text(
-                    '$level',
-                  ),
+                  label: Text('$level'),
                   labelStyle: const TextStyle(
-                    color:
-                        Color(0xFFF0F7F8),
-                    fontWeight:
-                        FontWeight.w900,
+                    color: Color(0xFFF0F7F8),
+                    fontWeight: FontWeight.w900,
                   ),
-                  selectedColor:
-                      const Color(
-                    0xFF3A3218,
-                  ),
-                  backgroundColor:
-                      const Color(
-                    0xFF0A1B24,
-                  ),
+                  selectedColor: const Color(0xFF3A3218),
+                  backgroundColor: const Color(0xFF0A1B24),
                   side: BorderSide(
-                    color:
-                        _importance == level
-                        ? const Color(
-                            0xFFF2C14E,
-                          )
-                        : const Color(
-                            0xFF244D5C,
-                          ),
+                    color: _importance == level
+                        ? const Color(0xFFF2C14E)
+                        : const Color(0xFF244D5C),
                   ),
-                  shape:
-                      RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(
-                      13,
-                    ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(13),
                   ),
                 ),
             ],
           ),
           const SizedBox(height: 10),
           Text(
-            _importanceDescription(
-              _importance,
-            ),
+            _importanceDescription(_importance),
             style: const TextStyle(
-              color:
-                  Color(0xFFA9C6CF),
+              color: Color(0xFFA9C6CF),
               height: 1.35,
               fontSize: 12.5,
             ),
@@ -5483,67 +3946,38 @@ class _KorlixAgentMemoryDraftSheetState
     );
   }
 
-  Widget _buildSensitiveMemoryControl(
-    Color accent,
-  ) {
+  Widget _buildSensitiveMemoryControl(Color accent) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(
-        13,
-        10,
-        10,
-        10,
-      ),
+      padding: const EdgeInsets.fromLTRB(13, 10, 10, 10),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(17),
-        color: _sensitive
-            ? const Color(0xFF302217)
-            : const Color(0xFF071722),
+        borderRadius: BorderRadius.circular(17),
+        color: _sensitive ? const Color(0xFF302217) : const Color(0xFF071722),
         border: Border.all(
-          color: _sensitive
-              ? const Color(
-                  0xFFFFB86B,
-                )
-              : const Color(
-                  0xFF244D5C,
-                ),
+          color: _sensitive ? const Color(0xFFFFB86B) : const Color(0xFF244D5C),
         ),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding:
-                const EdgeInsets.only(
-              top: 3,
-            ),
+            padding: const EdgeInsets.only(top: 3),
             child: Icon(
               _sensitive
-                  ? Icons
-                      .privacy_tip_rounded
-                  : Icons
-                      .privacy_tip_outlined,
-              color: _sensitive
-                  ? const Color(
-                      0xFFFFB86B,
-                    )
-                  : accent,
+                  ? Icons.privacy_tip_rounded
+                  : Icons.privacy_tip_outlined,
+              color: _sensitive ? const Color(0xFFFFB86B) : accent,
             ),
           ),
           const SizedBox(width: 10),
           const Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Sensitive memory',
                   style: TextStyle(
-                    color:
-                        Color(0xFFF0F7F8),
-                    fontWeight:
-                        FontWeight.w900,
+                    color: Color(0xFFF0F7F8),
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
                 SizedBox(height: 4),
@@ -5555,8 +3989,7 @@ class _KorlixAgentMemoryDraftSheetState
                   'but does not replace, '
                   'account access controls.',
                   style: TextStyle(
-                    color:
-                        Color(0xFFA9C6CF),
+                    color: Color(0xFFA9C6CF),
                     height: 1.35,
                     fontSize: 12.5,
                   ),
@@ -5573,66 +4006,42 @@ class _KorlixAgentMemoryDraftSheetState
                 _validationMessage = null;
               });
             },
-            activeThumbColor:
-                const Color(
-              0xFFFFB86B,
-            ),
-            activeTrackColor:
-                const Color(
-              0x665B4026,
-            ),
+            activeThumbColor: const Color(0xFFFFB86B),
+            activeTrackColor: const Color(0x665B4026),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildMemoryConsentControl(
-    Color accent,
-  ) {
+  Widget _buildMemoryConsentControl(Color accent) {
     return Container(
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(17),
-        color:
-            const Color(0xFF071722),
+        borderRadius: BorderRadius.circular(17),
+        color: const Color(0xFF071722),
         border: Border.all(
-          color: _confirmed
-              ? accent
-              : const Color(
-                  0xFF244D5C,
-                ),
+          color: _confirmed ? accent : const Color(0xFF244D5C),
         ),
       ),
       child: CheckboxListTile(
         value: _confirmed,
         onChanged: (value) {
           setState(() {
-            _confirmed =
-                value == true;
+            _confirmed = value == true;
 
-            _validationMessage =
-                null;
+            _validationMessage = null;
           });
         },
-        controlAffinity:
-            ListTileControlAffinity.leading,
+        controlAffinity: ListTileControlAffinity.leading,
         activeColor: accent,
-        checkColor:
-            const Color(0xFF03110E),
-        contentPadding:
-            const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 4,
-        ),
+        checkColor: const Color(0xFF03110E),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         title: Text(
           'Save in ${widget.agent.name} '
           'long-term memory',
           style: const TextStyle(
-            color:
-                Color(0xFFF0F7F8),
-            fontWeight:
-                FontWeight.w900,
+            color: Color(0xFFF0F7F8),
+            fontWeight: FontWeight.w900,
           ),
         ),
         subtitle: const Text(
@@ -5641,19 +4050,14 @@ class _KorlixAgentMemoryDraftSheetState
           'across future sessions until I '
           'delete it, clear the agent’s '
           'memory, or reset the agent.',
-          style: TextStyle(
-            color:
-                Color(0xFFA9C6CF),
-            height: 1.4,
-          ),
+          style: TextStyle(color: Color(0xFFA9C6CF), height: 1.4),
         ),
       ),
     );
   }
 
   Widget _buildMemoryDraftValidation() {
-    final message =
-        _validationMessage?.trim() ?? '';
+    final message = _validationMessage?.trim() ?? '';
 
     if (message.isEmpty) {
       return const SizedBox.shrink();
@@ -5663,23 +4067,16 @@ class _KorlixAgentMemoryDraftSheetState
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(14),
-        color:
-            const Color(0xFF351923),
-        border: Border.all(
-          color:
-              const Color(0xFFFF7185),
-        ),
+        borderRadius: BorderRadius.circular(14),
+        color: const Color(0xFF351923),
+        border: Border.all(color: const Color(0xFFFF7185)),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(
             Icons.error_outline_rounded,
-            color:
-                Color(0xFFFF8B9B),
+            color: Color(0xFFFF8B9B),
             size: 21,
           ),
           const SizedBox(width: 9),
@@ -5687,10 +4084,8 @@ class _KorlixAgentMemoryDraftSheetState
             child: Text(
               message,
               style: const TextStyle(
-                color:
-                    Color(0xFFFFD8DE),
-                fontWeight:
-                    FontWeight.w700,
+                color: Color(0xFFFFD8DE),
+                fontWeight: FontWeight.w700,
                 height: 1.35,
               ),
             ),
@@ -5700,32 +4095,18 @@ class _KorlixAgentMemoryDraftSheetState
     );
   }
 
-  Widget _buildMemoryDraftPrivacyNotice(
-    Color accent,
-  ) {
+  Widget _buildMemoryDraftPrivacyNotice(Color accent) {
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(16),
-        color:
-            const Color(0xFF081B25),
-        border: Border.all(
-          color:
-              accent.withValues(
-            alpha: 0.48,
-          ),
-        ),
+        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFF081B25),
+        border: Border.all(color: accent.withValues(alpha: 0.48)),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.lock_outline_rounded,
-            color: accent,
-            size: 21,
-          ),
+          Icon(Icons.lock_outline_rounded, color: accent, size: 21),
           const SizedBox(width: 9),
           Expanded(
             child: Text(
@@ -5737,8 +4118,7 @@ class _KorlixAgentMemoryDraftSheetState
               'authorization, or confirmation '
               'rules.',
               style: const TextStyle(
-                color:
-                    Color(0xFFA9C6CF),
+                color: Color(0xFFA9C6CF),
                 height: 1.4,
                 fontSize: 12.5,
               ),
@@ -5749,108 +4129,70 @@ class _KorlixAgentMemoryDraftSheetState
     );
   }
 
-  Widget _buildDraftTagChip(
-    String tag,
-  ) {
+  Widget _buildDraftTagChip(String tag) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 4,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(999),
-        color:
-            const Color(0xFF102B38),
-        border: Border.all(
-          color:
-              const Color(0xFF28596A),
-        ),
+        borderRadius: BorderRadius.circular(999),
+        color: const Color(0xFF102B38),
+        border: Border.all(color: const Color(0xFF28596A)),
       ),
       child: Text(
         tag,
         style: const TextStyle(
-          color:
-              Color(0xFFB7D7DE),
+          color: Color(0xFFB7D7DE),
           fontSize: 11,
-          fontWeight:
-              FontWeight.w700,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
   }
 
   Widget _buildDraftTagPreview() {
-    return ValueListenableBuilder<
-        TextEditingValue>(
-      valueListenable:
-          _tagsController,
-      builder: (
-        context,
-        value,
-        child,
-      ) {
-        final tags =
-            _normalizedDraftTags();
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: _tagsController,
+      builder: (context, value, child) {
+        final tags = _normalizedDraftTags();
 
         if (tags.isEmpty) {
           return const Text(
             'No tags added. Tags are optional.',
-            style: TextStyle(
-              color:
-                  Color(0xFF8299A2),
-              fontSize: 12,
-            ),
+            style: TextStyle(color: Color(0xFF8299A2), fontSize: 12),
           );
         }
 
         return Wrap(
           spacing: 7,
           runSpacing: 7,
-          children: [
-            for (final tag in tags)
-              _buildDraftTagChip(tag),
-          ],
+          children: [for (final tag in tags) _buildDraftTagChip(tag)],
         );
       },
     );
   }
 
-  Widget _buildMemoryDraftFields(
-    Color accent,
-  ) {
+  Widget _buildMemoryDraftFields(Color accent) {
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'MEMORY DETAILS',
           style: TextStyle(
             color: accent,
-            fontWeight:
-                FontWeight.w900,
+            fontWeight: FontWeight.w900,
             letterSpacing: 0.6,
             fontSize: 12,
           ),
         ),
         const SizedBox(height: 8),
         TextField(
-          controller:
-              _labelController,
+          controller: _labelController,
           maxLength: 120,
-          textInputAction:
-              TextInputAction.next,
-          textCapitalization:
-              TextCapitalization.sentences,
-          style: const TextStyle(
-            color:
-                Color(0xFFF0F7F8),
-          ),
-          decoration:
-              _memoryDraftDecoration(
+          textInputAction: TextInputAction.next,
+          textCapitalization: TextCapitalization.sentences,
+          style: const TextStyle(color: Color(0xFFF0F7F8)),
+          decoration: _memoryDraftDecoration(
             label: 'Short label',
-            hint:
-                'Example: Report style',
+            hint: 'Example: Report style',
             helper:
                 'Optional. Use a clear name '
                 'that will help you recognize '
@@ -5862,24 +4204,15 @@ class _KorlixAgentMemoryDraftSheetState
         ),
         const SizedBox(height: 12),
         TextField(
-          controller:
-              _contentController,
+          controller: _contentController,
           minLines: 6,
           maxLines: 14,
           maxLength: 4000,
-          keyboardType:
-              TextInputType.multiline,
-          textInputAction:
-              TextInputAction.newline,
-          textCapitalization:
-              TextCapitalization.sentences,
-          style: const TextStyle(
-            color:
-                Color(0xFFF0F7F8),
-            height: 1.42,
-          ),
-          decoration:
-              _memoryDraftDecoration(
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          textCapitalization: TextCapitalization.sentences,
+          style: const TextStyle(color: Color(0xFFF0F7F8), height: 1.42),
+          decoration: _memoryDraftDecoration(
             label: 'What should this agent remember?',
             hint:
                 'Example: Use a one-page '
@@ -5896,20 +4229,13 @@ class _KorlixAgentMemoryDraftSheetState
         ),
         const SizedBox(height: 12),
         TextField(
-          controller:
-              _tagsController,
+          controller: _tagsController,
           maxLength: 600,
-          textInputAction:
-              TextInputAction.done,
-          style: const TextStyle(
-            color:
-                Color(0xFFF0F7F8),
-          ),
-          decoration:
-              _memoryDraftDecoration(
+          textInputAction: TextInputAction.done,
+          style: const TextStyle(color: Color(0xFFF0F7F8)),
+          decoration: _memoryDraftDecoration(
             label: 'Tags',
-            hint:
-                'reports, executive, audit',
+            hint: 'reports, executive, audit',
             helper:
                 'Optional. Separate up to '
                 '12 tags with commas, '
@@ -5925,9 +4251,7 @@ class _KorlixAgentMemoryDraftSheetState
     );
   }
 
-  Widget _buildMemoryDraftActions(
-    Color accent,
-  ) {
+  Widget _buildMemoryDraftActions(Color accent) {
     return Row(
       children: [
         Expanded(
@@ -5935,42 +4259,26 @@ class _KorlixAgentMemoryDraftSheetState
             onPressed: () {
               Navigator.of(context).pop();
             },
-            style:
-                OutlinedButton.styleFrom(
-              padding:
-                  const EdgeInsets.symmetric(
-                vertical: 15,
-              ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 15),
             ),
-            child:
-                const Text('Cancel'),
+            child: const Text('Cancel'),
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
           flex: 2,
           child: FilledButton.icon(
-            onPressed:
-                _submitMemoryDraft,
-            style:
-                FilledButton.styleFrom(
+            onPressed: _submitMemoryDraft,
+            style: FilledButton.styleFrom(
               backgroundColor: accent,
-              foregroundColor:
-                  const Color(0xFF03110E),
-              padding:
-                  const EdgeInsets.symmetric(
-                vertical: 15,
-              ),
+              foregroundColor: const Color(0xFF03110E),
+              padding: const EdgeInsets.symmetric(vertical: 15),
             ),
-            icon: const Icon(
-              Icons.save_rounded,
-            ),
+            icon: const Icon(Icons.save_rounded),
             label: const Text(
               'Save Confirmed Memory',
-              style: TextStyle(
-                fontWeight:
-                    FontWeight.w900,
-              ),
+              style: TextStyle(fontWeight: FontWeight.w900),
             ),
           ),
         ),
@@ -5980,103 +4288,58 @@ class _KorlixAgentMemoryDraftSheetState
 
   @override
   Widget build(BuildContext context) {
-    final screenSize =
-        MediaQuery.sizeOf(context);
+    final screenSize = MediaQuery.sizeOf(context);
 
-    final bottomInset =
-        MediaQuery.viewInsetsOf(
-      context,
-    ).bottom;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
-    final accent =
-        korlixLiveConvoAgentAccent(
-      widget.agent.accentHex,
-    );
+    final accent = korlixLiveConvoAgentAccent(widget.agent.accentHex);
 
     return Material(
       color: Colors.transparent,
       child: Align(
-        alignment:
-            Alignment.bottomCenter,
+        alignment: Alignment.bottomCenter,
         child: Container(
           width: double.infinity,
           constraints: BoxConstraints(
             maxWidth: 760,
-            maxHeight:
-                screenSize.height * 0.94,
+            maxHeight: screenSize.height * 0.94,
           ),
-          margin:
-              const EdgeInsets.only(
-            top: 24,
-          ),
-          decoration:
-              const BoxDecoration(
-            color:
-                Color(0xFF041019),
-            borderRadius:
-                BorderRadius.vertical(
-              top:
-                  Radius.circular(28),
-            ),
+          margin: const EdgeInsets.only(top: 24),
+          decoration: const BoxDecoration(
+            color: Color(0xFF041019),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color:
-                    Color(0x66000000),
+                color: Color(0x66000000),
                 blurRadius: 34,
-                offset:
-                    Offset(0, -8),
+                offset: Offset(0, -8),
               ),
             ],
           ),
-          clipBehavior:
-              Clip.antiAlias,
+          clipBehavior: Clip.antiAlias,
           child: SafeArea(
             top: false,
             child: ListView(
-              keyboardDismissBehavior:
-                  ScrollViewKeyboardDismissBehavior
-                      .onDrag,
-              padding:
-                  EdgeInsets.fromLTRB(
-                18,
-                14,
-                18,
-                26 + bottomInset,
-              ),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: EdgeInsets.fromLTRB(18, 14, 18, 26 + bottomInset),
               children: [
-                _buildMemoryDraftHeader(
-                  accent,
-                ),
+                _buildMemoryDraftHeader(accent),
                 const SizedBox(height: 14),
-                _buildMemoryDraftPrivacyNotice(
-                  accent,
-                ),
+                _buildMemoryDraftPrivacyNotice(accent),
                 const SizedBox(height: 18),
-                _buildMemoryKindSelector(
-                  accent,
-                ),
+                _buildMemoryKindSelector(accent),
                 const SizedBox(height: 20),
-                _buildMemoryDraftFields(
-                  accent,
-                ),
+                _buildMemoryDraftFields(accent),
                 const SizedBox(height: 20),
-                _buildImportanceSelector(
-                  accent,
-                ),
+                _buildImportanceSelector(accent),
                 const SizedBox(height: 14),
-                _buildSensitiveMemoryControl(
-                  accent,
-                ),
+                _buildSensitiveMemoryControl(accent),
                 const SizedBox(height: 14),
-                _buildMemoryConsentControl(
-                  accent,
-                ),
+                _buildMemoryConsentControl(accent),
                 const SizedBox(height: 12),
                 _buildMemoryDraftValidation(),
                 const SizedBox(height: 18),
-                _buildMemoryDraftActions(
-                  accent,
-                ),
+                _buildMemoryDraftActions(accent),
               ],
             ),
           ),
@@ -6086,8 +4349,7 @@ class _KorlixAgentMemoryDraftSheetState
   }
 }
 
-const List<String> _korlixCustomAgentIconNames =
-    <String>[
+const List<String> _korlixCustomAgentIconNames = <String>[
   'smart_toy',
   'auto_awesome',
   'support_agent',
@@ -6100,8 +4362,7 @@ const List<String> _korlixCustomAgentIconNames =
   'psychology',
 ];
 
-const List<String> _korlixCustomAgentAccentHexes =
-    <String>[
+const List<String> _korlixCustomAgentAccentHexes = <String>[
   '21D4F4',
   '62D6A7',
   'F2C14E',
@@ -6112,33 +4373,26 @@ const List<String> _korlixCustomAgentAccentHexes =
   '69D9E8',
 ];
 
-class _KorlixCustomAgentCreatorSheet
-    extends StatefulWidget {
+class _KorlixCustomAgentCreatorSheet extends StatefulWidget {
   const _KorlixCustomAgentCreatorSheet();
 
   @override
-  State<_KorlixCustomAgentCreatorSheet>
-  createState() {
+  State<_KorlixCustomAgentCreatorSheet> createState() {
     return _KorlixCustomAgentCreatorSheetState();
   }
 }
 
 class _KorlixCustomAgentCreatorSheetState
     extends State<_KorlixCustomAgentCreatorSheet> {
-  final TextEditingController _nameController =
-      TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
 
-  final TextEditingController _descriptionController =
-      TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
 
-  final TextEditingController _missionController =
-      TextEditingController();
+  final TextEditingController _missionController = TextEditingController();
 
-  final TextEditingController _trainingController =
-      TextEditingController();
+  final TextEditingController _trainingController = TextEditingController();
 
-  final Set<String> _selectedTools =
-      <String>{
+  final Set<String> _selectedTools = <String>{
     'general_chat',
     'memory',
     'agent_training',
@@ -6163,71 +4417,47 @@ class _KorlixCustomAgentCreatorSheetState
   }
 
   Color get _customAccent {
-    return korlixLiveConvoAgentAccent(
-      _accentHex,
-    );
+    return korlixLiveConvoAgentAccent(_accentHex);
   }
 
-  bool _isRequiredCustomTool(
-    String toolId,
-  ) {
-    if (toolId == 'general_chat' ||
-        toolId == 'agent_training') {
+  bool _isRequiredCustomTool(String toolId) {
+    if (toolId == 'general_chat' || toolId == 'agent_training') {
       return true;
     }
 
-    return toolId == 'memory' &&
-        _memoryEnabled;
+    return toolId == 'memory' && _memoryEnabled;
   }
 
-  void _toggleCustomTool(
-    String toolId,
-    bool selected,
-  ) {
+  void _toggleCustomTool(String toolId, bool selected) {
     if (toolId == 'memory') {
-      _toggleCustomMemory(
-        selected,
-      );
+      _toggleCustomMemory(selected);
 
       return;
     }
 
-    if (!selected &&
-        _isRequiredCustomTool(
-          toolId,
-        )) {
+    if (!selected && _isRequiredCustomTool(toolId)) {
       return;
     }
 
     setState(() {
       if (selected) {
-        _selectedTools.add(
-          toolId,
-        );
+        _selectedTools.add(toolId);
       } else {
-        _selectedTools.remove(
-          toolId,
-        );
+        _selectedTools.remove(toolId);
       }
 
       _validationMessage = null;
     });
   }
 
-  void _toggleCustomMemory(
-    bool enabled,
-  ) {
+  void _toggleCustomMemory(bool enabled) {
     setState(() {
       _memoryEnabled = enabled;
 
       if (enabled) {
-        _selectedTools.add(
-          'memory',
-        );
+        _selectedTools.add('memory');
       } else {
-        _selectedTools.remove(
-          'memory',
-        );
+        _selectedTools.remove('memory');
       }
 
       _validationMessage = null;
@@ -6235,31 +4465,18 @@ class _KorlixCustomAgentCreatorSheetState
   }
 
   List<String> _orderedCustomTools() {
-    final selected =
-        Set<String>.from(
-      _selectedTools,
-    )
-          ..add(
-            'general_chat',
-          )
-          ..add(
-            'agent_training',
-          );
+    final selected = Set<String>.from(_selectedTools)
+      ..add('general_chat')
+      ..add('agent_training');
 
     if (_memoryEnabled) {
-      selected.add(
-        'memory',
-      );
+      selected.add('memory');
     } else {
-      selected.remove(
-        'memory',
-      );
+      selected.remove('memory');
     }
 
     return List<String>.unmodifiable(
-      _korlixAgentAllToolIds.where(
-        selected.contains,
-      ),
+      _korlixAgentAllToolIds.where(selected.contains),
     );
   }
 
@@ -6274,22 +4491,17 @@ class _KorlixCustomAgentCreatorSheetState
   }
 
   void _submitCustomAgent() {
-    final name =
-        _nameController.text.trim();
+    final name = _nameController.text.trim();
 
-    final description =
-        _descriptionController.text.trim();
+    final description = _descriptionController.text.trim();
 
-    final mission =
-        _missionController.text.trim();
+    final mission = _missionController.text.trim();
 
-    final training =
-        _trainingController.text.trim();
+    final training = _trainingController.text.trim();
 
     if (name.isEmpty) {
       setState(() {
-        _validationMessage =
-            'Enter a name for the custom agent.';
+        _validationMessage = 'Enter a name for the custom agent.';
       });
 
       return;
@@ -6320,28 +4532,22 @@ class _KorlixCustomAgentCreatorSheetState
       KorlixLiveConvoCustomAgentDraft(
         name: name,
 
-        description:
-            description.isEmpty
+        description: description.isEmpty
             ? 'A private, trainable '
-                'LIVE CONVO agent.'
+                  'LIVE CONVO agent.'
             : description,
 
         mission: mission,
 
-        iconName:
-            _iconName,
+        iconName: _iconName,
 
-        accentHex:
-            _accentHex,
+        accentHex: _accentHex,
 
-        trainingInstructions:
-            training,
+        trainingInstructions: training,
 
-        toolIds:
-            _orderedCustomTools(),
+        toolIds: _orderedCustomTools(),
 
-        memoryEnabled:
-            _memoryEnabled,
+        memoryEnabled: _memoryEnabled,
       ),
     );
   }
@@ -6357,106 +4563,55 @@ class _KorlixCustomAgentCreatorSheetState
       helperText: helper,
       alignLabelWithHint: true,
       filled: true,
-      fillColor:
-          const Color(0xFF071722),
-      labelStyle:
-          const TextStyle(
-        color:
-            Color(0xFF8CDDE8),
-        fontWeight:
-            FontWeight.w800,
+      fillColor: const Color(0xFF071722),
+      labelStyle: const TextStyle(
+        color: Color(0xFF8CDDE8),
+        fontWeight: FontWeight.w800,
       ),
-      hintStyle:
-          const TextStyle(
-        color:
-            Color(0xFF718A96),
+      hintStyle: const TextStyle(color: Color(0xFF718A96)),
+      helperStyle: const TextStyle(color: Color(0xFF8FA8B1), height: 1.3),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0xFF244D5C)),
       ),
-      helperStyle:
-          const TextStyle(
-        color:
-            Color(0xFF8FA8B1),
-        height: 1.3,
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: _customAccent, width: 1.6),
       ),
-      enabledBorder:
-          OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(16),
-        borderSide:
-            const BorderSide(
-          color:
-              Color(0xFF244D5C),
-        ),
-      ),
-      focusedBorder:
-          OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(16),
-        borderSide:
-            BorderSide(
-          color:
-              _customAccent,
-          width: 1.6,
-        ),
-      ),
-      errorBorder:
-          OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(16),
-        borderSide:
-            const BorderSide(
-          color:
-              Color(0xFFFF7185),
-        ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0xFFFF7185)),
       ),
     );
   }
 
   Widget _buildCustomAgentHeader() {
-    final accent =
-        _customAccent;
+    final accent = _customAccent;
 
     return Row(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            borderRadius:
-                BorderRadius.circular(16),
-            color:
-                accent.withValues(
-              alpha: 0.14,
-            ),
-            border: Border.all(
-              color:
-                  accent.withValues(
-                alpha: 0.72,
-              ),
-            ),
+            borderRadius: BorderRadius.circular(16),
+            color: accent.withValues(alpha: 0.14),
+            border: Border.all(color: accent.withValues(alpha: 0.72)),
           ),
-          child: Icon(
-            korlixLiveConvoAgentIcon(
-              _iconName,
-            ),
-            color: accent,
-          ),
+          child: Icon(korlixLiveConvoAgentIcon(_iconName), color: accent),
         ),
         const SizedBox(width: 12),
         const Expanded(
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'CREATE YOUR OWN AGENT',
                 style: TextStyle(
-                  color:
-                      Color(0xFFF0F7F8),
+                  color: Color(0xFFF0F7F8),
                   fontSize: 19,
-                  fontWeight:
-                      FontWeight.w900,
+                  fontWeight: FontWeight.w900,
                   letterSpacing: 0.4,
                 ),
               ),
@@ -6465,59 +4620,37 @@ class _KorlixCustomAgentCreatorSheetState
                 'Build a private specialist '
                 'with its own mission, training, '
                 'tools, and long-term memory.',
-                style: TextStyle(
-                  color:
-                      Color(0xFFA9C6CF),
-                  height: 1.35,
-                ),
+                style: TextStyle(color: Color(0xFFA9C6CF), height: 1.35),
               ),
             ],
           ),
         ),
         IconButton(
-          tooltip:
-              'Close custom-agent creator',
+          tooltip: 'Close custom-agent creator',
           onPressed: () {
             Navigator.of(context).pop();
           },
-          icon: const Icon(
-            Icons.close_rounded,
-          ),
-          color:
-              const Color(0xFFC7D7DC),
+          icon: const Icon(Icons.close_rounded),
+          color: const Color(0xFFC7D7DC),
         ),
       ],
     );
   }
 
   Widget _buildCustomAgentPrivacyNotice() {
-    final accent =
-        _customAccent;
+    final accent = _customAccent;
 
     return Container(
-      padding:
-          const EdgeInsets.all(13),
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(16),
-        color:
-            const Color(0xFF081B25),
-        border: Border.all(
-          color:
-              accent.withValues(
-            alpha: 0.48,
-          ),
-        ),
+        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFF081B25),
+        border: Border.all(color: accent.withValues(alpha: 0.48)),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.verified_user_outlined,
-            color: accent,
-            size: 21,
-          ),
+          Icon(Icons.verified_user_outlined, color: accent, size: 21),
           const SizedBox(width: 9),
           const Expanded(
             child: Text(
@@ -6528,8 +4661,7 @@ class _KorlixCustomAgentCreatorSheetState
               'tool, credit, or confirmation '
               'rules.',
               style: TextStyle(
-                color:
-                    Color(0xFFA9C6CF),
+                color: Color(0xFFA9C6CF),
                 height: 1.4,
                 fontSize: 12.5,
               ),
@@ -6540,9 +4672,7 @@ class _KorlixCustomAgentCreatorSheetState
     );
   }
 
-  String _customIconLabel(
-    String iconName,
-  ) {
+  String _customIconLabel(String iconName) {
     switch (iconName) {
       case 'auto_awesome':
         return 'Creative';
@@ -6577,9 +4707,7 @@ class _KorlixCustomAgentCreatorSheetState
     }
   }
 
-  String _customAccentLabel(
-    String accentHex,
-  ) {
+  String _customAccentLabel(String accentHex) {
     switch (accentHex) {
       case '62D6A7':
         return 'Emerald';
@@ -6609,41 +4737,30 @@ class _KorlixCustomAgentCreatorSheetState
   }
 
   Widget _buildCustomIdentityFields() {
-    final accent =
-        _customAccent;
+    final accent = _customAccent;
 
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'AGENT IDENTITY',
           style: TextStyle(
             color: accent,
-            fontWeight:
-                FontWeight.w900,
+            fontWeight: FontWeight.w900,
             letterSpacing: 0.6,
             fontSize: 12,
           ),
         ),
         const SizedBox(height: 8),
         TextField(
-          controller:
-              _nameController,
+          controller: _nameController,
           maxLength: 80,
-          textInputAction:
-              TextInputAction.next,
-          textCapitalization:
-              TextCapitalization.words,
-          style: const TextStyle(
-            color:
-                Color(0xFFF0F7F8),
-          ),
-          decoration:
-              _customAgentDecoration(
+          textInputAction: TextInputAction.next,
+          textCapitalization: TextCapitalization.words,
+          style: const TextStyle(color: Color(0xFFF0F7F8)),
+          decoration: _customAgentDecoration(
             label: 'Agent name',
-            hint:
-                'Example: Brand Coach',
+            hint: 'Example: Brand Coach',
             helper:
                 'Use a short, clear name '
                 'that describes the specialist.',
@@ -6654,22 +4771,14 @@ class _KorlixCustomAgentCreatorSheetState
         ),
         const SizedBox(height: 12),
         TextField(
-          controller:
-              _descriptionController,
+          controller: _descriptionController,
           maxLength: 240,
           minLines: 2,
           maxLines: 4,
-          textInputAction:
-              TextInputAction.next,
-          textCapitalization:
-              TextCapitalization.sentences,
-          style: const TextStyle(
-            color:
-                Color(0xFFF0F7F8),
-            height: 1.4,
-          ),
-          decoration:
-              _customAgentDecoration(
+          textInputAction: TextInputAction.next,
+          textCapitalization: TextCapitalization.sentences,
+          style: const TextStyle(color: Color(0xFFF0F7F8), height: 1.4),
+          decoration: _customAgentDecoration(
             label: 'Short description',
             hint:
                 'Example: Private guidance '
@@ -6684,24 +4793,15 @@ class _KorlixCustomAgentCreatorSheetState
         ),
         const SizedBox(height: 12),
         TextField(
-          controller:
-              _missionController,
+          controller: _missionController,
           maxLength: 2400,
           minLines: 5,
           maxLines: 10,
-          keyboardType:
-              TextInputType.multiline,
-          textInputAction:
-              TextInputAction.newline,
-          textCapitalization:
-              TextCapitalization.sentences,
-          style: const TextStyle(
-            color:
-                Color(0xFFF0F7F8),
-            height: 1.42,
-          ),
-          decoration:
-              _customAgentDecoration(
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          textCapitalization: TextCapitalization.sentences,
+          style: const TextStyle(color: Color(0xFFF0F7F8), height: 1.42),
+          decoration: _customAgentDecoration(
             label: 'Mission',
             hint:
                 'Describe the work this '
@@ -6719,26 +4819,16 @@ class _KorlixCustomAgentCreatorSheetState
         ),
         const SizedBox(height: 12),
         TextField(
-          controller:
-              _trainingController,
+          controller: _trainingController,
           maxLength: 12000,
           minLines: 4,
           maxLines: 10,
-          keyboardType:
-              TextInputType.multiline,
-          textInputAction:
-              TextInputAction.newline,
-          textCapitalization:
-              TextCapitalization.sentences,
-          style: const TextStyle(
-            color:
-                Color(0xFFF0F7F8),
-            height: 1.42,
-          ),
-          decoration:
-              _customAgentDecoration(
-            label:
-                'Initial training instructions',
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          textCapitalization: TextCapitalization.sentences,
+          style: const TextStyle(color: Color(0xFFF0F7F8), height: 1.42),
+          decoration: _customAgentDecoration(
+            label: 'Initial training instructions',
             hint:
                 'Example: Use concise '
                 'recommendations, follow the '
@@ -6757,19 +4847,16 @@ class _KorlixCustomAgentCreatorSheetState
   }
 
   Widget _buildCustomIconSelector() {
-    final accent =
-        _customAccent;
+    final accent = _customAccent;
 
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'AGENT ICON',
           style: TextStyle(
             color: accent,
-            fontWeight:
-                FontWeight.w900,
+            fontWeight: FontWeight.w900,
             letterSpacing: 0.6,
             fontSize: 12,
           ),
@@ -6779,74 +4866,40 @@ class _KorlixCustomAgentCreatorSheetState
           spacing: 8,
           runSpacing: 8,
           children: [
-            for (final iconName
-                in _korlixCustomAgentIconNames)
+            for (final iconName in _korlixCustomAgentIconNames)
               Builder(
                 builder: (context) {
-                  final selected =
-                      iconName ==
-                      _iconName;
+                  final selected = iconName == _iconName;
 
                   return ChoiceChip(
                     selected: selected,
                     showCheckmark: false,
                     onSelected: (_) {
                       setState(() {
-                        _iconName =
-                            iconName;
+                        _iconName = iconName;
 
-                        _validationMessage =
-                            null;
+                        _validationMessage = null;
                       });
                     },
                     avatar: Icon(
-                      korlixLiveConvoAgentIcon(
-                        iconName,
-                      ),
+                      korlixLiveConvoAgentIcon(iconName),
                       size: 19,
-                      color: selected
-                          ? accent
-                          : const Color(
-                              0xFF8FA8B1,
-                            ),
+                      color: selected ? accent : const Color(0xFF8FA8B1),
                     ),
-                    label: Text(
-                      _customIconLabel(
-                        iconName,
-                      ),
-                    ),
+                    label: Text(_customIconLabel(iconName)),
                     labelStyle: TextStyle(
                       color: selected
-                          ? const Color(
-                              0xFFF0F7F8,
-                            )
-                          : const Color(
-                              0xFFB1C4CA,
-                            ),
-                      fontWeight:
-                          FontWeight.w800,
+                          ? const Color(0xFFF0F7F8)
+                          : const Color(0xFFB1C4CA),
+                      fontWeight: FontWeight.w800,
                     ),
-                    selectedColor:
-                        accent.withValues(
-                      alpha: 0.18,
-                    ),
-                    backgroundColor:
-                        const Color(
-                      0xFF071722,
-                    ),
+                    selectedColor: accent.withValues(alpha: 0.18),
+                    backgroundColor: const Color(0xFF071722),
                     side: BorderSide(
-                      color: selected
-                          ? accent
-                          : const Color(
-                              0xFF244D5C,
-                            ),
+                      color: selected ? accent : const Color(0xFF244D5C),
                     ),
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(
-                        999,
-                      ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
                     ),
                   );
                 },
@@ -6859,16 +4912,13 @@ class _KorlixCustomAgentCreatorSheetState
 
   Widget _buildCustomAccentSelector() {
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'ACCENT COLOR',
           style: TextStyle(
-            color:
-                _customAccent,
-            fontWeight:
-                FontWeight.w900,
+            color: _customAccent,
+            fontWeight: FontWeight.w900,
             letterSpacing: 0.6,
             fontSize: 12,
           ),
@@ -6878,131 +4928,75 @@ class _KorlixCustomAgentCreatorSheetState
           spacing: 10,
           runSpacing: 10,
           children: [
-            for (final accentHex
-                in _korlixCustomAgentAccentHexes)
+            for (final accentHex in _korlixCustomAgentAccentHexes)
               Builder(
                 builder: (context) {
-                  final selected =
-                      accentHex ==
-                      _accentHex;
+                  final selected = accentHex == _accentHex;
 
-                  final color =
-                      korlixLiveConvoAgentAccent(
-                    accentHex,
-                  );
+                  final color = korlixLiveConvoAgentAccent(accentHex);
 
                   return Material(
-                    color:
-                        Colors.transparent,
+                    color: Colors.transparent,
                     child: InkWell(
-                      borderRadius:
-                          BorderRadius.circular(
-                        16,
-                      ),
+                      borderRadius: BorderRadius.circular(16),
                       onTap: () {
                         setState(() {
-                          _accentHex =
-                              accentHex;
+                          _accentHex = accentHex;
 
-                          _validationMessage =
-                              null;
+                          _validationMessage = null;
                         });
                       },
                       child: AnimatedContainer(
-                        duration:
-                            const Duration(
-                          milliseconds: 160,
-                        ),
+                        duration: const Duration(milliseconds: 160),
                         width: 94,
-                        padding:
-                            const EdgeInsets
-                                .symmetric(
+                        padding: const EdgeInsets.symmetric(
                           horizontal: 9,
                           vertical: 9,
                         ),
-                        decoration:
-                            BoxDecoration(
-                          borderRadius:
-                              BorderRadius
-                                  .circular(16),
-                          color:
-                              selected
-                              ? color.withValues(
-                                  alpha: 0.16,
-                                )
-                              : const Color(
-                                  0xFF071722,
-                                ),
-                          border:
-                              Border.all(
-                            color:
-                                selected
-                                ? color
-                                : const Color(
-                                    0xFF244D5C,
-                                  ),
-                            width:
-                                selected
-                                ? 1.6
-                                : 1,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          color: selected
+                              ? color.withValues(alpha: 0.16)
+                              : const Color(0xFF071722),
+                          border: Border.all(
+                            color: selected ? color : const Color(0xFF244D5C),
+                            width: selected ? 1.6 : 1,
                           ),
                         ),
                         child: Column(
-                          mainAxisSize:
-                              MainAxisSize.min,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Container(
                               width: 34,
                               height: 34,
-                              decoration:
-                                  BoxDecoration(
-                                shape:
-                                    BoxShape.circle,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
                                 color: color,
-                                boxShadow:
-                                    <BoxShadow>[
+                                boxShadow: <BoxShadow>[
                                   BoxShadow(
-                                    color:
-                                        color.withValues(
-                                      alpha: 0.24,
-                                    ),
+                                    color: color.withValues(alpha: 0.24),
                                     blurRadius: 10,
                                   ),
                                 ],
                               ),
                               child: selected
                                   ? const Icon(
-                                      Icons
-                                          .check_rounded,
-                                      color:
-                                          Color(
-                                        0xFF03110E,
-                                      ),
+                                      Icons.check_rounded,
+                                      color: Color(0xFF03110E),
                                       size: 21,
                                     )
                                   : null,
                             ),
-                            const SizedBox(
-                              height: 7,
-                            ),
+                            const SizedBox(height: 7),
                             Text(
-                              _customAccentLabel(
-                                accentHex,
-                              ),
-                              textAlign:
-                                  TextAlign.center,
-                              style:
-                                  TextStyle(
-                                color:
-                                    selected
+                              _customAccentLabel(accentHex),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: selected
                                     ? color
-                                    : const Color(
-                                        0xFFA9C6CF,
-                                      ),
+                                    : const Color(0xFFA9C6CF),
                                 fontSize: 11,
-                                fontWeight:
-                                    FontWeight
-                                        .w800,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ],
@@ -7019,67 +5013,41 @@ class _KorlixCustomAgentCreatorSheetState
   }
 
   Widget _buildCustomMemoryControl() {
-    final accent =
-        _customAccent;
+    final accent = _customAccent;
 
     return Container(
-      padding:
-          const EdgeInsets.fromLTRB(
-        13,
-        10,
-        10,
-        10,
-      ),
+      padding: const EdgeInsets.fromLTRB(13, 10, 10, 10),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(17),
-        color:
-            const Color(0xFF071722),
+        borderRadius: BorderRadius.circular(17),
+        color: const Color(0xFF071722),
         border: Border.all(
           color: _memoryEnabled
-              ? accent.withValues(
-                  alpha: 0.72,
-                )
-              : const Color(
-                  0xFF244D5C,
-                ),
+              ? accent.withValues(alpha: 0.72)
+              : const Color(0xFF244D5C),
         ),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding:
-                const EdgeInsets.only(
-              top: 3,
-            ),
+            padding: const EdgeInsets.only(top: 3),
             child: Icon(
               _memoryEnabled
-                  ? Icons
-                      .psychology_alt_rounded
-                  : Icons
-                      .memory_outlined,
-              color: _memoryEnabled
-                  ? accent
-                  : const Color(
-                      0xFF8299A2,
-                    ),
+                  ? Icons.psychology_alt_rounded
+                  : Icons.memory_outlined,
+              color: _memoryEnabled ? accent : const Color(0xFF8299A2),
             ),
           ),
           const SizedBox(width: 10),
           const Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Private long-term memory',
                   style: TextStyle(
-                    color:
-                        Color(0xFFF0F7F8),
-                    fontWeight:
-                        FontWeight.w900,
+                    color: Color(0xFFF0F7F8),
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
                 SizedBox(height: 4),
@@ -7089,8 +5057,7 @@ class _KorlixCustomAgentCreatorSheetState
                   'own user-confirmed memories '
                   'across future sessions.',
                   style: TextStyle(
-                    color:
-                        Color(0xFFA9C6CF),
+                    color: Color(0xFFA9C6CF),
                     height: 1.35,
                     fontSize: 12.5,
                   ),
@@ -7100,16 +5067,10 @@ class _KorlixCustomAgentCreatorSheetState
           ),
           const SizedBox(width: 8),
           Switch(
-            value:
-                _memoryEnabled,
-            onChanged:
-                _toggleCustomMemory,
-            activeThumbColor:
-                accent,
-            activeTrackColor:
-                accent.withValues(
-              alpha: 0.45,
-            ),
+            value: _memoryEnabled,
+            onChanged: _toggleCustomMemory,
+            activeThumbColor: accent,
+            activeTrackColor: accent.withValues(alpha: 0.45),
           ),
         ],
       ),
@@ -7117,32 +5078,22 @@ class _KorlixCustomAgentCreatorSheetState
   }
 
   Widget _buildCustomToolPermissions() {
-    final accent =
-        _customAccent;
+    final accent = _customAccent;
 
-    final tools =
-        _korlixAgentAllToolIds
-            .where(
-              (toolId) =>
-                  toolId != 'memory',
-            )
-            .toList(
-              growable: false,
-            );
+    final tools = _korlixAgentAllToolIds
+        .where((toolId) => toolId != 'memory')
+        .toList(growable: false);
 
-    final enabledToolCount =
-        _orderedCustomTools().length;
+    final enabledToolCount = _orderedCustomTools().length;
 
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'AUTHORIZED TOOLS',
           style: TextStyle(
             color: accent,
-            fontWeight:
-                FontWeight.w900,
+            fontWeight: FontWeight.w900,
             letterSpacing: 0.6,
             fontSize: 12,
           ),
@@ -7153,8 +5104,7 @@ class _KorlixCustomAgentCreatorSheetState
           'General conversation and agent '
           'training are required.',
           style: const TextStyle(
-            color:
-                Color(0xFFA9C6CF),
+            color: Color(0xFFA9C6CF),
             height: 1.35,
             fontSize: 12.5,
           ),
@@ -7162,65 +5112,37 @@ class _KorlixCustomAgentCreatorSheetState
         const SizedBox(height: 9),
         Container(
           decoration: BoxDecoration(
-            borderRadius:
-                BorderRadius.circular(18),
-            color:
-                const Color(0xFF071722),
-            border: Border.all(
-              color:
-                  const Color(0xFF244D5C),
-            ),
+            borderRadius: BorderRadius.circular(18),
+            color: const Color(0xFF071722),
+            border: Border.all(color: const Color(0xFF244D5C)),
           ),
-          clipBehavior:
-              Clip.antiAlias,
+          clipBehavior: Clip.antiAlias,
           child: Column(
             children: [
-              for (
-                var index = 0;
-                index < tools.length;
-                index += 1
-              ) ...[
+              for (var index = 0; index < tools.length; index += 1) ...[
                 Builder(
                   builder: (context) {
-                    final toolId =
-                        tools[index];
+                    final toolId = tools[index];
 
-                    final required =
-                        _isRequiredCustomTool(
-                      toolId,
-                    );
+                    final required = _isRequiredCustomTool(toolId);
 
-                    final selected =
-                        _selectedTools.contains(
-                      toolId,
-                    );
+                    final selected = _selectedTools.contains(toolId);
 
                     return CheckboxListTile(
                       value: selected,
                       onChanged: required
                           ? (_) {}
                           : (value) {
-                              if (value ==
-                                  null) {
+                              if (value == null) {
                                 return;
                               }
 
-                              _toggleCustomTool(
-                                toolId,
-                                value,
-                              );
+                              _toggleCustomTool(toolId, value);
                             },
-                      controlAffinity:
-                          ListTileControlAffinity
-                              .leading,
+                      controlAffinity: ListTileControlAffinity.leading,
                       activeColor: accent,
-                      checkColor:
-                          const Color(
-                        0xFF03110E,
-                      ),
-                      contentPadding:
-                          const EdgeInsets
-                              .symmetric(
+                      checkColor: const Color(0xFF03110E),
+                      contentPadding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 2,
                       ),
@@ -7228,41 +5150,23 @@ class _KorlixCustomAgentCreatorSheetState
                         children: [
                           Expanded(
                             child: Text(
-                              _korlixAgentToolLabel(
-                                toolId,
-                              ),
-                              style:
-                                  TextStyle(
+                              _korlixAgentToolLabel(toolId),
+                              style: TextStyle(
                                 color: selected
-                                    ? const Color(
-                                        0xFFF0F7F8,
-                                      )
-                                    : const Color(
-                                        0xFF8299A2,
-                                      ),
-                                fontWeight:
-                                    FontWeight
-                                        .w800,
+                                    ? const Color(0xFFF0F7F8)
+                                    : const Color(0xFF8299A2),
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ),
                           if (required)
-                            _KorlixAgentBadge(
-                              text: 'REQUIRED',
-                              color: accent,
-                            ),
+                            _KorlixAgentBadge(text: 'REQUIRED', color: accent),
                         ],
                       ),
                       subtitle: Text(
-                        _korlixAgentToolDescription(
-                          toolId,
-                        ),
-                        style:
-                            const TextStyle(
-                          color:
-                              Color(
-                            0xFFA9C6CF,
-                          ),
+                        _korlixAgentToolDescription(toolId),
+                        style: const TextStyle(
+                          color: Color(0xFFA9C6CF),
                           height: 1.3,
                           fontSize: 12.5,
                         ),
@@ -7270,44 +5174,24 @@ class _KorlixCustomAgentCreatorSheetState
                     );
                   },
                 ),
-                if (index !=
-                    tools.length - 1)
-                  const Divider(
-                    height: 1,
-                    color:
-                        Color(
-                      0xFF173541,
-                    ),
-                  ),
+                if (index != tools.length - 1)
+                  const Divider(height: 1, color: Color(0xFF173541)),
               ],
             ],
           ),
         ),
         const SizedBox(height: 9),
         Container(
-          padding:
-              const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            borderRadius:
-                BorderRadius.circular(15),
-            color:
-                const Color(0xFF081B25),
-            border: Border.all(
-              color:
-                  accent.withValues(
-                alpha: 0.42,
-              ),
-            ),
+            borderRadius: BorderRadius.circular(15),
+            color: const Color(0xFF081B25),
+            border: Border.all(color: accent.withValues(alpha: 0.42)),
           ),
           child: Row(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                Icons.shield_outlined,
-                color: accent,
-                size: 21,
-              ),
+              Icon(Icons.shield_outlined, color: accent, size: 21),
               const SizedBox(width: 9),
               const Expanded(
                 child: Text(
@@ -7318,10 +5202,7 @@ class _KorlixCustomAgentCreatorSheetState
                   'confirmation, file, camera, '
                   'and safety checks still apply.',
                   style: TextStyle(
-                    color:
-                        Color(
-                      0xFFA9C6CF,
-                    ),
+                    color: Color(0xFFA9C6CF),
                     height: 1.4,
                     fontSize: 12.5,
                   ),
@@ -7335,52 +5216,34 @@ class _KorlixCustomAgentCreatorSheetState
   }
 
   Widget _buildCustomConsentControl() {
-    final accent =
-        _customAccent;
+    final accent = _customAccent;
 
     return Container(
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(17),
-        color:
-            const Color(0xFF071722),
+        borderRadius: BorderRadius.circular(17),
+        color: const Color(0xFF071722),
         border: Border.all(
-          color: _confirmed
-              ? accent
-              : const Color(
-                  0xFF244D5C,
-                ),
+          color: _confirmed ? accent : const Color(0xFF244D5C),
         ),
       ),
       child: CheckboxListTile(
         value: _confirmed,
         onChanged: (value) {
           setState(() {
-            _confirmed =
-                value == true;
+            _confirmed = value == true;
 
-            _validationMessage =
-                null;
+            _validationMessage = null;
           });
         },
-        controlAffinity:
-            ListTileControlAffinity
-                .leading,
+        controlAffinity: ListTileControlAffinity.leading,
         activeColor: accent,
-        checkColor:
-            const Color(0xFF03110E),
-        contentPadding:
-            const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 4,
-        ),
+        checkColor: const Color(0xFF03110E),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         title: const Text(
           'Create and save this custom agent',
           style: TextStyle(
-            color:
-                Color(0xFFF0F7F8),
-            fontWeight:
-                FontWeight.w900,
+            color: Color(0xFFF0F7F8),
+            fontWeight: FontWeight.w900,
           ),
         ),
         subtitle: const Text(
@@ -7389,19 +5252,14 @@ class _KorlixCustomAgentCreatorSheetState
           'tools, and memory setting may '
           'remain saved to my account until '
           'I update or delete the agent.',
-          style: TextStyle(
-            color:
-                Color(0xFFA9C6CF),
-            height: 1.4,
-          ),
+          style: TextStyle(color: Color(0xFFA9C6CF), height: 1.4),
         ),
       ),
     );
   }
 
   Widget _buildCustomValidation() {
-    final message =
-        _validationMessage?.trim() ?? '';
+    final message = _validationMessage?.trim() ?? '';
 
     if (message.isEmpty) {
       return const SizedBox.shrink();
@@ -7409,26 +5267,18 @@ class _KorlixCustomAgentCreatorSheetState
 
     return Container(
       width: double.infinity,
-      padding:
-          const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(14),
-        color:
-            const Color(0xFF351923),
-        border: Border.all(
-          color:
-              const Color(0xFFFF7185),
-        ),
+        borderRadius: BorderRadius.circular(14),
+        color: const Color(0xFF351923),
+        border: Border.all(color: const Color(0xFFFF7185)),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(
             Icons.error_outline_rounded,
-            color:
-                Color(0xFFFF8B9B),
+            color: Color(0xFFFF8B9B),
             size: 21,
           ),
           const SizedBox(width: 9),
@@ -7436,10 +5286,8 @@ class _KorlixCustomAgentCreatorSheetState
             child: Text(
               message,
               style: const TextStyle(
-                color:
-                    Color(0xFFFFD8DE),
-                fontWeight:
-                    FontWeight.w700,
+                color: Color(0xFFFFD8DE),
+                fontWeight: FontWeight.w700,
                 height: 1.35,
               ),
             ),
@@ -7450,8 +5298,7 @@ class _KorlixCustomAgentCreatorSheetState
   }
 
   Widget _buildCustomAgentActions() {
-    final accent =
-        _customAccent;
+    final accent = _customAccent;
 
     return Row(
       children: [
@@ -7460,42 +5307,26 @@ class _KorlixCustomAgentCreatorSheetState
             onPressed: () {
               Navigator.of(context).pop();
             },
-            style:
-                OutlinedButton.styleFrom(
-              padding:
-                  const EdgeInsets.symmetric(
-                vertical: 15,
-              ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 15),
             ),
-            child:
-                const Text('Cancel'),
+            child: const Text('Cancel'),
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
           flex: 2,
           child: FilledButton.icon(
-            onPressed:
-                _submitCustomAgent,
-            style:
-                FilledButton.styleFrom(
+            onPressed: _submitCustomAgent,
+            style: FilledButton.styleFrom(
               backgroundColor: accent,
-              foregroundColor:
-                  const Color(0xFF03110E),
-              padding:
-                  const EdgeInsets.symmetric(
-                vertical: 15,
-              ),
+              foregroundColor: const Color(0xFF03110E),
+              padding: const EdgeInsets.symmetric(vertical: 15),
             ),
-            icon: const Icon(
-              Icons.add_circle_rounded,
-            ),
+            icon: const Icon(Icons.add_circle_rounded),
             label: const Text(
               'Create Agent',
-              style: TextStyle(
-                fontWeight:
-                    FontWeight.w900,
-              ),
+              style: TextStyle(fontWeight: FontWeight.w900),
             ),
           ),
         ),
@@ -7505,67 +5336,40 @@ class _KorlixCustomAgentCreatorSheetState
 
   @override
   Widget build(BuildContext context) {
-    final screenSize =
-        MediaQuery.sizeOf(context);
+    final screenSize = MediaQuery.sizeOf(context);
 
-    final bottomInset =
-        MediaQuery.viewInsetsOf(
-      context,
-    ).bottom;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
-    final accent =
-        _customAccent;
+    final accent = _customAccent;
 
     return Material(
       color: Colors.transparent,
       child: Align(
-        alignment:
-            Alignment.bottomCenter,
+        alignment: Alignment.bottomCenter,
         child: Container(
           width: double.infinity,
           constraints: BoxConstraints(
             maxWidth: 820,
-            maxHeight:
-                screenSize.height * 0.94,
+            maxHeight: screenSize.height * 0.94,
           ),
-          margin:
-              const EdgeInsets.only(
-            top: 24,
-          ),
-          decoration:
-              const BoxDecoration(
-            color:
-                Color(0xFF041019),
-            borderRadius:
-                BorderRadius.vertical(
-              top:
-                  Radius.circular(28),
-            ),
+          margin: const EdgeInsets.only(top: 24),
+          decoration: const BoxDecoration(
+            color: Color(0xFF041019),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color:
-                    Color(0x66000000),
+                color: Color(0x66000000),
                 blurRadius: 34,
-                offset:
-                    Offset(0, -8),
+                offset: Offset(0, -8),
               ),
             ],
           ),
-          clipBehavior:
-              Clip.antiAlias,
+          clipBehavior: Clip.antiAlias,
           child: SafeArea(
             top: false,
             child: ListView(
-              keyboardDismissBehavior:
-                  ScrollViewKeyboardDismissBehavior
-                      .onDrag,
-              padding:
-                  EdgeInsets.fromLTRB(
-                18,
-                14,
-                18,
-                26 + bottomInset,
-              ),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: EdgeInsets.fromLTRB(18, 14, 18, 26 + bottomInset),
               children: [
                 _buildCustomAgentHeader(),
                 const SizedBox(height: 14),
@@ -7581,8 +5385,7 @@ class _KorlixCustomAgentCreatorSheetState
                   'MEMORY',
                   style: TextStyle(
                     color: accent,
-                    fontWeight:
-                        FontWeight.w900,
+                    fontWeight: FontWeight.w900,
                     letterSpacing: 0.6,
                     fontSize: 12,
                   ),
@@ -7606,8 +5409,7 @@ class _KorlixCustomAgentCreatorSheetState
   }
 }
 
-class _KorlixAgentVersionHistorySheet
-    extends StatelessWidget {
+class _KorlixAgentVersionHistorySheet extends StatelessWidget {
   const _KorlixAgentVersionHistorySheet({
     required this.agent,
     required this.versions,
@@ -7634,18 +5436,11 @@ class _KorlixAgentVersionHistorySheet
     List<String> keys, {
     String fallback = '',
   }) {
-    final value =
-        _snapshotValue(
-      version,
-      keys,
-    );
+    final value = _snapshotValue(version, keys);
 
-    final text =
-        (value ?? '').toString().trim();
+    final text = (value ?? '').toString().trim();
 
-    return text.isEmpty
-        ? fallback
-        : text;
+    return text.isEmpty ? fallback : text;
   }
 
   bool _snapshotBool(
@@ -7653,11 +5448,7 @@ class _KorlixAgentVersionHistorySheet
     List<String> keys, {
     required bool fallback,
   }) {
-    final value =
-        _snapshotValue(
-      version,
-      keys,
-    );
+    final value = _snapshotValue(version, keys);
 
     if (value is bool) {
       return value;
@@ -7667,45 +5458,25 @@ class _KorlixAgentVersionHistorySheet
       return value != 0;
     }
 
-    final normalized =
-        (value ?? '')
-            .toString()
-            .trim()
-            .toLowerCase();
+    final normalized = (value ?? '').toString().trim().toLowerCase();
 
-    if (<String>{
-      'true',
-      'yes',
-      'on',
-      '1',
-    }.contains(normalized)) {
+    if (<String>{'true', 'yes', 'on', '1'}.contains(normalized)) {
       return true;
     }
 
-    if (<String>{
-      'false',
-      'no',
-      'off',
-      '0',
-    }.contains(normalized)) {
+    if (<String>{'false', 'no', 'off', '0'}.contains(normalized)) {
       return false;
     }
 
     return fallback;
   }
 
-  List<String> _snapshotTools(
-    KorlixLiveConvoAgentVersion version,
-  ) {
-    final raw =
-        _snapshotValue(
-      version,
-      const <String>[
-        'toolIds',
-        'tool_ids',
-        'tools',
-      ],
-    );
+  List<String> _snapshotTools(KorlixLiveConvoAgentVersion version) {
+    final raw = _snapshotValue(version, const <String>[
+      'toolIds',
+      'tool_ids',
+      'tools',
+    ]);
 
     if (raw is! Iterable<Object?>) {
       return agent.toolIds;
@@ -7715,62 +5486,37 @@ class _KorlixAgentVersionHistorySheet
     final seen = <String>{};
 
     for (final item in raw) {
-      final toolId =
-          (item ?? '')
-              .toString()
-              .trim();
+      final toolId = (item ?? '').toString().trim();
 
-      if (toolId.isEmpty ||
-          !seen.add(toolId)) {
+      if (toolId.isEmpty || !seen.add(toolId)) {
         continue;
       }
 
       result.add(toolId);
     }
 
-    return result.isEmpty
-        ? agent.toolIds
-        : List<String>.unmodifiable(
-            result,
-          );
+    return result.isEmpty ? agent.toolIds : List<String>.unmodifiable(result);
   }
 
-  String _versionDate(
-    DateTime? value,
-  ) {
+  String _versionDate(DateTime? value) {
     if (value == null) {
       return 'Date unavailable';
     }
 
-    final local =
-        value.toLocal();
+    final local = value.toLocal();
 
-    final hour =
-        local.hour % 12 == 0
-        ? 12
-        : local.hour % 12;
+    final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
 
-    final minute =
-        local.minute
-            .toString()
-            .padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
 
-    final period =
-        local.hour >= 12
-        ? 'PM'
-        : 'AM';
+    final period = local.hour >= 12 ? 'PM' : 'AM';
 
     return '${local.month}/${local.day}/${local.year} '
         '$hour:$minute $period';
   }
 
-  String _versionSourceLabel(
-    String source,
-  ) {
-    final clean =
-        source
-            .trim()
-            .replaceAll('_', ' ');
+  String _versionSourceLabel(String source) {
+    final clean = source.trim().replaceAll('_', ' ');
 
     if (clean.isEmpty) {
       return 'Training update';
@@ -7778,9 +5524,7 @@ class _KorlixAgentVersionHistorySheet
 
     return clean
         .split(' ')
-        .where(
-          (word) => word.isNotEmpty,
-        )
+        .where((word) => word.isNotEmpty)
         .map(
           (word) =>
               '${word[0].toUpperCase()}'
@@ -7789,39 +5533,20 @@ class _KorlixAgentVersionHistorySheet
         .join(' ');
   }
 
-  Widget _buildVersionToolChip(
-    String toolId,
-    Color accent,
-  ) {
+  Widget _buildVersionToolChip(String toolId, Color accent) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 4,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(999),
-        color:
-            accent.withValues(
-          alpha: 0.10,
-        ),
-        border: Border.all(
-          color:
-              accent.withValues(
-            alpha: 0.38,
-          ),
-        ),
+        borderRadius: BorderRadius.circular(999),
+        color: accent.withValues(alpha: 0.10),
+        border: Border.all(color: accent.withValues(alpha: 0.38)),
       ),
       child: Text(
-        _korlixAgentToolLabel(
-          toolId,
-        ),
+        _korlixAgentToolLabel(toolId),
         style: TextStyle(
           color: accent,
           fontSize: 11,
-          fontWeight:
-              FontWeight.w800,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
@@ -7832,162 +5557,85 @@ class _KorlixAgentVersionHistorySheet
     KorlixLiveConvoAgentVersion version,
     Color accent,
   ) {
-    final isCurrent =
-        version.version ==
-        agent.version;
+    final isCurrent = version.version == agent.version;
 
-    final training =
-        _snapshotText(
-      version,
-      const <String>[
-        'trainingInstructions',
-        'training_instructions',
-      ],
-    );
+    final training = _snapshotText(version, const <String>[
+      'trainingInstructions',
+      'training_instructions',
+    ]);
 
-    final mission =
-        _snapshotText(
-      version,
-      const <String>[
-        'mission',
-      ],
-      fallback: agent.mission,
-    );
+    final mission = _snapshotText(version, const <String>[
+      'mission',
+    ], fallback: agent.mission);
 
-    final tools =
-        _snapshotTools(
-      version,
-    );
+    final tools = _snapshotTools(version);
 
-    final memoryEnabled =
-        _snapshotBool(
-      version,
-      const <String>[
-        'memoryEnabled',
-        'memory_enabled',
-      ],
-      fallback:
-          agent.memoryEnabled,
-    );
+    final memoryEnabled = _snapshotBool(version, const <String>[
+      'memoryEnabled',
+      'memory_enabled',
+    ], fallback: agent.memoryEnabled);
 
-    final sourceLabel =
-        _versionSourceLabel(
-      version.source,
-    );
+    final sourceLabel = _versionSourceLabel(version.source);
 
-    final dateLabel =
-        _versionDate(
-      version.createdAt,
-    );
+    final dateLabel = _versionDate(version.createdAt);
 
     return Container(
-      margin:
-          const EdgeInsets.fromLTRB(
-        16,
-        0,
-        16,
-        12,
-      ),
-      padding:
-          const EdgeInsets.all(14),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(20),
         color: isCurrent
-            ? accent.withValues(
-                alpha: 0.12,
-              )
-            : const Color(
-                0xFF071722,
-              ),
+            ? accent.withValues(alpha: 0.12)
+            : const Color(0xFF071722),
         border: Border.all(
-          color: isCurrent
-              ? accent
-              : const Color(
-                  0xFF244D5C,
-                ),
-          width:
-              isCurrent ? 1.6 : 1,
+          color: isCurrent ? accent : const Color(0xFF244D5C),
+          width: isCurrent ? 1.6 : 1,
         ),
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: 44,
                 height: 44,
-                decoration:
-                    BoxDecoration(
-                  borderRadius:
-                      BorderRadius.circular(
-                    14,
-                  ),
-                  color:
-                      accent.withValues(
-                    alpha: 0.14,
-                  ),
-                  border: Border.all(
-                    color:
-                        accent.withValues(
-                      alpha: 0.58,
-                    ),
-                  ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: accent.withValues(alpha: 0.14),
+                  border: Border.all(color: accent.withValues(alpha: 0.58)),
                 ),
                 child: Icon(
-                  isCurrent
-                      ? Icons
-                          .verified_rounded
-                      : Icons
-                          .history_rounded,
+                  isCurrent ? Icons.verified_rounded : Icons.history_rounded,
                   color: accent,
                 ),
               ),
               const SizedBox(width: 11),
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment
-                          .start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Wrap(
                       spacing: 8,
                       runSpacing: 6,
-                      crossAxisAlignment:
-                          WrapCrossAlignment
-                              .center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
                           'Version '
                           '${version.version}',
-                          style:
-                              const TextStyle(
-                            color:
-                                Color(
-                              0xFFF0F7F8,
-                            ),
+                          style: const TextStyle(
+                            color: Color(0xFFF0F7F8),
                             fontSize: 16,
-                            fontWeight:
-                                FontWeight
-                                    .w900,
+                            fontWeight: FontWeight.w900,
                           ),
                         ),
                         if (isCurrent)
-                          _KorlixAgentBadge(
-                            text: 'CURRENT',
-                            color: accent,
-                          )
+                          _KorlixAgentBadge(text: 'CURRENT', color: accent)
                         else
                           const _KorlixAgentBadge(
                             text: 'RESTORABLE',
-                            color:
-                                Color(
-                              0xFFB794F4,
-                            ),
+                            color: Color(0xFFB794F4),
                           ),
                       ],
                     ),
@@ -7995,17 +5643,11 @@ class _KorlixAgentVersionHistorySheet
                     Text(
                       '$sourceLabel · '
                       '$dateLabel',
-                      style:
-                          const TextStyle(
-                        color:
-                            Color(
-                          0xFF8FA8B1,
-                        ),
+                      style: const TextStyle(
+                        color: Color(0xFF8FA8B1),
                         height: 1.3,
                         fontSize: 12,
-                        fontWeight:
-                            FontWeight
-                                .w700,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
@@ -8017,11 +5659,9 @@ class _KorlixAgentVersionHistorySheet
           const Text(
             'TRAINING',
             style: TextStyle(
-              color:
-                  Color(0xFF8CDDE8),
+              color: Color(0xFF8CDDE8),
               fontSize: 11.5,
-              fontWeight:
-                  FontWeight.w900,
+              fontWeight: FontWeight.w900,
               letterSpacing: 0.5,
             ),
           ),
@@ -8029,34 +5669,25 @@ class _KorlixAgentVersionHistorySheet
           Text(
             training.isEmpty
                 ? 'No personal training '
-                    'was saved in this version.'
+                      'was saved in this version.'
                 : training,
             maxLines: 7,
-            overflow:
-                TextOverflow.ellipsis,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: training.isEmpty
-                  ? const Color(
-                      0xFF8299A2,
-                    )
-                  : const Color(
-                      0xFFD8E7EA,
-                    ),
+                  ? const Color(0xFF8299A2)
+                  : const Color(0xFFD8E7EA),
               height: 1.42,
-              fontStyle: training.isEmpty
-                  ? FontStyle.italic
-                  : FontStyle.normal,
+              fontStyle: training.isEmpty ? FontStyle.italic : FontStyle.normal,
             ),
           ),
           const SizedBox(height: 13),
           const Text(
             'MISSION',
             style: TextStyle(
-              color:
-                  Color(0xFF8CDDE8),
+              color: Color(0xFF8CDDE8),
               fontSize: 11.5,
-              fontWeight:
-                  FontWeight.w900,
+              fontWeight: FontWeight.w900,
               letterSpacing: 0.5,
             ),
           ),
@@ -8064,11 +5695,9 @@ class _KorlixAgentVersionHistorySheet
           Text(
             mission,
             maxLines: 4,
-            overflow:
-                TextOverflow.ellipsis,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              color:
-                  Color(0xFFBBD0D6),
+              color: Color(0xFFBBD0D6),
               height: 1.4,
               fontSize: 12.5,
             ),
@@ -8078,11 +5707,7 @@ class _KorlixAgentVersionHistorySheet
             spacing: 7,
             runSpacing: 7,
             children: [
-              for (final toolId in tools)
-                _buildVersionToolChip(
-                  toolId,
-                  accent,
-                ),
+              for (final toolId in tools) _buildVersionToolChip(toolId, accent),
             ],
           ),
           const SizedBox(height: 13),
@@ -8090,18 +5715,12 @@ class _KorlixAgentVersionHistorySheet
             children: [
               Icon(
                 memoryEnabled
-                    ? Icons
-                        .psychology_alt_rounded
-                    : Icons
-                        .memory_outlined,
+                    ? Icons.psychology_alt_rounded
+                    : Icons.memory_outlined,
                 size: 19,
                 color: memoryEnabled
-                    ? const Color(
-                        0xFF62D6A7,
-                      )
-                    : const Color(
-                        0xFF8299A2,
-                      ),
+                    ? const Color(0xFF62D6A7)
+                    : const Color(0xFF8299A2),
               ),
               const SizedBox(width: 7),
               Expanded(
@@ -8111,40 +5730,25 @@ class _KorlixAgentVersionHistorySheet
                       : 'Long-term memory disabled',
                   style: TextStyle(
                     color: memoryEnabled
-                        ? const Color(
-                            0xFF62D6A7,
-                          )
-                        : const Color(
-                            0xFF8299A2,
-                          ),
-                    fontWeight:
-                        FontWeight.w800,
+                        ? const Color(0xFF62D6A7)
+                        : const Color(0xFF8299A2),
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
               if (!isCurrent)
                 OutlinedButton.icon(
                   onPressed: () {
-                    Navigator.of(context).pop(
-                      version.version,
-                    );
+                    Navigator.of(context).pop(version.version);
                   },
-                  style:
-                      OutlinedButton.styleFrom(
+                  style: OutlinedButton.styleFrom(
                     foregroundColor: accent,
-                    side: BorderSide(
-                      color: accent,
-                    ),
+                    side: BorderSide(color: accent),
                   ),
-                  icon: const Icon(
-                    Icons.restore_rounded,
-                  ),
+                  icon: const Icon(Icons.restore_rounded),
                   label: const Text(
                     'Select',
-                    style: TextStyle(
-                      fontWeight:
-                          FontWeight.w900,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.w900),
                   ),
                 ),
             ],
@@ -8154,10 +5758,7 @@ class _KorlixAgentVersionHistorySheet
     );
   }
 
-  Widget _buildVersionHistoryHeader(
-    BuildContext context,
-    Color accent,
-  ) {
+  Widget _buildVersionHistoryHeader(BuildContext context, Color accent) {
     final count = versions.length;
 
     final countLabel = count == 1
@@ -8165,50 +5766,31 @@ class _KorlixAgentVersionHistorySheet
         : '$count saved training versions';
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        18,
-        12,
-        12,
-        10,
-      ),
+      padding: const EdgeInsets.fromLTRB(18, 12, 12, 10),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              borderRadius:
-                  BorderRadius.circular(16),
-              color: accent.withValues(
-                alpha: 0.14,
-              ),
-              border: Border.all(
-                color: accent.withValues(
-                  alpha: 0.72,
-                ),
-              ),
+              borderRadius: BorderRadius.circular(16),
+              color: accent.withValues(alpha: 0.14),
+              border: Border.all(color: accent.withValues(alpha: 0.72)),
             ),
-            child: Icon(
-              Icons.history_rounded,
-              color: accent,
-            ),
+            child: Icon(Icons.history_rounded, color: accent),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   '${agent.name.toUpperCase()} HISTORY',
                   style: const TextStyle(
-                    color:
-                        Color(0xFFF0F7F8),
+                    color: Color(0xFFF0F7F8),
                     fontSize: 19,
-                    fontWeight:
-                        FontWeight.w900,
+                    fontWeight: FontWeight.w900,
                     letterSpacing: 0.4,
                   ),
                 ),
@@ -8216,8 +5798,7 @@ class _KorlixAgentVersionHistorySheet
                 Text(
                   countLabel,
                   style: const TextStyle(
-                    color:
-                        Color(0xFFA9C6CF),
+                    color: Color(0xFFA9C6CF),
                     height: 1.35,
                   ),
                 ),
@@ -8225,77 +5806,54 @@ class _KorlixAgentVersionHistorySheet
             ),
           ),
           IconButton(
-            tooltip:
-                'Close training history',
+            tooltip: 'Close training history',
             onPressed: () {
               Navigator.of(context).pop();
             },
-            icon: const Icon(
-              Icons.close_rounded,
-            ),
-            color:
-                const Color(0xFFC7D7DC),
+            icon: const Icon(Icons.close_rounded),
+            color: const Color(0xFFC7D7DC),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildVersionHistoryNotice(
-    Color accent,
-  ) {
-    final restorableCount =
-        versions.where(
-      (version) =>
-          version.version !=
-          agent.version,
-    ).length;
+  Widget _buildVersionHistoryNotice(Color accent) {
+    final restorableCount = versions
+        .where((version) => version.version != agent.version)
+        .length;
 
     final message = restorableCount == 0
         ? 'The current version is the only '
-            'saved training version for '
-            '${agent.name}.'
+              'saved training version for '
+              '${agent.name}.'
         : restorableCount == 1
-            ? 'One earlier training version '
-                'can be restored. Selecting it '
-                'will return you to a final '
-                'confirmation before anything '
-                'changes.'
-            : '$restorableCount earlier training '
-                'versions can be restored. '
-                'Selecting one will return you '
-                'to a final confirmation before '
-                'anything changes.';
+        ? 'One earlier training version '
+              'can be restored. Selecting it '
+              'will return you to a final '
+              'confirmation before anything '
+              'changes.'
+        : '$restorableCount earlier training '
+              'versions can be restored. '
+              'Selecting one will return you '
+              'to a final confirmation before '
+              'anything changes.';
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(
-        16,
-        0,
-        16,
-        12,
-      ),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(16),
-        color:
-            const Color(0xFF081B25),
-        border: Border.all(
-          color: accent.withValues(
-            alpha: 0.48,
-          ),
-        ),
+        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFF081B25),
+        border: Border.all(color: accent.withValues(alpha: 0.48)),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
             restorableCount == 0
-                ? Icons
-                    .verified_rounded
-                : Icons
-                    .restore_rounded,
+                ? Icons.verified_rounded
+                : Icons.restore_rounded,
             color: accent,
             size: 22,
           ),
@@ -8304,11 +5862,9 @@ class _KorlixAgentVersionHistorySheet
             child: Text(
               message,
               style: const TextStyle(
-                color:
-                    Color(0xFFD8E7EA),
+                color: Color(0xFFD8E7EA),
                 height: 1.4,
-                fontWeight:
-                    FontWeight.w700,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -8317,27 +5873,14 @@ class _KorlixAgentVersionHistorySheet
     );
   }
 
-  Widget _buildEmptyVersionHistory(
-    Color accent,
-  ) {
+  Widget _buildEmptyVersionHistory(Color accent) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(
-        16,
-        0,
-        16,
-        12,
-      ),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(20),
-        color:
-            const Color(0xFF071722),
-        border: Border.all(
-          color: accent.withValues(
-            alpha: 0.46,
-          ),
-        ),
+        borderRadius: BorderRadius.circular(20),
+        color: const Color(0xFF071722),
+        border: Border.all(color: accent.withValues(alpha: 0.46)),
       ),
       child: Column(
         children: [
@@ -8346,14 +5889,8 @@ class _KorlixAgentVersionHistorySheet
             height: 58,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: accent.withValues(
-                alpha: 0.13,
-              ),
-              border: Border.all(
-                color: accent.withValues(
-                  alpha: 0.62,
-                ),
-              ),
+              color: accent.withValues(alpha: 0.13),
+              border: Border.all(color: accent.withValues(alpha: 0.62)),
             ),
             child: Icon(
               Icons.history_toggle_off_rounded,
@@ -8366,11 +5903,9 @@ class _KorlixAgentVersionHistorySheet
             'No training history yet',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color:
-                  Color(0xFFF0F7F8),
+              color: Color(0xFFF0F7F8),
               fontSize: 16,
-              fontWeight:
-                  FontWeight.w900,
+              fontWeight: FontWeight.w900,
             ),
           ),
           const SizedBox(height: 7),
@@ -8379,54 +5914,32 @@ class _KorlixAgentVersionHistorySheet
             '${agent.name} to create its first '
             'restorable version.',
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color:
-                  Color(0xFFA9C6CF),
-              height: 1.4,
-            ),
+            style: const TextStyle(color: Color(0xFFA9C6CF), height: 1.4),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildVersionHistoryFooter(
-    BuildContext context,
-    Color accent,
-  ) {
+  Widget _buildVersionHistoryFooter(BuildContext context, Color accent) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        16,
-        2,
-        16,
-        18,
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 18),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            padding:
-                const EdgeInsets.all(13),
+            padding: const EdgeInsets.all(13),
             decoration: BoxDecoration(
-              borderRadius:
-                  BorderRadius.circular(16),
-              color:
-                  const Color(0xFF081B25),
-              border: Border.all(
-                color:
-                    const Color(0xFF244D5C),
-              ),
+              borderRadius: BorderRadius.circular(16),
+              color: const Color(0xFF081B25),
+              border: Border.all(color: const Color(0xFF244D5C)),
             ),
             child: const Row(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
-                  Icons
-                      .verified_user_outlined,
-                  color:
-                      Color(0xFF8CDDE8),
+                  Icons.verified_user_outlined,
+                  color: Color(0xFF8CDDE8),
                   size: 21,
                 ),
                 SizedBox(width: 9),
@@ -8441,8 +5954,7 @@ class _KorlixAgentVersionHistorySheet
                     'separately from the '
                     'Memory screen.',
                     style: TextStyle(
-                      color:
-                          Color(0xFFA9C6CF),
+                      color: Color(0xFFA9C6CF),
                       height: 1.4,
                       fontSize: 12.5,
                     ),
@@ -8456,27 +5968,15 @@ class _KorlixAgentVersionHistorySheet
             onPressed: () {
               Navigator.of(context).pop();
             },
-            style:
-                OutlinedButton.styleFrom(
+            style: OutlinedButton.styleFrom(
               foregroundColor: accent,
-              side: BorderSide(
-                color: accent,
-              ),
-              padding:
-                  const EdgeInsets.symmetric(
-                vertical: 14,
-                horizontal: 16,
-              ),
+              side: BorderSide(color: accent),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
             ),
-            icon: const Icon(
-              Icons.check_rounded,
-            ),
+            icon: const Icon(Icons.check_rounded),
             label: const Text(
               'Keep Current Version',
-              style: TextStyle(
-                fontWeight:
-                    FontWeight.w900,
-              ),
+              style: TextStyle(fontWeight: FontWeight.w900),
             ),
           ),
         ],
@@ -8486,98 +5986,54 @@ class _KorlixAgentVersionHistorySheet
 
   @override
   Widget build(BuildContext context) {
-    final screenSize =
-        MediaQuery.sizeOf(context);
+    final screenSize = MediaQuery.sizeOf(context);
 
-    final accent =
-        korlixLiveConvoAgentAccent(
-      agent.accentHex,
-    );
+    final accent = korlixLiveConvoAgentAccent(agent.accentHex);
 
-    final orderedVersions =
-        versions.toList()
-          ..sort(
-            (left, right) =>
-                right.version.compareTo(
-              left.version,
-            ),
-          );
+    final orderedVersions = versions.toList()
+      ..sort((left, right) => right.version.compareTo(left.version));
 
     return Material(
       color: Colors.transparent,
       child: Align(
-        alignment:
-            Alignment.bottomCenter,
+        alignment: Alignment.bottomCenter,
         child: Container(
           width: double.infinity,
           constraints: BoxConstraints(
             maxWidth: 840,
-            maxHeight:
-                screenSize.height * 0.94,
+            maxHeight: screenSize.height * 0.94,
           ),
-          margin: const EdgeInsets.only(
-            top: 24,
-          ),
-          decoration:
-              const BoxDecoration(
-            color:
-                Color(0xFF041019),
-            borderRadius:
-                BorderRadius.vertical(
-              top:
-                  Radius.circular(28),
-            ),
+          margin: const EdgeInsets.only(top: 24),
+          decoration: const BoxDecoration(
+            color: Color(0xFF041019),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color:
-                    Color(0x66000000),
+                color: Color(0x66000000),
                 blurRadius: 34,
-                offset:
-                    Offset(0, -8),
+                offset: Offset(0, -8),
               ),
             ],
           ),
-          clipBehavior:
-              Clip.antiAlias,
+          clipBehavior: Clip.antiAlias,
           child: SafeArea(
             top: false,
             child: Column(
               children: [
-                _buildVersionHistoryHeader(
-                  context,
-                  accent,
-                ),
+                _buildVersionHistoryHeader(context, accent),
                 Expanded(
                   child: ListView(
                     keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior
-                            .onDrag,
-                    padding:
-                        const EdgeInsets.only(
-                      bottom: 8,
-                    ),
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: const EdgeInsets.only(bottom: 8),
                     children: [
-                      _buildVersionHistoryNotice(
-                        accent,
-                      ),
+                      _buildVersionHistoryNotice(accent),
                       if (orderedVersions.isEmpty)
-                        _buildEmptyVersionHistory(
-                          accent,
-                        )
+                        _buildEmptyVersionHistory(accent)
                       else
-                        for (
-                          final version
-                              in orderedVersions
-                        )
-                          _buildVersionCard(
-                            context,
-                            version,
-                            accent,
-                          ),
-                      _buildVersionHistoryFooter(
-                        context,
-                        accent,
-                      ),
+                        for (final version in orderedVersions)
+                          _buildVersionCard(context, version, accent),
+                      _buildVersionHistoryFooter(context, accent),
                     ],
                   ),
                 ),

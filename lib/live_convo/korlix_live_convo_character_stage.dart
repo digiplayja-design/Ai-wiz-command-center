@@ -35,6 +35,7 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
     required this.connecting,
     required this.connected,
     required this.muted,
+    this.paused = false,
     required this.error,
     required this.userTranscript,
     required this.assistantTranscript,
@@ -44,10 +45,12 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
     required this.rendererReady,
     required this.remoteRenderer,
     required this.onStart,
+    this.onTogglePause,
     required this.onToggleMute,
     required this.onSendText,
     required this.onSendImage,
     required this.onEnd,
+    this.onRequestClose,
     // KORLIX_LIVE_CONVO_AGENT_HUB_STAGE_BUILD131_BEGIN
     this.activeAgentName = 'My Assistant',
     this.activeAgentDescription =
@@ -86,6 +89,9 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
   final bool connected;
   final bool muted;
 
+  // KORLIX_LIVE_CONVO_HARD_LOCKED_PAUSE_STAGE_BUILD131_V1
+  final bool paused;
+
   final String? error;
   final String userTranscript;
   final String assistantTranscript;
@@ -97,10 +103,12 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
   final rtc.RTCVideoRenderer remoteRenderer;
 
   final Future<void> Function()? onStart;
+  final Future<void> Function()? onTogglePause;
   final Future<void> Function()? onToggleMute;
   final Future<void> Function(String text)? onSendText;
   final KorlixLiveConvoImageSender? onSendImage;
   final Future<void> Function()? onEnd;
+  final Future<bool> Function()? onRequestClose;
 
   final String activeAgentName;
   final String activeAgentDescription;
@@ -307,7 +315,7 @@ class _KorlixLiveConvoCharacterStageState
       return _KorlixLiveVisualPhase.disconnected;
     }
 
-    if (widget.muted) {
+    if (widget.paused || widget.muted) {
       return _KorlixLiveVisualPhase.muted;
     }
 
@@ -384,7 +392,9 @@ class _KorlixLiveConvoCharacterStageState
         return 'Interrupted — listening again';
 
       case _KorlixLiveVisualPhase.muted:
-        return 'Microphone muted';
+        return widget.paused
+            ? 'LIVE CONVO paused and locked'
+            : 'Microphone muted';
 
       case _KorlixLiveVisualPhase.disconnected:
         return 'LIVE CONVO disconnected';
@@ -412,7 +422,10 @@ class _KorlixLiveConvoCharacterStageState
         return 'Continue speaking when ready.';
 
       case _KorlixLiveVisualPhase.muted:
-        return 'Unmute when you are ready to continue.';
+        return widget.paused
+            ? 'The provider voice session is closed. Tap Resume to '
+                  'continue with the current temporary chat context.'
+            : 'Unmute when you are ready to continue.';
 
       case _KorlixLiveVisualPhase.disconnected:
         return 'Check your connection, then reconnect.';
@@ -431,10 +444,24 @@ class _KorlixLiveConvoCharacterStageState
   }
 
   Future<void> _closeStage() async {
+    final requestClose = widget.onRequestClose;
     final end = widget.onEnd;
+    final hasCurrentChat =
+        widget.connected ||
+        widget.connecting ||
+        widget.paused ||
+        widget.transcriptEntries.isNotEmpty;
 
-    if (end != null && (widget.connected || widget.connecting)) {
-      await end();
+    if (hasCurrentChat) {
+      if (requestClose != null) {
+        final shouldClose = await requestClose();
+
+        if (!shouldClose) {
+          return;
+        }
+      } else if (end != null) {
+        await end();
+      }
     }
 
     if (!mounted) {
@@ -1212,7 +1239,10 @@ class _KorlixLiveConvoCharacterStageState
     final phaseColor = _phaseColor(phase);
 
     final canStart =
-        !widget.connecting && !widget.connected && widget.onStart != null;
+        !widget.connecting &&
+        !widget.connected &&
+        !widget.paused &&
+        widget.onStart != null;
 
     final canEnd = widget.onEnd != null;
 
@@ -1435,7 +1465,7 @@ class _KorlixLiveConvoCharacterStageState
                   ),
                   const SizedBox(height: 16),
                 ],
-                if (!widget.connected && !widget.connecting)
+                if (!widget.connected && !widget.connecting && !widget.paused)
                   FilledButton.icon(
                     onPressed: canStart
                         ? () => unawaited(widget.onStart!())
@@ -1470,12 +1500,25 @@ class _KorlixLiveConvoCharacterStageState
                     runSpacing: 16,
                     children: [
                       _circleAction(
+                        icon: widget.paused
+                            ? Icons.play_arrow_rounded
+                            : Icons.pause_rounded,
+                        label: widget.paused ? 'Resume' : 'Lock Pause',
+                        color: widget.paused
+                            ? const Color(0xFF62D6A7)
+                            : const Color(0xFFFFD166),
+                        filled: widget.paused,
+                        onPressed: widget.onTogglePause == null
+                            ? null
+                            : () => unawaited(widget.onTogglePause!()),
+                      ),
+                      _circleAction(
                         icon: widget.muted
                             ? Icons.mic_off_rounded
                             : Icons.mic_rounded,
                         label: widget.muted ? 'Unmute' : 'Mute',
                         color: const Color(0xFF69D9E8),
-                        onPressed: widget.onToggleMute == null
+                        onPressed: widget.paused || widget.onToggleMute == null
                             ? null
                             : () => unawaited(widget.onToggleMute!()),
                       ),
@@ -1572,7 +1615,7 @@ class _KorlixLiveConvoCharacterStageState
                       ),
                       _circleAction(
                         icon: Icons.stop_rounded,
-                        label: 'End',
+                        label: 'Stop',
                         color: const Color(0xFFFF5E73),
                         filled: true,
                         onPressed: canEnd

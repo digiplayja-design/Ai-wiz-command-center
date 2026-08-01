@@ -7,13 +7,9 @@ import 'korlix_live_convo_agent.dart';
 
 // KORLIX_LIVE_CONVO_AGENT_CLIENT_BUILD131_BEGIN
 
-typedef KorlixLiveConvoAgentHeadersBuilder =
-    Map<String, String> Function();
+typedef KorlixLiveConvoAgentHeadersBuilder = Map<String, String> Function();
 
-bool _korlixAgentClientBool(
-  Object? value, {
-  bool fallback = false,
-}) {
+bool _korlixAgentClientBool(Object? value, {bool fallback = false}) {
   if (value is bool) {
     return value;
   }
@@ -22,10 +18,7 @@ bool _korlixAgentClientBool(
     return value != 0;
   }
 
-  final normalized = (value ?? '')
-      .toString()
-      .trim()
-      .toLowerCase();
+  final normalized = (value ?? '').toString().trim().toLowerCase();
 
   if (<String>{'true', 'yes', 'on', '1'}.contains(normalized)) {
     return true;
@@ -38,11 +31,7 @@ bool _korlixAgentClientBool(
   return fallback;
 }
 
-int _korlixAgentClientInt(
-  Object? value, {
-  int fallback = 0,
-  int minimum = 0,
-}) {
+int _korlixAgentClientInt(Object? value, {int fallback = 0, int minimum = 0}) {
   final parsed = value is int
       ? value
       : int.tryParse((value ?? '').toString().trim());
@@ -66,10 +55,7 @@ Map<String, dynamic>? _korlixAgentClientMap(Object? value) {
   return null;
 }
 
-String _korlixAgentClientText(
-  Object? value, {
-  String fallback = '',
-}) {
+String _korlixAgentClientText(Object? value, {String fallback = ''}) {
   final text = (value ?? '').toString().trim();
   return text.isEmpty ? fallback : text;
 }
@@ -120,12 +106,9 @@ class KorlixLiveConvoAgentCatalog {
     return null;
   }
 
-  factory KorlixLiveConvoAgentCatalog.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory KorlixLiveConvoAgentCatalog.fromJson(Map<String, dynamic> json) {
     final persistenceConfigured = _korlixAgentClientBool(
-      json['persistenceConfigured'] ??
-          json['persistence_configured'],
+      json['persistenceConfigured'] ?? json['persistence_configured'],
     );
 
     final parsed = <String, KorlixLiveConvoAgent>{};
@@ -144,8 +127,7 @@ class KorlixLiveConvoAgentCatalog {
         if (agent.id.isNotEmpty) {
           parsed[agent.id] = agent.copyWith(
             persistenceConfigured:
-                agent.persistenceConfigured ||
-                persistenceConfigured,
+                agent.persistenceConfigured || persistenceConfigured,
           );
         }
       }
@@ -153,22 +135,14 @@ class KorlixLiveConvoAgentCatalog {
 
     final result = <KorlixLiveConvoAgent>[];
 
-    for (final fallback
-        in KorlixLiveConvoAgent.builtInFallbacks) {
+    for (final fallback in KorlixLiveConvoAgent.builtInFallbacks) {
       result.add(
         parsed.remove(fallback.id) ??
-            fallback.copyWith(
-              persistenceConfigured:
-                  persistenceConfigured,
-            ),
+            fallback.copyWith(persistenceConfigured: persistenceConfigured),
       );
     }
 
-    result.addAll(
-      parsed.values.where(
-        (agent) => agent.active,
-      ),
-    );
+    result.addAll(parsed.values.where((agent) => agent.active));
 
     return KorlixLiveConvoAgentCatalog(
       agents: List<KorlixLiveConvoAgent>.unmodifiable(result),
@@ -197,24 +171,16 @@ class KorlixLiveConvoAgentVersion {
   final DateTime? createdAt;
 
   String get displayLabel {
-    final cleanSource = source
-        .replaceAll('_', ' ')
-        .trim();
+    final cleanSource = source.replaceAll('_', ' ').trim();
 
     return cleanSource.isEmpty
         ? 'Version $version'
         : 'Version $version — $cleanSource';
   }
 
-  factory KorlixLiveConvoAgentVersion.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory KorlixLiveConvoAgentVersion.fromJson(Map<String, dynamic> json) {
     return KorlixLiveConvoAgentVersion(
-      version: _korlixAgentClientInt(
-        json['version'],
-        fallback: 1,
-        minimum: 1,
-      ),
+      version: _korlixAgentClientInt(json['version'], fallback: 1, minimum: 1),
 
       source: _korlixAgentClientText(
         json['source'],
@@ -222,15 +188,11 @@ class KorlixLiveConvoAgentVersion {
       ),
 
       snapshot: Map<String, dynamic>.unmodifiable(
-        _korlixAgentClientMap(
-              json['snapshot'],
-            ) ??
-            const <String, dynamic>{},
+        _korlixAgentClientMap(json['snapshot']) ?? const <String, dynamic>{},
       ),
 
       createdAt: _korlixAgentClientDate(
-        json['createdAt'] ??
-            json['created_at'],
+        json['createdAt'] ?? json['created_at'],
       ),
     );
   }
@@ -253,9 +215,7 @@ class KorlixLiveConvoAgentClient {
   final bool _ownsClient;
 
   String get _cleanBase {
-    final clean = backendBaseUrl
-        .trim()
-        .replaceFirst(RegExp(r'/+$'), '');
+    final clean = backendBaseUrl.trim().replaceFirst(RegExp(r'/+$'), '');
 
     if (clean.isEmpty) {
       throw const KorlixLiveConvoAgentClientException(
@@ -267,37 +227,24 @@ class KorlixLiveConvoAgentClient {
     return clean;
   }
 
-  Map<String, String> _requestHeaders({
-    required bool hasJsonBody,
-  }) {
-    final headers = Map<String, String>.from(
-      headersBuilder(),
-    )
-      ..removeWhere(
-        (name, _) =>
-            name.trim().toLowerCase() ==
-            'content-type',
-      )
+  Map<String, String> _requestHeaders({required bool hasJsonBody}) {
+    final headers = Map<String, String>.from(headersBuilder())
+      ..removeWhere((name, _) => name.trim().toLowerCase() == 'content-type')
       ..['Accept'] = 'application/json';
 
     if (hasJsonBody) {
-      headers['Content-Type'] =
-          'application/json; charset=utf-8';
+      headers['Content-Type'] = 'application/json; charset=utf-8';
     }
 
     return headers;
   }
 
-  Uri _requestUri(
-    String path, {
-    Map<String, String>? queryParameters,
-  }) {
+  Uri _requestUri(String path, {Map<String, String>? queryParameters}) {
     final uri = Uri.parse('$_cleanBase$path');
 
     final cleanQuery = <String, String>{};
 
-    for (final entry
-        in (queryParameters ?? const <String, String>{}).entries) {
+    for (final entry in (queryParameters ?? const <String, String>{}).entries) {
       final value = entry.value.trim();
 
       if (value.isNotEmpty) {
@@ -305,16 +252,10 @@ class KorlixLiveConvoAgentClient {
       }
     }
 
-    return cleanQuery.isEmpty
-        ? uri
-        : uri.replace(
-            queryParameters: cleanQuery,
-          );
+    return cleanQuery.isEmpty ? uri : uri.replace(queryParameters: cleanQuery);
   }
 
-  Map<String, dynamic>? _decodeResponse(
-    http.Response response,
-  ) {
+  Map<String, dynamic>? _decodeResponse(http.Response response) {
     final body = response.body.trim();
 
     if (body.isEmpty) {
@@ -343,27 +284,20 @@ class KorlixLiveConvoAgentClient {
     }
 
     if (error is Map) {
-      final nested =
-          error['message'] ??
-          error['error'] ??
-          error['detail'];
+      final nested = error['message'] ?? error['error'] ?? error['detail'];
 
-      if (nested != null &&
-          nested.toString().trim().isNotEmpty) {
+      if (nested != null && nested.toString().trim().isNotEmpty) {
         return nested.toString().trim();
       }
     }
 
-    if (message != null &&
-        message.toString().trim().isNotEmpty) {
+    if (message != null && message.toString().trim().isNotEmpty) {
       return message.toString().trim();
     }
 
     final body = response.body.trim();
 
-    if (body.isNotEmpty &&
-        body.length <= 300 &&
-        !body.startsWith('<')) {
+    if (body.isNotEmpty && body.length <= 300 && !body.startsWith('<')) {
       return body;
     }
 
@@ -377,19 +311,19 @@ class KorlixLiveConvoAgentClient {
     Map<String, String>? queryParameters,
     required String fallbackError,
   }) async {
+    // KORLIX_LIVE_CONVO_FRESH_RUNTIME_BUILD131_V1
+    final normalizedMethod = method.trim().toUpperCase();
+    final effectiveQueryParameters = <String, String>{
+      ...?queryParameters,
+      if (normalizedMethod == 'GET')
+        '_korlixFresh': DateTime.now().microsecondsSinceEpoch.toString(),
+    };
     final request = http.Request(
-      method,
-      _requestUri(
-        path,
-        queryParameters: queryParameters,
-      ),
+      normalizedMethod,
+      _requestUri(path, queryParameters: effectiveQueryParameters),
     );
 
-    request.headers.addAll(
-      _requestHeaders(
-        hasJsonBody: body != null,
-      ),
-    );
+    request.headers.addAll(_requestHeaders(hasJsonBody: body != null));
 
     if (body != null) {
       request.body = jsonEncode(body);
@@ -398,9 +332,7 @@ class KorlixLiveConvoAgentClient {
     late final http.StreamedResponse streamedResponse;
 
     try {
-      streamedResponse = await _client
-          .send(request)
-          .timeout(timeout);
+      streamedResponse = await _client.send(request).timeout(timeout);
     } on TimeoutException {
       throw const KorlixLiveConvoAgentClientException(
         'The Agent Hub request timed out. Please try again.',
@@ -415,19 +347,13 @@ class KorlixLiveConvoAgentClient {
       );
     }
 
-    final response =
-        await http.Response.fromStream(streamedResponse);
+    final response = await http.Response.fromStream(streamedResponse);
 
     final decoded = _decodeResponse(response);
 
-    if (response.statusCode < 200 ||
-        response.statusCode >= 300) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
       throw KorlixLiveConvoAgentClientException(
-        _responseMessage(
-          response,
-          decoded,
-          fallback: fallbackError,
-        ),
+        _responseMessage(response, decoded, fallback: fallbackError),
         code: _korlixAgentClientText(
           decoded?['code'],
           fallback: 'agent_hub_request_failed',
@@ -451,9 +377,7 @@ class KorlixLiveConvoAgentClient {
     String key, {
     required String errorMessage,
   }) {
-    final map = _korlixAgentClientMap(
-      response[key],
-    );
+    final map = _korlixAgentClientMap(response[key]);
 
     if (map == null) {
       throw KorlixLiveConvoAgentClientException(
@@ -475,8 +399,7 @@ class KorlixLiveConvoAgentClient {
     return KorlixLiveConvoAgentCatalog.fromJson(response);
   }
 
-  Future<KorlixLiveConvoAgentModelProof>
-  loadModelProof() async {
+  Future<KorlixLiveConvoAgentModelProof> loadModelProof() async {
     final response = await _requestJson(
       method: 'GET',
       path: KorlixLiveConvoAgentApiContract.modelProofPath,
@@ -484,13 +407,10 @@ class KorlixLiveConvoAgentClient {
     );
 
     final nested = _korlixAgentClientMap(
-      response['modelProof'] ??
-          response['model_proof'],
+      response['modelProof'] ?? response['model_proof'],
     );
 
-    return KorlixLiveConvoAgentModelProof.fromJson(
-      nested ?? response,
-    );
+    return KorlixLiveConvoAgentModelProof.fromJson(nested ?? response);
   }
 
   Future<KorlixLiveConvoAgentRuntime> loadRuntime({
@@ -500,9 +420,7 @@ class KorlixLiveConvoAgentClient {
   }) async {
     final response = await _requestJson(
       method: 'GET',
-      path: KorlixLiveConvoAgentApiContract.runtimePath(
-        agentId,
-      ),
+      path: KorlixLiveConvoAgentApiContract.runtimePath(agentId),
       queryParameters: <String, String>{
         'characterName': characterName,
         'language': language,
@@ -513,8 +431,7 @@ class KorlixLiveConvoAgentClient {
     final runtime = _requiredMap(
       response,
       'runtime',
-      errorMessage:
-          'The selected agent returned no runtime configuration.',
+      errorMessage: 'The selected agent returned no runtime configuration.',
     );
 
     return KorlixLiveConvoAgentRuntime.fromJson(runtime);
@@ -534,8 +451,7 @@ class KorlixLiveConvoAgentClient {
       _requiredMap(
         response,
         'agent',
-        errorMessage:
-            'The custom-agent service returned no agent.',
+        errorMessage: 'The custom-agent service returned no agent.',
       ),
     );
   }
@@ -546,9 +462,7 @@ class KorlixLiveConvoAgentClient {
   }) async {
     final response = await _requestJson(
       method: 'PUT',
-      path: KorlixLiveConvoAgentApiContract.agentPath(
-        agentId,
-      ),
+      path: KorlixLiveConvoAgentApiContract.agentPath(agentId),
       body: changes,
       fallbackError: 'Could not update the LIVE CONVO agent.',
     );
@@ -557,8 +471,7 @@ class KorlixLiveConvoAgentClient {
       _requiredMap(
         response,
         'agent',
-        errorMessage:
-            'The agent-update service returned no agent.',
+        errorMessage: 'The agent-update service returned no agent.',
       ),
     );
   }
@@ -583,9 +496,7 @@ class KorlixLiveConvoAgentClient {
 
     final response = await _requestJson(
       method: 'POST',
-      path: KorlixLiveConvoAgentApiContract.trainingPath(
-        agentId,
-      ),
+      path: KorlixLiveConvoAgentApiContract.trainingPath(agentId),
       body: update.toJson(),
       fallbackError: 'Could not save the agent training.',
     );
@@ -594,8 +505,7 @@ class KorlixLiveConvoAgentClient {
       _requiredMap(
         response,
         'agent',
-        errorMessage:
-            'The training service returned no updated agent.',
+        errorMessage: 'The training service returned no updated agent.',
       ),
     );
   }
@@ -605,9 +515,7 @@ class KorlixLiveConvoAgentClient {
   }) async {
     final response = await _requestJson(
       method: 'GET',
-      path: KorlixLiveConvoAgentApiContract.memoriesPath(
-        agentId,
-      ),
+      path: KorlixLiveConvoAgentApiContract.memoriesPath(agentId),
       fallbackError: 'Could not load the agent memories.',
     );
 
@@ -619,16 +527,12 @@ class KorlixLiveConvoAgentClient {
         final map = _korlixAgentClientMap(rawMemory);
 
         if (map != null) {
-          memories.add(
-            KorlixLiveConvoAgentMemory.fromJson(map),
-          );
+          memories.add(KorlixLiveConvoAgentMemory.fromJson(map));
         }
       }
     }
 
-    return List<KorlixLiveConvoAgentMemory>.unmodifiable(
-      memories,
-    );
+    return List<KorlixLiveConvoAgentMemory>.unmodifiable(memories);
   }
 
   Future<KorlixLiveConvoAgentMemory> saveMemory({
@@ -651,9 +555,7 @@ class KorlixLiveConvoAgentClient {
 
     final response = await _requestJson(
       method: 'POST',
-      path: KorlixLiveConvoAgentApiContract.memoriesPath(
-        agentId,
-      ),
+      path: KorlixLiveConvoAgentApiContract.memoriesPath(agentId),
       body: draft.toJson(),
       fallbackError: 'Could not save the long-term memory.',
     );
@@ -662,8 +564,7 @@ class KorlixLiveConvoAgentClient {
       _requiredMap(
         response,
         'memory',
-        errorMessage:
-            'The memory service returned no saved memory.',
+        errorMessage: 'The memory service returned no saved memory.',
       ),
     );
   }
@@ -691,21 +592,12 @@ class KorlixLiveConvoAgentClient {
 
     final response = await _requestJson(
       method: 'POST',
-      path:
-          KorlixLiveConvoAgentApiContract.forgetMemoryPath(
-        agentId,
-      ),
-      body: <String, dynamic>{
-        'confirmed': true,
-        'query': cleanQuery,
-      },
+      path: KorlixLiveConvoAgentApiContract.forgetMemoryPath(agentId),
+      body: <String, dynamic>{'confirmed': true, 'query': cleanQuery},
       fallbackError: 'Could not forget the matching memories.',
     );
 
-    return _korlixAgentClientInt(
-      response['removed'],
-      minimum: 0,
-    );
+    return _korlixAgentClientInt(response['removed'], minimum: 0);
   }
 
   Future<void> deleteMemory({
@@ -722,13 +614,8 @@ class KorlixLiveConvoAgentClient {
 
     await _requestJson(
       method: 'DELETE',
-      path: KorlixLiveConvoAgentApiContract.memoryPath(
-        agentId,
-        memoryId,
-      ),
-      body: const <String, dynamic>{
-        'confirmed': true,
-      },
+      path: KorlixLiveConvoAgentApiContract.memoryPath(agentId, memoryId),
+      body: const <String, dynamic>{'confirmed': true},
       fallbackError: 'Could not delete the memory.',
     );
   }
@@ -746,12 +633,8 @@ class KorlixLiveConvoAgentClient {
 
     await _requestJson(
       method: 'DELETE',
-      path: KorlixLiveConvoAgentApiContract.memoriesPath(
-        agentId,
-      ),
-      body: const <String, dynamic>{
-        'confirmed': true,
-      },
+      path: KorlixLiveConvoAgentApiContract.memoriesPath(agentId),
+      body: const <String, dynamic>{'confirmed': true},
       fallbackError: 'Could not clear the agent memories.',
     );
   }
@@ -761,11 +644,8 @@ class KorlixLiveConvoAgentClient {
   }) async {
     final response = await _requestJson(
       method: 'GET',
-      path: KorlixLiveConvoAgentApiContract.versionsPath(
-        agentId,
-      ),
-      fallbackError:
-          'Could not load the agent training history.',
+      path: KorlixLiveConvoAgentApiContract.versionsPath(agentId),
+      fallbackError: 'Could not load the agent training history.',
     );
 
     final rawVersions = response['versions'];
@@ -776,21 +656,14 @@ class KorlixLiveConvoAgentClient {
         final map = _korlixAgentClientMap(rawVersion);
 
         if (map != null) {
-          versions.add(
-            KorlixLiveConvoAgentVersion.fromJson(map),
-          );
+          versions.add(KorlixLiveConvoAgentVersion.fromJson(map));
         }
       }
     }
 
-    versions.sort(
-      (left, right) =>
-          right.version.compareTo(left.version),
-    );
+    versions.sort((left, right) => right.version.compareTo(left.version));
 
-    return List<KorlixLiveConvoAgentVersion>.unmodifiable(
-      versions,
-    );
+    return List<KorlixLiveConvoAgentVersion>.unmodifiable(versions);
   }
 
   Future<KorlixLiveConvoAgent> restoreVersion({
@@ -807,24 +680,19 @@ class KorlixLiveConvoAgentClient {
 
     final response = await _requestJson(
       method: 'POST',
-      path:
-          KorlixLiveConvoAgentApiContract.restoreVersionPath(
+      path: KorlixLiveConvoAgentApiContract.restoreVersionPath(
         agentId,
         version,
       ),
-      body: const <String, dynamic>{
-        'confirmed': true,
-      },
-      fallbackError:
-          'Could not restore the selected training version.',
+      body: const <String, dynamic>{'confirmed': true},
+      fallbackError: 'Could not restore the selected training version.',
     );
 
     return KorlixLiveConvoAgent.fromJson(
       _requiredMap(
         response,
         'agent',
-        errorMessage:
-            'The restore service returned no updated agent.',
+        errorMessage: 'The restore service returned no updated agent.',
       ),
     );
   }
@@ -842,14 +710,9 @@ class KorlixLiveConvoAgentClient {
 
     await _requestJson(
       method: 'DELETE',
-      path: KorlixLiveConvoAgentApiContract.agentPath(
-        agentId,
-      ),
-      body: const <String, dynamic>{
-        'confirmed': true,
-      },
-      fallbackError:
-          'Could not reset or delete the selected agent.',
+      path: KorlixLiveConvoAgentApiContract.agentPath(agentId),
+      body: const <String, dynamic>{'confirmed': true},
+      fallbackError: 'Could not reset or delete the selected agent.',
     );
   }
 
