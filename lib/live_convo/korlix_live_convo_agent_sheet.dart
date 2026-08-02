@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'korlix_live_convo_agent.dart';
 import 'korlix_live_convo_agent_client.dart';
+import 'korlix_live_convo_agent_file_memory_sheet.dart';
 
 // KORLIX_LIVE_CONVO_AGENT_SHEET_BUILD131_BEGIN
 
@@ -2344,6 +2345,66 @@ class _KorlixAgentMemoryManagerSheetState
     }
   }
 
+  // KORLIX_AGENT_FILE_MEMORY_MANAGER_INTEGRATION_BUILD131_V1_BEGIN
+  Future<void> _openAttachFileMemory() async {
+    if (!widget.agent.persistenceConfigured) {
+      _showMemoryMessage(
+        'Apply the included Supabase '
+        'long-term-memory migration before '
+        'saving memories.',
+        error: true,
+      );
+
+      return;
+    }
+
+    if (!widget.agent.memoryEnabled) {
+      _showMemoryMessage(
+        'Long-term memory is disabled for '
+        '${widget.agent.name}. Enable it in '
+        'Train Agent first.',
+        error: true,
+      );
+
+      return;
+    }
+
+    final savedCount = await showKorlixLiveConvoAgentFileMemorySheet(
+      context: context,
+      client: widget.client,
+      agent: widget.agent,
+    );
+
+    if (!mounted || savedCount == null || savedCount <= 0) {
+      return;
+    }
+
+    setState(() {
+      _changed = true;
+    });
+
+    await _loadMemories(showLoading: false);
+
+    if (!mounted) {
+      return;
+    }
+
+    _showMemoryMessage(
+      savedCount == 1
+          ? '1 file-derived memory was saved privately for '
+                '${widget.agent.name}. Applying it now.'
+          : '$savedCount file-derived memories were saved privately for '
+                '${widget.agent.name}. Applying them now.',
+    );
+
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+
+    if (mounted) {
+      _closeMemoryManager();
+    }
+  }
+  // KORLIX_AGENT_FILE_MEMORY_MANAGER_INTEGRATION_BUILD131_V1_END
+
   Future<void> _deleteMemory(KorlixLiveConvoAgentMemory memory) async {
     final label = memory.label.trim().isEmpty ? memory.content : memory.label;
 
@@ -3094,33 +3155,85 @@ class _KorlixAgentMemoryManagerSheetState
 
     final hasMemories = _memories.isNotEmpty;
 
+    final typeMemoryButton = FilledButton.icon(
+      onPressed: canAdd
+          ? () {
+              unawaited(_openAddMemory());
+            }
+          : null,
+      style: FilledButton.styleFrom(
+        backgroundColor: accent,
+        foregroundColor: const Color(0xFF03110E),
+        disabledBackgroundColor: const Color(0xFF33454B),
+        disabledForegroundColor: const Color(0xFF83969C),
+        padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
+      ),
+      icon: const Icon(Icons.edit_note_rounded),
+      label: const Text(
+        'Type Memory',
+        style: TextStyle(fontWeight: FontWeight.w900),
+      ),
+    );
+
+    final attachFileButton = OutlinedButton.icon(
+      onPressed: canAdd
+          ? () {
+              unawaited(_openAttachFileMemory());
+            }
+          : null,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: accent,
+        disabledForegroundColor: const Color(0xFF83969C),
+        side: BorderSide(
+          color: canAdd
+              ? accent.withValues(alpha: 0.78)
+              : const Color(0xFF33454B),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
+      ),
+      icon: const Icon(Icons.attach_file_rounded),
+      label: const Text(
+        'Attach File',
+        style: TextStyle(fontWeight: FontWeight.w900),
+      ),
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          FilledButton.icon(
-            onPressed: canAdd
-                ? () {
-                    unawaited(_openAddMemory());
-                  }
-                : null,
-            style: FilledButton.styleFrom(
-              backgroundColor: accent,
-              foregroundColor: const Color(0xFF03110E),
-              disabledBackgroundColor: const Color(0xFF33454B),
-              disabledForegroundColor: const Color(0xFF83969C),
-              padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
+          Text(
+            'ADD MEMORY',
+            style: TextStyle(
+              color: accent,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.6,
+              fontSize: 12,
             ),
-            icon: const Icon(Icons.add_rounded),
-            label: Text(
-              !persistenceReady
-                  ? 'Migration Required'
-                  : !memoryEnabled
-                  ? 'Enable Memory First'
-                  : 'Add Confirmed Memory',
-              style: const TextStyle(fontWeight: FontWeight.w900),
-            ),
+          ),
+          const SizedBox(height: 8),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 430) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    typeMemoryButton,
+                    const SizedBox(height: 9),
+                    attachFileButton,
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: typeMemoryButton),
+                  const SizedBox(width: 9),
+                  Expanded(child: attachFileButton),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 9),
           Wrap(

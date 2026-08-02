@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -197,6 +198,502 @@ class KorlixLiveConvoAgentVersion {
     );
   }
 }
+
+// KORLIX_AGENT_FILE_MEMORY_CLIENT_MODELS_BUILD131_V1_BEGIN
+
+class KorlixLiveConvoAgentMemoryFileUpload {
+  KorlixLiveConvoAgentMemoryFileUpload({
+    required String name,
+    required Uint8List bytes,
+  }) : name = _cleanName(name),
+       bytes = Uint8List.fromList(bytes);
+
+  static const List<String> allowedExtensions = <String>[
+    'pdf',
+    'doc',
+    'docx',
+    'xls',
+    'xlsx',
+    'csv',
+    'txt',
+    'md',
+    'rtf',
+    'ppt',
+    'pptx',
+    'jpg',
+    'jpeg',
+    'png',
+    'webp',
+  ];
+
+  static const int maximumFiles = 5;
+  static const int maximumBytesPerFile = 10 * 1024 * 1024;
+
+  final String name;
+  final Uint8List bytes;
+
+  int get sizeBytes => bytes.length;
+
+  String get extension {
+    final match = RegExp(r'\.([a-zA-Z0-9]+)$').firstMatch(name);
+    return match?.group(1)?.toLowerCase() ?? '';
+  }
+
+  String get dedupeKey => '${name.toLowerCase()}|$sizeBytes';
+
+  static String _cleanName(String value) {
+    final clean = value.trim().replaceAll(
+      RegExp(r'[\\/:*?"<>|\u0000-\u001F]'),
+      '_',
+    );
+    return clean.isEmpty ? 'Source file' : clean;
+  }
+}
+
+class KorlixLiveConvoAgentMemoryFileMetadata {
+  const KorlixLiveConvoAgentMemoryFileMetadata({
+    required this.fileName,
+    required this.extension,
+    required this.mimeType,
+    required this.sizeBytes,
+    required this.sha256,
+    required this.detectedSignature,
+    required this.isImage,
+  });
+
+  final String fileName;
+  final String extension;
+  final String mimeType;
+  final int sizeBytes;
+  final String sha256;
+  final String detectedSignature;
+  final bool isImage;
+
+  factory KorlixLiveConvoAgentMemoryFileMetadata.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return KorlixLiveConvoAgentMemoryFileMetadata(
+      fileName: _korlixAgentClientText(
+        json['fileName'] ?? json['file_name'],
+        fallback: 'Source file',
+      ),
+      extension: _korlixAgentClientText(json['extension']).toLowerCase(),
+      mimeType: _korlixAgentClientText(json['mimeType'] ?? json['mime_type']),
+      sizeBytes: _korlixAgentClientInt(
+        json['sizeBytes'] ?? json['size_bytes'] ?? json['size'],
+        minimum: 0,
+      ),
+      sha256: _korlixAgentClientText(json['sha256']).toLowerCase(),
+      detectedSignature: _korlixAgentClientText(
+        json['detectedSignature'] ?? json['detected_signature'],
+      ).toLowerCase(),
+      isImage: _korlixAgentClientBool(json['isImage'] ?? json['is_image']),
+    );
+  }
+}
+
+class KorlixLiveConvoAgentMemoryFileProvenance {
+  const KorlixLiveConvoAgentMemoryFileProvenance({
+    required this.sourceIndex,
+    required this.fileName,
+    required this.extension,
+    required this.mimeType,
+    required this.sizeBytes,
+    required this.sha256,
+    this.page,
+    this.sheet,
+    this.row,
+    this.slide,
+    this.region,
+  });
+
+  final int sourceIndex;
+  final String fileName;
+  final String extension;
+  final String mimeType;
+  final int sizeBytes;
+  final String sha256;
+  final String? page;
+  final String? sheet;
+  final String? row;
+  final String? slide;
+  final String? region;
+
+  factory KorlixLiveConvoAgentMemoryFileProvenance.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    String? optionalText(Object? value) {
+      final clean = _korlixAgentClientText(value);
+      return clean.isEmpty ? null : clean;
+    }
+
+    return KorlixLiveConvoAgentMemoryFileProvenance(
+      sourceIndex: _korlixAgentClientInt(
+        json['sourceIndex'] ?? json['source_index'],
+        minimum: 0,
+      ),
+      fileName: _korlixAgentClientText(
+        json['fileName'] ?? json['file_name'],
+        fallback: 'Source file',
+      ),
+      extension: _korlixAgentClientText(json['extension']).toLowerCase(),
+      mimeType: _korlixAgentClientText(json['mimeType'] ?? json['mime_type']),
+      sizeBytes: _korlixAgentClientInt(
+        json['sizeBytes'] ?? json['size_bytes'] ?? json['size'],
+        minimum: 0,
+      ),
+      sha256: _korlixAgentClientText(json['sha256']).toLowerCase(),
+      page: optionalText(json['page']),
+      sheet: optionalText(json['sheet']),
+      row: optionalText(json['row']),
+      slide: optionalText(json['slide']),
+      region: optionalText(json['region']),
+    );
+  }
+
+  String get sourceLine {
+    final parts = <String>['Source file: $fileName'];
+
+    if (page != null) {
+      parts.add('Page $page');
+    }
+
+    if (sheet != null) {
+      parts.add('Sheet $sheet');
+    }
+
+    if (row != null) {
+      parts.add('Row $row');
+    }
+
+    if (slide != null) {
+      parts.add('Slide $slide');
+    }
+
+    if (region != null) {
+      parts.add('Region $region');
+    }
+
+    if (mimeType.isNotEmpty) {
+      parts.add('MIME: $mimeType');
+    }
+
+    if (sha256.isNotEmpty) {
+      parts.add('SHA-256: $sha256');
+    }
+
+    return '[${parts.join(' | ')}]';
+  }
+
+  String get locationLabel {
+    final parts = <String>[];
+
+    if (page != null) {
+      parts.add('Page $page');
+    }
+
+    if (sheet != null) {
+      parts.add('Sheet $sheet');
+    }
+
+    if (row != null) {
+      parts.add('Row $row');
+    }
+
+    if (slide != null) {
+      parts.add('Slide $slide');
+    }
+
+    if (region != null) {
+      parts.add('Region $region');
+    }
+
+    return parts.join(' · ');
+  }
+}
+
+class KorlixLiveConvoAgentMemoryFileSuggestion {
+  const KorlixLiveConvoAgentMemoryFileSuggestion({
+    required this.id,
+    required this.draft,
+    required this.provenance,
+  });
+
+  final String id;
+  final KorlixLiveConvoMemoryDraft draft;
+  final KorlixLiveConvoAgentMemoryFileProvenance provenance;
+
+  factory KorlixLiveConvoAgentMemoryFileSuggestion.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    final draftMap =
+        _korlixAgentClientMap(json['draft']) ?? const <String, dynamic>{};
+
+    final provenanceMap =
+        _korlixAgentClientMap(json['provenance']) ?? const <String, dynamic>{};
+
+    final rawTags = draftMap['tags'];
+    final tags = <String>[];
+    final seen = <String>{};
+
+    if (rawTags is Iterable<Object?>) {
+      for (final value in rawTags) {
+        final clean = _korlixAgentClientText(value);
+
+        if (clean.isEmpty || !seen.add(clean.toLowerCase())) {
+          continue;
+        }
+
+        tags.add(clean.length <= 48 ? clean : clean.substring(0, 48));
+
+        if (tags.length >= 12) {
+          break;
+        }
+      }
+    }
+
+    final rawImportance = _korlixAgentClientInt(
+      draftMap['importance'],
+      fallback: 3,
+      minimum: 1,
+    );
+
+    final importance = rawImportance > 5 ? 5 : rawImportance;
+
+    return KorlixLiveConvoAgentMemoryFileSuggestion(
+      id: _korlixAgentClientText(
+        json['id'],
+        fallback: 'file-memory-suggestion',
+      ),
+      draft: KorlixLiveConvoMemoryDraft(
+        content: _korlixAgentClientText(draftMap['content']),
+        confirmed: false,
+        kind: _korlixAgentClientText(draftMap['kind'], fallback: 'fact'),
+        label: _korlixAgentClientText(draftMap['label']),
+        tags: List<String>.unmodifiable(tags),
+        importance: importance,
+        sensitive: _korlixAgentClientBool(draftMap['sensitive']),
+        source: _korlixAgentClientText(
+          draftMap['source'],
+          fallback: 'file_memory',
+        ),
+      ),
+      provenance: KorlixLiveConvoAgentMemoryFileProvenance.fromJson(
+        provenanceMap,
+      ),
+    );
+  }
+
+  String get editableContent {
+    return draft.content
+        .replaceFirst(RegExp(r'\s*\[Source file:[^\]]+\]\s*$'), '')
+        .trim();
+  }
+
+  KorlixLiveConvoAgentMemoryFileSuggestion copyWithDraft(
+    KorlixLiveConvoMemoryDraft value,
+  ) {
+    return KorlixLiveConvoAgentMemoryFileSuggestion(
+      id: id,
+      draft: value,
+      provenance: provenance,
+    );
+  }
+
+  KorlixLiveConvoMemoryDraft confirmedDraft() {
+    final body = editableContent;
+    final sourceLine = provenance.sourceLine;
+
+    final content = body.isEmpty ? sourceLine : '$body\n\n$sourceLine';
+
+    final tags = <String>[];
+    final seen = <String>{};
+
+    void addTag(String value) {
+      final clean = value.trim();
+
+      if (clean.isEmpty || !seen.add(clean.toLowerCase())) {
+        return;
+      }
+
+      tags.add(clean.length <= 48 ? clean : clean.substring(0, 48));
+    }
+
+    addTag('file_memory');
+
+    if (provenance.sha256.isNotEmpty) {
+      addTag(
+        'file_${provenance.sha256.substring(0, provenance.sha256.length < 12 ? provenance.sha256.length : 12)}',
+      );
+    }
+
+    if (provenance.extension.isNotEmpty) {
+      addTag('ext_${provenance.extension}');
+    }
+
+    for (final tag in draft.tags) {
+      addTag(tag);
+    }
+
+    return KorlixLiveConvoMemoryDraft(
+      content: content,
+      confirmed: true,
+      kind: draft.kind,
+      label: draft.label,
+      tags: List<String>.unmodifiable(tags.take(12)),
+      importance: draft.importance,
+      sensitive: draft.sensitive,
+      source: draft.source.trim().isEmpty ? 'file_memory' : draft.source,
+    );
+  }
+}
+
+class KorlixLiveConvoAgentMemoryFilePreview {
+  const KorlixLiveConvoAgentMemoryFilePreview({
+    required this.analysisVersion,
+    required this.summary,
+    required this.files,
+    required this.suggestions,
+    required this.requiresApproval,
+    required this.autoSaved,
+    required this.sourceStoredByKorlix,
+    required this.sourceRetentionMessage,
+    required this.maximumFiles,
+    required this.maximumBytesPerFile,
+    required this.maximumSuggestions,
+    required this.creditsUsed,
+    this.tier,
+  });
+
+  final String analysisVersion;
+  final String summary;
+  final List<KorlixLiveConvoAgentMemoryFileMetadata> files;
+  final List<KorlixLiveConvoAgentMemoryFileSuggestion> suggestions;
+  final bool requiresApproval;
+  final bool autoSaved;
+  final bool sourceStoredByKorlix;
+  final String sourceRetentionMessage;
+  final int maximumFiles;
+  final int maximumBytesPerFile;
+  final int maximumSuggestions;
+  final int creditsUsed;
+  final String? tier;
+
+  factory KorlixLiveConvoAgentMemoryFilePreview.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    final files = <KorlixLiveConvoAgentMemoryFileMetadata>[];
+
+    final rawFiles = json['files'];
+
+    if (rawFiles is Iterable<Object?>) {
+      for (final rawFile in rawFiles) {
+        final map = _korlixAgentClientMap(rawFile);
+
+        if (map != null) {
+          files.add(KorlixLiveConvoAgentMemoryFileMetadata.fromJson(map));
+        }
+      }
+    }
+
+    final suggestions = <KorlixLiveConvoAgentMemoryFileSuggestion>[];
+
+    final rawSuggestions = json['suggestions'];
+
+    if (rawSuggestions is Iterable<Object?>) {
+      for (final rawSuggestion in rawSuggestions) {
+        final map = _korlixAgentClientMap(rawSuggestion);
+
+        if (map != null) {
+          suggestions.add(
+            KorlixLiveConvoAgentMemoryFileSuggestion.fromJson(map),
+          );
+        }
+      }
+    }
+
+    final retention =
+        _korlixAgentClientMap(json['sourceRetention']) ??
+        _korlixAgentClientMap(json['source_retention']) ??
+        const <String, dynamic>{};
+
+    final limits =
+        _korlixAgentClientMap(json['limits']) ?? const <String, dynamic>{};
+
+    final requiresApproval = _korlixAgentClientBool(
+      json['requiresApproval'] ?? json['requires_approval'],
+      fallback: true,
+    );
+
+    final autoSaved = _korlixAgentClientBool(
+      json['autoSaved'] ?? json['auto_saved'],
+    );
+
+    final sourceStoredByKorlix = _korlixAgentClientBool(
+      retention['storedByKorlix'] ?? retention['stored_by_korlix'],
+    );
+
+    if (!requiresApproval || autoSaved) {
+      throw const KorlixLiveConvoAgentClientException(
+        'The Agent file-memory preview did not preserve explicit user approval.',
+        code: 'agent_memory_file_approval_boundary_failed',
+      );
+    }
+
+    if (sourceStoredByKorlix) {
+      throw const KorlixLiveConvoAgentClientException(
+        'The Agent file-memory preview unexpectedly retained the source file.',
+        code: 'agent_memory_file_retention_boundary_failed',
+      );
+    }
+
+    if (suggestions.isEmpty) {
+      throw const KorlixLiveConvoAgentClientException(
+        'No durable memory suggestions were returned from the attached files.',
+        code: 'agent_memory_file_no_suggestions',
+      );
+    }
+
+    final rawTier = _korlixAgentClientText(json['tier']);
+
+    return KorlixLiveConvoAgentMemoryFilePreview(
+      analysisVersion: _korlixAgentClientText(
+        json['analysisVersion'] ?? json['analysis_version'],
+      ),
+      summary: _korlixAgentClientText(json['summary']),
+      files: List<KorlixLiveConvoAgentMemoryFileMetadata>.unmodifiable(files),
+      suggestions: List<KorlixLiveConvoAgentMemoryFileSuggestion>.unmodifiable(
+        suggestions,
+      ),
+      requiresApproval: requiresApproval,
+      autoSaved: autoSaved,
+      sourceStoredByKorlix: sourceStoredByKorlix,
+      sourceRetentionMessage: _korlixAgentClientText(retention['message']),
+      maximumFiles: _korlixAgentClientInt(
+        limits['maximumFiles'] ?? limits['maximum_files'],
+        fallback: KorlixLiveConvoAgentMemoryFileUpload.maximumFiles,
+        minimum: 1,
+      ),
+      maximumBytesPerFile: _korlixAgentClientInt(
+        limits['maximumBytesPerFile'] ?? limits['maximum_bytes_per_file'],
+        fallback: KorlixLiveConvoAgentMemoryFileUpload.maximumBytesPerFile,
+        minimum: 1,
+      ),
+      maximumSuggestions: _korlixAgentClientInt(
+        limits['maximumSuggestions'] ?? limits['maximum_suggestions'],
+        fallback: 20,
+        minimum: 1,
+      ),
+      creditsUsed: _korlixAgentClientInt(
+        json['creditsUsed'] ?? json['credits_used'],
+        minimum: 0,
+      ),
+      tier: rawTier.isEmpty ? null : rawTier,
+    );
+  }
+}
+
+// KORLIX_AGENT_FILE_MEMORY_CLIENT_MODELS_BUILD131_V1_END
 
 class KorlixLiveConvoAgentClient {
   KorlixLiveConvoAgentClient({
@@ -638,6 +1135,128 @@ class KorlixLiveConvoAgentClient {
       fallbackError: 'Could not clear the agent memories.',
     );
   }
+
+  // KORLIX_AGENT_FILE_MEMORY_MULTIPART_CLIENT_BUILD131_V1_BEGIN
+  Future<KorlixLiveConvoAgentMemoryFilePreview> analyzeMemoryFiles({
+    required String agentId,
+    required List<KorlixLiveConvoAgentMemoryFileUpload> files,
+  }) async {
+    if (files.isEmpty) {
+      throw const KorlixLiveConvoAgentClientException(
+        'Attach at least one file for Agent memory analysis.',
+        code: 'agent_memory_file_required',
+      );
+    }
+
+    if (files.length > KorlixLiveConvoAgentMemoryFileUpload.maximumFiles) {
+      throw const KorlixLiveConvoAgentClientException(
+        'Attach no more than five files at once.',
+        code: 'agent_memory_file_count_exceeded',
+      );
+    }
+
+    final seen = <String>{};
+
+    for (final file in files) {
+      if (file.bytes.isEmpty) {
+        throw KorlixLiveConvoAgentClientException(
+          '${file.name} is empty or could not be read on this device.',
+          code: 'agent_memory_file_empty',
+        );
+      }
+
+      if (file.sizeBytes >
+          KorlixLiveConvoAgentMemoryFileUpload.maximumBytesPerFile) {
+        throw KorlixLiveConvoAgentClientException(
+          '${file.name} exceeds the 10 MB Agent memory file limit.',
+          code: 'agent_memory_file_too_large',
+        );
+      }
+
+      if (!KorlixLiveConvoAgentMemoryFileUpload.allowedExtensions.contains(
+        file.extension,
+      )) {
+        throw KorlixLiveConvoAgentClientException(
+          '${file.name} is not a supported Agent memory file.',
+          code: 'agent_memory_file_type_unsupported',
+        );
+      }
+
+      if (!seen.add(file.dedupeKey)) {
+        throw KorlixLiveConvoAgentClientException(
+          '${file.name} is attached more than once.',
+          code: 'agent_memory_file_duplicate',
+        );
+      }
+    }
+
+    final request = http.MultipartRequest(
+      'POST',
+      _requestUri(
+        '${KorlixLiveConvoAgentApiContract.agentPath(agentId)}'
+        '/memory-files/analyze',
+      ),
+    );
+
+    request.headers.addAll(_requestHeaders(hasJsonBody: false));
+
+    for (final file in files) {
+      request.files.add(
+        http.MultipartFile.fromBytes('files', file.bytes, filename: file.name),
+      );
+    }
+
+    late final http.StreamedResponse streamedResponse;
+
+    final analysisTimeout = timeout.inMilliseconds < 120000
+        ? const Duration(seconds: 120)
+        : timeout;
+
+    try {
+      streamedResponse = await _client.send(request).timeout(analysisTimeout);
+    } on TimeoutException {
+      throw const KorlixLiveConvoAgentClientException(
+        'Agent memory file analysis timed out. Please try again.',
+        code: 'agent_memory_file_timeout',
+      );
+    } on KorlixLiveConvoAgentClientException {
+      rethrow;
+    } catch (error) {
+      throw KorlixLiveConvoAgentClientException(
+        'Could not reach the Agent memory file-analysis service: $error',
+        code: 'agent_memory_file_network_error',
+      );
+    }
+
+    final response = await http.Response.fromStream(streamedResponse);
+
+    final decoded = _decodeResponse(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw KorlixLiveConvoAgentClientException(
+        _responseMessage(
+          response,
+          decoded,
+          fallback: 'Could not analyze the attached Agent memory files.',
+        ),
+        code: _korlixAgentClientText(
+          decoded?['code'],
+          fallback: 'agent_memory_file_analysis_failed',
+        ),
+        statusCode: response.statusCode,
+      );
+    }
+
+    if (decoded == null) {
+      throw const KorlixLiveConvoAgentClientException(
+        'The Agent memory file-analysis service returned an invalid response.',
+        code: 'invalid_agent_memory_file_response',
+      );
+    }
+
+    return KorlixLiveConvoAgentMemoryFilePreview.fromJson(decoded);
+  }
+  // KORLIX_AGENT_FILE_MEMORY_MULTIPART_CLIENT_BUILD131_V1_END
 
   Future<List<KorlixLiveConvoAgentVersion>> loadVersions({
     required String agentId,
