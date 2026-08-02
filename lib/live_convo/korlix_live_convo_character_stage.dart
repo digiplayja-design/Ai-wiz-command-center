@@ -60,6 +60,11 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
     this.activeAgentMemoryEnabled = true,
     this.activeAgentVersion = 1,
     this.onOpenAgentHub,
+    // KORLIX_LIVE_CONVO_VOICE_SELECTOR_STAGE_BUILD131_V1
+    this.selectedVoiceName = 'Marin',
+    this.selectedVoicePresentation = 'Feminine-presenting',
+    this.selectedAccentName = 'Clear International',
+    this.onOpenVoiceSelector,
     // KORLIX_LIVE_CONVO_AGENT_HUB_STAGE_BUILD131_CONSTRUCTOR_END
     this.liveDocsCaptureActive = false,
     this.liveDocsCapturedTurnCount = 0,
@@ -117,6 +122,10 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
   final bool activeAgentMemoryEnabled;
   final int activeAgentVersion;
   final Future<void> Function()? onOpenAgentHub;
+  final String selectedVoiceName;
+  final String selectedVoicePresentation;
+  final String selectedAccentName;
+  final Future<void> Function()? onOpenVoiceSelector;
 
   final bool liveDocsCaptureActive;
   final int liveDocsCapturedTurnCount;
@@ -1233,6 +1242,79 @@ class _KorlixLiveConvoCharacterStageState
     );
   }
 
+  Widget _buildVoiceSelectorCard() {
+    const accent = Color(0xFF62D6A7);
+    final enabled = widget.onOpenVoiceSelector != null;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: enabled
+            ? () {
+                unawaited(widget.onOpenVoiceSelector!());
+              }
+            : null,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: double.infinity,
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            color: accent.withValues(alpha: 0.08),
+            border: Border.all(
+              color: accent.withValues(alpha: enabled ? 0.68 : 0.34),
+              width: enabled ? 1.3 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.voice_chat_rounded, color: accent),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Voice: ${widget.selectedVoiceName}',
+                      style: const TextStyle(
+                        color: Color(0xFFF1F6F8),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${widget.selectedVoicePresentation} • '
+                      '${widget.selectedAccentName}',
+                      style: const TextStyle(
+                        color: Color(0xFFA9C6CF),
+                        height: 1.3,
+                        fontSize: 12.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: accent.withValues(alpha: enabled ? 0.95 : 0.38),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final phase = _phase;
@@ -1442,6 +1524,8 @@ class _KorlixLiveConvoCharacterStageState
                 ),
                 const SizedBox(height: 14),
                 _buildActiveAgentCard(),
+                const SizedBox(height: 10),
+                _buildVoiceSelectorCard(),
                 const SizedBox(height: 18),
                 if (widget.error != null &&
                     widget.error!.trim().isNotEmpty) ...[

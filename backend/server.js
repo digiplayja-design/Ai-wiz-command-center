@@ -6108,12 +6108,84 @@ function korlixLiveConvoModelV1() {
   );
 }
 
-function korlixLiveConvoVoiceV1() {
-  return korlixLiveConvoEnvStringV1(
+// KORLIX_LIVE_CONVO_MULTI_VOICE_BUILD131_V1
+const KORLIX_LIVE_CONVO_SUPPORTED_VOICES_V1 = Object.freeze([
+  "alloy",
+  "ash",
+  "ballad",
+  "coral",
+  "echo",
+  "sage",
+  "shimmer",
+  "verse",
+  "marin",
+  "cedar",
+]);
+
+const KORLIX_LIVE_CONVO_ACCENT_INSTRUCTIONS_V1 = Object.freeze({
+  neutral:
+    "Use a clear, natural, internationally understandable English delivery. Do not imitate a particular regional accent.",
+  general_american:
+    "When speaking English, use a natural General American accent with clear rhoticity and moderate pacing. Keep the selected conversation language unchanged unless the user asks to switch.",
+  british_english:
+    "When speaking English, use a natural modern British accent with clear consonants and moderate pacing. Keep the selected conversation language unchanged unless the user asks to switch.",
+  australian_english:
+    "When speaking English, use a natural Australian accent with relaxed but clear pacing. Keep the selected conversation language unchanged unless the user asks to switch.",
+  jamaican_caribbean_english:
+    "Use a natural Jamaican or wider Caribbean English-influenced accent while keeping standard English wording unless the user asks for patois or creole. Keep it subtle, intelligible, and never caricatured.",
+  nigerian_english:
+    "When speaking English, use a natural educated Nigerian accent with clear rhythm and moderate pacing. Keep it respectful, never exaggerated, and keep the selected conversation language unchanged unless the user asks to switch.",
+  indian_english:
+    "When speaking English, use a natural educated Indian accent with clear articulation and moderate pacing. Keep it respectful, never exaggerated, and keep the selected conversation language unchanged unless the user asks to switch.",
+  irish_english:
+    "When speaking English, use a natural Irish accent with clear articulation and moderate pacing. Keep the selected conversation language unchanged unless the user asks to switch.",
+  canadian_english:
+    "When speaking English, use a natural Canadian accent with clear articulation and moderate pacing. Keep the selected conversation language unchanged unless the user asks to switch.",
+});
+
+function korlixLiveConvoDefaultVoiceV1() {
+  const configured = korlixLiveConvoEnvStringV1(
     "KORLIX_LIVE_CONVO_VOICE",
     "marin"
-  );
+  ).toLowerCase();
+
+  return KORLIX_LIVE_CONVO_SUPPORTED_VOICES_V1.includes(configured)
+    ? configured
+    : "marin";
 }
+
+function korlixLiveConvoVoiceV1(req = null) {
+  const requested = String(
+    req?.headers?.["x-korlix-live-convo-voice"] || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  return KORLIX_LIVE_CONVO_SUPPORTED_VOICES_V1.includes(requested)
+    ? requested
+    : korlixLiveConvoDefaultVoiceV1();
+}
+
+function korlixLiveConvoAccentIdV1(req = null) {
+  const requested = String(
+    req?.headers?.["x-korlix-live-convo-accent"] || "neutral"
+  )
+    .trim()
+    .toLowerCase();
+
+  return Object.prototype.hasOwnProperty.call(
+    KORLIX_LIVE_CONVO_ACCENT_INSTRUCTIONS_V1,
+    requested
+  )
+    ? requested
+    : "neutral";
+}
+
+function korlixLiveConvoAccentInstructionV1(req = null) {
+  const accentId = korlixLiveConvoAccentIdV1(req);
+  return KORLIX_LIVE_CONVO_ACCENT_INSTRUCTIONS_V1[accentId];
+}
+
 
 function korlixLiveConvoReasoningEffortV1() {
   const configured = korlixLiveConvoEnvStringV1(
@@ -6259,6 +6331,9 @@ function korlixLiveConvoInstructionsV1(req) {
     String(req.headers?.["x-korlix-language"] || "English")
   );
 
+  const accentInstruction =
+    korlixLiveConvoAccentInstructionV1(req);
+
   return [
     "# Role and Objective",
     `You are the user's active Korlix AI agent speaking through the ${characterName} visual and voice character in LIVE CONVO.`,
@@ -6278,6 +6353,10 @@ function korlixLiveConvoInstructionsV1(req) {
     "",
     "# Language",
     `Use ${language} unless the user clearly asks to switch languages.`,
+    "",
+    "# Voice Delivery",
+    accentInstruction,
+    "Keep the selected accent natural, intelligible, and consistent. Never turn an accent into a stereotype or change languages unless the user asks.",
     "",
     "# Conversation Behavior",
     "Listen carefully and allow the user to finish speaking.",
@@ -6329,7 +6408,7 @@ function korlixLiveConvoSessionConfigV1(req) {
         },
       },
       output: {
-        voice: korlixLiveConvoVoiceV1(),
+        voice: korlixLiveConvoVoiceV1(req),
       },
     },
   };
@@ -7306,6 +7385,10 @@ app.get("/api/live-convo/health", (req, res) => {
     ),
     model: korlixLiveConvoModelV1(),
     voice: korlixLiveConvoVoiceV1(),
+    supportedVoices: KORLIX_LIVE_CONVO_SUPPORTED_VOICES_V1,
+    supportedAccents: Object.keys(
+      KORLIX_LIVE_CONVO_ACCENT_INSTRUCTIONS_V1
+    ),
     reasoningEffort: korlixLiveConvoReasoningEffortV1(),
     requiresAuthentication: true,
   });
