@@ -83,16 +83,17 @@ void stopKorlixCharacterSpeechGlobally() {
 
 final List<String> kKorlixBootWarnings = <String>[];
 
-const bool _kKorlixBackendOverrideDeclared =
-    bool.hasEnvironment('AI_WIZARD_BACKEND_URL');
+const bool _kKorlixBackendOverrideDeclared = bool.hasEnvironment(
+  'AI_WIZARD_BACKEND_URL',
+);
 
-const String _kKorlixBackendOverrideUrl =
-    String.fromEnvironment('AI_WIZARD_BACKEND_URL');
+const String _kKorlixBackendOverrideUrl = String.fromEnvironment(
+  'AI_WIZARD_BACKEND_URL',
+);
 
-const String kKorlixBackendBaseUrl =
-    _kKorlixBackendOverrideDeclared
-        ? _kKorlixBackendOverrideUrl
-        : 'https://chee-chai-chee-backend.onrender.com';
+const String kKorlixBackendBaseUrl = _kKorlixBackendOverrideDeclared
+    ? _kKorlixBackendOverrideUrl
+    : 'https://chee-chai-chee-backend.onrender.com';
 Future<void> main() async {
   await runZonedGuarded<Future<void>>(
     () async {
@@ -3926,6 +3927,449 @@ class LanguageCopy {
     required this.quickActions,
   });
 }
+
+// KORLIX_LIVE_CONVO_HERO_BUTTON_BUILD131_BEGIN
+
+class _KorlixLiveConvoHeroButton extends StatefulWidget {
+  const _KorlixLiveConvoHeroButton({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  State<_KorlixLiveConvoHeroButton> createState() {
+    return _KorlixLiveConvoHeroButtonState();
+  }
+}
+
+class _KorlixLiveConvoHeroButtonState extends State<_KorlixLiveConvoHeroButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _energyController;
+
+  bool _hovered = false;
+  bool _pressed = false;
+  bool _reduceMotion = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _energyController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final media = MediaQuery.maybeOf(context);
+
+    final reduceMotion =
+        (media?.disableAnimations ?? false) ||
+        (media?.accessibleNavigation ?? false);
+
+    _reduceMotion = reduceMotion;
+
+    if (_reduceMotion) {
+      _energyController
+        ..stop()
+        ..value = 0.22;
+    } else if (!_energyController.isAnimating) {
+      _energyController.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _energyController.dispose();
+    super.dispose();
+  }
+
+  double _triangleWave(double value) {
+    final doubled = (value * 2.0) % 2.0;
+
+    return doubled <= 1.0 ? doubled : 2.0 - doubled;
+  }
+
+  double _barHeight(double phase, int index) {
+    if (_reduceMotion) {
+      const heights = <double>[17, 29, 22, 33, 14];
+
+      return heights[index];
+    }
+
+    final shifted = (phase + (index * 0.165)) % 1.0;
+
+    final wave = 1.0 - ((shifted * 2.0) - 1.0).abs();
+
+    return 12.0 + (wave * 23.0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onPressed != null;
+
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: 'LIVE CONVO',
+      hint: 'Start a real-time voice conversation with Korlix.',
+      child: Tooltip(
+        message: 'Start LIVE CONVO',
+        child: AnimatedBuilder(
+          animation: _energyController,
+          builder: (context, child) {
+            final phase = _reduceMotion ? 0.22 : _energyController.value;
+
+            final pulse = _reduceMotion ? 0.58 : _triangleWave(phase);
+
+            final interactionScale = _pressed
+                ? 0.974
+                : _hovered
+                ? 1.018
+                : 1.0;
+
+            final pulseScale = _reduceMotion ? 0.0 : 0.011 * pulse;
+
+            final cyanAlpha = enabled ? 0.34 + (0.38 * pulse) : 0.10;
+
+            final magentaAlpha = enabled ? 0.20 + (0.28 * pulse) : 0.07;
+
+            return Transform.scale(
+              scale: interactionScale + pulseScale,
+              child: Opacity(
+                opacity: enabled ? 1.0 : 0.54,
+                child: Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(minHeight: 82),
+                  padding: const EdgeInsets.all(2.7),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(26),
+                    gradient: SweepGradient(
+                      colors: const <Color>[
+                        Color(0xFFFFD166),
+                        Color(0xFFFFFFFF),
+                        Color(0xFF21D4F4),
+                        Color(0xFF7C4DFF),
+                        Color(0xFFFF4FD8),
+                        Color(0xFFFFD166),
+                      ],
+                      stops: const <double>[0.00, 0.14, 0.31, 0.52, 0.76, 1.00],
+                      transform: GradientRotation(phase * 6.283185307179586),
+                    ),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: const Color(
+                          0xFF21D4F4,
+                        ).withValues(alpha: cyanAlpha),
+                        blurRadius: 25 + (pulse * 18),
+                        spreadRadius: 0.7 + (pulse * 2.2),
+                      ),
+                      BoxShadow(
+                        color: const Color(
+                          0xFFFF4FD8,
+                        ).withValues(alpha: magentaAlpha),
+                        blurRadius: 34 + (pulse * 17),
+                        spreadRadius: 0.3 + (pulse * 1.3),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.52),
+                        blurRadius: 18,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(23.3),
+                    child: Ink(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(23.3),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: <Color>[
+                            Color(0xFF020C14),
+                            Color(0xFF073149),
+                            Color(0xFF281044),
+                            Color(0xFF07131D),
+                          ],
+                          stops: <double>[0.00, 0.36, 0.72, 1.00],
+                        ),
+                        border: Border.all(
+                          color: Colors.white.withValues(
+                            alpha: 0.15 + (pulse * 0.18),
+                          ),
+                          width: 1.1,
+                        ),
+                      ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(23.3),
+                        onTap: widget.onPressed,
+                        onHover: enabled
+                            ? (value) {
+                                if (!mounted || _hovered == value) {
+                                  return;
+                                }
+
+                                setState(() {
+                                  _hovered = value;
+                                });
+                              }
+                            : null,
+                        onHighlightChanged: enabled
+                            ? (value) {
+                                if (!mounted || _pressed == value) {
+                                  return;
+                                }
+
+                                setState(() {
+                                  _pressed = value;
+                                });
+                              }
+                            : null,
+                        splashColor: const Color(
+                          0xFF21D4F4,
+                        ).withValues(alpha: 0.25),
+                        highlightColor: Colors.white.withValues(alpha: 0.07),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          child: Row(
+                            children: <Widget>[
+                              Container(
+                                width: 58,
+                                height: 58,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: const LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: <Color>[
+                                      Color(0xFFFFD166),
+                                      Color(0xFF21D4F4),
+                                      Color(0xFF7C4DFF),
+                                    ],
+                                  ),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.76),
+                                    width: 1.1,
+                                  ),
+                                  boxShadow: <BoxShadow>[
+                                    BoxShadow(
+                                      color: const Color(0xFF21D4F4).withValues(
+                                        alpha: 0.38 + (pulse * 0.34),
+                                      ),
+                                      blurRadius: 16 + (pulse * 10),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: List<Widget>.generate(5, (index) {
+                                    return Container(
+                                      width: 4,
+                                      height: _barHeight(phase, index),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(99),
+                                        gradient: const LinearGradient(
+                                          begin: Alignment.topCenter,
+                                          end: Alignment.bottomCenter,
+                                          colors: <Color>[
+                                            Color(0xFFFFFFFF),
+                                            Color(0xFF07131D),
+                                          ],
+                                        ),
+                                        boxShadow: <BoxShadow>[
+                                          BoxShadow(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.42,
+                                            ),
+                                            blurRadius: 3,
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Row(
+                                      children: <Widget>[
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 7,
+                                            vertical: 3,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFF335F),
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                            boxShadow: <BoxShadow>[
+                                              BoxShadow(
+                                                color: const Color(0xFFFF335F)
+                                                    .withValues(
+                                                      alpha:
+                                                          0.42 + (pulse * 0.42),
+                                                    ),
+                                                blurRadius: 6 + (pulse * 7),
+                                              ),
+                                            ],
+                                          ),
+                                          child: const Text(
+                                            'LIVE',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontFamily: 'monospace',
+                                              fontSize: 8.5,
+                                              fontWeight: FontWeight.w900,
+                                              letterSpacing: 1.4,
+                                              height: 1.0,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 7),
+                                        const Text(
+                                          'VOICE-FIRST AI',
+                                          style: TextStyle(
+                                            color: Color(0xFFBDEFFF),
+                                            fontFamily: 'monospace',
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 1.65,
+                                            height: 1.0,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 7),
+                                    ShaderMask(
+                                      blendMode: BlendMode.srcIn,
+                                      shaderCallback: (bounds) {
+                                        return LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: const <Color>[
+                                            Color(0xFFFFD166),
+                                            Color(0xFFFFFFFF),
+                                            Color(0xFF21D4F4),
+                                            Color(0xFFFF4FD8),
+                                          ],
+                                          stops: const <double>[
+                                            0.00,
+                                            0.28,
+                                            0.64,
+                                            1.00,
+                                          ],
+                                          transform: GradientRotation(
+                                            (phase - 0.5) * 0.72,
+                                          ),
+                                        ).createShader(bounds);
+                                      },
+                                      child: const Text(
+                                        'LIVE CONVO',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontFamily: 'monospace',
+                                          fontSize: 21,
+                                          fontWeight: FontWeight.w900,
+                                          fontStyle: FontStyle.italic,
+                                          letterSpacing: 3.1,
+                                          height: 1.0,
+                                          shadows: <Shadow>[
+                                            Shadow(
+                                              color: Color(0xB821D4F4),
+                                              blurRadius: 10,
+                                            ),
+                                            Shadow(
+                                              color: Color(0x99FF4FD8),
+                                              blurRadius: 16,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    const Text(
+                                      'TAP TO TALK  •  REAL-TIME AI',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Color(0xFFD9F8FF),
+                                        fontFamily: 'monospace',
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 1.35,
+                                        height: 1.0,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withValues(
+                                    alpha: 0.10 + (pulse * 0.08),
+                                  ),
+                                  border: Border.all(
+                                    color: const Color(
+                                      0xFFFFD166,
+                                    ).withValues(alpha: 0.75),
+                                    width: 1.1,
+                                  ),
+                                  boxShadow: <BoxShadow>[
+                                    BoxShadow(
+                                      color: const Color(0xFFFFD166).withValues(
+                                        alpha: 0.18 + (pulse * 0.24),
+                                      ),
+                                      blurRadius: 10 + (pulse * 8),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.arrow_forward_rounded,
+                                  color: Color(0xFFFFE8A6),
+                                  size: 22,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+// KORLIX_LIVE_CONVO_HERO_BUTTON_BUILD131_END
 
 class AppLanguages {
   static const List<LanguageCopy> all = [
@@ -15739,6 +16183,12 @@ Make the entire output professional, well-structured using Markdown, and product
 
                 SizedBox(height: 12),
 
+                // KORLIX_LIVE_CONVO_HERO_HOME_SLOT_BUILD131_BEGIN
+                _KorlixLiveConvoHeroButton(
+                  onPressed: _loading ? null : _openLiveConvoAudioTest,
+                ),
+                const SizedBox(height: 14),
+                // KORLIX_LIVE_CONVO_HERO_HOME_SLOT_BUILD131_END
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -15760,14 +16210,6 @@ Make the entire output professional, well-structured using Markdown, and product
                       success: false,
                       active: false,
                       onPressed: _loading ? null : _capturePhotoAndAskShortcut,
-                    ),
-                    // KORLIX_LIVE_CONVO_PHASE2B_BUTTON
-                    toolButton(
-                      icon: Icons.graphic_eq_rounded,
-                      label: 'LIVE CONVO',
-                      active: false,
-                      success: false,
-                      onPressed: _loading ? null : _openLiveConvoAudioTest,
                     ),
                     toolButton(
                       icon: Icons.mic_rounded,
@@ -15818,9 +16260,14 @@ Make the entire output professional, well-structured using Markdown, and product
                   spacing: 9,
                   runSpacing: 9,
                   alignment: WrapAlignment.center,
+                  // KORLIX_CREDIT_PUBLIC_ENTRY_HIDDEN_BUILD131_BEGIN
+                  // Preserve the credit QuickActions in source while excluding
+                  // them from the public home-screen action list.
                   children: t.quickActions
+                      .where((action) => !_isCreditReportActionSafeUi(action))
                       .map(_buildSafeUiQuickActionChip)
                       .toList(),
+                  // KORLIX_CREDIT_PUBLIC_ENTRY_HIDDEN_BUILD131_END
                 ),
 
                 if (_error != null) ...[
