@@ -35,6 +35,7 @@ import 'image_to_video/image_to_video_screen.dart';
 import 'live_convo/korlix_live_convo_test_screen.dart';
 
 import 'billing/korlix_apple_billing.dart';
+import 'privacy/korlix_third_party_ai_consent.dart';
 
 const String kKorlixImaginePicturePrompt =
     'Describe the picture you want Korlix AI to create.';
@@ -2186,6 +2187,968 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     }
   }
 
+
+  // KORLIX_SAVED_SETTINGS_DELETE_BUILD131_V1_BEGIN
+
+  Map<String, dynamic> _savedSettingsResponseJson(http.Response response) {
+    final body = response.body.trim();
+
+    if (body.isEmpty) {
+      return <String, dynamic>{};
+    }
+
+    final decoded = jsonDecode(body);
+
+    if (decoded is Map) {
+      return decoded.cast<String, dynamic>();
+    }
+
+    return <String, dynamic>{};
+  }
+
+  Future<bool> _confirmSavedSettingsDeletion({
+    required String title,
+    required String message,
+    required String confirmLabel,
+  }) async {
+    if (!mounted) {
+      return false;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF071B27),
+          title: Text(
+            title,
+            style: const TextStyle(
+              color: Color(0xFFE4EBEE),
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          content: Text(
+            message,
+            style: const TextStyle(
+              color: Color(0xFFA9C6CF),
+              height: 1.4,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.delete_forever_rounded),
+              label: Text(confirmLabel),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    return confirmed == true;
+  }
+
+  Future<void> _deleteSavedHistoryById(String historyId) async {
+    final id = historyId.trim();
+
+    if (id.isEmpty) {
+      throw Exception('This saved generation has no valid record ID.');
+    }
+
+    final response = await http
+        .delete(
+          _assertValidKorlixBackendUri(
+            '$kKorlixBackendBaseUrl/api/history/${Uri.encodeComponent(id)}',
+          ),
+          headers: _headers(),
+        )
+        .timeout(const Duration(seconds: 20));
+
+    final data = _savedSettingsResponseJson(response);
+
+    if (response.statusCode >= 400) {
+      throw Exception(data['error'] ?? 'Could not delete the saved generation.');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadSavedHistoryBatch() async {
+    final response = await http
+        .get(
+          _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/history'),
+          headers: _headers(),
+        )
+        .timeout(const Duration(seconds: 20));
+
+    final data = _savedSettingsResponseJson(response);
+
+    if (response.statusCode >= 400) {
+      throw Exception(data['error'] ?? 'Could not refresh Saved Settings.');
+    }
+
+    final rawHistory = data['history'];
+
+    if (rawHistory is! List) {
+      return const <Map<String, dynamic>>[];
+    }
+
+    return rawHistory
+        .whereType<Map>()
+        .map((row) => row.cast<String, dynamic>())
+        .toList(growable: false);
+  }
+
+  Future<bool> _deleteSavedHistoryItem({
+    required String historyId,
+    required String prompt,
+  }) async {
+    final confirmed = await _confirmSavedSettingsDeletion(
+      title: 'Delete saved generation?',
+      message:
+          'Delete this Saved Settings record permanently? This cannot be '
+          'undone. Any copy already downloaded to your device will remain '
+          'on that device.\n\n${prompt.trim().isEmpty ? 'Saved generation' : prompt.trim()}',
+      confirmLabel: 'Delete',
+    );
+
+    if (!confirmed) {
+      return false;
+    }
+
+    try {
+      await _deleteSavedHistoryById(historyId);
+      return true;
+    } catch (error) {
+      await _showKorlixNotice(
+        title: 'Delete failed',
+        message: _cleanError(error),
+        danger: true,
+      );
+      return false;
+    }
+  }
+
+  Future<int?> _deleteAllSavedHistoryItems({required int loadedCount}) async {
+    final confirmed = await _confirmSavedSettingsDeletion(
+      title: 'Delete all Saved Settings?',
+      message:
+          'Permanently delete every saved generation associated with your '
+          'signed-in KORLIX account${loadedCount > 0 ? ' ($loadedCount currently loaded)' : ''}? '
+          'This cannot be undone. Files already downloaded to your device '
+          'will not be removed.',
+      confirmLabel: 'Delete All',
+    );
+
+    if (!confirmed) {
+      return null;
+    }
+
+    var deletedCount = 0;
+
+    try {
+      while (true) {
+        final rows = await _loadSavedHistoryBatch();
+
+        if (rows.isEmpty) {
+          break;
+        }
+
+        final ids = rows
+            .map((row) => (row['id'] ?? '').toString().trim())
+            .where((id) => id.isNotEmpty)
+            .toList(growable: false);
+
+        if (ids.isEmpty) {
+          throw Exception(
+            'KORLIX could not identify the remaining Saved Settings records.',
+          );
+        }
+
+        for (final id in ids) {
+          await _deleteSavedHistoryById(id);
+          deletedCount += 1;
+        }
+
+        if (deletedCount > 10000) {
+          throw Exception(
+            'The Saved Settings deletion safety limit was reached. Please '
+            'contact KORLIX support before trying again.',
+          );
+        }
+      }
+
+      return deletedCount;
+    } catch (error) {
+      await _showKorlixNotice(
+        title: 'Delete All failed',
+        message: _cleanError(error),
+        danger: true,
+      );
+      return null;
+    }
+  }
+
+  // KORLIX_SAVED_SETTINGS_DELETE_BUILD131_V1_END
+
+  // KORLIX_BRAIN_VAULT_SECURITY_SETTINGS_UI_BUILD131_V1_BEGIN
+
+  bool _brainVaultSecurityBool(Object? value) {
+    if (value is bool) {
+      return value;
+    }
+
+    return value?.toString().trim().toLowerCase() == 'true';
+  }
+
+  int _brainVaultSecurityInt(Object? value) {
+    if (value is int) {
+      return value;
+    }
+
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  String _brainVaultSecurityDate(Object? value) {
+    final raw = value?.toString().trim() ?? '';
+
+    if (raw.isEmpty) {
+      return 'Not available';
+    }
+
+    final parsed = DateTime.tryParse(raw);
+
+    if (parsed == null) {
+      return raw;
+    }
+
+    final local = parsed.toLocal();
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+
+    return '${local.year}-$month-$day $hour:$minute';
+  }
+
+  Future<Map<String, dynamic>> _brainVaultSecurityRequest({
+    required String path,
+    Map<String, dynamic>? body,
+  }) async {
+    final uri = _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl$path');
+    final response = body == null
+        ? await http
+              .get(uri, headers: _headers())
+              .timeout(const Duration(seconds: 25))
+        : await http
+              .post(
+                uri,
+                headers: _headers(),
+                body: jsonEncode(body),
+              )
+              .timeout(const Duration(seconds: 25));
+    final data = _savedSettingsResponseJson(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        data['error'] ?? 'Could not update BRAIN VAULT security.',
+      );
+    }
+
+    return data;
+  }
+
+  Future<bool> _openBrainVaultCredentialDialog({
+    required String mode,
+  }) async {
+    final isSet = mode == 'set';
+    final isChange = mode == 'change';
+    final isReset = mode == 'reset';
+
+    if (!isSet && !isChange && !isReset) {
+      throw ArgumentError.value(mode, 'mode', 'Unsupported BRAIN VAULT action');
+    }
+
+    final accountPasswordController = TextEditingController();
+    final currentVaultPasswordController = TextEditingController();
+    final newVaultPasswordController = TextEditingController();
+    final confirmationController = TextEditingController();
+    var working = false;
+    var obscurePasswords = true;
+    String? errorText;
+
+    final title = isSet
+        ? 'Set BRAIN VAULT Password'
+        : isChange
+        ? 'Change BRAIN VAULT Password'
+        : 'Reset BRAIN VAULT Password';
+    final actionLabel = isSet
+        ? 'Set Password'
+        : isChange
+        ? 'Change Password'
+        : 'Reset Password';
+
+    try {
+      final completed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (statefulDialogContext, setDialogState) {
+              Widget passwordField({
+                required TextEditingController controller,
+                required String label,
+                required TextInputAction textInputAction,
+                VoidCallback? onSubmitted,
+              }) {
+                return TextField(
+                  controller: controller,
+                  enabled: !working,
+                  obscureText: obscurePasswords,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  smartDashesType: SmartDashesType.disabled,
+                  smartQuotesType: SmartQuotesType.disabled,
+                  keyboardType: TextInputType.visiblePassword,
+                  textInputAction: textInputAction,
+                  autofillHints: const <String>[],
+                  style: const TextStyle(color: Color(0xFFF0F7F8)),
+                  onChanged: (_) {
+                    if (errorText == null) {
+                      return;
+                    }
+
+                    setDialogState(() {
+                      errorText = null;
+                    });
+                  },
+                  onSubmitted: onSubmitted == null
+                      ? null
+                      : (_) {
+                          onSubmitted();
+                        },
+                  decoration: InputDecoration(
+                    labelText: label,
+                    prefixIcon: const Icon(Icons.password_rounded),
+                  ),
+                );
+              }
+
+              Future<void> submit() async {
+                if (working) {
+                  return;
+                }
+
+                final accountPassword = accountPasswordController.text;
+                final currentVaultPassword =
+                    currentVaultPasswordController.text;
+                final newVaultPassword = newVaultPasswordController.text;
+                final confirmation = confirmationController.text;
+                String? validationError;
+
+                if (accountPassword.isEmpty) {
+                  validationError = 'Enter the current KORLIX login password.';
+                } else if (isChange &&
+                    (currentVaultPassword.length < 12 ||
+                        currentVaultPassword.length > 128)) {
+                  validationError =
+                      'Enter the current 12 to 128 character BRAIN VAULT password.';
+                } else if (newVaultPassword.length < 12 ||
+                    newVaultPassword.length > 128) {
+                  validationError =
+                      'The new BRAIN VAULT password must contain 12 to 128 characters.';
+                } else if (newVaultPassword != confirmation) {
+                  validationError = 'The BRAIN VAULT passwords do not match.';
+                } else if (newVaultPassword == accountPassword) {
+                  validationError =
+                      'The BRAIN VAULT password must differ from the KORLIX login password.';
+                }
+
+                if (validationError != null) {
+                  setDialogState(() {
+                    errorText = validationError;
+                  });
+                  return;
+                }
+
+                setDialogState(() {
+                  working = true;
+                  errorText = null;
+                });
+
+                try {
+                  final path = isSet
+                      ? '/api/brain-vault/password/set'
+                      : isChange
+                      ? '/api/brain-vault/password/change'
+                      : '/api/brain-vault/password/reset';
+                  final body = isSet
+                      ? <String, dynamic>{
+                          'accountPassword': accountPassword,
+                          'vaultPassword': newVaultPassword,
+                          'confirmVaultPassword': confirmation,
+                        }
+                      : isChange
+                      ? <String, dynamic>{
+                          'accountPassword': accountPassword,
+                          'currentVaultPassword': currentVaultPassword,
+                          'newVaultPassword': newVaultPassword,
+                          'confirmVaultPassword': confirmation,
+                        }
+                      : <String, dynamic>{
+                          'accountPassword': accountPassword,
+                          'newVaultPassword': newVaultPassword,
+                          'confirmVaultPassword': confirmation,
+                        };
+
+                  await _brainVaultSecurityRequest(path: path, body: body);
+
+                  accountPasswordController.clear();
+                  currentVaultPasswordController.clear();
+                  newVaultPasswordController.clear();
+                  confirmationController.clear();
+
+                  if (!mounted || !statefulDialogContext.mounted) {
+                    return;
+                  }
+
+                  Navigator.of(statefulDialogContext).pop(true);
+                } catch (error) {
+                  accountPasswordController.clear();
+                  currentVaultPasswordController.clear();
+                  newVaultPasswordController.clear();
+                  confirmationController.clear();
+
+                  if (!mounted || !statefulDialogContext.mounted) {
+                    return;
+                  }
+
+                  setDialogState(() {
+                    working = false;
+                    errorText = _cleanError(error);
+                  });
+                }
+              }
+
+              return AlertDialog(
+                backgroundColor: const Color(0xFF071722),
+                title: Row(
+                  children: [
+                    const Icon(
+                      Icons.admin_panel_settings_rounded,
+                      color: Color(0xFFB794F4),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          color: Color(0xFFF0F7F8),
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                content: SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'Only the authenticated Account Manager may manage this '
+                          'credential. The BRAIN VAULT password is separate from '
+                          'the KORLIX login password and is never stored in an '
+                          'agent brain or export.',
+                          style: TextStyle(
+                            color: Color(0xFFD8E7EA),
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        passwordField(
+                          controller: accountPasswordController,
+                          label: 'Current KORLIX login password',
+                          textInputAction: TextInputAction.next,
+                        ),
+                        if (isChange) ...[
+                          const SizedBox(height: 12),
+                          passwordField(
+                            controller: currentVaultPasswordController,
+                            label: 'Current BRAIN VAULT password',
+                            textInputAction: TextInputAction.next,
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        passwordField(
+                          controller: newVaultPasswordController,
+                          label: isSet
+                              ? 'New BRAIN VAULT password'
+                              : 'New BRAIN VAULT password',
+                          textInputAction: TextInputAction.next,
+                        ),
+                        const SizedBox(height: 12),
+                        passwordField(
+                          controller: confirmationController,
+                          label: 'Confirm BRAIN VAULT password',
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: () {
+                            unawaited(submit());
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: !obscurePasswords,
+                              onChanged: working
+                                  ? null
+                                  : (value) {
+                                      setDialogState(() {
+                                        obscurePasswords = value != true;
+                                      });
+                                    },
+                            ),
+                            const Expanded(
+                              child: Text(
+                                'Show passwords',
+                                style: TextStyle(color: Color(0xFFC7D7DC)),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (errorText != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            errorText!,
+                            style: const TextStyle(
+                              color: Colors.redAccent,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                        if (working) ...[
+                          const SizedBox(height: 12),
+                          const LinearProgressIndicator(
+                            minHeight: 3,
+                            color: Color(0xFFB794F4),
+                            backgroundColor: Color(0xFF243240),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: working
+                        ? null
+                        : () {
+                            Navigator.of(statefulDialogContext).pop(false);
+                          },
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: working
+                        ? null
+                        : () {
+                            unawaited(submit());
+                          },
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFB794F4),
+                      foregroundColor: const Color(0xFF160A22),
+                    ),
+                    icon: working
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: Color(0xFF160A22),
+                            ),
+                          )
+                        : const Icon(Icons.verified_user_rounded),
+                    label: Text(
+                      actionLabel,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+
+      return completed == true;
+    } finally {
+      accountPasswordController.clear();
+      currentVaultPasswordController.clear();
+      newVaultPasswordController.clear();
+      confirmationController.clear();
+      accountPasswordController.dispose();
+      currentVaultPasswordController.dispose();
+      newVaultPasswordController.dispose();
+      confirmationController.dispose();
+    }
+  }
+
+  Future<void> _openBrainVaultSecuritySettings() async {
+    late final Map<String, dynamic> status;
+
+    try {
+      status = await _brainVaultSecurityRequest(
+        path: '/api/brain-vault/security-status',
+      );
+    } catch (error) {
+      await _showKorlixNotice(
+        title: 'BRAIN VAULT Security unavailable',
+        message: _cleanError(error),
+        danger: true,
+      );
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    final configured = _brainVaultSecurityBool(status['configured']);
+    final canManage = _brainVaultSecurityBool(status['canManage']);
+    final passwordVersion = _brainVaultSecurityInt(status['passwordVersion']);
+    final failedAttemptCount = _brainVaultSecurityInt(
+      status['failedAttemptCount'],
+    );
+    final lockedUntilRaw = status['lockedUntil']?.toString().trim() ?? '';
+    final lockedUntil = DateTime.tryParse(lockedUntilRaw);
+    final currentlyLocked = lockedUntil != null &&
+        lockedUntil.toUtc().isAfter(DateTime.now().toUtc());
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: const Color(0xCC02070C),
+      builder: (sheetContext) {
+        Future<void> runAction(String mode) async {
+          final completed = await _openBrainVaultCredentialDialog(mode: mode);
+
+          if (!mounted || !sheetContext.mounted || !completed) {
+            return;
+          }
+
+          Navigator.of(sheetContext).pop();
+
+          await _showKorlixNotice(
+            title: 'BRAIN VAULT Security updated',
+            message: mode == 'set'
+                ? 'The separate Account Manager BRAIN VAULT password is now configured.'
+                : mode == 'change'
+                ? 'The BRAIN VAULT password was changed successfully.'
+                : 'The BRAIN VAULT password was reset successfully.',
+          );
+        }
+
+        return Material(
+          color: Colors.transparent,
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: double.infinity,
+              constraints: BoxConstraints(
+                maxWidth: 760,
+                maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.92,
+              ),
+              margin: const EdgeInsets.only(top: 24),
+              decoration: const BoxDecoration(
+                color: Color(0xFF041019),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Color(0x66000000),
+                    blurRadius: 34,
+                    offset: Offset(0, -8),
+                  ),
+                ],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: SafeArea(
+                top: false,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 30),
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            color: const Color(0xFFB794F4).withValues(alpha: 0.14),
+                            border: Border.all(
+                              color: const Color(0xFFB794F4).withValues(alpha: 0.58),
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.admin_panel_settings_rounded,
+                            color: Color(0xFFDFC9FF),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'BRAIN VAULT Security',
+                                style: TextStyle(
+                                  color: Color(0xFFF0F7F8),
+                                  fontSize: 21,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              SizedBox(height: 3),
+                              Text(
+                                'Account Manager controls',
+                                style: TextStyle(
+                                  color: Color(0xFFB794F4),
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Close BRAIN VAULT Security',
+                          onPressed: () {
+                            Navigator.of(sheetContext).pop();
+                          },
+                          icon: const Icon(Icons.close_rounded),
+                          color: const Color(0xFFC7D7DC),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        color: const Color(0xFF081B25),
+                        border: Border.all(color: const Color(0xFF2B5360)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                configured
+                                    ? Icons.verified_user_rounded
+                                    : Icons.gpp_maybe_rounded,
+                                color: configured
+                                    ? const Color(0xFF62D6A7)
+                                    : const Color(0xFFFFC566),
+                              ),
+                              const SizedBox(width: 9),
+                              Expanded(
+                                child: Text(
+                                  configured
+                                      ? 'Separate password configured'
+                                      : 'Password setup required',
+                                  style: TextStyle(
+                                    color: configured
+                                        ? const Color(0xFF62D6A7)
+                                        : const Color(0xFFFFC566),
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'This credential is different from the KORLIX login '
+                            'password. It is controlled by the authenticated '
+                            'Account Manager and protects BRAIN VAULT access on '
+                            'web, iOS, and Android.',
+                            style: TextStyle(
+                              color: Color(0xFFD8E7EA),
+                              height: 1.45,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        color: const Color(0xFF06151E),
+                        border: Border.all(color: const Color(0xFF1F3D49)),
+                      ),
+                      child: Column(
+                        children: [
+                          _brainVaultSecurityStatusRow(
+                            label: 'Manager',
+                            value: canManage ? 'Account Owner' : 'Unavailable',
+                          ),
+                          _brainVaultSecurityStatusRow(
+                            label: 'Password version',
+                            value: configured ? '$passwordVersion' : 'Not set',
+                          ),
+                          _brainVaultSecurityStatusRow(
+                            label: 'Changed',
+                            value: _brainVaultSecurityDate(
+                              status['passwordChangedAt'],
+                            ),
+                          ),
+                          _brainVaultSecurityStatusRow(
+                            label: 'Failed attempts',
+                            value: '$failedAttemptCount',
+                          ),
+                          _brainVaultSecurityStatusRow(
+                            label: 'Lock status',
+                            value: currentlyLocked
+                                ? 'Locked until ${_brainVaultSecurityDate(lockedUntilRaw)}'
+                                : 'Available',
+                            last: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (!configured)
+                      FilledButton.icon(
+                        onPressed: canManage
+                            ? () {
+                                unawaited(runAction('set'));
+                              }
+                            : null,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(50),
+                          backgroundColor: const Color(0xFFB794F4),
+                          foregroundColor: const Color(0xFF160A22),
+                        ),
+                        icon: const Icon(Icons.add_moderator_rounded),
+                        label: const Text(
+                          'Set BRAIN VAULT Password',
+                          style: TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                      )
+                    else ...[
+                      FilledButton.icon(
+                        onPressed: canManage
+                            ? () {
+                                unawaited(runAction('change'));
+                              }
+                            : null,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(50),
+                          backgroundColor: const Color(0xFFB794F4),
+                          foregroundColor: const Color(0xFF160A22),
+                        ),
+                        icon: const Icon(Icons.password_rounded),
+                        label: const Text(
+                          'Change BRAIN VAULT Password',
+                          style: TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        onPressed: canManage
+                            ? () {
+                                unawaited(runAction('reset'));
+                              }
+                            : null,
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(50),
+                          foregroundColor: const Color(0xFFFFC566),
+                          side: const BorderSide(color: Color(0xFFFFC566)),
+                        ),
+                        icon: const Icon(Icons.restart_alt_rounded),
+                        label: const Text(
+                          'Reset with KORLIX Login Password',
+                          style: TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Security note: five incorrect BRAIN VAULT attempts lock '
+                      'verification for 15 minutes. Passwords are submitted only '
+                      'to the authenticated KORLIX security routes and are not '
+                      'placed in Saved Settings, exports, billing, or AI GAS.',
+                      style: TextStyle(
+                        color: Color(0xFFA9C6CF),
+                        height: 1.4,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _brainVaultSecurityStatusRow({
+    required String label,
+    required String value,
+    bool last = false,
+  }) {
+    return Container(
+      padding: EdgeInsets.only(bottom: last ? 0 : 10, top: last ? 10 : 0),
+      decoration: last
+          ? null
+          : const BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: Color(0xFF17303A)),
+              ),
+            ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 126,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFFA9C6CF),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: Color(0xFFF0F7F8),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // KORLIX_BRAIN_VAULT_SECURITY_SETTINGS_UI_BUILD131_V1_END
+
   Future<void> _requestAccountDeletion() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -2995,9 +3958,12 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
       final limits =
           (meData['limits'] as Map?)?.cast<String, dynamic>() ??
           <String, dynamic>{};
-      final history = (historyData['history'] as List?) ?? [];
+      final history = List<dynamic>.from(
+        (historyData['history'] as List?) ?? const <dynamic>[],
+      );
       final characters = (meData['characters'] as List?) ?? [];
       final characterAccess = (meData['characterAccess'] as List?) ?? [];
+      var historyDeleteBusy = false;
 
       final tier = (profile['tier'] ?? 'basic').toString();
       final dailyLimit = _asInt(limits['dailyRequestLimit']);
@@ -3017,8 +3983,10 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         builder: (context) {
-          return SafeArea(
-            child: DraggableScrollableSheet(
+          return StatefulBuilder(
+            builder: (context, setPanelState) {
+              return SafeArea(
+                child: DraggableScrollableSheet(
               expand: false,
               initialChildSize: 0.78,
               minChildSize: 0.45,
@@ -3165,6 +4133,23 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       ),
                     ),
                     const SizedBox(height: 10),
+                    // KORLIX_BRAIN_VAULT_ACCOUNT_MANAGER_SETTINGS_BUILD131_V1_BEGIN
+                    OutlinedButton.icon(
+                      onPressed: _openBrainVaultSecuritySettings,
+                      icon: const Icon(Icons.admin_panel_settings_rounded),
+                      label: const Text('BRAIN VAULT Security'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFDFC9FF),
+                        side: BorderSide(
+                          color: const Color(0xFFB794F4).withValues(alpha: 0.68),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    // KORLIX_BRAIN_VAULT_ACCOUNT_MANAGER_SETTINGS_BUILD131_V1_END
+                    const SizedBox(height: 10),
                     OutlinedButton.icon(
                       onPressed: _requestAccountDeletion,
                       icon: const Icon(Icons.delete_forever_rounded),
@@ -3180,13 +4165,78 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       ),
                     ),
                     const SizedBox(height: 22),
-                    const Text(
-                      'Saved Settings',
-                      style: TextStyle(
-                        color: Color(0xFFE4EBEE),
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                      ),
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Saved Settings',
+                            style: TextStyle(
+                              color: Color(0xFFE4EBEE),
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        if (history.isNotEmpty)
+                          TextButton.icon(
+                            onPressed: historyDeleteBusy
+                                ? null
+                                : () async {
+                                    setPanelState(() {
+                                      historyDeleteBusy = true;
+                                    });
+
+                                    try {
+                                      final deletedCount =
+                                          await _deleteAllSavedHistoryItems(
+                                            loadedCount: history.length,
+                                          );
+
+                                      if (deletedCount == null ||
+                                          !context.mounted) {
+                                        return;
+                                      }
+
+                                      setPanelState(() {
+                                        history.clear();
+                                      });
+
+                                      ScaffoldMessenger.of(context)
+                                        ..hideCurrentSnackBar()
+                                        ..showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              deletedCount == 1
+                                                  ? '1 saved generation deleted.'
+                                                  : '$deletedCount saved generations deleted.',
+                                            ),
+                                          ),
+                                        );
+                                    } finally {
+                                      if (context.mounted) {
+                                        setPanelState(() {
+                                          historyDeleteBusy = false;
+                                        });
+                                      }
+                                    }
+                                  },
+                            icon: historyDeleteBusy
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.delete_sweep_rounded),
+                            label: Text(
+                              historyDeleteBusy ? 'Deleting…' : 'Delete All',
+                            ),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.redAccent,
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 10),
                     if (history.isEmpty)
@@ -3205,6 +4255,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                     else
                       ...history.take(20).map((item) {
                         final row = (item as Map).cast<String, dynamic>();
+                        final historyId = (row['id'] ?? '').toString().trim();
                         final prompt = (row['prompt'] ?? '').toString();
                         final response = (row['response'] ?? '').toString();
                         final resultType = (row['result_type'] ?? 'answer')
@@ -3256,23 +4307,82 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                                 ),
                               ),
                               const SizedBox(height: 10),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: TextButton.icon(
-                                  onPressed: () => _reportHistoryItem(
-                                    generationId: row['id']?.toString(),
-                                    prompt: prompt,
+                              Row(
+                                children: [
+                                  TextButton.icon(
+                                    onPressed: () => _reportHistoryItem(
+                                      generationId: historyId,
+                                      prompt: prompt,
+                                    ),
+                                    icon: const Icon(
+                                      Icons.flag_outlined,
+                                      size: 17,
+                                    ),
+                                    label: const Text('Report Output'),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: const Color(0xFF69D9E8),
+                                      padding: EdgeInsets.zero,
+                                    ),
                                   ),
-                                  icon: const Icon(
-                                    Icons.flag_outlined,
-                                    size: 17,
+                                  const Spacer(),
+                                  IconButton(
+                                    tooltip: 'Delete saved generation',
+                                    onPressed:
+                                        historyDeleteBusy || historyId.isEmpty
+                                        ? null
+                                        : () async {
+                                            setPanelState(() {
+                                              historyDeleteBusy = true;
+                                            });
+
+                                            try {
+                                              final deleted =
+                                                  await _deleteSavedHistoryItem(
+                                                    historyId: historyId,
+                                                    prompt: prompt,
+                                                  );
+
+                                              if (!deleted ||
+                                                  !context.mounted) {
+                                                return;
+                                              }
+
+                                              setPanelState(() {
+                                                history.removeWhere((candidate) {
+                                                  if (candidate is! Map) {
+                                                    return false;
+                                                  }
+
+                                                  return (candidate['id'] ?? '')
+                                                          .toString()
+                                                          .trim() ==
+                                                      historyId;
+                                                });
+                                              });
+
+                                              ScaffoldMessenger.of(context)
+                                                ..hideCurrentSnackBar()
+                                                ..showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                      'Saved generation deleted.',
+                                                    ),
+                                                  ),
+                                                );
+                                            } finally {
+                                              if (context.mounted) {
+                                                setPanelState(() {
+                                                  historyDeleteBusy = false;
+                                                });
+                                              }
+                                            }
+                                          },
+                                    icon: const Icon(
+                                      Icons.delete_outline_rounded,
+                                    ),
+                                    color: Colors.redAccent,
                                   ),
-                                  label: const Text('Report Output'),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: const Color(0xFF69D9E8),
-                                    padding: EdgeInsets.zero,
-                                  ),
-                                ),
+                                ],
                               ),
                             ],
                           ),
@@ -3282,6 +4392,8 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                 );
               },
             ),
+          );
+            },
           );
         },
       );
@@ -6435,6 +7547,25 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   }
 
   Future<void> _generateImprovedPicture() async {
+    // KORLIX_AI_CONSENT_GATE_BUILD131_V1_IMPROVE_PICTURE_BEGIN
+    final korlixThirdPartyAiConsentGranted =
+        await ensureKorlixThirdPartyAiConsent(
+          context: context,
+          featureName: 'Improve Picture',
+          providers: const <KorlixThirdPartyAiProvider>{
+            KorlixThirdPartyAiProvider.openAi,
+          },
+          dataCategories: const <KorlixThirdPartyAiDataCategory>{
+            KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
+            KorlixThirdPartyAiDataCategory.imagesAndPhotos,
+          },
+        );
+
+    if (!korlixThirdPartyAiConsentGranted) {
+      return;
+    }
+    // KORLIX_AI_CONSENT_GATE_BUILD131_V1_IMPROVE_PICTURE_END
+
     await _stopAiCharacterTalkingForQuery();
 
     final files = _activeUploadFiles;
@@ -6588,6 +7719,26 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   }
 
   Future<void> _generateWithUpload() async {
+    // KORLIX_AI_CONSENT_GATE_BUILD131_V1_GENERATE_WITH_UPLOAD_BEGIN
+    final korlixThirdPartyAiConsentGranted =
+        await ensureKorlixThirdPartyAiConsent(
+          context: context,
+          featureName: 'Analyze Uploaded Content',
+          providers: const <KorlixThirdPartyAiProvider>{
+            KorlixThirdPartyAiProvider.openAi,
+          },
+          dataCategories: const <KorlixThirdPartyAiDataCategory>{
+            KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
+            KorlixThirdPartyAiDataCategory.imagesAndPhotos,
+            KorlixThirdPartyAiDataCategory.filesAndDocuments,
+          },
+        );
+
+    if (!korlixThirdPartyAiConsentGranted) {
+      return;
+    }
+    // KORLIX_AI_CONSENT_GATE_BUILD131_V1_GENERATE_WITH_UPLOAD_END
+
     await _stopAiCharacterTalkingForQuery();
 
     final files = _activeUploadFiles;
@@ -7140,6 +8291,29 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   }
 
   Future<void> _generate() async {
+    // KORLIX_AI_CONSENT_GATE_BUILD131_V1_MAIN_GENERATE_BEGIN
+    final korlixThirdPartyAiConsentGranted =
+        await ensureKorlixThirdPartyAiConsent(
+          context: context,
+          featureName: 'Korlix AI Request',
+          providers: const <KorlixThirdPartyAiProvider>{
+            KorlixThirdPartyAiProvider.openAi,
+            KorlixThirdPartyAiProvider.klingAi,
+            KorlixThirdPartyAiProvider.musicApiAi,
+          },
+          dataCategories: const <KorlixThirdPartyAiDataCategory>{
+            KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
+            KorlixThirdPartyAiDataCategory.imagesAndPhotos,
+            KorlixThirdPartyAiDataCategory.filesAndDocuments,
+            KorlixThirdPartyAiDataCategory.agentTrainingAndMemory,
+          },
+        );
+
+    if (!korlixThirdPartyAiConsentGranted) {
+      return;
+    }
+    // KORLIX_AI_CONSENT_GATE_BUILD131_V1_MAIN_GENERATE_END
+
     // KORLIX_CREDIT_ALL_THREE_REPORTS_GUARD
     if (_fixCreditReportMode && !_hasRequiredCreditReportsUploaded) {
       setState(() {
@@ -15848,6 +17022,26 @@ Make the entire output professional, well-structured using Markdown, and product
 
   // KORLIX_LIVE_CONVO_PHASE2B_OPEN_BEGIN
   Future<void> _openLiveConvoAudioTest() async {
+    // KORLIX_AI_CONSENT_GATE_BUILD131_V1_LIVE_CONVO_BEGIN
+    final korlixThirdPartyAiConsentGranted =
+        await ensureKorlixThirdPartyAiConsent(
+          context: context,
+          featureName: 'LIVE CONVO',
+          providers: const <KorlixThirdPartyAiProvider>{
+            KorlixThirdPartyAiProvider.openAi,
+          },
+          dataCategories: const <KorlixThirdPartyAiDataCategory>{
+            KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
+            KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,
+            KorlixThirdPartyAiDataCategory.agentTrainingAndMemory,
+          },
+        );
+
+    if (!korlixThirdPartyAiConsentGranted) {
+      return;
+    }
+    // KORLIX_AI_CONSENT_GATE_BUILD131_V1_LIVE_CONVO_END
+
     final token = kKorlixAccessToken?.trim() ?? '';
 
     if (token.isEmpty) {

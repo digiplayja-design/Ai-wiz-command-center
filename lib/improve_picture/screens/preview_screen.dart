@@ -10,17 +10,20 @@ import '../controllers/portrait_studio_controller.dart';
 import '../models/portrait_studio_callback.dart';
 import '../models/template_model.dart';
 import 'processing_screen.dart';
+import '../../privacy/korlix_third_party_ai_consent.dart';
 
-const bool _kKorlixPortraitBackendOverrideDeclared =
-    bool.hasEnvironment('AI_WIZARD_BACKEND_URL');
+const bool _kKorlixPortraitBackendOverrideDeclared = bool.hasEnvironment(
+  'AI_WIZARD_BACKEND_URL',
+);
 
-const String _kKorlixPortraitBackendOverrideUrl =
-    String.fromEnvironment('AI_WIZARD_BACKEND_URL');
+const String _kKorlixPortraitBackendOverrideUrl = String.fromEnvironment(
+  'AI_WIZARD_BACKEND_URL',
+);
 
 const String _kKorlixPortraitPreviewEndpoint =
     _kKorlixPortraitBackendOverrideDeclared
-        ? '${_kKorlixPortraitBackendOverrideUrl}/api/image/improve'
-        : 'https://chee-chai-chee-backend.onrender.com/api/image/improve';
+    ? '${_kKorlixPortraitBackendOverrideUrl}/api/image/improve'
+    : 'https://chee-chai-chee-backend.onrender.com/api/image/improve';
 
 class PreviewScreen extends StatefulWidget {
   const PreviewScreen({
@@ -87,6 +90,25 @@ class _PreviewScreenState extends State<PreviewScreen> {
   }
 
   Future<void> _generateAfterPreview() async {
+    // KORLIX_AI_CONSENT_GATE_BUILD131_V1_IMPROVE_PREVIEW_BEGIN
+    final korlixThirdPartyAiConsentGranted =
+        await ensureKorlixThirdPartyAiConsent(
+          context: context,
+          featureName: 'Improve Picture Preview',
+          providers: const <KorlixThirdPartyAiProvider>{
+            KorlixThirdPartyAiProvider.openAi,
+          },
+          dataCategories: const <KorlixThirdPartyAiDataCategory>{
+            KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
+            KorlixThirdPartyAiDataCategory.imagesAndPhotos,
+          },
+        );
+
+    if (!korlixThirdPartyAiConsentGranted) {
+      return;
+    }
+    // KORLIX_AI_CONSENT_GATE_BUILD131_V1_IMPROVE_PREVIEW_END
+
     final bytes = _uploadedBytes;
 
     if (bytes == null || bytes.isEmpty) {

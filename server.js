@@ -2395,6 +2395,744 @@ app.post("/api/characters/select", async (req, res) => {
 });
 
 
+// KORLIX_BRAIN_VAULT_CREDENTIALS_BUILD131_V2_BEGIN
+
+// The current KORLIX account architecture is per authenticated user.
+// That authenticated account owner is therefore the initial Account Manager.
+// manager_user_id is stored separately so a future organization/team model can
+// delegate management without changing the credential or route contract.
+const KORLIX_BRAIN_VAULT_CREDENTIAL_TABLE_V2 =
+  "korlix_brain_vault_credentials";
+const KORLIX_BRAIN_VAULT_PASSWORD_MIN_V2 = 12;
+const KORLIX_BRAIN_VAULT_PASSWORD_MAX_V2 = 128;
+const KORLIX_BRAIN_VAULT_SCRYPT_BYTES_V2 = 64;
+const KORLIX_BRAIN_VAULT_MAX_FAILURES_V2 = 5;
+const KORLIX_BRAIN_VAULT_LOCK_MS_V2 = 15 * 60 * 1000;
+const KORLIX_BRAIN_VAULT_UNLOCK_MS_V2 = 5 * 60 * 1000;
+
+function korlixBrainVaultCredentialErrorV2(
+  message,
+  code,
+  statusCode = 400,
+) {
+  const error = new Error(message);
+  error.code = code;
+  error.statusCode = statusCode;
+  return error;
+}
+
+function korlixBrainVaultPasswordV2(value) {
+  return typeof value === "string" ? value : "";
+}
+
+function korlixBrainVaultRequirePasswordPolicyV2(
+  password,
+  label = "BRAIN VAULT password",
+) {
+  if (
+    password.length < KORLIX_BRAIN_VAULT_PASSWORD_MIN_V2 ||
+    password.length > KORLIX_BRAIN_VAULT_PASSWORD_MAX_V2
+  ) {
+    throw korlixBrainVaultCredentialErrorV2(
+      `${label} must contain 12 to 128 characters.`,
+      "brain_vault_password_policy_failed",
+      400,
+    );
+  }
+}
+
+function korlixBrainVaultScryptV2(password, saltHex) {
+  return new Promise((resolve, reject) => {
+    const salt = Buffer.from(String(saltHex || ""), "hex");
+
+    if (salt.length < 16) {
+      reject(
+        korlixBrainVaultCredentialErrorV2(
+          "The stored BRAIN VAULT credential is invalid.",
+          "brain_vault_credential_invalid",
+          500,
+        ),
+      );
+      return;
+    }
+
+    crypto.scrypt(
+      password,
+      salt,
+      KORLIX_BRAIN_VAULT_SCRYPT_BYTES_V2,
+      {
+        N: 16384,
+        r: 8,
+        p: 1,
+        maxmem: 64 * 1024 * 1024,
+      },
+      (error, derivedKey) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve(derivedKey);
+      },
+    );
+  });
+}
+
+async function korlixBrainVaultHashPasswordV2(password) {
+  const saltHex = crypto.randomBytes(16).toString("hex");
+  const derivedKey = await korlixBrainVaultScryptV2(password, saltHex);
+
+  return {
+    passwordHash: derivedKey.toString("hex"),
+    passwordSalt: saltHex,
+    passwordAlgorithm: "scrypt-v1",
+  };
+}
+
+async function korlixBrainVaultPasswordMatchesV2(
+  password,
+  credential,
+) {
+  if (
+    !credential ||
+    credential.password_algorithm !== "scrypt-v1"
+  ) {
+    return false;
+  }
+
+  const expected = Buffer.from(
+    String(credential.password_hash || ""),
+    "hex",
+  );
+
+  if (expected.length !== KORLIX_BRAIN_VAULT_SCRYPT_BYTES_V2) {
+    return false;
+  }
+
+  const actual = await korlixBrainVaultScryptV2(
+    password,
+    credential.password_salt,
+  );
+
+  return (
+    actual.length === expected.length &&
+    crypto.timingSafeEqual(actual, expected)
+  );
+}
+
+async function korlixBrainVaultLoadCredentialV2(accountId) {
+  const { data, error } = await supabaseAdmin
+    .from(KORLIX_BRAIN_VAULT_CREDENTIAL_TABLE_V2)
+    .select(
+      "account_id,manager_user_id,password_hash,password_salt," +
+        "password_algorithm,password_version,failed_attempt_count," +
+        "locked_until,last_verified_at,password_changed_at," +
+        "created_at,updated_at",
+    )
+    .eq("account_id", accountId)
+    .maybeSingle();
+
+  if (error) {
+    if (String(error.code || "") === "42P01") {
+      throw korlixBrainVaultCredentialErrorV2(
+        "BRAIN VAULT security storage is not ready yet.",
+        "brain_vault_migration_required",
+        503,
+      );
+    }
+
+    throw error;
+  }
+
+  return data || null;
+}
+
+function korlixBrainVaultRequireAccountManagerV2(user, credential = null) {
+  const userId = String(user?.id || "").trim();
+
+  if (!userId) {
+    throw korlixBrainVaultCredentialErrorV2(
+      "Authentication is required.",
+      "brain_vault_auth_required",
+      401,
+    );
+  }
+
+  if (
+    credential &&
+    String(credential.manager_user_id || "") !== userId
+  ) {
+    throw korlixBrainVaultCredentialErrorV2(
+      "Only the Account Manager may change BRAIN VAULT security.",
+      "brain_vault_manager_required",
+      403,
+    );
+  }
+
+  return userId;
+}
+
+async function korlixBrainVaultVerifyAccountManagerLoginV2({
+  user,
+  accountPassword,
+}) {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw korlixBrainVaultCredentialErrorV2(
+      "Account Manager verification is unavailable.",
+      "brain_vault_manager_verification_unavailable",
+      503,
+    );
+  }
+
+  if (accountPassword.length < 6 || accountPassword.length > 512) {
+    throw korlixBrainVaultCredentialErrorV2(
+      "Enter the Account Manager's current KORLIX login password.",
+      "brain_vault_manager_login_required",
+      400,
+    );
+  }
+
+  const email = String(user?.email || "").trim().toLowerCase();
+
+  if (!email) {
+    throw korlixBrainVaultCredentialErrorV2(
+      "This Account Manager has no password email available.",
+      "brain_vault_manager_email_unavailable",
+      409,
+    );
+  }
+
+  const verificationClient = createClient(
+    supabaseUrl,
+    supabaseAnonKey,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    },
+  );
+
+  const { data, error } =
+    await verificationClient.auth.signInWithPassword({
+      email,
+      password: accountPassword,
+    });
+
+  if (error || !data?.user || data.user.id !== user.id) {
+    throw korlixBrainVaultCredentialErrorV2(
+      "Account Manager verification failed.",
+      "brain_vault_manager_verification_failed",
+      401,
+    );
+  }
+}
+
+function korlixBrainVaultLockedUntilV2(credential) {
+  const value = Date.parse(String(credential?.locked_until || ""));
+  return Number.isFinite(value) ? value : 0;
+}
+
+async function korlixBrainVaultRecordFailureV2(credential) {
+  const failures =
+    Math.max(0, Number(credential?.failed_attempt_count) || 0) + 1;
+  const shouldLock =
+    failures >= KORLIX_BRAIN_VAULT_MAX_FAILURES_V2;
+  const lockedUntil = shouldLock
+    ? new Date(Date.now() + KORLIX_BRAIN_VAULT_LOCK_MS_V2).toISOString()
+    : null;
+
+  const { error } = await supabaseAdmin
+    .from(KORLIX_BRAIN_VAULT_CREDENTIAL_TABLE_V2)
+    .update({
+      failed_attempt_count: shouldLock
+        ? KORLIX_BRAIN_VAULT_MAX_FAILURES_V2
+        : failures,
+      locked_until: lockedUntil,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("account_id", credential.account_id)
+    .eq("password_version", credential.password_version);
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    failures,
+    lockedUntil,
+  };
+}
+
+async function korlixBrainVaultClearFailuresV2(credential) {
+  const now = new Date().toISOString();
+  const { error } = await supabaseAdmin
+    .from(KORLIX_BRAIN_VAULT_CREDENTIAL_TABLE_V2)
+    .update({
+      failed_attempt_count: 0,
+      locked_until: null,
+      last_verified_at: now,
+      updated_at: now,
+    })
+    .eq("account_id", credential.account_id)
+    .eq("password_version", credential.password_version);
+
+  if (error) {
+    throw error;
+  }
+}
+
+function korlixBrainVaultRouteErrorV2(res, error, fallbackCode) {
+  return res.status(error.statusCode || 500).json({
+    error: getKorlixUserFacingError(error),
+    code: error.code || fallbackCode,
+  });
+}
+
+app.get("/api/brain-vault/security-status", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+
+  try {
+    if (!supabaseAdmin) {
+      throw korlixBrainVaultCredentialErrorV2(
+        "BRAIN VAULT security is unavailable.",
+        "brain_vault_service_unavailable",
+        503,
+      );
+    }
+
+    const user = await requireUser(req);
+    const credential = await korlixBrainVaultLoadCredentialV2(user.id);
+    korlixBrainVaultRequireAccountManagerV2(user, credential);
+
+    return res.json({
+      success: true,
+      configured: Boolean(credential),
+      canManage: true,
+      managerMode: "account_owner",
+      passwordVersion: Number(credential?.password_version || 0),
+      failedAttemptCount: Number(
+        credential?.failed_attempt_count || 0,
+      ),
+      lockedUntil: credential?.locked_until || null,
+      passwordChangedAt: credential?.password_changed_at || null,
+    });
+  } catch (error) {
+    return korlixBrainVaultRouteErrorV2(
+      res,
+      error,
+      "brain_vault_status_error",
+    );
+  }
+});
+
+app.post("/api/brain-vault/password/set", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+
+  try {
+    if (!supabaseAdmin) {
+      throw korlixBrainVaultCredentialErrorV2(
+        "BRAIN VAULT security is unavailable.",
+        "brain_vault_service_unavailable",
+        503,
+      );
+    }
+
+    const user = await requireUser(req);
+    korlixBrainVaultRequireAccountManagerV2(user);
+
+    const accountPassword = korlixBrainVaultPasswordV2(
+      req.body?.accountPassword,
+    );
+    const vaultPassword = korlixBrainVaultPasswordV2(
+      req.body?.vaultPassword,
+    );
+    const confirmation = korlixBrainVaultPasswordV2(
+      req.body?.confirmVaultPassword,
+    );
+
+    korlixBrainVaultRequirePasswordPolicyV2(vaultPassword);
+
+    if (vaultPassword !== confirmation) {
+      throw korlixBrainVaultCredentialErrorV2(
+        "The BRAIN VAULT passwords do not match.",
+        "brain_vault_password_confirmation_mismatch",
+        400,
+      );
+    }
+
+    await korlixBrainVaultVerifyAccountManagerLoginV2({
+      user,
+      accountPassword,
+    });
+
+    if (vaultPassword === accountPassword) {
+      throw korlixBrainVaultCredentialErrorV2(
+        "The BRAIN VAULT password must differ from the KORLIX login password.",
+        "brain_vault_password_must_be_separate",
+        400,
+      );
+    }
+
+    const existing = await korlixBrainVaultLoadCredentialV2(user.id);
+
+    if (existing) {
+      korlixBrainVaultRequireAccountManagerV2(user, existing);
+      throw korlixBrainVaultCredentialErrorV2(
+        "A BRAIN VAULT password is already configured. Use Change Password instead.",
+        "brain_vault_password_already_configured",
+        409,
+      );
+    }
+
+    const hashed = await korlixBrainVaultHashPasswordV2(vaultPassword);
+    const now = new Date().toISOString();
+    const { error } = await supabaseAdmin
+      .from(KORLIX_BRAIN_VAULT_CREDENTIAL_TABLE_V2)
+      .insert({
+        account_id: user.id,
+        manager_user_id: user.id,
+        password_hash: hashed.passwordHash,
+        password_salt: hashed.passwordSalt,
+        password_algorithm: hashed.passwordAlgorithm,
+        password_version: 1,
+        failed_attempt_count: 0,
+        locked_until: null,
+        password_changed_at: now,
+        created_at: now,
+        updated_at: now,
+        metadata: {
+          managerMode: "account_owner",
+          source: "korlix_brain_vault_settings",
+        },
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    return res.status(201).json({
+      success: true,
+      configured: true,
+      managerMode: "account_owner",
+      passwordVersion: 1,
+    });
+  } catch (error) {
+    return korlixBrainVaultRouteErrorV2(
+      res,
+      error,
+      "brain_vault_password_set_error",
+    );
+  }
+});
+
+app.post("/api/brain-vault/password/verify", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+
+  try {
+    if (!supabaseAdmin) {
+      throw korlixBrainVaultCredentialErrorV2(
+        "BRAIN VAULT security is unavailable.",
+        "brain_vault_service_unavailable",
+        503,
+      );
+    }
+
+    const user = await requireUser(req);
+    const vaultPassword = korlixBrainVaultPasswordV2(
+      req.body?.vaultPassword,
+    );
+    korlixBrainVaultRequirePasswordPolicyV2(vaultPassword);
+
+    const credential = await korlixBrainVaultLoadCredentialV2(user.id);
+
+    if (!credential) {
+      throw korlixBrainVaultCredentialErrorV2(
+        "The Account Manager has not configured a BRAIN VAULT password yet.",
+        "brain_vault_password_not_configured",
+        409,
+      );
+    }
+
+    korlixBrainVaultRequireAccountManagerV2(user, credential);
+
+    const lockedUntil = korlixBrainVaultLockedUntilV2(credential);
+
+    if (lockedUntil > Date.now()) {
+      throw korlixBrainVaultCredentialErrorV2(
+        "Too many incorrect BRAIN VAULT password attempts. Try again later.",
+        "brain_vault_password_rate_limited",
+        429,
+      );
+    }
+
+    const verified = await korlixBrainVaultPasswordMatchesV2(
+      vaultPassword,
+      credential,
+    );
+
+    if (!verified) {
+      const failure = await korlixBrainVaultRecordFailureV2(credential);
+
+      throw korlixBrainVaultCredentialErrorV2(
+        failure.lockedUntil
+          ? "Too many incorrect BRAIN VAULT password attempts. Try again in 15 minutes."
+          : "The BRAIN VAULT password is incorrect.",
+        failure.lockedUntil
+          ? "brain_vault_password_rate_limited"
+          : "brain_vault_password_incorrect",
+        failure.lockedUntil ? 429 : 401,
+      );
+    }
+
+    await korlixBrainVaultClearFailuresV2(credential);
+
+    return res.json({
+      success: true,
+      verified: true,
+      managerMode: "account_owner",
+      passwordVersion: Number(credential.password_version || 1),
+      unlockExpiresAt: new Date(
+        Date.now() + KORLIX_BRAIN_VAULT_UNLOCK_MS_V2,
+      ).toISOString(),
+    });
+  } catch (error) {
+    return korlixBrainVaultRouteErrorV2(
+      res,
+      error,
+      "brain_vault_password_verify_error",
+    );
+  }
+});
+
+app.post("/api/brain-vault/password/change", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+
+  try {
+    if (!supabaseAdmin) {
+      throw korlixBrainVaultCredentialErrorV2(
+        "BRAIN VAULT security is unavailable.",
+        "brain_vault_service_unavailable",
+        503,
+      );
+    }
+
+    const user = await requireUser(req);
+    const accountPassword = korlixBrainVaultPasswordV2(
+      req.body?.accountPassword,
+    );
+    const currentVaultPassword = korlixBrainVaultPasswordV2(
+      req.body?.currentVaultPassword,
+    );
+    const newVaultPassword = korlixBrainVaultPasswordV2(
+      req.body?.newVaultPassword,
+    );
+    const confirmation = korlixBrainVaultPasswordV2(
+      req.body?.confirmVaultPassword,
+    );
+
+    korlixBrainVaultRequirePasswordPolicyV2(
+      currentVaultPassword,
+      "Current BRAIN VAULT password",
+    );
+    korlixBrainVaultRequirePasswordPolicyV2(
+      newVaultPassword,
+      "New BRAIN VAULT password",
+    );
+
+    if (newVaultPassword !== confirmation) {
+      throw korlixBrainVaultCredentialErrorV2(
+        "The new BRAIN VAULT passwords do not match.",
+        "brain_vault_password_confirmation_mismatch",
+        400,
+      );
+    }
+
+    await korlixBrainVaultVerifyAccountManagerLoginV2({
+      user,
+      accountPassword,
+    });
+
+    if (newVaultPassword === accountPassword) {
+      throw korlixBrainVaultCredentialErrorV2(
+        "The BRAIN VAULT password must differ from the KORLIX login password.",
+        "brain_vault_password_must_be_separate",
+        400,
+      );
+    }
+
+    const credential = await korlixBrainVaultLoadCredentialV2(user.id);
+
+    if (!credential) {
+      throw korlixBrainVaultCredentialErrorV2(
+        "No BRAIN VAULT password is configured.",
+        "brain_vault_password_not_configured",
+        409,
+      );
+    }
+
+    korlixBrainVaultRequireAccountManagerV2(user, credential);
+
+    const currentMatches = await korlixBrainVaultPasswordMatchesV2(
+      currentVaultPassword,
+      credential,
+    );
+
+    if (!currentMatches) {
+      await korlixBrainVaultRecordFailureV2(credential);
+      throw korlixBrainVaultCredentialErrorV2(
+        "The current BRAIN VAULT password is incorrect.",
+        "brain_vault_current_password_incorrect",
+        401,
+      );
+    }
+
+    const hashed = await korlixBrainVaultHashPasswordV2(
+      newVaultPassword,
+    );
+    const nextVersion = Number(credential.password_version || 1) + 1;
+    const now = new Date().toISOString();
+    const { error } = await supabaseAdmin
+      .from(KORLIX_BRAIN_VAULT_CREDENTIAL_TABLE_V2)
+      .update({
+        manager_user_id: user.id,
+        password_hash: hashed.passwordHash,
+        password_salt: hashed.passwordSalt,
+        password_algorithm: hashed.passwordAlgorithm,
+        password_version: nextVersion,
+        failed_attempt_count: 0,
+        locked_until: null,
+        last_verified_at: null,
+        password_changed_at: now,
+        updated_at: now,
+      })
+      .eq("account_id", user.id)
+      .eq("password_version", credential.password_version);
+
+    if (error) {
+      throw error;
+    }
+
+    return res.json({
+      success: true,
+      configured: true,
+      managerMode: "account_owner",
+      passwordVersion: nextVersion,
+    });
+  } catch (error) {
+    return korlixBrainVaultRouteErrorV2(
+      res,
+      error,
+      "brain_vault_password_change_error",
+    );
+  }
+});
+
+app.post("/api/brain-vault/password/reset", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+
+  try {
+    if (!supabaseAdmin) {
+      throw korlixBrainVaultCredentialErrorV2(
+        "BRAIN VAULT security is unavailable.",
+        "brain_vault_service_unavailable",
+        503,
+      );
+    }
+
+    const user = await requireUser(req);
+    const accountPassword = korlixBrainVaultPasswordV2(
+      req.body?.accountPassword,
+    );
+    const newVaultPassword = korlixBrainVaultPasswordV2(
+      req.body?.newVaultPassword,
+    );
+    const confirmation = korlixBrainVaultPasswordV2(
+      req.body?.confirmVaultPassword,
+    );
+
+    korlixBrainVaultRequirePasswordPolicyV2(
+      newVaultPassword,
+      "New BRAIN VAULT password",
+    );
+
+    if (newVaultPassword !== confirmation) {
+      throw korlixBrainVaultCredentialErrorV2(
+        "The new BRAIN VAULT passwords do not match.",
+        "brain_vault_password_confirmation_mismatch",
+        400,
+      );
+    }
+
+    await korlixBrainVaultVerifyAccountManagerLoginV2({
+      user,
+      accountPassword,
+    });
+
+    if (newVaultPassword === accountPassword) {
+      throw korlixBrainVaultCredentialErrorV2(
+        "The BRAIN VAULT password must differ from the KORLIX login password.",
+        "brain_vault_password_must_be_separate",
+        400,
+      );
+    }
+
+    const credential = await korlixBrainVaultLoadCredentialV2(user.id);
+
+    if (!credential) {
+      throw korlixBrainVaultCredentialErrorV2(
+        "No BRAIN VAULT password is configured. Use Set Password instead.",
+        "brain_vault_password_not_configured",
+        409,
+      );
+    }
+
+    korlixBrainVaultRequireAccountManagerV2(user, credential);
+
+    const hashed = await korlixBrainVaultHashPasswordV2(
+      newVaultPassword,
+    );
+    const nextVersion = Number(credential.password_version || 1) + 1;
+    const now = new Date().toISOString();
+    const { error } = await supabaseAdmin
+      .from(KORLIX_BRAIN_VAULT_CREDENTIAL_TABLE_V2)
+      .update({
+        manager_user_id: user.id,
+        password_hash: hashed.passwordHash,
+        password_salt: hashed.passwordSalt,
+        password_algorithm: hashed.passwordAlgorithm,
+        password_version: nextVersion,
+        failed_attempt_count: 0,
+        locked_until: null,
+        last_verified_at: null,
+        password_changed_at: now,
+        updated_at: now,
+      })
+      .eq("account_id", user.id)
+      .eq("password_version", credential.password_version);
+
+    if (error) {
+      throw error;
+    }
+
+    return res.json({
+      success: true,
+      configured: true,
+      reset: true,
+      managerMode: "account_owner",
+      passwordVersion: nextVersion,
+    });
+  } catch (error) {
+    return korlixBrainVaultRouteErrorV2(
+      res,
+      error,
+      "brain_vault_password_reset_error",
+    );
+  }
+});
+
+// KORLIX_BRAIN_VAULT_CREDENTIALS_BUILD131_V2_END
+
 app.post("/api/auth/signout", async (req, res) => {
   try {
     const user = await requireUser(req);

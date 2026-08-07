@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
+import '../privacy/korlix_third_party_ai_consent.dart';
 
 typedef KorlixImageToVideoHeadersBuilder =
     Future<Map<String, String>> Function();
@@ -196,6 +197,25 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
   }
 
   Future<void> _generateVideo() async {
+    // KORLIX_AI_CONSENT_GATE_BUILD131_V1_IMAGE_TO_VIDEO_BEGIN
+    final korlixThirdPartyAiConsentGranted =
+        await ensureKorlixThirdPartyAiConsent(
+          context: context,
+          featureName: 'Create Video',
+          providers: const <KorlixThirdPartyAiProvider>{
+            KorlixThirdPartyAiProvider.klingAi,
+          },
+          dataCategories: const <KorlixThirdPartyAiDataCategory>{
+            KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
+            KorlixThirdPartyAiDataCategory.imagesAndPhotos,
+          },
+        );
+
+    if (!korlixThirdPartyAiConsentGranted) {
+      return;
+    }
+    // KORLIX_AI_CONSENT_GATE_BUILD131_V1_IMAGE_TO_VIDEO_END
+
     final file = _imageFile;
     final imageBytes = _imageBytes;
     final prompt = _promptController.text.trim();

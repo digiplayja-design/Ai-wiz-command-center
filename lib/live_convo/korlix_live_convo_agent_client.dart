@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import 'korlix_live_convo_agent.dart';
+import 'korlix_live_convo_brain_vault.dart';
 
 // KORLIX_LIVE_CONVO_AGENT_CLIENT_BUILD131_BEGIN
 
@@ -1334,6 +1335,236 @@ class KorlixLiveConvoAgentClient {
       fallbackError: 'Could not reset or delete the selected agent.',
     );
   }
+
+  // KORLIX_BRAIN_VAULT_CREDENTIAL_CLIENT_BUILD131_V2_BEGIN
+
+  void _validateBrainVaultCredentialPassword(
+    String password, {
+    String label = 'BRAIN VAULT password',
+  }) {
+    if (password.length < 12 || password.length > 128) {
+      throw KorlixLiveConvoAgentClientException(
+        '$label must contain 12 to 128 characters.',
+        code: 'brain_vault_password_policy_failed',
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> loadBrainVaultSecurityStatus() async {
+    return _requestJson(
+      method: 'GET',
+      path: '/api/brain-vault/security-status',
+      fallbackError: 'Could not load BRAIN VAULT security settings.',
+    );
+  }
+
+  Future<void> verifyBrainVaultPassword({required String password}) async {
+    _validateBrainVaultCredentialPassword(password);
+
+    final response = await _requestJson(
+      method: 'POST',
+      path: '/api/brain-vault/password/verify',
+      body: <String, dynamic>{'vaultPassword': password},
+      fallbackError: 'Could not unlock BRAIN VAULT.',
+    );
+
+    if (!_korlixAgentClientBool(response['verified'])) {
+      throw const KorlixLiveConvoAgentClientException(
+        'KORLIX could not verify the BRAIN VAULT password.',
+        code: 'brain_vault_password_unverified',
+      );
+    }
+  }
+
+  Future<void> setBrainVaultPassword({
+    required String accountPassword,
+    required String vaultPassword,
+    required String confirmVaultPassword,
+  }) async {
+    _validateBrainVaultCredentialPassword(vaultPassword);
+
+    if (vaultPassword != confirmVaultPassword) {
+      throw const KorlixLiveConvoAgentClientException(
+        'The BRAIN VAULT passwords do not match.',
+        code: 'brain_vault_password_confirmation_mismatch',
+      );
+    }
+
+    await _requestJson(
+      method: 'POST',
+      path: '/api/brain-vault/password/set',
+      body: <String, dynamic>{
+        'accountPassword': accountPassword,
+        'vaultPassword': vaultPassword,
+        'confirmVaultPassword': confirmVaultPassword,
+      },
+      fallbackError: 'Could not set the BRAIN VAULT password.',
+    );
+  }
+
+  Future<void> changeBrainVaultPassword({
+    required String accountPassword,
+    required String currentVaultPassword,
+    required String newVaultPassword,
+    required String confirmVaultPassword,
+  }) async {
+    _validateBrainVaultCredentialPassword(
+      currentVaultPassword,
+      label: 'Current BRAIN VAULT password',
+    );
+    _validateBrainVaultCredentialPassword(
+      newVaultPassword,
+      label: 'New BRAIN VAULT password',
+    );
+
+    if (newVaultPassword != confirmVaultPassword) {
+      throw const KorlixLiveConvoAgentClientException(
+        'The new BRAIN VAULT passwords do not match.',
+        code: 'brain_vault_password_confirmation_mismatch',
+      );
+    }
+
+    await _requestJson(
+      method: 'POST',
+      path: '/api/brain-vault/password/change',
+      body: <String, dynamic>{
+        'accountPassword': accountPassword,
+        'currentVaultPassword': currentVaultPassword,
+        'newVaultPassword': newVaultPassword,
+        'confirmVaultPassword': confirmVaultPassword,
+      },
+      fallbackError: 'Could not change the BRAIN VAULT password.',
+    );
+  }
+
+  Future<void> resetBrainVaultPassword({
+    required String accountPassword,
+    required String newVaultPassword,
+    required String confirmVaultPassword,
+  }) async {
+    _validateBrainVaultCredentialPassword(
+      newVaultPassword,
+      label: 'New BRAIN VAULT password',
+    );
+
+    if (newVaultPassword != confirmVaultPassword) {
+      throw const KorlixLiveConvoAgentClientException(
+        'The new BRAIN VAULT passwords do not match.',
+        code: 'brain_vault_password_confirmation_mismatch',
+      );
+    }
+
+    await _requestJson(
+      method: 'POST',
+      path: '/api/brain-vault/password/reset',
+      body: <String, dynamic>{
+        'accountPassword': accountPassword,
+        'newVaultPassword': newVaultPassword,
+        'confirmVaultPassword': confirmVaultPassword,
+      },
+      fallbackError: 'Could not reset the BRAIN VAULT password.',
+    );
+  }
+
+  // KORLIX_BRAIN_VAULT_CREDENTIAL_CLIENT_BUILD131_V2_END
+
+  // KORLIX_BRAIN_VAULT_CLIENT_BUILD131_V1_BEGIN
+
+  Future<KorlixBrainVaultPackage> loadBrainPackage({
+    required KorlixLiveConvoAgent agent,
+    required bool includeMemories,
+    required bool includeSensitiveMemories,
+    required bool includeVersionHistory,
+    required String mode,
+  }) async {
+    final memories = includeMemories
+        ? await loadMemories(agentId: agent.id)
+        : const <KorlixLiveConvoAgentMemory>[];
+
+    final versions = includeVersionHistory
+        ? await loadVersions(agentId: agent.id)
+        : const <KorlixLiveConvoAgentVersion>[];
+
+    final brainVersions = versions
+        .map(
+          (version) => KorlixBrainVaultVersion.fromJson(<String, dynamic>{
+            'version': version.version,
+            'source': version.source,
+            'snapshot': version.snapshot,
+            'createdAt': version.createdAt?.toIso8601String(),
+          }),
+        )
+        .toList(growable: false);
+
+    return KorlixBrainVaultPackage.fromAgent(
+      agent: agent,
+      memories: memories,
+      versions: brainVersions,
+      includeMemories: includeMemories,
+      includeSensitiveMemories: includeSensitiveMemories,
+      includeVersionHistory: includeVersionHistory,
+      mode: mode,
+    );
+  }
+
+  Future<KorlixLiveConvoAgent> createAgentFromBrainPackage({
+    required KorlixBrainVaultPackage package,
+    required String nameOverride,
+    required bool includeMemories,
+    required bool includeSensitiveMemories,
+  }) async {
+    final created = await createCustomAgent(
+      package.agent.toCustomAgentDraft(nameOverride: nameOverride),
+    );
+
+    final memoryDrafts = includeMemories
+        ? package.memoryDrafts(
+            includeSensitiveMemories: includeSensitiveMemories,
+          )
+        : const <KorlixLiveConvoMemoryDraft>[];
+
+    try {
+      for (final draft in memoryDrafts) {
+        await saveMemory(agentId: created.id, draft: draft);
+      }
+    } catch (_) {
+      try {
+        await deleteOrResetAgent(agentId: created.id, confirmed: true);
+      } catch (_) {
+        // The original import error remains authoritative.
+      }
+
+      rethrow;
+    }
+
+    return created.copyWith(memoryCount: memoryDrafts.length);
+  }
+
+  Future<KorlixLiveConvoAgent> duplicateAgentBrain({
+    required KorlixLiveConvoAgent sourceAgent,
+    required String nameOverride,
+    required bool includeMemories,
+    required bool includeSensitiveMemories,
+  }) async {
+    final package = await loadBrainPackage(
+      agent: sourceAgent,
+      includeMemories: includeMemories,
+      includeSensitiveMemories: true,
+      includeVersionHistory: false,
+      mode: includeMemories
+          ? KorlixBrainVaultPackage.privateBackupMode
+          : KorlixBrainVaultPackage.templateMode,
+    );
+
+    return createAgentFromBrainPackage(
+      package: package,
+      nameOverride: nameOverride,
+      includeMemories: includeMemories,
+      includeSensitiveMemories: includeSensitiveMemories,
+    );
+  }
+
+  // KORLIX_BRAIN_VAULT_CLIENT_BUILD131_V1_END
 
   void close() {
     if (_ownsClient) {

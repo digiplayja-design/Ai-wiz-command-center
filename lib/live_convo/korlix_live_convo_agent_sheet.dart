@@ -1,9 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart' as fp;
+import 'package:share_plus/share_plus.dart';
 import 'package:flutter/material.dart';
 
 import 'korlix_live_convo_agent.dart';
 import 'korlix_live_convo_agent_client.dart';
+import 'korlix_live_convo_brain_vault.dart';
 import 'korlix_live_convo_agent_file_memory_sheet.dart';
 
 // KORLIX_LIVE_CONVO_AGENT_SHEET_BUILD131_BEGIN
@@ -133,10 +138,6 @@ class _KorlixLiveConvoAgentHubSheetState
         .replaceFirst('KorlixLiveConvoAgentClientException: ', '')
         .replaceFirst('Exception: ', '')
         .trim();
-  }
-
-  KorlixLiveConvoAgent get _selectedAgent {
-    return _catalog.agentById(_selectedAgentId) ?? widget.activeAgent;
   }
 
   Future<void> _load() async {
@@ -723,6 +724,22 @@ class _KorlixLiveConvoAgentHubSheetState
                       icon: const Icon(Icons.psychology_alt_rounded),
                       label: const Text('Memory'),
                     ),
+                    OutlinedButton.icon(
+                      onPressed: enabled
+                          ? () {
+                              unawaited(_openBrainVault(agent));
+                            }
+                          : null,
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFB794F4)),
+                        foregroundColor: const Color(0xFFE0CBFF),
+                      ),
+                      icon: const Icon(Icons.lock_rounded),
+                      label: const Text(
+                        'Brain Vault • Locked',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                    ),
                     PopupMenuButton<String>(
                       enabled: enabled,
                       tooltip: 'More agent options',
@@ -1002,6 +1019,790 @@ class _KorlixLiveConvoAgentHubSheetState
       'Select Use Agent to activate it.',
     );
   }
+
+  // KORLIX_BRAIN_VAULT_UI_BUILD131_V1_BEGIN
+
+  // KORLIX_BRAIN_VAULT_LOCK_UI_BUILD131_V2_BEGIN
+
+  Future<DateTime?> _unlockBrainVault(KorlixLiveConvoAgent agent) async {
+    final controller = TextEditingController();
+    var checking = false;
+    var obscurePassword = true;
+    String? errorText;
+
+    try {
+      final unlocked = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (statefulDialogContext, setDialogState) {
+              Future<void> submitPassword() async {
+                if (checking) {
+                  return;
+                }
+
+                final password = controller.text;
+
+                if (password.length < 12 || password.length > 128) {
+                  setDialogState(() {
+                    errorText =
+                        'Enter the 12 to 128 character BRAIN VAULT password.';
+                  });
+                  return;
+                }
+
+                setDialogState(() {
+                  checking = true;
+                  errorText = null;
+                });
+
+                try {
+                  await widget.client.verifyBrainVaultPassword(
+                    password: password,
+                  );
+                  controller.clear();
+
+                  if (!mounted || !statefulDialogContext.mounted) {
+                    return;
+                  }
+
+                  Navigator.of(statefulDialogContext).pop(true);
+                } catch (error) {
+                  controller.clear();
+
+                  if (!mounted || !statefulDialogContext.mounted) {
+                    return;
+                  }
+
+                  setDialogState(() {
+                    checking = false;
+                    errorText = _cleanError(error);
+                  });
+                }
+              }
+
+              return AlertDialog(
+                backgroundColor: const Color(0xFF071722),
+                title: const Row(
+                  children: [
+                    Icon(Icons.lock_rounded, color: Color(0xFFB794F4)),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Unlock BRAIN VAULT',
+                        style: TextStyle(
+                          color: Color(0xFFF0F7F8),
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Enter the separate BRAIN VAULT password set by the '
+                        'Account Manager to open ${agent.name}’s vault. This '
+                        'password is different from the KORLIX login password '
+                        'and is never stored, exported, or added to the agent '
+                        'brain.',
+                        style: const TextStyle(
+                          color: Color(0xFFD8E7EA),
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: controller,
+                        autofocus: true,
+                        obscureText: obscurePassword,
+                        enabled: !checking,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        smartDashesType: SmartDashesType.disabled,
+                        smartQuotesType: SmartQuotesType.disabled,
+                        keyboardType: TextInputType.visiblePassword,
+                        textInputAction: TextInputAction.done,
+                        autofillHints: const <String>[],
+                        style: const TextStyle(color: Color(0xFFF0F7F8)),
+                        onChanged: (_) {
+                          if (errorText == null) {
+                            return;
+                          }
+
+                          setDialogState(() {
+                            errorText = null;
+                          });
+                        },
+                        onSubmitted: (_) {
+                          unawaited(submitPassword());
+                        },
+                        decoration: InputDecoration(
+                          labelText: 'BRAIN VAULT password',
+                          helperText: 'Set separately by the Account Manager',
+                          errorText: errorText,
+                          prefixIcon: const Icon(Icons.password_rounded),
+                          suffixIcon: IconButton(
+                            tooltip: obscurePassword
+                                ? 'Show password'
+                                : 'Hide password',
+                            onPressed: checking
+                                ? null
+                                : () {
+                                    setDialogState(() {
+                                      obscurePassword = !obscurePassword;
+                                    });
+                                  },
+                            icon: Icon(
+                              obscurePassword
+                                  ? Icons.visibility_rounded
+                                  : Icons.visibility_off_rounded,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (checking) ...[
+                        const SizedBox(height: 14),
+                        const LinearProgressIndicator(
+                          minHeight: 3,
+                          color: Color(0xFFB794F4),
+                          backgroundColor: Color(0xFF243240),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: checking
+                        ? null
+                        : () {
+                            controller.clear();
+                            Navigator.of(statefulDialogContext).pop(false);
+                          },
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: checking
+                        ? null
+                        : () {
+                            unawaited(submitPassword());
+                          },
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFB794F4),
+                      foregroundColor: const Color(0xFF160A22),
+                    ),
+                    icon: checking
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: Color(0xFF160A22),
+                            ),
+                          )
+                        : const Icon(Icons.lock_open_rounded),
+                    label: const Text(
+                      'Unlock Vault',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+
+      return unlocked == true ? DateTime.now().toUtc() : null;
+    } finally {
+      controller.clear();
+      controller.dispose();
+    }
+  }
+
+  // KORLIX_BRAIN_VAULT_LOCK_UI_BUILD131_V2_END
+
+  Future<String?> _promptBrainVaultName({
+    required String title,
+    required String initialName,
+  }) async {
+    final controller = TextEditingController(text: initialName);
+
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF071722),
+            title: Text(
+              title,
+              style: const TextStyle(
+                color: Color(0xFFF0F7F8),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              maxLength: 80,
+              style: const TextStyle(color: Color(0xFFF0F7F8)),
+              decoration: const InputDecoration(
+                labelText: 'New agent name',
+                helperText:
+                    'The imported or duplicated brain becomes a separate '
+                    'custom agent.',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                },
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final clean = controller.text.trim();
+
+                  if (clean.isNotEmpty) {
+                    Navigator.of(dialogContext).pop(clean);
+                  }
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF62D6A7),
+                  foregroundColor: const Color(0xFF03110E),
+                ),
+                child: const Text(
+                  'Continue',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  Future<bool?> _chooseSensitiveBrainMemories({
+    required int sensitiveCount,
+    required String actionLabel,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF071722),
+          title: const Text(
+            'Sensitive memories detected',
+            style: TextStyle(
+              color: Color(0xFFFFD38A),
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          content: Text(
+            '$sensitiveCount ${sensitiveCount == 1 ? 'memory is' : 'memories are'} '
+            'marked sensitive. Excluding sensitive memories is the safer '
+            'default. Include them only when this is your private backup.',
+            style: const TextStyle(color: Color(0xFFD8E7EA), height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+            OutlinedButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
+              child: Text('Exclude and $actionLabel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(true);
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFFFC566),
+                foregroundColor: const Color(0xFF211400),
+              ),
+              child: Text(
+                'Include and $actionLabel',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<KorlixBrainVaultPackage?> _loadBrainVaultPackage({
+    required KorlixLiveConvoAgent agent,
+    required bool includeMemories,
+    required bool includeVersionHistory,
+    required String mode,
+  }) {
+    return _runBusy<KorlixBrainVaultPackage>(() {
+      return widget.client.loadBrainPackage(
+        agent: agent,
+        includeMemories: includeMemories,
+        includeSensitiveMemories: true,
+        includeVersionHistory: includeVersionHistory,
+        mode: mode,
+      );
+    });
+  }
+
+  Future<void> _showBrainVaultContents(KorlixLiveConvoAgent agent) async {
+    final package = await _loadBrainVaultPackage(
+      agent: agent,
+      includeMemories: true,
+      includeVersionHistory: true,
+      mode: KorlixBrainVaultPackage.privateBackupMode,
+    );
+
+    if (!mounted || package == null) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF071722),
+          title: Row(
+            children: [
+              const Icon(Icons.account_tree_rounded, color: Color(0xFF69D9E8)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '${agent.name} BRAIN CONTENTS',
+                  style: const TextStyle(
+                    color: Color(0xFFF0F7F8),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'Training: '
+            '${package.agent.hasPublishedTraining ? 'Published' : 'Not published'}\n'
+            'Current training version: ${agent.version}\n'
+            'Approved memories: ${package.memories.length}\n'
+            'Sensitive memories: ${package.sensitiveMemoryCount}\n'
+            'Training-history snapshots: ${package.versions.length}\n'
+            'Tools: ${package.agent.toolIds.join(', ')}\n\n'
+            'Voice and accent are currently stored as LIVE CONVO user '
+            'preferences, not inside an individual agent brain, so they are '
+            'not included in this foundation export.',
+            style: const TextStyle(color: Color(0xFFD8E7EA), height: 1.5),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text('Done'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _duplicateBrainVaultAgent({
+    required KorlixLiveConvoAgent agent,
+    required bool includeMemories,
+  }) async {
+    final package = await _loadBrainVaultPackage(
+      agent: agent,
+      includeMemories: includeMemories,
+      includeVersionHistory: false,
+      mode: includeMemories
+          ? KorlixBrainVaultPackage.privateBackupMode
+          : KorlixBrainVaultPackage.templateMode,
+    );
+
+    if (!mounted || package == null) {
+      return;
+    }
+
+    var includeSensitive = false;
+
+    if (includeMemories && package.sensitiveMemoryCount > 0) {
+      final choice = await _chooseSensitiveBrainMemories(
+        sensitiveCount: package.sensitiveMemoryCount,
+        actionLabel: 'Duplicate',
+      );
+
+      if (!mounted || choice == null) {
+        return;
+      }
+
+      includeSensitive = choice;
+    }
+
+    final name = await _promptBrainVaultName(
+      title: includeMemories ? 'Duplicate Full Brain' : 'Duplicate Agent Setup',
+      initialName: 'Copy of ${agent.name}',
+    );
+
+    if (!mounted || name == null) {
+      return;
+    }
+
+    final memoryCount = includeMemories
+        ? package
+              .memoryDrafts(includeSensitiveMemories: includeSensitive)
+              .length
+        : 0;
+
+    final duplicateContents = includeMemories
+        ? 'the current training and $memoryCount approved memories'
+        : 'the current mission, tools, appearance, and training';
+
+    final confirmed = await _confirmAction(
+      title: 'Create duplicated agent?',
+      message:
+          'Create "$name" as a new custom agent with $duplicateContents? '
+          'The copy will not remain linked to ${agent.name}.',
+      confirmLabel: 'Duplicate Brain',
+    );
+
+    if (!mounted || !confirmed) {
+      return;
+    }
+
+    final created = await _runBusy<KorlixLiveConvoAgent>(() {
+      return widget.client.createAgentFromBrainPackage(
+        package: package,
+        nameOverride: name,
+        includeMemories: includeMemories,
+        includeSensitiveMemories: includeSensitive,
+      );
+    });
+
+    if (!mounted || created == null) {
+      return;
+    }
+
+    _replaceAgent(created);
+    await _load();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _selectedAgentId = created.id;
+    });
+
+    _showMessage(
+      '${created.name} was created with $memoryCount '
+      '${memoryCount == 1 ? 'memory' : 'memories'}.',
+    );
+  }
+
+  Future<void> _shareBrainVaultPackage({
+    required KorlixBrainVaultPackage package,
+  }) async {
+    final exportText = package.encodePretty();
+    final bytes = Uint8List.fromList(utf8.encode(exportText));
+    final filename = package.suggestedFileName;
+
+    final renderObject = context.findRenderObject();
+    final sharePositionOrigin = renderObject is RenderBox
+        ? renderObject.localToGlobal(Offset.zero) & renderObject.size
+        : const Rect.fromLTWH(0, 0, 1, 1);
+
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          files: <XFile>[XFile.fromData(bytes, mimeType: 'application/json')],
+          fileNameOverrides: <String>[filename],
+          text: 'KORLIX BRAIN VAULT export: ${package.agent.name}',
+          subject: 'KORLIX BRAIN VAULT',
+          sharePositionOrigin: sharePositionOrigin,
+        ),
+      );
+    } catch (_) {
+      await SharePlus.instance.share(
+        ShareParams(
+          text: exportText,
+          subject: 'KORLIX BRAIN VAULT: ${package.agent.name}',
+          sharePositionOrigin: sharePositionOrigin,
+        ),
+      );
+    }
+  }
+
+  Future<void> _exportBrainVaultAgent({
+    required KorlixLiveConvoAgent agent,
+    required bool privateBackup,
+  }) async {
+    final package = await _loadBrainVaultPackage(
+      agent: agent,
+      includeMemories: privateBackup,
+      includeVersionHistory: privateBackup,
+      mode: privateBackup
+          ? KorlixBrainVaultPackage.privateBackupMode
+          : KorlixBrainVaultPackage.templateMode,
+    );
+
+    if (!mounted || package == null) {
+      return;
+    }
+
+    var includeSensitive = false;
+
+    if (privateBackup && package.sensitiveMemoryCount > 0) {
+      final choice = await _chooseSensitiveBrainMemories(
+        sensitiveCount: package.sensitiveMemoryCount,
+        actionLabel: 'Export',
+      );
+
+      if (!mounted || choice == null) {
+        return;
+      }
+
+      includeSensitive = choice;
+    }
+
+    final finalPackage = privateBackup
+        ? package.withSensitiveMemories(includeSensitive)
+        : package;
+
+    final confirmed = await _confirmAction(
+      title: privateBackup
+          ? 'Export Full Private Brain?'
+          : 'Export Brain Template?',
+      message: privateBackup
+          ? 'This file will contain the current agent setup, training, '
+                '${finalPackage.memories.length} approved memories, and '
+                '${finalPackage.versions.length} training-history snapshots. '
+                'Keep it private. It does not contain account credentials, '
+                'purchases, AI GAS, raw voice recordings, or temporary chats.'
+          : 'This shareable template contains the agent mission, appearance, '
+                'tools, and current training. It contains no long-term '
+                'memories or account information.',
+      confirmLabel: 'Export Brain',
+    );
+
+    if (!mounted || !confirmed) {
+      return;
+    }
+
+    try {
+      await _shareBrainVaultPackage(package: finalPackage);
+
+      if (mounted) {
+        _showMessage(
+          '${finalPackage.agent.name} was exported as '
+          '${finalPackage.suggestedFileName}.',
+        );
+      }
+    } catch (error) {
+      _showMessage(
+        'Could not export this BRAIN VAULT file: ${_cleanError(error)}',
+        error: true,
+      );
+    }
+  }
+
+  Future<void> _importBrainVaultPackage() async {
+    try {
+      final result = await fp.FilePicker.platform.pickFiles(
+        type: fp.FileType.custom,
+        allowedExtensions: const <String>['korlixbrain', 'json'],
+        allowMultiple: false,
+        withData: true,
+      );
+
+      if (!mounted || result == null || result.files.isEmpty) {
+        return;
+      }
+
+      final file = result.files.single;
+
+      if (file.size > KorlixBrainVaultPackage.maximumBytes) {
+        throw const FormatException(
+          'This BRAIN VAULT file exceeds the 2 MB safety limit.',
+        );
+      }
+
+      final bytes = file.bytes;
+
+      if (bytes == null || bytes.isEmpty) {
+        throw const FormatException(
+          'The selected BRAIN VAULT file could not be read on this device.',
+        );
+      }
+
+      final package = KorlixBrainVaultPackage.decode(
+        utf8.decode(bytes, allowMalformed: false),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      var includeSensitive = false;
+
+      if (package.sensitiveMemoryCount > 0) {
+        final choice = await _chooseSensitiveBrainMemories(
+          sensitiveCount: package.sensitiveMemoryCount,
+          actionLabel: 'Import',
+        );
+
+        if (!mounted || choice == null) {
+          return;
+        }
+
+        includeSensitive = choice;
+      }
+
+      final name = await _promptBrainVaultName(
+        title: 'Import KORLIX Brain',
+        initialName: package.agent.name,
+      );
+
+      if (!mounted || name == null) {
+        return;
+      }
+
+      final memoryCount = package
+          .memoryDrafts(includeSensitiveMemories: includeSensitive)
+          .length;
+
+      final confirmed = await _confirmAction(
+        title: 'Import this agent brain?',
+        message:
+            'Agent: ${package.agent.name}\n'
+            'Training: '
+            '${package.agent.hasPublishedTraining ? 'Published' : 'Not published'}\n'
+            'Memories to import: $memoryCount\n'
+            'Sensitive memories in file: ${package.sensitiveMemoryCount}\n'
+            'Reference history snapshots: ${package.versions.length}\n\n'
+            'KORLIX will create a new custom agent owned by your signed-in '
+            'account. Unknown fields, account IDs, billing data, API keys, '
+            'and unauthorized tools are ignored.',
+        confirmLabel: 'Import Brain',
+      );
+
+      if (!mounted || !confirmed) {
+        return;
+      }
+
+      final created = await _runBusy<KorlixLiveConvoAgent>(() {
+        return widget.client.createAgentFromBrainPackage(
+          package: package,
+          nameOverride: name,
+          includeMemories: true,
+          includeSensitiveMemories: includeSensitive,
+        );
+      });
+
+      if (!mounted || created == null) {
+        return;
+      }
+
+      _replaceAgent(created);
+      await _load();
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _selectedAgentId = created.id;
+      });
+
+      _showMessage(
+        '${created.name} was imported with $memoryCount '
+        '${memoryCount == 1 ? 'memory' : 'memories'}.',
+      );
+    } on FormatException catch (error) {
+      _showMessage(error.message, error: true);
+    } catch (error) {
+      _showMessage(
+        'Could not import this BRAIN VAULT file: ${_cleanError(error)}',
+        error: true,
+      );
+    }
+  }
+
+  Future<void> _openBrainVault(KorlixLiveConvoAgent agent) async {
+    final unlockedAt = await _unlockBrainVault(agent);
+
+    if (!mounted || unlockedAt == null) {
+      return;
+    }
+
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: const Color(0xCC02070C),
+      builder: (sheetContext) {
+        return _KorlixBrainVaultActionSheet(agent: agent);
+      },
+    );
+
+    if (!mounted || action == null) {
+      return;
+    }
+
+    final unlockExpired = !DateTime.now().toUtc().isBefore(
+      unlockedAt.add(const Duration(minutes: 5)),
+    );
+
+    if (unlockExpired) {
+      _showMessage(
+        'BRAIN VAULT relocked after five minutes. Open it again and '
+        're-enter the separate BRAIN VAULT password.',
+        error: true,
+      );
+      return;
+    }
+
+    switch (action) {
+      case 'contents':
+        await _showBrainVaultContents(agent);
+        break;
+
+      case 'duplicate_setup':
+        await _duplicateBrainVaultAgent(agent: agent, includeMemories: false);
+        break;
+
+      case 'duplicate_full':
+        await _duplicateBrainVaultAgent(agent: agent, includeMemories: true);
+        break;
+
+      case 'export_template':
+        await _exportBrainVaultAgent(agent: agent, privateBackup: false);
+        break;
+
+      case 'export_private':
+        await _exportBrainVaultAgent(agent: agent, privateBackup: true);
+        break;
+
+      case 'import':
+        await _importBrainVaultPackage();
+        break;
+    }
+  }
+
+  // KORLIX_BRAIN_VAULT_UI_BUILD131_V1_END
 
   Future<void> _openVersionHistory(KorlixLiveConvoAgent agent) async {
     final versions = await _runBusy<List<KorlixLiveConvoAgentVersion>>(() {
@@ -5521,6 +6322,248 @@ class _KorlixCustomAgentCreatorSheetState
     );
   }
 }
+
+// KORLIX_BRAIN_VAULT_ACTION_SHEET_BUILD131_V1_BEGIN
+
+class _KorlixBrainVaultActionSheet extends StatelessWidget {
+  const _KorlixBrainVaultActionSheet({required this.agent});
+
+  final KorlixLiveConvoAgent agent;
+
+  Widget _actionTile(
+    BuildContext context, {
+    required String value,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    Color color = const Color(0xFF69D9E8),
+  }) {
+    return ListTile(
+      onTap: () {
+        Navigator.of(context).pop(value);
+      },
+      leading: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          color: color.withValues(alpha: 0.14),
+          border: Border.all(color: color.withValues(alpha: 0.56)),
+        ),
+        child: Icon(icon, color: color),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: Color(0xFFF0F7F8),
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(color: Color(0xFFA9C6CF), height: 1.35),
+      ),
+      trailing: const Icon(
+        Icons.chevron_right_rounded,
+        color: Color(0xFF8299A2),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenSize = MediaQuery.sizeOf(context);
+    final accent = korlixLiveConvoAgentAccent(agent.accentHex);
+
+    return Material(
+      color: Colors.transparent,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: Container(
+          width: double.infinity,
+          constraints: BoxConstraints(
+            maxWidth: 760,
+            maxHeight: screenSize.height * 0.92,
+          ),
+          margin: const EdgeInsets.only(top: 24),
+          decoration: const BoxDecoration(
+            color: Color(0xFF041019),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: Color(0x66000000),
+                blurRadius: 34,
+                offset: Offset(0, -8),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: SafeArea(
+            top: false,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        color: accent.withValues(alpha: 0.14),
+                        border: Border.all(
+                          color: accent.withValues(alpha: 0.72),
+                        ),
+                      ),
+                      child: Icon(Icons.account_tree_rounded, color: accent),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'BRAIN VAULT',
+                            style: TextStyle(
+                              color: Color(0xFFF0F7F8),
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            agent.name,
+                            style: TextStyle(
+                              color: accent,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close BRAIN VAULT',
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                      icon: const Icon(Icons.close_rounded),
+                      color: const Color(0xFFC7D7DC),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    color: const Color(0xFF081B25),
+                    border: Border.all(color: const Color(0xFF2B5360)),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.lock_open_rounded,
+                            size: 19,
+                            color: Color(0xFF62D6A7),
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'UNLOCKED FOR THIS OPENING',
+                            style: TextStyle(
+                              color: Color(0xFF62D6A7),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'KORLIX verified the separate BRAIN VAULT password set by '
+                        'the Account Manager. This temporary unlock closes with '
+                        'this window and expires after five minutes. Duplicate, '
+                        'export, and import actions still require their existing '
+                        'confirmations.',
+                        style: TextStyle(color: Color(0xFFD8E7EA), height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _actionTile(
+                  context,
+                  value: 'contents',
+                  icon: Icons.inventory_2_outlined,
+                  title: 'Brain Contents',
+                  subtitle:
+                      'Review training, memory, sensitivity, tools, and '
+                      'version counts.',
+                ),
+                _actionTile(
+                  context,
+                  value: 'duplicate_setup',
+                  icon: Icons.copy_all_rounded,
+                  title: 'Duplicate Setup Only',
+                  subtitle:
+                      'Copy mission, appearance, tools, and current training '
+                      'without memories.',
+                  color: const Color(0xFF62D6A7),
+                ),
+                _actionTile(
+                  context,
+                  value: 'duplicate_full',
+                  icon: Icons.account_tree_rounded,
+                  title: 'Duplicate Full Brain',
+                  subtitle:
+                      'Create a separate custom agent with approved memories.',
+                  color: const Color(0xFFB794F4),
+                ),
+                _actionTile(
+                  context,
+                  value: 'export_template',
+                  icon: Icons.ios_share_rounded,
+                  title: 'Export Brain Template',
+                  subtitle:
+                      'Share the agent setup and training without personal '
+                      'memories.',
+                  color: const Color(0xFFF2C14E),
+                ),
+                _actionTile(
+                  context,
+                  value: 'export_private',
+                  icon: Icons.lock_outline_rounded,
+                  title: 'Export Full Private Backup',
+                  subtitle:
+                      'Export setup, training, approved memories, and '
+                      'reference history.',
+                  color: const Color(0xFFFF8A65),
+                ),
+                const Divider(height: 24, color: Color(0xFF23404A)),
+                _actionTile(
+                  context,
+                  value: 'import',
+                  icon: Icons.file_open_rounded,
+                  title: 'Import a KORLIX Brain',
+                  subtitle:
+                      'Preview and create a new custom agent from a safe '
+                      '.korlixbrain package.',
+                  color: const Color(0xFF69D9E8),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// KORLIX_BRAIN_VAULT_ACTION_SHEET_BUILD131_V1_END
 
 class _KorlixAgentVersionHistorySheet extends StatelessWidget {
   const _KorlixAgentVersionHistorySheet({
