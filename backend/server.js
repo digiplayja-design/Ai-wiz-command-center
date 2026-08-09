@@ -27,7 +27,11 @@ import {
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, Table, TableRow, TableCell, WidthType, ShadingType } from "docx";
 
 import multer from "multer";
-import { installKorlixVapiNovaRoutes } from "./korlix_vapi_nova.mjs"; // KORLIX_VAPI_NOVA_BUILD133_IMPORT
+import { installKorlixVapiNovaRoutes } from "./korlix_vapi_nova.mjs";
+
+import {
+  createKorlixVapiNovaAgentBridgeFetch,
+} from "./korlix_vapi_nova_agent_bridge.mjs"; // KORLIX_VAPI_NOVA_BUILD133_IMPORT
 import { createKorlixVapiNovaRuntime } from "./korlix_vapi_nova_responder.mjs"; // KORLIX_VAPI_NOVA_RESPONDER_BUILD133_IMPORT
 dotenv.config();
 
@@ -12571,9 +12575,37 @@ app.post(
 // KORLIX_LIVE_DOCS_GENERATION_BUILD131_END
 
 // KORLIX_VAPI_NOVA_BUILD133_INSTALL_START
+const korlixVapiNovaAgentBridgeFetch =
+  createKorlixVapiNovaAgentBridgeFetch({
+    environment: process.env,
+    fetchImpl: globalThis.fetch,
+
+    loadAgentRuntime: async ({
+      ownerUid,
+      agentId,
+    }) => {
+      return korlixLiveConvoBuildAgentRuntimeV1({
+        req: {
+          headers: {
+            "x-korlix-character": "nova",
+            "x-korlix-language": "English",
+          },
+        },
+
+        user: {
+          id: ownerUid,
+        },
+
+        agentId,
+        characterName: "Nova",
+        language: "English",
+      });
+    },
+  });
+
 const korlixVapiNovaRuntime = createKorlixVapiNovaRuntime({
   environment: process.env,
-  fetchImpl: globalThis.fetch,
+  fetchImpl: korlixVapiNovaAgentBridgeFetch,
   logger: console,
 }); // KORLIX_VAPI_NOVA_RESPONDER_BUILD133_INIT
 
