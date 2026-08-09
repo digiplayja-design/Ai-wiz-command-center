@@ -27,6 +27,8 @@ import {
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, Table, TableRow, TableCell, WidthType, ShadingType } from "docx";
 
 import multer from "multer";
+import { installKorlixVapiNovaRoutes } from "./korlix_vapi_nova.mjs"; // KORLIX_VAPI_NOVA_BUILD133_IMPORT
+import { createKorlixVapiNovaRuntime } from "./korlix_vapi_nova_responder.mjs"; // KORLIX_VAPI_NOVA_RESPONDER_BUILD133_IMPORT
 dotenv.config();
 
 const app = express();
@@ -12567,6 +12569,23 @@ app.post(
   },
 );
 // KORLIX_LIVE_DOCS_GENERATION_BUILD131_END
+
+// KORLIX_VAPI_NOVA_BUILD133_INSTALL_START
+const korlixVapiNovaRuntime = createKorlixVapiNovaRuntime({
+  environment: process.env,
+  fetchImpl: globalThis.fetch,
+  logger: console,
+}); // KORLIX_VAPI_NOVA_RESPONDER_BUILD133_INIT
+
+installKorlixVapiNovaRoutes(app, {
+  getAuthenticatedUser,
+  environment: process.env,
+  // Nova runtime wiring is added in the next guarded batch.
+  novaResponder: korlixVapiNovaRuntime.respond,
+  // Call transcripts and reports remain disabled until approved.
+  eventSink: korlixVapiNovaRuntime.acceptEvent,
+});
+// KORLIX_VAPI_NOVA_BUILD133_INSTALL_END
 
 app.use("/api", (req, res) => {
   return res.status(404).json({
