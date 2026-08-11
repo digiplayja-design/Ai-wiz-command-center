@@ -27,6 +27,10 @@ import {
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, Table, TableRow, TableCell, WidthType, ShadingType } from "docx";
 
 import multer from "multer";
+import {
+  createKorlixAiGasService,
+  KorlixAiGasError,
+} from "./korlix_ai_gas.mjs";
 dotenv.config();
 
 const app = express();
@@ -9324,11 +9328,10 @@ app.post("/api/live-convo/usage", async (req, res) => {
       };
 
       const { data, error } = await supabaseAdmin.rpc(
-        "korlix_live_convo_report_usage",
+        "korlix_live_convo_report_usage_with_ai_gas_build132",
         {
           p_session_id: sessionId,
           p_user_id: user.id,
-          p_duration_seconds: number(body.durationSeconds, 86400),
           p_response_count: number(body.responseCount, 100000),
           p_total_tokens: number(body.totalTokens),
           p_input_tokens: number(body.inputTokens),
@@ -9337,6 +9340,7 @@ app.post("/api/live-convo/usage", async (req, res) => {
           p_output_audio_tokens: number(body.outputAudioTokens),
           p_image_tokens: number(body.imageTokens),
           p_transcription_tokens: number(body.transcriptionTokens),
+          p_monthly_session_limit: limits.monthlySessions,
           p_monthly_duration_limit: limits.monthlySeconds,
           p_monthly_token_limit: limits.monthlyTokens,
           p_ended: body.ended === true,
@@ -12567,6 +12571,282 @@ app.post(
   },
 );
 // KORLIX_LIVE_DOCS_GENERATION_BUILD131_END
+
+
+// KORLIX_AI_GAS_BUILD132_BACKEND_ROUTES_START
+
+const KORLIX_AI_GAS_BUILD132_PROVIDER_READINESS =
+  Object.freeze({
+    apple: false,
+    google: false,
+    web: false,
+  });
+
+let korlixAiGasBuild132ServiceInstance = null;
+
+function korlixAiGasBuild132Service() {
+  if (!supabaseAdmin) {
+    throw new KorlixAiGasError(
+      "AI GAS database service is unavailable.",
+      {
+        statusCode: 503,
+        code: "ai_gas_database_unavailable",
+      },
+    );
+  }
+
+  if (!korlixAiGasBuild132ServiceInstance) {
+    korlixAiGasBuild132ServiceInstance =
+      createKorlixAiGasService({
+        supabaseAdmin,
+
+        // Provider purchase fulfillment remains deliberately
+        // fail-closed until the exact App Store and Google Play
+        // AI GAS products and server verifiers are configured.
+        appleAdapter: null,
+        googleAdapter: null,
+
+        logger: console,
+      });
+  }
+
+  return korlixAiGasBuild132ServiceInstance;
+}
+
+function korlixAiGasBuild132ErrorResponse(
+  res,
+  error,
+) {
+  const requestedStatus = Number(
+    error?.statusCode,
+  );
+
+  const allowedStatuses = new Set([
+    400,
+    401,
+    403,
+    404,
+    409,
+    429,
+    503,
+  ]);
+
+  const statusCode =
+    Number.isInteger(requestedStatus) &&
+    allowedStatuses.has(requestedStatus)
+      ? requestedStatus
+      : 500;
+
+  const known =
+    error instanceof KorlixAiGasError;
+
+  const code = known
+    ? String(
+        error.code ||
+          "ai_gas_request_failed",
+      )
+    : "ai_gas_request_failed";
+
+  if (statusCode >= 500) {
+    console.error(
+      "KORLIX_AI_GAS_BUILD132_REQUEST_FAILED",
+      {
+        code,
+        statusCode,
+      },
+    );
+  }
+
+  const message =
+    statusCode >= 500
+      ? "AI GAS is temporarily unavailable."
+      : String(
+          error?.message ||
+            "AI GAS request failed.",
+        ).slice(0, 300);
+
+  return res.status(statusCode).json({
+    ok: false,
+    code,
+    error: message,
+  });
+}
+
+function korlixAiGasBuild132PurchaseBody(req) {
+  const body =
+    req.body &&
+    typeof req.body === "object" &&
+    !Array.isArray(req.body)
+      ? req.body
+      : {};
+
+  const prohibitedClientFields = [
+    "seconds",
+    "durationSeconds",
+    "duration_seconds",
+    "baseUsdCents",
+    "base_usd_cents",
+    "price",
+    "priceCents",
+    "price_cents",
+    "balanceSeconds",
+    "balance_seconds",
+  ];
+
+  const prohibitedField =
+    prohibitedClientFields.find(
+      (field) =>
+        Object.hasOwn(body, field),
+    );
+
+  if (prohibitedField) {
+    throw new KorlixAiGasError(
+      "AI GAS package value must be determined by the server.",
+      {
+        statusCode: 400,
+        code:
+          "ai_gas_client_value_forbidden",
+      },
+    );
+  }
+
+  return body;
+}
+
+app.get(
+  "/api/ai-gas/catalog",
+  async (req, res) => {
+    try {
+      await requireUser(req);
+
+      const packages =
+        await korlixAiGasBuild132Service()
+          .getCatalog();
+
+      return res.json({
+        ok: true,
+        feature: "ai_gas",
+        purpose:
+          "live_convo_voice_time",
+        access: [
+          "basic",
+          "pro",
+          "ultra",
+        ],
+        providerReadiness:
+          KORLIX_AI_GAS_BUILD132_PROVIDER_READINESS,
+        packages,
+      });
+    } catch (error) {
+      return korlixAiGasBuild132ErrorResponse(
+        res,
+        error,
+      );
+    }
+  },
+);
+
+app.get(
+  "/api/ai-gas/balance",
+  async (req, res) => {
+    try {
+      const user =
+        await requireUser(req);
+
+      const balance =
+        await korlixAiGasBuild132Service()
+          .getBalance({
+            userId: user.id,
+          });
+
+      return res.json({
+        ok: true,
+        balanceSeconds:
+          balance.balanceSeconds,
+        balanceMinutes:
+          Math.floor(
+            balance.balanceSeconds / 60,
+          ),
+      });
+    } catch (error) {
+      return korlixAiGasBuild132ErrorResponse(
+        res,
+        error,
+      );
+    }
+  },
+);
+
+app.post(
+  "/api/ai-gas/purchase/apple/verify",
+  async (req, res) => {
+    try {
+      const user =
+        await requireUser(req);
+
+      const purchase =
+        korlixAiGasBuild132PurchaseBody(
+          req,
+        );
+
+      const result =
+        await korlixAiGasBuild132Service()
+          .verifyApplePurchase({
+            user,
+            purchase,
+          });
+
+      return res.json({
+        ok: true,
+        ...result,
+      });
+    } catch (error) {
+      return korlixAiGasBuild132ErrorResponse(
+        res,
+        error,
+      );
+    }
+  },
+);
+
+app.post(
+  "/api/ai-gas/purchase/google/verify",
+  async (req, res) => {
+    try {
+      const user =
+        await requireUser(req);
+
+      const purchase =
+        korlixAiGasBuild132PurchaseBody(
+          req,
+        );
+
+      const result =
+        await korlixAiGasBuild132Service()
+          .verifyGooglePurchase({
+            user,
+            purchase,
+          });
+
+      return res.json({
+        ok: true,
+        ...result,
+      });
+    } catch (error) {
+      return korlixAiGasBuild132ErrorResponse(
+        res,
+        error,
+      );
+    }
+  },
+);
+
+// Public ledger grant, reversal, and direct consumption
+// routes are intentionally prohibited. Those operations
+// remain server-owned and are reached only through
+// verified purchase or LIVE CONVO usage flows.
+
+// KORLIX_AI_GAS_BUILD132_BACKEND_ROUTES_END
 
 app.use("/api", (req, res) => {
   return res.status(404).json({
