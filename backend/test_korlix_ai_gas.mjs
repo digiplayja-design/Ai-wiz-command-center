@@ -62,7 +62,7 @@ function catalogRows() {
       sku: "korlix_ai_gas_5h",
       display_name: "5 Hours AI GAS",
       seconds: 18000,
-      base_usd_cents: 12500,
+      base_usd_cents: 12499,
       apple_product_id:
         "com.korlix.ai_gas.5h",
       google_product_id:
@@ -264,7 +264,7 @@ test(
           "korlix_ai_gas_5h",
           "5 Hours AI GAS",
           18000,
-          12500,
+          12499,
         ],
       ]
     );

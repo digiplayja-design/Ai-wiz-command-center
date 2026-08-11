@@ -4,7 +4,7 @@ const PACKAGE_ROWS = [
   ["korlix_ai_gas_1h", "1 Hour AI GAS", 3600, 3000],
   ["korlix_ai_gas_2h", "2 Hours AI GAS", 7200, 5500],
   ["korlix_ai_gas_3h", "3 Hours AI GAS", 10800, 8000],
-  ["korlix_ai_gas_5h", "5 Hours AI GAS", 18000, 12500],
+  ["korlix_ai_gas_5h", "5 Hours AI GAS", 18000, 12499],
 ];
 
 export const KORLIX_AI_GAS_PACKAGES = Object.freeze(
