@@ -11,6 +11,7 @@ import {
   korlixAgentRuntimeView,
   korlixAgentSanitizeMemoryInput,
   korlixAgentSanitizeProfileMutation,
+  korlixAgentTrainingModeV1,
   korlixAgentVersionSnapshot,
 } from "./korlix_live_convo_agents.js";
 
@@ -116,6 +117,55 @@ test("built-in training mutation cannot replace protected mission", () => {
   assert.equal(
     mutation.tool_ids.includes("image_generation"),
     false,
+  );
+});
+
+test("training mode accepts only append or replace", () => {
+  assert.equal(korlixAgentTrainingModeV1("append"), "append");
+  assert.equal(korlixAgentTrainingModeV1(" REPLACE "), "replace");
+
+  assert.throws(
+    () => korlixAgentTrainingModeV1("merge"),
+    (error) => error?.code === "training_mode_invalid",
+  );
+});
+
+test("training mutations honor append and replace modes", () => {
+  const existingProfile = korlixAgentProfileFromRow({
+    agentId: "my_assistant",
+    row: {
+      training_instructions: "Use concise action lists.",
+      memory_enabled: true,
+      version: 3,
+    },
+  });
+
+  const appended = korlixAgentSanitizeProfileMutation({
+    agentId: "my_assistant",
+    existingProfile,
+    appendTraining: true,
+    body: {
+      trainingInstructions: "End with the next step.",
+    },
+  });
+
+  const replaced = korlixAgentSanitizeProfileMutation({
+    agentId: "my_assistant",
+    existingProfile,
+    appendTraining: false,
+    body: {
+      trainingInstructions: "Use a detailed narrative format.",
+    },
+  });
+
+  assert.equal(
+    appended.training_instructions,
+    "Use concise action lists.\n\nEnd with the next step.",
+  );
+
+  assert.equal(
+    replaced.training_instructions,
+    "Use a detailed narrative format.",
   );
 });
 

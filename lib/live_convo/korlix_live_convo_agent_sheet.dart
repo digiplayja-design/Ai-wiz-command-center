@@ -916,7 +916,10 @@ class _KorlixLiveConvoAgentHubSheetState
           backgroundColor: Colors.transparent,
           barrierColor: const Color(0xCC02070C),
           builder: (sheetContext) {
-            return _KorlixAgentTrainingSheet(agent: agent);
+            return _KorlixAgentTrainingSheet(
+              client: widget.client,
+              agent: agent,
+            );
           },
         );
 
@@ -2105,8 +2108,9 @@ String _korlixAgentToolDescription(String toolId) {
 }
 
 class _KorlixAgentTrainingSheet extends StatefulWidget {
-  const _KorlixAgentTrainingSheet({required this.agent});
+  const _KorlixAgentTrainingSheet({required this.client, required this.agent});
 
+  final KorlixLiveConvoAgentClient client;
   final KorlixLiveConvoAgent agent;
 
   @override
@@ -2124,6 +2128,12 @@ class _KorlixAgentTrainingSheetState extends State<_KorlixAgentTrainingSheet> {
   late bool _memoryEnabled;
 
   bool _confirmed = false;
+  bool _trainingDocumentBusy = false;
+  bool _documentDraftLoaded = false;
+
+  String _trainingMode = 'append';
+  String? _documentSummary;
+  List<String> _documentFileNames = const <String>[];
 
   String? _validationMessage;
 
@@ -2132,6 +2142,10 @@ class _KorlixAgentTrainingSheetState extends State<_KorlixAgentTrainingSheet> {
     super.initState();
 
     _instructionsController = TextEditingController();
+
+    _trainingMode = widget.agent.trainingInstructions.trim().isEmpty
+        ? 'replace'
+        : 'append';
 
     _memoryEnabled = widget.agent.memoryEnabled;
 
@@ -2216,6 +2230,165 @@ class _KorlixAgentTrainingSheetState extends State<_KorlixAgentTrainingSheet> {
     });
   }
 
+  String _cleanTrainingDocumentError(Object error) {
+    return error
+        .toString()
+        .replaceFirst('KorlixLiveConvoAgentClientException: ', '')
+        .replaceFirst('Exception: ', '')
+        .replaceFirst('Bad state: ', '')
+        .replaceFirst('StateError: ', '')
+        .trim();
+  }
+
+  void _setTrainingMode(String value) {
+    if (value != 'append' && value != 'replace') {
+      return;
+    }
+
+    setState(() {
+      _trainingMode = value;
+      _confirmed = false;
+      _validationMessage = null;
+    });
+  }
+
+  Future<void> _uploadTrainingDocuments() async {
+    if (_trainingDocumentBusy || !widget.agent.persistenceConfigured) {
+      return;
+    }
+
+    setState(() {
+      _trainingDocumentBusy = true;
+      _validationMessage = null;
+    });
+
+    try {
+      final result = await fp.FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        withData: true,
+        type: fp.FileType.custom,
+        allowedExtensions:
+            KorlixLiveConvoAgentMemoryFileUpload.allowedExtensions,
+      );
+
+      if (!mounted || result == null || result.files.isEmpty) {
+        return;
+      }
+
+      final accepted = <KorlixLiveConvoAgentMemoryFileUpload>[];
+      final warnings = <String>[];
+      final seen = <String>{};
+
+      for (final picked in result.files) {
+        final cleanName = picked.name.trim().isEmpty
+            ? 'Training source ${accepted.length + 1}'
+            : picked.name.trim();
+
+        final bytes = picked.bytes;
+
+        if (bytes == null || bytes.isEmpty) {
+          warnings.add('$cleanName could not be read on this device.');
+          continue;
+        }
+
+        final upload = KorlixLiveConvoAgentMemoryFileUpload(
+          name: cleanName,
+          bytes: bytes,
+        );
+
+        if (!KorlixLiveConvoAgentMemoryFileUpload.allowedExtensions.contains(
+          upload.extension,
+        )) {
+          warnings.add('$cleanName is not a supported training file.');
+          continue;
+        }
+
+        if (upload.sizeBytes >
+            KorlixLiveConvoAgentMemoryFileUpload.maximumBytesPerFile) {
+          warnings.add('$cleanName exceeds the 10 MB file limit.');
+          continue;
+        }
+
+        if (!seen.add(upload.dedupeKey)) {
+          warnings.add('$cleanName was selected more than once.');
+          continue;
+        }
+
+        if (accepted.length >=
+            KorlixLiveConvoAgentMemoryFileUpload.maximumFiles) {
+          warnings.add('Only five files may be analyzed at once.');
+          break;
+        }
+
+        accepted.add(upload);
+      }
+
+      if (accepted.isEmpty) {
+        throw StateError(
+          warnings.isEmpty
+              ? 'Attach at least one supported training file.'
+              : warnings.take(4).join('\n'),
+        );
+      }
+
+      final preview = await widget.client.analyzeTrainingFiles(
+        agentId: widget.agent.id,
+        files: accepted,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      final draft = preview.trainingDraft.trim();
+      final summaryParts = <String>[];
+
+      if (preview.summary.trim().isNotEmpty) {
+        summaryParts.add(preview.summary.trim());
+      }
+
+      if (warnings.isNotEmpty) {
+        summaryParts.add('Skipped: ${warnings.take(3).join(' ')}');
+      }
+
+      _instructionsController.value = TextEditingValue(
+        text: draft,
+        selection: TextSelection.collapsed(offset: draft.length),
+      );
+
+      setState(() {
+        _trainingMode = widget.agent.trainingInstructions.trim().isEmpty
+            ? 'replace'
+            : 'append';
+        _documentDraftLoaded = true;
+        _documentSummary = summaryParts.join('\n\n');
+        _documentFileNames = List<String>.unmodifiable(
+          preview.files.map((file) => file.fileName),
+        );
+        _confirmed = false;
+        _validationMessage = null;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      final message = _cleanTrainingDocumentError(error);
+
+      setState(() {
+        _validationMessage = message.isEmpty
+            ? 'The training document could not be analyzed.'
+            : message;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _trainingDocumentBusy = false;
+        });
+      }
+    }
+  }
+
   void _submitTraining() {
     final instructions = _instructionsController.text.trim();
 
@@ -2259,7 +2432,10 @@ class _KorlixAgentTrainingSheetState extends State<_KorlixAgentTrainingSheet> {
         confirmed: true,
         toolIds: orderedTools,
         memoryEnabled: _memoryEnabled,
-        source: 'agent_hub_training',
+        mode: _trainingMode,
+        source: _documentDraftLoaded
+            ? 'agent_training_document_reviewed'
+            : 'agent_hub_training',
       ),
     );
   }
@@ -2288,6 +2464,287 @@ class _KorlixAgentTrainingSheetState extends State<_KorlixAgentTrainingSheet> {
         borderRadius: BorderRadius.circular(16),
         borderSide: const BorderSide(color: Color(0xFFFF7185)),
       ),
+    );
+  }
+
+  Widget _buildTrainingDocumentControl(Color accent, bool canSave) {
+    final hasSummary = (_documentSummary ?? '').trim().isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: const Color(0xFF071722),
+        border: Border.all(
+          color: _documentDraftLoaded
+              ? const Color(0xFF3A9778)
+              : const Color(0xFF244D5C),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: accent.withValues(alpha: 0.14),
+                  border: Border.all(color: accent.withValues(alpha: 0.55)),
+                ),
+                child: Icon(Icons.upload_file_rounded, color: accent),
+              ),
+              const SizedBox(width: 11),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Upload Training Document',
+                      style: TextStyle(
+                        color: Color(0xFFF0F7F8),
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Attach up to five PDFs, Word files, spreadsheets, '
+                      'presentations, text files, or images. KORLIX will '
+                      'create a draft for you to review and edit.',
+                      style: TextStyle(
+                        color: Color(0xFFA9C6CF),
+                        height: 1.35,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: canSave && !_trainingDocumentBusy
+                  ? _uploadTrainingDocuments
+                  : null,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF143B4A),
+                foregroundColor: const Color(0xFFE7F7FA),
+                disabledBackgroundColor: const Color(0xFF26383E),
+                disabledForegroundColor: const Color(0xFF8299A2),
+                padding: const EdgeInsets.symmetric(vertical: 13),
+              ),
+              icon: _trainingDocumentBusy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFFE7F7FA),
+                      ),
+                    )
+                  : const Icon(Icons.attach_file_rounded),
+              label: Text(
+                _trainingDocumentBusy
+                    ? 'Analyzing Training Document…'
+                    : _documentDraftLoaded
+                    ? 'Upload Different Training Document'
+                    : 'Choose Training Document',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+          ),
+          if (_documentDraftLoaded) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                color: const Color(0xFF0B2A24),
+                border: Border.all(color: const Color(0xFF3A9778)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(
+                        Icons.fact_check_rounded,
+                        color: Color(0xFF62D6A7),
+                        size: 19,
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'REVIEWABLE DRAFT CREATED',
+                          style: TextStyle(
+                            color: Color(0xFF62D6A7),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_documentFileNames.isNotEmpty) ...[
+                    const SizedBox(height: 7),
+                    Text(
+                      _documentFileNames.join(' · '),
+                      style: const TextStyle(
+                        color: Color(0xFFD8E7EA),
+                        height: 1.35,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                  if (hasSummary) ...[
+                    const SizedBox(height: 7),
+                    Text(
+                      _documentSummary!,
+                      style: const TextStyle(
+                        color: Color(0xFFA9C6CF),
+                        height: 1.35,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 7),
+                  const Text(
+                    'The uploaded source file was not retained. This draft '
+                    'has not been published and may be edited below.',
+                    style: TextStyle(
+                      color: Color(0xFF8CDDE8),
+                      height: 1.35,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrainingModeOption({
+    required Color accent,
+    required String value,
+    required String title,
+    required String description,
+    required IconData icon,
+  }) {
+    final selected = _trainingMode == value;
+
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          _setTrainingMode(value);
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 170),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: selected
+                ? accent.withValues(alpha: 0.15)
+                : const Color(0xFF071722),
+            border: Border.all(
+              color: selected ? accent : const Color(0xFF244D5C),
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    selected
+                        ? Icons.radio_button_checked_rounded
+                        : Icons.radio_button_off_rounded,
+                    color: selected ? accent : const Color(0xFF8299A2),
+                    size: 19,
+                  ),
+                  const SizedBox(width: 7),
+                  Icon(
+                    icon,
+                    color: selected ? accent : const Color(0xFFA9C6CF),
+                    size: 18,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  color: selected
+                      ? const Color(0xFFF0F7F8)
+                      : const Color(0xFFBBD0D6),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                description,
+                style: const TextStyle(
+                  color: Color(0xFFA9C6CF),
+                  height: 1.3,
+                  fontSize: 11.8,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTrainingModeControl(Color accent) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'HOW SHOULD THIS TRAINING BE APPLIED?',
+          style: TextStyle(
+            color: Color(0xFF8CDDE8),
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.6,
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildTrainingModeOption(
+              accent: accent,
+              value: 'append',
+              title: 'Append',
+              description: 'Keep the current training and add this update.',
+              icon: Icons.playlist_add_rounded,
+            ),
+            const SizedBox(width: 10),
+            _buildTrainingModeOption(
+              accent: accent,
+              value: 'replace',
+              title: 'Replace',
+              description: 'Replace the current training with this draft.',
+              icon: Icons.find_replace_rounded,
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -2730,13 +3187,28 @@ class _KorlixAgentTrainingSheetState extends State<_KorlixAgentTrainingSheet> {
                 const SizedBox(height: 8),
                 _buildCurrentTraining(),
                 const SizedBox(height: 18),
+                _buildTrainingDocumentControl(accent, canSave),
+                const SizedBox(height: 18),
+                _buildTrainingModeControl(accent),
+                const SizedBox(height: 18),
                 const Text(
-                  'NEW TRAINING TO ADD',
+                  'TRAINING UPDATE',
                   style: TextStyle(
                     color: Color(0xFF8CDDE8),
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.6,
                     fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  _trainingMode == 'replace'
+                      ? 'This text will replace the current published training.'
+                      : 'This text will be added after the current published training.',
+                  style: const TextStyle(
+                    color: Color(0xFFA9C6CF),
+                    height: 1.35,
+                    fontSize: 12.5,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -2745,22 +3217,21 @@ class _KorlixAgentTrainingSheetState extends State<_KorlixAgentTrainingSheet> {
                   minLines: 5,
                   maxLines: 12,
                   maxLength: 12000,
-                  enabled: canSave,
+                  enabled: canSave && !_trainingDocumentBusy,
                   style: const TextStyle(color: Color(0xFFF0F7F8), height: 1.4),
                   decoration: _trainingDecoration(
                     label:
                         'Instructions for '
                         '${widget.agent.name}',
                     hint:
-                        'Example: Use concise '
-                        'executive summaries and '
-                        'place action items at '
-                        'the end.',
+                        'Type or paste instructions, or upload a training '
+                        'document above to generate a reviewable draft.',
                   ),
                   onChanged: (_) {
-                    if (_validationMessage != null) {
+                    if (_validationMessage != null || _confirmed) {
                       setState(() {
                         _validationMessage = null;
+                        _confirmed = false;
                       });
                     }
                   },
@@ -2841,7 +3312,9 @@ class _KorlixAgentTrainingSheetState extends State<_KorlixAgentTrainingSheet> {
                     Expanded(
                       flex: 2,
                       child: FilledButton.icon(
-                        onPressed: canSave ? _submitTraining : null,
+                        onPressed: canSave && !_trainingDocumentBusy
+                            ? _submitTraining
+                            : null,
                         style: FilledButton.styleFrom(
                           backgroundColor: accent,
                           foregroundColor: const Color(0xFF03110E),
