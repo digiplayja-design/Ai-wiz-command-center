@@ -18,10 +18,7 @@ String _korlixAgentString(
   return text.substring(0, maximum);
 }
 
-String _korlixAgentId(
-  Object? value, {
-  String fallback = 'general',
-}) {
+String _korlixAgentId(Object? value, {String fallback = 'general'}) {
   final normalized = (value ?? '')
       .toString()
       .trim()
@@ -34,15 +31,10 @@ String _korlixAgentId(
     return fallback;
   }
 
-  return normalized.length <= 96
-      ? normalized
-      : normalized.substring(0, 96);
+  return normalized.length <= 96 ? normalized : normalized.substring(0, 96);
 }
 
-bool _korlixAgentBool(
-  Object? value, {
-  bool fallback = false,
-}) {
+bool _korlixAgentBool(Object? value, {bool fallback = false}) {
   if (value is bool) {
     return value;
   }
@@ -103,10 +95,7 @@ List<String> _korlixAgentStringList(
   final seen = <String>{};
 
   for (final item in value) {
-    final clean = _korlixAgentString(
-      item,
-      maximum: maximumLength,
-    );
+    final clean = _korlixAgentString(item, maximum: maximumLength);
 
     final key = clean.toLowerCase();
 
@@ -146,19 +135,14 @@ DateTime? _korlixAgentDateTime(Object? value) {
   return DateTime.tryParse(text)?.toUtc();
 }
 
-String _korlixAgentAccent(
-  Object? value, {
-  String fallback = '21D4F4',
-}) {
+String _korlixAgentAccent(Object? value, {String fallback = '21D4F4'}) {
   final candidate = (value ?? '')
       .toString()
       .trim()
       .replaceFirst('#', '')
       .toUpperCase();
 
-  return RegExp(r'^[0-9A-F]{6}$').hasMatch(candidate)
-      ? candidate
-      : fallback;
+  return RegExp(r'^[0-9A-F]{6}$').hasMatch(candidate) ? candidate : fallback;
 }
 
 class KorlixLiveConvoAgent {
@@ -208,8 +192,7 @@ class KorlixLiveConvoAgent {
 
   bool get hasPublishedTraining => trainingInstructions.trim().isNotEmpty;
 
-  bool get memoryPersistenceReady =>
-      canUseMemory && persistenceConfigured;
+  bool get memoryPersistenceReady => canUseMemory && persistenceConfigured;
 
   String get memorySummary {
     if (!memoryEnabled) {
@@ -220,26 +203,17 @@ class KorlixLiveConvoAgent {
       return 'Memory setup required';
     }
 
-    return memoryCount == 1
-        ? '1 memory'
-        : '$memoryCount memories';
+    return memoryCount == 1 ? '1 memory' : '$memoryCount memories';
   }
 
-  factory KorlixLiveConvoAgent.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory KorlixLiveConvoAgent.fromJson(Map<String, dynamic> json) {
     final id = _korlixAgentId(
-      json['id'] ??
-          json['agentId'] ??
-          json['agent_id'],
+      json['id'] ?? json['agentId'] ?? json['agent_id'],
     );
 
     final fallback = KorlixLiveConvoAgent.fallbackForId(id);
 
-    final rawTools =
-        json['toolIds'] ??
-        json['tool_ids'] ??
-        json['tools'];
+    final rawTools = json['toolIds'] ?? json['tool_ids'] ?? json['tools'];
 
     return KorlixLiveConvoAgent(
       id: id,
@@ -257,17 +231,13 @@ class KorlixLiveConvoAgent {
       ),
 
       iconName: _korlixAgentString(
-        json['icon'] ??
-            json['iconName'] ??
-            json['icon_name'],
+        json['icon'] ?? json['iconName'] ?? json['icon_name'],
         fallback: fallback.iconName,
         maximum: 64,
       ),
 
       accentHex: _korlixAgentAccent(
-        json['accent'] ??
-            json['accentHex'] ??
-            json['accent_hex'],
+        json['accent'] ?? json['accentHex'] ?? json['accent_hex'],
         fallback: fallback.accentHex,
       ),
 
@@ -278,58 +248,37 @@ class KorlixLiveConvoAgent {
       ),
 
       trainingInstructions: _korlixAgentString(
-        json['trainingInstructions'] ??
-            json['training_instructions'],
+        json['trainingInstructions'] ?? json['training_instructions'],
         maximum: 12000,
       ),
 
-      toolIds: _korlixAgentStringList(
-        rawTools,
-        fallback: fallback.toolIds,
-      ),
+      toolIds: _korlixAgentStringList(rawTools, fallback: fallback.toolIds),
 
       memoryEnabled: _korlixAgentBool(
-        json['memoryEnabled'] ??
-            json['memory_enabled'],
+        json['memoryEnabled'] ?? json['memory_enabled'],
         fallback: fallback.memoryEnabled,
       ),
 
       memoryCount: _korlixAgentInt(
-        json['memoryCount'] ??
-            json['memory_count'],
+        json['memoryCount'] ?? json['memory_count'],
         minimum: 0,
       ),
 
       isCustom: _korlixAgentBool(
-        json['isCustom'] ??
-            json['is_custom'],
+        json['isCustom'] ?? json['is_custom'],
         fallback: fallback.isCustom,
       ),
 
-      active: _korlixAgentBool(
-        json['active'],
-        fallback: true,
-      ),
+      active: _korlixAgentBool(json['active'], fallback: true),
 
-      version: _korlixAgentInt(
-        json['version'],
-        fallback: 1,
-        minimum: 1,
-      ),
+      version: _korlixAgentInt(json['version'], fallback: 1, minimum: 1),
 
-      createdAt: _korlixAgentDateTime(
-        json['createdAt'] ??
-            json['created_at'],
-      ),
+      createdAt: _korlixAgentDateTime(json['createdAt'] ?? json['created_at']),
 
-      updatedAt: _korlixAgentDateTime(
-        json['updatedAt'] ??
-            json['updated_at'],
-      ),
+      updatedAt: _korlixAgentDateTime(json['updatedAt'] ?? json['updated_at']),
 
       persistenceConfigured: _korlixAgentBool(
-        json['persistenceConfigured'] ??
-            json['persistence_configured'],
+        json['persistenceConfigured'] ?? json['persistence_configured'],
       ),
     );
   }
@@ -379,8 +328,7 @@ class KorlixLiveConvoAgent {
       iconName: iconName ?? this.iconName,
       accentHex: accentHex ?? this.accentHex,
       mission: mission ?? this.mission,
-      trainingInstructions:
-          trainingInstructions ?? this.trainingInstructions,
+      trainingInstructions: trainingInstructions ?? this.trainingInstructions,
       toolIds: toolIds ?? this.toolIds,
       memoryEnabled: memoryEnabled ?? this.memoryEnabled,
       memoryCount: memoryCount ?? this.memoryCount,
@@ -406,28 +354,26 @@ class KorlixLiveConvoAgent {
     return generalFallback;
   }
 
-  static const KorlixLiveConvoAgent generalFallback =
-      KorlixLiveConvoAgent(
-        id: 'general',
-        name: 'General Korlix',
-        description:
-            'Flexible everyday conversation and problem solving.',
-        iconName: 'auto_awesome',
-        accentHex: '21D4F4',
-        mission:
-            'Handle broad requests naturally and use specialist tools '
-            'only when they are genuinely useful.',
-        toolIds: <String>[
-          'general_chat',
-          'live_docs',
-          'file_analysis',
-          'image_generation',
-          'image_improvement',
-          'camera',
-          'memory',
-          'agent_training',
-        ],
-      );
+  static const KorlixLiveConvoAgent generalFallback = KorlixLiveConvoAgent(
+    id: 'general',
+    name: 'General Korlix',
+    description: 'Flexible everyday conversation and problem solving.',
+    iconName: 'auto_awesome',
+    accentHex: '21D4F4',
+    mission:
+        'Handle broad requests naturally and use specialist tools '
+        'only when they are genuinely useful.',
+    toolIds: <String>[
+      'general_chat',
+      'live_docs',
+      'file_analysis',
+      'image_generation',
+      'image_improvement',
+      'camera',
+      'memory',
+      'agent_training',
+    ],
+  );
 
   static const List<KorlixLiveConvoAgent> builtInFallbacks =
       <KorlixLiveConvoAgent>[
@@ -436,8 +382,7 @@ class KorlixLiveConvoAgent {
         KorlixLiveConvoAgent(
           id: 'doc_wizard',
           name: 'Doc Wizard',
-          description:
-              'Reports, spreadsheets, Word documents, and PDFs.',
+          description: 'Reports, spreadsheets, Word documents, and PDFs.',
           iconName: 'description',
           accentHex: '62D6A7',
           mission:
@@ -542,34 +487,17 @@ class KorlixLiveConvoAgentMemory {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
-  factory KorlixLiveConvoAgentMemory.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory KorlixLiveConvoAgentMemory.fromJson(Map<String, dynamic> json) {
     return KorlixLiveConvoAgentMemory(
-      id: _korlixAgentString(
-        json['id'],
-        maximum: 160,
-      ),
+      id: _korlixAgentString(json['id'], maximum: 160),
 
-      agentId: _korlixAgentId(
-        json['agentId'] ??
-            json['agent_id'],
-      ),
+      agentId: _korlixAgentId(json['agentId'] ?? json['agent_id']),
 
-      kind: _korlixAgentId(
-        json['kind'],
-        fallback: 'preference',
-      ),
+      kind: _korlixAgentId(json['kind'], fallback: 'preference'),
 
-      label: _korlixAgentString(
-        json['label'],
-        maximum: 120,
-      ),
+      label: _korlixAgentString(json['label'], maximum: 120),
 
-      content: _korlixAgentString(
-        json['content'],
-        maximum: 4000,
-      ),
+      content: _korlixAgentString(json['content'], maximum: 4000),
 
       tags: _korlixAgentStringList(
         json['tags'],
@@ -584,9 +512,7 @@ class KorlixLiveConvoAgentMemory {
         maximum: 5,
       ),
 
-      sensitive: _korlixAgentBool(
-        json['sensitive'],
-      ),
+      sensitive: _korlixAgentBool(json['sensitive']),
 
       source: _korlixAgentString(
         json['source'],
@@ -594,20 +520,11 @@ class KorlixLiveConvoAgentMemory {
         maximum: 80,
       ),
 
-      active: _korlixAgentBool(
-        json['active'],
-        fallback: true,
-      ),
+      active: _korlixAgentBool(json['active'], fallback: true),
 
-      createdAt: _korlixAgentDateTime(
-        json['createdAt'] ??
-            json['created_at'],
-      ),
+      createdAt: _korlixAgentDateTime(json['createdAt'] ?? json['created_at']),
 
-      updatedAt: _korlixAgentDateTime(
-        json['updatedAt'] ??
-            json['updated_at'],
-      ),
+      updatedAt: _korlixAgentDateTime(json['updatedAt'] ?? json['updated_at']),
     );
   }
 }
@@ -625,31 +542,25 @@ class KorlixLiveConvoAgentModelProof {
   final String liveDocsReasoningEffort;
   final bool deterministicAuditEngine;
 
-  factory KorlixLiveConvoAgentModelProof.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory KorlixLiveConvoAgentModelProof.fromJson(Map<String, dynamic> json) {
     return KorlixLiveConvoAgentModelProof(
       liveConvoModel: _korlixAgentString(
-        json['liveConvoModel'] ??
-            json['live_convo_model'],
+        json['liveConvoModel'] ?? json['live_convo_model'],
         maximum: 160,
       ),
 
       liveDocsDocumentModel: _korlixAgentString(
-        json['liveDocsDocumentModel'] ??
-            json['live_docs_document_model'],
+        json['liveDocsDocumentModel'] ?? json['live_docs_document_model'],
         maximum: 160,
       ),
 
       liveDocsReasoningEffort: _korlixAgentString(
-        json['liveDocsReasoningEffort'] ??
-            json['live_docs_reasoning_effort'],
+        json['liveDocsReasoningEffort'] ?? json['live_docs_reasoning_effort'],
         maximum: 40,
       ),
 
       deterministicAuditEngine: _korlixAgentBool(
-        json['deterministicAuditEngine'] ??
-            json['deterministic_audit_engine'],
+        json['deterministicAuditEngine'] ?? json['deterministic_audit_engine'],
       ),
     );
   }
@@ -675,24 +586,13 @@ class KorlixLiveConvoAppliedMemory {
   final int importance;
   final bool sensitive;
 
-  factory KorlixLiveConvoAppliedMemory.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory KorlixLiveConvoAppliedMemory.fromJson(Map<String, dynamic> json) {
     return KorlixLiveConvoAppliedMemory(
-      id: _korlixAgentString(
-        json['id'],
-        maximum: 160,
-      ),
+      id: _korlixAgentString(json['id'], maximum: 160),
 
-      kind: _korlixAgentId(
-        json['kind'],
-        fallback: 'preference',
-      ),
+      kind: _korlixAgentId(json['kind'], fallback: 'preference'),
 
-      label: _korlixAgentString(
-        json['label'],
-        maximum: 120,
-      ),
+      label: _korlixAgentString(json['label'], maximum: 120),
 
       importance: _korlixAgentInt(
         json['importance'],
@@ -701,9 +601,7 @@ class KorlixLiveConvoAppliedMemory {
         maximum: 5,
       ),
 
-      sensitive: _korlixAgentBool(
-        json['sensitive'],
-      ),
+      sensitive: _korlixAgentBool(json['sensitive']),
     );
   }
 }
@@ -727,13 +625,10 @@ class KorlixLiveConvoAgentRuntime {
   final bool persistenceConfigured;
   final String runtimeVersion;
 
-  factory KorlixLiveConvoAgentRuntime.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory KorlixLiveConvoAgentRuntime.fromJson(Map<String, dynamic> json) {
     final rawAgent = _korlixAgentMap(json['agent']);
 
-    final rawMemories = json['appliedMemories'] ??
-        json['applied_memories'];
+    final rawMemories = json['appliedMemories'] ?? json['applied_memories'];
 
     final appliedMemories = <KorlixLiveConvoAppliedMemory>[];
 
@@ -742,21 +637,15 @@ class KorlixLiveConvoAgentRuntime {
         final map = _korlixAgentMap(item);
 
         if (map != null) {
-          appliedMemories.add(
-            KorlixLiveConvoAppliedMemory.fromJson(map),
-          );
+          appliedMemories.add(KorlixLiveConvoAppliedMemory.fromJson(map));
         }
       }
     }
 
-    final rawProof = _korlixAgentMap(
-      json['modelProof'] ??
-          json['model_proof'],
-    );
+    final rawProof = _korlixAgentMap(json['modelProof'] ?? json['model_proof']);
 
     final persistenceConfigured = _korlixAgentBool(
-      json['persistenceConfigured'] ??
-          json['persistence_configured'],
+      json['persistenceConfigured'] ?? json['persistence_configured'],
     );
 
     final parsedAgent = rawAgent == null
@@ -764,24 +653,19 @@ class KorlixLiveConvoAgentRuntime {
         : KorlixLiveConvoAgent.fromJson(rawAgent);
 
     return KorlixLiveConvoAgentRuntime(
-      agent: parsedAgent.copyWith(
-        persistenceConfigured: persistenceConfigured,
-      ),
+      agent: parsedAgent.copyWith(persistenceConfigured: persistenceConfigured),
 
       toolIds: _korlixAgentStringList(
-        json['toolIds'] ??
-            json['tool_ids'],
+        json['toolIds'] ?? json['tool_ids'],
         fallback: parsedAgent.toolIds,
       ),
 
       memoryCount: _korlixAgentInt(
-        json['memoryCount'] ??
-            json['memory_count'],
+        json['memoryCount'] ?? json['memory_count'],
         minimum: 0,
       ),
 
-      appliedMemories:
-          List<KorlixLiveConvoAppliedMemory>.unmodifiable(
+      appliedMemories: List<KorlixLiveConvoAppliedMemory>.unmodifiable(
         appliedMemories,
       ),
 
@@ -792,8 +676,7 @@ class KorlixLiveConvoAgentRuntime {
       persistenceConfigured: persistenceConfigured,
 
       runtimeVersion: _korlixAgentString(
-        json['runtimeVersion'] ??
-            json['runtime_version'],
+        json['runtimeVersion'] ?? json['runtime_version'],
         maximum: 120,
       ),
     );
@@ -806,6 +689,7 @@ class KorlixLiveConvoAgentTrainingUpdate {
     required this.confirmed,
     this.toolIds,
     this.memoryEnabled,
+    this.mode = 'append',
     this.source = 'user_confirmed_training',
   });
 
@@ -813,16 +697,26 @@ class KorlixLiveConvoAgentTrainingUpdate {
   final bool confirmed;
   final List<String>? toolIds;
   final bool? memoryEnabled;
+  final String mode;
   final String source;
 
+  String get normalizedMode {
+    return mode.trim().toLowerCase() == 'replace' ? 'replace' : 'append';
+  }
+
   Map<String, dynamic> toJson() {
+    final trainingMode = normalizedMode;
+
     return <String, dynamic>{
       'confirmed': confirmed,
       'trainingInstructions': instructions.trim(),
       if (toolIds != null) 'toolIds': toolIds,
-      if (memoryEnabled != null)
-        'memoryEnabled': memoryEnabled,
+      if (memoryEnabled != null) 'memoryEnabled': memoryEnabled,
+      'mode': trainingMode,
       'source': source.trim(),
+      'changeSummary': trainingMode == 'replace'
+          ? 'User replaced the current agent training.'
+          : 'User appended to the current agent training.',
     };
   }
 }
@@ -835,11 +729,7 @@ class KorlixLiveConvoCustomAgentDraft {
     this.iconName = 'smart_toy',
     this.accentHex = '21D4F4',
     this.trainingInstructions = '',
-    this.toolIds = const <String>[
-      'general_chat',
-      'memory',
-      'agent_training',
-    ],
+    this.toolIds = const <String>['general_chat', 'memory', 'agent_training'],
     this.memoryEnabled = true,
   });
 
@@ -891,8 +781,8 @@ class KorlixLiveConvoMemoryDraft {
     final safeImportance = importance < 1
         ? 1
         : importance > 5
-            ? 5
-            : importance;
+        ? 5
+        : importance;
 
     return <String, dynamic>{
       'confirmed': confirmed,
@@ -910,11 +800,9 @@ class KorlixLiveConvoMemoryDraft {
 class KorlixLiveConvoAgentApiContract {
   const KorlixLiveConvoAgentApiContract._();
 
-  static const String catalogPath =
-      '/api/live-convo/agents';
+  static const String catalogPath = '/api/live-convo/agents';
 
-  static const String modelProofPath =
-      '/api/live-convo/agents/model-proof';
+  static const String modelProofPath = '/api/live-convo/agents/model-proof';
 
   static String agentPath(String agentId) {
     return '$catalogPath/${Uri.encodeComponent(agentId)}';
@@ -928,6 +816,10 @@ class KorlixLiveConvoAgentApiContract {
     return '${agentPath(agentId)}/training';
   }
 
+  static String trainingFilesAnalyzePath(String agentId) {
+    return '${agentPath(agentId)}/training-files/analyze';
+  }
+
   static String memoriesPath(String agentId) {
     return '${agentPath(agentId)}/memories';
   }
@@ -936,10 +828,7 @@ class KorlixLiveConvoAgentApiContract {
     return '${memoriesPath(agentId)}/forget';
   }
 
-  static String memoryPath(
-    String agentId,
-    String memoryId,
-  ) {
+  static String memoryPath(String agentId, String memoryId) {
     return '${memoriesPath(agentId)}/'
         '${Uri.encodeComponent(memoryId)}';
   }
@@ -948,10 +837,7 @@ class KorlixLiveConvoAgentApiContract {
     return '${agentPath(agentId)}/versions';
   }
 
-  static String restoreVersionPath(
-    String agentId,
-    int version,
-  ) {
+  static String restoreVersionPath(String agentId, int version) {
     return '${versionsPath(agentId)}/$version/restore';
   }
 }

@@ -696,6 +696,153 @@ class KorlixLiveConvoAgentMemoryFilePreview {
 
 // KORLIX_AGENT_FILE_MEMORY_CLIENT_MODELS_BUILD131_V1_END
 
+// KORLIX_AGENT_FILE_TRAINING_CLIENT_MODELS_BUILD132_V1_BEGIN
+
+class KorlixLiveConvoAgentTrainingFilePreview {
+  const KorlixLiveConvoAgentTrainingFilePreview({
+    required this.analysisVersion,
+    required this.summary,
+    required this.trainingDraft,
+    required this.files,
+    required this.requiresApproval,
+    required this.autoSaved,
+    required this.sourceStoredByKorlix,
+    required this.sourceRetentionMessage,
+    required this.maximumFiles,
+    required this.maximumBytesPerFile,
+    required this.maximumTrainingCharacters,
+    required this.creditsUsed,
+    this.tier,
+  });
+
+  final String analysisVersion;
+  final String summary;
+  final String trainingDraft;
+  final List<KorlixLiveConvoAgentMemoryFileMetadata> files;
+  final bool requiresApproval;
+  final bool autoSaved;
+  final bool sourceStoredByKorlix;
+  final String sourceRetentionMessage;
+  final int maximumFiles;
+  final int maximumBytesPerFile;
+  final int maximumTrainingCharacters;
+  final int creditsUsed;
+  final String? tier;
+
+  factory KorlixLiveConvoAgentTrainingFilePreview.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    final files = <KorlixLiveConvoAgentMemoryFileMetadata>[];
+    final rawFiles = json['files'];
+
+    if (rawFiles is Iterable<Object?>) {
+      for (final rawFile in rawFiles) {
+        final map = _korlixAgentClientMap(rawFile);
+
+        if (map != null) {
+          files.add(KorlixLiveConvoAgentMemoryFileMetadata.fromJson(map));
+        }
+      }
+    }
+
+    final retention =
+        _korlixAgentClientMap(json['sourceRetention']) ??
+        _korlixAgentClientMap(json['source_retention']) ??
+        const <String, dynamic>{};
+
+    final limits =
+        _korlixAgentClientMap(json['limits']) ?? const <String, dynamic>{};
+
+    final requiresApproval = _korlixAgentClientBool(
+      json['requiresApproval'] ?? json['requires_approval'],
+      fallback: true,
+    );
+
+    final autoSaved = _korlixAgentClientBool(
+      json['autoSaved'] ?? json['auto_saved'],
+    );
+
+    final sourceStoredByKorlix = _korlixAgentClientBool(
+      retention['storedByKorlix'] ?? retention['stored_by_korlix'],
+    );
+
+    if (!requiresApproval || autoSaved) {
+      throw const KorlixLiveConvoAgentClientException(
+        'The training-document preview did not preserve explicit user approval.',
+        code: 'agent_training_file_approval_boundary_failed',
+      );
+    }
+
+    if (sourceStoredByKorlix) {
+      throw const KorlixLiveConvoAgentClientException(
+        'The training-document preview unexpectedly retained the source file.',
+        code: 'agent_training_file_retention_boundary_failed',
+      );
+    }
+
+    final maximumTrainingCharacters = _korlixAgentClientInt(
+      limits['maximumTrainingCharacters'] ??
+          limits['maximum_training_characters'],
+      fallback: 12000,
+      minimum: 1,
+    );
+
+    final trainingDraft = _korlixAgentClientText(
+      json['trainingDraft'] ??
+          json['training_draft'] ??
+          json['draft'] ??
+          json['instructions'],
+    );
+
+    if (trainingDraft.isEmpty) {
+      throw const KorlixLiveConvoAgentClientException(
+        'No usable training draft was returned from the attached files.',
+        code: 'agent_training_file_no_draft',
+      );
+    }
+
+    if (trainingDraft.length > maximumTrainingCharacters) {
+      throw const KorlixLiveConvoAgentClientException(
+        'The generated training draft exceeds the allowed training limit.',
+        code: 'agent_training_file_draft_too_large',
+      );
+    }
+
+    final rawTier = _korlixAgentClientText(json['tier']);
+
+    return KorlixLiveConvoAgentTrainingFilePreview(
+      analysisVersion: _korlixAgentClientText(
+        json['analysisVersion'] ?? json['analysis_version'],
+      ),
+      summary: _korlixAgentClientText(json['summary']),
+      trainingDraft: trainingDraft,
+      files: List<KorlixLiveConvoAgentMemoryFileMetadata>.unmodifiable(files),
+      requiresApproval: requiresApproval,
+      autoSaved: autoSaved,
+      sourceStoredByKorlix: sourceStoredByKorlix,
+      sourceRetentionMessage: _korlixAgentClientText(retention['message']),
+      maximumFiles: _korlixAgentClientInt(
+        limits['maximumFiles'] ?? limits['maximum_files'],
+        fallback: KorlixLiveConvoAgentMemoryFileUpload.maximumFiles,
+        minimum: 1,
+      ),
+      maximumBytesPerFile: _korlixAgentClientInt(
+        limits['maximumBytesPerFile'] ?? limits['maximum_bytes_per_file'],
+        fallback: KorlixLiveConvoAgentMemoryFileUpload.maximumBytesPerFile,
+        minimum: 1,
+      ),
+      maximumTrainingCharacters: maximumTrainingCharacters,
+      creditsUsed: _korlixAgentClientInt(
+        json['creditsUsed'] ?? json['credits_used'],
+        minimum: 0,
+      ),
+      tier: rawTier.isEmpty ? null : rawTier,
+    );
+  }
+}
+
+// KORLIX_AGENT_FILE_TRAINING_CLIENT_MODELS_BUILD132_V1_END
+
 class KorlixLiveConvoAgentClient {
   KorlixLiveConvoAgentClient({
     required this.backendBaseUrl,
@@ -992,6 +1139,15 @@ class KorlixLiveConvoAgentClient {
       );
     }
 
+    final mode = update.mode.trim().toLowerCase();
+
+    if (mode != 'append' && mode != 'replace') {
+      throw const KorlixLiveConvoAgentClientException(
+        'Choose whether to append to or replace the current training.',
+        code: 'training_mode_invalid',
+      );
+    }
+
     final response = await _requestJson(
       method: 'POST',
       path: KorlixLiveConvoAgentApiContract.trainingPath(agentId),
@@ -1258,6 +1414,126 @@ class KorlixLiveConvoAgentClient {
     return KorlixLiveConvoAgentMemoryFilePreview.fromJson(decoded);
   }
   // KORLIX_AGENT_FILE_MEMORY_MULTIPART_CLIENT_BUILD131_V1_END
+
+  // KORLIX_AGENT_FILE_TRAINING_MULTIPART_CLIENT_BUILD132_V1_BEGIN
+  Future<KorlixLiveConvoAgentTrainingFilePreview> analyzeTrainingFiles({
+    required String agentId,
+    required List<KorlixLiveConvoAgentMemoryFileUpload> files,
+  }) async {
+    if (files.isEmpty) {
+      throw const KorlixLiveConvoAgentClientException(
+        'Attach at least one file for Agent training analysis.',
+        code: 'agent_training_file_required',
+      );
+    }
+
+    if (files.length > KorlixLiveConvoAgentMemoryFileUpload.maximumFiles) {
+      throw const KorlixLiveConvoAgentClientException(
+        'Attach no more than five files at once.',
+        code: 'agent_training_file_count_exceeded',
+      );
+    }
+
+    final seen = <String>{};
+
+    for (final file in files) {
+      if (file.bytes.isEmpty) {
+        throw KorlixLiveConvoAgentClientException(
+          '${file.name} is empty or could not be read on this device.',
+          code: 'agent_training_file_empty',
+        );
+      }
+
+      if (file.sizeBytes >
+          KorlixLiveConvoAgentMemoryFileUpload.maximumBytesPerFile) {
+        throw KorlixLiveConvoAgentClientException(
+          '${file.name} exceeds the 10 MB Agent training file limit.',
+          code: 'agent_training_file_too_large',
+        );
+      }
+
+      if (!KorlixLiveConvoAgentMemoryFileUpload.allowedExtensions.contains(
+        file.extension,
+      )) {
+        throw KorlixLiveConvoAgentClientException(
+          '${file.name} is not a supported Agent training file.',
+          code: 'agent_training_file_type_unsupported',
+        );
+      }
+
+      if (!seen.add(file.dedupeKey)) {
+        throw KorlixLiveConvoAgentClientException(
+          '${file.name} is attached more than once.',
+          code: 'agent_training_file_duplicate',
+        );
+      }
+    }
+
+    final request = http.MultipartRequest(
+      'POST',
+      _requestUri(
+        KorlixLiveConvoAgentApiContract.trainingFilesAnalyzePath(agentId),
+      ),
+    );
+
+    request.headers.addAll(_requestHeaders(hasJsonBody: false));
+
+    for (final file in files) {
+      request.files.add(
+        http.MultipartFile.fromBytes('files', file.bytes, filename: file.name),
+      );
+    }
+
+    late final http.StreamedResponse streamedResponse;
+
+    final analysisTimeout = timeout.inMilliseconds < 120000
+        ? const Duration(seconds: 120)
+        : timeout;
+
+    try {
+      streamedResponse = await _client.send(request).timeout(analysisTimeout);
+    } on TimeoutException {
+      throw const KorlixLiveConvoAgentClientException(
+        'Agent training-document analysis timed out. Please try again.',
+        code: 'agent_training_file_timeout',
+      );
+    } on KorlixLiveConvoAgentClientException {
+      rethrow;
+    } catch (error) {
+      throw KorlixLiveConvoAgentClientException(
+        'Could not reach the Agent training-document service: $error',
+        code: 'agent_training_file_network_error',
+      );
+    }
+
+    final response = await http.Response.fromStream(streamedResponse);
+    final decoded = _decodeResponse(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw KorlixLiveConvoAgentClientException(
+        _responseMessage(
+          response,
+          decoded,
+          fallback: 'Could not analyze the attached Agent training files.',
+        ),
+        code: _korlixAgentClientText(
+          decoded?['code'],
+          fallback: 'agent_training_file_analysis_failed',
+        ),
+        statusCode: response.statusCode,
+      );
+    }
+
+    if (decoded == null) {
+      throw const KorlixLiveConvoAgentClientException(
+        'The Agent training-document service returned an invalid response.',
+        code: 'invalid_agent_training_file_response',
+      );
+    }
+
+    return KorlixLiveConvoAgentTrainingFilePreview.fromJson(decoded);
+  }
+  // KORLIX_AGENT_FILE_TRAINING_MULTIPART_CLIENT_BUILD132_V1_END
 
   Future<List<KorlixLiveConvoAgentVersion>> loadVersions({
     required String agentId,

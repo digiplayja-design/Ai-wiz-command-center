@@ -494,6 +494,26 @@ function korlixAgentPublicView({
       persistenceConfigured === true,
   };
 }
+function korlixAgentTrainingModeV1(value) {
+  const normalized =
+    String(value ?? "append")
+      .trim()
+      .toLowerCase();
+
+  if (
+    normalized === "append" ||
+    normalized === "replace"
+  ) {
+    return normalized;
+  }
+
+  throw korlixAgentInputError(
+    "Choose whether to append to or replace the current training.",
+    "training_mode_invalid",
+    400,
+  );
+}
+
 function korlixAgentStrictId(value) {
   const raw = String(value ?? "")
     .trim()
@@ -1617,6 +1637,7 @@ export {
   korlixAgentRuntimeView,
   korlixAgentSanitizeMemoryInput,
   korlixAgentSanitizeProfileMutation,
+  korlixAgentTrainingModeV1,
   korlixAgentVersionSnapshot,
 };
 
@@ -3014,6 +3035,14 @@ async function korlixAgentSaveTrainingV1({
     );
   }
 
+  const mode =
+    korlixAgentTrainingModeV1(
+      body?.mode ??
+      body?.trainingMode ??
+      body?.training_mode ??
+      "append",
+    );
+
   return korlixAgentPersistProfileV1({
     client,
     userId,
@@ -3027,14 +3056,18 @@ async function korlixAgentSaveTrainingV1({
     },
 
     appendTraining:
-      true,
+      mode === "append",
 
     source:
       korlixAgentCleanString(
         body?.source,
         120,
       ) ||
-      "user_confirmed_training",
+      (
+        mode === "replace"
+          ? "user_replaced_training"
+          : "user_appended_training"
+      ),
 
     changeSummary:
       korlixAgentCleanString(
@@ -3042,7 +3075,11 @@ async function korlixAgentSaveTrainingV1({
         body?.change_summary,
         500,
       ) ||
-      "User-confirmed training update.",
+      (
+        mode === "replace"
+          ? "User-confirmed training replacement."
+          : "User-confirmed training addition."
+      ),
   });
 }
 
