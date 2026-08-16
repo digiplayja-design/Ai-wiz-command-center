@@ -24,6 +24,12 @@ import {
   korlixAgentSaveTrainingV1,
   korlixAgentUpdateProfileV1,
 } from "./backend/korlix_live_convo_agents.js";
+import {
+  installKorlixAgentEmailDraftRoutes,
+} from "./backend/korlix_agent_email_routes.mjs"; // KORLIX_AGENT_EMAIL_DRAFT_ROUTES_BUILD133_IMPORT
+import {
+  installKorlixAgentEmailDeliveryRoutes,
+} from "./backend/korlix_agent_email_delivery.mjs"; // KORLIX_AGENT_EMAIL_DELIVERY_BUILD133_IMPORT
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, Table, TableRow, TableCell, WidthType, ShadingType } from "docx";
 
 import multer from "multer";
@@ -127,7 +133,16 @@ async function korlixSendSupportReport(payload) {
 const port = process.env.PORT || 8787;
 
 app.use(cors());
-app.use(express.json({ limit: "5mb" }));
+app.use(express.json({
+  limit: "5mb",
+  verify: (req, _res, buffer) => {
+    const url = String(req.originalUrl || req.url || "");
+
+    if (url.startsWith("/api/agent-email/resend/webhook")) {
+      req.korlixAgentEmailRawBody = Buffer.from(buffer);
+    }
+  },
+})); // KORLIX_AGENT_EMAIL_RESEND_RAW_BODY_BUILD133
 
 const documentUpload = multer({
   storage: multer.memoryStorage(),
@@ -12339,6 +12354,30 @@ app.post(
   },
 );
 // KORLIX_LIVE_DOCS_GENERATION_BUILD131_END
+
+// KORLIX_AGENT_EMAIL_DRAFT_ROUTES_BUILD133_INSTALL_START
+installKorlixAgentEmailDraftRoutes(app, {
+  environment: process.env,
+  supabaseAdmin,
+  requireUser,
+  loadAgentProfile: korlixAgentLoadProfileV1,
+  logger: console,
+  providerSendPathImplemented: true,
+  autopilotExecutionImplemented: true,
+  webhookEventsImplemented: true,
+});
+// KORLIX_AGENT_EMAIL_DRAFT_ROUTES_BUILD133_INSTALL_END
+
+// KORLIX_AGENT_EMAIL_DELIVERY_BUILD133_INSTALL_START
+installKorlixAgentEmailDeliveryRoutes(app, {
+  environment: process.env,
+  supabaseAdmin,
+  requireUser,
+  loadAgentProfile: korlixAgentLoadProfileV1,
+  fetchImpl: globalThis.fetch,
+  logger: console,
+});
+// KORLIX_AGENT_EMAIL_DELIVERY_BUILD133_INSTALL_END
 
 app.use("/api", (req, res) => {
   return res.status(404).json({

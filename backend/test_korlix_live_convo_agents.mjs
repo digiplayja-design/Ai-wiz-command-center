@@ -459,6 +459,49 @@ test("agent IDs normalize predictably", () => {
   );
 });
 
+test("Agent Email is available only when a custom agent explicitly authorizes it", () => {
+  const custom = korlixAgentSanitizeProfileMutation({
+    agentId: "custom_nova",
+    isCustom: true,
+    body: {
+      name: "Nova",
+      mission: "Help approved contacts with KORLIX follow-up.",
+      toolIds: [
+        "general_chat",
+        "memory",
+        "agent_training",
+        "agent_email",
+      ],
+      memoryEnabled: true,
+    },
+  });
+
+  const builtIn = korlixAgentSanitizeProfileMutation({
+    agentId: "my_assistant",
+    body: {
+      toolIds: [
+        "general_chat",
+        "memory",
+        "agent_training",
+        "agent_email",
+      ],
+    },
+  });
+
+  assert.ok(
+    custom.tool_ids.includes(
+      "agent_email",
+    ),
+  );
+
+  assert.equal(
+    builtIn.tool_ids.includes(
+      "agent_email",
+    ),
+    false,
+  );
+});
+
 console.log(
   `KORLIX_LIVE_CONVO_AGENT_TEST_COUNT=${passed}`,
 );

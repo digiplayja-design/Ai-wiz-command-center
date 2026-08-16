@@ -9,6 +9,7 @@ const KORLIX_AGENT_TOOL_IDS = new Set([
   "camera",
   "memory",
   "agent_training",
+  "agent_email",
 ]);
 
 const KORLIX_AGENT_MEMORY_KINDS = new Set([
