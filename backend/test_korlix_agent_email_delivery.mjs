@@ -578,7 +578,10 @@ test("delivery installer registers controlled routes without sending during inst
   assert.equal(installed.controlledSendImplemented, true);
   assert.equal(installed.webhookEventsImplemented, true);
   assert.equal(installed.autopilotTriggerImplemented, true);
+  assert.equal(installed.autopilotSchedulerEnabled, false);
   assert.equal(installed.autopilotSchedulerConfigured, false);
+  assert.equal(installed.autopilotSchedulerStarted, false);
+  assert.equal(typeof installed.stopAutopilotScheduler, "function");
 });
 
 test("Supabase persistence claims sends only through the atomic service-role RPC", async () => {
@@ -1540,6 +1543,7 @@ test("both server entry points capture raw webhook bytes and install delivery ro
     assert.match(source, /providerSendPathImplemented:\s*true/);
     assert.match(source, /autopilotExecutionImplemented:\s*true/);
     assert.match(source, /webhookEventsImplemented:\s*true/);
+    assert.match(source, /autoStartScheduler:\s*true/);
     assert.ok(
       source.indexOf("KORLIX_AGENT_EMAIL_DELIVERY_BUILD133_INSTALL_START") <
         source.indexOf('app.use("/api"'),

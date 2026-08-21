@@ -13076,6 +13076,7 @@ installKorlixAgentEmailDeliveryRoutes(app, {
   loadAgentProfile: korlixAgentLoadProfileV1,
   fetchImpl: globalThis.fetch,
   logger: console,
+  autoStartScheduler: true,
 });
 // KORLIX_AGENT_EMAIL_DELIVERY_BUILD133_INSTALL_END
 

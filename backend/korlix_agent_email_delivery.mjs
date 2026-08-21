@@ -15,6 +15,11 @@ import {
   createKorlixAgentEmailSupabaseStore,
 } from "./korlix_agent_email_routes.mjs";
 
+import {
+  createKorlixAgentEmailAutopilotScheduler,
+  korlixAgentEmailAutopilotSchedulerConfiguration,
+} from "./korlix_agent_email_scheduler.mjs";
+
 const PREFIX = "/api/live-convo/agents/:agentId/email";
 
 export const KORLIX_AGENT_EMAIL_DELIVERY_ROUTES = Object.freeze({
@@ -1786,6 +1791,8 @@ export function createKorlixAgentEmailDeliveryService({
         "KORLIX_AGENT_EMAIL_AUTOPILOT_ENABLED",
         false,
       );
+      const scheduler =
+        korlixAgentEmailAutopilotSchedulerConfiguration(environment);
       return Object.freeze({
         agentId: identity.agentId,
         sameNova: status.sameNova,
@@ -1800,7 +1807,11 @@ export function createKorlixAgentEmailDeliveryService({
         controlledSendImplemented: true,
         webhookEventsImplemented: true,
         autopilotTriggerImplemented: true,
-        autopilotSchedulerConfigured: false,
+        autopilotSchedulerEnabled: scheduler.enabled,
+        autopilotSchedulerConfigured: scheduler.configured,
+        autopilotSchedulerTriggerKey: scheduler.triggerKey,
+        autopilotSchedulerIntervalMinutes: scheduler.intervalMinutes,
+        autopilotSchedulerConfigurationErrors: [...scheduler.errors],
         autopilotBatchCap: boundedInteger(
           environment?.KORLIX_AGENT_EMAIL_AUTOPILOT_BATCH_CAP,
           20,
@@ -2292,7 +2303,9 @@ export function createKorlixAgentEmailDeliveryService({
         sentCount: results.filter((item) => item.sent === true && item.replayed !== true).length,
         replayedCount: results.filter((item) => item.replayed === true).length,
         results,
-        schedulerConfigured: false,
+        schedulerConfigured:
+          korlixAgentEmailAutopilotSchedulerConfiguration(environment)
+            .configured,
       });
     },
   });
@@ -2352,6 +2365,10 @@ export function installKorlixAgentEmailDeliveryRoutes(
     logger = console,
     now = () => new Date(),
     randomUUID = () => crypto.randomUUID(),
+    autoStartScheduler = false,
+    schedulerNow = null,
+    schedulerSetTimeout = globalThis.setTimeout,
+    schedulerClearTimeout = globalThis.clearTimeout,
   } = {},
 ) {
   if (
@@ -2379,6 +2396,18 @@ export function installKorlixAgentEmailDeliveryRoutes(
     now,
     randomUUID,
   });
+  const autopilotScheduler =
+    createKorlixAgentEmailAutopilotScheduler({
+      environment,
+      runAutopilot: ({ body }) => service.runAutopilot({ body }),
+      now: typeof schedulerNow === "function" ? schedulerNow : now,
+      setTimeoutImpl: schedulerSetTimeout,
+      clearTimeoutImpl: schedulerClearTimeout,
+      logger,
+    });
+  const autopilotSchedulerStatus = autoStartScheduler === true
+    ? autopilotScheduler.start()
+    : autopilotScheduler.status();
   const route = (fallback, handler) =>
     authenticatedRoute({
       requireUser,
@@ -2536,7 +2565,11 @@ export function installKorlixAgentEmailDeliveryRoutes(
     controlledSendImplemented: true,
     webhookEventsImplemented: true,
     autopilotTriggerImplemented: true,
-    autopilotSchedulerConfigured: false,
+    autopilotSchedulerEnabled: autopilotSchedulerStatus.enabled,
+    autopilotSchedulerConfigured: autopilotSchedulerStatus.configured,
+    autopilotSchedulerStarted: autopilotSchedulerStatus.started,
+    autopilotSchedulerStatus: autopilotScheduler.status,
+    stopAutopilotScheduler: autopilotScheduler.stop,
     emailSentDuringInstall: false,
     outboundCallingPaused: true,
   });
