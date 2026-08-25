@@ -1,5 +1,7 @@
 "use strict";
 
+const K133_NOVA_EMAIL_SETTINGS_ENABLE_FIX_V4_FRESH = true;
+
 const APP = {
   apiBase:
     localStorage.getItem("korlixNovaEmailApiBase") ||
@@ -939,10 +941,22 @@ function setTopStatus({
   els.autopilotToggle.checked =
     autopilot;
 
+
+  const agentEmailEnabled =
+    asBoolean(
+      firstDefined(
+        APP.settings?.enabled,
+        false,
+      ),
+      false,
+    );
+
   els.pauseSystemButton.textContent =
-    paused
-      ? "▶ Resume Nova"
-      : "Ⅱ Pause Nova";
+    !agentEmailEnabled
+      ? "▶ Enable Nova"
+      : paused
+        ? "▶ Resume Nova"
+        : "Ⅱ Pause Nova";
 
   els.stopAutopilotButton.disabled =
     !autopilot;
@@ -2027,6 +2041,7 @@ function fullSettingsPayload(patch) {
   return payload;
 }
 
+
 async function updateSettings(patch) {
   const path =
     `${emailBase()}/settings`;
@@ -2034,77 +2049,141 @@ async function updateSettings(patch) {
   const payload =
     fullSettingsPayload(patch);
 
-  try {
-    return await requestJson(
-      path,
-      {
-        method: "PATCH",
-        body: JSON.stringify(payload),
-      },
-    );
-  } catch (error) {
-    if (
-      ![404, 405].includes(
-        error.status,
-      )
-    ) {
-      throw error;
-    }
-
-    return requestJson(
-      path,
-      {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      },
-    );
-  }
+  return requestJson(
+    path,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
-async function setPaused(paused) {
-  const phrase = paused
-    ? "PAUSE NOVA"
-    : "RESUME NOVA";
+
+async function setPaused(
+  paused,
+  forceEnable = false,
+) {
+  const currentlyEnabled =
+    asBoolean(
+      firstDefined(
+        APP.settings?.enabled,
+        false,
+      ),
+      false,
+    );
+
+  const currentMode =
+    String(
+      firstDefined(
+        APP.settings?.mode,
+        APP.settings?.operatingMode,
+        "approval_required",
+      ),
+    ).toLowerCase();
+
+  const enableAction =
+    forceEnable ||
+    !currentlyEnabled;
+
+  const phrase =
+    enableAction
+      ? "ENABLE NOVA EMAIL"
+      : paused
+        ? "PAUSE NOVA"
+        : "RESUME NOVA";
 
   const confirmation = prompt(
     `Type ${phrase} to continue.`,
   );
 
   if (confirmation !== phrase) {
-    return;
+    return false;
   }
+
+  const validMode =
+    [
+      "draft_only",
+      "approval_required",
+      "autopilot",
+    ].includes(currentMode)
+      ? currentMode
+      : "approval_required";
+
+  const targetMode =
+    paused
+      ? validMode
+      : enableAction
+        ? "approval_required"
+        : validMode;
 
   els.pauseSystemButton.disabled = true;
 
   try {
-    await updateSettings({
+    const result = await updateSettings({
+      enabled: true,
       paused,
+      mode: targetMode,
     });
 
-    toast(
-      paused
-        ? "Nova Agent Email is paused."
-        : "Nova Agent Email is active.",
-      "success",
-    );
+    if (
+      result?.settings &&
+      typeof result.settings === "object"
+    ) {
+      APP.settings =
+        result.settings;
+    }
 
     await refreshDashboard({
       silent: true,
     });
+
+    const root =
+      statusRoot(APP.statusPayload);
+
+    if (
+      !paused &&
+      !asBoolean(
+        firstDefined(
+          root?.canDraft,
+          APP.statusPayload?.canDraft,
+          false,
+        ),
+        false,
+      )
+    ) {
+      throw new Error(
+        "Nova's settings were saved, but production still does not permit drafting. Press Refresh and review the status cards.",
+      );
+    }
+
+    toast(
+      enableAction
+        ? "Nova Agent Email is enabled in Approval Required mode."
+        : paused
+          ? "Nova Agent Email is paused."
+          : "Nova Agent Email is resumed.",
+      "success",
+    );
+
+    return true;
   } catch (error) {
     toast(
       error.message,
       "error",
     );
+
+    return false;
   } finally {
     els.pauseSystemButton.disabled = false;
   }
 }
 
+
 async function setAutopilot(enabled) {
-  const phrase = enabled
-    ? "ENABLE AUTOPILOT"
-    : "STOP AUTOPILOT";
+  const phrase =
+    enabled
+      ? "ENABLE AUTOPILOT"
+      : "STOP AUTOPILOT";
 
   const confirmation = prompt(
     `Type ${phrase} to continue.`,
@@ -2114,31 +2193,130 @@ async function setAutopilot(enabled) {
     els.autopilotToggle.checked =
       !enabled;
 
-    return;
+    return false;
   }
 
   els.autopilotToggle.disabled = true;
   els.stopAutopilotButton.disabled = true;
 
   try {
-    await updateSettings({
+    const result = await updateSettings({
+      enabled: true,
+      paused: false,
       mode: enabled
         ? "autopilot"
         : "approval_required",
-
-      autopilotEnabled: enabled,
     });
 
-    toast(
-      enabled
-        ? "Nova Autopilot is enabled."
-        : "Nova Autopilot is stopped.",
-      "success",
-    );
+    if (
+      result?.settings &&
+      typeof result.settings === "object"
+    ) {
+      APP.settings =
+        result.settings;
+    }
 
     await refreshDashboard({
       silent: true,
     });
+
+    const root =
+      statusRoot(APP.statusPayload);
+
+    if (
+      enabled &&
+      !asBoolean(
+        firstDefined(
+          root?.canAutopilot,
+          APP.statusPayload?.canAutopilot,
+          false,
+        ),
+        false,
+      )
+    ) {
+      const blockers = [];
+
+      if (
+        !asBoolean(
+          root?.featureEnabled,
+          false,
+        )
+      ) {
+        blockers.push(
+          "production Agent Email feature",
+        );
+      }
+
+      if (
+        asBoolean(
+          root?.emergencyPaused,
+          false,
+        )
+      ) {
+        blockers.push(
+          "production emergency pause",
+        );
+      }
+
+      if (
+        !asBoolean(
+          root?.providerConfigured,
+          false,
+        )
+      ) {
+        blockers.push(
+          "Resend provider configuration",
+        );
+      }
+
+      if (
+        !asBoolean(
+          root?.toolAuthorized,
+          false,
+        )
+      ) {
+        blockers.push(
+          "Nova Agent Email authorization",
+        );
+      }
+
+      if (
+        !asBoolean(
+          root?.settingsEnabled,
+          false,
+        )
+      ) {
+        blockers.push(
+          "Nova's saved Agent Email setting",
+        );
+      }
+
+      if (
+        asBoolean(
+          root?.settingsPaused,
+          false,
+        )
+      ) {
+        blockers.push(
+          "Nova's saved pause setting",
+        );
+      }
+
+      throw new Error(
+        blockers.length
+          ? `Autopilot remains blocked by: ${blockers.join(", ")}.`
+          : "Autopilot settings were saved, but production did not report canAutopilot=true.",
+      );
+    }
+
+    toast(
+      enabled
+        ? "Nova Autopilot is enabled."
+        : "Nova Autopilot is stopped and Approval Required mode is active.",
+      "success",
+    );
+
+    return true;
   } catch (error) {
     els.autopilotToggle.checked =
       !enabled;
@@ -2147,8 +2325,11 @@ async function setAutopilot(enabled) {
       error.message,
       "error",
     );
+
+    return false;
   } finally {
     els.autopilotToggle.disabled = false;
+    els.stopAutopilotButton.disabled = false;
   }
 }
 
@@ -2712,32 +2893,74 @@ function bindEvents() {
     () => refreshDashboard(),
   );
 
-  els.createDraftButton.addEventListener(
+
+els.createDraftButton.addEventListener(
     "click",
-    () => {
+    async () => {
       if (!APP.connected) {
         showModal("connectionModal");
-
         return;
+      }
+
+      const enabled =
+        asBoolean(
+          firstDefined(
+            APP.settings?.enabled,
+            false,
+          ),
+          false,
+        );
+
+      if (!enabled) {
+        const enabledNow =
+          await setPaused(
+            false,
+            true,
+          );
+
+        if (!enabledNow) {
+          return;
+        }
       }
 
       showModal("draftModal");
     },
   );
 
-  els.pauseSystemButton.addEventListener(
+
+els.pauseSystemButton.addEventListener(
     "click",
-    () => {
+    async () => {
+      const currentlyEnabled =
+        asBoolean(
+          firstDefined(
+            APP.settings?.enabled,
+            false,
+          ),
+          false,
+        );
+
       const currentlyPaused =
         asBoolean(
           firstDefined(
-            APP.settings.paused,
+            APP.settings?.paused,
             false,
           ),
+          false,
         );
 
-      setPaused(
+      if (!currentlyEnabled) {
+        await setPaused(
+          false,
+          true,
+        );
+
+        return;
+      }
+
+      await setPaused(
         !currentlyPaused,
+        false,
       );
     },
   );
