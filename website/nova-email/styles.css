@@ -1418,3 +1418,18 @@ textarea:focus-visible {
     width: 100%;
   }
 }
+
+
+/* K133_NOVA_EMAIL_WEB_AUTH_LOGO_FIX_V2 */
+.brand-logo,
+.modal-logo,
+.footer img {
+  border-radius: 22%;
+  object-fit: cover;
+  background: #01152a;
+}
+
+#connectSessionButton:disabled {
+  cursor: wait;
+  opacity: 0.66;
+}

@@ -2963,4 +2963,971 @@ async function boot() {
   loadHealth().catch(() => {});
 }
 
+// K133_NOVA_EMAIL_WEB_AUTH_LOGO_FIX_V2_BEGIN
+const KORLIX_NOVA_EMAIL_FIX_VERSION_V2 = "2026-08-25-auth-logo-v2";
+
+APP.refreshToken = null;
+APP.userEmail = null;
+APP.deviceId = null;
+APP.deviceLabel = "Nova Email Web Control Center";
+
+function korlixParseStoredValueV2(raw) {
+  if (raw === null || raw === undefined) {
+    return null;
+  }
+
+  let value = raw;
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    if (typeof value !== "string") {
+      break;
+    }
+
+    const trimmed = value.trim();
+
+    if (!trimmed) {
+      return "";
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed);
+
+      if (parsed === value) {
+        break;
+      }
+
+      value = parsed;
+    } catch {
+      break;
+    }
+  }
+
+  return value;
+}
+
+function korlixStorageEntriesV2() {
+  const output = [];
+
+  for (const storage of [localStorage, sessionStorage]) {
+    try {
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+
+        if (!key) {
+          continue;
+        }
+
+        output.push({
+          storage,
+          key,
+          value: storage.getItem(key),
+        });
+      }
+    } catch {
+      // Browser privacy settings can block one storage area.
+    }
+  }
+
+  return output;
+}
+
+function korlixStoredStringV2(names) {
+  const requested = new Set(
+    names.map((name) => String(name).toLowerCase()),
+  );
+
+  for (const item of korlixStorageEntriesV2()) {
+    const lowerKey = String(item.key).toLowerCase();
+    const matches = [...requested].some(
+      (name) =>
+        lowerKey === name ||
+        lowerKey === `flutter.${name}` ||
+        lowerKey.endsWith(`.${name}`) ||
+        lowerKey.endsWith(`:${name}`),
+    );
+
+    if (!matches) {
+      continue;
+    }
+
+    const parsed = korlixParseStoredValueV2(item.value);
+
+    if (typeof parsed === "string" && parsed.trim()) {
+      return parsed.trim();
+    }
+  }
+
+  return "";
+}
+
+function korlixOwnSessionValueV2(key) {
+  try {
+    return String(localStorage.getItem(key) || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function korlixReadSessionBundleV2() {
+  const accessToken = firstDefined(
+    korlixOwnSessionValueV2("korlixNovaEmailAccessTokenV2"),
+    korlixStoredStringV2([
+      "korlix_access_token",
+      "access_token",
+      "accessToken",
+    ]),
+    findSessionToken(),
+    "",
+  );
+
+  const refreshToken = firstDefined(
+    korlixOwnSessionValueV2("korlixNovaEmailRefreshTokenV2"),
+    korlixStoredStringV2([
+      "korlix_refresh_token",
+      "refresh_token",
+      "refreshToken",
+    ]),
+    "",
+  );
+
+  const email = firstDefined(
+    korlixOwnSessionValueV2("korlixNovaEmailUserEmailV2"),
+    korlixStoredStringV2([
+      "korlix_user_email",
+      "user_email",
+      "email",
+    ]),
+    "",
+  );
+
+  return {
+    accessToken: String(accessToken || "").trim(),
+    refreshToken: String(refreshToken || "").trim(),
+    email: String(email || "").trim(),
+  };
+}
+
+function korlixPersistOwnSessionV2(bundle) {
+  try {
+    if (bundle.accessToken) {
+      localStorage.setItem(
+        "korlixNovaEmailAccessTokenV2",
+        bundle.accessToken,
+      );
+    }
+
+    if (bundle.refreshToken) {
+      localStorage.setItem(
+        "korlixNovaEmailRefreshTokenV2",
+        bundle.refreshToken,
+      );
+    }
+
+    if (bundle.email) {
+      localStorage.setItem(
+        "korlixNovaEmailUserEmailV2",
+        bundle.email,
+      );
+    }
+  } catch {
+    // In-memory session remains usable when browser storage is unavailable.
+  }
+}
+
+function korlixJwtSecondsRemainingV2(token) {
+  const payload = decodeJwtPayload(token);
+
+  if (!payload?.exp) {
+    return 0;
+  }
+
+  return Math.floor(Number(payload.exp) - Date.now() / 1000);
+}
+
+function korlixEnsureDeviceV2() {
+  const storedDeviceId = firstDefined(
+    korlixOwnSessionValueV2("korlixNovaEmailDeviceIdV2"),
+    korlixStoredStringV2([
+      "korlix_device_id",
+      "device_id",
+    ]),
+    "",
+  );
+
+  APP.deviceId = String(storedDeviceId || "").trim();
+
+  if (!APP.deviceId) {
+    APP.deviceId =
+      `korlix_web_${Date.now()}_` +
+      Math.random().toString(36).slice(2, 12);
+
+    try {
+      localStorage.setItem(
+        "korlixNovaEmailDeviceIdV2",
+        APP.deviceId,
+      );
+    } catch {
+      // In-memory device ID is sufficient for this page load.
+    }
+  }
+
+  APP.deviceLabel = firstDefined(
+    korlixStoredStringV2([
+      "korlix_device_label",
+      "device_label",
+    ]),
+    APP.deviceLabel,
+  );
+}
+
+function korlixAuthHeadersV2(extra = {}) {
+  korlixEnsureDeviceV2();
+
+  return {
+    Accept: "application/json",
+    ...(APP.token
+      ? { Authorization: `Bearer ${APP.token}` }
+      : {}),
+    "X-Korlix-Device-Id": APP.deviceId,
+    "X-Korlix-Device-Label": APP.deviceLabel,
+    "X-Korlix-Platform": "web",
+    ...(APP.userEmail
+      ? { "X-Korlix-User-Email": APP.userEmail }
+      : {}),
+    ...extra,
+  };
+}
+
+async function korlixFetchWithTimeoutV2(
+  url,
+  options = {},
+  timeoutMilliseconds = 25000,
+) {
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(),
+    timeoutMilliseconds,
+  );
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(
+        "The production request timed out. Please try Connect Session again.",
+      );
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function korlixResponseErrorV2(response, payload) {
+  const message = firstDefined(
+    payload?.message,
+    payload?.error,
+    payload?.detail,
+    payload?.code,
+    `Request failed with HTTP ${response.status}.`,
+  );
+
+  const error = new Error(String(message));
+  error.status = response.status;
+  error.payload = payload;
+  error.code = firstDefined(
+    payload?.code,
+    payload?.errorCode,
+    payload?.error_code,
+    "",
+  );
+
+  return error;
+}
+
+async function korlixReadJsonResponseV2(response) {
+  const text = await response.text();
+
+  if (!text) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
+}
+
+async function korlixRefreshSessionV2(bundle, force = false) {
+  korlixEnsureDeviceV2();
+
+  let session = {
+    accessToken: String(bundle?.accessToken || "").trim(),
+    refreshToken: String(bundle?.refreshToken || "").trim(),
+    email: String(bundle?.email || "").trim(),
+  };
+
+  const shouldRefresh = Boolean(
+    session.refreshToken &&
+      (force ||
+        !tokenUsable(session.accessToken) ||
+        korlixJwtSecondsRemainingV2(session.accessToken) < 600),
+  );
+
+  if (shouldRefresh) {
+    const response = await korlixFetchWithTimeoutV2(
+      `${APP.apiBase}/api/auth/refresh`,
+      {
+        method: "POST",
+        headers: korlixAuthHeadersV2({
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({
+          refresh_token: session.refreshToken,
+          device_id: APP.deviceId,
+          device_label: APP.deviceLabel,
+          platform: "web",
+        }),
+      },
+      30000,
+    );
+
+    const payload = await korlixReadJsonResponseV2(response);
+
+    if (!response.ok) {
+      if (!tokenUsable(session.accessToken)) {
+        throw korlixResponseErrorV2(response, payload);
+      }
+    } else {
+      const refreshed = payload?.session || {};
+
+      session = {
+        accessToken: String(
+          refreshed.access_token || session.accessToken || "",
+        ).trim(),
+        refreshToken: String(
+          refreshed.refresh_token || session.refreshToken || "",
+        ).trim(),
+        email: String(
+          payload?.user?.email || session.email || "",
+        ).trim(),
+      };
+    }
+  }
+
+  if (!tokenUsable(session.accessToken)) {
+    throw new Error(
+      "Your KORLIX browser session has expired. Open KORLIX Login, sign in again, then return and press Connect Session.",
+    );
+  }
+
+  APP.token = session.accessToken;
+  APP.refreshToken = session.refreshToken;
+  APP.userEmail = session.email;
+
+  korlixPersistOwnSessionV2(session);
+
+  return session;
+}
+
+findSessionToken = function findSessionTokenV2() {
+  const own = korlixOwnSessionValueV2(
+    "korlixNovaEmailAccessTokenV2",
+  );
+
+  if (tokenUsable(own)) {
+    return own;
+  }
+
+  const explicit = korlixStoredStringV2([
+    "korlix_access_token",
+    "access_token",
+    "accessToken",
+  ]);
+
+  if (tokenUsable(explicit)) {
+    return explicit;
+  }
+
+  for (const item of korlixStorageEntriesV2()) {
+    const token = searchObjectForToken(item.value);
+
+    if (tokenUsable(token)) {
+      return token;
+    }
+  }
+
+  return null;
+};
+
+requestJson = async function requestJsonV2(path, options = {}) {
+  if (!APP.token) {
+    throw new Error(
+      "No authenticated KORLIX browser session was found.",
+    );
+  }
+
+  const url = path.startsWith("http")
+    ? path
+    : `${APP.apiBase}${path}`;
+
+  const response = await korlixFetchWithTimeoutV2(
+    url,
+    {
+      ...options,
+      headers: korlixAuthHeadersV2({
+        ...(options.body
+          ? { "Content-Type": "application/json" }
+          : {}),
+        ...(options.headers || {}),
+      }),
+    },
+    Number(options.timeoutMilliseconds || 25000),
+  );
+
+  const payload = await korlixReadJsonResponseV2(response);
+
+  if (!response.ok) {
+    throw korlixResponseErrorV2(response, payload);
+  }
+
+  return payload;
+};
+
+function korlixAgentRecordV2(row) {
+  if (!row || typeof row !== "object") {
+    return {};
+  }
+
+  return firstDefined(
+    row.agent,
+    row.profile,
+    row.data,
+    row,
+    {},
+  );
+}
+
+function korlixAgentScoreV2(row) {
+  const record = korlixAgentRecordV2(row);
+  const id = String(
+    firstDefined(
+      record.agentId,
+      record.agent_id,
+      record.id,
+      row.agentId,
+      row.agent_id,
+      row.id,
+      "",
+    ),
+  ).trim();
+
+  const name = String(
+    firstDefined(
+      record.name,
+      record.displayName,
+      record.display_name,
+      record.title,
+      record.agentName,
+      row.name,
+      "",
+    ),
+  ).toLowerCase();
+
+  const toolValues = firstDefined(
+    record.toolIds,
+    record.tool_ids,
+    record.tools,
+    row.toolIds,
+    row.tool_ids,
+    row.tools,
+    [],
+  );
+
+  const tools = Array.isArray(toolValues)
+    ? toolValues.map((value) =>
+        String(
+          value?.id || value?.toolId || value,
+        ).toLowerCase(),
+      )
+    : [String(toolValues).toLowerCase()];
+
+  let score = 0;
+
+  if (name.includes("nova")) score += 120;
+  if (id.toLowerCase().includes("nova")) score += 80;
+  if (id === "custom_nova") score += 20;
+  if (tools.some((tool) => tool.includes("agent_email"))) score += 60;
+
+  if (
+    asBoolean(
+      firstDefined(
+        record.isCustom,
+        record.is_custom,
+        record.custom,
+        row.isCustom,
+        row.is_custom,
+        false,
+      ),
+      false,
+    )
+  ) {
+    score += 30;
+  }
+
+  if (
+    asBoolean(
+      firstDefined(
+        record.active,
+        record.isActive,
+        record.is_active,
+        row.active,
+        row.isActive,
+        true,
+      ),
+      true,
+    )
+  ) {
+    score += 10;
+  }
+
+  return { id, name, score, row };
+}
+
+discoverNovaAgent = async function discoverNovaAgentV2() {
+  const payload = await requestJson(
+    "/api/live-convo/agents",
+  );
+
+  const agents = findList(payload, [
+    "agents",
+    "profiles",
+  ]);
+
+  const ranked = agents
+    .map(korlixAgentScoreV2)
+    .filter((candidate) => candidate.id && candidate.score > 0)
+    .sort((left, right) => right.score - left.score);
+
+  return ranked[0]?.id || "";
+};
+
+function korlixConnectionErrorTextV2(error) {
+  const code = firstDefined(
+    error?.code,
+    error?.payload?.code,
+    error?.payload?.errorCode,
+    "",
+  );
+
+  const status = Number(error?.status || 0);
+  const parts = [];
+
+  if (status) {
+    parts.push(`HTTP ${status}`);
+  }
+
+  if (code) {
+    parts.push(String(code));
+  }
+
+  parts.push(
+    String(error?.message || "Production Agent Email connection failed."),
+  );
+
+  return parts.join(" — ");
+}
+
+function korlixNovaBindingErrorV2(error) {
+  const code = String(
+    firstDefined(
+      error?.code,
+      error?.payload?.code,
+      "",
+    ),
+  ).toLowerCase();
+
+  const message = String(error?.message || "").toLowerCase();
+
+  return (
+    code.includes("existing_nova") ||
+    code.includes("custom_active_nova") ||
+    code.includes("tool_not_authorized") ||
+    message.includes("existing nova") ||
+    message.includes("selected nova")
+  );
+}
+
+async function korlixValidateLoginV2() {
+  const payload = await requestJson(
+    "/api/me",
+    { timeoutMilliseconds: 25000 },
+  );
+
+  APP.userEmail = String(
+    firstDefined(
+      payload?.user?.email,
+      payload?.profile?.email,
+      APP.userEmail,
+      "",
+    ),
+  ).trim();
+
+  korlixPersistOwnSessionV2({
+    accessToken: APP.token,
+    refreshToken: APP.refreshToken,
+    email: APP.userEmail,
+  });
+
+  return payload;
+}
+
+refreshDashboard = async function refreshDashboardV2(
+  { silent = false, statusPayload = null } = {},
+) {
+  if (!APP.token || !APP.agentId) {
+    setMessage(
+      els.connectionMessage,
+      "A valid signed-in KORLIX session and Nova Agent ID are required.",
+      "error",
+    );
+    showModal("connectionModal");
+    return false;
+  }
+
+  els.refreshButton.disabled = true;
+  setConnectedState(true, "Connecting to Nova…");
+
+  const base = emailBase();
+
+  const [
+    statusResult,
+    recipientResult,
+    draftResult,
+    deliveryResult,
+    eventResult,
+    ruleResult,
+    healthResult,
+  ] = await Promise.all([
+    statusPayload
+      ? Promise.resolve({
+          payload: statusPayload,
+          list: [],
+          error: null,
+        })
+      : settledRequest(`${base}/status`, []),
+    settledRequest(`${base}/recipients?limit=100`, ["recipients"]),
+    settledRequest(`${base}/drafts?limit=100`, ["drafts", "messages"]),
+    settledRequest(`${base}/delivery/status`, []),
+    settledRequest(`${base}/events?limit=100`, ["events"]),
+    settledRequest(`${base}/rules?limit=100`, ["rules"]),
+    loadHealth().catch((error) => ({ error })),
+  ]);
+
+  if (statusResult.error) {
+    const message = korlixConnectionErrorTextV2(statusResult.error);
+
+    setConnectedState(false, "Connection failed");
+    setTopStatus({
+      operational: false,
+      webhook: false,
+      autopilot: false,
+      paused: true,
+      dailyCap: 5,
+    });
+
+    setMessage(
+      els.connectionMessage,
+      `Connection failed: ${message}`,
+      "error",
+    );
+
+    showModal("connectionModal");
+
+    if (!silent) {
+      toast(message, "error");
+    }
+
+    els.refreshButton.disabled = false;
+    return false;
+  }
+
+  APP.statusPayload = statusResult.payload || {};
+  APP.recipients = recipientResult.list;
+  APP.drafts = draftResult.list;
+  APP.delivery = firstDefined(
+    deliveryResult.payload?.status,
+    deliveryResult.payload?.deliveryStatus,
+    deliveryResult.payload?.data,
+    deliveryResult.payload,
+    {},
+  );
+  APP.events = eventResult.list;
+  APP.rules = ruleResult.list;
+
+  renderDashboard();
+
+  setConnectedState(
+    true,
+    `Nova · ${APP.agentId}`,
+  );
+
+  setMessage(
+    els.connectionMessage,
+    "Nova Agent Email connected. Production data loaded successfully.",
+    "success",
+  );
+
+  closeModal("connectionModal");
+
+  const optionalErrors = [
+    recipientResult,
+    draftResult,
+    deliveryResult,
+    eventResult,
+    ruleResult,
+    healthResult,
+  ].filter((result) => result?.error);
+
+  if (optionalErrors.length && !silent) {
+    toast(
+      `Connected. ${optionalErrors.length} optional panel request(s) could not be loaded.`,
+    );
+  } else if (!silent) {
+    toast(
+      "Nova Email production data refreshed.",
+      "success",
+    );
+  }
+
+  els.refreshButton.disabled = false;
+  return true;
+};
+
+connectSession = async function connectSessionV2() {
+  if (els.connectSessionButton.disabled) {
+    return;
+  }
+
+  els.connectSessionButton.disabled = true;
+
+  APP.apiBase =
+    els.apiBaseInput.value.trim().replace(/\/+$/, "") ||
+    APP.apiBase;
+
+  localStorage.setItem(
+    "korlixNovaEmailApiBase",
+    APP.apiBase,
+  );
+
+  setMessage(
+    els.connectionMessage,
+    "Validating and refreshing the KORLIX browser session…",
+  );
+
+  try {
+    const bundle = korlixReadSessionBundleV2();
+
+    if (!bundle.accessToken && !bundle.refreshToken) {
+      throw new Error(
+        "No KORLIX login session was found. Press Open KORLIX Login, sign in, then return to this page.",
+      );
+    }
+
+    await korlixRefreshSessionV2(bundle, true);
+    await korlixValidateLoginV2();
+
+    setMessage(
+      els.connectionMessage,
+      "Session verified. Locating your exact active Nova Agent Hub profile…",
+    );
+
+    const enteredAgentId = els.agentIdInput.value.trim();
+    let discoveredAgentId = "";
+
+    try {
+      discoveredAgentId = await discoverNovaAgent();
+    } catch (discoveryError) {
+      if (!enteredAgentId) {
+        throw discoveryError;
+      }
+    }
+
+    APP.agentId = discoveredAgentId || enteredAgentId || findStoredAgentId();
+
+    if (!APP.agentId) {
+      throw new Error(
+        "Nova was not found in this KORLIX account. Confirm that Nova is an active custom Agent Hub agent with the Agent Email tool authorized.",
+      );
+    }
+
+    els.agentIdInput.value = APP.agentId;
+
+    localStorage.setItem(
+      "korlixNovaEmailAgentId",
+      APP.agentId,
+    );
+
+    setMessage(
+      els.connectionMessage,
+      `Nova profile ${APP.agentId} found. Loading production Agent Email data…`,
+    );
+
+    let statusPayload;
+
+    try {
+      statusPayload = await requestJson(
+        `${emailBase()}/status`,
+        { timeoutMilliseconds: 25000 },
+      );
+    } catch (statusError) {
+      if (korlixNovaBindingErrorV2(statusError)) {
+        const retryAgentId = await discoverNovaAgent();
+
+        if (retryAgentId && retryAgentId !== APP.agentId) {
+          APP.agentId = retryAgentId;
+          els.agentIdInput.value = retryAgentId;
+          localStorage.setItem(
+            "korlixNovaEmailAgentId",
+            retryAgentId,
+          );
+
+          statusPayload = await requestJson(
+            `${emailBase()}/status`,
+            { timeoutMilliseconds: 25000 },
+          );
+        } else {
+          throw statusError;
+        }
+      } else {
+        throw statusError;
+      }
+    }
+
+    const connected = await refreshDashboard({
+      silent: true,
+      statusPayload,
+    });
+
+    if (!connected) {
+      throw new Error(
+        "The Nova status request did not complete successfully.",
+      );
+    }
+  } catch (error) {
+    const message = korlixConnectionErrorTextV2(error);
+
+    setConnectedState(false, "Connection failed");
+    setMessage(
+      els.connectionMessage,
+      message,
+      "error",
+    );
+    showModal("connectionModal");
+  } finally {
+    els.connectSessionButton.disabled = false;
+  }
+};
+
+boot = async function bootV2() {
+  bindEvents();
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  APP.apiBase =
+    localStorage.getItem("korlixNovaEmailApiBase") ||
+    APP.apiBase;
+
+  APP.agentId =
+    new URLSearchParams(location.search).get("agentId") ||
+    localStorage.getItem("korlixNovaEmailAgentId") ||
+    findStoredAgentId();
+
+  els.agentIdInput.value = APP.agentId;
+  els.apiBaseInput.value = APP.apiBase;
+
+  const bundle = korlixReadSessionBundleV2();
+
+  if (bundle.accessToken || bundle.refreshToken) {
+    setMessage(
+      els.connectionMessage,
+      "Session found. Verifying and loading Nova Agent Email…",
+    );
+    showModal("connectionModal");
+
+    try {
+      await korlixRefreshSessionV2(bundle, false);
+      await korlixValidateLoginV2();
+
+      const discovered = await discoverNovaAgent().catch(() => "");
+
+      if (discovered) {
+        APP.agentId = discovered;
+        els.agentIdInput.value = discovered;
+        localStorage.setItem(
+          "korlixNovaEmailAgentId",
+          discovered,
+        );
+      }
+
+      if (!APP.agentId) {
+        throw new Error(
+          "Nova was not discovered automatically. Enter Nova’s Agent Hub ID and press Connect Session.",
+        );
+      }
+
+      const statusPayload = await requestJson(
+        `${emailBase()}/status`,
+        { timeoutMilliseconds: 25000 },
+      );
+
+      const connected = await refreshDashboard({
+        silent: true,
+        statusPayload,
+      });
+
+      if (connected) {
+        return;
+      }
+    } catch (error) {
+      setConnectedState(false, "Connection failed");
+      setMessage(
+        els.connectionMessage,
+        korlixConnectionErrorTextV2(error),
+        "error",
+      );
+      showModal("connectionModal");
+    }
+  } else {
+    setConnectedState(false, "Connect KORLIX session");
+    setMessage(
+      els.connectionMessage,
+      "No KORLIX browser session was found. Open KORLIX Login, sign in, then return and press Connect Session.",
+      "error",
+    );
+    showModal("connectionModal");
+  }
+
+  loadHealth().catch(() => {});
+};
+
+window.addEventListener("unhandledrejection", (event) => {
+  const message = korlixConnectionErrorTextV2(event.reason);
+
+  if (!APP.connected) {
+    setMessage(
+      els.connectionMessage,
+      message,
+      "error",
+    );
+    showModal("connectionModal");
+  }
+});
+// K133_NOVA_EMAIL_WEB_AUTH_LOGO_FIX_V2_END
+
 boot();
