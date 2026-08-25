@@ -1433,3 +1433,15 @@ textarea:focus-visible {
   cursor: wait;
   opacity: 0.66;
 }
+
+
+/* K133_NOVA_EMAIL_TOOL_AUTH_V3 */
+.nova-tool-authorization-button {
+  width: 100%;
+  margin-top: 12px;
+  min-height: 44px;
+}
+
+.nova-tool-authorization-button[hidden] {
+  display: none !important;
+}

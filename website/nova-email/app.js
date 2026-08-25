@@ -3930,4 +3930,331 @@ window.addEventListener("unhandledrejection", (event) => {
 });
 // K133_NOVA_EMAIL_WEB_AUTH_LOGO_FIX_V2_END
 
+// K133_NOVA_EMAIL_TOOL_AUTH_V3_BEGIN
+const KORLIX_NOVA_EMAIL_TOOL_AUTH_V3 =
+  "2026-08-25-agent-email-tool-authorization-v3";
+
+APP.lastConnectionError = null;
+
+function korlixAgentToolIdsV3(agent) {
+  const raw = firstDefined(
+    agent?.toolIds,
+    agent?.tool_ids,
+    agent?.tools,
+    [],
+  );
+
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return [...new Set(
+    raw
+      .map((value) =>
+        String(
+          value?.id ??
+          value?.toolId ??
+          value?.tool_id ??
+          value ??
+          "",
+        )
+          .trim()
+          .toLowerCase(),
+      )
+      .filter(Boolean),
+  )];
+}
+
+function korlixAgentEmailAuthorizationRequiredV3(error) {
+  const code = String(
+    firstDefined(
+      error?.code,
+      error?.payload?.code,
+      error?.payload?.errorCode,
+      error?.payload?.error_code,
+      "",
+    ),
+  )
+    .trim()
+    .toLowerCase();
+
+  return code === "agent_email_tool_not_authorized";
+}
+
+function korlixEnsureAuthorizeButtonV3() {
+  let button = document.getElementById(
+    "authorizeAgentEmailButton",
+  );
+
+  if (button) {
+    return button;
+  }
+
+  button = document.createElement("button");
+  button.id = "authorizeAgentEmailButton";
+  button.type = "button";
+  button.className =
+    "button button-warning nova-tool-authorization-button";
+  button.textContent = "Authorize Nova for Agent Email";
+  button.hidden = true;
+
+  const actions =
+    els.connectionModal?.querySelector(
+      ".modal-actions",
+    );
+
+  if (actions) {
+    actions.insertAdjacentElement(
+      "afterend",
+      button,
+    );
+  } else {
+    els.connectionModal
+      ?.querySelector(".modal-card")
+      ?.appendChild(button);
+  }
+
+  button.addEventListener(
+    "click",
+    korlixAuthorizeNovaEmailToolV3,
+  );
+
+  return button;
+}
+
+function korlixSetAuthorizeButtonV3(error) {
+  const button =
+    korlixEnsureAuthorizeButtonV3();
+
+  const required =
+    korlixAgentEmailAuthorizationRequiredV3(
+      error,
+    );
+
+  button.hidden = !required;
+
+  if (required) {
+    button.disabled = false;
+    button.textContent =
+      "Authorize Nova for Agent Email";
+  }
+}
+
+const korlixConnectionErrorTextV2BeforeToolAuthV3 =
+  korlixConnectionErrorTextV2;
+
+korlixConnectionErrorTextV2 =
+  function korlixConnectionErrorTextV3(error) {
+    APP.lastConnectionError = error;
+
+    queueMicrotask(
+      () => korlixSetAuthorizeButtonV3(error),
+    );
+
+    return korlixConnectionErrorTextV2BeforeToolAuthV3(
+      error,
+    );
+  };
+
+async function korlixAuthorizeNovaEmailToolV3() {
+  const button =
+    korlixEnsureAuthorizeButtonV3();
+
+  if (
+    !APP.token ||
+    !APP.agentId
+  ) {
+    setMessage(
+      els.connectionMessage,
+      "Connect and verify the KORLIX session before authorizing Nova.",
+      "error",
+    );
+
+    return;
+  }
+
+  const phrase =
+    "AUTHORIZE NOVA EMAIL";
+
+  const confirmation = prompt(
+    "This will add the Agent Email tool to the exact active Nova profile. " +
+    `Type ${phrase} to continue.`,
+  );
+
+  if (confirmation !== phrase) {
+    setMessage(
+      els.connectionMessage,
+      "Agent Email authorization was not changed.",
+      "error",
+    );
+
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent =
+    "Authorizing Nova…";
+
+  setMessage(
+    els.connectionMessage,
+    "Loading the exact active Nova profile and preserving its current tools, training, memory, mission, and identity…",
+  );
+
+  try {
+    const encodedAgentId =
+      encodeURIComponent(APP.agentId);
+
+    const profilePayload =
+      await requestJson(
+        `/api/live-convo/agents/${encodedAgentId}`,
+        {
+          timeoutMilliseconds: 25000,
+        },
+      );
+
+    const agent =
+      korlixAgentRecordV2(profilePayload);
+
+    const returnedAgentId = String(
+      firstDefined(
+        agent?.agentId,
+        agent?.agent_id,
+        agent?.id,
+        "",
+      ),
+    ).trim();
+
+    if (returnedAgentId !== APP.agentId) {
+      throw new Error(
+        "The Agent Hub returned a different profile. Authorization was stopped.",
+      );
+    }
+
+    const isCustom = asBoolean(
+      firstDefined(
+        agent?.isCustom,
+        agent?.is_custom,
+        false,
+      ),
+      false,
+    );
+
+    const active = asBoolean(
+      firstDefined(
+        agent?.active,
+        agent?.isActive,
+        true,
+      ),
+      true,
+    );
+
+    if (!isCustom || !active) {
+      throw new Error(
+        "Agent Email can be authorized only for the active custom Nova profile.",
+      );
+    }
+
+    const currentToolIds =
+      korlixAgentToolIdsV3(agent);
+
+    const updatedToolIds = [
+      ...new Set([
+        ...currentToolIds,
+        "agent_email",
+      ]),
+    ];
+
+    let savedAgent = agent;
+
+    if (
+      !currentToolIds.includes("agent_email")
+    ) {
+      const updatePayload =
+        await requestJson(
+          `/api/live-convo/agents/${encodedAgentId}`,
+          {
+            method: "PUT",
+            timeoutMilliseconds: 30000,
+            body: JSON.stringify({
+              confirmed: true,
+              confirmation: true,
+              toolIds: updatedToolIds,
+              source:
+                "nova_email_web_tool_authorization",
+              changeSummary:
+                "User authorized the active Nova profile to use Agent Email from the production web control center.",
+            }),
+          },
+        );
+
+      savedAgent =
+        korlixAgentRecordV2(updatePayload);
+    }
+
+    const verifiedToolIds =
+      korlixAgentToolIdsV3(savedAgent);
+
+    if (
+      !verifiedToolIds.includes("agent_email")
+    ) {
+      throw new Error(
+        "Nova’s profile update completed without the Agent Email tool. No email was sent.",
+      );
+    }
+
+    setMessage(
+      els.connectionMessage,
+      "Nova is now authorized for Agent Email. Reloading the production control center…",
+      "success",
+    );
+
+    button.hidden = true;
+
+    const statusPayload =
+      await requestJson(
+        `${emailBase()}/status`,
+        {
+          timeoutMilliseconds: 25000,
+        },
+      );
+
+    const connected =
+      await refreshDashboard({
+        silent: true,
+        statusPayload,
+      });
+
+    if (!connected) {
+      throw new Error(
+        "Nova was authorized, but the production dashboard did not finish loading. Press Connect Session once more.",
+      );
+    }
+
+    toast(
+      "Nova Agent Email authorization is active.",
+      "success",
+    );
+  } catch (error) {
+    APP.lastConnectionError = error;
+
+    setMessage(
+      els.connectionMessage,
+      korlixConnectionErrorTextV2BeforeToolAuthV3(
+        error,
+      ),
+      "error",
+    );
+
+    button.hidden = false;
+    showModal("connectionModal");
+  } finally {
+    button.disabled = false;
+    button.textContent =
+      "Authorize Nova for Agent Email";
+  }
+}
+
+korlixEnsureAuthorizeButtonV3();
+// K133_NOVA_EMAIL_TOOL_AUTH_V3_END
+
 boot();
