@@ -1,0 +1,17 @@
+{
+  "name": "KORLIX AI — Nova Autonomous Email Control Center",
+  "short_name": "Nova Email",
+  "description": "KORLIX AI production Agent Email command center.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#010712",
+  "theme_color": "#020914",
+  "icons": [
+    {
+      "src": "./assets/korlix-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
