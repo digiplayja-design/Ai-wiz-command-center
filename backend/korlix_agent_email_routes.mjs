@@ -1603,6 +1603,7 @@ export function createKorlixAgentEmailDraftService({
       });
     },
 
+    // K133_AGENT_EMAIL_DRAFT_REAPPROVAL_V1_BEGIN
     async approveDraft({ userId, agentId, messageId, body }) {
       const identity = await context({ userId, agentId });
       await settingsRequired(identity);
@@ -1624,6 +1625,11 @@ export function createKorlixAgentEmailDraftService({
         );
       }
 
+      const nonceHash = crypto
+        .createHash("sha256")
+        .update(nonce)
+        .digest("hex");
+
       const existing = await loadMessage(identity, messageId);
       const status = line(existing.status, 40).toLowerCase();
 
@@ -1631,9 +1637,93 @@ export function createKorlixAgentEmailDraftService({
         status === "approved" &&
         existing.authorization_type === "one_time_confirmation"
       ) {
+        const storedNonceHash = line(
+          existing.confirmation_nonce_hash,
+          128,
+        );
+
+        const sameNonce =
+          storedNonceHash.length === nonceHash.length &&
+          storedNonceHash.length > 0 &&
+          crypto.timingSafeEqual(
+            Buffer.from(storedNonceHash, "utf8"),
+            Buffer.from(nonceHash, "utf8"),
+          );
+
+        if (sameNonce) {
+          return Object.freeze({
+            draft: messagePublicView(existing),
+            replayed: true,
+            reapproved: false,
+            approved: true,
+            sent: false,
+          });
+        }
+
+        if (source.reapprove !== true) {
+          fail(
+            "This Nova email draft is already approved with a different confirmation nonce. Reapprove this exact draft before sending it.",
+            "agent_email_draft_reapproval_required",
+            409,
+          );
+        }
+
+        await loadRecipient(
+          identity,
+          existing.recipient_id,
+          existing.message_kind === "marketing",
+        );
+
+        const authorizedAt = now().toISOString();
+        const existingMetadata = objectValue(existing.metadata);
+        const reapprovalCount =
+          Math.max(
+            0,
+            Number.parseInt(
+              existingMetadata.reapprovalCount,
+              10,
+            ) || 0,
+          ) + 1;
+
+        const row = await store.updateMessage(
+          identity.userId,
+          identity.agentId,
+          existing.id,
+          {
+            status: "approved",
+            authorization_type: "one_time_confirmation",
+            authorized_at: authorizedAt,
+            authorized_by: identity.userId,
+            confirmation_nonce_hash: nonceHash,
+            metadata: {
+              ...existingMetadata,
+              approvedBy: identity.userId,
+              approvedAt: authorizedAt,
+              reapprovedBy: identity.userId,
+              reapprovedAt: authorizedAt,
+              reapprovalCount,
+              previousApprovalReplaced: true,
+              providerSendPathImplemented:
+                providerSendPathImplemented === true,
+            },
+          },
+        );
+
+        await recordEvent(
+          identity,
+          row.id,
+          "draft_reapproved",
+          {
+            authorizationType: "one_time_confirmation",
+            previousApprovalReplaced: true,
+            sent: false,
+          },
+        );
+
         return Object.freeze({
-          draft: messagePublicView(existing),
-          replayed: true,
+          draft: messagePublicView(row),
+          replayed: false,
+          reapproved: true,
           approved: true,
           sent: false,
         });
@@ -1663,10 +1753,7 @@ export function createKorlixAgentEmailDraftService({
           authorization_type: "one_time_confirmation",
           authorized_at: authorizedAt,
           authorized_by: identity.userId,
-          confirmation_nonce_hash: crypto
-            .createHash("sha256")
-            .update(nonce)
-            .digest("hex"),
+          confirmation_nonce_hash: nonceHash,
           metadata: {
             ...objectValue(existing.metadata),
             approvedBy: identity.userId,
@@ -1684,10 +1771,12 @@ export function createKorlixAgentEmailDraftService({
       return Object.freeze({
         draft: messagePublicView(row),
         replayed: false,
+        reapproved: false,
         approved: true,
         sent: false,
       });
     },
+    // K133_AGENT_EMAIL_DRAFT_REAPPROVAL_V1_END
   });
 }
 

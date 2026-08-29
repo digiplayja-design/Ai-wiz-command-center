@@ -12,6 +12,7 @@ import {
 } from "./korlix_agent_email_delivery.mjs";
 
 import {
+  createKorlixAgentEmailDraftService,
   createKorlixAgentEmailSupabaseStore,
 } from "./korlix_agent_email_routes.mjs";
 
@@ -762,6 +763,150 @@ test("one-time approval hash is passed into the atomic database claim", async ()
     crypto.createHash("sha256").update(nonce).digest("hex"),
   );
 });
+
+// K133_AGENT_EMAIL_DRAFT_REAPPROVAL_INTEGRATION_TEST_V2_BEGIN
+test("explicit reapproval rotates the nonce and sends exactly once", async () => {
+  const {
+    service: deliveryService,
+    store,
+    provider,
+  } = fixture();
+
+  seedSettings(store);
+  seedRecipient(store);
+
+  const { nonce: originalNonce } =
+    seedApprovedMessage(store);
+
+  const draftService =
+    createKorlixAgentEmailDraftService({
+      environment: environment(),
+      store,
+      loadAgentProfile: async () => profile(),
+      now: () => new Date(NOW),
+      randomUUID: () => MESSAGE,
+    });
+
+  const sameNonceReplay =
+    await draftService.approveDraft({
+      userId: OWNER,
+      agentId: AGENT,
+      messageId: MESSAGE,
+      body: {
+        confirmed: true,
+        confirmationNonce: originalNonce,
+      },
+    });
+
+  assert.equal(sameNonceReplay.replayed, true);
+  assert.equal(sameNonceReplay.reapproved, false);
+  assert.equal(provider.calls.length, 0);
+  assert.equal(store.state.events.length, 0);
+
+  const replacementNonce =
+    "replacement-approval-nonce-002";
+
+  await expectCode(
+    () => draftService.approveDraft({
+      userId: OWNER,
+      agentId: AGENT,
+      messageId: MESSAGE,
+      body: {
+        confirmed: true,
+        confirmationNonce: replacementNonce,
+      },
+    }),
+    "agent_email_draft_reapproval_required",
+  );
+
+  assert.equal(provider.calls.length, 0);
+  assert.equal(store.state.events.length, 0);
+
+  const reapproved =
+    await draftService.approveDraft({
+      userId: OWNER,
+      agentId: AGENT,
+      messageId: MESSAGE,
+      body: {
+        confirmed: true,
+        confirmationNonce: replacementNonce,
+        reapprove: true,
+      },
+    });
+
+  assert.equal(reapproved.replayed, false);
+  assert.equal(reapproved.reapproved, true);
+  assert.equal(reapproved.sent, false);
+  assert.equal(provider.calls.length, 0);
+
+  assert.equal(
+    store.state.events.at(-1).event_type,
+    "draft_reapproved",
+  );
+
+  await expectCode(
+    () => deliveryService.sendApprovedDraft({
+      userId: OWNER,
+      agentId: AGENT,
+      messageId: MESSAGE,
+      body: {
+        confirmed: true,
+        confirmationNonce: originalNonce,
+      },
+    }),
+    "agent_email_send_confirmation_nonce_mismatch",
+  );
+
+  assert.equal(provider.calls.length, 0);
+
+  const sent =
+    await deliveryService.sendApprovedDraft({
+      userId: OWNER,
+      agentId: AGENT,
+      messageId: MESSAGE,
+      body: {
+        confirmed: true,
+        confirmationNonce: replacementNonce,
+      },
+    });
+
+  assert.equal(sent.sent, true);
+  assert.equal(sent.replayed, false);
+
+  assert.equal(
+    sent.message.providerMessageId,
+    "resend-1",
+  );
+
+  assert.equal(provider.calls.length, 1);
+
+  const replay =
+    await deliveryService.sendApprovedDraft({
+      userId: OWNER,
+      agentId: AGENT,
+      messageId: MESSAGE,
+      body: {
+        confirmed: true,
+        confirmationNonce: replacementNonce,
+      },
+    });
+
+  assert.equal(replay.sent, true);
+  assert.equal(replay.replayed, true);
+  assert.equal(provider.calls.length, 1);
+
+  assert.deepEqual(
+    store.state.events.map(
+      (event) => event.event_type,
+    ),
+    [
+      "draft_reapproved",
+      "send_attempted",
+      "send_accepted",
+    ],
+  );
+});
+// K133_AGENT_EMAIL_DRAFT_REAPPROVAL_INTEGRATION_TEST_V2_END
 
 test("a late emergency pause after the atomic claim aborts before Resend and restores the message", async () => {
   const { service, store, provider } = fixture();
@@ -1566,6 +1711,6 @@ for (const entry of tests) {
   console.log(`PASS ${passed}: ${entry.name}`);
 }
 
-assert.equal(passed, 38);
+assert.equal(passed, 39);
 console.log(`KORLIX_AGENT_EMAIL_DELIVERY_TEST_COUNT=${passed}`);
 console.log("KORLIX_AGENT_EMAIL_DELIVERY_TEST_PASS=true");
