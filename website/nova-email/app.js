@@ -3291,42 +3291,472 @@ function korlixOwnSessionValueV2(key) {
   }
 }
 
+// K133_NOVA_EMAIL_AUTH_REFRESH_REPAIR_V3_BEGIN
+const KORLIX_NOVA_EMAIL_AUTH_REFRESH_REPAIR_V3 =
+  "2026-08-28-auth-refresh-repair-v3";
+
+const KORLIX_NOVA_EMAIL_PRIVATE_REFRESH_KEY_V3 =
+  "korlixNovaEmailRefreshTokenV2";
+
+const KORLIX_NOVA_EMAIL_REFRESH_LOCK_KEY_V3 =
+  "korlixNovaEmailRefreshLockV3";
+
+let korlixRefreshPromiseV3 = null;
+
+function korlixRemoveStorageKeyV3(
+  targetKey,
+) {
+  const expected =
+    String(targetKey || "")
+      .toLowerCase();
+
+  for (
+    const storage
+    of [
+      localStorage,
+      sessionStorage,
+    ]
+  ) {
+    try {
+      const keys = [];
+
+      for (
+        let index = 0;
+        index < storage.length;
+        index += 1
+      ) {
+        const key =
+          storage.key(index);
+
+        if (key) {
+          keys.push(key);
+        }
+      }
+
+      for (const key of keys) {
+        const lower =
+          String(key).toLowerCase();
+
+        if (
+          lower === expected ||
+          lower.endsWith(
+            `.${expected}`,
+          ) ||
+          lower.endsWith(
+            `:${expected}`,
+          )
+        ) {
+          storage.removeItem(key);
+        }
+      }
+    } catch {
+      // The active in-memory session can continue.
+    }
+  }
+}
+
+function korlixClearPrivateRefreshTokenV3() {
+  korlixRemoveStorageKeyV3(
+    KORLIX_NOVA_EMAIL_PRIVATE_REFRESH_KEY_V3,
+  );
+
+  APP.refreshToken = null;
+}
+
+function korlixMainStoredStringV3(
+  names,
+) {
+  const requested =
+    new Set(
+      names.map(
+        (name) =>
+          String(name)
+            .toLowerCase(),
+      ),
+    );
+
+  for (
+    const item
+    of korlixStorageEntriesV2()
+  ) {
+    const lowerKey =
+      String(item.key)
+        .toLowerCase();
+
+    if (
+      lowerKey.includes(
+        "korlixnovaemail",
+      )
+    ) {
+      continue;
+    }
+
+    const matches =
+      [...requested].some(
+        (name) =>
+          lowerKey === name ||
+          lowerKey ===
+            `flutter.${name}` ||
+          lowerKey.endsWith(
+            `.${name}`,
+          ) ||
+          lowerKey.endsWith(
+            `:${name}`,
+          ),
+      );
+
+    if (!matches) {
+      continue;
+    }
+
+    const parsed =
+      korlixParseStoredValueV2(
+        item.value,
+      );
+
+    if (
+      typeof parsed ===
+        "string" &&
+      parsed.trim()
+    ) {
+      return parsed.trim();
+    }
+  }
+
+  return "";
+}
+
+function korlixChooseAccessTokenV3(
+  ...tokens
+) {
+  const usable =
+    tokens
+      .map(
+        (token) =>
+          String(token || "")
+            .trim(),
+      )
+      .filter(
+        (token) =>
+          tokenUsable(token),
+      );
+
+  usable.sort(
+    (
+      left,
+      right,
+    ) =>
+      korlixJwtSecondsRemainingV2(
+        right,
+      ) -
+      korlixJwtSecondsRemainingV2(
+        left,
+      ),
+  );
+
+  return usable[0] || "";
+}
+
+function korlixStaleRefreshErrorV3(
+  error,
+) {
+  const text = [
+    error?.message,
+    error?.code,
+    error?.payload?.message,
+    error?.payload?.error,
+    error?.payload?.detail,
+    error?.payload?.code,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return (
+    text.includes(
+      "already used",
+    ) ||
+    (
+      text.includes("invalid") &&
+      text.includes(
+        "refresh token",
+      )
+    ) ||
+    text.includes(
+      "refresh_token_already_used",
+    )
+  );
+}
+
+function korlixDelayV3(
+  milliseconds,
+) {
+  return new Promise(
+    (resolve) =>
+      setTimeout(
+        resolve,
+        milliseconds,
+      ),
+  );
+}
+
+async function korlixWithStorageRefreshLockV3(
+  task,
+) {
+  const owner =
+    `${Date.now()}-` +
+    Math.random()
+      .toString(36)
+      .slice(2, 14);
+
+  const deadline =
+    Date.now() + 12000;
+
+  while (
+    Date.now() < deadline
+  ) {
+    try {
+      let current = null;
+
+      try {
+        current =
+          JSON.parse(
+            localStorage.getItem(
+              KORLIX_NOVA_EMAIL_REFRESH_LOCK_KEY_V3,
+            ) ||
+            "null",
+          );
+      } catch {
+        current = null;
+      }
+
+      if (
+        !current ||
+        Number(
+          current.expiresAt ||
+          0,
+        ) < Date.now()
+      ) {
+        localStorage.setItem(
+          KORLIX_NOVA_EMAIL_REFRESH_LOCK_KEY_V3,
+          JSON.stringify({
+            owner,
+            expiresAt:
+              Date.now() +
+              45000,
+          }),
+        );
+
+        await korlixDelayV3(
+          35,
+        );
+
+        const verified =
+          JSON.parse(
+            localStorage.getItem(
+              KORLIX_NOVA_EMAIL_REFRESH_LOCK_KEY_V3,
+            ) ||
+            "null",
+          );
+
+        if (
+          verified?.owner ===
+          owner
+        ) {
+          try {
+            return await task();
+          } finally {
+            const latest =
+              JSON.parse(
+                localStorage.getItem(
+                  KORLIX_NOVA_EMAIL_REFRESH_LOCK_KEY_V3,
+                ) ||
+                "null",
+              );
+
+            if (
+              latest?.owner ===
+              owner
+            ) {
+              localStorage.removeItem(
+                KORLIX_NOVA_EMAIL_REFRESH_LOCK_KEY_V3,
+              );
+            }
+          }
+        }
+      }
+    } catch {
+      return await task();
+    }
+
+    await korlixDelayV3(
+      120 +
+      Math.floor(
+        Math.random() *
+        120,
+      ),
+    );
+  }
+
+  throw new Error(
+    "Another KORLIX tab is refreshing the session. Close duplicate KORLIX tabs, wait a moment, then try again.",
+  );
+}
+
+async function korlixWithRefreshLockV3(
+  task,
+) {
+  if (
+    typeof navigator !==
+      "undefined" &&
+    navigator.locks?.request
+  ) {
+    return await navigator.locks.request(
+      "korlix-nova-email-refresh-v3",
+      {
+        mode: "exclusive",
+      },
+      task,
+    );
+  }
+
+  return await korlixWithStorageRefreshLockV3(
+    task,
+  );
+}
+
+function korlixResetEmailSessionV3() {
+  for (
+    const key
+    of [
+      "korlixNovaEmailAccessTokenV2",
+      "korlixNovaEmailRefreshTokenV2",
+      "korlixNovaEmailUserEmailV2",
+      KORLIX_NOVA_EMAIL_REFRESH_LOCK_KEY_V3,
+    ]
+  ) {
+    korlixRemoveStorageKeyV3(
+      key,
+    );
+  }
+
+  APP.token = null;
+  APP.refreshToken = null;
+  APP.userEmail = null;
+
+  setConnectedState(
+    false,
+    "Connect KORLIX session",
+  );
+
+  setMessage(
+    els.connectionMessage,
+    "Nova Email’s private session cache was reset. Your main KORLIX login was not deleted. Return to the signed-in KORLIX tab, then press Connect Session once.",
+    "success",
+  );
+
+  showModal(
+    "connectionModal",
+  );
+}
+
+function korlixInstallResetEmailSessionButtonV3() {
+  if (
+    document.getElementById(
+      "korlixResetEmailSessionV3",
+    ) ||
+    !els.connectSessionButton
+  ) {
+    return;
+  }
+
+  const button =
+    document.createElement(
+      "button",
+    );
+
+  button.id =
+    "korlixResetEmailSessionV3";
+
+  button.type =
+    "button";
+
+  button.className =
+    els.connectSessionButton
+      .className;
+
+  button.textContent =
+    "Reset Email Session";
+
+  button.addEventListener(
+    "click",
+    korlixResetEmailSessionV3,
+  );
+
+  els.connectSessionButton
+    .parentElement
+    ?.insertBefore(
+      button,
+      els.connectSessionButton,
+    );
+}
+// K133_NOVA_EMAIL_AUTH_REFRESH_REPAIR_V3_END
+
 function korlixReadSessionBundleV2() {
-  const accessToken = firstDefined(
-    korlixOwnSessionValueV2("korlixNovaEmailAccessTokenV2"),
-    korlixStoredStringV2([
+  const mainAccessToken =
+    korlixMainStoredStringV3([
       "korlix_access_token",
       "access_token",
       "accessToken",
-    ]),
-    findSessionToken(),
-    "",
-  );
+    ]);
 
-  const refreshToken = firstDefined(
-    korlixOwnSessionValueV2("korlixNovaEmailRefreshTokenV2"),
-    korlixStoredStringV2([
+  const ownAccessToken =
+    korlixOwnSessionValueV2(
+      "korlixNovaEmailAccessTokenV2",
+    );
+
+  const accessToken =
+    korlixChooseAccessTokenV3(
+      mainAccessToken,
+      ownAccessToken,
+      findSessionToken(),
+    );
+
+  const refreshToken =
+    korlixMainStoredStringV3([
       "korlix_refresh_token",
       "refresh_token",
       "refreshToken",
-    ]),
-    "",
-  );
+    ]);
 
-  const email = firstDefined(
-    korlixOwnSessionValueV2("korlixNovaEmailUserEmailV2"),
-    korlixStoredStringV2([
-      "korlix_user_email",
-      "user_email",
-      "email",
-    ]),
-    "",
-  );
+  const email =
+    firstDefined(
+      korlixMainStoredStringV3([
+        "korlix_user_email",
+        "user_email",
+        "email",
+      ]),
+      korlixOwnSessionValueV2(
+        "korlixNovaEmailUserEmailV2",
+      ),
+      "",
+    );
 
   return {
-    accessToken: String(accessToken || "").trim(),
-    refreshToken: String(refreshToken || "").trim(),
-    email: String(email || "").trim(),
+    accessToken:
+      String(
+        accessToken || "",
+      ).trim(),
+
+    refreshToken:
+      String(
+        refreshToken || "",
+      ).trim(),
+
+    email:
+      String(
+        email || "",
+      ).trim(),
   };
 }
 
@@ -3339,19 +3769,14 @@ function korlixPersistOwnSessionV2(bundle) {
       );
     }
 
-    if (bundle.refreshToken) {
-      localStorage.setItem(
-        "korlixNovaEmailRefreshTokenV2",
-        bundle.refreshToken,
-      );
-    }
-
     if (bundle.email) {
       localStorage.setItem(
         "korlixNovaEmailUserEmailV2",
         bundle.email,
       );
     }
+
+    korlixClearPrivateRefreshTokenV3();
   } catch {
     // In-memory session remains usable when browser storage is unavailable.
   }
@@ -3486,76 +3911,307 @@ async function korlixReadJsonResponseV2(response) {
   }
 }
 
-async function korlixRefreshSessionV2(bundle, force = false) {
+async function korlixRefreshSessionUnlockedV3(
+  bundle,
+  force = false,
+  allowRecovery = true,
+) {
   korlixEnsureDeviceV2();
 
   let session = {
-    accessToken: String(bundle?.accessToken || "").trim(),
-    refreshToken: String(bundle?.refreshToken || "").trim(),
-    email: String(bundle?.email || "").trim(),
+    accessToken:
+      String(
+        bundle?.accessToken ||
+        "",
+      ).trim(),
+
+    refreshToken:
+      String(
+        bundle?.refreshToken ||
+        "",
+      ).trim(),
+
+    email:
+      String(
+        bundle?.email ||
+        "",
+      ).trim(),
   };
 
-  const shouldRefresh = Boolean(
-    session.refreshToken &&
-      (force ||
-        !tokenUsable(session.accessToken) ||
-        korlixJwtSecondsRemainingV2(session.accessToken) < 600),
-  );
-
-  if (shouldRefresh) {
-    const response = await korlixFetchWithTimeoutV2(
-      `${APP.apiBase}/api/auth/refresh`,
-      {
-        method: "POST",
-        headers: korlixAuthHeadersV2({
-          "Content-Type": "application/json",
-        }),
-        body: JSON.stringify({
-          refresh_token: session.refreshToken,
-          device_id: APP.deviceId,
-          device_label: APP.deviceLabel,
-          platform: "web",
-        }),
-      },
-      30000,
+  const shouldRefresh =
+    Boolean(
+      session.refreshToken &&
+      (
+        force ||
+        !tokenUsable(
+          session.accessToken,
+        ) ||
+        korlixJwtSecondsRemainingV2(
+          session.accessToken,
+        ) < 600
+      )
     );
 
-    const payload = await korlixReadJsonResponseV2(response);
+  if (shouldRefresh) {
+    const attemptedRefreshToken =
+      session.refreshToken;
+
+    const response =
+      await korlixFetchWithTimeoutV2(
+        `${APP.apiBase}/api/auth/refresh`,
+        {
+          method: "POST",
+
+          headers:
+            korlixAuthHeadersV2({
+              "Content-Type":
+                "application/json",
+            }),
+
+          body:
+            JSON.stringify({
+              refresh_token:
+                attemptedRefreshToken,
+
+              device_id:
+                APP.deviceId,
+
+              device_label:
+                APP.deviceLabel,
+
+              platform:
+                "web",
+            }),
+        },
+        30000,
+      );
+
+    const payload =
+      await korlixReadJsonResponseV2(
+        response,
+      );
 
     if (!response.ok) {
-      if (!tokenUsable(session.accessToken)) {
-        throw korlixResponseErrorV2(response, payload);
+      const refreshError =
+        korlixResponseErrorV2(
+          response,
+          payload,
+        );
+
+      if (
+        korlixStaleRefreshErrorV3(
+          refreshError,
+        )
+      ) {
+        korlixClearPrivateRefreshTokenV3();
+
+        const fresh =
+          korlixReadSessionBundleV2();
+
+        session.accessToken =
+          korlixChooseAccessTokenV3(
+            fresh.accessToken,
+            session.accessToken,
+          );
+
+        session.email =
+          fresh.email ||
+          session.email;
+
+        const freshRefreshToken =
+          String(
+            fresh.refreshToken ||
+            "",
+          ).trim();
+
+        if (
+          allowRecovery &&
+          freshRefreshToken &&
+          freshRefreshToken !==
+            attemptedRefreshToken &&
+          (
+            !tokenUsable(
+              session.accessToken,
+            ) ||
+            korlixJwtSecondsRemainingV2(
+              session.accessToken,
+            ) < 600
+          )
+        ) {
+          return await korlixRefreshSessionUnlockedV3(
+            {
+              accessToken:
+                session.accessToken,
+
+              refreshToken:
+                freshRefreshToken,
+
+              email:
+                session.email,
+            },
+            false,
+            false,
+          );
+        }
+
+        if (
+          !tokenUsable(
+            session.accessToken,
+          )
+        ) {
+          throw new Error(
+            "The saved Nova Email refresh token was already used. Its stale private copy has been cleared. Return to KORLIX Login, sign in once, then come back and press Connect Session once.",
+          );
+        }
+      } else if (
+        !tokenUsable(
+          session.accessToken,
+        )
+      ) {
+        throw refreshError;
       }
     } else {
-      const refreshed = payload?.session || {};
+      const refreshed =
+        payload?.session ||
+        {};
 
       session = {
-        accessToken: String(
-          refreshed.access_token || session.accessToken || "",
-        ).trim(),
-        refreshToken: String(
-          refreshed.refresh_token || session.refreshToken || "",
-        ).trim(),
-        email: String(
-          payload?.user?.email || session.email || "",
-        ).trim(),
+        accessToken:
+          String(
+            refreshed.access_token ||
+            session.accessToken ||
+            "",
+          ).trim(),
+
+        refreshToken:
+          String(
+            refreshed.refresh_token ||
+            session.refreshToken ||
+            "",
+          ).trim(),
+
+        email:
+          String(
+            payload?.user?.email ||
+            session.email ||
+            "",
+          ).trim(),
       };
     }
   }
 
-  if (!tokenUsable(session.accessToken)) {
+  if (
+    !tokenUsable(
+      session.accessToken,
+    )
+  ) {
     throw new Error(
-      "Your KORLIX browser session has expired. Open KORLIX Login, sign in again, then return and press Connect Session.",
+      "Your KORLIX browser session has expired. Open KORLIX Login, sign in again, then return and press Connect Session once.",
     );
   }
 
-  APP.token = session.accessToken;
-  APP.refreshToken = session.refreshToken;
-  APP.userEmail = session.email;
+  APP.token =
+    session.accessToken;
 
-  korlixPersistOwnSessionV2(session);
+  APP.refreshToken =
+    session.refreshToken;
+
+  APP.userEmail =
+    session.email;
+
+  korlixPersistOwnSessionV2(
+    session,
+  );
 
   return session;
+}
+
+async function korlixRefreshSessionV2(
+  bundle,
+  force = false,
+) {
+  const requested = {
+    accessToken:
+      String(
+        bundle?.accessToken ||
+        "",
+      ).trim(),
+
+    refreshToken:
+      String(
+        bundle?.refreshToken ||
+        "",
+      ).trim(),
+
+    email:
+      String(
+        bundle?.email ||
+        "",
+      ).trim(),
+  };
+
+  if (
+    !force &&
+    tokenUsable(
+      requested.accessToken,
+    ) &&
+    korlixJwtSecondsRemainingV2(
+      requested.accessToken,
+    ) >= 600
+  ) {
+    APP.token =
+      requested.accessToken;
+
+    APP.refreshToken =
+      requested.refreshToken;
+
+    APP.userEmail =
+      requested.email;
+
+    korlixPersistOwnSessionV2(
+      requested,
+    );
+
+    return requested;
+  }
+
+  if (korlixRefreshPromiseV3) {
+    return await korlixRefreshPromiseV3;
+  }
+
+  korlixRefreshPromiseV3 =
+    korlixWithRefreshLockV3(
+      async () => {
+        const latest =
+          korlixReadSessionBundleV2();
+
+        return await korlixRefreshSessionUnlockedV3(
+          {
+            accessToken:
+              korlixChooseAccessTokenV3(
+                latest.accessToken,
+                requested.accessToken,
+              ),
+
+            refreshToken:
+              latest.refreshToken ||
+              requested.refreshToken,
+
+            email:
+              latest.email ||
+              requested.email,
+          },
+          force,
+          true,
+        );
+      },
+    );
+
+  try {
+    return await korlixRefreshPromiseV3;
+  } finally {
+    korlixRefreshPromiseV3 = null;
+  }
 }
 
 findSessionToken = function findSessionTokenV2() {
@@ -3950,7 +4606,7 @@ connectSession = async function connectSessionV2() {
 
   setMessage(
     els.connectionMessage,
-    "Validating and refreshing the KORLIX browser session…",
+    "Validating the current KORLIX browser session…",
   );
 
   try {
@@ -3962,7 +4618,7 @@ connectSession = async function connectSessionV2() {
       );
     }
 
-    await korlixRefreshSessionV2(bundle, true);
+    await korlixRefreshSessionV2(bundle, false);
     await korlixValidateLoginV2();
 
     setMessage(
@@ -4059,6 +4715,7 @@ connectSession = async function connectSessionV2() {
 
 boot = async function bootV2() {
   bindEvents();
+  korlixInstallResetEmailSessionButtonV3();
   updateClock();
   setInterval(updateClock, 1000);
 
