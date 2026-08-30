@@ -1445,3 +1445,68 @@ textarea:focus-visible {
 .nova-tool-authorization-button[hidden] {
   display: none !important;
 }
+
+/* K133_NOVA_EMAIL_DRAFT_NONCE_CONTROLS_V1_BEGIN */
+.button-secondary {
+  border-color: rgba(111, 167, 213, 0.62);
+  background: rgba(5, 31, 55, 0.88);
+  color: #d6e8f5;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  transform: none;
+  filter: grayscale(0.35);
+  opacity: 0.48;
+}
+
+.button[hidden] {
+  display: none !important;
+}
+
+.details-modal-actions {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.draft-authorization-note {
+  margin: 14px 0 0;
+  padding: 11px 13px;
+  border: 1px solid rgba(43, 140, 220, 0.42);
+  border-radius: 5px;
+  background: rgba(4, 27, 50, 0.68);
+  color: #a9c4d8;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+.draft-authorization-note.success {
+  border-color: rgba(76, 233, 105, 0.55);
+  background: rgba(7, 60, 27, 0.28);
+  color: var(--green);
+}
+
+.draft-authorization-note.warning {
+  border-color: rgba(255, 185, 40, 0.62);
+  background: rgba(83, 48, 0, 0.28);
+  color: var(--gold);
+}
+
+.draft-authorization-note.locked {
+  border-color: rgba(255, 78, 84, 0.54);
+  background: rgba(81, 15, 19, 0.26);
+  color: #ff9da0;
+}
+
+#editDraftModal .modal-card > p {
+  margin-bottom: 18px;
+}
+
+@media (max-width: 580px) {
+  .details-modal-actions {
+    align-items: stretch;
+  }
+}
+/* K133_NOVA_EMAIL_DRAFT_NONCE_CONTROLS_V1_END */
+

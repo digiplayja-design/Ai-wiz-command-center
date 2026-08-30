@@ -5137,4 +5137,861 @@ async function korlixAuthorizeNovaEmailToolV3() {
 korlixEnsureAuthorizeButtonV3();
 // K133_NOVA_EMAIL_TOOL_AUTH_V3_END
 
+
+// K133_NOVA_EMAIL_DRAFT_NONCE_CONTROLS_V1_BEGIN
+const K133_NOVA_EMAIL_DRAFT_NONCE_CONTROLS_V1 =
+  "2026-08-30-emailcenter-draft-nonce-controls-v1";
+
+APP.draftAuthorizationNonces = new Map();
+APP.draftDetailsBusy = false;
+
+Object.assign(els, {
+  editDraftButton: $("#editDraftButton"),
+  approveDraftButton: $("#approveDraftButton"),
+  reapproveDraftButton: $("#reapproveDraftButton"),
+  sendApprovedButton: $("#sendApprovedButton"),
+  draftAuthorizationNote: $("#draftAuthorizationNote"),
+
+  editDraftModal: $("#editDraftModal"),
+  editDraftForm: $("#editDraftForm"),
+  editDraftRecipientInput: $("#editDraftRecipientInput"),
+  editDraftSubjectInput: $("#editDraftSubjectInput"),
+  editDraftBodyInput: $("#editDraftBodyInput"),
+  editDraftTransactionalInput: $("#editDraftTransactionalInput"),
+  editDraftSaveButton: $("#editDraftSaveButton"),
+  editDraftMessage: $("#editDraftMessage"),
+});
+
+function korlixDraftStatusV1(draft) {
+  return String(
+    firstDefined(
+      draft?.status,
+      draft?.raw?.status,
+      "draft",
+    ),
+  )
+    .trim()
+    .toLowerCase();
+}
+
+function korlixDraftIsSentV1(draft) {
+  const status = korlixDraftStatusV1(draft);
+
+  return [
+    "sent",
+    "delivered",
+    "opened",
+    "clicked",
+  ].some((value) => status.includes(value));
+}
+
+function korlixDraftCanEditV1(draft) {
+  return new Set([
+    "draft",
+    "pending_approval",
+    "approved",
+    "failed",
+  ]).has(korlixDraftStatusV1(draft));
+}
+
+function korlixDraftIsApprovedV1(draft) {
+  return korlixDraftStatusV1(draft) === "approved";
+}
+
+function korlixCurrentDraftV1(id = APP.selectedDraft?.id) {
+  const normalizedId = String(id || "");
+
+  return (
+    APP.drafts
+      .map(normalizeDraft)
+      .find(
+        (draft) => String(draft.id) === normalizedId,
+      ) ||
+    (
+      String(APP.selectedDraft?.id || "") === normalizedId
+        ? APP.selectedDraft
+        : null
+    )
+  );
+}
+
+function korlixFreshDraftNonceV1() {
+  if (!globalThis.crypto?.getRandomValues) {
+    throw new Error(
+      "This browser cannot create a secure one-time approval. Update the browser and try again.",
+    );
+  }
+
+  const bytes = new Uint8Array(32);
+  globalThis.crypto.getRandomValues(bytes);
+
+  return [...bytes]
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function korlixHeldDraftNonceV1(draftId) {
+  return APP.draftAuthorizationNonces.get(
+    String(draftId || ""),
+  ) || "";
+}
+
+function korlixHoldDraftNonceV1(draftId, nonce) {
+  APP.draftAuthorizationNonces.set(
+    String(draftId),
+    String(nonce),
+  );
+}
+
+function korlixClearDraftNonceV1(draftId) {
+  APP.draftAuthorizationNonces.delete(
+    String(draftId || ""),
+  );
+}
+
+function korlixDraftSendBlockersV1() {
+  const root = statusRoot(APP.statusPayload);
+  const settings = normalizedSettings(APP.statusPayload);
+  const blockers = [];
+
+  const enabled = asBoolean(
+    firstDefined(
+      settings.enabled,
+      root.enabled,
+      root.canDraft,
+      true,
+    ),
+    true,
+  );
+
+  const paused = asBoolean(
+    firstDefined(
+      settings.paused,
+      settings.emergencyPaused,
+      root.paused,
+      root.emergencyPaused,
+      false,
+    ),
+    false,
+  );
+
+  const explicitCanSend = firstDefined(
+    root.canSend,
+    root.controlledSendEnabled,
+    APP.delivery?.canSend,
+    APP.delivery?.controlledSendEnabled,
+  );
+
+  if (!enabled) {
+    blockers.push("Agent Email is disabled");
+  }
+
+  if (paused) {
+    blockers.push("Emergency Pause is ON");
+  }
+
+  if (
+    explicitCanSend !== undefined &&
+    explicitCanSend !== null &&
+    !asBoolean(explicitCanSend, false)
+  ) {
+    blockers.push("controlled sending is locked by server policy");
+  }
+
+  return [...new Set(blockers)];
+}
+
+function korlixDraftHtmlV1(text) {
+  return String(text || "")
+    .split(/\n{2,}/)
+    .map(
+      (paragraph) =>
+        `<p>${escapeHtml(paragraph)
+          .replaceAll("\n", "<br>")}</p>`,
+    )
+    .join("");
+}
+
+function korlixSetDetailsBusyV1(busy) {
+  APP.draftDetailsBusy = Boolean(busy);
+  korlixRenderDraftControlsV1(APP.selectedDraft);
+}
+
+function korlixRenderDraftControlsV1(draft) {
+  if (!draft?.id) {
+    return;
+  }
+
+  const status = korlixDraftStatusV1(draft);
+  const sent = korlixDraftIsSentV1(draft);
+  const editable = korlixDraftCanEditV1(draft) && !sent;
+  const reviewable = ["draft", "pending_approval"].includes(status);
+  const approved = status === "approved";
+  const failed = status === "failed";
+  const heldNonce = korlixHeldDraftNonceV1(draft.id);
+  const blockers = korlixDraftSendBlockersV1();
+  const sendLocked = blockers.length > 0;
+  const busy = APP.draftDetailsBusy;
+
+  els.editDraftButton.hidden = !editable;
+  els.editDraftButton.disabled = busy || !editable;
+
+  els.approveDraftButton.hidden = !reviewable;
+  els.approveDraftButton.disabled = busy || !reviewable;
+
+  els.reapproveDraftButton.hidden = !approved;
+  els.reapproveDraftButton.disabled = busy || !approved;
+
+  els.approveSendButton.hidden = !(reviewable || approved);
+  els.approveSendButton.disabled =
+    busy || sendLocked || !(reviewable || approved);
+  els.approveSendButton.textContent = approved
+    ? "Reapprove & Send"
+    : "Approve & Send";
+
+  els.sendApprovedButton.hidden = !(
+    heldNonce && (approved || failed)
+  );
+  els.sendApprovedButton.disabled =
+    busy || sendLocked || !heldNonce;
+
+  els.draftAuthorizationNote.className =
+    "draft-authorization-note";
+
+  let note =
+    "Approval and sending are separate. A one-time authorization is kept only in this open browser tab.";
+
+  if (sent) {
+    note = "This email has already been sent. Its one-time authorization is no longer available.";
+    els.draftAuthorizationNote.classList.add("success");
+  } else if (heldNonce && sendLocked) {
+    note =
+      `Approval is held in this tab, but sending is locked: ${blockers.join("; ")}.`;
+    els.draftAuthorizationNote.classList.add("locked");
+  } else if (heldNonce) {
+    note =
+      "This exact draft is approved and its one-time authorization is held in this tab. Use Send Approved once.";
+    els.draftAuthorizationNote.classList.add("success");
+  } else if (approved) {
+    note =
+      "The server reports this draft as approved, but this tab does not hold its one-time authorization. Reapprove it before sending.";
+    els.draftAuthorizationNote.classList.add("warning");
+  } else if (sendLocked) {
+    note =
+      `Approval remains available. Sending is locked: ${blockers.join("; ")}.`;
+    els.draftAuthorizationNote.classList.add("locked");
+  }
+
+  els.draftAuthorizationNote.textContent = note;
+}
+
+function korlixRenderDraftDetailsV1(draft) {
+  const raw = draft?.raw || {};
+  const authorizationType = firstDefined(
+    raw.authorizationType,
+    raw.authorization_type,
+    "none",
+  );
+
+  els.draftDetails.textContent = [
+    `Subject: ${draft.subject}`,
+    `Recipient: ${
+      draft.recipientEmail ||
+      draft.recipientName ||
+      "Approved recipient"
+    }`,
+    `Status: ${draft.status}`,
+    `Authorization: ${authorizationType}`,
+    "",
+    draft.text || "HTML email draft available.",
+  ].join("\n");
+
+  korlixRenderDraftControlsV1(draft);
+}
+
+openDraftDetails = function openDraftDetailsV1(id) {
+  const draft = korlixCurrentDraftV1(id);
+
+  if (!draft) {
+    toast(
+      "The selected draft could not be found.",
+      "error",
+    );
+    return;
+  }
+
+  APP.selectedDraft = draft;
+  korlixRenderDraftDetailsV1(draft);
+  setMessage(els.detailsMessage, "");
+  showModal("detailsModal");
+};
+
+approvalRequest = async function approvalRequestV1(
+  draftId,
+  confirmationNonce,
+  { reapprove = false } = {},
+) {
+  const nonce = String(confirmationNonce || "");
+
+  if (nonce.length < 12) {
+    throw new Error(
+      "A fresh one-time confirmation could not be created. No approval was recorded.",
+    );
+  }
+
+  return requestJson(
+    `${emailBase()}/drafts/` +
+      `${encodeURIComponent(draftId)}/approve`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        confirmed: true,
+        confirmation: true,
+        approved: true,
+        approvalStatus: "approved",
+        status: "approved",
+        confirmationNonce: nonce,
+        confirmation_nonce: nonce,
+        ...(reapprove ? { reapprove: true } : {}),
+      }),
+    },
+  );
+};
+
+function korlixDraftErrorMessageV1(error) {
+  const code = String(
+    firstDefined(
+      error?.code,
+      error?.payload?.code,
+      error?.payload?.errorCode,
+      error?.payload?.error_code,
+      "",
+    ),
+  ).toLowerCase();
+  const message = String(error?.message || "");
+  const lower = message.toLowerCase();
+
+  if (
+    code.includes("emergency_pause") ||
+    lower.includes("emergency pause") ||
+    lower.includes("temporarily paused")
+  ) {
+    return "Emergency Pause is ON. The email was not sent.";
+  }
+
+  if (
+    code.includes("reapproval_required") ||
+    lower.includes("reapprove this exact draft")
+  ) {
+    return "This draft has a different or expired one-time authorization. Use Reapprove before sending.";
+  }
+
+  if (
+    code.includes("confirmation_nonce") ||
+    lower.includes("confirmation nonce")
+  ) {
+    return "The one-time approval was not accepted. Reapprove this exact draft in the current tab before sending.";
+  }
+
+  return message || "The Agent Email request did not complete.";
+}
+
+async function korlixSendDraftWithNonceV1(draft, nonce) {
+  const result = await requestJson(
+    `${emailBase()}/drafts/` +
+      `${encodeURIComponent(draft.id)}/send`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        confirmed: true,
+        confirmation: true,
+        confirmationNonce: nonce,
+        confirmation_nonce: nonce,
+        idempotencyKey: nonce,
+      }),
+    },
+  );
+
+  korlixClearDraftNonceV1(draft.id);
+
+  return result;
+}
+
+async function korlixApproveSelectedDraftV1({
+  sendAfterApproval = false,
+  forceReapprove = false,
+} = {}) {
+  const draft = korlixCurrentDraftV1();
+
+  if (!draft?.id || APP.draftDetailsBusy) {
+    return;
+  }
+
+  const status = korlixDraftStatusV1(draft);
+  const reapprove = forceReapprove || status === "approved";
+
+  if (!["draft", "pending_approval", "approved"].includes(status)) {
+    setMessage(
+      els.detailsMessage,
+      "Edit this draft into a reviewable state before approving it.",
+      "error",
+    );
+    return;
+  }
+
+  const blockers = korlixDraftSendBlockersV1();
+
+  if (sendAfterApproval && blockers.length) {
+    setMessage(
+      els.detailsMessage,
+      `Sending is locked: ${blockers.join("; ")}. Use ${
+        reapprove ? "Reapprove" : "Approve Only"
+      } instead.`,
+      "error",
+    );
+    return;
+  }
+
+  const phrase = sendAfterApproval
+    ? (reapprove ? "REAPPROVE AND SEND" : "APPROVE AND SEND")
+    : (reapprove ? "REAPPROVE DRAFT" : "APPROVE DRAFT");
+
+  const confirmation = prompt(
+    `Type ${phrase} to ${
+      reapprove ? "replace the prior approval for" : "approve"
+    } this exact draft${
+      sendAfterApproval ? " and send it once" : " without sending"
+    }.`,
+  );
+
+  if (confirmation !== phrase) {
+    return;
+  }
+
+  let nonce = "";
+
+  try {
+    nonce = korlixFreshDraftNonceV1();
+  } catch (error) {
+    setMessage(
+      els.detailsMessage,
+      korlixDraftErrorMessageV1(error),
+      "error",
+    );
+    return;
+  }
+
+  korlixSetDetailsBusyV1(true);
+  setMessage(
+    els.detailsMessage,
+    reapprove
+      ? "Replacing the one-time approval for this exact draft…"
+      : "Recording a one-time approval for this exact draft…",
+  );
+
+  try {
+    await approvalRequest(
+      draft.id,
+      nonce,
+      { reapprove },
+    );
+
+    korlixHoldDraftNonceV1(
+      draft.id,
+      nonce,
+    );
+
+    if (sendAfterApproval) {
+      setMessage(
+        els.detailsMessage,
+        "Approval recorded. Sending this exact approved draft…",
+      );
+
+      const result = await korlixSendDraftWithNonceV1(
+        draft,
+        nonce,
+      );
+
+      const providerId = firstDefined(
+        result.providerMessageId,
+        result.provider_message_id,
+        result.message?.providerMessageId,
+        result.message?.provider_message_id,
+        result.messageId,
+        "recorded",
+      );
+
+      await refreshDashboard({ silent: true });
+      openDraftDetails(draft.id);
+      setMessage(
+        els.detailsMessage,
+        `Email sent successfully. Provider reference: ${providerId}`,
+        "success",
+      );
+      toast(
+        "Nova sent the approved production email.",
+        "success",
+      );
+      return;
+    }
+
+    await refreshDashboard({ silent: true });
+    openDraftDetails(draft.id);
+    setMessage(
+      els.detailsMessage,
+      reapprove
+        ? "Draft reapproved. Its fresh one-time authorization is held only in this open tab. Nothing was sent."
+        : "Draft approved. Its one-time authorization is held only in this open tab. Nothing was sent.",
+      "success",
+    );
+  } catch (error) {
+    korlixClearDraftNonceV1(draft.id);
+    setMessage(
+      els.detailsMessage,
+      korlixDraftErrorMessageV1(error),
+      "error",
+    );
+  } finally {
+    korlixSetDetailsBusyV1(false);
+  }
+}
+
+approveAndSendDraft = async function approveAndSendDraftV1() {
+  await korlixApproveSelectedDraftV1({
+    sendAfterApproval: true,
+  });
+};
+
+async function korlixApproveOnlyDraftV1() {
+  await korlixApproveSelectedDraftV1({
+    sendAfterApproval: false,
+  });
+}
+
+async function korlixReapproveDraftV1() {
+  await korlixApproveSelectedDraftV1({
+    sendAfterApproval: false,
+    forceReapprove: true,
+  });
+}
+
+async function korlixSendApprovedDraftV1() {
+  const draft = korlixCurrentDraftV1();
+
+  if (!draft?.id || APP.draftDetailsBusy) {
+    return;
+  }
+
+  const nonce = korlixHeldDraftNonceV1(draft.id);
+
+  if (!nonce) {
+    setMessage(
+      els.detailsMessage,
+      "Reapprove this exact draft in the current tab before sending.",
+      "error",
+    );
+    korlixRenderDraftControlsV1(draft);
+    return;
+  }
+
+  const blockers = korlixDraftSendBlockersV1();
+
+  if (blockers.length) {
+    setMessage(
+      els.detailsMessage,
+      `Sending is locked: ${blockers.join("; ")}. The email was not sent.`,
+      "error",
+    );
+    return;
+  }
+
+  const phrase = "SEND APPROVED";
+  const confirmation = prompt(
+    `Type ${phrase} to consume this one-time authorization and send the exact approved draft.`,
+  );
+
+  if (confirmation !== phrase) {
+    return;
+  }
+
+  korlixSetDetailsBusyV1(true);
+  setMessage(
+    els.detailsMessage,
+    "Sending this exact approved draft…",
+  );
+
+  try {
+    const result = await korlixSendDraftWithNonceV1(
+      draft,
+      nonce,
+    );
+
+    const providerId = firstDefined(
+      result.providerMessageId,
+      result.provider_message_id,
+      result.message?.providerMessageId,
+      result.message?.provider_message_id,
+      result.messageId,
+      "recorded",
+    );
+
+    await refreshDashboard({ silent: true });
+    openDraftDetails(draft.id);
+    setMessage(
+      els.detailsMessage,
+      `Email sent successfully. Provider reference: ${providerId}`,
+      "success",
+    );
+    toast(
+      "Nova sent the approved production email.",
+      "success",
+    );
+  } catch (error) {
+    setMessage(
+      els.detailsMessage,
+      korlixDraftErrorMessageV1(error),
+      "error",
+    );
+  } finally {
+    korlixSetDetailsBusyV1(false);
+  }
+}
+
+function korlixActiveDraftRecipientsV1() {
+  return APP.recipients
+    .map(normalizeRecipient)
+    .filter(
+      (recipient) =>
+        recipient.active &&
+        !["unsubscribed", "suppressed"].includes(
+          recipient.status.toLowerCase(),
+        ),
+    );
+}
+
+function korlixOpenEditDraftV1() {
+  const draft = korlixCurrentDraftV1();
+
+  if (!draft?.id || !korlixDraftCanEditV1(draft)) {
+    setMessage(
+      els.detailsMessage,
+      "This email can no longer be edited.",
+      "error",
+    );
+    return;
+  }
+
+  const recipients = korlixActiveDraftRecipientsV1();
+
+  els.editDraftRecipientInput.innerHTML = [
+    '<option value="">Select an approved recipient</option>',
+    ...recipients.map(
+      (recipient) =>
+        `<option value="${escapeHtml(recipient.id)}">${escapeHtml(
+          recipient.name
+            ? `${recipient.name} — ${recipient.email}`
+            : recipient.email,
+        )}</option>`,
+    ),
+  ].join("");
+
+  const matchedRecipient = recipients.find(
+    (recipient) =>
+      String(recipient.id) === String(draft.recipientId) ||
+      recipient.email.toLowerCase() ===
+        String(draft.recipientEmail || "").toLowerCase(),
+  );
+
+  els.editDraftRecipientInput.value =
+    matchedRecipient?.id || draft.recipientId || "";
+  els.editDraftSubjectInput.value = draft.subject || "";
+  els.editDraftBodyInput.value = draft.text || "";
+  els.editDraftTransactionalInput.checked = true;
+  setMessage(els.editDraftMessage, "");
+  showModal("editDraftModal");
+}
+
+async function korlixSaveDraftEditsV1(event) {
+  event.preventDefault();
+
+  const draft = korlixCurrentDraftV1();
+
+  if (!draft?.id || APP.draftDetailsBusy) {
+    return;
+  }
+
+  const recipient = recipientById(
+    els.editDraftRecipientInput.value,
+  );
+  const subject = els.editDraftSubjectInput.value.trim();
+  const text = els.editDraftBodyInput.value.trim();
+
+  if (
+    !recipient ||
+    !subject ||
+    !text ||
+    !els.editDraftTransactionalInput.checked
+  ) {
+    setMessage(
+      els.editDraftMessage,
+      "Select an approved recipient, complete the draft, and confirm it is transactional.",
+      "error",
+    );
+    return;
+  }
+
+  if (
+    korlixDraftIsApprovedV1(draft) &&
+    !confirm(
+      "Editing this approved draft will reset its one-time authorization. Continue?",
+    )
+  ) {
+    return;
+  }
+
+  els.editDraftSaveButton.disabled = true;
+  setMessage(
+    els.editDraftMessage,
+    "Saving changes and resetting any prior approval…",
+  );
+
+  try {
+    const html = korlixDraftHtmlV1(text);
+
+    await requestJson(
+      `${emailBase()}/drafts/` +
+        `${encodeURIComponent(draft.id)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          confirmed: true,
+          confirmation: true,
+          recipientId: recipient.id,
+          recipient_id: recipient.id,
+          recipientEmail: recipient.email,
+          recipientName: recipient.name,
+          subject,
+          subjectLine: subject,
+          textBody: text,
+          bodyText: text,
+          body: text,
+          htmlBody: html,
+          bodyHtml: html,
+          marketing: false,
+          isMarketing: false,
+          purpose: "transactional",
+        }),
+      },
+    );
+
+    korlixClearDraftNonceV1(draft.id);
+    await refreshDashboard({ silent: true });
+    closeModal("editDraftModal");
+    openDraftDetails(draft.id);
+    setMessage(
+      els.detailsMessage,
+      "Draft updated. Any prior approval was reset. Approve or reapprove the exact edited version before sending.",
+      "success",
+    );
+    toast(
+      "Draft updated. Nothing was sent.",
+      "success",
+    );
+  } catch (error) {
+    setMessage(
+      els.editDraftMessage,
+      korlixDraftErrorMessageV1(error),
+      "error",
+    );
+  } finally {
+    els.editDraftSaveButton.disabled = false;
+  }
+}
+
+const k133RefreshDashboardBeforeDraftControlsV1 =
+  refreshDashboard;
+
+refreshDashboard = async function refreshDashboardDraftControlsV1(
+  options = {},
+) {
+  const selectedId = String(APP.selectedDraft?.id || "");
+  const result = await k133RefreshDashboardBeforeDraftControlsV1(
+    options,
+  );
+
+  const currentDrafts = new Map(
+    APP.drafts
+      .map(normalizeDraft)
+      .filter((draft) => draft.id)
+      .map((draft) => [String(draft.id), draft]),
+  );
+
+  for (const draftId of APP.draftAuthorizationNonces.keys()) {
+    const current = currentDrafts.get(String(draftId));
+
+    if (
+      !current ||
+      !["approved", "failed"].includes(
+        korlixDraftStatusV1(current),
+      ) ||
+      korlixDraftIsSentV1(current)
+    ) {
+      korlixClearDraftNonceV1(draftId);
+    }
+  }
+
+  if (
+    selectedId &&
+    !els.detailsModal?.classList.contains("hidden")
+  ) {
+    const current = currentDrafts.get(selectedId);
+
+    if (current) {
+      APP.selectedDraft = current;
+      korlixRenderDraftDetailsV1(current);
+    }
+  }
+
+  return result;
+};
+
+const k133BindEventsBeforeDraftControlsV1 = bindEvents;
+
+bindEvents = function bindEventsDraftControlsV1() {
+  k133BindEventsBeforeDraftControlsV1();
+
+  els.editDraftButton.addEventListener(
+    "click",
+    korlixOpenEditDraftV1,
+  );
+  els.approveDraftButton.addEventListener(
+    "click",
+    korlixApproveOnlyDraftV1,
+  );
+  els.reapproveDraftButton.addEventListener(
+    "click",
+    korlixReapproveDraftV1,
+  );
+  els.sendApprovedButton.addEventListener(
+    "click",
+    korlixSendApprovedDraftV1,
+  );
+  els.editDraftForm.addEventListener(
+    "submit",
+    korlixSaveDraftEditsV1,
+  );
+};
+
+if (typeof korlixResetEmailSessionV3 === "function") {
+  const k133ResetEmailSessionBeforeDraftControlsV1 =
+    korlixResetEmailSessionV3;
+
+  korlixResetEmailSessionV3 = function resetEmailSessionDraftControlsV1() {
+    APP.draftAuthorizationNonces.clear();
+    APP.selectedDraft = null;
+    return k133ResetEmailSessionBeforeDraftControlsV1();
+  };
+}
+// K133_NOVA_EMAIL_DRAFT_NONCE_CONTROLS_V1_END
+
 boot();

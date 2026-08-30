@@ -19,8 +19,9 @@
     type="image/jpeg"
     href="./assets/korlix-nova-logo-v2.jpeg?v=20260825"
   >
-  <link rel="stylesheet" href="./styles.css?v=20260825-tool-auth3">
+  <link rel="stylesheet" href="./styles.css?v=k133-draft-nonce-controls-v1-20260830">
   <meta name="korlix-build" content="K133_NOVA_EMAIL_WEB_AUTH_LOGO_FIX_V2">
+  <meta name="korlix-draft-controls-build" content="K133_NOVA_EMAIL_DRAFT_NONCE_CONTROLS_V1">
   <meta name="korlix-tool-auth-build" content="K133_NOVA_EMAIL_TOOL_AUTH_V3">
 
   <!-- K133_NOVA_EMAIL_TEMPLATE_RULE_BUILDER_INDEX_BINDING_V1_HEAD -->
@@ -793,19 +794,158 @@
         id="draftDetails"
       ></div>
 
-      <div class="modal-actions">
+      <p
+        class="draft-authorization-note"
+        id="draftAuthorizationNote"
+        aria-live="polite"
+      >
+        Approval and sending are separate. A one-time authorization is
+        kept only in this open browser tab.
+      </p>
+
+      <div class="modal-actions details-modal-actions">
+        <button
+          class="button button-secondary"
+          id="editDraftButton"
+          type="button"
+        >
+          Edit Draft
+        </button>
+
+        <button
+          class="button button-primary"
+          id="approveDraftButton"
+          type="button"
+        >
+          Approve Only
+        </button>
+
+        <button
+          class="button button-primary"
+          id="reapproveDraftButton"
+          type="button"
+          hidden
+        >
+          Reapprove
+        </button>
+
         <button
           class="button button-warning"
           id="approveSendButton"
+          type="button"
         >
           Approve &amp; Send
+        </button>
+
+        <button
+          class="button button-warning"
+          id="sendApprovedButton"
+          type="button"
+          hidden
+        >
+          Send Approved
         </button>
       </div>
 
       <div
         class="form-message"
         id="detailsMessage"
+        aria-live="polite"
       ></div>
+    </section>
+  </div>
+
+  <div
+    class="modal-backdrop hidden"
+    id="editDraftModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="editDraftModalTitle"
+  >
+    <section class="modal-card modal-wide">
+      <button
+        class="modal-close"
+        data-close-modal="editDraftModal"
+        aria-label="Close"
+      >×</button>
+
+      <h2 id="editDraftModalTitle">
+        Edit Nova Email Draft
+      </h2>
+
+      <p>
+        Saving changes resets any prior one-time approval. Nothing is
+        sent from this form.
+      </p>
+
+      <form id="editDraftForm">
+        <label>
+          Approved Recipient
+          <select
+            id="editDraftRecipientInput"
+            required
+          >
+            <option value="">
+              Select an approved recipient
+            </option>
+          </select>
+        </label>
+
+        <label>
+          Subject
+          <input
+            id="editDraftSubjectInput"
+            type="text"
+            required
+            maxlength="240"
+          >
+        </label>
+
+        <label>
+          Message
+          <textarea
+            id="editDraftBodyInput"
+            required
+            rows="10"
+            maxlength="12000"
+          ></textarea>
+        </label>
+
+        <label class="confirmation-check">
+          <input
+            id="editDraftTransactionalInput"
+            type="checkbox"
+            required
+          >
+          <span>
+            This is a non-marketing transactional email.
+          </span>
+        </label>
+
+        <div class="modal-actions">
+          <button
+            class="button button-secondary"
+            type="button"
+            data-close-modal="editDraftModal"
+          >
+            Cancel
+          </button>
+
+          <button
+            class="button button-primary"
+            id="editDraftSaveButton"
+            type="submit"
+          >
+            Save Changes
+          </button>
+        </div>
+
+        <div
+          class="form-message"
+          id="editDraftMessage"
+          aria-live="polite"
+        ></div>
+      </form>
     </section>
   </div>
 
@@ -815,7 +955,7 @@
     aria-live="polite"
   ></div>
 
-  <script src="./app.js?v=k133-auth-refresh-repair-v3-20260828-r1"></script>
+  <script src="./app.js?v=k133-draft-nonce-controls-v1-20260830"></script>
   <!-- K133_NOVA_EMAIL_TEMPLATE_RULE_BUILDER_INDEX_BINDING_V1_SCRIPT -->
   <script src="./template-rule-builder.js?v=k133-template-rule-builder-v1-r1"></script>
 </body>
