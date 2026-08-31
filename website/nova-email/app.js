@@ -5994,4 +5994,272 @@ if (typeof korlixResetEmailSessionV3 === "function") {
 }
 // K133_NOVA_EMAIL_DRAFT_NONCE_CONTROLS_V1_END
 
+// K133_NOVA_EMAIL_SETTINGS_PRESERVATION_V1_BEGIN
+const K133_NOVA_EMAIL_SETTINGS_PRESERVATION_V1 =
+  "2026-08-30-settings-preservation-v1";
+
+function korlixSettingsObjectV1(value) {
+  return value &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+      ? value
+      : {};
+}
+
+function korlixSettingsValueV1(
+  incoming,
+  current,
+  names,
+  fallback,
+) {
+  const metadata =
+    korlixSettingsObjectV1(
+      current?.metadata,
+    );
+
+  for (const source of [
+    korlixSettingsObjectV1(incoming),
+    korlixSettingsObjectV1(current),
+    metadata,
+  ]) {
+    for (const name of names) {
+      if (
+        Object.prototype.hasOwnProperty.call(
+          source,
+          name,
+        ) &&
+        source[name] !== undefined &&
+        source[name] !== null
+      ) {
+        return source[name];
+      }
+    }
+  }
+
+  return fallback;
+}
+
+function korlixSettingsTextV1(
+  value,
+  fallback = "",
+) {
+  const text = String(
+    value ?? "",
+  ).trim();
+
+  return text || fallback;
+}
+
+fullSettingsPayload =
+  function fullSettingsPayloadV2(
+    patch = {},
+  ) {
+    const incoming =
+      korlixSettingsObjectV1(patch);
+
+    const current =
+      korlixSettingsObjectV1(
+        APP.settings,
+      );
+
+    const requestedMode =
+      korlixSettingsTextV1(
+        korlixSettingsValueV1(
+          incoming,
+          current,
+          [
+            "mode",
+            "operatingMode",
+            "operating_mode",
+          ],
+          "approval_required",
+        ),
+        "approval_required",
+      ).toLowerCase();
+
+    const mode = [
+      "draft_only",
+      "approval_required",
+      "autopilot",
+    ].includes(requestedMode)
+      ? requestedMode
+      : "approval_required";
+
+    const payload = {
+      ...incoming,
+
+      confirmed: true,
+      confirmation: true,
+
+      enabled: asBoolean(
+        korlixSettingsValueV1(
+          incoming,
+          current,
+          ["enabled"],
+          true,
+        ),
+        true,
+      ),
+
+      mode,
+
+      paused: asBoolean(
+        korlixSettingsValueV1(
+          incoming,
+          current,
+          [
+            "paused",
+            "emergencyPaused",
+            "emergency_paused",
+          ],
+          false,
+        ),
+        false,
+      ),
+
+      dailySendCap: Math.max(
+        1,
+        Math.trunc(
+          asNumber(
+            korlixSettingsValueV1(
+              incoming,
+              current,
+              [
+                "dailySendCap",
+                "daily_send_cap",
+              ],
+              5,
+            ),
+            5,
+          ),
+        ),
+      ),
+
+      maxFollowUps: Math.max(
+        0,
+        Math.trunc(
+          asNumber(
+            korlixSettingsValueV1(
+              incoming,
+              current,
+              [
+                "maxFollowUps",
+                "max_follow_ups",
+              ],
+              0,
+            ),
+            0,
+          ),
+        ),
+      ),
+
+      timezone: korlixSettingsTextV1(
+        korlixSettingsValueV1(
+          incoming,
+          current,
+          ["timezone"],
+          "UTC",
+        ),
+        "UTC",
+      ),
+
+      sendWindowStart:
+        korlixSettingsTextV1(
+          korlixSettingsValueV1(
+            incoming,
+            current,
+            [
+              "sendWindowStart",
+              "send_window_start",
+            ],
+            "09:00",
+          ),
+          "09:00",
+        ),
+
+      sendWindowEnd:
+        korlixSettingsTextV1(
+          korlixSettingsValueV1(
+            incoming,
+            current,
+            [
+              "sendWindowEnd",
+              "send_window_end",
+            ],
+            "17:00",
+          ),
+          "17:00",
+        ),
+
+      fromName: korlixSettingsTextV1(
+        korlixSettingsValueV1(
+          incoming,
+          current,
+          [
+            "fromName",
+            "from_name",
+          ],
+          "NOVA",
+        ),
+        "NOVA",
+      ),
+
+      marketingEnabled: asBoolean(
+        korlixSettingsValueV1(
+          incoming,
+          current,
+          [
+            "marketingEnabled",
+            "marketing_enabled",
+          ],
+          false,
+        ),
+        false,
+      ),
+    };
+
+    for (const [key, names] of [
+      [
+        "fromEmail",
+        [
+          "fromEmail",
+          "from_email",
+        ],
+      ],
+      [
+        "replyToEmail",
+        [
+          "replyToEmail",
+          "reply_to_email",
+        ],
+      ],
+      [
+        "physicalAddress",
+        [
+          "physicalAddress",
+          "physical_address",
+        ],
+      ],
+    ]) {
+      const value =
+        korlixSettingsValueV1(
+          incoming,
+          current,
+          names,
+          undefined,
+        );
+
+      if (
+        value !== undefined &&
+        value !== null
+      ) {
+        payload[key] =
+          String(value).trim();
+      }
+    }
+
+    return payload;
+  };
+// K133_NOVA_EMAIL_SETTINGS_PRESERVATION_V1_END
+
 boot();
