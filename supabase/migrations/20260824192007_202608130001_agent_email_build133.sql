@@ -671,3 +671,4 @@ comment on table public.korlix_agent_email_events is
 -- Scraped or guessed recipients are forbidden by the source_kind allowlist.
 -- No email may leave draft state without one-time confirmation or a preapproved rule.
 -- KORLIX_AGENT_EMAIL_BUILD133_END
+;

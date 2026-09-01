@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const migrationPath = path.resolve(
   here,
-  "../supabase/migrations/202608130001_agent_email_build133.sql",
+  "../supabase/migrations/20260824192007_202608130001_agent_email_build133.sql",
 );
 const sql = fs.readFileSync(migrationPath, "utf8");
 
