@@ -667,6 +667,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
             .select("*")
             .eq("user_id", userId)
             .eq("agent_id", agentId)
+            .is("deleted_at", null)
             .order("updated_at", { ascending: false })
             .limit(limit),
           "list Nova's Agent Email rules",
@@ -682,6 +683,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
           .eq("user_id", userId)
           .eq("agent_id", agentId)
           .eq("id", ruleId)
+          .is("deleted_at", null)
           .maybeSingle(),
         "load Nova's Agent Email rule",
       );
@@ -697,9 +699,36 @@ export function createKorlixAgentEmailSupabaseStore(client) {
             .eq("agent_id", agentId)
             .eq("enabled", true)
             .eq("send_mode", "autopilot")
+            .eq("schedule_type", "event")
             .eq("trigger_key", triggerKey)
+            .is("deleted_at", null)
             .order("created_at", { ascending: true }),
           "load Nova's preapproved Autopilot rules",
+        )) ?? []
+      );
+    },
+
+    async listDueScheduledRules(
+      userId,
+      agentId,
+      dueAt,
+      { limit = 20 } = {},
+    ) {
+      return (
+        (await query(
+          client
+            .from(tables.rules)
+            .select("*")
+            .eq("user_id", userId)
+            .eq("agent_id", agentId)
+            .eq("enabled", true)
+            .eq("send_mode", "autopilot")
+            .in("schedule_type", ["once", "weekly"])
+            .is("deleted_at", null)
+            .lte("next_run_at", dueAt)
+            .order("next_run_at", { ascending: true })
+            .limit(limit),
+          "load Nova's due scheduled Agent Email rules",
         )) ?? []
       );
     },
@@ -723,9 +752,25 @@ export function createKorlixAgentEmailSupabaseStore(client) {
           .eq("user_id", userId)
           .eq("agent_id", agentId)
           .eq("id", ruleId)
+          .is("deleted_at", null)
           .select("*")
           .single(),
         "update Nova's Agent Email rule",
+      );
+    },
+
+    async softDeleteRule(userId, agentId, ruleId, patch) {
+      return await query(
+        client
+          .from(tables.rules)
+          .update(patch)
+          .eq("user_id", userId)
+          .eq("agent_id", agentId)
+          .eq("id", ruleId)
+          .is("deleted_at", null)
+          .select("*")
+          .maybeSingle(),
+        "delete Nova's Agent Email rule",
       );
     },
 

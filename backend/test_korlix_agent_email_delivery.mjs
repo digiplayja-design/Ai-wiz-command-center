@@ -562,7 +562,7 @@ function test(name, callback) {
 test("delivery installer registers controlled routes without sending during installation", async () => {
   const registered = [];
   const app = {};
-  for (const method of ["get", "post", "patch"]) {
+  for (const method of ["get", "post", "patch", "delete"]) {
     app[method] = (path) => registered.push(`${method.toUpperCase()} ${path}`);
   }
   const provider = providerFixture();
@@ -574,11 +574,13 @@ test("delivery installer registers controlled routes without sending during inst
     provider,
     logger: { error() {} },
   });
-  assert.equal(registered.length, 8);
+  assert.equal(registered.length, 10);
   assert.equal(provider.calls.length, 0);
   assert.equal(installed.controlledSendImplemented, true);
   assert.equal(installed.webhookEventsImplemented, true);
   assert.equal(installed.autopilotTriggerImplemented, true);
+  assert.equal(installed.scheduledRuleRunnerImplemented, true);
+  assert.equal(installed.ruleDeleteImplemented, true);
   assert.equal(installed.autopilotSchedulerEnabled, false);
   assert.equal(installed.autopilotSchedulerConfigured, false);
   assert.equal(installed.autopilotSchedulerStarted, false);
@@ -1700,6 +1702,7 @@ test("route catalog contains controlled send, webhook, rule, event, and internal
   assert.match(KORLIX_AGENT_EMAIL_DELIVERY_ROUTES.sendDraft, /\/send$/);
   assert.match(KORLIX_AGENT_EMAIL_DELIVERY_ROUTES.resendWebhook, /resend\/webhook$/);
   assert.match(KORLIX_AGENT_EMAIL_DELIVERY_ROUTES.autopilotRun, /autopilot\/run$/);
+  assert.match(KORLIX_AGENT_EMAIL_DELIVERY_ROUTES.scheduledRun, /scheduled\/run$/);
   assert.match(KORLIX_AGENT_EMAIL_DELIVERY_ROUTES.rules, /\/rules$/);
   assert.match(KORLIX_AGENT_EMAIL_DELIVERY_ROUTES.events, /\/events$/);
 });

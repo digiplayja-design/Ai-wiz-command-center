@@ -20,6 +20,17 @@ import {
   korlixAgentEmailAutopilotSchedulerConfiguration,
 } from "./korlix_agent_email_scheduler.mjs";
 
+import {
+  korlixAgentEmailNextRunAt,
+  korlixAgentEmailScheduleDays,
+  korlixAgentEmailScheduleFingerprint,
+  korlixAgentEmailScheduleFromRule,
+  korlixAgentEmailScheduleLocalTime,
+  korlixAgentEmailScheduleTimestamp,
+  korlixAgentEmailScheduleTimezone,
+  korlixAgentEmailScheduleType,
+} from "./korlix_agent_email_schedule_k134b.mjs";
+
 const PREFIX = "/api/live-convo/agents/:agentId/email";
 
 export const KORLIX_AGENT_EMAIL_DELIVERY_ROUTES = Object.freeze({
@@ -30,6 +41,7 @@ export const KORLIX_AGENT_EMAIL_DELIVERY_ROUTES = Object.freeze({
   rule: `${PREFIX}/rules/:ruleId`,
   resendWebhook: "/api/agent-email/resend/webhook",
   autopilotRun: "/api/internal/agent-email/autopilot/run",
+  scheduledRun: "/api/internal/agent-email/scheduled/run",
 });
 
 const UUID =
@@ -73,6 +85,18 @@ const PROTECTED_RULE_FIELDS = new Set([
   "send_mode",
   "allowedDays",
   "allowed_days",
+  "scheduleType",
+  "schedule_type",
+  "scheduleTimezone",
+  "schedule_timezone",
+  "scheduleLocalTime",
+  "schedule_local_time",
+  "sendTime",
+  "send_time",
+  "scheduledFor",
+  "scheduled_for",
+  "scheduledAt",
+  "scheduled_at",
 ]);
 
 function objectValue(value) {
@@ -306,6 +330,7 @@ function rulePublicView(row) {
   if (!row) return null;
   const scope = objectValue(row.recipient_scope);
   const metadata = objectValue(row.metadata);
+  const schedule = korlixAgentEmailScheduleFromRule(row);
   return Object.freeze({
     id: line(row.id, 80),
     agentId: line(row.agent_id, 96).toLowerCase(),
@@ -328,6 +353,15 @@ function rulePublicView(row) {
     allowedDays: Array.isArray(metadata.allowedDays)
       ? metadata.allowedDays
       : [0, 1, 2, 3, 4, 5, 6],
+    scheduleType: schedule.type,
+    scheduleTimezone: schedule.timeZone,
+    scheduleLocalTime: schedule.localTime,
+    scheduleDays: [...schedule.days],
+    scheduledFor: schedule.scheduledFor,
+    nextRunAt: schedule.nextRunAt,
+    lastRunAt: schedule.lastRunAt,
+    completedAt: schedule.completedAt,
+    deletedAt: schedule.deletedAt,
     createdAt: row.created_at ?? null,
     updatedAt: row.updated_at ?? null,
   });
@@ -1582,12 +1616,78 @@ export function createKorlixAgentEmailDeliveryService({
         );
       }
     }
+    for (const systemOwned of [
+      "nextRunAt",
+      "next_run_at",
+      "lastRunAt",
+      "last_run_at",
+      "completedAt",
+      "completed_at",
+      "deletedAt",
+      "deleted_at",
+    ]) {
+      if (Object.hasOwn(source, systemOwned)) {
+        fail(
+          "Scheduled rule runtime fields are controlled only by the KORLIX server.",
+          "agent_email_rule_schedule_runtime_field_prohibited",
+          403,
+        );
+      }
+    }
 
     const existingScope = objectValue(existing?.recipient_scope);
     const existingMetadata = objectValue(existing?.metadata);
+    const existingSchedule = existing
+      ? korlixAgentEmailScheduleFromRule(existing)
+      : null;
+    const scheduleType = korlixAgentEmailScheduleType(
+      source.scheduleType ??
+        source.schedule_type ??
+        existingSchedule?.type ??
+        "event",
+    );
+    const scheduleTimezone = korlixAgentEmailScheduleTimezone(
+      source.scheduleTimezone ??
+        source.schedule_timezone ??
+        existingSchedule?.timeZone ??
+        settingsRow?.timezone ??
+        "UTC",
+    );
+    const scheduleLocalTime = scheduleType === "weekly"
+      ? korlixAgentEmailScheduleLocalTime(
+          source.scheduleLocalTime ??
+            source.schedule_local_time ??
+            source.sendTime ??
+            source.send_time ??
+            existingSchedule?.localTime,
+        )
+      : null;
+    const scheduleDays = scheduleType === "weekly"
+      ? korlixAgentEmailScheduleDays(
+          source.scheduleDays ??
+            source.schedule_days ??
+            source.allowedDays ??
+            source.allowed_days,
+          existingSchedule?.days?.length
+            ? existingSchedule.days
+            : existingMetadata.allowedDays,
+        )
+      : [];
+    const scheduledFor = scheduleType === "once"
+      ? korlixAgentEmailScheduleTimestamp(
+          source.scheduledFor ??
+            source.scheduled_for ??
+            source.scheduledAt ??
+            source.scheduled_at ??
+            existingSchedule?.scheduledFor,
+        )
+      : null;
     const name = line(source.name ?? existing?.name, 200);
     const triggerKey = normalizeTriggerKey(
-      source.triggerKey ?? source.trigger_key ?? existing?.trigger_key,
+      source.triggerKey ??
+        source.trigger_key ??
+        existing?.trigger_key ??
+        (scheduleType === "event" ? "" : "schedule.k134b"),
     );
     const recipientIdsRaw =
       source.recipientIds ??
@@ -1630,10 +1730,12 @@ export function createKorlixAgentEmailDeliveryService({
       1,
       500,
     );
-    const allowedDays = allowedDaysInput(
-      source.allowedDays ?? source.allowed_days,
-      existingMetadata.allowedDays,
-    );
+    const allowedDays = scheduleType === "weekly"
+      ? scheduleDays
+      : allowedDaysInput(
+          source.allowedDays ?? source.allowed_days,
+          existingMetadata.allowedDays,
+        );
 
     if (!name) {
       fail("Enter a name for the Agent Email rule.", "agent_email_rule_name_required");
@@ -1660,6 +1762,13 @@ export function createKorlixAgentEmailDeliveryService({
       fail(
         "Choose Draft Only or Approved Autopilot for this rule.",
         "agent_email_rule_send_mode_invalid",
+      );
+    }
+    if (scheduleType !== "event" && sendMode !== "autopilot") {
+      fail(
+        "One-time and weekly schedules require Approved Autopilot mode.",
+        "agent_email_schedule_requires_autopilot",
+        409,
       );
     }
     if (marketing && objectValue(settingsRow.metadata).marketingEnabled !== true) {
@@ -1710,7 +1819,7 @@ export function createKorlixAgentEmailDeliveryService({
     if (sendMode === "autopilot") {
       if (protectedChanged && !explicitPreapproval) {
         fail(
-          "Autopilot content or recipients changed. Confirm and preapprove the complete rule again.",
+          "Autopilot content, recipients, or schedule changed. Confirm and preapprove the complete rule again.",
           "agent_email_rule_reapproval_required",
           409,
         );
@@ -1745,6 +1854,74 @@ export function createKorlixAgentEmailDeliveryService({
       if (protectedChanged && existing) approvalVersion += 1;
     }
 
+    const currentDate = new Date(now());
+    const requestedScheduleFingerprint = korlixAgentEmailScheduleFingerprint({
+      scheduleType,
+      timeZone: scheduleTimezone,
+      localTime: scheduleLocalTime,
+      days: scheduleDays,
+      scheduledFor,
+    });
+    const existingScheduleFingerprint = existingSchedule
+      ? korlixAgentEmailScheduleFingerprint({
+          scheduleType: existingSchedule.type,
+          timeZone: existingSchedule.timeZone,
+          localTime: existingSchedule.localTime,
+          days: existingSchedule.days,
+          scheduledFor: existingSchedule.scheduledFor,
+        })
+      : null;
+    const scheduleChanged =
+      !existingSchedule ||
+      requestedScheduleFingerprint !== existingScheduleFingerprint;
+    const enablingSchedule =
+      scheduleType !== "event" &&
+      enabled &&
+      existing?.enabled !== true;
+    let nextRunAt = existingSchedule?.nextRunAt ?? null;
+    let lastRunAt = existingSchedule?.lastRunAt ?? null;
+    let completedAt = existingSchedule?.completedAt ?? null;
+
+    if (scheduleType === "event") {
+      nextRunAt = null;
+      lastRunAt = null;
+      completedAt = null;
+    } else if (!enabled) {
+      nextRunAt = null;
+      if (scheduleChanged) {
+        lastRunAt = null;
+        completedAt = null;
+      }
+    } else {
+      const existingNext = Date.parse(line(nextRunAt, 100));
+      const mustRecalculate =
+        scheduleChanged ||
+        enablingSchedule ||
+        !Number.isFinite(existingNext) ||
+        existingNext <= currentDate.getTime();
+
+      if (mustRecalculate) {
+        nextRunAt = korlixAgentEmailNextRunAt({
+          scheduleType,
+          after: currentDate,
+          timeZone: scheduleTimezone,
+          localTime: scheduleLocalTime,
+          days: scheduleDays,
+          scheduledFor,
+        });
+        completedAt = null;
+        if (scheduleChanged) lastRunAt = null;
+      }
+
+      if (!withinSendWindow(new Date(nextRunAt), settingsRow, null)) {
+        fail(
+          "The requested scheduled send time is outside Nova's confirmed sending window.",
+          "agent_email_schedule_outside_send_window",
+          409,
+        );
+      }
+    }
+
     return {
       user_id: identity.userId,
       agent_id: identity.agentId,
@@ -1764,14 +1941,368 @@ export function createKorlixAgentEmailDeliveryService({
       preapproved_at: preapprovedAt,
       preapproved_by: preapprovedBy,
       approval_version: approvalVersion,
+      schedule_type: scheduleType,
+      schedule_timezone: scheduleTimezone,
+      schedule_local_time: scheduleLocalTime,
+      schedule_days: scheduleDays,
+      scheduled_for: scheduledFor,
+      next_run_at: nextRunAt,
+      last_run_at: lastRunAt,
+      completed_at: completedAt,
+      deleted_at: null,
       metadata: {
         ...existingMetadata,
         allowedDays,
+        scheduleType,
+        scheduleTimezone,
+        scheduleLocalTime,
+        scheduledFor,
         preapprovalNonceHash: nonceHash,
         lastConfirmedBy: identity.userId,
         lastConfirmedAt: new Date(now()).toISOString(),
       },
     };
+  }
+  async function runScheduledDueRules({ body = {} } = {}) {
+    const source = objectValue(body);
+    for (const prohibited of [
+      "recipientIds",
+      "recipient_ids",
+      "emails",
+      "to",
+      "scheduledAt",
+      "scheduled_at",
+      "nextRunAt",
+      "next_run_at",
+      "now",
+    ]) {
+      if (Object.hasOwn(source, prohibited)) {
+        fail(
+          "The scheduled runner cannot accept request-selected recipients or clock overrides.",
+          "agent_email_scheduled_runner_override_prohibited",
+          403,
+        );
+      }
+    }
+    if (typeof store.listDueScheduledRules !== "function") {
+      fail(
+        "The scheduled Agent Email persistence upgrade is not available.",
+        "agent_email_schedule_persistence_not_ready",
+        503,
+      );
+    }
+
+    const binding = korlixAgentEmailNovaBinding(environment);
+    if (!binding.configured) {
+      fail(
+        "Nova's approved KORLIX Agent Hub binding is not configured.",
+        "agent_email_nova_binding_not_configured",
+        503,
+      );
+    }
+    const identity = await context({
+      userId: binding.ownerUid,
+      agentId: binding.agentId,
+    });
+    const { row: settingsRow } = await settingsRequired(identity, {
+      autopilot: true,
+    });
+    const currentDate = new Date(now());
+    const currentAt = currentDate.toISOString();
+    const batchCap = boundedInteger(
+      environment?.KORLIX_AGENT_EMAIL_AUTOPILOT_BATCH_CAP,
+      20,
+      1,
+      100,
+    );
+    const rules = await store.listDueScheduledRules(
+      identity.userId,
+      identity.agentId,
+      currentAt,
+      { limit: batchCap },
+    );
+    const results = [];
+    let attempted = 0;
+
+    for (const rule of rules) {
+      if (attempted >= batchCap) break;
+
+      if (!rule.preapproved_at || !rule.preapproved_by) {
+        results.push({
+          ruleId: rule.id,
+          skipped: "not_preapproved",
+        });
+        continue;
+      }
+
+      let schedule;
+      try {
+        schedule = korlixAgentEmailScheduleFromRule(rule);
+      } catch (error) {
+        results.push({
+          ruleId: rule.id,
+          skipped: "invalid_schedule",
+          code: line(error?.code, 120) || "agent_email_schedule_invalid",
+        });
+        continue;
+      }
+
+      if (
+        !["once", "weekly"].includes(schedule.type) ||
+        !schedule.nextRunAt ||
+        Date.parse(schedule.nextRunAt) > currentDate.getTime()
+      ) {
+        results.push({
+          ruleId: rule.id,
+          skipped: "not_due",
+        });
+        continue;
+      }
+
+      if (!withinSendWindow(currentDate, settingsRow, null)) {
+        results.push({
+          ruleId: rule.id,
+          skipped: "send_window_closed",
+          occurrenceAt: schedule.nextRunAt,
+        });
+        continue;
+      }
+
+      const recipientIds = ruleRecipientIds(rule);
+      const occurrenceAt = schedule.nextRunAt;
+      const ruleResults = [];
+
+      for (const recipientId of recipientIds) {
+        if (attempted >= batchCap) break;
+        attempted += 1;
+
+        let recipient;
+        let message;
+
+        try {
+          recipient = await loadRecipient(
+            identity,
+            recipientId,
+            rule.marketing === true,
+          );
+          const idempotencyKey = [
+            "scheduled",
+            rule.id,
+            safeHash(occurrenceAt).slice(0, 32),
+            recipient.id,
+          ].join(":");
+          message = await store.findMessageByIdempotency(
+            identity.userId,
+            identity.agentId,
+            idempotencyKey,
+          );
+
+          if (!message) {
+            const eventId = [
+              "scheduled",
+              rule.id,
+              occurrenceAt,
+            ].join(":");
+            const templateVariables = {
+              recipient_name: line(recipient.display_name, 160),
+              recipient_email: korlixAgentEmailAddress(recipient.email),
+              event_id: eventId,
+              scheduled_occurrence: occurrenceAt,
+              schedule_type: schedule.type,
+              schedule_timezone: schedule.timeZone,
+              schedule_local_time: schedule.localTime || "",
+            };
+            const subject = korlixAgentEmailRenderTemplate(
+              rule.subject_template,
+              templateVariables,
+            );
+            const textBody = korlixAgentEmailRenderTemplate(
+              rule.text_template,
+              templateVariables,
+            );
+            const htmlBody = rule.html_template
+              ? korlixAgentEmailRenderTemplate(
+                  rule.html_template,
+                  templateVariables,
+                  { html: true },
+                )
+              : "";
+            const createdAt = currentAt;
+
+            message = await store.insertMessage({
+              id: randomUUID(),
+              user_id: identity.userId,
+              agent_id: identity.agentId,
+              recipient_id: recipient.id,
+              rule_id: rule.id,
+              to_email: korlixAgentEmailAddress(recipient.email),
+              subject: line(subject, 200),
+              text_body: textBody,
+              html_body: htmlBody,
+              message_kind:
+                rule.marketing === true ? "marketing" : "transactional",
+              status: "approved",
+              authorization_type: "preapproved_rule",
+              authorized_at: rule.preapproved_at,
+              authorized_by: rule.preapproved_by,
+              confirmation_nonce_hash: null,
+              idempotency_key: idempotencyKey,
+              provider: "resend",
+              provider_message_id: null,
+              physical_address_snapshot:
+                rule.marketing === true
+                  ? line(settingsRow.physical_address, 500)
+                  : "",
+              unsubscribe_url_snapshot:
+                rule.marketing === true
+                  ? line(
+                      environment?.KORLIX_AGENT_EMAIL_UNSUBSCRIBE_URL,
+                      1000,
+                    )
+                  : "",
+              scheduled_at: occurrenceAt,
+              last_attempt_at: null,
+              attempt_count: 0,
+              sent_at: null,
+              failure_code: null,
+              failure_message: null,
+              metadata: {
+                source: "preapproved_scheduled_rule",
+                eventIdHash: safeHash(eventId),
+                triggerKey: line(rule.trigger_key, 120).toLowerCase(),
+                scheduleOccurrenceAt: occurrenceAt,
+                scheduleType: schedule.type,
+                scheduleTimezone: schedule.timeZone,
+                scheduleLocalTime: schedule.localTime,
+                scheduleDays: [...schedule.days],
+                ruleMaxSendsPerDay: rule.max_sends_per_day,
+                ruleApprovalVersion: rule.approval_version,
+                createdAt,
+              },
+            });
+
+            await recordEvent(
+              identity,
+              message.id,
+              "scheduled_message_created",
+              {
+                ruleId: rule.id,
+                recipientId: recipient.id,
+                occurrenceAt,
+                scheduleType: schedule.type,
+              },
+            );
+          }
+
+          const sent = await sendAuthorizedMessage({
+            identity,
+            settingsRow,
+            message,
+            allowedStatuses: ["approved", "failed"],
+            authorizationType: "preapproved_rule",
+            source: "preapproved_scheduled_rule",
+          });
+          const item = {
+            ruleId: rule.id,
+            recipientId: recipient.id,
+            messageId: sent.message.id,
+            occurrenceAt,
+            sent: sent.sent,
+            replayed: sent.replayed,
+          };
+          ruleResults.push(item);
+          results.push(item);
+        } catch (error) {
+          const item = {
+            ruleId: rule.id,
+            recipientId,
+            messageId: message?.id ?? null,
+            occurrenceAt,
+            sent: false,
+            code:
+              line(error?.code, 120) ||
+              "agent_email_scheduled_send_failed",
+            retryable: Number(error?.statusCode || 500) >= 500,
+          };
+          ruleResults.push(item);
+          results.push(item);
+        }
+      }
+
+      const occurrenceComplete =
+        ruleResults.length === recipientIds.length &&
+        ruleResults.every(
+          (item) => item.sent === true || item.replayed === true,
+        );
+      const metadata = objectValue(rule.metadata);
+
+      if (occurrenceComplete) {
+        const nextRunAt = schedule.type === "weekly"
+          ? korlixAgentEmailNextRunAt({
+              scheduleType: "weekly",
+              after: currentDate,
+              timeZone: schedule.timeZone,
+              localTime: schedule.localTime,
+              days: schedule.days,
+            })
+          : null;
+        const completedAt = schedule.type === "once"
+          ? currentAt
+          : null;
+
+        await store.updateRule(
+          identity.userId,
+          identity.agentId,
+          rule.id,
+          {
+            enabled: schedule.type === "once" ? false : true,
+            next_run_at: nextRunAt,
+            last_run_at: occurrenceAt,
+            completed_at: completedAt,
+            metadata: {
+              ...metadata,
+              lastScheduleAttemptAt: currentAt,
+              lastScheduleOccurrenceAt: occurrenceAt,
+              lastScheduleCompletedAt: currentAt,
+              lastScheduleResult: "sent",
+              nextRunAt,
+            },
+          },
+        );
+      } else {
+        const codes = ruleResults
+          .map((item) => line(item.code, 120))
+          .filter(Boolean);
+
+        await store.updateRule(
+          identity.userId,
+          identity.agentId,
+          rule.id,
+          {
+            metadata: {
+              ...metadata,
+              lastScheduleAttemptAt: currentAt,
+              lastScheduleOccurrenceAt: occurrenceAt,
+              lastScheduleResult: "pending_retry",
+              lastScheduleErrorCodes: [...new Set(codes)],
+            },
+          },
+        );
+      }
+    }
+
+    return Object.freeze({
+      dueAt: currentAt,
+      matchedRuleCount: rules.length,
+      attempted,
+      sentCount: results.filter(
+        (item) => item.sent === true && item.replayed !== true,
+      ).length,
+      replayedCount: results.filter(
+        (item) => item.replayed === true,
+      ).length,
+      results,
+    });
   }
 
   return Object.freeze({
@@ -1949,6 +2480,72 @@ export function createKorlixAgentEmailDeliveryService({
         created: false,
         sent: false,
       });
+    },
+
+    async deleteRule({ userId, agentId, ruleId, body = {} }) {
+      const identity = await context({ userId, agentId });
+      const source = objectValue(body);
+      requireConfirmation(
+        source,
+        "Confirm deletion of this exact Agent Email rule.",
+        "agent_email_rule_delete_confirmation_required",
+      );
+      const safeRuleId = uuid(
+        ruleId,
+        "agent_email_rule_id_invalid",
+        "Choose a valid Agent Email rule.",
+      );
+      const existing = await store.getRule(
+        identity.userId,
+        identity.agentId,
+        safeRuleId,
+      );
+      if (!existing) {
+        fail(
+          "The selected Agent Email rule was not found.",
+          "agent_email_rule_not_found",
+          404,
+        );
+      }
+      if (typeof store.softDeleteRule !== "function") {
+        fail(
+          "The scheduled Agent Email deletion upgrade is not available.",
+          "agent_email_schedule_persistence_not_ready",
+          503,
+        );
+      }
+      const deletedAt = new Date(now()).toISOString();
+      const row = await store.softDeleteRule(
+        identity.userId,
+        identity.agentId,
+        safeRuleId,
+        {
+          enabled: false,
+          next_run_at: null,
+          deleted_at: deletedAt,
+          metadata: {
+            ...objectValue(existing.metadata),
+            deletedBy: identity.userId,
+            deletedAt,
+          },
+        },
+      );
+      if (!row) {
+        fail(
+          "The selected Agent Email rule was not found.",
+          "agent_email_rule_not_found",
+          404,
+        );
+      }
+      return Object.freeze({
+        rule: rulePublicView(row),
+        deleted: true,
+        sent: false,
+      });
+    },
+
+    async runScheduledAutopilot({ body = {} } = {}) {
+      return await runScheduledDueRules({ body });
     },
 
     async processResendWebhook({ rawBody, headers }) {
@@ -2375,7 +2972,8 @@ export function installKorlixAgentEmailDeliveryRoutes(
     !app ||
     typeof app.get !== "function" ||
     typeof app.post !== "function" ||
-    typeof app.patch !== "function"
+    typeof app.patch !== "function" ||
+    typeof app.delete !== "function"
   ) {
     throw new TypeError("An Express-compatible application is required.");
   }
@@ -2399,7 +2997,49 @@ export function installKorlixAgentEmailDeliveryRoutes(
   const autopilotScheduler =
     createKorlixAgentEmailAutopilotScheduler({
       environment,
-      runAutopilot: ({ body }) => service.runAutopilot({ body }),
+      runAutopilot: async ({ body }) => {
+        let eventResult = null;
+        let scheduledResult = null;
+        let eventError = null;
+        let scheduledError = null;
+
+        try {
+          eventResult = await service.runAutopilot({ body });
+        } catch (error) {
+          eventError = error;
+        }
+
+        try {
+          scheduledResult = await service.runScheduledAutopilot({ body: {} });
+        } catch (error) {
+          scheduledError = error;
+        }
+
+        if (eventError && scheduledError) {
+          throw scheduledError;
+        }
+
+        return Object.freeze({
+          matchedRuleCount:
+            Math.max(0, Number(eventResult?.matchedRuleCount) || 0) +
+            Math.max(0, Number(scheduledResult?.matchedRuleCount) || 0),
+          attempted:
+            Math.max(0, Number(eventResult?.attempted) || 0) +
+            Math.max(0, Number(scheduledResult?.attempted) || 0),
+          sentCount:
+            Math.max(0, Number(eventResult?.sentCount) || 0) +
+            Math.max(0, Number(scheduledResult?.sentCount) || 0),
+          replayedCount:
+            Math.max(0, Number(eventResult?.replayedCount) || 0) +
+            Math.max(0, Number(scheduledResult?.replayedCount) || 0),
+          eventErrorCode:
+            line(eventError?.code, 120) || null,
+          scheduledErrorCode:
+            line(scheduledError?.code, 120) || null,
+          eventResult,
+          scheduledResult,
+        });
+      },
       now: typeof schedulerNow === "function" ? schedulerNow : now,
       setTimeoutImpl: schedulerSetTimeout,
       clearTimeoutImpl: schedulerClearTimeout,
@@ -2512,6 +3152,23 @@ export function installKorlixAgentEmailDeliveryRoutes(
     ),
   );
 
+  app.delete(
+    routes.rule,
+    route(
+      "Could not delete Nova's Agent Email rule.",
+      async ({ req, res, userId, agentId }) =>
+        res.json({
+          ok: true,
+          ...(await service.deleteRule({
+            userId,
+            agentId,
+            ruleId: req.params.ruleId,
+            body: req.body,
+          })),
+        }),
+    ),
+  );
+
   app.post(routes.resendWebhook, async (req, res) => {
     try {
       const result = await service.processResendWebhook({
@@ -2560,11 +3217,37 @@ export function installKorlixAgentEmailDeliveryRoutes(
     }
   });
 
+  app.post(routes.scheduledRun, async (req, res) => {
+    try {
+      internalSecretAuthorized(req, environment);
+      return res.json({
+        ok: true,
+        ...(await service.runScheduledAutopilot({ body: req.body })),
+      });
+    } catch (error) {
+      if (
+        Number(error?.statusCode || 500) >= 500 &&
+        typeof logger?.error === "function"
+      ) {
+        logger.error("KORLIX_AGENT_EMAIL_SCHEDULED_ROUTE_FAILED", {
+          code: line(error?.code, 120) || "agent_email_scheduled_run_failed",
+        });
+      }
+      return responseError(
+        res,
+        error,
+        "Could not run Nova's scheduled Agent Email rules.",
+      );
+    }
+  });
+
   return Object.freeze({
     routes,
     controlledSendImplemented: true,
     webhookEventsImplemented: true,
     autopilotTriggerImplemented: true,
+    scheduledRuleRunnerImplemented: true,
+    ruleDeleteImplemented: true,
     autopilotSchedulerEnabled: autopilotSchedulerStatus.enabled,
     autopilotSchedulerConfigured: autopilotSchedulerStatus.configured,
     autopilotSchedulerStarted: autopilotSchedulerStatus.started,
