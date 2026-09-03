@@ -6,13 +6,49 @@
     busyRuleId: "",
   };
 
+  // K134B_SCHEDULE_STATUS_NORMALIZATION_V1_BEGIN
+  const placeholderTexts = new Set([
+    "",
+    "undefined",
+    "null",
+    "nan",
+  ]);
+
+  const isMeaningful = (value) => {
+    if (
+      value === undefined ||
+      value === null
+    ) {
+      return false;
+    }
+
+    if (
+      typeof value !==
+      "string"
+    ) {
+      return true;
+    }
+
+    return !placeholderTexts.has(
+      value
+        .trim()
+        .toLowerCase(),
+    );
+  };
+
   const first = (...values) =>
     values.find(
-      (value) =>
-        value !== undefined &&
-        value !== null &&
-        value !== "",
+      isMeaningful,
     );
+
+  const optionalText = (value) => {
+    const selected =
+      first(value);
+
+    return selected === undefined
+      ? ""
+      : String(selected).trim();
+  };
 
   const bool = (
     value,
@@ -86,8 +122,6 @@
     first(
       rule?.nextRunAt,
       rule?.next_run_at,
-      rule?.scheduledFor,
-      rule?.scheduled_for,
     );
 
   const scheduledFor = (rule) =>
@@ -133,7 +167,7 @@
     );
 
   const lastResult = (rule) =>
-    String(
+    optionalText(
       first(
         rule?.lastResult,
         rule?.last_result,
@@ -142,20 +176,122 @@
       ),
     );
 
+  const firstErrorCode = (value) => {
+    if (
+      Array.isArray(value)
+    ) {
+      return optionalText(
+        first(
+          ...value,
+        ),
+      );
+    }
+
+    return optionalText(
+      value,
+    );
+  };
+
   const failureCode = (
     rule,
     message,
   ) =>
-    String(
+    optionalText(
       first(
         rule?.failureCode,
         rule?.failure_code,
         message?.failureCode,
         message?.failure_code,
-        rule?.metadata?.lastScheduleErrorCodes?.[0],
+        firstErrorCode(
+          rule?.errorCodes,
+        ),
+        firstErrorCode(
+          rule?.error_codes,
+        ),
+        firstErrorCode(
+          message?.errorCodes,
+        ),
+        firstErrorCode(
+          message?.error_codes,
+        ),
+        firstErrorCode(
+          rule?.metadata
+            ?.lastScheduleErrorCodes,
+        ),
         "",
       ),
     );
+
+  const messageStatusLabel = (
+    rule,
+    message,
+  ) => {
+    const explicit =
+      optionalText(
+        first(
+          message?.status,
+          lastResult(rule),
+        ),
+      );
+
+    if (explicit) {
+      return explicit;
+    }
+
+    if (deletedAt(rule)) {
+      return "Deleted";
+    }
+
+    if (completedAt(rule)) {
+      return "Completed";
+    }
+
+    if (
+      !bool(
+        first(
+          rule?.enabled,
+          rule?.isEnabled,
+        ),
+        false,
+      )
+    ) {
+      return scheduleType(rule) ===
+        "weekly"
+        ? "Paused before send"
+        : "Cancelled before send";
+    }
+
+    return "No message attempt yet";
+  };
+
+  const nextRunForDisplay = (rule) => {
+    if (
+      deletedAt(rule) ||
+      completedAt(rule)
+    ) {
+      return null;
+    }
+
+    if (
+      !bool(
+        first(
+          rule?.enabled,
+          rule?.isEnabled,
+        ),
+        false,
+      )
+    ) {
+      return null;
+    }
+
+    return (
+      first(
+        nextRun(rule),
+        scheduledFor(rule),
+      ) ??
+      null
+    );
+  };
 
   const isScheduled = (rule) => {
     const type = scheduleType(rule);
@@ -330,18 +466,20 @@
       };
     }
 
-    if (
-      !bool(
+    const enabled =
+      bool(
         first(
           rule?.enabled,
           rule?.isEnabled,
         ),
         false,
-      )
-    ) {
+      );
+
+    if (!enabled) {
       return {
         label:
-          scheduleType(rule) === "once"
+          scheduleType(rule) ===
+          "once"
             ? "CANCELLED"
             : "PAUSED",
         tone: "muted",
@@ -349,23 +487,29 @@
     }
 
     const result =
-      lastResult(rule).toLowerCase();
+      lastResult(rule)
+        .toLowerCase();
 
     const messageStatus =
-      String(
+      optionalText(
         first(
           message?.status,
           "",
         ),
       ).toLowerCase();
 
-    if (
+    const code =
       failureCode(
         rule,
         message,
-      ) ||
+      );
+
+    if (
+      code ||
       result.includes("fail") ||
-      messageStatus === "failed"
+      messageStatus.includes(
+        "fail",
+      )
     ) {
       return {
         label: "FAILED",
@@ -374,11 +518,13 @@
     }
 
     if (
-      messageStatus === "delivered" ||
+      messageStatus ===
+        "delivered" ||
       first(
         message?.deliveredAt,
         message?.delivered_at,
-        message?.metadata?.deliveredAt,
+        message?.metadata
+          ?.deliveredAt,
       )
     ) {
       return {
@@ -397,9 +543,16 @@
       };
     }
 
-    const due = new Date(
-      nextRun(rule),
-    );
+    const dueValue =
+      first(
+        nextRun(rule),
+        scheduledFor(rule),
+      );
+
+    const due =
+      new Date(
+        dueValue || "",
+      );
 
     if (
       !Number.isNaN(
@@ -726,12 +879,9 @@
             !completedAt(rule);
 
           const messageStatus =
-            String(
-              first(
-                message?.status,
-                lastResult(rule),
-                "No message attempt yet",
-              ),
+            messageStatusLabel(
+              rule,
+              message,
             );
 
           const delivered =
@@ -814,7 +964,9 @@
                   <dd>
                     ${html(
                       formatDate(
-                        nextRun(rule),
+                        nextRunForDisplay(
+                          rule,
+                        ),
                         timezone(rule),
                       ),
                     )}
@@ -862,16 +1014,10 @@
                   </dd>
                 </div>
 
-                ${
-                  code
-                    ? `
-                      <div class="wide">
-                        <dt>Failure code</dt>
-                        <dd>${html(code)}</dd>
-                      </div>
-                    `
-                    : ""
-                }
+                <div class="wide">
+                  <dt>Failure code</dt>
+                  <dd>${html(code || "—")}</dd>
+                </div>
               </dl>
 
               ${
@@ -897,6 +1043,20 @@
         })
         .join("");
   }
+
+  globalThis.KorlixK134BScheduleDashboardTest =
+    Object.freeze({
+      first,
+      optionalText,
+      nextRun,
+      scheduledFor,
+      nextRunForDisplay,
+      lastResult,
+      failureCode,
+      messageStatusLabel,
+      statusFor,
+    });
+  // K134B_SCHEDULE_STATUS_NORMALIZATION_V1_END
 
   const originalRenderDashboard =
     renderDashboard;
