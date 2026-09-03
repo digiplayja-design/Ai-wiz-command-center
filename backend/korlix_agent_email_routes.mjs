@@ -32,6 +32,7 @@ export const KORLIX_AGENT_EMAIL_DRAFT_ROUTES = Object.freeze({
   drafts: `${PREFIX}/drafts`,
   draft: `${PREFIX}/drafts/:messageId`,
   approveDraft: `${PREFIX}/drafts/:messageId/approve`,
+  deleteDraft: `${PREFIX}/drafts/:messageId`,
 });
 
 const UUID =
@@ -43,6 +44,20 @@ const EDITABLE_MESSAGE_STATUSES = new Set([
   "approved",
   "failed",
 ]);
+
+// K134B_SAFE_DRAFT_DELETE_V1_BEGIN
+const DELETABLE_MESSAGE_STATUSES = new Set([
+  "draft",
+  "pending_approval",
+  "approved",
+  "failed",
+]);
+const TYPED_DRAFT_DELETE_STATUSES = new Set([
+  "approved",
+  "failed",
+]);
+const DRAFT_DELETE_CONFIRMATION_PHRASE = "DELETE DRAFT";
+// K134B_SAFE_DRAFT_DELETE_V1_END
 
 function objectValue(value) {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -314,11 +329,22 @@ function messagePublicView(row) {
   }
 
   const status = line(row.status, 40).toLowerCase() || "draft";
+  const metadata = objectValue(row.metadata);
+  const providerMessageId = line(row.provider_message_id, 240) || null;
+  const lastFailureAmbiguous =
+    metadata.lastFailureAmbiguous === true ||
+    metadata.last_failure_ambiguous === true;
+  const canDelete =
+    DELETABLE_MESSAGE_STATUSES.has(status) &&
+    !row.sent_at &&
+    !providerMessageId &&
+    !lastFailureAmbiguous;
 
   return Object.freeze({
     id: line(row.id, 80),
     agentId: line(row.agent_id, 96).toLowerCase(),
     recipientId: line(row.recipient_id, 80) || null,
+    ruleId: line(row.rule_id, 80) || null,
     toEmail: line(row.to_email, 320).toLowerCase(),
     subject: line(row.subject, 240),
     textBody: String(row.text_body ?? ""),
@@ -334,13 +360,15 @@ function messagePublicView(row) {
     physicalAddress: line(row.physical_address_snapshot, 500),
     unsubscribeUrl: line(row.unsubscribe_url_snapshot, 1000),
     idempotencyKey: line(row.idempotency_key, 240),
-    provider: line(row.provider, 40).toLowerCase() || "resend",
-    providerMessageId: line(row.provider_message_id, 240) || null,
+    provider: line(row.provider, 40).toLowerCase() || "resend",    providerMessageId,
     lastAttemptAt: row.last_attempt_at ?? null,
     attemptCount: boundedInteger(row.attempt_count, 0, 0, 100),
     sentAt: row.sent_at ?? null,
     failureCode: line(row.failure_code, 120) || null,
     failureMessage: line(row.failure_message, 600) || null,
+    canDelete,
+    deleteConfirmationRequired:
+      canDelete && TYPED_DRAFT_DELETE_STATUSES.has(status),
     canEdit: EDITABLE_MESSAGE_STATUSES.has(status),
     canApprove: status === "draft" || status === "pending_approval",
     sent: status === "sent",
@@ -565,6 +593,23 @@ export function createKorlixAgentEmailSupabaseStore(client) {
           .select("*")
           .single(),
         "update Nova's email draft",
+      );
+    },
+
+    async cancelMessage(userId, agentId, messageId, patch) {
+      return await query(
+        client
+          .from(tables.messages)
+          .update(patch)
+          .eq("user_id", userId)
+          .eq("agent_id", agentId)
+          .eq("id", messageId)
+          .in("status", [...DELETABLE_MESSAGE_STATUSES])
+          .is("provider_message_id", null)
+          .is("sent_at", null)
+          .select("*")
+          .maybeSingle(),
+        "cancel Nova's unsent email draft",
       );
     },
 
@@ -1427,7 +1472,11 @@ export function createKorlixAgentEmailDraftService({
       );
 
       return Object.freeze({
-        drafts: rows.map(messagePublicView),
+        drafts: rows
+          .filter(
+            (row) => line(row?.status, 40).toLowerCase() !== "cancelled",
+          )
+          .map(messagePublicView),
       });
     },
 
@@ -1649,6 +1698,174 @@ export function createKorlixAgentEmailDraftService({
     },
 
     // K133_AGENT_EMAIL_DRAFT_REAPPROVAL_V1_BEGIN
+    async deleteDraft({
+      userId,
+      agentId,
+      messageId,
+      body,
+    }) {
+      const identity = await context({ userId, agentId });
+      const source = objectValue(body);
+
+      requireConfirmation(
+        source,
+        "Confirm that this unsent Nova email draft should be deleted.",
+        "agent_email_draft_delete_confirmation_required",
+      );
+
+      const existing = await loadMessage(identity, messageId);
+      const status = line(existing.status, 40).toLowerCase();
+
+      if (status === "cancelled") {
+        return Object.freeze({
+          draft: messagePublicView(existing),
+          replayed: true,
+          deleted: true,
+          softDeleted: true,
+          sent: false,
+        });
+      }
+
+      const metadata = objectValue(existing.metadata);
+      const providerMessageId =
+        line(existing.provider_message_id, 240);
+      const ambiguousProviderOutcome =
+        metadata.lastFailureAmbiguous === true ||
+        metadata.last_failure_ambiguous === true;
+
+      if (
+        !DELETABLE_MESSAGE_STATUSES.has(status) ||
+        existing.sent_at ||
+        providerMessageId ||
+        ambiguousProviderOutcome
+      ) {
+        fail(
+          "This email can no longer be deleted because a send is active, complete, or requires provider reconciliation.",
+          "agent_email_draft_not_deletable",
+          409,
+        );
+      }
+
+      if (existing.rule_id) {
+        const rule = await store.getRule(
+          identity.userId,
+          identity.agentId,
+          existing.rule_id,
+        );
+
+        if (!rule) {
+          fail(
+            "Review the linked schedule before deleting this draft.",
+            "agent_email_draft_schedule_review_required",
+            409,
+          );
+        }
+
+        if (
+          rule.enabled === true &&
+          !rule.completed_at &&
+          !rule.deleted_at
+        ) {
+          fail(
+            "Pause or cancel the linked schedule before deleting this draft.",
+            "agent_email_draft_schedule_active",
+            409,
+          );
+        }
+      }
+
+      const typedPhrase = line(
+        source.confirmationPhrase ??
+          source.confirmation_phrase,
+        80,
+      );
+
+      if (
+        TYPED_DRAFT_DELETE_STATUSES.has(status) &&
+        typedPhrase !== DRAFT_DELETE_CONFIRMATION_PHRASE
+      ) {
+        fail(
+          `Type ${DRAFT_DELETE_CONFIRMATION_PHRASE} to delete this ${status} draft.`,
+          "agent_email_draft_delete_phrase_required",
+          409,
+        );
+      }
+
+      const deletedAt = now().toISOString();
+
+      const row = await store.cancelMessage(
+        identity.userId,
+        identity.agentId,
+        existing.id,
+        {
+          status: "cancelled",
+          authorization_type: "none",
+          authorized_at: null,
+          authorized_by: null,
+          confirmation_nonce_hash: null,
+          scheduled_at: null,
+          metadata: {
+            ...metadata,
+            draftDeleted: true,
+            draftDeletedAt: deletedAt,
+            draftDeletedBy: identity.userId,
+            draftDeletePreviousStatus: status,
+            draftDeleteReason: "user_confirmed",
+            draftDeleteTypedConfirmationRequired:
+              TYPED_DRAFT_DELETE_STATUSES.has(status),
+          },
+        },
+      );
+
+      if (!row) {
+        const current = await store.getMessage(
+          identity.userId,
+          identity.agentId,
+          existing.id,
+        );
+
+        if (
+          line(current?.status, 40).toLowerCase() ===
+          "cancelled"
+        ) {
+          return Object.freeze({
+            draft: messagePublicView(current),
+            replayed: true,
+            deleted: true,
+            softDeleted: true,
+            sent: false,
+          });
+        }
+
+        fail(
+          "The draft changed while deletion was being confirmed. Refresh before trying again.",
+          "agent_email_draft_delete_raced_with_send",
+          409,
+        );
+      }
+
+      await recordEvent(
+        identity,
+        row.id,
+        "draft_deleted",
+        {
+          previousStatus: status,
+          hardDeleted: false,
+          authorizationRevoked: true,
+          scheduledAtCleared: true,
+          sent: false,
+        },
+      );
+
+      return Object.freeze({
+        draft: messagePublicView(row),
+        replayed: false,
+        deleted: true,
+        softDeleted: true,
+        sent: false,
+      });
+    },
+
     async approveDraft({ userId, agentId, messageId, body }) {
       const identity = await context({ userId, agentId });
       await settingsRequired(identity);
@@ -1895,6 +2112,7 @@ export function installKorlixAgentEmailDraftRoutes(
     typeof app.post !== "function" ||
     typeof app.put !== "function" ||
     typeof app.patch !== "function"
+    || typeof app.delete !== "function"
   ) {
     throw new TypeError("An Express-compatible application is required.");
   }
@@ -2076,6 +2294,23 @@ export function installKorlixAgentEmailDraftRoutes(
         res.json({
           ok: true,
           ...(await service.updateDraft({
+            userId,
+            agentId,
+            messageId: req.params.messageId,
+            body: req.body,
+          })),
+        }),
+    ),
+  );
+
+  app.delete(
+    routes.deleteDraft,
+    route(
+      "Could not delete Nova's email draft.",
+      async ({ req, res, userId, agentId }) =>
+        res.json({
+          ok: true,
+          ...(await service.deleteDraft({
             userId,
             agentId,
             messageId: req.params.messageId,
