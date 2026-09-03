@@ -678,6 +678,39 @@ export function createKorlixAgentEmailSupabaseStore(client) {
       return Math.max(0, Number(result?.count) || 0);
     },
 
+    // K134B_AUTHORITATIVE_DAILY_USAGE_V1_STORE_BEGIN
+    async countSendingSince(userId, agentId, since) {
+      let result;
+
+      try {
+        result = await client
+          .from(tables.messages)
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("agent_id", agentId)
+          .eq("status", "sending")
+          .gte("last_attempt_at", since);
+      } catch (error) {
+        throw databaseError(
+          error,
+          "count Nova's in-flight daily email sends",
+        );
+      }
+
+      if (result?.error) {
+        throw databaseError(
+          result.error,
+          "count Nova's in-flight daily email sends",
+        );
+      }
+
+      return Math.max(
+        0,
+        Number(result?.count) || 0,
+      );
+    },
+    // K134B_AUTHORITATIVE_DAILY_USAGE_V1_STORE_END
+
     async countRuleSentSince(userId, agentId, ruleId, since) {
       let result;
 

@@ -475,17 +475,88 @@ function timezoneOffsetMilliseconds(date, timeZone) {
   return representedAsUtc - date.getTime();
 }
 
-function zonedDayStart(date, timeZone) {
-  const parts = zonedParts(date, timeZone);
-  let candidate = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
-  for (let index = 0; index < 3; index += 1) {
-    candidate = new Date(
-      Date.UTC(parts.year, parts.month - 1, parts.day) -
-        timezoneOffsetMilliseconds(candidate, timeZone),
+// K134B_AUTHORITATIVE_DAILY_USAGE_V1_TIME_BEGIN
+function zonedCalendarDayStart(year, month, day, timeZone) {
+  const representedAsUtc =
+    Date.UTC(
+      year,
+      month - 1,
+      day,
     );
+
+  let candidate =
+    new Date(
+      representedAsUtc,
+    );
+
+  for (
+    let index = 0;
+    index < 3;
+    index += 1
+  ) {
+    candidate =
+      new Date(
+        representedAsUtc -
+          timezoneOffsetMilliseconds(
+            candidate,
+            timeZone,
+          ),
+      );
   }
+
   return candidate.toISOString();
 }
+
+function zonedDayStart(date, timeZone) {
+  const parts =
+    zonedParts(
+      date,
+      timeZone,
+    );
+
+  return zonedCalendarDayStart(
+    parts.year,
+    parts.month,
+    parts.day,
+    timeZone,
+  );
+}
+
+function zonedDayWindow(date, timeZone) {
+  const parts =
+    zonedParts(
+      date,
+      timeZone,
+    );
+
+  const nextCalendarDay =
+    new Date(
+      Date.UTC(
+        parts.year,
+        parts.month - 1,
+        parts.day + 1,
+      ),
+    );
+
+  return Object.freeze({
+    startAt:
+      zonedCalendarDayStart(
+        parts.year,
+        parts.month,
+        parts.day,
+        timeZone,
+      ),
+
+    endAt:
+      zonedCalendarDayStart(
+        nextCalendarDay.getUTCFullYear(),
+        nextCalendarDay.getUTCMonth() + 1,
+        nextCalendarDay.getUTCDate(),
+        timeZone,
+      ),
+  });
+}
+// K134B_AUTHORITATIVE_DAILY_USAGE_V1_TIME_END
 
 function withinSendWindow(date, settingsRow, allowedDays = null) {
   const metadata = objectValue(settingsRow?.metadata);
@@ -2324,11 +2395,96 @@ export function createKorlixAgentEmailDeliveryService({
       );
       const scheduler =
         korlixAgentEmailAutopilotSchedulerConfiguration(environment);
+
+      // K134B_AUTHORITATIVE_DAILY_USAGE_V1_STATUS_BEGIN
+      const settingsView =
+        settingsPublicView(
+          settingsRow,
+        );
+
+      const usageTimeZone =
+        settingsView.timezone ||
+        "UTC";
+
+      const usageWindow =
+        zonedDayWindow(
+          new Date(
+            now(),
+          ),
+          usageTimeZone,
+        );
+
+      const sentToday =
+        settingsRow
+          ? await store.countSentSince(
+              identity.userId,
+              identity.agentId,
+              usageWindow.startAt,
+            )
+          : 0;
+
+      const sendingToday =
+        settingsRow &&
+        typeof store.countSendingSince ===
+          "function"
+          ? await store.countSendingSince(
+              identity.userId,
+              identity.agentId,
+              usageWindow.startAt,
+            )
+          : 0;
+
+      const dailySendCap =
+        boundedInteger(
+          settingsRow?.daily_send_cap,
+          5,
+          1,
+          500,
+        );
+
+      const usedToday =
+        Math.max(
+          0,
+          sentToday +
+            sendingToday,
+        );
+
+      const remainingToday =
+        Math.max(
+          0,
+          dailySendCap -
+            usedToday,
+        );
+
+      const dailyUsage =
+        Object.freeze({
+          authoritative:
+            true,
+
+          source:
+            "agent_email_messages",
+
+          timezone:
+            usageTimeZone,
+
+          windowStartAt:
+            usageWindow.startAt,
+
+          windowEndAt:
+            usageWindow.endAt,
+
+          dailySendCap,
+          sentToday,
+          sendingToday,
+          usedToday,
+          remainingToday,
+        });
+      // K134B_AUTHORITATIVE_DAILY_USAGE_V1_STATUS_END
       return Object.freeze({
         agentId: identity.agentId,
         sameNova: status.sameNova,
         toolAuthorized: status.toolAuthorized,
-        settings: settingsPublicView(settingsRow),
+        settings: settingsView,
         providerConfigured: status.providerConfigured,
         sendRuntimeEnabled,
         autopilotRuntimeEnabled,
@@ -2349,6 +2505,18 @@ export function createKorlixAgentEmailDeliveryService({
           1,
           100,
         ),
+        dailyUsage,
+        dailySendCap,
+        sentToday,
+        sendingToday,
+        usedToday,
+        remainingToday,
+        dailyUsageTimezone:
+          usageTimeZone,
+        dailyUsageWindowStartAt:
+          usageWindow.startAt,
+        dailyUsageWindowEndAt:
+          usageWindow.endAt,
         outboundCallingPaused: true,
       });
     },
