@@ -1,0 +1,137 @@
+/* K134B_SAFE_DRAFT_DELETE_UI_V1_BEGIN */
+
+.k134b-delete-toolbar-button,
+.k134b-delete-button,
+.k134b-delete-details-button {
+  border-color: rgba(255, 92, 115, 0.7) !important;
+  color: #ffd8df !important;
+  background: rgba(130, 16, 38, 0.38) !important;
+}
+
+.k134b-delete-toolbar-button:hover,
+.k134b-delete-button:hover:not(:disabled),
+.k134b-delete-details-button:hover:not(:disabled) {
+  background: rgba(180, 24, 55, 0.58) !important;
+}
+
+.k134b-delete-overlay[hidden] {
+  display: none !important;
+}
+
+.k134b-delete-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(1, 7, 18, 0.82);
+  backdrop-filter: blur(12px);
+}
+
+.k134b-delete-dialog {
+  width: min(760px, 100%);
+  max-height: min(780px, 88vh);
+  overflow: auto;
+  border: 1px solid rgba(93, 201, 255, 0.32);
+  border-radius: 22px;
+  padding: 1.25rem;
+  background: #061225;
+  box-shadow: 0 26px 90px rgba(0, 0, 0, 0.55);
+}
+
+.k134b-delete-dialog-head,
+.k134b-delete-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.k134b-delete-dialog-head h2 {
+  margin: 0.2rem 0 0;
+}
+
+.k134b-delete-dialog-head small,
+.k134b-delete-row-copy small {
+  letter-spacing: 0.08em;
+  opacity: 0.62;
+}
+
+.k134b-delete-close {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 1.4rem;
+}
+
+.k134b-delete-help {
+  margin: 1rem 0;
+  opacity: 0.78;
+}
+
+.k134b-delete-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.k134b-delete-row {
+  border: 1px solid rgba(92, 198, 255, 0.22);
+  border-radius: 16px;
+  padding: 0.9rem;
+  background: rgba(3, 18, 38, 0.76);
+}
+
+.k134b-delete-row-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.22rem;
+}
+
+.k134b-delete-row-copy strong,
+.k134b-delete-row-copy span {
+  overflow-wrap: anywhere;
+}
+
+.k134b-delete-button {
+  flex: 0 0 auto;
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 0.58rem 0.85rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.k134b-delete-button:disabled,
+.k134b-delete-details-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.k134b-delete-empty {
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  padding: 1.2rem;
+  text-align: center;
+  opacity: 0.72;
+}
+
+html.k134b-delete-modal-open {
+  overflow: hidden;
+}
+
+@media (max-width: 620px) {
+  .k134b-delete-row {
+    flex-direction: column;
+  }
+
+  .k134b-delete-button {
+    width: 100%;
+  }
+}
+
+/* K134B_SAFE_DRAFT_DELETE_UI_V1_END */
