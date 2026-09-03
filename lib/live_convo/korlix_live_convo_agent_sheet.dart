@@ -10,6 +10,7 @@ import 'korlix_live_convo_agent.dart';
 import 'korlix_live_convo_agent_client.dart';
 import 'korlix_live_convo_brain_vault.dart';
 import 'korlix_live_convo_agent_file_memory_sheet.dart';
+import 'korlix_live_convo_agent_email_sheet.dart';
 
 // KORLIX_LIVE_CONVO_AGENT_SHEET_BUILD131_BEGIN
 
@@ -724,6 +725,25 @@ class _KorlixLiveConvoAgentHubSheetState
                       icon: const Icon(Icons.psychology_alt_rounded),
                       label: const Text('Memory'),
                     ),
+                    // KORLIX_AGENT_EMAIL_BUTTON_BUILD133_BEGIN
+                    if (agent.isCustom && agent.toolIds.contains('agent_email'))
+                      OutlinedButton.icon(
+                        onPressed: enabled
+                            ? () {
+                                unawaited(_openAgentEmail(agent));
+                              }
+                            : null,
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: accent),
+                          foregroundColor: accent,
+                        ),
+                        icon: const Icon(Icons.alternate_email_rounded),
+                        label: const Text(
+                          'Agent Email',
+                          style: TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    // KORLIX_AGENT_EMAIL_BUTTON_BUILD133_END
                     OutlinedButton.icon(
                       onPressed: enabled
                           ? () {
@@ -1742,6 +1762,16 @@ class _KorlixLiveConvoAgentHubSheetState
       );
     }
   }
+
+  // KORLIX_AGENT_EMAIL_OPEN_METHOD_BUILD133_BEGIN
+  Future<void> _openAgentEmail(KorlixLiveConvoAgent agent) async {
+    await showKorlixLiveConvoAgentEmailSheet(
+      context: context,
+      client: widget.client,
+      agent: agent,
+    );
+  }
+  // KORLIX_AGENT_EMAIL_OPEN_METHOD_BUILD133_END
 
   Future<void> _openBrainVault(KorlixLiveConvoAgent agent) async {
     final unlockedAt = await _unlockBrainVault(agent);

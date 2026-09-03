@@ -1,0 +1,128 @@
+/* K134B_NOVA_EMAIL_SCHEDULE_DASHBOARD_V1_BEGIN */
+
+.k134b-schedule-panel {
+  grid-column: 1 / -1;
+}
+
+.k134b-schedule-metrics {
+  margin-bottom: 1rem;
+}
+
+.k134b-schedule-list {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.k134b-schedule-row {
+  border: 1px solid rgba(92, 198, 255, 0.28);
+  border-radius: 18px;
+  padding: 1rem;
+  background: rgba(4, 20, 42, 0.72);
+}
+
+.k134b-schedule-row[data-state="red"] {
+  border-color: rgba(255, 112, 112, 0.55);
+}
+
+.k134b-schedule-row-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.k134b-schedule-row-head strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.k134b-schedule-row-head small {
+  display: block;
+  margin-top: 0.25rem;
+  opacity: 0.72;
+}
+
+.k134b-schedule-badge {
+  border-radius: 999px;
+  padding: 0.28rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.k134b-schedule-badge.green {
+  background: rgba(50, 214, 151, 0.16);
+  color: #72f1bd;
+}
+
+.k134b-schedule-badge.gold {
+  background: rgba(243, 190, 73, 0.16);
+  color: #ffd778;
+}
+
+.k134b-schedule-badge.red {
+  background: rgba(255, 90, 90, 0.16);
+  color: #ff9b9b;
+}
+
+.k134b-schedule-badge.muted {
+  background: rgba(148, 163, 184, 0.16);
+  color: #cbd5e1;
+}
+
+.k134b-schedule-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      4,
+      minmax(0, 1fr)
+    );
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.k134b-schedule-grid div {
+  min-width: 0;
+}
+
+.k134b-schedule-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.k134b-schedule-grid dt {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.k134b-schedule-grid dd {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.k134b-schedule-stop {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .k134b-schedule-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+}
+
+@media (max-width: 560px) {
+  .k134b-schedule-row-head {
+    flex-direction: column;
+  }
+
+  .k134b-schedule-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* K134B_NOVA_EMAIL_SCHEDULE_DASHBOARD_V1_END */

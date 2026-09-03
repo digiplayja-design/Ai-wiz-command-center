@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">KORLIX AI</title>
+  <desc id="desc">KORLIX cyan circuit intelligence emblem.</desc>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="70%">
+      <stop offset="0" stop-color="#082a4a"/>
+      <stop offset="0.65" stop-color="#03162d"/>
+      <stop offset="1" stop-color="#010813"/>
+    </radialGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#66f4ff"/>
+      <stop offset="0.5" stop-color="#00d7ed"/>
+      <stop offset="1" stop-color="#058ec2"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <g fill="none" stroke="url(#cyan)" filter="url(#glow)">
+    <circle cx="256" cy="256" r="203" stroke-width="9"/>
+    <circle cx="256" cy="256" r="180" stroke-width="3" opacity=".7"/>
+    <path d="M86 190h31l18-26 31-7 16-39 33-8 15-20h58" stroke-width="7"/>
+    <path d="M427 324h-31l-18 27-34 8-14 36-38 7-13 18h-61" stroke-width="7"/>
+    <path d="M354 86l26 25 36 5 14 29" stroke-width="6" opacity=".75"/>
+    <path d="M86 336l25 15 7 34 34 22" stroke-width="6" opacity=".55"/>
+  </g>
+
+  <g fill="url(#cyan)" filter="url(#glow)">
+    <path d="M164 225c0-28 15-58 43-71 16-8 33-11 49-11s33 3 49 11c28 13 43 43 43 71v73c0 55-43 103-92 103s-92-48-92-103z"/>
+    <ellipse cx="147" cy="267" rx="22" ry="34"/>
+    <ellipse cx="365" cy="267" rx="22" ry="34"/>
+  </g>
+
+  <g fill="#03162d">
+    <path d="M190 238l49 22-49 18z"/>
+    <path d="M322 238l-49 22 49 18z"/>
+    <path d="M226 344l30 11 30-11-30 24z"/>
+    <circle cx="256" cy="307" r="18"/>
+  </g>
+
+  <g stroke="#70f8ff" stroke-width="7" stroke-linecap="round" fill="#70f8ff" filter="url(#glow)">
+    <path d="M256 307V124"/>
+    <path d="M256 206l-42-42v-61"/>
+    <path d="M256 206l42-42v-61"/>
+    <path d="M233 181v-94"/>
+    <path d="M279 181V87"/>
+    <path d="M205 171v-61"/>
+    <path d="M307 171v-61"/>
+    <circle cx="214" cy="101" r="8"/>
+    <circle cx="298" cy="101" r="8"/>
+    <circle cx="233" cy="80" r="8"/>
+    <circle cx="279" cy="80" r="8"/>
+    <circle cx="205" cy="103" r="8"/>
+    <circle cx="307" cy="103" r="8"/>
+  </g>
+</svg>

@@ -1,0 +1,964 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1,viewport-fit=cover"
+  >
+  <meta
+    name="description"
+    content="KORLIX AI Nova Autonomous Email Control Center"
+  >
+  <meta name="theme-color" content="#020914">
+
+  <title>KORLIX AI — Nova Email Control Center</title>
+
+  <link
+    rel="icon"
+    type="image/jpeg"
+    href="./assets/korlix-nova-logo-v2.jpeg?v=20260825"
+  >
+  <link rel="stylesheet" href="./styles.css?v=k133-draft-nonce-controls-v1-20260830">
+  <meta name="korlix-build" content="K133_NOVA_EMAIL_WEB_AUTH_LOGO_FIX_V2">
+  <meta name="korlix-draft-controls-build" content="K133_NOVA_EMAIL_DRAFT_NONCE_CONTROLS_V1">
+  <meta name="korlix-tool-auth-build" content="K133_NOVA_EMAIL_TOOL_AUTH_V3">
+
+  <!-- K133_NOVA_EMAIL_TEMPLATE_RULE_BUILDER_INDEX_BINDING_V1_HEAD -->
+  <meta name="korlix-template-rule-builder-build" content="K133_NOVA_EMAIL_TEMPLATE_RULE_BUILDER_V1">
+  <link rel="stylesheet" href="./template-rule-builder.css?v=k133-template-rule-builder-v1-r1">
+  <link rel="stylesheet" href="k134b-schedule-dashboard.css">
+</head>
+
+<body>
+  <div class="background-grid" aria-hidden="true"></div>
+
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <img
+          class="brand-logo"
+          src="./assets/korlix-nova-logo-v2.jpeg?v=20260825"
+          alt="KORLIX AI"
+        >
+        <div>
+          <div class="brand-name">KORLIX <span>AI</span></div>
+          <div class="brand-caption">INTELLIGENCE SYSTEMS</div>
+        </div>
+      </div>
+
+      <nav class="navigation" aria-label="Nova Email sections">
+        <button class="nav-item active" data-section="command">
+          <span class="nav-icon">◉</span>
+          <span>Command Center</span>
+        </button>
+
+        <button class="nav-item" data-section="drafts">
+          <span class="nav-icon">▤</span>
+          <span>Drafts</span>
+        </button>
+
+        <button class="nav-item" data-section="recipients">
+          <span class="nav-icon">♙</span>
+          <span>Recipients</span>
+        </button>
+
+        <button class="nav-item" data-section="templates">
+          <span class="nav-icon">▧</span>
+          <span>Templates</span>
+        </button>
+
+        <button class="nav-item" data-section="analytics">
+          <span class="nav-icon">⌁</span>
+          <span>Analytics</span>
+        </button>
+
+        <button class="nav-item" data-section="logs">
+          <span class="nav-icon">☷</span>
+          <span>Logs</span>
+        </button>
+
+        <button class="nav-item" data-section="settings">
+          <span class="nav-icon">⚙</span>
+          <span>Settings</span>
+        </button>
+
+        <button class="nav-item" data-section="integrations">
+          <span class="nav-icon">⛓</span>
+          <span>Integrations</span>
+        </button>
+
+        <button class="nav-item" data-section="health">
+          <span class="nav-icon">♡</span>
+          <span>Health</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-spacer"></div>
+
+      <section class="sidebar-widget">
+        <span class="eyebrow">SYSTEM TIME</span>
+        <strong id="systemDate">—</strong>
+        <span id="systemTime">—</span>
+      </section>
+
+      <section class="sidebar-widget plan-widget">
+        <span class="plan-icon">♛</span>
+        <div>
+          <span class="eyebrow">KORLIX AI PLAN</span>
+          <strong>Enterprise</strong>
+        </div>
+        <span class="state-positive">Active</span>
+      </section>
+
+      <button class="account-card" id="connectionButton">
+        <span class="avatar">KA</span>
+        <span class="account-details">
+          <strong>KORLIX Admin</strong>
+          <small id="connectionLabel">Connect session</small>
+        </span>
+        <span>⌄</span>
+      </button>
+    </aside>
+
+    <main class="main-content">
+      <header class="top-header">
+        <button
+          class="mobile-menu"
+          id="mobileMenuButton"
+          aria-label="Open menu"
+        >☰</button>
+
+        <div>
+          <h1>NOVA AUTONOMOUS EMAIL CONTROL CENTER</h1>
+          <p>
+            Command and monitor Nova’s autonomous email system in real time.
+          </p>
+        </div>
+
+        <div class="header-actions">
+          <span
+            class="connection-state"
+            id="connectionState"
+          >
+            <i></i>
+            Not connected
+          </span>
+
+          <button
+            class="button button-secondary"
+            id="refreshButton"
+          >
+            ↻ Refresh
+          </button>
+
+          <button
+            class="button button-primary"
+            id="createDraftButton"
+          >
+            ＋ Create Draft
+          </button>
+
+          <button
+            class="button button-warning"
+            id="pauseSystemButton"
+          >
+            Ⅱ Pause Nova
+          </button>
+        </div>
+      </header>
+
+      <section class="status-strip" aria-label="System status">
+        <article class="status-card">
+          <span class="status-icon green">➤</span>
+          <div>
+            <small>SYSTEM STATUS</small>
+            <strong
+              id="systemStatus"
+              class="state-positive"
+            >CONNECTING</strong>
+          </div>
+          <i class="indicator" id="systemStatusIndicator"></i>
+        </article>
+
+        <article class="status-card">
+          <span class="status-icon green">⌘</span>
+          <div>
+            <small>RESEND WEBHOOK</small>
+            <strong
+              id="webhookStatus"
+              class="state-neutral"
+            >—</strong>
+          </div>
+          <i class="indicator" id="webhookIndicator"></i>
+        </article>
+
+        <article class="status-card">
+          <span class="status-icon blue">◌</span>
+          <div>
+            <small>AUTOPILOT</small>
+            <strong
+              id="autopilotStatus"
+              class="state-neutral"
+            >—</strong>
+          </div>
+          <i class="indicator" id="autopilotIndicator"></i>
+        </article>
+
+        <article class="status-card">
+          <span class="status-icon muted">Ⅱ</span>
+          <div>
+            <small>EMERGENCY PAUSE</small>
+            <strong id="pauseStatus">—</strong>
+          </div>
+          <i class="indicator" id="pauseIndicator"></i>
+        </article>
+
+        <article class="status-card gold-card">
+          <span class="status-icon gold">◔</span>
+          <div>
+            <small>DAILY CAP</small>
+            <strong id="dailyCapStatus">— / DAY</strong>
+          </div>
+          <i class="indicator gold-indicator"></i>
+        </article>
+      </section>
+
+      <section class="dashboard-grid">
+        <article
+          class="panel send-controls-panel"
+          id="commandPanel"
+        >
+          <div class="panel-heading">
+            <h2>⚙ AUTONOMOUS SEND CONTROLS</h2>
+          </div>
+
+          <div class="control-row">
+            <div>
+              <strong>Autopilot Mode</strong>
+              <p>
+                Nova monitors approved triggers and sends within configured
+                safety limits.
+              </p>
+            </div>
+
+            <label class="switch">
+              <input
+                type="checkbox"
+                id="autopilotToggle"
+              >
+              <span></span>
+            </label>
+          </div>
+
+          <button
+            class="wide-control-button"
+            id="stopAutopilotButton"
+          >
+            STOP AUTOPILOT
+            <span>■</span>
+          </button>
+
+          <div class="cap-block">
+            <div class="cap-heading">
+              <span>Daily Cap</span>
+              <strong id="dailyCapLabel">5 emails per day</strong>
+            </div>
+
+            <div class="progress-track">
+              <div
+                class="progress-value"
+                id="dailyCapProgress"
+              ></div>
+            </div>
+
+            <small id="dailyCapUsage">0 / 5 used</small>
+          </div>
+
+          <div class="quiet-hours">
+            <span>Quiet Hours</span>
+            <strong id="quietHoursValue">10:00 PM – 6:00 AM</strong>
+            <span class="moon">◒</span>
+          </div>
+        </article>
+
+        <article
+          class="panel"
+          id="recipientsPanel"
+        >
+          <div class="panel-heading">
+            <h2>♙ APPROVED RECIPIENTS</h2>
+
+            <button
+              class="small-action"
+              id="manageRecipientsButton"
+            >
+              Manage
+            </button>
+          </div>
+
+          <div class="metric-pair">
+            <div>
+              <strong id="recipientCount">0</strong>
+              <span>Active Recipients</span>
+            </div>
+
+            <div class="positive-metric">
+              <strong id="recipientRecentCount">+0</strong>
+              <span>Added recently</span>
+            </div>
+          </div>
+
+          <div
+            class="compact-list"
+            id="recipientList"
+          >
+            <div class="empty-state">
+              Connect your KORLIX session to load approved recipients.
+            </div>
+          </div>
+
+          <button
+            class="panel-footer-button"
+            id="manageRecipientsFooterButton"
+          >
+            MANAGE RECIPIENTS
+            <span>›</span>
+          </button>
+        </article>
+
+        <article
+          class="panel"
+          id="draftsPanel"
+        >
+          <div class="panel-heading">
+            <h2>▧ DRAFT QUEUE</h2>
+
+            <button
+              class="small-action"
+              id="viewDraftsButton"
+            >
+              View all
+            </button>
+          </div>
+
+          <div class="metric-pair">
+            <div>
+              <strong id="draftCount">0</strong>
+              <span>Drafts Ready</span>
+            </div>
+          </div>
+
+          <div
+            class="draft-list"
+            id="draftList"
+          >
+            <div class="empty-state">
+              No Agent Email drafts loaded.
+            </div>
+          </div>
+
+          <button
+            class="panel-footer-button"
+            id="viewDraftsFooterButton"
+          >
+            VIEW ALL DRAFTS
+            <span>›</span>
+          </button>
+        </article>
+
+        <article
+          class="panel"
+          id="analyticsPanel"
+        >
+          <div class="panel-heading">
+            <h2>▣ DELIVERY TIMELINE (TODAY)</h2>
+          </div>
+
+          <div class="timeline-metrics">
+            <div>
+              <span>Sent</span>
+              <strong id="sentMetric">0</strong>
+            </div>
+
+            <div>
+              <span>Delivered</span>
+              <strong id="deliveredMetric">0</strong>
+            </div>
+
+            <div>
+              <span>Opened</span>
+              <strong id="openedMetric">0</strong>
+            </div>
+
+            <div>
+              <span>Clicked</span>
+              <strong id="clickedMetric">0</strong>
+            </div>
+          </div>
+
+          <div class="chart-area">
+            <svg
+              viewBox="0 0 560 210"
+              role="img"
+              aria-label="Delivery activity chart"
+            >
+              <g class="chart-grid">
+                <line x1="45" y1="25" x2="540" y2="25"/>
+                <line x1="45" y1="75" x2="540" y2="75"/>
+                <line x1="45" y1="125" x2="540" y2="125"/>
+                <line x1="45" y1="175" x2="540" y2="175"/>
+              </g>
+
+              <polyline
+                id="deliveryChartLine"
+                points="45,175 125,175 205,175 285,175 365,175 445,175 540,175"
+              />
+
+              <g class="chart-labels">
+                <text x="45" y="203">12 AM</text>
+                <text x="122" y="203">4 AM</text>
+                <text x="200" y="203">8 AM</text>
+                <text x="277" y="203">12 PM</text>
+                <text x="368" y="203">4 PM</text>
+                <text x="446" y="203">8 PM</text>
+              </g>
+            </svg>
+          </div>
+
+          <div class="panel-note">
+            Last refreshed:
+            <strong id="lastRefreshValue">—</strong>
+          </div>
+        </article>
+
+        <article
+          class="panel"
+          id="logsPanel"
+        >
+          <div class="panel-heading">
+            <h2>ϟ RESEND EVENT FEED</h2>
+
+            <button
+              class="small-action"
+              id="viewLogsButton"
+            >
+              View logs
+            </button>
+          </div>
+
+          <div
+            class="event-list"
+            id="eventList"
+          >
+            <div class="empty-state">
+              No Agent Email events loaded.
+            </div>
+          </div>
+
+          <button
+            class="panel-footer-button"
+            id="viewLogsFooterButton"
+          >
+            VIEW FULL LOGS
+            <span>›</span>
+          </button>
+        </article>
+
+        <article
+          class="panel"
+          id="healthPanel"
+        >
+          <div class="panel-heading">
+            <h2>♡ HEALTH CHECKS</h2>
+
+            <button
+              class="small-action"
+              id="viewHealthButton"
+            >
+              Refresh
+            </button>
+          </div>
+
+          <div class="health-list">
+            <div class="health-row">
+              <i></i>
+              <span>Production API</span>
+              <strong id="healthApi">CHECKING</strong>
+            </div>
+
+            <div class="health-row">
+              <i></i>
+              <span>Webhook Listener</span>
+              <strong id="healthWebhook">CHECKING</strong>
+            </div>
+
+            <div class="health-row">
+              <i></i>
+              <span>Database</span>
+              <strong id="healthDatabase">CHECKING</strong>
+            </div>
+
+            <div class="health-row">
+              <i></i>
+              <span>Autopilot Engine</span>
+              <strong id="healthAutopilot">CHECKING</strong>
+            </div>
+
+            <div class="health-row">
+              <i></i>
+              <span>Agent Email Runtime</span>
+              <strong id="healthEmail">CHECKING</strong>
+            </div>
+
+            <div class="health-row">
+              <i></i>
+              <span>Rate Limit Monitor</span>
+              <strong id="healthLimits">CHECKING</strong>
+            </div>
+          </div>
+
+          <button
+            class="panel-footer-button"
+            id="viewHealthFooterButton"
+          >
+            REFRESH HEALTH
+            <span>›</span>
+          </button>
+        </article>
+      </section>
+
+      <footer class="footer">
+        <span>KORLIX AI</span>
+        <i>•</i>
+        <span>NOVA AUTONOMOUS EMAIL SYSTEM</span>
+        <img
+          src="./assets/korlix-nova-logo-v2.jpeg?v=20260825"
+          alt=""
+          aria-hidden="true"
+        >
+      </footer>
+    </main>
+  </div>
+
+  <div
+    class="modal-backdrop hidden"
+    id="connectionModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="connectionModalTitle"
+  >
+    <section class="modal-card">
+      <button
+        class="modal-close"
+        data-close-modal="connectionModal"
+        aria-label="Close"
+      >×</button>
+
+      <img
+        class="modal-logo"
+        src="./assets/korlix-nova-logo-v2.jpeg?v=20260825"
+        alt="KORLIX AI"
+      >
+
+      <h2 id="connectionModalTitle">
+        Connect Nova Email
+      </h2>
+
+      <p>
+        This page uses your existing signed-in KORLIX browser session.
+        Sign in through the main KORLIX web app first.
+      </p>
+
+      <label>
+        Nova Agent ID
+        <input
+          id="agentIdInput"
+          type="text"
+          autocomplete="off"
+          placeholder="Nova Agent Hub ID"
+        >
+      </label>
+
+      <label>
+        Production API
+        <input
+          id="apiBaseInput"
+          type="url"
+          autocomplete="off"
+          value="https://chee-chai-chee-backend.onrender.com"
+        >
+      </label>
+
+      <div class="modal-actions">
+        <button
+          class="button button-secondary"
+          id="openKorlixAppButton"
+        >
+          Open KORLIX Login
+        </button>
+
+        <button
+          class="button button-primary"
+          id="connectSessionButton"
+        >
+          Connect Session
+        </button>
+      </div>
+
+      <div
+        class="form-message"
+        id="connectionMessage"
+      ></div>
+    </section>
+  </div>
+
+  <div
+    class="modal-backdrop hidden"
+    id="recipientModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="recipientModalTitle"
+  >
+    <section class="modal-card">
+      <button
+        class="modal-close"
+        data-close-modal="recipientModal"
+        aria-label="Close"
+      >×</button>
+
+      <h2 id="recipientModalTitle">
+        Add Approved Recipient
+      </h2>
+
+      <p>
+        Only add an address you own or have permission to contact.
+      </p>
+
+      <form id="recipientForm">
+        <label>
+          Name
+          <input
+            id="recipientNameInput"
+            type="text"
+            required
+            maxlength="160"
+          >
+        </label>
+
+        <label>
+          Email
+          <input
+            id="recipientEmailInput"
+            type="email"
+            required
+            maxlength="320"
+          >
+        </label>
+
+        <label class="confirmation-check">
+          <input
+            id="recipientPermissionInput"
+            type="checkbox"
+            required
+          >
+          <span>
+            I confirm this recipient was entered by me and is approved
+            for transactional email.
+          </span>
+        </label>
+
+        <div class="modal-actions">
+          <button
+            class="button button-primary"
+            type="submit"
+          >
+            Save Recipient
+          </button>
+        </div>
+
+        <div
+          class="form-message"
+          id="recipientMessage"
+        ></div>
+      </form>
+    </section>
+  </div>
+
+  <div
+    class="modal-backdrop hidden"
+    id="draftModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="draftModalTitle"
+  >
+    <section class="modal-card modal-wide">
+      <button
+        class="modal-close"
+        data-close-modal="draftModal"
+        aria-label="Close"
+      >×</button>
+
+      <h2 id="draftModalTitle">
+        Create Nova Email Draft
+      </h2>
+
+      <form id="draftForm">
+        <label>
+          Approved Recipient
+          <select
+            id="draftRecipientInput"
+            required
+          >
+            <option value="">
+              Select an approved recipient
+            </option>
+          </select>
+        </label>
+
+        <label>
+          Subject
+          <input
+            id="draftSubjectInput"
+            type="text"
+            required
+            maxlength="240"
+          >
+        </label>
+
+        <label>
+          Message
+          <textarea
+            id="draftBodyInput"
+            required
+            rows="10"
+            maxlength="12000"
+          ></textarea>
+        </label>
+
+        <label class="confirmation-check">
+          <input
+            id="draftTransactionalInput"
+            type="checkbox"
+            required
+          >
+          <span>
+            This is a non-marketing transactional email.
+          </span>
+        </label>
+
+        <div class="modal-actions">
+          <button
+            class="button button-secondary"
+            type="button"
+            data-close-modal="draftModal"
+          >
+            Cancel
+          </button>
+
+          <button
+            class="button button-primary"
+            type="submit"
+          >
+            Save Draft
+          </button>
+        </div>
+
+        <div
+          class="form-message"
+          id="draftMessage"
+        ></div>
+      </form>
+    </section>
+  </div>
+
+  <div
+    class="modal-backdrop hidden"
+    id="detailsModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="detailsModalTitle"
+  >
+    <section class="modal-card modal-wide">
+      <button
+        class="modal-close"
+        data-close-modal="detailsModal"
+        aria-label="Close"
+      >×</button>
+
+      <h2 id="detailsModalTitle">
+        Draft Details
+      </h2>
+
+      <div
+        class="draft-details"
+        id="draftDetails"
+      ></div>
+
+      <p
+        class="draft-authorization-note"
+        id="draftAuthorizationNote"
+        aria-live="polite"
+      >
+        Approval and sending are separate. A one-time authorization is
+        kept only in this open browser tab.
+      </p>
+
+      <div class="modal-actions details-modal-actions">
+        <button
+          class="button button-secondary"
+          id="editDraftButton"
+          type="button"
+        >
+          Edit Draft
+        </button>
+
+        <button
+          class="button button-primary"
+          id="approveDraftButton"
+          type="button"
+        >
+          Approve Only
+        </button>
+
+        <button
+          class="button button-primary"
+          id="reapproveDraftButton"
+          type="button"
+          hidden
+        >
+          Reapprove
+        </button>
+
+        <button
+          class="button button-warning"
+          id="approveSendButton"
+          type="button"
+        >
+          Approve &amp; Send
+        </button>
+
+        <button
+          class="button button-warning"
+          id="sendApprovedButton"
+          type="button"
+          hidden
+        >
+          Send Approved
+        </button>
+      </div>
+
+      <div
+        class="form-message"
+        id="detailsMessage"
+        aria-live="polite"
+      ></div>
+    </section>
+  </div>
+
+  <div
+    class="modal-backdrop hidden"
+    id="editDraftModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="editDraftModalTitle"
+  >
+    <section class="modal-card modal-wide">
+      <button
+        class="modal-close"
+        data-close-modal="editDraftModal"
+        aria-label="Close"
+      >×</button>
+
+      <h2 id="editDraftModalTitle">
+        Edit Nova Email Draft
+      </h2>
+
+      <p>
+        Saving changes resets any prior one-time approval. Nothing is
+        sent from this form.
+      </p>
+
+      <form id="editDraftForm">
+        <label>
+          Approved Recipient
+          <select
+            id="editDraftRecipientInput"
+            required
+          >
+            <option value="">
+              Select an approved recipient
+            </option>
+          </select>
+        </label>
+
+        <label>
+          Subject
+          <input
+            id="editDraftSubjectInput"
+            type="text"
+            required
+            maxlength="240"
+          >
+        </label>
+
+        <label>
+          Message
+          <textarea
+            id="editDraftBodyInput"
+            required
+            rows="10"
+            maxlength="12000"
+          ></textarea>
+        </label>
+
+        <label class="confirmation-check">
+          <input
+            id="editDraftTransactionalInput"
+            type="checkbox"
+            required
+          >
+          <span>
+            This is a non-marketing transactional email.
+          </span>
+        </label>
+
+        <div class="modal-actions">
+          <button
+            class="button button-secondary"
+            type="button"
+            data-close-modal="editDraftModal"
+          >
+            Cancel
+          </button>
+
+          <button
+            class="button button-primary"
+            id="editDraftSaveButton"
+            type="submit"
+          >
+            Save Changes
+          </button>
+        </div>
+
+        <div
+          class="form-message"
+          id="editDraftMessage"
+          aria-live="polite"
+        ></div>
+      </form>
+    </section>
+  </div>
+
+  <div
+    class="toast-container"
+    id="toastContainer"
+    aria-live="polite"
+  ></div>
+
+  <script src="./app.js?v=k133-draft-nonce-controls-v1-20260830"></script>
+  <!-- K133_NOVA_EMAIL_TEMPLATE_RULE_BUILDER_INDEX_BINDING_V1_SCRIPT -->
+  <script src="./template-rule-builder.js?v=k133-template-rule-builder-v1-r1"></script>
+  <script src="k134b-schedule-dashboard.js" defer></script>
+</body>
+</html>
