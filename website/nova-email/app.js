@@ -1582,6 +1582,169 @@ function renderDelivery() {
     new Date().toLocaleTimeString();
 }
 
+// K134B_AUTHORITATIVE_DAILY_USAGE_UI_V1_BEGIN
+function authoritativeDailyUsage(root) {
+  const delivery =
+    APP.delivery || {};
+
+  const daily =
+    firstDefined(
+      delivery.dailyUsage,
+      delivery.daily_usage,
+      root.dailyUsage,
+      root.daily_usage,
+      {},
+    ) || {};
+
+  const dailySendCap =
+    Math.max(
+      1,
+      Math.trunc(
+        asNumber(
+          firstDefined(
+            daily.dailySendCap,
+            daily.daily_send_cap,
+            delivery.dailySendCap,
+            delivery.daily_send_cap,
+            root.dailySendCap,
+            root.daily_send_cap,
+            APP.settings.dailySendCap,
+            APP.settings.daily_send_cap,
+            5,
+          ),
+          5,
+        ),
+      ),
+    );
+
+  const sentToday =
+    Math.max(
+      0,
+      Math.trunc(
+        asNumber(
+          firstDefined(
+            daily.sentToday,
+            daily.sent_today,
+            delivery.sentToday,
+            delivery.sent_today,
+            root.sentToday,
+            root.sent_today,
+            0,
+          ),
+          0,
+        ),
+      ),
+    );
+
+  const sendingToday =
+    Math.max(
+      0,
+      Math.trunc(
+        asNumber(
+          firstDefined(
+            daily.sendingToday,
+            daily.sending_today,
+            delivery.sendingToday,
+            delivery.sending_today,
+            root.sendingToday,
+            root.sending_today,
+            0,
+          ),
+          0,
+        ),
+      ),
+    );
+
+  const usedToday =
+    Math.max(
+      0,
+      Math.trunc(
+        asNumber(
+          firstDefined(
+            daily.usedToday,
+            daily.used_today,
+            delivery.usedToday,
+            delivery.used_today,
+            root.usedToday,
+            root.used_today,
+            sentToday +
+              sendingToday,
+          ),
+          sentToday +
+            sendingToday,
+        ),
+      ),
+    );
+
+  const remainingToday =
+    Math.max(
+      0,
+      Math.trunc(
+        asNumber(
+          firstDefined(
+            daily.remainingToday,
+            daily.remaining_today,
+            delivery.remainingToday,
+            delivery.remaining_today,
+            root.remainingToday,
+            root.remaining_today,
+            dailySendCap -
+              usedToday,
+          ),
+          dailySendCap -
+            usedToday,
+        ),
+      ),
+    );
+
+  return Object.freeze({
+    authoritative:
+      daily.authoritative ===
+      true,
+
+    dailySendCap,
+    sentToday,
+    sendingToday,
+    usedToday,
+    remainingToday,
+
+    timezone:
+      String(
+        firstDefined(
+          daily.timezone,
+          delivery.dailyUsageTimezone,
+          root.dailyUsageTimezone,
+          APP.settings.timezone,
+          "UTC",
+        ),
+      ),
+
+    windowStartAt:
+      firstDefined(
+        daily.windowStartAt,
+        daily.window_start_at,
+        delivery.dailyUsageWindowStartAt,
+        root.dailyUsageWindowStartAt,
+        null,
+      ),
+
+    windowEndAt:
+      firstDefined(
+        daily.windowEndAt,
+        daily.window_end_at,
+        delivery.dailyUsageWindowEndAt,
+        root.dailyUsageWindowEndAt,
+        null,
+      ),
+  });
+}
+
+globalThis.KorlixK134BAuthoritativeDailyUsageTest =
+  Object.freeze({
+    authoritativeDailyUsage,
+  });
+// K134B_AUTHORITATIVE_DAILY_USAGE_UI_V1_END
+
 function renderDashboard() {
   const root =
     statusRoot(APP.statusPayload);
@@ -1638,36 +1801,14 @@ function renderDashboard() {
     true,
   );
 
-  const dailyCap = Math.max(
-    1,
-    asNumber(
-      firstDefined(
-        APP.settings.dailySendCap,
-        APP.settings.daily_send_cap,
-        root.dailySendCap,
-        APP.delivery.dailySendCap,
-        5,
-      ),
-      5,
-    ),
-  );
+  const dailyUsage =
+    authoritativeDailyUsage(root);
 
-  const metrics =
-    calculateDeliveryMetrics();
+  const dailyCap =
+    dailyUsage.dailySendCap;
 
-  const used = Math.min(
-    dailyCap,
-    Math.max(
-      metrics.sent,
-      asNumber(
-        firstDefined(
-          root.sentToday,
-          APP.delivery.sentToday,
-          0,
-        ),
-      ),
-    ),
-  );
+  const used =
+    dailyUsage.usedToday;
 
   setTopStatus({
     operational: enabled,
@@ -1681,7 +1822,11 @@ function renderDashboard() {
     `${dailyCap} emails per day`;
 
   els.dailyCapUsage.textContent =
-    `${used} / ${dailyCap} used`;
+    `${used} / ${dailyCap} used today`;
+
+  els.dailyCapUsage.title =
+    `${dailyUsage.remainingToday} remaining · ` +
+    `resets at midnight ${dailyUsage.timezone}`;
 
   els.dailyCapProgress.style.width =
     `${Math.min(
