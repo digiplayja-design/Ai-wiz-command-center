@@ -38,6 +38,8 @@ import 'billing/korlix_apple_billing.dart';
 import 'privacy/korlix_third_party_ai_consent.dart';
 
 import 'meeting_copilot/korlix_meeting_copilot_route.dart';
+import 'meeting_copilot/korlix_meeting_copilot_auth_bridge.dart';
+
 const String kKorlixImaginePicturePrompt =
     'Describe the picture you want Korlix AI to create.';
 
@@ -277,6 +279,10 @@ class CheeChaiCheeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorObservers: <NavigatorObserver>[
+        kKorlixMeetingCopilotAuthObserver,
+      ],
+
       routes: <String, WidgetBuilder>{
         KorlixMeetingCopilotRoute.routeName: (_) =>
             const KorlixMeetingCopilotRoute(),
@@ -2192,7 +2198,6 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     }
   }
 
-
   // KORLIX_SAVED_SETTINGS_DELETE_BUILD131_V1_BEGIN
 
   Map<String, dynamic> _savedSettingsResponseJson(http.Response response) {
@@ -2235,10 +2240,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
           ),
           content: Text(
             message,
-            style: const TextStyle(
-              color: Color(0xFFA9C6CF),
-              height: 1.4,
-            ),
+            style: const TextStyle(color: Color(0xFFA9C6CF), height: 1.4),
           ),
           actions: [
             TextButton(
@@ -2281,7 +2283,9 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     final data = _savedSettingsResponseJson(response);
 
     if (response.statusCode >= 400) {
-      throw Exception(data['error'] ?? 'Could not delete the saved generation.');
+      throw Exception(
+        data['error'] ?? 'Could not delete the saved generation.',
+      );
     }
   }
 
@@ -2453,11 +2457,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
               .get(uri, headers: _headers())
               .timeout(const Duration(seconds: 25))
         : await http
-              .post(
-                uri,
-                headers: _headers(),
-                body: jsonEncode(body),
-              )
+              .post(uri, headers: _headers(), body: jsonEncode(body))
               .timeout(const Duration(seconds: 25));
     final data = _savedSettingsResponseJson(response);
 
@@ -2470,9 +2470,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     return data;
   }
 
-  Future<bool> _openBrainVaultCredentialDialog({
-    required String mode,
-  }) async {
+  Future<bool> _openBrainVaultCredentialDialog({required String mode}) async {
     final isSet = mode == 'set';
     final isChange = mode == 'change';
     final isReset = mode == 'reset';
@@ -2834,7 +2832,8 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     );
     final lockedUntilRaw = status['lockedUntil']?.toString().trim() ?? '';
     final lockedUntil = DateTime.tryParse(lockedUntilRaw);
-    final currentlyLocked = lockedUntil != null &&
+    final currentlyLocked =
+        lockedUntil != null &&
         lockedUntil.toUtc().isAfter(DateTime.now().toUtc());
 
     await showModalBottomSheet<void>(
@@ -2898,9 +2897,13 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                           height: 52,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(16),
-                            color: const Color(0xFFB794F4).withValues(alpha: 0.14),
+                            color: const Color(
+                              0xFFB794F4,
+                            ).withValues(alpha: 0.14),
                             border: Border.all(
-                              color: const Color(0xFFB794F4).withValues(alpha: 0.58),
+                              color: const Color(
+                                0xFFB794F4,
+                              ).withValues(alpha: 0.58),
                             ),
                           ),
                           child: const Icon(
@@ -3119,9 +3122,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
       decoration: last
           ? null
           : const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: Color(0xFF17303A)),
-              ),
+              border: Border(bottom: BorderSide(color: Color(0xFF17303A))),
             ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3992,412 +3993,428 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
             builder: (context, setPanelState) {
               return SafeArea(
                 child: DraggableScrollableSheet(
-              expand: false,
-              initialChildSize: 0.78,
-              minChildSize: 0.45,
-              maxChildSize: 0.92,
-              builder: (context, controller) {
-                return ListView(
-                  controller: controller,
-                  padding: const EdgeInsets.all(22),
-                  children: [
-                    Row(
+                  expand: false,
+                  initialChildSize: 0.78,
+                  minChildSize: 0.45,
+                  maxChildSize: 0.92,
+                  builder: (context, controller) {
+                    return ListView(
+                      controller: controller,
+                      padding: const EdgeInsets.all(22),
                       children: [
-                        Image.asset(
-                          'assets/branding/korlix_mini_mark.png',
-                          height: 38,
-                          fit: BoxFit.contain,
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Text(
-                            'Korlix Account',
-                            style: TextStyle(
-                              color: Color(0xFFE4EBEE),
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
+                        Row(
+                          children: [
+                            Image.asset(
+                              'assets/branding/korlix_mini_mark.png',
+                              height: 38,
+                              fit: BoxFit.contain,
                             ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.25),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: const Color(0xFF2EC7DF).withOpacity(0.35),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${tier.toUpperCase()} PLAN',
-                            style: const TextStyle(
-                              color: Color(0xFF69D9E8),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.8,
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Text(
+                                'Korlix Account',
+                                style: TextStyle(
+                                  color: Color(0xFFE4EBEE),
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            dailyLimit > 0
-                                ? '$remaining of $dailyLimit daily generations remaining'
-                                : 'Custom usage limits',
-                            style: const TextStyle(
-                              color: Color(0xFFE4EBEE),
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Signed in as ${kKorlixUserEmail ?? 'Korlix user'}',
-                            style: const TextStyle(
-                              color: Color(0xFFA9C6CF),
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    FilledButton.icon(
-                      onPressed: () => _openPlansPanel(currentTier: tier),
-                      icon: const Icon(Icons.workspace_premium_rounded),
-                      label: const Text('View plans / upgrade'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF143B4A),
-                        foregroundColor: const Color(0xFFE4EBEE),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(999),
+                          ],
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    FilledButton.icon(
-                      onPressed: () => _openCharactersPanel(
-                        currentTier: tier,
-                        selectedCharacterId:
-                            (profile['selected_character'] ?? 'jj').toString(),
-                        characters: characters,
-                        characterAccess: characterAccess,
-                      ),
-                      icon: const Icon(Icons.groups_rounded),
-                      label: const Text('View characters'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF0A2B3D),
-                        foregroundColor: const Color(0xFFE4EBEE),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 10),
-                    FilledButton.icon(
-                      onPressed: _openComingSoonPanel,
-                      icon: const Icon(Icons.upcoming_rounded),
-                      label: const Text('Coming Soon'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF143B4A),
-                        foregroundColor: const Color(0xFFE4EBEE),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: () => _openThemePanel(
-                        currentTier: tier,
-                        currentTheme:
-                            (profile['preferred_theme'] ?? 'korlix_blue')
-                                .toString(),
-                      ),
-                      icon: const Icon(Icons.palette_outlined),
-                      label: const Text('Color Theme'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: tier == 'ultra' || tier == 'enterprise'
-                            ? const Color(0xFFFFD166)
-                            : const Color(0xFFA9C6CF),
-                        side: BorderSide(
-                          color:
-                              (tier == 'ultra' || tier == 'enterprise'
-                                      ? const Color(0xFFFFD166)
-                                      : const Color(0xFFA9C6CF))
-                                  .withOpacity(0.50),
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    // KORLIX_BRAIN_VAULT_ACCOUNT_MANAGER_SETTINGS_BUILD131_V1_BEGIN
-                    OutlinedButton.icon(
-                      onPressed: _openBrainVaultSecuritySettings,
-                      icon: const Icon(Icons.admin_panel_settings_rounded),
-                      label: const Text('BRAIN VAULT Security'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFFDFC9FF),
-                        side: BorderSide(
-                          color: const Color(0xFFB794F4).withValues(alpha: 0.68),
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
-                    // KORLIX_BRAIN_VAULT_ACCOUNT_MANAGER_SETTINGS_BUILD131_V1_END
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: _requestAccountDeletion,
-                      icon: const Icon(Icons.delete_forever_rounded),
-                      label: const Text('Request account deletion'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.redAccent,
-                        side: BorderSide(
-                          color: Colors.redAccent.withOpacity(0.55),
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            'Saved Settings',
-                            style: TextStyle(
-                              color: Color(0xFFE4EBEE),
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                        if (history.isNotEmpty)
-                          TextButton.icon(
-                            onPressed: historyDeleteBusy
-                                ? null
-                                : () async {
-                                    setPanelState(() {
-                                      historyDeleteBusy = true;
-                                    });
-
-                                    try {
-                                      final deletedCount =
-                                          await _deleteAllSavedHistoryItems(
-                                            loadedCount: history.length,
-                                          );
-
-                                      if (deletedCount == null ||
-                                          !context.mounted) {
-                                        return;
-                                      }
-
-                                      setPanelState(() {
-                                        history.clear();
-                                      });
-
-                                      ScaffoldMessenger.of(context)
-                                        ..hideCurrentSnackBar()
-                                        ..showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              deletedCount == 1
-                                                  ? '1 saved generation deleted.'
-                                                  : '$deletedCount saved generations deleted.',
-                                            ),
-                                          ),
-                                        );
-                                    } finally {
-                                      if (context.mounted) {
-                                        setPanelState(() {
-                                          historyDeleteBusy = false;
-                                        });
-                                      }
-                                    }
-                                  },
-                            icon: historyDeleteBusy
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.delete_sweep_rounded),
-                            label: Text(
-                              historyDeleteBusy ? 'Deleting…' : 'Delete All',
-                            ),
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.redAccent,
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    if (history.isEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.22),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.white10),
-                        ),
-                        child: const Text(
-                          'No saved generations yet.',
-                          style: TextStyle(color: Color(0xFFA9C6CF)),
-                        ),
-                      )
-                    else
-                      ...history.take(20).map((item) {
-                        final row = (item as Map).cast<String, dynamic>();
-                        final historyId = (row['id'] ?? '').toString().trim();
-                        final prompt = (row['prompt'] ?? '').toString();
-                        final response = (row['response'] ?? '').toString();
-                        final resultType = (row['result_type'] ?? 'answer')
-                            .toString()
-                            .toUpperCase();
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(14),
+                        const SizedBox(height: 18),
+                        Container(
+                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.22),
-                            borderRadius: BorderRadius.circular(16),
+                            color: Colors.black.withOpacity(0.25),
+                            borderRadius: BorderRadius.circular(18),
                             border: Border.all(
-                              color: const Color(0xFF2EC7DF).withOpacity(0.22),
+                              color: const Color(0xFF2EC7DF).withOpacity(0.35),
                             ),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                resultType,
+                                '${tier.toUpperCase()} PLAN',
                                 style: const TextStyle(
                                   color: Color(0xFF69D9E8),
-                                  fontSize: 11,
+                                  fontSize: 13,
                                   fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.7,
+                                  letterSpacing: 0.8,
                                 ),
                               ),
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 8),
                               Text(
-                                prompt,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                                dailyLimit > 0
+                                    ? '$remaining of $dailyLimit daily generations remaining'
+                                    : 'Custom usage limits',
                                 style: const TextStyle(
                                   color: Color(0xFFE4EBEE),
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                response,
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
+                                'Signed in as ${kKorlixUserEmail ?? 'Korlix user'}',
                                 style: const TextStyle(
                                   color: Color(0xFFA9C6CF),
                                   fontSize: 13,
-                                  height: 1.35,
                                 ),
-                              ),
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  TextButton.icon(
-                                    onPressed: () => _reportHistoryItem(
-                                      generationId: historyId,
-                                      prompt: prompt,
-                                    ),
-                                    icon: const Icon(
-                                      Icons.flag_outlined,
-                                      size: 17,
-                                    ),
-                                    label: const Text('Report Output'),
-                                    style: TextButton.styleFrom(
-                                      foregroundColor: const Color(0xFF69D9E8),
-                                      padding: EdgeInsets.zero,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  IconButton(
-                                    tooltip: 'Delete saved generation',
-                                    onPressed:
-                                        historyDeleteBusy || historyId.isEmpty
-                                        ? null
-                                        : () async {
-                                            setPanelState(() {
-                                              historyDeleteBusy = true;
-                                            });
-
-                                            try {
-                                              final deleted =
-                                                  await _deleteSavedHistoryItem(
-                                                    historyId: historyId,
-                                                    prompt: prompt,
-                                                  );
-
-                                              if (!deleted ||
-                                                  !context.mounted) {
-                                                return;
-                                              }
-
-                                              setPanelState(() {
-                                                history.removeWhere((candidate) {
-                                                  if (candidate is! Map) {
-                                                    return false;
-                                                  }
-
-                                                  return (candidate['id'] ?? '')
-                                                          .toString()
-                                                          .trim() ==
-                                                      historyId;
-                                                });
-                                              });
-
-                                              ScaffoldMessenger.of(context)
-                                                ..hideCurrentSnackBar()
-                                                ..showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text(
-                                                      'Saved generation deleted.',
-                                                    ),
-                                                  ),
-                                                );
-                                            } finally {
-                                              if (context.mounted) {
-                                                setPanelState(() {
-                                                  historyDeleteBusy = false;
-                                                });
-                                              }
-                                            }
-                                          },
-                                    icon: const Icon(
-                                      Icons.delete_outline_rounded,
-                                    ),
-                                    color: Colors.redAccent,
-                                  ),
-                                ],
                               ),
                             ],
                           ),
-                        );
-                      }),
-                  ],
-                );
-              },
-            ),
-          );
+                        ),
+                        const SizedBox(height: 14),
+                        FilledButton.icon(
+                          onPressed: () => _openPlansPanel(currentTier: tier),
+                          icon: const Icon(Icons.workspace_premium_rounded),
+                          label: const Text('View plans / upgrade'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF143B4A),
+                            foregroundColor: const Color(0xFFE4EBEE),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        FilledButton.icon(
+                          onPressed: () => _openCharactersPanel(
+                            currentTier: tier,
+                            selectedCharacterId:
+                                (profile['selected_character'] ?? 'jj')
+                                    .toString(),
+                            characters: characters,
+                            characterAccess: characterAccess,
+                          ),
+                          icon: const Icon(Icons.groups_rounded),
+                          label: const Text('View characters'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF0A2B3D),
+                            foregroundColor: const Color(0xFFE4EBEE),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 10),
+                        FilledButton.icon(
+                          onPressed: _openComingSoonPanel,
+                          icon: const Icon(Icons.upcoming_rounded),
+                          label: const Text('Coming Soon'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF143B4A),
+                            foregroundColor: const Color(0xFFE4EBEE),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                          onPressed: () => _openThemePanel(
+                            currentTier: tier,
+                            currentTheme:
+                                (profile['preferred_theme'] ?? 'korlix_blue')
+                                    .toString(),
+                          ),
+                          icon: const Icon(Icons.palette_outlined),
+                          label: const Text('Color Theme'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor:
+                                tier == 'ultra' || tier == 'enterprise'
+                                ? const Color(0xFFFFD166)
+                                : const Color(0xFFA9C6CF),
+                            side: BorderSide(
+                              color:
+                                  (tier == 'ultra' || tier == 'enterprise'
+                                          ? const Color(0xFFFFD166)
+                                          : const Color(0xFFA9C6CF))
+                                      .withOpacity(0.50),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        // KORLIX_BRAIN_VAULT_ACCOUNT_MANAGER_SETTINGS_BUILD131_V1_BEGIN
+                        OutlinedButton.icon(
+                          onPressed: _openBrainVaultSecuritySettings,
+                          icon: const Icon(Icons.admin_panel_settings_rounded),
+                          label: const Text('BRAIN VAULT Security'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFDFC9FF),
+                            side: BorderSide(
+                              color: const Color(
+                                0xFFB794F4,
+                              ).withValues(alpha: 0.68),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ),
+                        // KORLIX_BRAIN_VAULT_ACCOUNT_MANAGER_SETTINGS_BUILD131_V1_END
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                          onPressed: _requestAccountDeletion,
+                          icon: const Icon(Icons.delete_forever_rounded),
+                          label: const Text('Request account deletion'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.redAccent,
+                            side: BorderSide(
+                              color: Colors.redAccent.withOpacity(0.55),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 22),
+                        Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Saved Settings',
+                                style: TextStyle(
+                                  color: Color(0xFFE4EBEE),
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                            if (history.isNotEmpty)
+                              TextButton.icon(
+                                onPressed: historyDeleteBusy
+                                    ? null
+                                    : () async {
+                                        setPanelState(() {
+                                          historyDeleteBusy = true;
+                                        });
+
+                                        try {
+                                          final deletedCount =
+                                              await _deleteAllSavedHistoryItems(
+                                                loadedCount: history.length,
+                                              );
+
+                                          if (deletedCount == null ||
+                                              !context.mounted) {
+                                            return;
+                                          }
+
+                                          setPanelState(() {
+                                            history.clear();
+                                          });
+
+                                          ScaffoldMessenger.of(context)
+                                            ..hideCurrentSnackBar()
+                                            ..showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  deletedCount == 1
+                                                      ? '1 saved generation deleted.'
+                                                      : '$deletedCount saved generations deleted.',
+                                                ),
+                                              ),
+                                            );
+                                        } finally {
+                                          if (context.mounted) {
+                                            setPanelState(() {
+                                              historyDeleteBusy = false;
+                                            });
+                                          }
+                                        }
+                                      },
+                                icon: historyDeleteBusy
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.delete_sweep_rounded),
+                                label: Text(
+                                  historyDeleteBusy
+                                      ? 'Deleting…'
+                                      : 'Delete All',
+                                ),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.redAccent,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        if (history.isEmpty)
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.22),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.white10),
+                            ),
+                            child: const Text(
+                              'No saved generations yet.',
+                              style: TextStyle(color: Color(0xFFA9C6CF)),
+                            ),
+                          )
+                        else
+                          ...history.take(20).map((item) {
+                            final row = (item as Map).cast<String, dynamic>();
+                            final historyId = (row['id'] ?? '')
+                                .toString()
+                                .trim();
+                            final prompt = (row['prompt'] ?? '').toString();
+                            final response = (row['response'] ?? '').toString();
+                            final resultType = (row['result_type'] ?? 'answer')
+                                .toString()
+                                .toUpperCase();
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.22),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: const Color(
+                                    0xFF2EC7DF,
+                                  ).withOpacity(0.22),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    resultType,
+                                    style: const TextStyle(
+                                      color: Color(0xFF69D9E8),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.7,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    prompt,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Color(0xFFE4EBEE),
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    response,
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Color(0xFFA9C6CF),
+                                      fontSize: 13,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    children: [
+                                      TextButton.icon(
+                                        onPressed: () => _reportHistoryItem(
+                                          generationId: historyId,
+                                          prompt: prompt,
+                                        ),
+                                        icon: const Icon(
+                                          Icons.flag_outlined,
+                                          size: 17,
+                                        ),
+                                        label: const Text('Report Output'),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: const Color(
+                                            0xFF69D9E8,
+                                          ),
+                                          padding: EdgeInsets.zero,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      IconButton(
+                                        tooltip: 'Delete saved generation',
+                                        onPressed:
+                                            historyDeleteBusy ||
+                                                historyId.isEmpty
+                                            ? null
+                                            : () async {
+                                                setPanelState(() {
+                                                  historyDeleteBusy = true;
+                                                });
+
+                                                try {
+                                                  final deleted =
+                                                      await _deleteSavedHistoryItem(
+                                                        historyId: historyId,
+                                                        prompt: prompt,
+                                                      );
+
+                                                  if (!deleted ||
+                                                      !context.mounted) {
+                                                    return;
+                                                  }
+
+                                                  setPanelState(() {
+                                                    history.removeWhere((
+                                                      candidate,
+                                                    ) {
+                                                      if (candidate is! Map) {
+                                                        return false;
+                                                      }
+
+                                                      return (candidate['id'] ??
+                                                                  '')
+                                                              .toString()
+                                                              .trim() ==
+                                                          historyId;
+                                                    });
+                                                  });
+
+                                                  ScaffoldMessenger.of(context)
+                                                    ..hideCurrentSnackBar()
+                                                    ..showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text(
+                                                          'Saved generation deleted.',
+                                                        ),
+                                                      ),
+                                                    );
+                                                } finally {
+                                                  if (context.mounted) {
+                                                    setPanelState(() {
+                                                      historyDeleteBusy = false;
+                                                    });
+                                                  }
+                                                }
+                                              },
+                                        icon: const Icon(
+                                          Icons.delete_outline_rounded,
+                                        ),
+                                        color: Colors.redAccent,
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                      ],
+                    );
+                  },
+                ),
+              );
             },
           );
         },
@@ -17076,6 +17093,30 @@ Make the entire output professional, well-structured using Markdown, and product
   }
   // KORLIX_LIVE_CONVO_PHASE2B_OPEN_END
 
+  // K135Z_B4A_AUTHENTICATED_MEETING_COPILOT_OPEN_BEGIN
+  Future<void> _openMeetingCopilot() async {
+    final session = Supabase.instance.client.auth.currentSession;
+
+    if (session == null) {
+      await korlixRememberPendingMeetingCopilotRoute();
+
+      await _showKorlixNotice(
+        title: 'Sign in required',
+        message: 'Please sign in before opening Nova Meeting Copilot.',
+      );
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    await Navigator.of(
+      context,
+    ).pushNamed<void>(KorlixMeetingCopilotRoute.routeName);
+  }
+  // K135Z_B4A_AUTHENTICATED_MEETING_COPILOT_OPEN_END
+
   Widget _buildCommandPanel() {
     final t = _t;
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
@@ -17393,6 +17434,16 @@ Make the entire output professional, well-structured using Markdown, and product
                   runSpacing: 8,
                   alignment: WrapAlignment.center,
                   children: [
+                    // K135Z_B4A_MEETING_COPILOT_COMMAND_CENTER_ENTRY_BEGIN
+                    toolButton(
+                      icon: Icons.video_call_rounded,
+                      label: 'Meeting Copilot',
+                      locked: false,
+                      success: false,
+                      active: false,
+                      onPressed: _loading ? null : _openMeetingCopilot,
+                    ),
+                    // K135Z_B4A_MEETING_COPILOT_COMMAND_CENTER_ENTRY_END
                     toolButton(
                       icon: Icons.attach_file_rounded,
                       label: 'Upload',
