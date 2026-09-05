@@ -37,6 +37,7 @@ import 'live_convo/korlix_live_convo_test_screen.dart';
 import 'billing/korlix_apple_billing.dart';
 import 'privacy/korlix_third_party_ai_consent.dart';
 
+import 'meeting_copilot/korlix_meeting_copilot_route.dart';
 const String kKorlixImaginePicturePrompt =
     'Describe the picture you want Korlix AI to create.';
 
@@ -276,6 +277,10 @@ class CheeChaiCheeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      routes: <String, WidgetBuilder>{
+        KorlixMeetingCopilotRoute.routeName: (_) =>
+            const KorlixMeetingCopilotRoute(),
+      },
       title: 'Korlix AI',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
