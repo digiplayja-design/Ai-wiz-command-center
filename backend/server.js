@@ -24,6 +24,7 @@ import {
   korlixAgentSaveTrainingV1,
   korlixAgentUpdateProfileV1,
 } from "./korlix_live_convo_agents.js";
+import k136sLearningMount from "./k136s_learning/http/mount.cjs"; // K136S-F1
 import {
   installKorlixAgentEmailDraftRoutes,
 } from "./korlix_agent_email_routes.mjs"; // KORLIX_AGENT_EMAIL_DRAFT_ROUTES_BUILD133_IMPORT
@@ -13125,6 +13126,7 @@ installKorlixVapiNovaRoutes(app, {
 });
 // KORLIX_VAPI_NOVA_BUILD133_INSTALL_END
 
+k136sLearningMount.mountK136S(app, { supabaseAdmin, requireUser, korlixAgentSaveMemoryV1, korlixAgentListMemoriesV1 }); // K136S-F1
 app.use("/api", (req, res) => {
   return res.status(404).json({
     error: `API route not found: ${req.method} ${req.originalUrl}`,

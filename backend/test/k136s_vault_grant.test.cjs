@@ -171,11 +171,14 @@ test('socket: grant forwards exactly once to the real verify path with relayed a
   } finally { await close(preview); await close(backend); }
 });
 
-test('socket: backend down -> 503; backend hanging -> 503 after the timeout; never a grant', async () => {
-  // a port we KNOW is closed: bind, record the port, then close before use
-  const probe = http.createServer(() => {}); const deadPort = await listen(probe); await close(probe);
-  const down = createServer({ key: KEY, now: Date.now, vaultVerifier: createHttpVerifier({ backendUrl: `http://127.0.0.1:${deadPort}`, timeoutMs: 1000 }) });
-  // a backend that accepts the connection but never answers
+test('socket: backend refusing/hanging -> 503, never a grant (deterministic: no reliance on an unbound port)', async () => {
+  // "down" backend: accepts the TCP connection and immediately destroys it -> ECONNRESET every time.
+  // (An unbound ephemeral port can be re-bound by a parallel test process; this cannot.)
+  const resetting = http.createServer(() => {});
+  resetting.on('connection', (sock) => sock.destroy());
+  const rport = await listen(resetting);
+  const down = createServer({ key: KEY, now: Date.now, vaultVerifier: createHttpVerifier({ backendUrl: `http://127.0.0.1:${rport}`, timeoutMs: 1000 }) });
+  // "hanging" backend: accepts and never answers -> verifier timeout.
   const sockets = new Set();
   const hanging = http.createServer(() => { /* never responds */ });
   hanging.on('connection', (sock) => { sockets.add(sock); sock.on('close', () => sockets.delete(sock)); });
@@ -189,7 +192,7 @@ test('socket: backend down -> 503; backend hanging -> 503 after the timeout; nev
     assert.equal(r2.status, 503); assert.equal(r2.json.code, 'BACKEND_UNAVAILABLE'); assert.ok(!r2.json.grant);
   } finally {
     await close(down); await close(slow);
-    for (const sock of sockets) sock.destroy();   // release the stuck connection so close() can complete
-    await close(hanging);
+    for (const sock of sockets) sock.destroy();
+    await close(hanging); await close(resetting);
   }
 });
