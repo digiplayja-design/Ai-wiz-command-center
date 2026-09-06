@@ -9,6 +9,8 @@
 // callers and tests are unchanged) and additionally attaches `handle.async(req)`, which serves
 // POST /k136s/grant (the vault-backed issuer, which must await the backend) and otherwise delegates
 // to the synchronous path. The server uses `handle.async`.
+// K136S-E: `handle.async` also serves POST /k136s/approve/request and /k136s/approve/confirm via an
+// injected `approvalRoutes` object (see approval_routes.cjs), after verifying the preview grant.
 const { normalize, contentHash, diffWords } = require('../domain/normalize_diff.cjs');
 const { classify, reclassify } = require('../domain/classifier.cjs');
 const { check: checkPolicy } = require('../domain/policy_check.cjs');
@@ -16,7 +18,8 @@ const { verifyGrant, mintGrant } = require('./grant.cjs');
 const { issueVaultGrant } = require('./vault_grant_issuer.cjs');
 
 const VERSION = 'C1';   // API version reported by /k136s/health; unchanged from C for compatibility
-const BUILD = 'D1';     // stage marker
+const BUILD = 'D1';     // kept for compatibility with D's tests; see STAGE
+const STAGE = 'E1';     // current stage marker
 const MAX_BODY_BYTES = 65536; // 64 KiB hard cap; the server also caps, this is defense in depth
 const MAX_TEXT = 8000;        // reject absurd inputs early (policy still enforces its own 2000 limit)
 
@@ -76,7 +79,7 @@ function buildPreview({ agentId, proposedText, currentText, overrides }, now) {
 }
 
 // createPreviewHandler -> handle({ method, path, headers, rawBody }) -> { status, json }
-function createPreviewHandler({ key, allowDevGrant = false, now = Date.now, vaultVerifier = null, relayHeaderNames = undefined, grantTtlMs = undefined } = {}) {
+function createPreviewHandler({ key, allowDevGrant = false, now = Date.now, vaultVerifier = null, relayHeaderNames = undefined, grantTtlMs = undefined, approvalRoutes = null } = {}) {
   const clock = typeof now === 'function' ? now : () => now;
 
   const handle = function handle(req) {
@@ -86,7 +89,7 @@ function createPreviewHandler({ key, allowDevGrant = false, now = Date.now, vaul
     const headers = (req && req.headers) || {};
 
     if (method === 'GET' && path === '/k136s/health') {
-      return json(200, { ok: true, service: 'k136s-preview', version: VERSION, build: BUILD, devGrant: !!allowDevGrant, vaultGrant: typeof vaultVerifier === 'function' });
+      return json(200, { ok: true, service: 'k136s-preview', version: VERSION, build: BUILD, stage: STAGE, devGrant: !!allowDevGrant, vaultGrant: typeof vaultVerifier === 'function', approvals: !!(approvalRoutes && typeof approvalRoutes.confirm === 'function') });
     }
 
     // Dev-only grant issuer. Present ONLY when explicitly enabled; the real vault-backed issuer is K136S-D.
@@ -151,10 +154,22 @@ function createPreviewHandler({ key, allowDevGrant = false, now = Date.now, vaul
         verify: vaultVerifier, relayHeaderNames,
       });
     }
+    if (method === 'POST' && (path === '/k136s/approve/request' || path === '/k136s/approve/confirm')) {
+      if (!approvalRoutes) return json(503, { error: 'approval routes not configured', code: 'APPROVALS_NOT_CONFIGURED' });
+      const headers = (req && req.headers) || {};
+      const token = headers['x-k136s-grant'] || headers['X-K136S-Grant'];
+      const v = verifyGrant(token, { now: clock(), key });
+      if (!v.ok) return json(401, { error: 'preview grant required', code: v.code });
+      let body;
+      try { body = parseBody(req && req.rawBody); }
+      catch (e) { return e.tooLarge ? json(413, { error: 'payload too large' }) : json(400, { error: 'invalid JSON body' }); }
+      const fn = path.endsWith('/request') ? approvalRoutes.request : approvalRoutes.confirm;
+      return fn({ headers, body, grantPayload: v.payload });
+    }
     return handle(req);
   };
 
   return handle;
 }
 
-module.exports = Object.freeze({ createPreviewHandler, buildPreview, VERSION, BUILD, MAX_BODY_BYTES, MAX_TEXT });
+module.exports = Object.freeze({ createPreviewHandler, buildPreview, VERSION, BUILD, STAGE, MAX_BODY_BYTES, MAX_TEXT });

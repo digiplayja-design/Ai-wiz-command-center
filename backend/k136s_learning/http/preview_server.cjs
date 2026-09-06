@@ -8,9 +8,17 @@
 // K136S_BACKEND_URL (default http://127.0.0.1:8787) at /api/brain-vault/password/verify, relaying the
 // caller's K136S_RELAY_HEADERS (default authorization,cookie). Nothing about the request body or the
 // caller's headers is ever logged here.
+// K136S-E adds the approve/confirm routes. In this standalone server they are DEV-ONLY: identity comes
+// from x-k136s-dev-user / x-k136s-dev-account headers when K136S_ALLOW_DEV_IDENTITY=1, and writes go to
+// an in-memory fake writer when K136S_ALLOW_FAKE_WRITER=1. Without those flags the routes fail closed
+// (503). No service-role key is ever read here; the real identity + korlixAgentSaveMemoryV1 are bound at F.
 const http = require('node:http');
 const { createPreviewHandler, MAX_BODY_BYTES } = require('./preview_handler.cjs');
 const { createHttpVerifier, parseRelayHeaders, DEFAULT_BACKEND_URL, DEFAULT_TIMEOUT_MS } = require('./vault_grant_issuer.cjs');
+const { createApprovalRoutes } = require('./approval_routes.cjs');
+const { createApprovalService } = require('../services/approval_service.cjs');
+const { createMemoryStore } = require('../adapters/memory_store.cjs');
+const { createFakeMemoryWriter } = require('../adapters/memory_writer.cjs');
 
 const DEFAULT_PORT = 7461;      // K136S reserved range is 7460-7469
 const DEFAULT_HOST = '127.0.0.1'; // loopback only; forwarding is opt-in via the Codespaces Ports panel
@@ -22,8 +30,8 @@ function send(res, status, obj) {
 }
 
 // createServer returns an http.Server WITHOUT listening, so tests can bind an ephemeral port.
-function createServer({ key, allowDevGrant = false, now = Date.now, maxBodyBytes = MAX_BODY_BYTES, vaultVerifier = null, relayHeaderNames = undefined, grantTtlMs = undefined } = {}) {
-  const handle = createPreviewHandler({ key, allowDevGrant, now, vaultVerifier, relayHeaderNames, grantTtlMs });
+function createServer({ key, allowDevGrant = false, now = Date.now, maxBodyBytes = MAX_BODY_BYTES, vaultVerifier = null, relayHeaderNames = undefined, grantTtlMs = undefined, approvalRoutes = null } = {}) {
+  const handle = createPreviewHandler({ key, allowDevGrant, now, vaultVerifier, relayHeaderNames, grantTtlMs, approvalRoutes });
   return http.createServer((req, res) => {
     const chunks = [];
     let size = 0;
@@ -59,9 +67,17 @@ function start() {
   const relayHeaderNames = parseRelayHeaders(process.env.K136S_RELAY_HEADERS);
   const timeoutMs = Number(process.env.K136S_VERIFY_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
   const vaultVerifier = createHttpVerifier({ backendUrl, timeoutMs });
-  const server = createServer({ key, allowDevGrant, now: Date.now, vaultVerifier, relayHeaderNames });
+  // K136S-E: approval routes with DEV-ONLY identity + fake writer (env-gated); otherwise fail closed.
+  const allowDevIdentity = process.env.K136S_ALLOW_DEV_IDENTITY === '1';
+  const allowFakeWriter = process.env.K136S_ALLOW_FAKE_WRITER === '1';
+  const store = createMemoryStore();
+  const approvals = createApprovalService({ store, now: Date.now });
+  const identity = allowDevIdentity ? (h) => { const u = h['x-k136s-dev-user']; const a = h['x-k136s-dev-account']; return (typeof u === 'string' && u && typeof a === 'string' && a) ? { userId: u, accountId: a } : null; } : null;
+  const writer = allowFakeWriter ? createFakeMemoryWriter({ now: Date.now }) : null;
+  const approvalRoutes = createApprovalRoutes({ store, approvals, writer, identity, now: Date.now });
+  const server = createServer({ key, allowDevGrant, now: Date.now, vaultVerifier, relayHeaderNames, approvalRoutes });
   server.listen(port, host, () => {
-    console.log(`k136s-preview listening on http://${host}:${port}  (dev-grant: ${allowDevGrant ? 'ON' : 'off'}; vault-grant -> ${backendUrl}; relay: ${relayHeaderNames.join(',')}; read-only, no DB)`);
+    console.log(`k136s-preview listening on http://${host}:${port}  (dev-grant: ${allowDevGrant ? 'ON' : 'off'}; vault-grant -> ${backendUrl}; relay: ${relayHeaderNames.join(',')}; approvals: dev-identity ${allowDevIdentity ? 'ON' : 'off'}, writer ${allowFakeWriter ? 'FAKE(in-memory)' : 'none'}; no DB)`);
   });
   const shutdown = (sig) => { console.log(`k136s-preview received ${sig}, closing`); server.close(() => process.exit(0)); };
   process.on('SIGINT', () => shutdown('SIGINT'));
