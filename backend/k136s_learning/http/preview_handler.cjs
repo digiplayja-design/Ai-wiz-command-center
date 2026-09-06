@@ -4,12 +4,19 @@
 // sockets, issues no approval tokens, and touches no database. All effects (reading the socket,
 // writing the response) live in preview_server.cjs. This module is exhaustively unit-testable
 // without a running server.
+//
+// K136S-D: `createPreviewHandler(...)` still returns the synchronous `handle(req)` from C (so existing
+// callers and tests are unchanged) and additionally attaches `handle.async(req)`, which serves
+// POST /k136s/grant (the vault-backed issuer, which must await the backend) and otherwise delegates
+// to the synchronous path. The server uses `handle.async`.
 const { normalize, contentHash, diffWords } = require('../domain/normalize_diff.cjs');
 const { classify, reclassify } = require('../domain/classifier.cjs');
 const { check: checkPolicy } = require('../domain/policy_check.cjs');
 const { verifyGrant, mintGrant } = require('./grant.cjs');
+const { issueVaultGrant } = require('./vault_grant_issuer.cjs');
 
-const VERSION = 'C1';
+const VERSION = 'C1';   // API version reported by /k136s/health; unchanged from C for compatibility
+const BUILD = 'D1';     // stage marker
 const MAX_BODY_BYTES = 65536; // 64 KiB hard cap; the server also caps, this is defense in depth
 const MAX_TEXT = 8000;        // reject absurd inputs early (policy still enforces its own 2000 limit)
 
@@ -69,17 +76,17 @@ function buildPreview({ agentId, proposedText, currentText, overrides }, now) {
 }
 
 // createPreviewHandler -> handle({ method, path, headers, rawBody }) -> { status, json }
-function createPreviewHandler({ key, allowDevGrant = false, now = Date.now } = {}) {
+function createPreviewHandler({ key, allowDevGrant = false, now = Date.now, vaultVerifier = null, relayHeaderNames = undefined, grantTtlMs = undefined } = {}) {
   const clock = typeof now === 'function' ? now : () => now;
 
-  return function handle(req) {
+  const handle = function handle(req) {
     const method = (req && req.method ? String(req.method) : 'GET').toUpperCase();
     const rawPath = req && req.path ? String(req.path) : '/';
     const path = rawPath.split('?')[0].replace(/\/+$/, '') || '/';
     const headers = (req && req.headers) || {};
 
     if (method === 'GET' && path === '/k136s/health') {
-      return json(200, { ok: true, service: 'k136s-preview', version: VERSION, devGrant: !!allowDevGrant });
+      return json(200, { ok: true, service: 'k136s-preview', version: VERSION, build: BUILD, devGrant: !!allowDevGrant, vaultGrant: typeof vaultVerifier === 'function' });
     }
 
     // Dev-only grant issuer. Present ONLY when explicitly enabled; the real vault-backed issuer is K136S-D.
@@ -125,6 +132,29 @@ function createPreviewHandler({ key, allowDevGrant = false, now = Date.now } = {
 
     return json(404, { error: 'not found' });
   };
+
+  // Async entry point (used by the server). Serves the vault-backed grant issuer, else delegates.
+  handle.async = async function handleAsync(req) {
+    const method = (req && req.method ? String(req.method) : 'GET').toUpperCase();
+    const rawPath = req && req.path ? String(req.path) : '/';
+    const path = rawPath.split('?')[0].replace(/\/+$/, '') || '/';
+    if (method === 'POST' && path === '/k136s/grant') {
+      let body;
+      try { body = parseBody(req && req.rawBody); }
+      catch (e) { return e.tooLarge ? json(413, { error: 'payload too large' }) : json(400, { error: 'invalid JSON body' }); }
+      // The password is passed straight through to the issuer and is not retained here.
+      return issueVaultGrant({
+        agentId: body && body.agentId,
+        vaultPassword: body && body.vaultPassword,
+        headers: (req && req.headers) || {},
+        key, now: clock, ttlMs: grantTtlMs,
+        verify: vaultVerifier, relayHeaderNames,
+      });
+    }
+    return handle(req);
+  };
+
+  return handle;
 }
 
-module.exports = Object.freeze({ createPreviewHandler, buildPreview, VERSION, MAX_BODY_BYTES, MAX_TEXT });
+module.exports = Object.freeze({ createPreviewHandler, buildPreview, VERSION, BUILD, MAX_BODY_BYTES, MAX_TEXT });
