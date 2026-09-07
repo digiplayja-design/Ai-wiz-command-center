@@ -1,3 +1,4 @@
+const { registerK135zZoomRoutes } = require("./k135z_zoom/zoom_routes.cjs");
 import express from "express";
 import crypto from "crypto";
 import cors from "cors";
@@ -13135,6 +13136,81 @@ app.use("/api", (req, res) => {
 });
 // KORLIX_API_NOT_FOUND_FALLBACK_FINAL_END
 
+
+// K135Z_B5A_ZOOM_SERVER_REGISTRATION_BEGIN
+registerK135zZoomRoutes(app, {
+  env: process.env,
+
+  authenticateRequest: async (req) => {
+    const resolver =
+      app.locals?.korlixAuthenticateRequest ||
+      app.locals?.authenticateRequest ||
+      app.locals?.resolveAuthenticatedUser;
+
+    if (typeof resolver === "function") {
+      return resolver(req);
+    }
+
+    return (
+      req.korlixUser ||
+      req.user ||
+      req.auth?.user ||
+      (
+        req.auth &&
+        typeof req.auth === "object"
+          ? req.auth
+          : null
+      ) ||
+      req.session?.user ||
+      null
+    );
+  },
+
+  resolveEnterprise: async (principal, req) => {
+    const resolver =
+      app.locals?.korlixResolveEnterprise ||
+      app.locals?.resolveEnterpriseEntitlement ||
+      app.locals?.hasEnterpriseAccess;
+
+    if (typeof resolver === "function") {
+      return Boolean(
+        await resolver(
+          principal,
+          req,
+        )
+      );
+    }
+
+    const values = [
+      principal?.tier,
+      principal?.plan,
+      principal?.subscriptionTier,
+      principal?.subscription_tier,
+      principal?.app_metadata?.tier,
+      principal?.app_metadata?.plan,
+      principal?.user_metadata?.tier,
+      principal?.user_metadata?.plan,
+      req.korlixTier,
+      req.subscriptionTier,
+    ];
+
+    return values.some((value) => {
+      const tokens = String(value ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .split("_")
+        .filter(Boolean);
+
+      return (
+        tokens.includes("enterprise") &&
+        !tokens.includes("non") &&
+        !tokens.includes("not")
+      );
+    });
+  },
+});
+// K135Z_B5A_ZOOM_SERVER_REGISTRATION_END
 
 app.listen(port, () => {
   console.log(`Korlix AI backend running on port ${port}`);
