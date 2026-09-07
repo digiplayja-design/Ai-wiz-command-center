@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'korlix_meeting_copilot.dart';
+import 'korlix_meeting_copilot_access.dart';
 
 abstract final class KorlixMeetingCopilotAssets {
   static const String korlixLogo = 'assets/meeting_copilot/korlix_logo.jpeg';
@@ -38,6 +39,11 @@ class _KorlixMeetingCopilotRouteState extends State<KorlixMeetingCopilotRoute> {
 
   @override
   Widget build(BuildContext context) {
+    // K135Z_B4B_V11_DIRECT_ROUTE_ENTERPRISE_GATE
+    if (!kKorlixMeetingCopilotEnterpriseAccess.value) {
+      return const KorlixMeetingCopilotLockedPage();
+    }
+
     return Semantics(
       label: KorlixMeetingCopilotRoute.accessibilityLabel,
       child: KeyedSubtree(

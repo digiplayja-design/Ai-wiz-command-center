@@ -11,6 +11,8 @@ import 'korlix_live_convo_agent_client.dart';
 import 'korlix_live_convo_brain_vault.dart';
 import 'korlix_live_convo_agent_file_memory_sheet.dart';
 import 'korlix_live_convo_agent_email_sheet.dart';
+import '../meeting_copilot/korlix_meeting_copilot_access.dart';
+import '../meeting_copilot/korlix_meeting_copilot_route.dart';
 
 // KORLIX_LIVE_CONVO_AGENT_SHEET_BUILD131_BEGIN
 
@@ -20,6 +22,8 @@ Future<KorlixLiveConvoAgentRuntime?> showKorlixLiveConvoAgentHub({
   required KorlixLiveConvoAgent activeAgent,
   required String characterName,
   required String language,
+
+  bool meetingCopilotEnterpriseEnabled = false,
 }) {
   return showModalBottomSheet<KorlixLiveConvoAgentRuntime>(
     context: context,
@@ -33,6 +37,8 @@ Future<KorlixLiveConvoAgentRuntime?> showKorlixLiveConvoAgentHub({
         activeAgent: activeAgent,
         characterName: characterName,
         language: language,
+
+        meetingCopilotEnterpriseEnabled: meetingCopilotEnterpriseEnabled,
       );
     },
   );
@@ -89,12 +95,16 @@ Color korlixLiveConvoAgentAccent(String value) {
 }
 
 class KorlixLiveConvoAgentHubSheet extends StatefulWidget {
+  final bool meetingCopilotEnterpriseEnabled;
+
   const KorlixLiveConvoAgentHubSheet({
     super.key,
     required this.client,
     required this.activeAgent,
     required this.characterName,
     required this.language,
+
+    this.meetingCopilotEnterpriseEnabled = false,
   });
 
   final KorlixLiveConvoAgentClient client;
@@ -291,51 +301,59 @@ class _KorlixLiveConvoAgentHubSheetState
   Widget _buildHeader() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 12, 12, 10),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: const Color(0xFF123A47),
-              border: Border.all(color: const Color(0xFF21D4F4)),
-            ),
-            child: const Icon(Icons.hub_rounded, color: Color(0xFF69D9E8)),
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'LIVE CONVO AGENTS',
-                  style: TextStyle(
-                    color: Color(0xFFF0F7F8),
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.5,
-                  ),
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  color: const Color(0xFF123A47),
+                  border: Border.all(color: const Color(0xFF21D4F4)),
                 ),
-                SizedBox(height: 3),
-                Text(
-                  'Select, train, and manage '
-                  'private long-term memory.',
-                  style: TextStyle(color: Color(0xFFA9C6CF), height: 1.3),
+                child: const Icon(Icons.hub_rounded, color: Color(0xFF69D9E8)),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'LIVE CONVO AGENTS',
+                      style: TextStyle(
+                        color: Color(0xFFF0F7F8),
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Select, train, and manage '
+                      'private long-term memory.',
+                      style: TextStyle(color: Color(0xFFA9C6CF), height: 1.3),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              IconButton(
+                tooltip: 'Close Agent Hub',
+                onPressed: _busy
+                    ? null
+                    : () {
+                        Navigator.of(context).pop();
+                      },
+                icon: const Icon(Icons.close_rounded),
+                color: const Color(0xFFC7D7DC),
+              ),
+            ],
           ),
-          IconButton(
-            tooltip: 'Close Agent Hub',
-            onPressed: _busy
-                ? null
-                : () {
-                    Navigator.of(context).pop();
-                  },
-            icon: const Icon(Icons.close_rounded),
-            color: const Color(0xFFC7D7DC),
-          ),
+          const SizedBox(height: 14),
+          // K135Z_B4B_V11_AGENT_HUB_CARD_SLOT
+          _buildMeetingCopilotEnterpriseCard(),
         ],
       ),
     );
@@ -1965,6 +1983,132 @@ class _KorlixLiveConvoAgentHubSheetState
                 'and memory were reset.',
     );
   }
+
+  // K135Z_B4B_V11_AGENT_HUB_ENTERPRISE_CARD_BEGIN
+  Widget _buildMeetingCopilotEnterpriseCard() {
+    final enterprise = widget.meetingCopilotEnterpriseEnabled;
+
+    return Semantics(
+      button: true,
+      label: enterprise
+          ? 'Open Nova Meeting Copilot'
+          : 'Nova Meeting Copilot, Enterprise upgrade required',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () {
+          if (enterprise) {
+            setKorlixMeetingCopilotEnterpriseAccess(true);
+
+            Navigator.of(
+              context,
+            ).pushNamed(KorlixMeetingCopilotRoute.routeName);
+
+            return;
+          }
+
+          showModalBottomSheet<void>(
+            context: context,
+            backgroundColor: const Color(0xFF071722),
+            builder: (_) => const KorlixMeetingCopilotLockedPanel(),
+          );
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            color: const Color(0xFF081F2C),
+            border: Border.all(
+              color: enterprise
+                  ? const Color(0xFF21D4F4)
+                  : const Color(0xFF5A6C75),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF21D4F4), width: 2),
+                ),
+                child: ClipOval(
+                  child: Image.asset(
+                    'assets/meeting_copilot/nova_canonical.webp',
+                    fit: BoxFit.cover,
+                    semanticLabel: 'Nova, KORLIX AI meeting assistant',
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.smart_toy_rounded,
+                      color: Color(0xFF69D9E8),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'NOVA MEETING COPILOT',
+                      style: TextStyle(
+                        color: Color(0xFFF0F7F8),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      enterprise
+                          ? 'Enterprise meeting '
+                                'intelligence, live notes, '
+                                'decisions, and action items.'
+                          : 'Locked — upgrade to '
+                                'Enterprise for Nova '
+                                'meeting intelligence.',
+                      style: const TextStyle(
+                        color: Color(0xFFA9C6CF),
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF123A47),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        enterprise ? 'ENTERPRISE • OPEN' : 'ENTERPRISE ONLY',
+                        style: const TextStyle(
+                          color: Color(0xFF69D9E8),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                enterprise
+                    ? Icons.chevron_right_rounded
+                    : Icons.lock_outline_rounded,
+                color: const Color(0xFFA9C6CF),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  // K135Z_B4B_V11_AGENT_HUB_ENTERPRISE_CARD_END
 
   @override
   Widget build(BuildContext context) {
