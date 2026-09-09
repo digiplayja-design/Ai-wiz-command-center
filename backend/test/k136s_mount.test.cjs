@@ -155,3 +155,22 @@ test('mount: Supabase authority survives a second mount and awaits DB consumptio
   assert.equal(JSON.stringify(client.writes).includes(rq.json.approvalToken), false);
   await m._internals.store.pending(); assert.equal(m._internals.store.stats().failed, 0);
 });
+
+// K136S-F5: the in-process contract flag must be outside the serializable request body.
+test('F5 mount passes an internal capability and exact read key without body flags', async () => {
+  const { buildWriter } = require('../k136s_learning/http/mount.cjs');
+  const internal = Symbol.for('korlix.k136s.memory-contract.v1');
+  let saved, listed;
+  const w = buildWriter({ supabaseAdmin:{},
+    saveMemory:async args => { saved=args;return null; },
+    listMemories:async args => { listed=args;return []; },
+  });
+  const { contentHash } = require('../k136s_learning/domain/normalize_diff.cjs');
+  const change={normalizedText:'A valid fact.',type:'MEMORY',category:'general',sensitivity:'low',expiresAt:null};
+  change.contentHash=contentHash({agentId:'general',text:change.normalizedText,...change});
+  await w.write({userId:'u',agentId:'general',memoryKey:'k136s:memory:test',change,sessionId:'s',approvalId:'a'});
+  await w.readByKey({userId:'u',agentId:'general',memoryKey:'k136s:memory:test'});
+  assert.equal(saved[internal],true);assert.equal(listed[internal],true);
+  assert.equal(listed.memoryKey,'k136s:memory:test');
+  assert.equal(Object.getOwnPropertySymbols(saved.body).length,0);
+});

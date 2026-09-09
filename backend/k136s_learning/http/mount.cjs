@@ -61,17 +61,37 @@ function normalizeList(result) {
 }
 const keyOf = (r) => r && (r.memory_key || r.memoryKey || r.key || null);
 
-function buildWriter({ supabaseAdmin, saveMemory, listMemories }) {
+function buildWriter({ supabaseAdmin, saveMemory, listMemories, now = Date.now }) {
+  // K136S-F5: a Symbol cannot be supplied in an HTTP JSON body.
+  const internal = Symbol.for('korlix.k136s.memory-contract.v1');
+  const { contentHash } = require('../domain/normalize_diff.cjs');
   return createBackendMemoryWriter({
     confirmationField: CONFIRMATION_FIELD,
-    saveMemory: async ({ userId, agentId, body }) => saveMemory({ client: supabaseAdmin, userId, agentId, body: augmentSaveBody(body) }),
+    saveMemory: async ({ userId, agentId, body }) => saveMemory({
+      client:supabaseAdmin, userId, agentId, body:augmentSaveBody(body), [internal]:true,
+    }),
     loadMemoryByKey: async ({ userId, agentId, memoryKey }) => {
-      const rows = normalizeList(await listMemories({ client: supabaseAdmin, userId, agentId }));
-      const hit = rows.find((r) => keyOf(r) === memoryKey) || null;
-      if (!hit) return null;
-      // tolerate domain objects that rename metadata
-      if (hit.metadata === undefined && hit.meta && typeof hit.meta === 'object') return Object.assign({}, hit, { metadata: hit.meta });
-      return hit;
+      const rows = normalizeList(await listMemories({
+        client:supabaseAdmin, userId, agentId, memoryKey, [internal]:true,
+      }));
+      const hit = rows.find(r => keyOf(r) === memoryKey) || null;
+      if (!hit || hit.user_id !== userId || hit.agent_id !== agentId) return null;
+      const md = hit.metadata || hit.meta;
+      const k = md && md.k136s;
+      if (!k || typeof k.contentHash !== 'string') return null;
+      const text = typeof hit.content === 'string' ? hit.content : hit.memory_text;
+      const persistedExpiry = hit.expires_at ?? null;
+      if (persistedExpiry !== null && (!Number.isFinite(Date.parse(persistedExpiry)) || Date.parse(persistedExpiry) <= now())) return null;
+      // Postgres may return +00:00 while the approved hash used Z. Check the
+      // stored timestamp against the stored original hash input before hashing.
+      const expiresAt = Object.prototype.hasOwnProperty.call(k,'expiresAt') ? k.expiresAt :
+        persistedExpiry === null ? null : new Date(persistedExpiry).toISOString();
+      if ((expiresAt === null) !== (persistedExpiry === null) ||
+          (expiresAt !== null && Date.parse(expiresAt) !== Date.parse(persistedExpiry))) return null;
+      // Recompute from persisted fields, never from the request or an in-memory save result.
+      if (contentHash({ agentId, text, type:k.type, category:k.category,
+          sensitivity:k.sensitivity, expiresAt }) !== k.contentHash) return null;
+      return hit.metadata === undefined ? Object.assign({},hit,{metadata:md}) : hit;
     },
   });
 }
@@ -128,7 +148,7 @@ function mountK136S(app, deps = {}) {
       return identityFromUser(user);
     };
 
-    const writer = buildWriter({ supabaseAdmin, saveMemory, listMemories });
+    const writer = buildWriter({ supabaseAdmin, saveMemory, listMemories, now });
     const approvalRoutes = createApprovalRoutes({ store, approvals, writer, identity, now });
     const handle = createPreviewHandler({ key, allowDevGrant: false, now, vaultVerifier, relayHeaderNames, approvalRoutes });
 

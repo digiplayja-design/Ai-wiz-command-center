@@ -3548,7 +3548,20 @@ async function korlixAgentListMemoriesV1({
   agentId,
   includeInactive = false,
   maximumItems = 100,
+  memoryKey,
+  [K136S_MEMORY_INTERNAL]: k136sInternal = false,
 }) {
+  // K136S-F5: exact internal read. Ordinary Agent Hub projection is unchanged.
+  if (k136sInternal === true) {
+    const u = korlixAgentUserIdV1(userId), a = korlixAgentStrictId(agentId);
+    if (typeof memoryKey !== 'string' || !/^k136s:[a-z0-9_:.-]+$/.test(memoryKey) || memoryKey.length > 120)
+      throw korlixAgentInputError('A learning memory key is required.', 'k136s_memory_key_required');
+    const row = await korlixAgentLoadMemoryRowByKeyV1({ client, userId:u, agentId:a, memoryKey });
+    if (!row) return [];
+    if (row.user_id !== u || row.agent_id !== a || row.memory_key !== memoryKey)
+      throw korlixAgentInputError('Learning read binding mismatch.', 'k136s_memory_binding_mismatch');
+    return [structuredClone(row)];
+  }
   const rows =
     await korlixAgentListMemoryRowsV1({
       client,
@@ -3590,11 +3603,46 @@ async function korlixAgentLoadRuntimeMemoriesV1({
   );
 }
 
+// K136S-F5: this Symbol is an in-process capability, never an HTTP/body flag.
+const K136S_MEMORY_INTERNAL = Symbol.for('korlix.k136s.memory-contract.v1');
+
+async function korlixK136sEnvelopeV1({ body, agentId, memoryKey, memory }) {
+  const md = body?.metadata?.k136s;
+  const fail = () => { throw korlixAgentInputError('Invalid internal learning record.', 'k136s_memory_contract_invalid'); };
+  if (body?.confirmed !== true || body?.source !== 'k136s_spoken_learning' ||
+      typeof memoryKey !== 'string' || !/^k136s:[a-z0-9_:.-]+$/.test(memoryKey) || memoryKey.length > 120 ||
+      !md || typeof md !== 'object' || Array.isArray(md) || md.version !== 'E1' ||
+      !/^[a-f0-9]{64}$/.test(md.contentHash || '') ||
+      !['MEMORY', 'TRAINING', 'PROFILE'].includes(md.type) ||
+      !['low', 'medium', 'high'].includes(md.sensitivity) ||
+      !(md.category === null || typeof md.category === 'string') ||
+      !['sessionId', 'approvalId'].every(k => typeof md[k] === 'string' && md[k].trim() && md[k].length <= 180) ||
+      memory.content !== body.content || body.session_id !== md.sessionId) fail();
+  const allowed = new Set(['version','contentHash','type','category','sensitivity','sessionId','approvalId','superseded']);
+  if (Object.keys(md).some(k => !allowed.has(k))) fail();
+  const exp = body.expires_at;
+  if (!(exp === null || (typeof exp === 'string' && Number.isFinite(Date.parse(exp))))) fail();
+  if (md.superseded != null) {
+    const p = md.superseded;
+    if (!p || typeof p !== 'object' || Array.isArray(p) ||
+        Object.keys(p).some(k => !['previousContentHash','previousContent','at'].includes(k)) ||
+        !(p.previousContentHash === null || /^[a-f0-9]{64}$/.test(p.previousContentHash || '')) ||
+        !(p.previousContent === null || (typeof p.previousContent === 'string' && p.previousContent.length <= 4000)) ||
+        !(p.at === null || typeof p.at === 'string')) fail();
+  }
+  const { default: codec } = await import('./k136s_learning/domain/normalize_diff.cjs');
+  const actual = codec.contentHash({ agentId, text: memory.content, type: md.type,
+    category: md.category, sensitivity: md.sensitivity, expiresAt: exp });
+  if (actual !== md.contentHash) fail();
+  return { metadata: { ...structuredClone(md), expiresAt:exp }, expiresAt:exp };
+}
+
 async function korlixAgentSaveMemoryV1({
   client,
   userId,
   agentId,
   body,
+  [K136S_MEMORY_INTERNAL]: k136sInternal = false,
 }) {
   korlixAgentRequireConfirmationV1(
     body,
@@ -3708,6 +3756,13 @@ async function korlixAgentSaveMemoryV1({
         source.language,
     });
 
+  // K136S-F5: preserve only validated learning provenance on the internal path.
+  if (k136sInternal === true) {
+    const envelope = await korlixK136sEnvelopeV1({ body, agentId:safeAgentId, memoryKey, memory });
+    memoryRow.metadata = { ...memoryRow.metadata, k136s:envelope.metadata };
+    memoryRow.expires_at = envelope.expiresAt;
+  }
+
   let pending;
 
   if (previousRow?.id) {
@@ -3747,6 +3802,7 @@ async function korlixAgentSaveMemoryV1({
     );
   }
 
+  if (k136sInternal === true) return structuredClone(savedRow);
   return korlixAgentMemoryFromDatabaseRowV1(
     savedRow,
   );
