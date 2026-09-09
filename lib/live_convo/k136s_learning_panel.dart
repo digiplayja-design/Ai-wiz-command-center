@@ -276,524 +276,377 @@ class K136sPreview {
 // Controller
 // ---------------------------------------------------------------------------
 
-class K136sLearningController extends ChangeNotifier {
-  K136sLearningController({
-    required this.api,
-    required this.agentId,
-    required Future<void> Function(bool muted) setMuted,
-    required Future<void> Function() refreshContext,
-    List<String>? triggerPhrases,
-    List<String>? endPhrases,
-    DateTime Function()? now,
-  })  : _setMuted = setMuted,
-        _refreshContext = refreshContext,
-        _now = now ?? DateTime.now,
-        triggerPhrases = triggerPhrases ?? const <String>['nova learn this', 'nova remember this', 'nova learning mode'],
-        endPhrases = endPhrases ?? const <String>['thats all', 'that is all', 'end learning', 'nova done', 'nova thats it'];
-
-  static const Duration authTimeout = Duration(minutes: 2);
-  static const Duration captureTimeout = Duration(minutes: 3);
-  static const Duration previewTimeout = Duration(minutes: 10);
-  static const Duration confirmationTimeout = Duration(seconds: 120);
-  static const Duration sessionTimeout = Duration(minutes: 10);
-  static const Duration grantFreshness = Duration(seconds: 60);
-  static const Duration grantSafety = Duration(seconds: 5);
-  static const int maxCaptureChars = 4000;
-
-  final K136sLearningApiBase api;
+// K136S-F5: explicit microphone and refresh receipts; no success-by-returning-void.
+class K136sRefreshReceipt {
+  const K136sRefreshReceipt({required this.agentId, required this.liveSessionId,
+    required this.contextRestored});
   final String agentId;
-  final List<String> triggerPhrases;
-  final List<String> endPhrases;
-  final Future<void> Function(bool) _setMuted;
-  final Future<void> Function() _refreshContext;
-  final DateTime Function() _now;
+  final String liveSessionId;
+  final bool contextRestored;
+}
 
+class K136sMicTrack {
+  K136sMicTrack({required this.readEnabled, required this.writeEnabled,
+    required this.nativeMute});
+  final bool Function() readEnabled;
+  final void Function(bool) writeEnabled;
+  final Future<void> Function(bool) nativeMute;
+}
+
+/// Holds the exact stream/track lease. A late completion never unmutes a new stream.
+class K136sMicrophoneGuard {
+  K136sMicrophoneGuard({required this.identity, required this.tracks});
+  final Object? Function() identity;
+  final List<K136sMicTrack> Function() tracks;
+  Object? _owner;
+  List<K136sMicTrack> _held = <K136sMicTrack>[];
+  List<bool> _before = <bool>[];
+  bool get engaged => _owner != null;
+  Future<bool> setMuted(bool muted) async {
+    if (muted) {
+      final owner = identity();
+      if (owner == null) return false;
+      if (_owner != null) {
+        return identical(_owner, owner) && _held.isNotEmpty &&
+          _held.every((t) => !t.readEnabled());
+      }
+      final held = tracks();
+      if (held.isEmpty) return false;
+      _owner = owner;
+      _held = held;
+      _before = held.map((t) => t.readEnabled()).toList();
+      try {
+        for (final t in held) { t.writeEnabled(false); }
+        for (final t in held) { await t.nativeMute(true); }
+        return identical(identity(), owner) && held.every((t) => !t.readEnabled());
+      } catch (_) { return false; }
+    }
+    final owner = _owner;
+    if (owner == null) return true;
+    final held = _held;
+    final before = _before;
+    try {
+      if (identical(identity(), owner)) {
+        for (var i = 0; i < held.length; i++) {
+          await held[i].nativeMute(!before[i]);
+          if (!identical(identity(), owner)) break;
+          held[i].writeEnabled(before[i]);
+        }
+        if (identical(identity(), owner)) {
+          for (var i = 0; i < held.length; i++) {
+            if (held[i].readEnabled() != before[i]) return false;
+          }
+        }
+      }
+      _owner = null; _held = <K136sMicTrack>[]; _before = <bool>[];
+      return true;
+    } catch (_) { return false; }
+  }
+}
+
+class K136sLearningController extends ChangeNotifier {
+  K136sLearningController({required this.api, required this._agentId,
+    required this._setMuted, required this._refreshContext,
+    this._liveSessionId = '', this._ready = false, this._principalScope = '',
+    List<String>? triggerPhrases, List<String>? endPhrases, DateTime Function()? now})
+    : _now = now ?? DateTime.now,
+      triggerPhrases = triggerPhrases ?? const <String>['nova learn this','nova remember this','nova learning mode'],
+      endPhrases = endPhrases ?? const <String>['thats all','that is all','end learning','nova done','nova thats it'];
+  static const Duration authTimeout = Duration(minutes:2);
+  static const Duration captureTimeout = Duration(minutes:3);
+  static const Duration previewTimeout = Duration(minutes:10);
+  static const Duration confirmationTimeout = Duration(seconds:120);
+  static const Duration sessionTimeout = Duration(minutes:10);
+  static const Duration grantFreshness = Duration(seconds:60);
+  static const Duration grantSafety = Duration(seconds:5);
+  static const int maxCaptureChars = 4000;
+  final K136sLearningApiBase api;
+  String _agentId, _liveSessionId, _principalScope;
+  bool _ready;
+  String get agentId => _agentId;
+  String get liveSessionId => _liveSessionId;
+  final List<String> triggerPhrases, endPhrases;
+  final Future<bool> Function(bool) _setMuted;
+  final Future<K136sRefreshReceipt?> Function() _refreshContext;
+  final DateTime Function() _now;
   K136sLearningState _state = K136sLearningState.idle;
-  String? sessionId;
-  String? _grant;
-  DateTime? _grantAt;
+  String? sessionId, _grant, _approvalToken, lastError, lastCode, memoryKey, memoryId;
+  DateTime? _grantAt, _approvalExpiresAt, _sessionStartedAt, _stateEnteredAt;
   int? passwordVersion;
   final StringBuffer _capture = StringBuffer();
   K136sPreview? preview;
-  String? _approvalToken;
-  DateTime? _approvalExpiresAt;
   _PendingAfterAuth _pending = _PendingAfterAuth.none;
-  DateTime? _sessionStartedAt;
-  DateTime? _stateEnteredAt;
-  bool busy = false;
-  bool micMuted = false;
-  String? lastError;
-  String? lastCode;
-  String? memoryKey;
-  String? memoryId;
-  bool contextRefreshed = false;
-  bool _disposed = false;
-
+  bool busy = false, micMuted = false, contextRefreshed = false, _disposed = false;
+  int _epoch = 0, _micJobs = 0;
+  Future<void> _micTail = Future<void>.value();
   K136sLearningState get state => _state;
   bool get isTerminal => _terminal.contains(_state);
   bool get isActive => _state != K136sLearningState.idle && !isTerminal;
   bool get isVisible => _state != K136sLearningState.idle;
+  bool get micBusy => _micJobs != 0;
   String get capturedText => _capture.toString().trim();
   bool get hasGrant => _grant != null && _grant!.isNotEmpty;
-  bool get grantIsFresh => _grantAt != null && _now().difference(_grantAt!) < (grantFreshness - grantSafety);
+  bool get grantIsFresh => _grantAt != null && _now().difference(_grantAt!) < (grantFreshness-grantSafety);
   bool get pendingReauth => _pending != _PendingAfterAuth.none;
-  bool get voiceConfirmAllowed => preview != null && !preview!.elevated;
-
-  // ------------------------------------------------------------------ helpers
-
-  static String _norm(String s) =>
-      s.toLowerCase().replaceAll(RegExp(r"[^\w\s']"), ' ').replaceAll("'", '').replaceAll(RegExp(r'\s+'), ' ').trim();
-
-  static String? _matchPhrase(String text, List<String> phrases) {
+  bool get voiceConfirmAllowed => preview != null && !preview!.elevated && preview!.allowedChannels.contains('voice');
+  bool _valid(int e) => !_disposed && _epoch == e;
+  static String _norm(String s) => s.toLowerCase().replaceAll(RegExp(r"[^\w\s']"),' ')
+    .replaceAll("'",'').replaceAll(RegExp(r'\s+'),' ').trim();
+  static String? _matchPhrase(String text,List<String> phrases) {
     final n = _norm(text);
-    for (final p in phrases) {
-      final np = _norm(p);
-      if (np.isNotEmpty && n.contains(np)) return np;
-    }
+    for (final p in phrases) { final np=_norm(p); if(np.isNotEmpty && n.contains(np)) return np; }
     return null;
   }
-
+  bool recognizesTrigger(String text) => _matchPhrase(text,triggerPhrases) != null;
+  void _notify() { if(!_disposed) notifyListeners(); }
   void _enter(K136sLearningState next) {
-    _state = next;
-    _stateEnteredAt = _now();
-    lastError = null;
-    lastCode = null;
-    _notify();
+    _state=next; _stateEnteredAt=_now(); lastError=null; lastCode=null; _notify();
   }
-
-  void _fail(String message, {String? code}) {
-    lastError = message;
-    lastCode = code;
-    _notify();
+  void _fail(String message,{String? code}) { lastError=message;lastCode=code;_notify(); }
+  void setError(String message,{String? code}) => _fail(message,code:code);
+  void _clearSecrets() { _grant=null;_grantAt=null;_approvalToken=null;_approvalExpiresAt=null;passwordVersion=null; }
+  void bindContext({required String agentId,required String liveSessionId,required bool ready,required String principalScope}) {
+    if(_disposed || (_agentId==agentId && _liveSessionId==liveSessionId && _ready==ready && _principalScope==principalScope)) return;
+    invalidate();
+    _agentId=agentId;_liveSessionId=liveSessionId;_ready=ready;_principalScope=principalScope;
   }
-
-  /// Surface a UI-side validation message (e.g. typed-confirm mismatch) without touching state.
-  void setError(String message, {String? code}) => _fail(message, code: code);
-
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  Future<void> _mute(bool muted) async {
-    micMuted = muted;
-    try {
-      await _setMuted(muted);
-    } catch (_) {
-      // the screen may have no local track yet; the panel still works
+  void invalidate() {
+    if(_disposed) return;
+    final unknown=_state==K136sLearningState.committing;
+    final visible=isVisible;
+    _epoch++;busy=false;_clearSecrets();_pending=_PendingAfterAuth.none;
+    _capture.clear();preview=null;sessionId=null;memoryKey=null;memoryId=null;contextRefreshed=false;
+    _enter(visible ? K136sLearningState.cancelled : K136sLearningState.idle);
+    if (visible) {
+      _fail(unknown ? 'The session changed while saving. The result is unconfirmed; check Agent Hub before retrying.' :
+        'Learning cancelled because the agent, sign-in, or live session changed.',code:unknown?'WRITE_OUTCOME_UNKNOWN':'CONTEXT_CHANGED');
     }
+    unawaited(_mute(false));
   }
-
-  void _clearSecrets() {
-    _grant = null;
-    _grantAt = null;
-    _approvalToken = null;
-    _approvalExpiresAt = null;
+  Future<bool> _mute(bool muted) {
+    final e=_epoch;_micJobs++;
+    final operation=_micTail.then((_) async {
+      if(muted && !_valid(e)) return false;
+      bool ok;
+      try { ok=await _setMuted(muted); } catch(_) { ok=false; }
+      if(_valid(e) && ok) micMuted=muted;
+      return ok && _valid(e);
+    });
+    _micTail=operation.then<void>((_) {},onError:(Object _,StackTrace _) {});
+    return operation.whenComplete(() { _micJobs--;_notify(); });
   }
-
-  static String _newSessionId(DateTime t) {
-    final r = Random();
-    final tail = List<int>.generate(6, (_) => r.nextInt(36)).map((int v) => v.toRadixString(36)).join();
-    return 'k136s-${t.millisecondsSinceEpoch}-$tail';
+  Future<K136sApiResult?> _request(Future<K136sApiResult> Function() action) async {
+    final e=_epoch;busy=true;_notify();
+    K136sApiResult result;
+    try { result=await action(); }
+    catch(_) { result=const K136sApiResult(0,<String,dynamic>{'code':'NETWORK'}); }
+    if(!_valid(e)) return null;
+    busy=false;
+    return result;
   }
-
-  // ------------------------------------------------------------------ events
-
-  /// Feed USER speech (final transcriptions) here. Assistant text must not be fed.
+  Future<void> _protectVault(_PendingAfterAuth pending,{bool reauth=false}) async {
+    final e=_epoch;
+    _pending=pending;_grant=null;_grantAt=null;busy=true;
+    _enter(K136sLearningState.triggered);
+    final protected=await _mute(true);
+    if(!_valid(e)) return;
+    busy=false;
+    if(!protected) {
+      _clearSecrets();_enter(K136sLearningState.rejected);
+      _fail('Microphone protection could not be confirmed. No password field was opened.',code:'MIC_PROTECTION_FAILED');
+      await _mute(false);return;
+    }
+    _enter(K136sLearningState.authRequired);
+    if(reauth) _fail('Re-enter the BRAIN VAULT password to continue this exact change.',code:'REAUTH_REQUIRED');
+  }
   void onUserTranscript(String text) {
-    if (_disposed || busy) return;
-    final t = text.trim();
-    if (t.isEmpty) return;
-    switch (_state) {
+    if(_disposed || busy || micBusy || !_ready || _liveSessionId.isEmpty || _agentId.isEmpty) return;
+    final t=text.trim();if(t.isEmpty) return;
+    switch(_state) {
       case K136sLearningState.idle:
-        if (_matchPhrase(t, triggerPhrases) != null) {
-          sessionId = _newSessionId(_now());
-          _sessionStartedAt = _now();
-          _capture.clear();
-          preview = null;
-          memoryKey = null;
-          memoryId = null;
-          contextRefreshed = false;
-          _clearSecrets();
-          _pending = _PendingAfterAuth.none;
+        if(recognizesTrigger(t)) {
+          _epoch++;
+          final r=Random.secure();
+          sessionId='k136s-${_now().millisecondsSinceEpoch}-${List<int>.generate(12,(_)=>r.nextInt(36)).map((v)=>v.toRadixString(36)).join()}';
+          _sessionStartedAt=_now();_capture.clear();preview=null;memoryKey=null;memoryId=null;contextRefreshed=false;_clearSecrets();
           _enter(K136sLearningState.triggered);
-          // mute before the vault field is shown (B: MIC_MUTED precedes AUTH_REQUIRED)
-          unawaited(_mute(true).then((_) {
-            if (_state == K136sLearningState.triggered) _enter(K136sLearningState.authRequired);
-          }));
+          unawaited(_protectVault(_PendingAfterAuth.none));
         }
         return;
       case K136sLearningState.capturing:
-        final end = _matchPhrase(t, endPhrases);
-        var piece = t;
-        if (end != null) {
-          // strip everything from the first word where the end phrase begins
-          final words = t.split(RegExp(r'\s+'));
-          var cut = words.length;
-          for (var i = 0; i < words.length; i++) {
-            if (_norm(words.sublist(i).join(' ')).startsWith(end)) {
-              cut = i;
-              break;
-            }
-          }
-          piece = words.sublist(0, cut).join(' ');
+        final end=_matchPhrase(t,endPhrases);var piece=t;
+        if(end!=null) {
+          final words=t.split(RegExp(r'\s+'));var cut=words.length;
+          for(var i=0;i<words.length;i++) { if(_norm(words.sublist(i).join(' ')).startsWith(end)) {cut=i;break;} }
+          piece=words.sublist(0,cut).join(' ');
         }
-        if (piece.trim().isNotEmpty) {
-          if (_capture.length + piece.length + 1 > maxCaptureChars) {
-            _fail('Capture limit reached (${maxCaptureChars} characters).', code: 'CAPTURE_LIMIT');
-          } else {
-            if (_capture.isNotEmpty) _capture.write(' ');
-            _capture.write(piece.trim());
-            _notify();
-          }
+        if(piece.trim().isNotEmpty) {
+          if(_capture.length+piece.length+1>maxCaptureChars) {
+            _fail('Capture limit reached ($maxCaptureChars characters).',code:'CAPTURE_LIMIT');
+          } else { if(_capture.isNotEmpty) _capture.write(' ');_capture.write(piece.trim());_notify(); }
         }
-        if (end != null) unawaited(endCapture());
-        return;
+        if(end!=null) unawaited(endCapture());return;
       case K136sLearningState.confirmationRequired:
-        final n = _norm(t);
-        if (n == 'cancel' || n == 'nova cancel') {
-          unawaited(cancel());
-        } else if (n == 'confirm' || n == 'nova confirm' || n == 'yes confirm') {
-          unawaited(confirm(channel: 'voice'));
-        }
+        final n=_norm(t);
+        if(n=='cancel'||n=='nova cancel') { unawaited(cancel()); }
+        else if(n=='confirm'||n=='nova confirm'||n=='yes confirm') { unawaited(confirm(channel:'voice')); }
         return;
-      default:
-        return;
+      default:return;
     }
   }
-
-  /// Typed-only. The password is forwarded once and never kept on this object.
   Future<void> submitVaultPassword(String password) async {
-    if (_disposed || busy || _state != K136sLearningState.authRequired) return;
-    final pw = password;
-    if (pw.isEmpty) {
-      _fail('Enter the BRAIN VAULT password.', code: 'PASSWORD_REQUIRED');
-      return;
-    }
-    busy = true;
-    _notify();
-    K136sApiResult r;
-    try {
-      r = await api.grant(agentId: agentId, vaultPassword: pw);
-    } finally {
-      busy = false;
-    }
-    if (_disposed) return;
-    if (r.ok && r.json['grant'] is String) {
-      _grant = r.json['grant'] as String;
-      _grantAt = _now();
-      final pv = r.json['passwordVersion'];
-      passwordVersion = pv is int ? pv : int.tryParse('$pv');
-      _enter(K136sLearningState.authenticated);
-      await _mute(false);
-      if (_disposed) return;
-      switch (_pending) {
-        case _PendingAfterAuth.preview:
-          _pending = _PendingAfterAuth.none;
-          await _runPreview();
-          return;
-        case _PendingAfterAuth.approveRequest:
-          _pending = _PendingAfterAuth.none;
-          _enter(K136sLearningState.previewReady);
-          await requestConfirmation();
-          return;
-        case _PendingAfterAuth.confirmTyped:
-          _pending = _PendingAfterAuth.none;
-          _enter(K136sLearningState.confirmationRequired);
-          return;
-        case _PendingAfterAuth.none:
-          _enter(K136sLearningState.capturing);
-          return;
+    if(_disposed||busy||micBusy||!micMuted||_state!=K136sLearningState.authRequired) return;
+    if(password.isEmpty) {_fail('Enter the BRAIN VAULT password.',code:'PASSWORD_REQUIRED');return;}
+    final e=_epoch;
+    final r=await _request(()=>api.grant(agentId:agentId,vaultPassword:password));
+    if(r==null) return;
+    if(r.ok && r.json['grant'] is String && (r.json['grant'] as String).isNotEmpty) {
+      _grant=r.json['grant'] as String;_grantAt=_now();
+      final pv=r.json['passwordVersion'];passwordVersion=pv is int?pv:int.tryParse('$pv');
+      _enter(K136sLearningState.authenticated);busy=true;
+      final released=await _mute(false);if(!_valid(e)) return;busy=false;
+      if(!released) {_clearSecrets();_enter(K136sLearningState.rejected);_fail('Microphone release failed. Learning stopped.',code:'MIC_RELEASE_FAILED');return;}
+      final pending=_pending;_pending=_PendingAfterAuth.none;
+      switch(pending) {
+        case _PendingAfterAuth.preview:await _runPreview();return;
+        case _PendingAfterAuth.approveRequest:_enter(K136sLearningState.previewReady);await requestConfirmation();return;
+        case _PendingAfterAuth.confirmTyped:_enter(K136sLearningState.confirmationRequired);return;
+        case _PendingAfterAuth.none:_enter(K136sLearningState.capturing);return;
       }
     }
-    switch (r.status) {
-      case 429:
-        _fail('Too many incorrect attempts. The vault is locked for a while.', code: r.code ?? 'brain_vault_password_rate_limited');
-        break;
-      case 401:
-        _fail('The BRAIN VAULT password is incorrect.', code: r.code ?? 'brain_vault_password_incorrect');
-        break;
-      case 409:
-        _fail('No BRAIN VAULT password is configured for this account.', code: r.code ?? 'brain_vault_password_not_configured');
-        break;
-      case 503:
-      case 502:
-      case 0:
-        _fail('The vault service is unavailable right now.', code: r.code ?? 'BACKEND_UNAVAILABLE');
-        break;
-      default:
-        _fail(r.error ?? 'Vault verification failed.', code: r.code ?? 'VAULT_FAILED');
-    }
+    final message=r.status==401?'The BRAIN VAULT password is incorrect.':r.status==429?'The vault is temporarily locked.':
+      r.status==409?'No BRAIN VAULT password is configured.':'Vault verification failed or is unavailable.';
+    _fail(message,code:r.code??'VAULT_FAILED');
   }
-
   Future<void> endCapture() async {
-    if (_disposed || busy || _state != K136sLearningState.capturing) return;
-    if (capturedText.isEmpty) {
-      _fail('Nothing captured yet — say what Nova should learn.', code: 'EMPTY_CAPTURE');
-      return;
-    }
+    if(_disposed||busy||_state!=K136sLearningState.capturing) return;
+    if(capturedText.isEmpty) {_fail('Nothing captured yet — say what Nova should learn.',code:'EMPTY_CAPTURE');return;}
     await _runPreview();
   }
-
   Future<void> _runPreview() async {
-    if (!hasGrant) {
-      await _needReauth(_PendingAfterAuth.preview);
-      return;
-    }
+    if(!hasGrant) {await _needReauth(_PendingAfterAuth.preview);return;}
     _enter(K136sLearningState.classifying);
-    busy = true;
-    _notify();
-    K136sApiResult r;
-    try {
-      r = await api.preview(agentId: agentId, proposedText: capturedText, grant: _grant!);
-    } finally {
-      busy = false;
-    }
-    if (_disposed) return;
-    if (r.status == 401) {
-      await _needReauth(_PendingAfterAuth.preview);
-      return;
-    }
-    if (!r.ok) {
-      _enter(K136sLearningState.capturing);
-      _fail(r.error ?? 'Preview failed.', code: r.code ?? 'PREVIEW_FAILED');
-      return;
-    }
-    final p = K136sPreview.fromJson(r.json);
-    if (p == null) {
-      _enter(K136sLearningState.capturing);
-      _fail('Preview response was not understood.', code: 'PREVIEW_MALFORMED');
-      return;
-    }
-    preview = p;
-    if (!p.allowed && !p.requiresQueue) {
-      _enter(K136sLearningState.rejected);
-      _fail('Nova cannot learn this: ${p.violations.join(', ')}', code: p.violations.isNotEmpty ? p.violations.first : 'POLICY_DENIED');
-      await _mute(false);
-      return;
+    final r=await _request(()=>api.preview(agentId:agentId,proposedText:capturedText,grant:_grant!));
+    if(r==null) return;
+    if(r.status==401) {await _needReauth(_PendingAfterAuth.preview);return;}
+    if(!r.ok) {_enter(K136sLearningState.capturing);_fail('Preview failed.',code:r.code??'PREVIEW_FAILED');return;}
+    final p=K136sPreview.fromJson(r.json);
+    if(p==null) {_enter(K136sLearningState.capturing);_fail('Preview response was not understood.',code:'PREVIEW_MALFORMED');return;}
+    preview=p;
+    if(!p.allowed&&!p.requiresQueue) {
+      _clearSecrets();_enter(K136sLearningState.rejected);
+      _fail('This change cannot be learned.',code:p.violations.isNotEmpty?p.violations.first:'POLICY_DENIED');await _mute(false);return;
     }
     _enter(K136sLearningState.previewReady);
   }
-
   Future<void> requestConfirmation() async {
-    if (_disposed || busy || _state != K136sLearningState.previewReady || preview == null) return;
-    if (preview!.requiresQueue) {
-      _fail('This change needs manual review and cannot be confirmed here.', code: 'REQUIRES_QUEUE');
-      return;
-    }
-    if (!hasGrant) {
-      await _needReauth(_PendingAfterAuth.approveRequest);
-      return;
-    }
-    busy = true;
-    _notify();
-    K136sApiResult r;
-    try {
-      r = await api.approveRequest(
-        sessionId: sessionId!,
-        agentId: agentId,
-        contentHash: preview!.contentHash,
-        elevated: preview!.elevated,
-        grant: _grant!,
-      );
-    } finally {
-      busy = false;
-    }
-    if (_disposed) return;
-    if (r.status == 401 && r.code != 'UNAUTHENTICATED') {
-      await _needReauth(_PendingAfterAuth.approveRequest);
-      return;
-    }
-    if (!r.ok || r.json['approvalToken'] is! String) {
-      _fail(r.error ?? 'Could not request approval.', code: r.code ?? 'APPROVAL_REQUEST_FAILED');
-      return;
-    }
-    _approvalToken = r.json['approvalToken'] as String;
-    final exp = r.json['expiresAt'];
-    _approvalExpiresAt = exp is int ? DateTime.fromMillisecondsSinceEpoch(exp) : _now().add(confirmationTimeout);
+    if(_disposed||busy||_state!=K136sLearningState.previewReady||preview==null) return;
+    if(preview!.requiresQueue) {_fail('This change needs manual review.',code:'REQUIRES_QUEUE');return;}
+    if(!hasGrant) {await _needReauth(_PendingAfterAuth.approveRequest);return;}
+    final r=await _request(()=>api.approveRequest(sessionId:sessionId!,agentId:agentId,contentHash:preview!.contentHash,elevated:preview!.elevated,grant:_grant!));
+    if(r==null) return;
+    if(r.status==401&&r.code!='UNAUTHENTICATED') {await _needReauth(_PendingAfterAuth.approveRequest);return;}
+    if(!r.ok||r.json['approvalToken'] is! String||(r.json['approvalToken'] as String).isEmpty) {_fail('Could not request approval.',code:r.code??'APPROVAL_REQUEST_FAILED');return;}
+    _approvalToken=r.json['approvalToken'] as String;
+    final exp=r.json['expiresAt'];
+    _approvalExpiresAt=exp is int?DateTime.fromMillisecondsSinceEpoch(exp):_now().add(confirmationTimeout);
     _enter(K136sLearningState.confirmationRequired);
   }
-
-  /// channel: 'voice' or 'typed'. Elevated changes accept 'typed' only.
   Future<void> confirm({required String channel}) async {
-    if (_disposed || busy || _state != K136sLearningState.confirmationRequired || preview == null) return;
-    if (channel != 'typed' && channel != 'voice') return;
-    if (preview!.elevated && channel != 'typed') {
-      _fail('This is an elevated change — confirm by typing, not by voice.', code: 'ELEVATED_REQUIRES_TYPED');
-      return;
-    }
-    if (preview!.elevated && !grantIsFresh) {
-      await _needReauth(_PendingAfterAuth.confirmTyped);
-      return;
-    }
-    if (!hasGrant) {
-      await _needReauth(_PendingAfterAuth.confirmTyped);
-      return;
-    }
-    if (_approvalToken == null) {
-      _enter(K136sLearningState.previewReady);
-      _fail('The approval is no longer valid — request it again.', code: 'APPROVAL_MISSING');
-      return;
+    if(_disposed||busy||_state!=K136sLearningState.confirmationRequired||preview==null) return;
+    if(channel!='typed'&&channel!='voice') return;
+    if(preview!.elevated&&channel!='typed') {_fail('This change requires typed confirmation.',code:'ELEVATED_REQUIRES_TYPED');return;}
+    if(channel=='voice'&&!voiceConfirmAllowed) {_fail('Voice confirmation is not allowed.',code:'CHANNEL_REQUIRED');return;}
+    if((preview!.elevated&&!grantIsFresh)||!hasGrant) {await _needReauth(_PendingAfterAuth.confirmTyped);return;}
+    if(_approvalToken==null||(_approvalExpiresAt!=null&&!_now().isBefore(_approvalExpiresAt!))) {
+      _approvalToken=null;_enter(K136sLearningState.previewReady);_fail('Request a new approval.',code:'APPROVAL_MISSING');return;
     }
     _enter(K136sLearningState.committing);
-    busy = true;
-    _notify();
-    K136sApiResult r;
-    try {
-      r = await api.approveConfirm(
-        sessionId: sessionId!,
-        agentId: agentId,
-        contentHash: preview!.contentHash,
-        approvalToken: _approvalToken!,
-        channel: channel,
-        preview: preview!.toConfirmPayload(),
-        grant: _grant!,
-      );
-    } finally {
-      busy = false;
+    final r=await _request(()=>api.approveConfirm(sessionId:sessionId!,agentId:agentId,contentHash:preview!.contentHash,
+      approvalToken:_approvalToken!,channel:channel,preview:preview!.toConfirmPayload(),grant:_grant!));
+    if(r==null) return;
+    if(r.ok&&r.json['state']=='VERIFIED') {
+      memoryKey=r.json['memoryKey']?.toString();memoryId=r.json['memoryId']?.toString();
+      _clearSecrets();_enter(K136sLearningState.verified);await _mute(false);return;
     }
-    if (_disposed) return;
-    if (r.ok && r.json['state'] == 'VERIFIED') {
-      memoryKey = r.json['memoryKey']?.toString();
-      memoryId = r.json['memoryId']?.toString();
-      _approvalToken = null;
-      _enter(K136sLearningState.verified);
-      await _mute(false);
-      return;
+    if(r.status==410) {_approvalToken=null;_enter(K136sLearningState.previewReady);_fail('The approval expired — request it again.',code:r.code??'EXPIRED');return;}
+    if(r.status==401&&r.code!='UNAUTHENTICATED') {await _needReauth(_PendingAfterAuth.confirmTyped);return;}
+    if(r.status==403&&r.code=='ELEVATED_REQUIRES_FRESH_VAULT') {await _needReauth(_PendingAfterAuth.confirmTyped);return;}
+    if((r.status==401||r.status==403)&&r.json['approvalConsumed']!=true) {
+      _enter(K136sLearningState.confirmationRequired);_fail('Confirmation refused.',code:r.code??'FORBIDDEN');return;
     }
-    switch (r.status) {
-      case 410: // approval expired → back to the preview (B: TOKEN_EXPIRED → PREVIEW_READY)
-        _approvalToken = null;
-        _enter(K136sLearningState.previewReady);
-        _fail('The approval expired — request it again.', code: r.code ?? 'EXPIRED');
-        return;
-      case 401:
-        if (r.code == 'UNAUTHENTICATED') {
-          _enter(K136sLearningState.confirmationRequired);
-          _fail('You are not signed in.', code: r.code);
-          return;
-        }
-        _enter(K136sLearningState.confirmationRequired);
-        await _needReauth(_PendingAfterAuth.confirmTyped);
-        return;
-      case 403:
-        _enter(K136sLearningState.confirmationRequired);
-        _fail(r.error ?? 'Confirmation refused.', code: r.code ?? 'FORBIDDEN');
-        return;
-      case 503:
-      case 0:
-        _enter(K136sLearningState.confirmationRequired);
-        _fail('The service is unavailable — try again.', code: r.code ?? 'BACKEND_UNAVAILABLE');
-        return;
-      default: // 409 replay/verification failed, 422 policy, 502 write failed, 500: the approval is spent
-        _approvalToken = null;
-        _enter(K136sLearningState.rejected);
-        _fail(r.error ?? 'The change was rejected.', code: r.code ?? 'REJECTED');
-        await _mute(false);
-        return;
-    }
-  }
-
-  Future<void> _needReauth(_PendingAfterAuth pending) async {
-    _pending = pending;
-    _grant = null;
-    _grantAt = null;
-    _enter(K136sLearningState.authRequired);
-    _fail(
-      pending == _PendingAfterAuth.confirmTyped
-          ? 'Re-enter the BRAIN VAULT password to confirm this elevated change.'
-          : 'The vault grant expired — re-enter the BRAIN VAULT password to continue.',
-      code: 'REAUTH_REQUIRED',
-    );
-    await _mute(true);
-  }
-
-  Future<void> cancel() async {
-    if (_disposed || isTerminal || _state == K136sLearningState.idle) return;
-    _clearSecrets();
-    _pending = _PendingAfterAuth.none;
-    _enter(K136sLearningState.cancelled);
+    _clearSecrets();_enter(K136sLearningState.rejected);
+    final unknown=r.status==0||r.status==503||r.ok;
+    _fail(unknown?'The save result is unconfirmed. Check Agent Hub before retrying.':'The change was not verified. Review the result before retrying.',
+      code:unknown?'WRITE_OUTCOME_UNKNOWN':r.code??'REJECTED');
     await _mute(false);
   }
-
+  Future<void> _needReauth(_PendingAfterAuth pending) => _protectVault(pending,reauth:true);
+  Future<void> cancel() async {
+    if(_disposed||isTerminal||_state==K136sLearningState.idle) return;
+    final unknown=_state==K136sLearningState.committing;
+    _epoch++;busy=false;_clearSecrets();_pending=_PendingAfterAuth.none;
+    _capture.clear();preview=null;_enter(K136sLearningState.cancelled);
+    if(unknown) _fail('Cancellation cannot undo a submitted save. Its result is unconfirmed; check Agent Hub.',code:'WRITE_OUTCOME_UNKNOWN');
+    await _mute(false);
+  }
   Future<void> refreshNovaContext() async {
-    if (_disposed || _state != K136sLearningState.verified || contextRefreshed) return;
-    busy = true;
-    _notify();
+    if(_disposed||busy||_state!=K136sLearningState.verified||contextRefreshed) return;
+    final e=_epoch;final oldSession=_liveSessionId;busy=true;_notify();
     try {
-      await _refreshContext();
-      contextRefreshed = true;
-    } catch (_) {
-      _fail('Could not refresh Nova\'s context — it will pick this up on the next session.', code: 'CONTEXT_REFRESH_FAILED');
-    } finally {
-      busy = false;
-      _notify();
-    }
+      final receipt=await _refreshContext();if(!_valid(e)) return;
+      if(receipt==null||receipt.agentId!=agentId||receipt.liveSessionId.isEmpty||receipt.liveSessionId==oldSession||!receipt.contextRestored) {
+        _fail('Context refresh was not confirmed. The verified memory remains saved.',code:'CONTEXT_REFRESH_FAILED');return;
+      }
+      _liveSessionId=receipt.liveSessionId;_ready=true;contextRefreshed=true;
+    } catch(_) {if(_valid(e)) _fail('Context refresh failed. The verified memory remains saved.',code:'CONTEXT_REFRESH_FAILED');}
+    finally {if(_valid(e)) {busy=false;_notify();}}
   }
-
   void reset() {
-    if (_disposed) return;
-    _clearSecrets();
-    _capture.clear();
-    preview = null;
-    sessionId = null;
-    _pending = _PendingAfterAuth.none;
-    _sessionStartedAt = null;
-    contextRefreshed = false;
-    _enter(K136sLearningState.idle);
+    if(_disposed||busy||micBusy) return;
+    _epoch++;_clearSecrets();_capture.clear();preview=null;sessionId=null;_pending=_PendingAfterAuth.none;
+    _sessionStartedAt=null;contextRefreshed=false;memoryId=null;memoryKey=null;_enter(K136sLearningState.idle);
   }
-
-  /// Call periodically (the panel does, once a second). Applies the B timeouts.
   void tick() {
-    if (_disposed || !isActive || _stateEnteredAt == null) return;
-    final t = _now();
-    final inState = t.difference(_stateEnteredAt!);
-    final inSession = _sessionStartedAt == null ? Duration.zero : t.difference(_sessionStartedAt!);
+    if(_disposed||!isActive||_stateEnteredAt==null) return;
+    final t=_now();final inState=t.difference(_stateEnteredAt!);
+    final inSession=_sessionStartedAt==null?Duration.zero:t.difference(_sessionStartedAt!);
     Duration? limit;
-    switch (_state) {
-      case K136sLearningState.authRequired:
-      case K136sLearningState.triggered:
-        limit = authTimeout;
-        break;
-      case K136sLearningState.capturing:
-      case K136sLearningState.authenticated:
-        limit = captureTimeout;
-        break;
-      case K136sLearningState.previewReady:
-      case K136sLearningState.classifying:
-        limit = previewTimeout;
-        break;
-      case K136sLearningState.confirmationRequired:
-      case K136sLearningState.committing:
-        limit = confirmationTimeout;
-        break;
-      default:
-        limit = null;
+    switch(_state) {
+      case K136sLearningState.authRequired:case K136sLearningState.triggered:limit=authTimeout;break;
+      case K136sLearningState.capturing:case K136sLearningState.authenticated:limit=captureTimeout;break;
+      case K136sLearningState.previewReady:case K136sLearningState.classifying:limit=previewTimeout;break;
+      case K136sLearningState.confirmationRequired:case K136sLearningState.committing:limit=confirmationTimeout;break;
+      default:limit=null;
     }
-    final approvalGone = _state == K136sLearningState.confirmationRequired && _approvalExpiresAt != null && !t.isBefore(_approvalExpiresAt!);
-    if (busy) return;
-    if (approvalGone) {
-      _approvalToken = null;
-      _enter(K136sLearningState.previewReady);
-      _fail('The approval expired — request it again.', code: 'EXPIRED');
-      return;
-    }
-    if ((limit != null && inState >= limit) || inSession >= sessionTimeout) {
-      _clearSecrets();
-      _pending = _PendingAfterAuth.none;
+    if(inSession>=sessionTimeout||(limit!=null&&inState>=limit&&_state!=K136sLearningState.confirmationRequired)) {
+      final unknown=_state==K136sLearningState.committing;
+      _epoch++;busy=false;_clearSecrets();_pending=_PendingAfterAuth.none;_capture.clear();preview=null;
       _enter(K136sLearningState.expired);
-      unawaited(_mute(false));
+      if(unknown) _fail('The save timed out; its result is unconfirmed. Check Agent Hub before retrying.',code:'WRITE_OUTCOME_UNKNOWN');
+      unawaited(_mute(false));return;
+    }
+    if(_state==K136sLearningState.confirmationRequired&&_approvalExpiresAt!=null&&!t.isBefore(_approvalExpiresAt!)) {
+      _epoch++;busy=false;_approvalToken=null;_enter(K136sLearningState.previewReady);_fail('The approval expired — request it again.',code:'EXPIRED');
     }
   }
-
   @override
   void dispose() {
-    _disposed = true;
-    _clearSecrets();
-    try {
-      api.close();
-    } catch (_) {}
+    if(_disposed) return;
+    _epoch++;_clearSecrets();_capture.clear();preview=null;
+    unawaited(_mute(false));_disposed=true;
+    try {api.close();} catch(_) {}
     super.dispose();
   }
+}
+
+/// Learning owns a voice turn only when already active, or when a free workflow
+/// explicitly enters learning. Other confirmation workflows keep their normal behavior.
+bool k136sRouteVoiceTurn(K136sLearningController? c,String text,{required bool otherWorkflowPending}) {
+  if(c==null) return false;
+  if(c.isActive) {c.onUserTranscript(text);return true;}
+  if(otherWorkflowPending||c.state!=K136sLearningState.idle||!c.recognizesTrigger(text)) return false;
+  c.onUserTranscript(text);return c.isActive;
 }
 
 // ---------------------------------------------------------------------------
@@ -817,13 +670,13 @@ class K136sLearningOverlay extends StatelessWidget {
         return Stack(
           fit: StackFit.passthrough,
           children: <Widget>[
-            child,
+            AbsorbPointer(absorbing:c.isActive || c.busy || c.micBusy, child:child),
             if (c.isVisible)
               Positioned(
                 left: 12,
                 right: 12,
                 bottom: 12,
-                child: SafeArea(child: K136sLearningPanel(controller: c)),
+                child: SafeArea(child: K136sLearningPanel(key:ValueKey(c.sessionId), controller: c)),
               ),
           ],
         );
@@ -849,11 +702,28 @@ class _K136sLearningPanelState extends State<K136sLearningPanel> {
   void initState() {
     super.initState();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => widget.controller.tick());
+    widget.controller.addListener(_clearPrivateFields);
+  }
+
+  void _clearPrivateFields() {
+    if(c.state != K136sLearningState.authRequired) _password.clear();
+    if(c.state != K136sLearningState.confirmationRequired) _typedConfirm.clear();
+  }
+
+  @override
+  void didUpdateWidget(covariant K136sLearningPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if(!identical(oldWidget.controller,widget.controller)) {
+      oldWidget.controller.removeListener(_clearPrivateFields);
+      widget.controller.addListener(_clearPrivateFields);
+      _password.clear();_typedConfirm.clear();
+    }
   }
 
   @override
   void dispose() {
     _ticker?.cancel();
+    widget.controller.removeListener(_clearPrivateFields);
     _password.dispose();
     _typedConfirm.dispose();
     super.dispose();
@@ -878,6 +748,7 @@ class _K136sLearningPanelState extends State<K136sLearningPanel> {
   }
 
   String _title() {
+    if(c.lastCode == 'WRITE_OUTCOME_UNKNOWN') return 'Save result not confirmed';
     switch (c.state) {
       case K136sLearningState.triggered:
         return 'Nova learning — muting mic…';
@@ -898,7 +769,7 @@ class _K136sLearningPanelState extends State<K136sLearningPanel> {
       case K136sLearningState.verified:
         return 'Nova learned this';
       case K136sLearningState.rejected:
-        return 'Not learned';
+        return 'Not verified';
       case K136sLearningState.expired:
         return 'Timed out';
       case K136sLearningState.cancelled:
@@ -940,6 +811,7 @@ class _K136sLearningPanelState extends State<K136sLearningPanel> {
       case K136sLearningState.authenticated:
         return const Padding(padding: EdgeInsets.all(12), child: LinearProgressIndicator());
       case K136sLearningState.authRequired:
+        if(!c.micMuted || c.micBusy) return const Text('Waiting for microphone protection.');
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
@@ -961,7 +833,7 @@ class _K136sLearningPanelState extends State<K136sLearningPanel> {
             Row(children: <Widget>[
               FilledButton(key: const Key('k136s_unlock'), onPressed: c.busy ? null : _submitPassword, child: const Text('Unlock')),
               const SizedBox(width: 8),
-              TextButton(onPressed: c.busy ? null : c.cancel, child: const Text('Cancel')),
+              TextButton(onPressed: c.cancel, child: const Text('Cancel')),
             ]),
           ],
         );
@@ -975,7 +847,7 @@ class _K136sLearningPanelState extends State<K136sLearningPanel> {
             Row(children: <Widget>[
               FilledButton(key: const Key('k136s_done'), onPressed: c.busy ? null : c.endCapture, child: const Text('Done')),
               const SizedBox(width: 8),
-              TextButton(onPressed: c.busy ? null : c.cancel, child: const Text('Cancel')),
+              TextButton(onPressed: c.cancel, child: const Text('Cancel')),
             ]),
           ],
         );
@@ -998,7 +870,7 @@ class _K136sLearningPanelState extends State<K136sLearningPanel> {
             Row(children: <Widget>[
               FilledButton(key: const Key('k136s_request'), onPressed: c.busy ? null : c.requestConfirmation, child: const Text('Approve…')),
               const SizedBox(width: 8),
-              TextButton(onPressed: c.busy ? null : c.cancel, child: const Text('Cancel')),
+              TextButton(onPressed: c.cancel, child: const Text('Cancel')),
             ]),
           ],
         );
@@ -1024,7 +896,7 @@ class _K136sLearningPanelState extends State<K136sLearningPanel> {
               const SizedBox(width: 8),
               if (c.voiceConfirmAllowed) const Text('or say "confirm"'),
               const Spacer(),
-              TextButton(onPressed: c.busy ? null : c.cancel, child: const Text('Cancel')),
+              TextButton(onPressed: c.cancel, child: const Text('Cancel')),
             ]),
           ],
         );
@@ -1066,7 +938,9 @@ class _K136sLearningPanelState extends State<K136sLearningPanel> {
       color: theme.colorScheme.surface,
       child: Padding(
         padding: const EdgeInsets.all(14),
-        child: Column(
+        child: ConstrainedBox(
+          constraints:BoxConstraints(maxHeight:(MediaQuery.sizeOf(context).height * 0.65).clamp(120.0,600.0).toDouble()),
+          child:SingleChildScrollView(child:Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -1075,7 +949,7 @@ class _K136sLearningPanelState extends State<K136sLearningPanel> {
               const SizedBox(width: 8),
               Expanded(child: Text(_title(), style: theme.textTheme.titleSmall)),
               if (c.isActive)
-                IconButton(tooltip: 'Cancel', icon: const Icon(Icons.close, size: 18), onPressed: c.busy ? null : c.cancel),
+                IconButton(tooltip: 'Cancel', icon: const Icon(Icons.close, size: 18), onPressed: c.cancel),
             ]),
             if (c.lastError != null) ...<Widget>[
               const SizedBox(height: 6),
@@ -1084,6 +958,7 @@ class _K136sLearningPanelState extends State<K136sLearningPanel> {
             const SizedBox(height: 8),
             _body(context),
           ],
+        )),
         ),
       ),
     );

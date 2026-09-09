@@ -74,8 +74,12 @@ class Harness {
     controller = K136sLearningController(
       api: this.api,
       agentId: 'agent-1',
-      setMuted: (bool m) async => muteCalls.add(m),
-      refreshContext: () async => refreshCalls++,
+      liveSessionId:'live-1', ready:true, principalScope:'fixture-user',
+      setMuted: (bool m) async { muteCalls.add(m);return true; },
+      refreshContext: () async {
+        refreshCalls++;
+        return K136sRefreshReceipt(agentId:'agent-1',liveSessionId:'live-${refreshCalls+1}',contextRestored:true);
+      },
       now: () => now,
     );
   }
