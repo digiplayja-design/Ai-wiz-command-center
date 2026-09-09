@@ -34,7 +34,7 @@ test('happy path reaches VERIFIED and WRITE is emitted only by APPROVE', () => {
   assert.equal(s.state, STATES.CONFIRMATION_REQUIRED);
   assert.equal(effects.includes(EFFECTS.WRITE), false, 'no WRITE effect before approval');
   assert.deepEqual(effects.slice(0, 3), [EFFECTS.MUTE_MIC, EFFECTS.AUDIT, EFFECTS.SHOW_VAULT_FIELD]);
-  const consumed = { ok: true, approvalId: 'ap-1', contentHash: 'h1', userId: 'mgr-1', accountId: 'acct-1', agentId: 'agent-1' };
+  const consumed = { ok: true, sessionId: IDS.id, approvalId: 'ap-1', contentHash: 'h1', userId: 'mgr-1', accountId: 'acct-1', agentId: 'agent-1' };
   const r1 = step(s, EVENTS.APPROVE, { now: T0 + 12000, consumed, channel: 'voice' });
   assert.equal(r1.session.state, STATES.COMMITTING);
   assert.deepEqual(r1.effects, [EFFECTS.WRITE]);
@@ -95,11 +95,15 @@ test('prohibited classification and policy violations reject at CLASSIFIED; queu
 
 test('approval must match content hash, session bindings and be consumed; elevated approvals cannot be voice', () => {
   const { s } = runToConfirmation();
-  const ok = { ok: true, approvalId: 'ap-1', contentHash: 'h1', userId: 'mgr-1', accountId: 'acct-1', agentId: 'agent-1' };
+  const ok = { ok: true, sessionId: IDS.id, approvalId: 'ap-1', contentHash: 'h1', userId: 'mgr-1', accountId: 'acct-1', agentId: 'agent-1' };
   assert.equal(transition(s, EVENTS.APPROVE, { now: T0 + 12000, consumed: Object.assign({}, ok, { ok: false }), channel: 'voice' }).code, 'APPROVAL_NOT_CONSUMED');
   assert.equal(transition(s, EVENTS.APPROVE, { now: T0 + 12000, consumed: Object.assign({}, ok, { approvalId: 'other' }), channel: 'voice' }).code, 'APPROVAL_ID_MISMATCH');
   assert.equal(transition(s, EVENTS.APPROVE, { now: T0 + 12000, consumed: Object.assign({}, ok, { contentHash: 'h2' }), channel: 'voice' }).code, 'CONTENT_HASH_MISMATCH');
   assert.equal(transition(s, EVENTS.APPROVE, { now: T0 + 12000, consumed: Object.assign({}, ok, { accountId: 'acct-9' }), channel: 'voice' }).code, 'APPROVAL_BINDING_MISMATCH');
+  for (const sessionId of ['wrong-session', undefined]) {
+    const denied = transition(s, EVENTS.APPROVE, { now: T0 + 12000, consumed: { ...ok, sessionId }, channel: 'typed' });
+    assert.equal(denied.code, 'APPROVAL_BINDING_MISMATCH'); assert.deepEqual(denied.effects, []);
+  }
   assert.equal(transition(s, EVENTS.APPROVE, { now: T0 + 12000, consumed: ok }).code, 'CHANNEL_REQUIRED');
   assert.equal(transition(s, EVENTS.REQUEST_CONFIRMATION, { now: T0 + 12000, approval: { approvalId: 'x', contentHash: 'h2', expiresAt: T0 + 20000 } }).code, 'INVALID_TRANSITION');
   const el = runToConfirmation({ preview: { policy: { allowed: true, elevated: true, requiresQueue: false, violations: [] } }, approval: { elevated: true } }).s;
@@ -118,7 +122,7 @@ test('token expiry returns to PREVIEW_READY with a cleared approval; edit re-cla
 
 test('verification failure after a write is a REJECTED terminal with the write recorded and an ALERT', () => {
   const { s } = runToConfirmation();
-  const consumed = { ok: true, approvalId: 'ap-1', contentHash: 'h1', userId: 'mgr-1', accountId: 'acct-1', agentId: 'agent-1' };
+  const consumed = { ok: true, sessionId: IDS.id, approvalId: 'ap-1', contentHash: 'h1', userId: 'mgr-1', accountId: 'acct-1', agentId: 'agent-1' };
   const c = step(s, EVENTS.APPROVE, { now: T0 + 12000, consumed, channel: 'typed' }).session;
   assert.equal(transition(c, EVENTS.COMMITTED, { now: T0 + 13000, write: { entryRef: 'mem-1', contentHash: 'other' }, verification: { found: true } }).code, 'WRITE_RECORD_INVALID');
   const r = step(c, EVENTS.COMMITTED, { now: T0 + 13000, write: { entryRef: 'mem-1', contentHash: 'h1' }, verification: { found: false } });

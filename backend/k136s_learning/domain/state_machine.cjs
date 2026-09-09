@@ -162,7 +162,7 @@ function transition(session, event, ctx = {}) {
       if (c.ok !== true) return fail('APPROVAL_NOT_CONSUMED', 'approval token was not consumed');
       if (c.approvalId !== ap.approvalId) return fail('APPROVAL_ID_MISMATCH', 'consumed approval does not belong to this session');
       if (c.contentHash !== session.preview.contentHash || c.contentHash !== ap.contentHash) return fail('CONTENT_HASH_MISMATCH', 'approved content differs from the preview');
-      if (c.userId !== session.userId || c.accountId !== session.accountId || c.agentId !== session.agentId) return fail('APPROVAL_BINDING_MISMATCH', 'approval is bound to a different manager, account or agent');
+      if (c.sessionId !== session.id || c.userId !== session.userId || c.accountId !== session.accountId || c.agentId !== session.agentId) return fail('APPROVAL_BINDING_MISMATCH', 'approval is bound to a different manager, account or agent');
       if (ap.elevated) {
         if (ctx.channel !== 'typed') return fail('ELEVATED_VOICE_FORBIDDEN', 'elevated changes cannot be approved by voice');
         if (!Number.isFinite(ctx.vaultReverifiedAt) || now - ctx.vaultReverifiedAt > TTL_MS.ELEVATED_FRESHNESS || ctx.vaultReverifiedAt > now + 1000) return fail('VAULT_REVERIFY_REQUIRED', 'elevated changes need a vault re-verification within 60 seconds');

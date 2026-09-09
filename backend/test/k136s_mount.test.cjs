@@ -65,7 +65,7 @@ test('mount: registers the five routes and reports mounted + memory store; dev e
   assert.equal(r.ok, true); assert.equal(r.configured, true); assert.equal(r.store, 'memory');
   assert.deepEqual([...routes.keys()].sort(), ROUTES.map(([m, p]) => `${m.toUpperCase()} ${p}`).sort());
   const h = await call('GET', '/k136s/health');
-  assert.equal(h.status, 200); assert.equal(h.json.mounted, true); assert.equal(h.json.stage, 'F1'); assert.equal(h.json.devGrant, false); assert.equal(h.json.vaultGrant, true); assert.equal(h.json.approvals, true);
+  assert.equal(h.status, 200); assert.equal(h.json.mounted, true); assert.equal(h.json.stage, 'F4'); assert.equal(h.json.devGrant, false); assert.equal(h.json.vaultGrant, true); assert.equal(h.json.approvals, true);
   assert.equal(h.set['cache-control'], 'no-store');
   assert.equal((await call('POST', '/k136s/grant/dev', { body: { agentId: 'a' } })).status, 404, 'dev grant is not even routed');
 });
@@ -132,25 +132,26 @@ test('mount: read-back goes through the list helper; a helper that returns nothi
   assert.ok(m._internals.store.audit.list().some((e) => e.eventType === 'ALERT'));
 });
 
-test('mount: K136S_STORE=supabase selects the mirroring store; approvals + audit are mirrored to the K136S tables', async () => {
-  const { app, call } = stubApp(); const f = fakes();
-  const writes = [];
-  f.supabaseAdmin = { tag: 'admin', from(table) { return { insert: async (row) => { writes.push(['insert', table, row]); return { data: row, error: null }; }, update: (vals) => ({ eq: async (col, v) => { writes.push(['update', table, vals, col, v]); return { data: null, error: null }; } }) }; } };
-  const m = mountK136S(app, Object.assign({ env: env({ K136S_STORE: 'supabase' }), log: quiet, vaultVerifier: OK_VAULT }, f));
+test('mount: Supabase authority survives a second mount and awaits DB consumption before writing', async () => {
+  const { fakeClient } = require('./k136s_f4_durable_approval.test.cjs');
+  const f = fakes(); const client = fakeClient(); f.supabaseAdmin = client;
+  const first = stubApp(), second = stubApp();
+  const deps = { ...f, env: env({ K136S_STORE: 'supabase', NODE_ENV: 'production' }), log: quiet, vaultVerifier: OK_VAULT };
+  const m = mountK136S(first.app, deps); mountK136S(second.app, deps);
   assert.equal(m.store, 'supabase');
-  const auth = { authorization: 'Bearer good' };
-  const g = await call('POST', '/k136s/grant', { headers: auth, body: { agentId: 'a', vaultPassword: 'pw' } });
-  const gh = { 'x-k136s-grant': g.json.grant };
-  const p = await call('POST', '/k136s/preview', { headers: gh, body: { agentId: 'a', proposedText: 'Acme prefers morning calls.' } });
-  const preview = { normalizedText: p.json.normalizedText, type: p.json.classification.type, category: p.json.classification.category, sensitivity: p.json.classification.sensitivity, expiresAt: p.json.classification.expiresAt };
-  const rq = await call('POST', '/k136s/approve/request', { headers: Object.assign({}, gh, auth), body: { sessionId: 's', agentId: 'a', contentHash: p.json.contentHash } });
-  const cf = await call('POST', '/k136s/approve/confirm', { headers: Object.assign({}, gh, auth), body: { sessionId: 's', agentId: 'a', contentHash: p.json.contentHash, approvalToken: rq.json.approvalToken, channel: 'voice', preview } });
-  assert.equal(cf.json.state, 'VERIFIED');
-  await m._internals.store.pending();
-  const tables = writes.map((w) => `${w[0]}:${w[1]}`);
-  assert.ok(tables.includes('insert:k136s_approvals')); assert.ok(tables.includes('update:k136s_approvals')); assert.ok(tables.filter((t) => t === 'insert:k136s_audit_events').length >= 3);
-  const approvalRow = writes.find((w) => w[0] === 'insert' && w[1] === 'k136s_approvals')[2];
-  assert.equal(approvalRow.user_id, 'user-1'); assert.equal(approvalRow.account_id, 'acct-9'); assert.match(approvalRow.token_hash, /^[0-9a-f]{64}$/); assert.equal(approvalRow.consumed_at, null);
-  assert.equal(JSON.stringify(writes).includes(rq.json.approvalToken), false, 'raw approval token never mirrored');
-  assert.equal(m._internals.store.stats().failed, 0);
+  const h = await first.call('GET', '/k136s/health');
+  assert.equal(h.json.approvalAuthority, 'supabase_atomic');
+  const headers = { authorization: 'Bearer good' };
+  const g = await first.call('POST', '/k136s/grant', { headers, body: { agentId: 'a', vaultPassword: 'fixture-only' } });
+  headers['x-k136s-grant'] = g.json.grant;
+  const p = await first.call('POST', '/k136s/preview', { headers, body: { agentId: 'a', proposedText: 'Acme prefers morning calls.' } });
+  const preview = { normalizedText: p.json.normalizedText, ...p.json.classification };
+  const body = { sessionId: 's', agentId: 'a', contentHash: p.json.contentHash };
+  const rq = await first.call('POST', '/k136s/approve/request', { headers, body });
+  assert.equal(rq.status, 200);
+  const cf = await second.call('POST', '/k136s/approve/confirm', { headers, body: { ...body, preview, channel: 'voice', approvalToken: rq.json.approvalToken } });
+  assert.equal(cf.status, 200); assert.equal(cf.json.state, 'VERIFIED'); assert.equal(f.saved.length, 1);
+  assert.ok(client.rows[0].consumed_at); assert.equal(client.rows[0].user_id, 'user-1'); assert.equal(client.rows[0].account_id, 'acct-9');
+  assert.equal(JSON.stringify(client.writes).includes(rq.json.approvalToken), false);
+  await m._internals.store.pending(); assert.equal(m._internals.store.stats().failed, 0);
 });

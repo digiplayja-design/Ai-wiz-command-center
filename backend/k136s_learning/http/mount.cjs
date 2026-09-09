@@ -9,8 +9,8 @@
 //   • writer    — E's backend writer bound to korlixAgentSaveMemoryV1 (confirmation field
 //                 `confirmed`, body augmented with `label`/`expiresAt`/`memory` for the row mapper)
 //                 and read-back via korlixAgentListMemoriesV1 filtered by key
-//   • store     — in-memory by default; K136S_STORE=supabase mirrors approvals + audit to the
-//                 K136S tables (after the migration is applied)
+//   • store     — K136S_STORE=supabase uses DB-authoritative async approvals; required in production.
+//                 In-memory mode is retained for non-production development/tests only.
 // Dev grant and dev identity are HARD-OFF here. server.js is an ES module and this file is CJS:
 // it is loaded with a default import and must NOT require the ESM agents module — the helpers are
 // passed in. Nothing in here throws into the host: a K136S problem logs and fails closed.
@@ -22,7 +22,7 @@ const { createMemoryStore } = require('../adapters/memory_store.cjs');
 const { createSupabaseStore } = require('../adapters/supabase_store.cjs');
 const { createBackendMemoryWriter } = require('../adapters/memory_writer.cjs');
 
-const STAGE = 'F1';
+const STAGE = 'F4';
 const ROUTES = Object.freeze([
   ['get', '/k136s/health'], ['post', '/k136s/grant'], ['post', '/k136s/preview'],
   ['post', '/k136s/approve/request'], ['post', '/k136s/approve/confirm'],
@@ -89,6 +89,11 @@ function mountK136S(app, deps = {}) {
     const key = typeof env.K136S_GRANT_KEY === 'string' ? env.K136S_GRANT_KEY : '';
     const configured = key.length >= 16;
     const problems = [];
+    const mode = String(env.K136S_STORE || '').toLowerCase();
+    const production = env.NODE_ENV === 'production' || env.RENDER === 'true';
+    if (!['', 'memory', 'supabase'].includes(mode) || (production && mode !== 'supabase')) {
+      problems.push('K136S_STORE must be supabase in production; no memory fallback');
+    }
     if (!configured) problems.push('K136S_GRANT_KEY missing or shorter than 16 chars');
     if (!isFn(requireUser)) problems.push('requireUser not provided');
     if (!supabaseAdmin) problems.push('supabaseAdmin not provided');
@@ -113,7 +118,7 @@ function mountK136S(app, deps = {}) {
 
     const useSupabase = String(env.K136S_STORE || '').toLowerCase() === 'supabase';
     const store = useSupabase ? createSupabaseStore({ client: supabaseAdmin, now, log }) : createMemoryStore();
-    const approvals = createApprovalService({ store, now });
+    const approvals = useSupabase ? store.approvalService : createApprovalService({ store, now }); // K136S-F4
 
     // Identity: resolved from the express request attached to the headers object per call.
     const identity = async (headers) => {
@@ -135,7 +140,7 @@ function mountK136S(app, deps = {}) {
         const out = await handle.async({ method: req.method, path: req.originalUrl || req.url || req.path, headers, rawBody });
         res.set && res.set('cache-control', 'no-store');
         const json = (out && out.json) || { error: 'internal error' };
-        if (out && out.status === 200 && json && typeof json === 'object' && json.service === 'k136s-preview') Object.assign(json, { mounted: true, stage: STAGE, store: store.kind || 'memory' });
+        if (out && out.status === 200 && json && typeof json === 'object' && json.service === 'k136s-preview') Object.assign(json, { mounted: true, stage: STAGE, store: store.kind || 'memory', approvalAuthority: store.authority || 'memory' });
         res.status((out && out.status) || 500).json(json);
       } catch (e) {
         warn(`request failed: ${e && e.message || e}`);

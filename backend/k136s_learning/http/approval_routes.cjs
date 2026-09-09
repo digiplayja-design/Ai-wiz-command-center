@@ -53,14 +53,25 @@ function createApprovalRoutes({ store, approvals, writer = null, identity = null
     return { ok: true, userId: id.userId, accountId: id.accountId };
   }
 
+  // K136S-F4: await the durable authority; sanitize failures; never authorize on uncertainty.
+  async function approvalCall(method, input) {
+    try {
+      const r = await approvals[method](input);
+      const codes = ['INVALID_INPUT', 'EXPIRED', 'NOT_FOUND', 'ALREADY_CONSUMED', 'BINDING_MISMATCH', 'APPROVAL_STORE_UNAVAILABLE'];
+      if (r && r.ok === true) return r;
+      if (r && r.ok === false && codes.includes(r.code)) return { ok: false, code: r.code, field: r.field };
+    } catch { /* no raw error disclosure */ }
+    return { ok: false, code: 'APPROVAL_STORE_UNAVAILABLE' };
+  }
+
   // grantPayload: the verified preview grant ({ agentId, iat, exp, pv, mgr }) supplied by the handler.
   async function request({ headers, body, grantPayload }) {
     if (!body || !isStr(body.sessionId) || !isStr(body.agentId) || !isStr(body.contentHash)) return json(400, { error: 'sessionId, agentId and contentHash are required', code: 'INVALID_INPUT' });
     if (!grantPayload || grantPayload.agentId !== body.agentId) return json(403, { error: 'grant not valid for this agent', code: 'AGENT_MISMATCH' });
     const who = await resolveIdentity(headers);
     if (!who.ok) return json(who.status, { error: 'identity required', code: who.code });
-    const r = approvals.issue({ sessionId: body.sessionId, userId: who.userId, accountId: who.accountId, agentId: body.agentId, contentHash: body.contentHash, elevated: body.elevated === true });
-    if (!r.ok) return json(400, { error: 'cannot issue approval', code: r.code, field: r.field });
+    const r = await approvalCall('issue', { sessionId: body.sessionId, userId: who.userId, accountId: who.accountId, agentId: body.agentId, contentHash: body.contentHash, elevated: body.elevated === true });
+    if (!r.ok) return json(r.code === 'APPROVAL_STORE_UNAVAILABLE' ? 503 : 400, { error: 'cannot issue approval', code: r.code, field: r.field });
     audit('APPROVAL_ISSUED', { sessionId: body.sessionId, userId: who.userId, accountId: who.accountId, agentId: body.agentId, contentHash: body.contentHash, approvalId: r.approvalId, elevated: r.elevated });
     return json(200, { approvalToken: r.token, approvalId: r.approvalId, expiresAt: r.expiresAt, elevated: r.elevated, note: 'single-use; expires in 120s' });
   }
@@ -97,11 +108,15 @@ function createApprovalRoutes({ store, approvals, writer = null, identity = null
     }
 
     // 3) consume the approval — atomic, single-use, bound
-    const c = approvals.consume({ token: body.approvalToken, sessionId: body.sessionId, userId: who.userId, accountId: who.accountId, agentId: body.agentId, contentHash: body.contentHash });
+    const c = await approvalCall('consume', { token: body.approvalToken, sessionId: body.sessionId, userId: who.userId, accountId: who.accountId, agentId: body.agentId, contentHash: body.contentHash });
     if (!c.ok) {
       audit('CONFIRM_REJECTED', { sessionId: body.sessionId, agentId: body.agentId, reason: 'APPROVAL_' + c.code });
-      const status = c.code === 'EXPIRED' ? 410 : c.code === 'ALREADY_CONSUMED' ? 409 : c.code === 'BINDING_MISMATCH' ? 403 : 401;
+      const status = c.code === 'APPROVAL_STORE_UNAVAILABLE' ? 503 : c.code === 'EXPIRED' ? 410 : c.code === 'ALREADY_CONSUMED' ? 409 : c.code === 'BINDING_MISMATCH' ? 403 : 401;
       return json(status, { error: 'approval not valid', code: c.code });
+    }
+    if (c.sessionId !== body.sessionId || c.userId !== who.userId || c.accountId !== who.accountId ||
+        c.agentId !== body.agentId || c.contentHash !== body.contentHash || !isStr(c.approvalId) || !Number.isFinite(c.consumedAt)) {
+      return json(503, { error: 'approval consumption could not be verified', code: 'APPROVAL_STORE_UNAVAILABLE' });
     }
     if (policy.elevated && c.elevated !== true) {
       audit('CONFIRM_REJECTED', { sessionId: body.sessionId, agentId: body.agentId, reason: 'ELEVATED_NOT_DECLARED', approvalId: c.approvalId });

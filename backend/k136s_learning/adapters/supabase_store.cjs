@@ -1,91 +1,123 @@
 'use strict';
-// K136S-F1 Supabase-backed store.
-//
-// B's approval service uses the store SYNCHRONOUSLY (insert / consumeIfValid), so this adapter keeps
-// the in-memory store as the authoritative, atomic source of truth for the running process and
-// MIRRORS to the K136S tables asynchronously:
-//   • k136s_approvals     — inserted on issue, consumed_at set on consume (visibility, not atomicity)
-//   • k136s_audit_events  — every audit event (durable trail; this is the main reason to opt in)
-//   • sessions            — memory only (E does not persist sessions; F2/F3 may)
-// Mirror failures are counted and logged; they never break the request path. A process restart
-// loses unconsumed approvals (they live 120 s anyway). Making approvals DB-atomic needs an async
-// approval service — a follow-up with its own approval, because it edits a B module.
-//
-// Opt-in only: the mount selects this store when K136S_STORE=supabase AND a client is present, which
-// is meaningful only after supabase/migrations/202609060001_k136s_learning_build136.sql is applied.
+// K136S-F4: Supabase is the ONLY approval authority in this adapter.
+// No approval cache/fallback. Use approvalService (async), not B's synchronous service.
+// Consumption is one filtered UPDATE ... RETURNING. Audit mirroring remains best-effort.
+const crypto = require('node:crypto');
 const { createMemoryStore } = require('./memory_store.cjs');
-
+const { hashToken, DEFAULT_TTL_MS } = require('../services/approval_service.cjs');
 const TABLES = Object.freeze({ approvals: 'k136s_approvals', audit: 'k136s_audit_events', sessions: 'k136s_learning_sessions' });
-const AUDIT_COLUMNS = Object.freeze(['sessionId', 'userId', 'accountId', 'agentId', 'approvalId', 'memoryKey', 'contentHash']);
-const iso = (ms) => (Number.isFinite(ms) ? new Date(ms).toISOString() : null);
-
-function createSupabaseStore({ client, now = Date.now, log = null, memory = null } = {}) {
+const BIND = Object.freeze({ sessionId: 'session_id', userId: 'user_id', accountId: 'account_id', agentId: 'agent_id', contentHash: 'content_hash' });
+const COLS = 'id,session_id,user_id,account_id,agent_id,token_hash,content_hash,elevated,created_at,expires_at,consumed_at';
+const AUDIT_COLUMNS = ['sessionId', 'userId', 'accountId', 'agentId', 'approvalId', 'memoryKey', 'contentHash'];
+const DETAIL_KEYS = ['reason', 'memoryId', 'superseded', 'elevated', 'expectedHash', 'readBackHash', 'claimed', 'computed', 'violations'];
+const str = (v) => typeof v === 'string' && v.trim().length > 0;
+const iso = (v) => new Date(v).toISOString();
+const unavailable = () => ({ ok: false, code: 'APPROVAL_STORE_UNAVAILABLE' });
+function decode(r) {
+  if (!r || !str(r.id) || !/^[0-9a-f]{64}$/.test(r.token_hash) || typeof r.elevated !== 'boolean') return null;
+  const out = { id: r.id, tokenHash: r.token_hash, elevated: r.elevated,
+    createdAt: Date.parse(r.created_at), expiresAt: Date.parse(r.expires_at),
+    consumedAt: r.consumed_at === null ? null : Date.parse(r.consumed_at) };
+  for (const [k, col] of Object.entries(BIND)) { if (!str(r[col])) return null; out[k] = r[col]; }
+  if (!Number.isFinite(out.createdAt) || !Number.isFinite(out.expiresAt) || out.expiresAt <= out.createdAt ||
+      (out.consumedAt !== null && !Number.isFinite(out.consumedAt))) return null;
+  return out;
+}
+function createSupabaseStore({ client, now = Date.now, log = null, memory = null, timeoutMs = 5000 } = {}) {
   if (!client || typeof client.from !== 'function') throw new TypeError('supabase store requires a client with from()');
-  const mem = memory || createMemoryStore();
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 10000) throw new TypeError('invalid store timeout');
+  const mem = memory || createMemoryStore(); // sessions/audit only; NEVER mem.approvals
   const stats = { mirrored: 0, failed: 0 };
-  let inflight = [];
-  const warn = (m) => { try { (log || console).warn(`[k136s] store mirror: ${m}`); } catch { /* ignore */ } };
-
-  // fire-and-forget with bookkeeping; never throws into the caller
-  function mirror(label, fn) {
-    let p;
-    try { p = Promise.resolve().then(fn); } catch (e) { p = Promise.reject(e); }
-    const tracked = p.then((r) => {
-      if (r && r.error) { stats.failed += 1; warn(`${label}: ${r.error.message || String(r.error)}`); }
-      else stats.mirrored += 1;
-    }).catch((e) => { stats.failed += 1; warn(`${label}: ${e && e.message || e}`); });
-    inflight.push(tracked);
-    if (inflight.length > 200) inflight = inflight.slice(-100);
-    return tracked;
-  }
-
-  const approvals = {
-    insert(record) {
-      const r = mem.approvals.insert(record);
-      mirror('approvals.insert', () => client.from(TABLES.approvals).insert({
-        id: record.id, session_id: record.sessionId, user_id: record.userId, account_id: record.accountId, agent_id: record.agentId,
-        token_hash: record.tokenHash, content_hash: record.contentHash, elevated: record.elevated === true,
-        created_at: iso(record.createdAt), expires_at: iso(record.expiresAt), consumed_at: null,
-      }));
+  const inflight = new Set();
+  async function query(build) {
+    const controller = new AbortController();
+    let timer;
+    try {
+      const task = Promise.resolve().then(() => build().abortSignal(controller.signal));
+      const timeout = new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('store timeout')); }, timeoutMs); });
+      const r = await Promise.race([task, timeout]);
+      if (!r || r.error) throw new Error('store rejected');
       return r;
-    },
-    findById(id) { return mem.approvals.findById(id); },
-    consumeIfValid(tokenHash, binding, nowMs) {
-      const result = mem.approvals.consumeIfValid(tokenHash, binding, nowMs);
-      if (result && result.ok && result.record) {
-        const rec = result.record;
-        mirror('approvals.consume', () => client.from(TABLES.approvals).update({ consumed_at: iso(rec.consumedAt || nowMs) }).eq('id', rec.id));
+    } catch {
+      stats.failed++;
+      // Never copy a database error, row, request, or token into a log or response.
+      try { (log || console).warn('[k136s] durable store operation failed'); } catch {}
+      return null;
+    } finally { clearTimeout(timer); }
+  }
+  async function issue(input) {
+    for (const k of Object.keys(BIND)) if (!input || !str(input[k])) return { ok: false, code: 'INVALID_INPUT', field: k };
+    try {
+      const at = now();
+      if (!Number.isFinite(at)) return unavailable();
+      const token = crypto.randomBytes(32).toString('base64url');
+      const row = { id: crypto.randomUUID(), token_hash: hashToken(token), elevated: input.elevated === true,
+        created_at: iso(at), expires_at: iso(at + DEFAULT_TTL_MS), consumed_at: null };
+      for (const [k, col] of Object.entries(BIND)) row[col] = input[k];
+      const r = await query(() => client.from(TABLES.approvals).insert(row).select(COLS));
+      if (!r || !Array.isArray(r.data) || r.data.length !== 1) return unavailable();
+      const rec = decode(r.data[0]);
+      if (!rec || rec.id !== row.id || rec.tokenHash !== row.token_hash || rec.consumedAt !== null ||
+          rec.createdAt !== at || rec.expiresAt !== at + DEFAULT_TTL_MS || rec.elevated !== row.elevated ||
+          Object.keys(BIND).some((k) => rec[k] !== input[k])) return unavailable();
+      if (!(rec.expiresAt > now())) return { ok: false, code: 'EXPIRED' };
+      return { ok: true, approvalId: rec.id, token, expiresAt: rec.expiresAt, elevated: rec.elevated };
+    } catch { return unavailable(); }
+  }
+  async function consume(input) {
+    for (const k of ['token', ...Object.keys(BIND)]) if (!input || !str(input[k])) return { ok: false, code: 'INVALID_INPUT' };
+    try {
+      const tokenHash = hashToken(input.token);
+      // 'now' is a timestamptz input evaluated by PostgreSQL for this request.
+      // All bindings, unused state, and expiry are conditions of the SAME UPDATE.
+      const r = await query(() => {
+        let q = client.from(TABLES.approvals).update({ consumed_at: 'now' }).eq('token_hash', tokenHash);
+        for (const [k, col] of Object.entries(BIND)) q = q.eq(col, input[k]);
+        return q.is('consumed_at', null).gt('expires_at', 'now').select(COLS);
+      });
+      if (!r || !Array.isArray(r.data) || r.data.length > 1) return unavailable();
+      if (r.data.length === 1) {
+        const rec = decode(r.data[0]);
+        if (!rec || rec.tokenHash !== tokenHash || rec.consumedAt === null ||
+            Object.keys(BIND).some((k) => rec[k] !== input[k])) return unavailable();
+        if (!(rec.consumedAt < rec.expiresAt) || !(rec.expiresAt > now())) return { ok: false, code: 'EXPIRED' };
+        return { ok: true, approvalId: rec.id, contentHash: rec.contentHash, userId: rec.userId, accountId: rec.accountId,
+          agentId: rec.agentId, sessionId: rec.sessionId, elevated: rec.elevated, consumedAt: rec.consumedAt };
       }
-      return result;
-    },
-    count() { return mem.approvals.count(); },
-    dump() { return mem.approvals.dump(); },
-  };
-
+      // Diagnostic read ONLY after losing the update. It can NEVER authorize a write.
+      const d = await query(() => client.from(TABLES.approvals).select(COLS).eq('token_hash', tokenHash).limit(2));
+      if (!d || !Array.isArray(d.data) || d.data.length > 1) return unavailable();
+      if (!d.data.length) return { ok: false, code: 'NOT_FOUND' };
+      const rec = decode(d.data[0]);
+      if (!rec || rec.tokenHash !== tokenHash) return unavailable();
+      if (Object.keys(BIND).some((k) => rec[k] !== input[k])) return { ok: false, code: 'BINDING_MISMATCH' };
+      if (rec.consumedAt !== null) return { ok: false, code: 'ALREADY_CONSUMED' };
+      if (!(rec.expiresAt > now())) return { ok: false, code: 'EXPIRED' };
+      return unavailable(); // no returned update row means no authority, even if a read looks valid
+    } catch { return unavailable(); }
+  }
   const audit = {
     append(event) {
-      const id = mem.audit.append(event);
+      const clean = { eventType: event.eventType, at: Number.isFinite(event.at) ? event.at : now() };
+      for (const k of [...AUDIT_COLUMNS, ...DETAIL_KEYS]) if (event[k] !== undefined) clean[k] = event[k];
+      const id = mem.audit.append(clean);
       const detail = {};
-      for (const k of Object.keys(event)) if (k !== 'eventType' && k !== 'at' && !AUDIT_COLUMNS.includes(k)) detail[k] = event[k];
-      mirror('audit.append', () => client.from(TABLES.audit).insert({
-        event_type: event.eventType, at: iso(Number.isFinite(event.at) ? event.at : now()),
-        session_id: event.sessionId || null, user_id: event.userId || null, account_id: event.accountId || null, agent_id: event.agentId || null,
-        approval_id: event.approvalId || null, memory_key: event.memoryKey || null, content_hash: event.contentHash || null,
-        detail,
-      }));
+      for (const k of DETAIL_KEYS) if (clean[k] !== undefined) detail[k] = clean[k];
+      const row = { event_type: clean.eventType, at: iso(clean.at), session_id: clean.sessionId || null,
+        user_id: clean.userId || null, account_id: clean.accountId || null, agent_id: clean.agentId || null,
+        approval_id: clean.approvalId || null, memory_key: clean.memoryKey || null, content_hash: clean.contentHash || null, detail };
+      const p = query(() => client.from(TABLES.audit).insert(row)).then((r) => { if (r) stats.mirrored++; });
+      inflight.add(p); p.finally(() => inflight.delete(p));
       return id;
     },
     list() { return mem.audit.list(); },
   };
-
-  return Object.freeze({
-    kind: 'supabase',
-    approvals, audit,
-    sessions: mem.sessions,
-    reset() { return mem.reset(); },
-    stats() { return Object.assign({}, stats); },
-    pending() { return Promise.allSettled(inflight.slice()); },
-  });
+  // Fail synchronously if somebody accidentally wires B's synchronous service to this store.
+  const unsupported = () => { throw new Error('K136S_DURABLE_SERVICE_REQUIRED'); };
+  return Object.freeze({ kind: 'supabase', authority: 'supabase_atomic',
+    approvalService: Object.freeze({ issue, consume, ttlMs: DEFAULT_TTL_MS }),
+    approvals: Object.freeze({ insert: unsupported, consumeIfValid: unsupported }),
+    audit, sessions: mem.sessions, reset() { mem.reset(); },
+    stats() { return { ...stats }; }, pending() { return Promise.allSettled([...inflight]); } });
 }
-
 module.exports = Object.freeze({ createSupabaseStore, TABLES });
