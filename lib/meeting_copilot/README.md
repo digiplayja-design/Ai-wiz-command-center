@@ -19,3 +19,13 @@ The `/meeting-copilot` named route binds the exact official KORLIX corporate
 mark separately from Nova's canonical assistant portrait. The route owns a
 `NovaMeetingCopilotController`, preserves Nova's muted-by-default behavior,
 and disposes the controller when the route closes where supported.
+
+## C2 normalized notes-only workspace
+
+The C2 workspace adds pure, bounded transcript reduction, evidence-linked notes,
+display-only minutes, operation correlation, stale-result rejection, reactive
+Enterprise access loss, and an explicitly silent `canSpeak == false` capability.
+The route preserves its no-argument constructor and accepts an optional
+feature-local workspace controller for isolated integration and tests. It does
+not add a provider, database, recording, email, calendar, CRM, or durable
+memory effect.

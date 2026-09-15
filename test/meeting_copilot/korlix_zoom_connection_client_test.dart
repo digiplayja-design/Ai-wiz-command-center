@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -290,4 +291,125 @@ void main() {
       ),
     );
   });
+
+  test(
+    'malformed meetings are protocol errors rather than empty results',
+    () async {
+      final KorlixZoomConnectionClient malformed = KorlixZoomConnectionClient(
+        backendBaseUri: Uri.parse('https://api.korlix.test/'),
+        headersBuilder: () async => <String, String>{},
+        transport:
+            ({
+              required String method,
+              required Uri uri,
+              required Map<String, String> headers,
+              Object? body,
+            }) async => const KorlixZoomTransportResponse(
+              statusCode: 200,
+              body: '{"ok":true,"meetings":{"bad":true}}',
+            ),
+      );
+
+      await expectLater(
+        malformed.listUpcomingMeetings(),
+        throwsA(
+          isA<KorlixZoomApiException>().having(
+            (KorlixZoomApiException error) => error.code,
+            'code',
+            'ZOOM_MEETINGS_RESPONSE_INVALID',
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'false disconnect acknowledgment does not manufacture disconnected state',
+    () async {
+      final KorlixZoomConnectionClient falseDisconnect =
+          KorlixZoomConnectionClient(
+            backendBaseUri: Uri.parse('https://api.korlix.test/'),
+            headersBuilder: () async => <String, String>{},
+            transport:
+                ({
+                  required String method,
+                  required Uri uri,
+                  required Map<String, String> headers,
+                  Object? body,
+                }) async {
+                  if (uri.path == KorlixZoomConnectionClient.statusPath) {
+                    return const KorlixZoomTransportResponse(
+                      statusCode: 200,
+                      body:
+                          '{"status":{"connected":true,'
+                          '"requires_reauthorization":false,'
+                          '"access_token_expired":false}}',
+                    );
+                  }
+                  return const KorlixZoomTransportResponse(
+                    statusCode: 200,
+                    body: '{"ok":false}',
+                  );
+                },
+          );
+      final KorlixZoomConnectionController controller =
+          KorlixZoomConnectionController(client: falseDisconnect);
+      await controller.refreshStatus();
+      expect(controller.phase, KorlixZoomConnectionPhase.connected);
+      await controller.disconnect();
+      expect(controller.phase, KorlixZoomConnectionPhase.error);
+      expect(controller.status?.connected, isTrue);
+      controller.dispose();
+    },
+  );
+
+  test(
+    'late status result cannot overwrite a newer status operation',
+    () async {
+      final Completer<KorlixZoomTransportResponse> first =
+          Completer<KorlixZoomTransportResponse>();
+      int calls = 0;
+      final KorlixZoomConnectionClient racing = KorlixZoomConnectionClient(
+        backendBaseUri: Uri.parse('https://api.korlix.test/'),
+        headersBuilder: () async => <String, String>{},
+        transport:
+            ({
+              required String method,
+              required Uri uri,
+              required Map<String, String> headers,
+              Object? body,
+            }) async {
+              calls += 1;
+              if (calls == 1) {
+                return first.future;
+              }
+              return const KorlixZoomTransportResponse(
+                statusCode: 200,
+                body:
+                    '{"status":{"connected":false,'
+                    '"requires_reauthorization":false,'
+                    '"access_token_expired":false}}',
+              );
+            },
+      );
+      final KorlixZoomConnectionController controller =
+          KorlixZoomConnectionController(client: racing);
+      final Future<void> old = controller.refreshStatus();
+      final Future<void> newer = controller.refreshStatus();
+      await newer;
+      first.complete(
+        const KorlixZoomTransportResponse(
+          statusCode: 200,
+          body:
+              '{"status":{"connected":true,'
+              '"requires_reauthorization":false,'
+              '"access_token_expired":false}}',
+        ),
+      );
+      await old;
+      expect(controller.phase, KorlixZoomConnectionPhase.disconnected);
+      expect(controller.status?.connected, isFalse);
+      controller.dispose();
+    },
+  );
 }

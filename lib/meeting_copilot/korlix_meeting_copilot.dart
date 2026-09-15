@@ -1,5 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'k135z_copilot_contract.dart';
+import 'k135z_workspace_controller.dart';
 
 enum NovaMeetingCopilotStatus {
   disconnected,
@@ -391,6 +396,8 @@ class KorlixMeetingCopilotScreen extends StatelessWidget {
     this.onAskNova,
     this.onThirtySecondUpdate,
     this.onSpeakNow,
+    this.workspaceController,
+    this.notesOnly = true,
   });
 
   final NovaMeetingCopilotController controller;
@@ -400,6 +407,8 @@ class KorlixMeetingCopilotScreen extends StatelessWidget {
   final VoidCallback? onAskNova;
   final VoidCallback? onThirtySecondUpdate;
   final VoidCallback? onSpeakNow;
+  final K135zWorkspaceController? workspaceController;
+  final bool notesOnly;
 
   static const Color _navy = Color(0xFF031426);
   static const Color _panel = Color(0xFF0A223A);
@@ -412,7 +421,10 @@ class KorlixMeetingCopilotScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: controller,
+      animation: Listenable.merge(<Listenable>[
+        controller,
+        if (workspaceController != null) workspaceController!,
+      ]),
       builder: (BuildContext context, Widget? child) {
         final NovaMeetingCopilotState state = controller.state;
 
@@ -429,6 +441,12 @@ class KorlixMeetingCopilotScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
                       _Header(korlixLogo: korlixLogo, state: state),
+                      if (workspaceController != null) ...<Widget>[
+                        const SizedBox(height: 18),
+                        K135zMeetingWorkspacePanel(
+                          controller: workspaceController!,
+                        ),
+                      ],
                       const SizedBox(height: 18),
                       if (wide)
                         Row(
@@ -444,6 +462,7 @@ class KorlixMeetingCopilotScreen extends StatelessWidget {
                                 onAskNova: onAskNova,
                                 onThirtySecondUpdate: onThirtySecondUpdate,
                                 onSpeakNow: onSpeakNow,
+                                notesOnly: notesOnly,
                               ),
                             ),
                             const SizedBox(width: 18),
@@ -462,6 +481,7 @@ class KorlixMeetingCopilotScreen extends StatelessWidget {
                           onAskNova: onAskNova,
                           onThirtySecondUpdate: onThirtySecondUpdate,
                           onSpeakNow: onSpeakNow,
+                          notesOnly: notesOnly,
                         ),
                         const SizedBox(height: 18),
                         _TranscriptPanel(state: state),
@@ -572,6 +592,7 @@ class _NovaControlPanel extends StatelessWidget {
     required this.onAskNova,
     required this.onThirtySecondUpdate,
     required this.onSpeakNow,
+    required this.notesOnly,
   });
 
   final NovaMeetingCopilotController controller;
@@ -581,6 +602,7 @@ class _NovaControlPanel extends StatelessWidget {
   final VoidCallback? onAskNova;
   final VoidCallback? onThirtySecondUpdate;
   final VoidCallback? onSpeakNow;
+  final bool notesOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -701,7 +723,8 @@ class _NovaControlPanel extends StatelessWidget {
               ),
               ElevatedButton.icon(
                 key: const Key('speak-now-button'),
-                onPressed: controller.canSpeakNow && onSpeakNow != null
+                onPressed:
+                    !notesOnly && controller.canSpeakNow && onSpeakNow != null
                     ? () {
                         controller.beginSpeaking();
                         onSpeakNow!();
@@ -992,4 +1015,125 @@ class _PrivacyBanner extends StatelessWidget {
       ),
     );
   }
+}
+
+class K135zMeetingWorkspacePanel extends StatelessWidget {
+  const K135zMeetingWorkspacePanel({super.key, required this.controller});
+
+  final K135zWorkspaceController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final K135zWorkspaceState state = controller.state;
+    final K135zMinutesPreview? preview = state.preview;
+    return _Panel(
+      title: 'Validated Notes Workspace',
+      leading: const Icon(
+        Icons.fact_check_outlined,
+        color: KorlixMeetingCopilotScreen._cyan,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              _workspaceChip('Phase', state.phase.name),
+              _workspaceChip('Pending', state.pendingAction?.name ?? 'none'),
+              _workspaceChip(
+                'Transcript',
+                '${state.transcript.segments.length} segments',
+              ),
+              _workspaceChip('Speech', state.canSpeak ? 'enabled' : 'disabled'),
+            ],
+          ),
+          if (state.errorMessage != null) ...<Widget>[
+            const SizedBox(height: 12),
+            Text(
+              state.errorMessage!,
+              key: const Key('k135z-workspace-error'),
+              style: const TextStyle(
+                color: KorlixMeetingCopilotScreen._danger,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              ElevatedButton.icon(
+                key: const Key('k135z-workspace-start'),
+                onPressed: state.canStart
+                    ? () => unawaited(controller.startListening())
+                    : null,
+                icon: const Icon(Icons.hearing_rounded),
+                label: const Text('Start Notes Capture'),
+              ),
+              OutlinedButton.icon(
+                key: const Key('k135z-workspace-pause'),
+                onPressed: state.canPause
+                    ? () => unawaited(controller.pauseListening())
+                    : null,
+                icon: const Icon(Icons.pause_circle_outline),
+                label: const Text('Pause Capture'),
+              ),
+              OutlinedButton.icon(
+                key: const Key('k135z-workspace-stop'),
+                onPressed: state.canStop
+                    ? () => unawaited(controller.stopListening())
+                    : null,
+                icon: const Icon(Icons.stop_circle_outlined),
+                label: const Text('Stop Capture'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            preview?.coverageNotice ??
+                'Meeting notes stay in memory and remain evidence-linked. '
+                    'Nova cannot speak from this notes-only workspace.',
+            key: const Key('k135z-workspace-coverage'),
+            style: const TextStyle(
+              color: KorlixMeetingCopilotScreen._mutedText,
+            ),
+          ),
+          if (preview?.ok == true) ...<Widget>[
+            const SizedBox(height: 12),
+            Text(
+              preview!.title,
+              key: const Key('k135z-minutes-title'),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            for (final K135zMinutesSection section in preview.sections)
+              Text(
+                '${section.category.label}: ${section.items.length}',
+                style: const TextStyle(
+                  color: KorlixMeetingCopilotScreen._mutedText,
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static Widget _workspaceChip(String label, String value) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    decoration: BoxDecoration(
+      color: KorlixMeetingCopilotScreen._panelAlt,
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: KorlixMeetingCopilotScreen._border),
+    ),
+    child: Text(
+      '$label: $value',
+      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+    ),
+  );
 }

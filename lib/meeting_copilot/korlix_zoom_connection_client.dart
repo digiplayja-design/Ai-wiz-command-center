@@ -78,20 +78,23 @@ class KorlixZoomConnectionStatus {
   factory KorlixZoomConnectionStatus.fromJson(Map<String, dynamic> json) {
     return KorlixZoomConnectionStatus(
       connected: json['connected'] == true,
-
-      requiresReauthorization: json['requiresReauthorization'] == true,
-
-      accessTokenExpired: json['accessTokenExpired'] == true,
-
+      requiresReauthorization:
+          (json['requiresReauthorization'] ??
+              json['requires_reauthorization']) ==
+          true,
+      accessTokenExpired:
+          (json['accessTokenExpired'] ?? json['access_token_expired']) == true,
       scope: (json['scope'] ?? '').toString(),
-
-      expiresAt: DateTime.tryParse((json['expiresAt'] ?? '').toString()),
-
-      connectedAt: DateTime.tryParse((json['connectedAt'] ?? '').toString()),
-
-      zoomAccountId: _nullableString(json['zoomAccountId']),
-
-      zoomUserId: _nullableString(json['zoomUserId']),
+      expiresAt: DateTime.tryParse(
+        (json['expiresAt'] ?? json['expires_at'] ?? '').toString(),
+      ),
+      connectedAt: DateTime.tryParse(
+        (json['connectedAt'] ?? json['connected_at'] ?? '').toString(),
+      ),
+      zoomAccountId: _nullableString(
+        json['zoomAccountId'] ?? json['zoom_account_id'],
+      ),
+      zoomUserId: _nullableString(json['zoomUserId'] ?? json['zoom_user_id']),
     );
   }
 
@@ -119,24 +122,29 @@ class KorlixZoomMeetingSummary {
   });
 
   factory KorlixZoomMeetingSummary.fromJson(Map<String, dynamic> json) {
+    final String id = (json['id'] ?? '').toString().trim();
+    final String topic = (json['topic'] ?? '').toString().trim();
+    if (id.isEmpty || topic.isEmpty) {
+      throw const KorlixZoomApiException(
+        statusCode: 502,
+        code: 'ZOOM_MEETING_RESPONSE_INVALID',
+        message: 'The backend returned an invalid Zoom meeting record.',
+      );
+    }
     return KorlixZoomMeetingSummary(
-      id: (json['id'] ?? '').toString(),
-
+      id: id,
       uuid: _nullableString(json['uuid']),
-
-      topic: (json['topic'] ?? 'Untitled meeting').toString(),
-
-      startTime: DateTime.tryParse((json['startTime'] ?? '').toString()),
-
-      durationMinutes: _nullableInt(json['durationMinutes']),
-
+      topic: topic,
+      startTime: DateTime.tryParse(
+        (json['startTime'] ?? json['start_time'] ?? '').toString(),
+      ),
+      durationMinutes: _nullableInt(
+        json['durationMinutes'] ?? json['duration_minutes'],
+      ),
       timezone: _nullableString(json['timezone']),
-
       type: _nullableInt(json['type']),
-
-      isHost: json['isHost'] == true,
-
-      isAllDay: json['isAllDay'] == true,
+      isHost: (json['isHost'] ?? json['is_host']) == true,
+      isAllDay: (json['isAllDay'] ?? json['is_all_day']) == true,
     );
   }
 
@@ -240,18 +248,28 @@ class KorlixZoomConnectionClient {
     final dynamic values = payload['meetings'];
 
     if (values is! List) {
-      return const <KorlixZoomMeetingSummary>[];
+      throw const KorlixZoomApiException(
+        statusCode: 502,
+        code: 'ZOOM_MEETINGS_RESPONSE_INVALID',
+        message: 'The backend returned an invalid upcoming-meetings response.',
+      );
     }
 
-    return values
-        .whereType<Map>()
-        .map(
-          (Map value) => KorlixZoomMeetingSummary.fromJson(
-            Map<String, dynamic>.from(value),
-          ),
-        )
-        .where((KorlixZoomMeetingSummary meeting) => meeting.id.isNotEmpty)
-        .toList(growable: false);
+    final List<KorlixZoomMeetingSummary> meetings =
+        <KorlixZoomMeetingSummary>[];
+    for (final dynamic value in values) {
+      if (value is! Map) {
+        throw const KorlixZoomApiException(
+          statusCode: 502,
+          code: 'ZOOM_MEETING_RESPONSE_INVALID',
+          message: 'The backend returned an invalid Zoom meeting record.',
+        );
+      }
+      meetings.add(
+        KorlixZoomMeetingSummary.fromJson(Map<String, dynamic>.from(value)),
+      );
+    }
+    return List<KorlixZoomMeetingSummary>.unmodifiable(meetings);
   }
 
   Future<bool> disconnect() async {

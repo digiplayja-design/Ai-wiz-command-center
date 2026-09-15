@@ -4,7 +4,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../lib/meeting_copilot/k135z_workspace_controller.dart';
 import '../../lib/meeting_copilot/korlix_meeting_copilot.dart';
+import 'helpers/k135z_korlixai_fakes.dart';
 
 MemoryImage _pixel() {
   final Uint8List bytes = base64Decode(
@@ -169,5 +171,41 @@ void main() {
     expect(speakButton.onPressed, isNull);
 
     controller.dispose();
+  });
+
+  testWidgets('normalized workspace panel remains silent and access-bound', (
+    WidgetTester tester,
+  ) async {
+    final K135zFakeGateway gateway = K135zFakeGateway();
+    final K135zWorkspaceController workspace = K135zWorkspaceController(
+      gateway: gateway,
+      context: k135zTestContext(),
+      accessGranted: true,
+    );
+    final NovaMeetingCopilotController controller =
+        NovaMeetingCopilotController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KorlixMeetingCopilotScreen(
+          controller: controller,
+          workspaceController: workspace,
+          korlixLogo: _pixel(),
+          novaPortrait: _pixel(),
+          notesOnly: true,
+          onSpeakNow: () => fail('Notes-only workspace must not speak.'),
+        ),
+      ),
+    );
+
+    expect(find.text('Validated Notes Workspace'), findsOneWidget);
+    expect(find.text('Speech: disabled'), findsOneWidget);
+    final ElevatedButton speakButton = tester.widget<ElevatedButton>(
+      find.byKey(const Key('speak-now-button')),
+    );
+    expect(speakButton.onPressed, isNull);
+
+    controller.dispose();
+    workspace.dispose();
   });
 }
