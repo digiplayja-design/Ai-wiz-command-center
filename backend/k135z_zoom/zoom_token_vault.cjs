@@ -2,58 +2,12 @@
 
 const crypto = require("node:crypto");
 
-class K135zZoomError extends Error {
-  constructor(status, code, message, details = undefined) {
-    super(message);
-    this.name = "K135zZoomError";
-    this.status = Number.isInteger(status) ? status : 500;
-    this.code = code || "K135Z_ZOOM_ERROR";
-    this.details = details;
-  }
-}
+const { K135zZoomError, identity, identityKey, need, envelope } = require("./b5b_contract.cjs");
 
 function clone(value) {
   return value == null
     ? value
     : JSON.parse(JSON.stringify(value));
-}
-
-function identityKey(identity) {
-  if (!identity || typeof identity !== "object") {
-    throw new K135zZoomError(
-      400,
-      "ZOOM_IDENTITY_REQUIRED",
-      "A KORLIX user identity is required.",
-    );
-  }
-
-  const userId = String(
-    identity.userId ||
-      identity.user_id ||
-      identity.id ||
-      identity.sub ||
-      "",
-  ).trim();
-
-  const tenantId = String(
-    identity.tenantId ||
-      identity.tenant_id ||
-      identity.organizationId ||
-      identity.organization_id ||
-      identity.accountId ||
-      identity.account_id ||
-      "personal",
-  ).trim();
-
-  if (!userId) {
-    throw new K135zZoomError(
-      401,
-      "ZOOM_USER_ID_MISSING",
-      "The authenticated KORLIX user identifier is missing.",
-    );
-  }
-
-  return `${tenantId}:${userId}`;
 }
 
 class EnvelopeCipher {
@@ -65,7 +19,7 @@ class EnvelopeCipher {
       this.key = Buffer.from(keyMaterial);
     } else if (
       typeof keyMaterial === "string" &&
-      keyMaterial.trim()
+      Buffer.byteLength(keyMaterial, "utf8") >= 32
     ) {
       this.key = crypto
         .createHash("sha256")
@@ -80,7 +34,8 @@ class EnvelopeCipher {
     }
   }
 
-  encrypt(value) {
+  encrypt(value, binding) {
+    need(typeof binding === "string" && binding.length > 0, "ZOOM_TOKEN_BINDING_REQUIRED");
     const iv = crypto.randomBytes(12);
 
     const cipher = crypto.createCipheriv(
@@ -88,6 +43,8 @@ class EnvelopeCipher {
       this.key,
       iv,
     );
+
+    cipher.setAAD(Buffer.from("K135Z-B5B-v1:" + binding, "utf8"));
 
     const plaintext = Buffer.from(
       JSON.stringify(value),
@@ -102,7 +59,7 @@ class EnvelopeCipher {
     const tag = cipher.getAuthTag();
 
     return {
-      version: 1,
+      version: 2,
       algorithm: "aes-256-gcm",
       iv: iv.toString("base64url"),
       tag: tag.toString("base64url"),
@@ -110,10 +67,12 @@ class EnvelopeCipher {
     };
   }
 
-  decrypt(envelope) {
+  decrypt(envelopeValue, binding) {
+    need(typeof binding === "string" && binding.length > 0, "ZOOM_TOKEN_BINDING_REQUIRED");
+    const envelope = require("./b5b_contract.cjs").envelope(envelopeValue);
     if (
       !envelope ||
-      envelope.version !== 1 ||
+      envelope.version !== 2 ||
       envelope.algorithm !== "aes-256-gcm"
     ) {
       throw new K135zZoomError(
@@ -129,6 +88,8 @@ class EnvelopeCipher {
         this.key,
         Buffer.from(envelope.iv, "base64url"),
       );
+
+      decipher.setAAD(Buffer.from("K135Z-B5B-v1:" + binding, "utf8"));
 
       decipher.setAuthTag(
         Buffer.from(envelope.tag, "base64url"),
@@ -157,160 +118,11 @@ class EnvelopeCipher {
   }
 }
 
-class MemoryZoomRepository {
-  constructor() {
-    this.oauthStates = new Map();
-    this.usedOAuthStates = new Set();
-    this.connections = new Map();
-    this.webhookEvents = new Map();
-    this.rtmsSessions = new Map();
-  }
-
-  async saveOAuthState(stateHash, record) {
-    this.oauthStates.set(
-      String(stateHash),
-      clone(record),
-    );
-  }
-
-  async consumeOAuthState(
-    stateHash,
-    nowMs = Date.now(),
-  ) {
-    const key = String(stateHash);
-
-    if (this.usedOAuthStates.has(key)) {
-      throw new K135zZoomError(
-        409,
-        "ZOOM_OAUTH_STATE_REPLAYED",
-        "The Zoom authorization state has already been used.",
-      );
-    }
-
-    const record = this.oauthStates.get(key);
-
-    if (!record) {
-      throw new K135zZoomError(
-        400,
-        "ZOOM_OAUTH_STATE_INVALID",
-        "The Zoom authorization state is invalid.",
-      );
-    }
-
-    this.oauthStates.delete(key);
-    this.usedOAuthStates.add(key);
-
-    if (
-      !Number.isFinite(record.expiresAtMs) ||
-      record.expiresAtMs < nowMs
-    ) {
-      throw new K135zZoomError(
-        410,
-        "ZOOM_OAUTH_STATE_EXPIRED",
-        "The Zoom authorization state has expired.",
-      );
-    }
-
-    return clone(record);
-  }
-
-  async saveConnection(key, record) {
-    this.connections.set(
-      String(key),
-      clone(record),
-    );
-  }
-
-  async getConnection(key) {
-    return clone(
-      this.connections.get(String(key)) ||
-        null,
-    );
-  }
-
-  async deleteConnection(key) {
-    return this.connections.delete(
-      String(key),
-    );
-  }
-
-  async deleteConnectionsByZoomIdentity({
-    zoomAccountId,
-    zoomUserId,
-  }) {
-    let count = 0;
-
-    for (
-      const [key, value]
-      of this.connections.entries()
-    ) {
-      const accountMatches =
-        zoomAccountId &&
-        value.zoomAccountId === zoomAccountId;
-
-      const userMatches =
-        zoomUserId &&
-        value.zoomUserId === zoomUserId;
-
-      if (accountMatches || userMatches) {
-        this.connections.delete(key);
-        count += 1;
-      }
-    }
-
-    return count;
-  }
-
-  async recordWebhookEvent(
-    eventId,
-    record,
-  ) {
-    const key = String(eventId);
-
-    if (this.webhookEvents.has(key)) {
-      return false;
-    }
-
-    this.webhookEvents.set(
-      key,
-      clone(record),
-    );
-
-    return true;
-  }
-
-  async upsertRtmsSession(
-    sessionKey,
-    record,
-  ) {
-    const previous =
-      this.rtmsSessions.get(
-        String(sessionKey),
-      ) || {};
-
-    const next = {
-      ...previous,
-      ...clone(record),
-    };
-
-    this.rtmsSessions.set(
-      String(sessionKey),
-      next,
-    );
-
-    return clone(next);
-  }
-
-  async getRtmsSession(sessionKey) {
-    return clone(
-      this.rtmsSessions.get(
-        String(sessionKey),
-      ) || null,
-    );
-  }
-}
+const { MemoryZoomRepository } = require("./b5b_repository.cjs");
 
 class UnavailableZoomRepository {
+  async applyWebhookEvent() { return this._fail(); }
+  async getRtmsSession() { return this._fail(); }
   async _fail() {
     throw new K135zZoomError(
       503,
@@ -368,6 +180,7 @@ class ZoomTokenVault {
     tokenResponse,
     metadata = {},
   ) {
+    identity = require("./b5b_contract.cjs").identity(identity);
     const key = identityKey(identity);
     const nowMs = this.clock();
 
@@ -385,6 +198,8 @@ class ZoomTokenVault {
         "Zoom did not return the required token fields.",
       );
     }
+
+    need(Number.isSafeInteger(expiresInSeconds) && expiresInSeconds > 0 && expiresInSeconds <= 2678400, "ZOOM_TOKEN_EXPIRY_INVALID", 502);
 
     const tokenBundle = {
       accessToken: String(
@@ -416,6 +231,7 @@ class ZoomTokenVault {
 
     const record = {
       key,
+      agentId: identity.agentId,
       tenantId: String(
         identity.tenantId ||
           identity.tenant_id ||
@@ -449,7 +265,7 @@ class ZoomTokenVault {
       updatedAtMs: nowMs,
       encryptedTokens:
         this.cipher.encrypt(
-          tokenBundle,
+          tokenBundle, key,
         ),
     };
 
@@ -476,7 +292,7 @@ class ZoomTokenVault {
     return {
       record,
       tokens: this.cipher.decrypt(
-        record.encryptedTokens,
+        record.encryptedTokens, identityKey(identity),
       ),
     };
   }

@@ -19,111 +19,7 @@ function hashState(state) {
     .digest("hex");
 }
 
-function principalIdentity(principal) {
-  if (
-    !principal ||
-    typeof principal !== "object"
-  ) {
-    throw new K135zZoomError(
-      401,
-      "KORLIX_AUTH_REQUIRED",
-      "Authentication is required.",
-    );
-  }
-
-  const userId = String(
-    principal.userId ||
-      principal.user_id ||
-      principal.id ||
-      principal.sub ||
-      "",
-  ).trim();
-
-  const tenantId = String(
-    principal.tenantId ||
-      principal.tenant_id ||
-      principal.organizationId ||
-      principal.organization_id ||
-      principal.accountId ||
-      principal.account_id ||
-      "personal",
-  ).trim();
-
-  if (!userId) {
-    throw new K135zZoomError(
-      401,
-      "KORLIX_AUTH_SUBJECT_MISSING",
-      "The authenticated KORLIX user identifier is missing.",
-    );
-  }
-
-  return {
-    userId,
-    tenantId,
-  };
-}
-
-function normalizeReturnTo(
-  returnTo,
-  allowedOrigins = [],
-) {
-  if (!returnTo) {
-    return null;
-  }
-
-  let parsed;
-
-  try {
-    parsed = new URL(
-      String(returnTo),
-    );
-  } catch (error) {
-    throw new K135zZoomError(
-      400,
-      "ZOOM_RETURN_URL_INVALID",
-      "The Zoom return URL is invalid.",
-    );
-  }
-
-  if (
-    parsed.protocol !== "https:" &&
-    parsed.hostname !== "127.0.0.1"
-  ) {
-    throw new K135zZoomError(
-      400,
-      "ZOOM_RETURN_URL_SCHEME_REJECTED",
-      "The Zoom return URL must use HTTPS.",
-    );
-  }
-
-  const normalizedAllowed =
-    allowedOrigins
-      .map((value) => {
-        try {
-          return new URL(
-            String(value),
-          ).origin;
-        } catch (error) {
-          return null;
-        }
-      })
-      .filter(Boolean);
-
-  if (
-    normalizedAllowed.length > 0 &&
-    !normalizedAllowed.includes(
-      parsed.origin,
-    )
-  ) {
-    throw new K135zZoomError(
-      400,
-      "ZOOM_RETURN_URL_NOT_ALLOWED",
-      "The Zoom return URL is not allow-listed.",
-    );
-  }
-
-  return parsed.toString();
-}
+const { identity: principalIdentity, normalizeReturnTo, need, time } = require("./b5b_contract.cjs");
 
 class ZoomOAuthService {
   constructor({
@@ -132,6 +28,7 @@ class ZoomOAuthService {
     transport,
     config,
     clock = () => Date.now(),
+    authorizeStoredIdentity = async () => false,
   }) {
     this.repository = repository;
     this.tokenVault = tokenVault;
@@ -147,6 +44,7 @@ class ZoomOAuthService {
     };
 
     this.clock = clock;
+    this.authorizeStoredIdentity = authorizeStoredIdentity;
   }
 
   assertConfigured() {
@@ -171,7 +69,8 @@ class ZoomOAuthService {
     const identity =
       principalIdentity(principal);
 
-    const nowMs = this.clock();
+    const nowMs = time(this.clock());
+    need(Number.isSafeInteger(this.config.stateTtlMs) && this.config.stateTtlMs > 0 && this.config.stateTtlMs <= 600000, "ZOOM_STATE_TTL_INVALID");
 
     const state = crypto
       .randomBytes(32)
@@ -262,12 +161,9 @@ class ZoomOAuthService {
           this.clock(),
         );
 
-    const identity = {
-      userId:
-        stateRecord.userId,
-      tenantId:
-        stateRecord.tenantId,
-    };
+    const identity = principalIdentity(stateRecord);
+    need(await this.authorizeStoredIdentity(identity) === true, "ZOOM_STORED_AUTHORIZATION_DENIED", 403);
+    const safeReturnTo = normalizeReturnTo(stateRecord.returnTo, this.config.allowedReturnOrigins);
 
     const tokenResponse =
       await this.transport
@@ -294,8 +190,7 @@ class ZoomOAuthService {
     return {
       connected: true,
       returnTo:
-        stateRecord.returnTo ||
-        null,
+        safeReturnTo,
       identityKey:
         identityKey(identity),
     };

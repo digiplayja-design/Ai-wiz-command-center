@@ -55,9 +55,10 @@ function principal(
   tier = "enterprise",
 ) {
   return {
-    id: "user-1",
+    id: "11111111-1111-4111-8111-111111111111",
     tenantId: "tenant-1",
-    tier,
+    agentId: "agent-1",
+    app_metadata: {tier},
   };
 }
 
@@ -233,6 +234,7 @@ function makeFixture({
       tokenVault,
       transport,
       clock,
+      authorizeStoredIdentity: async () => true, // Offline fixture; real adapter is a separate integration gate.
 
       config: {
         clientId:
@@ -431,7 +433,7 @@ test(
       await fixture
         .repository
         .getConnection(
-          "tenant-1:user-1",
+          JSON.stringify(["tenant-1", "11111111-1111-4111-8111-111111111111", "agent-1"]),
         );
 
     const serialized =
@@ -453,7 +455,7 @@ test(
 
     const decrypted =
       fixture.cipher.decrypt(
-        record.encryptedTokens,
+        record.encryptedTokens, record.key,
       );
 
     assert.equal(

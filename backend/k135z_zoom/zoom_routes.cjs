@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("node:crypto");
+const { identity, eventPlan } = require("./b5b_contract.cjs");
 
 const {
   EnvelopeCipher,
@@ -158,65 +159,10 @@ function principalFromRequest(req) {
   );
 }
 
-function normalizedTierTokens(
-  value,
-) {
-  return String(
-    value ?? "",
-  )
-    .trim()
-    .toLowerCase()
-    .replace(
-      /[^a-z0-9]+/g,
-      "_",
-    )
-    .split("_")
-    .filter(Boolean);
-}
-
-function isEnterprisePrincipal(
-  principal,
-  req = undefined,
-) {
-  const values = [
-    principal?.tier,
-    principal?.plan,
-    principal
-      ?.subscriptionTier,
-    principal
-      ?.subscription_tier,
-    principal
-      ?.app_metadata?.tier,
-    principal
-      ?.app_metadata?.plan,
-    principal
-      ?.user_metadata?.tier,
-    principal
-      ?.user_metadata?.plan,
-    req?.korlixTier,
-    req?.subscriptionTier,
-  ];
-
-  return values.some(
-    (value) => {
-      const tokens =
-        normalizedTierTokens(
-          value,
-        );
-
-      return (
-        tokens.includes(
-          "enterprise",
-        ) &&
-        !tokens.includes(
-          "non",
-        ) &&
-        !tokens.includes(
-          "not",
-        )
-      );
-    },
-  );
+// Classification of SERVER-VERIFIED app metadata only; not an authentication mechanism.
+function isEnterprisePrincipal(principal) {
+  const tier = principal?.app_metadata?.tier;
+  return tier === "enterprise" || tier === "enterprise_plus";
 }
 
 async function readFetchJson(
@@ -266,8 +212,7 @@ function createFetchZoomTransport({
   tokenUrl,
   apiBaseUrl,
 }) {
-  const liveEnabled =
-    enabled === true;
+  const liveEnabled = false; // B5B local checkpoint: live transport remains disabled.
 
   function assertEnabled() {
     if (!liveEnabled) {
@@ -458,7 +403,7 @@ function createK135zZoomDependencies(
     ).toLowerCase() ===
     "production";
 
-  const allowEphemeral =
+  const allowEphemeral = !production &&
     String(
       env.KORLIX_K135Z_ZOOM_ALLOW_EPHEMERAL_STORE ||
         "",
@@ -472,7 +417,6 @@ function createK135zZoomDependencies(
   const repository =
     options.repository ||
     (
-      production &&
       !allowEphemeral
         ? new UnavailableZoomRepository()
         : new MemoryZoomRepository()
@@ -556,6 +500,7 @@ function createK135zZoomDependencies(
       repository,
       tokenVault,
       transport,
+      authorizeStoredIdentity: options.authorizeStoredIdentity || (async () => false),
 
       config: {
         clientId:
@@ -607,27 +552,10 @@ function createK135zZoomDependencies(
         repository,
       }),
 
-    authenticateRequest:
-      options.authenticateRequest ||
-      (
-        async (req) =>
-          principalFromRequest(
-            req,
-          )
-      ),
-
-    resolveEnterprise:
-      options.resolveEnterprise ||
-      (
-        async (
-          principal,
-          req,
-        ) =>
-          isEnterprisePrincipal(
-            principal,
-            req,
-          )
-      ),
+    // Real integration must inject verified authentication, entitlement and agent ownership.
+    authenticateRequest: options.authenticateRequest || (async () => null),
+    resolveEnterprise: options.resolveEnterprise || (async () => false),
+    authorizeAgent: options.authorizeAgent || (async () => false),
   };
 }
 
@@ -659,7 +587,7 @@ function createK135zZoomHandlers(
           req,
         );
 
-    if (!enterprise) {
+    if (enterprise !== true) {
       throw new K135zZoomError(
         403,
         "KORLIX_ENTERPRISE_REQUIRED",
@@ -667,7 +595,11 @@ function createK135zZoomHandlers(
       );
     }
 
-    return principal;
+    const bound = identity(principal);
+    if (typeof deps.authorizeAgent !== "function" || await deps.authorizeAgent(bound, req) !== true) {
+      throw new K135zZoomError(403, "KORLIX_AGENT_AUTHORIZATION_REQUIRED", "Agent authorization is required.");
+    }
+    return bound;
   }
 
   const start =
@@ -877,64 +809,8 @@ function createK135zZoomHandlers(
           );
         }
 
-        const eventId =
-          crypto
-            .createHash(
-              "sha256",
-            )
-            .update(
-              `${
-                body?.event ||
-                "unknown"
-              }:${
-                body?.event_ts ||
-                "0"
-              }:${
-                verified.rawBody
-              }`,
-              "utf8",
-            )
-            .digest("hex");
-
-        await deps.repository
-          .recordWebhookEvent(
-            eventId,
-            {
-              event:
-                String(
-                  body?.event ||
-                    "",
-                ),
-
-              eventTs:
-                Number(
-                  body?.event_ts ||
-                    0,
-                ),
-
-              receivedAt:
-                new Date()
-                  .toISOString(),
-
-              rawBodyStored:
-                false,
-            },
-          );
-
-        await deps
-          .rtmsSessionManager
-          .handleVerifiedEvent(
-            body,
-          );
-
-        return jsonResponse(
-          res,
-          200,
-          {
-            ok: true,
-            accepted: true,
-          },
-        );
+        const result = await deps.repository.applyWebhookEvent(eventPlan(verified));
+        return jsonResponse(res, 200, {ok: true, ...result});
       },
     );
 
@@ -962,37 +838,9 @@ function createK135zZoomHandlers(
           );
         }
 
-        const deleted =
-          await deps
-            .tokenVault
-            .deleteByZoomIdentity({
-              zoomAccountId:
-                String(
-                  body?.payload
-                    ?.account_id ||
-                    "",
-                ),
-
-              zoomUserId:
-                String(
-                  body?.payload
-                    ?.user_id ||
-                    "",
-                ),
-            });
-
-        return jsonResponse(
-          res,
-          200,
-          {
-            ok: true,
-
-            deleted_connections:
-              Number(
-                deleted || 0,
-              ),
-          },
-        );
+        const result = await deps.repository.applyWebhookEvent(eventPlan(verified));
+        return jsonResponse(res, 200, {ok: true, duplicate: result.duplicate,
+          deleted_connections: result.deletedConnections});
       },
     );
 
