@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'k135z_capture_controller.dart';
+import 'k135z_feedback_button.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -405,7 +406,7 @@ class KorlixMeetingCopilotScreen extends StatelessWidget {
   final NovaMeetingCopilotController controller;
   final ImageProvider<Object> korlixLogo;
   final ImageProvider<Object> novaPortrait;
-  final VoidCallback? onConnectZoom;
+  final FutureOr<void> Function()? onConnectZoom;
   final VoidCallback? onAskNova;
   final VoidCallback? onThirtySecondUpdate;
   final VoidCallback? onSpeakNow;
@@ -606,7 +607,7 @@ class _NovaControlPanel extends StatelessWidget {
   final NovaMeetingCopilotController controller;
   final ImageProvider<Object> novaPortrait;
   final NovaMeetingCopilotState state;
-  final VoidCallback? onConnectZoom;
+  final FutureOr<void> Function()? onConnectZoom;
   final VoidCallback? onAskNova;
   final VoidCallback? onThirtySecondUpdate;
   final VoidCallback? onSpeakNow;
@@ -683,56 +684,72 @@ class _NovaControlPanel extends StatelessWidget {
               ),
             ),
           ),
+          if (capture != null) ...[
+            const SizedBox(height: 12),
+            Semantics(liveRegion: true, child: Text(capture!.listeningMessage,
+              key: const Key('k135z-listening-feedback'),
+              textAlign: TextAlign.center,
+              style: TextStyle(color: capture!.actionError != null
+                ? KorlixMeetingCopilotScreen._danger : KorlixMeetingCopilotScreen._cyan))),
+          ],
           const SizedBox(height: 16),
           Wrap(
             spacing: 10,
             runSpacing: 10,
             alignment: WrapAlignment.center,
             children: <Widget>[
-              ElevatedButton.icon(
-                key: const Key('zoom-connect-button'),
+              K135zFeedbackButton.elevated(
+                buttonKey: const Key('zoom-connect-button'),
                 onPressed: onConnectZoom,
                 icon: const Icon(Icons.link),
                 label: const Text('Connect Zoom'),
               ),
-              ElevatedButton.icon(
-                key: const Key('start-listening-button'),
+              K135zFeedbackButton.elevated(
+                buttonKey: const Key('start-listening-button'),
+                selected: capture?.statusLabel == 'Listening',
+                activeColor: const Color(0xFF63E6A1),
+                pendingLabel: 'Starting…',
                 onPressed: capture != null
-                    ? (capture!.canStart ? () => unawaited(capture!.start()) : null)
+                    ? (capture!.canStart ? () => capture!.start() : null)
                     : (controller.canStartListening ? controller.startListening : null),
                 icon: const Icon(Icons.hearing),
-                label: const Text('Start Listening'),
+                label: Text(capture?.statusLabel == 'Listening' ? 'Listening' : 'Start Listening'),
               ),
-              OutlinedButton.icon(
-                key: const Key('pause-listening-button'),
+              K135zFeedbackButton.outlined(
+                buttonKey: const Key('pause-listening-button'),
+                selected: capture?.statusLabel == 'Paused',
+                activeColor: const Color(0xFFFFCC66),
+                pendingLabel: 'Pausing…',
                 onPressed: capture != null
-                    ? (capture!.canPause ? () => unawaited(capture!.pause()) : null)
+                    ? (capture!.canPause ? () => capture!.pause() : null)
                     : (controller.canPauseListening ? controller.pauseListening : null),
                 icon: const Icon(Icons.pause_circle_outline),
                 label: const Text('Pause Listening'),
               ),
-              OutlinedButton.icon(
-                key: const Key('stop-listening-button'),
+              K135zFeedbackButton.outlined(
+                buttonKey: const Key('stop-listening-button'),
+                selected: capture?.statusLabel == 'Stopped',
+                pendingLabel: 'Stopping…',
                 onPressed: capture != null
-                    ? (capture!.canStop ? () => unawaited(capture!.stop()) : null)
+                    ? (capture!.canStop ? () => capture!.stop() : null)
                     : (controller.canStopListening ? controller.stopListening : null),
                 icon: const Icon(Icons.stop_circle_outlined),
                 label: const Text('Stop Listening'),
               ),
-              OutlinedButton.icon(
-                key: const Key('ask-nova-button'),
+              K135zFeedbackButton.outlined(
+                buttonKey: const Key('ask-nova-button'),
                 onPressed: controller.canAskNova ? onAskNova : null,
                 icon: const Icon(Icons.chat_bubble_outline),
                 label: const Text('Ask Nova'),
               ),
-              OutlinedButton.icon(
-                key: const Key('thirty-second-update-button'),
+              K135zFeedbackButton.outlined(
+                buttonKey: const Key('thirty-second-update-button'),
                 onPressed: controller.canAskNova ? onThirtySecondUpdate : null,
                 icon: const Icon(Icons.summarize_outlined),
                 label: const Text('30-Second Update'),
               ),
-              ElevatedButton.icon(
-                key: const Key('speak-now-button'),
+              K135zFeedbackButton.elevated(
+                buttonKey: const Key('speak-now-button'),
                 onPressed:
                     !notesOnly && controller.canSpeakNow && onSpeakNow != null
                     ? () {
@@ -743,8 +760,8 @@ class _NovaControlPanel extends StatelessWidget {
                 icon: const Icon(Icons.record_voice_over_outlined),
                 label: const Text('Speak Now'),
               ),
-              OutlinedButton.icon(
-                key: const Key('mute-nova-button'),
+              K135zFeedbackButton.outlined(
+                buttonKey: const Key('mute-nova-button'),
                 onPressed: state.novaMuted ? null : controller.muteNova,
                 icon: const Icon(Icons.mic_off_outlined),
                 label: const Text('Mute Nova'),
@@ -768,8 +785,9 @@ class _TranscriptPanel extends StatelessWidget {
     final live = capture;
     if (live != null) return _Panel(title:'Live Transcript Preview', child:Column(
       crossAxisAlignment:CrossAxisAlignment.start, children:[
-        OutlinedButton(key:const Key('g6p-refresh-transcript'),
-          onPressed:live.canRefreshTranscript ? () => unawaited(live.refreshTranscript()) : null,
+        K135zFeedbackButton.outlined(buttonKey:const Key('g6p-refresh-transcript'),
+          pendingLabel:'Refreshing captions…',
+          onPressed:live.canRefreshTranscript ? () => live.refreshTranscript() : null,
           child:const Text('Refresh captions')),
         Text(live.transcriptMessage, style:const TextStyle(color:KorlixMeetingCopilotScreen._mutedText)),
         const Text('Recent captions only. Not saved; meeting coverage is incomplete.',

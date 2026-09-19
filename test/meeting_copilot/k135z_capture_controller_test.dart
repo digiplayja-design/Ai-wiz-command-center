@@ -14,7 +14,7 @@ class CaptureFixture {
   Map<String,dynamic>? previewOverride;
   int previewCode = 200;
 
-  int consentLatency = 0;
+  int consentLatency = 0, consentCode = 200;
   final calls = <String>[];
   Map<String, dynamic> row = {
     'snapshot': {'schemaVersion':1, 'context':{'tenantId':'user','userId':'user','agentId':'agent',
@@ -43,6 +43,8 @@ class CaptureFixture {
         if (action == 'status' && missing) return const KorlixZoomTransportResponse(statusCode:409,
           body:'{"ok":false,"error":{"code":"K135Z_WORKSPACE_BINDING_MISMATCH"}}');
         if (action == 'bind') {check(b['expectedBindingRevision'] == 0 && b['meetingUuid'] == 'meeting'); missing = false;}
+        if (action == 'consent' && consentCode != 200) return KorlixZoomTransportResponse(
+          statusCode:consentCode,body:'{"ok":false,"error":{"code":"K135Z_WORKSPACE_DENIED"}}');
         if (action == 'consent') now += consentLatency;
         if (action == 'consent' && hold != null) await hold!.future;
         if (action == 'renew' && failRenew) return const KorlixZoomTransportResponse(statusCode:503, body:'{}');
@@ -71,6 +73,32 @@ class CaptureFixture {
 }
 void main() {
   gate6pTests();
+  test('Ready and denied Start never claim listening; denial remains visible after refresh', () async {
+    final f = CaptureFixture(); try {
+      await f.c.selectMeeting('meeting');
+      expect(f.c.listeningMessage, contains('not listening yet'));
+      expect(f.c.isMeetingSelected('meeting'), isTrue);
+      f.consentCode = 403;
+      await f.c.setConsent(true); await f.c.start();
+      expect(f.c.listeningMessage, contains('Listening has not started'));
+      expect(f.calls.contains('start'), isFalse);
+      expect(f.c.isMeetingSelected('meeting'), isFalse);
+      await f.c.refresh();
+      expect(f.c.listeningMessage, contains('Listening has not started'));
+      expect(f.c.statusLabel, 'Ready');
+    } finally { f.c.dispose(); }
+  });
+  test('caption feedback requires confirmed stream and actual transcript data', () async {
+    final f = CaptureFixture(); try {
+      await f.start();
+      expect(f.c.listeningMessage, contains('Waiting for captions'));
+      await f.c.refreshTranscript();
+      expect(f.c.listeningMessage, contains('Captions received from Zoom'));
+      f.c.suspend();
+      expect(f.c.listeningMessage, isNot(contains('Nova is listening')));
+    } finally { f.c.dispose(); }
+  });
+
   test('Gate6N first selection binds the exact meeting with revision zero', () async {
     final f = CaptureFixture(); try {
       f.missing = true; await f.c.selectMeeting('meeting');

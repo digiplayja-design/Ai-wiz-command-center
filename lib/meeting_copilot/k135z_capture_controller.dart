@@ -80,6 +80,20 @@ class K135zCaptureController extends ChangeNotifier {
   bool get busy => _busy;
   bool get consent => _consent;
   String get message => _message;
+  String? _actionError;
+  String? get actionError => _actionError;
+  bool isMeetingSelected(String uuid) => usable && _confirmed &&
+    meetingUuid == uuid && _row?['pending'] == false && _row?['uncertain'] == false && _state != 'stopped';
+  String get listeningMessage {
+    if (_actionError != null) return _actionError!;
+    if (statusLabel == 'Listening') return transcriptLines.isEmpty
+      ? 'Listening connected. Waiting for captions from Zoom.'
+      : 'Captions received from Zoom. Nova is listening.';
+    if (statusLabel == 'Ready') return 'Ready to start. Nova is not listening yet.';
+    if (statusLabel == 'Paused') return 'Listening is paused.';
+    if (statusLabel == 'Stopped') return 'Listening is stopped.';
+    return 'Listening is not confirmed. Refresh the session.';
+  }
   String? get meetingUuid => _row?['snapshot']['context']['meetingUuid'] as String?;
   int? get activeSeconds => _confirmed && usable ? (_row?['snapshot']['activeSeconds'] as int?) : null;
   String get _state => _row?['snapshot']['state'] as String? ?? '';
@@ -144,6 +158,10 @@ class K135zCaptureController extends ChangeNotifier {
     if (response.statusCode == 409 && path == 'status' && decoded is Map &&
       decoded['ok'] == false && decoded['error'] is Map &&
       decoded['error']['code'] == 'K135Z_WORKSPACE_BINDING_MISMATCH') throw const _NoCaptureBinding();
+    if (response.statusCode == 403 && path == 'consent') throw const _CaptureFeedback(
+      'Listening has not started. Zoom streaming permission is not confirmed. Check host approval and realtime content sharing in Zoom, then refresh this session.');
+    if (response.statusCode == 401) throw const _CaptureFeedback(
+      'Your KORLIX sign-in needs refreshing. Reopen Meeting Copilot from Agent Hub.');
     _need(response.statusCode == 200);
     final result = _map(decoded, path == 'command' ? 'ok reply' : path == 'transcript' ? 'ok transcript' : 'ok workspace');
     _need(result['ok'] == true); return result;
@@ -165,8 +183,11 @@ class K135zCaptureController extends ChangeNotifier {
     if (!usable || _busy) return;
     _busy = true; final e = _epoch; notifyListeners();
     try { await action(e); _current(e); }
-    catch (_) {
-      if (!_dead && e == _epoch) { _confirmed = false; _renew = false; _consent = false;
+    catch (error) {
+      if (!_dead && e == _epoch) {
+        _actionError = error is _CaptureFeedback ? error.message
+          : 'Request not confirmed. Refresh the session before trying again.';
+        _confirmed = false; _renew = false; _consent = false;
         _message = 'Request unconfirmed. Refresh session before continuing. No automatic restart.'; cancelRequests(); }
     } finally { if (!_dead && e == _epoch) { _busy = false; notifyListeners(); } }
   }
@@ -178,7 +199,8 @@ class K135zCaptureController extends ChangeNotifier {
     on _NoCaptureBinding { _need(_row == null); }
     if (prior != null && prior['snapshot']['state'] != 'stopped') {
       _accept(prior, started, newBinding:true);
-      _need(prior['snapshot']['context']['meetingUuid'] == uuid);
+      if (prior['snapshot']['context']['meetingUuid'] != uuid) throw const _CaptureFeedback(
+        'Stop the previous session before selecting another meeting. Refresh session, then tap Stop Listening.');
     } else {
       final began = _clock();
       final row = _workspace((await _post('bind', {'meetingUuid':uuid,
@@ -188,6 +210,7 @@ class K135zCaptureController extends ChangeNotifier {
         row['authority']['hostAuthorized'] == false && row['authority']['listeningAuthorized'] == false);
       _accept(row, began, newBinding:true);
     }
+    _actionError = null;
     _message = 'Session selected. Start requires explicit consent and backend host approval.';
   });
   Future<void> refresh() => _run((e) async {
@@ -220,7 +243,7 @@ class K135zCaptureController extends ChangeNotifier {
   Future<void> pause() async { if (canPause) await _command('pause'); }
   Future<void> stop() async { if (canStop) await _command('stop'); }
   Future<void> _command(String action) => _run((e) async {
-    _renew = false;
+    _renew = false; _actionError = null;
     if (action == 'start') { _need(_consent); await _permission('consent', e); _current(e); _need(_consent); }
     final old = _row!['snapshot'] as Map<String, dynamic>;
     final op = {'requestId':'$_id-${++_number}', 'localEpoch':e, 'operationNumber':_number};
@@ -271,4 +294,9 @@ class K135zTranscriptPreviewLine {
   const K135zTranscriptPreviewLine({required this.sequence,required this.speaker,required this.text});
   final int sequence;
   final String speaker, text;
+}
+
+class _CaptureFeedback implements Exception {
+  const _CaptureFeedback(this.message);
+  final String message;
 }

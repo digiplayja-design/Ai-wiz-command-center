@@ -1,3 +1,4 @@
+import 'k135z_feedback_button.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -130,28 +131,30 @@ class _KorlixMeetingCopilotRouteState extends State<KorlixMeetingCopilotRoute> w
                 key: const Key('g6c-connection-message')),
             const Text('Listening requires host approval and your consent. Nova remains muted.'),
             Wrap(spacing: 8, runSpacing: 6, children: [
-              OutlinedButton(key: const Key('g6c-refresh'),
-                  onPressed: b != null && available ? () => unawaited(b.refresh()) : null,
-                  child: const Text('Refresh status')),
-              OutlinedButton(key: const Key('g6c-prepare'),
-                  onPressed: b != null && available ? () => unawaited(b.prepareAuthorization()) : null,
+              K135zFeedbackButton.outlined(buttonKey: const Key('g6c-refresh'),
+                  onPressed: b != null && available ? () => b.refresh() : null,
+                  pendingLabel: 'Refreshing…', child: const Text('Refresh status')),
+              K135zFeedbackButton.outlined(buttonKey: const Key('g6c-prepare'),
+                  onPressed: b != null && available ? () => b.prepareAuthorization() : null,
                   child: const Text('Prepare Zoom authorization')),
-              FilledButton(key: const Key('g6c-open'),
+              K135zFeedbackButton.filled(buttonKey: const Key('g6c-open'),
                   onPressed: b?.canOpenAuthorization == true
-                      ? () => unawaited(b!.openAuthorization()) : null,
+                      ? () => b!.openAuthorization() : null,
                   child: const Text('Open Zoom authorization')),
-              OutlinedButton(key: const Key('g6c-meetings'),
-                  onPressed: b != null && available && b.connected ? () => unawaited(b.loadMeetings()) : null,
+              K135zFeedbackButton.outlined(buttonKey: const Key('g6c-meetings'),
+                  onPressed: b != null && available && b.connected ? () => b.loadMeetings() : null,
                   child: const Text('List meetings')),
-              OutlinedButton(key: const Key('g6c-disconnect'),
-                  onPressed: b != null && available ? () => unawaited(b.disconnect()) : null,
+              K135zFeedbackButton.outlined(buttonKey: const Key('g6c-disconnect'),
+                  onPressed: b != null && available ? () => b.disconnect() : null,
                   child: const Text('Disconnect Zoom')),
             ]),
             if (b != null && b.meetings.isNotEmpty)
-              ...b.meetings.map((m) => OutlinedButton(
+              ...b.meetings.map((m) => K135zFeedbackButton.outlined(
+                selected: m.uuid != null && b.capture.isMeetingSelected(m.uuid!),
+                pendingLabel: 'Selecting meeting…',
                 onPressed: available && !b.capture.busy && m.uuid != null
-                    ? () => unawaited(b.capture.selectMeeting(m.uuid!)) : null,
-                child: Text('${m.topic} — ${m.uuid == null ? "Meeting session unavailable" : "Select meeting"}'))),
+                    ? () => b.capture.selectMeeting(m.uuid!) : null,
+                child: Text('${m.topic} — ${m.uuid == null ? "Meeting session unavailable" : b.capture.isMeetingSelected(m.uuid!) ? "Selected" : "Select meeting"}'))),
             if (b != null) ...[
               Text(b.capture.statusLabel, key:const Key('g6n-session-status')),
               Text(b.capture.message, key:const Key('g6n-session-message')),
@@ -161,9 +164,9 @@ class _KorlixMeetingCopilotRouteState extends State<KorlixMeetingCopilotRoute> w
                 value:b.capture.consent,
                 onChanged:b.capture.usable && !b.capture.busy && b.capture.meetingUuid != null
                     ? (v) => unawaited(b.capture.setConsent(v == true)) : null),
-              OutlinedButton(key:const Key('g6n-refresh-session'),
-                onPressed:b.capture.usable && !b.capture.busy ? () => unawaited(b.capture.refresh()) : null,
-                child:const Text('Refresh session')),
+              K135zFeedbackButton.outlined(buttonKey:const Key('g6n-refresh-session'),
+                onPressed:b.capture.usable && !b.capture.busy ? () => b.capture.refresh() : null,
+                pendingLabel: 'Refreshing session…', child:const Text('Refresh session')),
               const Text('Use Stop before leaving. Closing or backgrounding stops consent renewal; remote capture ends when its permission expires.'),
             ],
           ]),
@@ -187,7 +190,7 @@ class _KorlixMeetingCopilotRouteState extends State<KorlixMeetingCopilotRoute> w
             capture: _binding?.capture,
             workspaceController: widget.workspaceController,
             onConnectZoom: _binding?.usable == true && _binding?.busy == false
-                ? () => unawaited(_binding!.prepareAuthorization()) : null,
+                ? () => _binding!.prepareAuthorization() : null,
             notesOnly: true,
             korlixLogo: const AssetImage(KorlixMeetingCopilotAssets.korlixLogo),
             novaPortrait: const AssetImage(KorlixMeetingCopilotAssets.novaPortrait),
