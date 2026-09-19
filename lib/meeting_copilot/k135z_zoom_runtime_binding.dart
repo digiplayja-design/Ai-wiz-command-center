@@ -228,7 +228,7 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
     if (!usable || uri.origin != launch.backendBaseUri.origin ||
         !((<String>{'GET', 'DELETE'}.contains(method) && body == null) ||
           (method == 'POST' && body is Map<String, dynamic> &&
-           <String>{'bind','status','consent','command','transcript'}.any((p) => uri.path == '/api/k135z/zoom/workspace/$p')))) {
+           <String>{'bind','status','consent','command','transcript','audio-level'}.any((p) => uri.path == '/api/k135z/zoom/workspace/$p')))) {
       throw StateError('Zoom request binding is unavailable.');
     }
     final client = http.Client();
