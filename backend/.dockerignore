@@ -1,0 +1,16 @@
+.git
+**/.git
+node_modules
+**/node_modules
+.env
+.env.*
+**/.env
+**/.env.*
+logs
+**/*.log
+test
+test_*.mjs
+coverage
+.DS_Store
+Dockerfile
+.dockerignore
