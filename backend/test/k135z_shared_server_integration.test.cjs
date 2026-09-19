@@ -1817,3 +1817,74 @@ test('Regional OAuth connection survives encrypted storage refresh and meeting d
   await assert.rejects(service.completeAuthorization(callback),{code:'ZOOM_OAUTH_STATE_REPLAYED'});
   assert.equal(f.calls.length,4);
 });
+
+test('Hosted discovery supplies the omitted UUID without exposing meeting credentials',async()=>{
+  const f=http6r([{meetings:[{id:123,topic:'Scheduled fixture',is_host:true,
+    join_url:'private-join',passcode:'private-passcode'}]},
+    {meetings:[{id:123,uuid:'fixture-instance',start_url:'private-start',topic:'Do not copy'}]}]);
+  const {ZoomMeetingDiscovery}=require('../k135z_zoom/zoom_meeting_discovery.cjs');
+  const discovery=new ZoomMeetingDiscovery({transport:f.transport,oauthService:{
+    getAuthorizedAccess:async principal=>{assert.equal(principal,P);
+      return {accessToken:'fixture-access',apiUrl:'https://api.zoom.us'};}}});
+  const result=await discovery.listUpcoming(P);
+  assert.equal(result.count,1);assert.equal(result.meetings[0].uuid,'fixture-instance');
+  assert.equal(result.meetings[0].topic,'Scheduled fixture');assert.equal(result.meetings[0].isHost,true);
+  assert(!JSON.stringify(result).includes('private-'));assert.equal(result.nextPageToken,null);
+  assert.deepEqual(f.calls.map(c=>c.url),['https://api.zoom.us/v2/users/me/upcoming_meetings',
+    'https://api.zoom.us/v2/users/me/meetings?page_size=100']);
+  assert(f.calls.every(c=>c.method==='GET'&&c.headers.authorization==='Bearer fixture-access'&&c.redirect==='error'));
+});
+test('Hosted discovery skips extra requests for empty invited or already resolved lists',async()=>{
+  for(const meetings of [[],[{id:123,is_host:false}],[{id:123,is_host:true,uuid:'existing-instance'}]]){
+    const f=http6r([{meetings}]);const result=await f.transport.listUpcomingMeetings({accessToken:'fixture'});
+    assert.deepEqual(result.meetings,meetings);assert.equal(f.calls.length,1);
+  }
+});
+test('Hosted discovery never substitutes meeting IDs or attaches another meeting UUID',async()=>{
+  const meetings=[{id:123,is_host:true},{id:456,is_host:false}];
+  const f=http6r([{meetings,next_page_token:'upcoming-page'},
+    {meetings:[{id:456,uuid:'invited-instance'},{id:789,uuid:'other-instance'}]}]);
+  const result=await f.transport.listUpcomingMeetings({accessToken:'fixture'});
+  assert.deepEqual(result.meetings,meetings);assert.equal(result.next_page_token,'upcoming-page');
+});
+test('Hosted discovery follows bounded pagination on the fixed Zoom origin',async()=>{
+  const next='a/b?x=1&host=evil.example';
+  const f=http6r([{meetings:[{id:123,is_host:true}]},{meetings:[],next_page_token:next},
+    {meetings:[{id:'123',uuid:'fixture-instance'}]}]);
+  const result=await f.transport.listUpcomingMeetings({accessToken:'fixture'});
+  assert.equal(result.meetings[0].uuid,'fixture-instance');assert.equal(f.calls.length,3);
+  const url=new URL(f.calls[2].url);assert.equal(url.origin,'https://api.zoom.us');
+  assert.equal(url.pathname,'/v2/users/me/meetings');assert.equal(url.searchParams.get('next_page_token'),next);
+  assert.equal(url.searchParams.has('host'),false);
+});
+test('Hosted discovery rejects malformed responses and conflicting instance mappings',async()=>{
+  for(const page of [{meetings:null},{meetings:[null]},{meetings:[{id:123}]},
+    {meetings:[{id:123,uuid:' bad '}]},{meetings:[{id:123,uuid:'x'.repeat(181)}]},
+    {meetings:[{id:1.5,uuid:'fixture'}]},{meetings:[],next_page_token:42}]){
+    const f=http6r([{meetings:[{id:123,is_host:true}]},page]);
+    await assert.rejects(f.transport.listUpcomingMeetings({accessToken:'fixture'}),{code:'ZOOM_MEETINGS_RESPONSE_INVALID'});
+  }
+  const f=http6r([{meetings:[{id:123,is_host:true}]},
+    {meetings:[{id:123,uuid:'first-instance'}],next_page_token:'next'},
+    {meetings:[{id:123,uuid:'second-instance'}]}]);
+  await assert.rejects(f.transport.listUpcomingMeetings({accessToken:'fixture'}),{code:'ZOOM_MEETING_UUID_AMBIGUOUS'});
+});
+test('Hosted discovery limits repeated and excessive pagination without partial bindings',async()=>{
+  for(const tokens of [['repeated','repeated'],['one','two','three']]){
+    const f=http6r([{meetings:[{id:123,is_host:true}]},...tokens.map(next_page_token=>
+      ({meetings:[{id:123,uuid:'fixture-instance'}],next_page_token}))]);
+    await assert.rejects(f.transport.listUpcomingMeetings({accessToken:'fixture'}),{code:'ZOOM_MEETINGS_LOOKUP_LIMIT'});
+    assert.equal(f.calls.length,1+tokens.length);
+  }
+});
+test('Hosted discovery shares one deadline across upcoming and hosted requests',async t=>{
+  let now=1000;t.mock.method(Date,'now',()=>now);
+  const f=http6r([()=>{now+=26;return json6r({meetings:[{id:123,is_host:true}]});}],{timeoutMs:25});
+  await assert.rejects(f.transport.listUpcomingMeetings({accessToken:'fixture'}),{code:'ZOOM_HTTP_TIMEOUT'});
+  assert.equal(f.calls.length,1);
+});
+test('Hosted discovery reports missing permission without hiding it as an empty list',async()=>{
+  const f=http6r([{meetings:[{id:123,is_host:true}]},()=>json6r({message:'private-detail'},401)]);
+  await assert.rejects(f.transport.listUpcomingMeetings({accessToken:'fixture'}),{code:'ZOOM_UPSTREAM_REQUEST_FAILED'});
+  assert.equal(f.calls.length,2);
+});

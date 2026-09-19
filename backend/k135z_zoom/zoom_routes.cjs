@@ -1267,12 +1267,13 @@ function createK135zOAuthHttpTransport({enabled=false,fetchImpl=globalThis.fetch
   const requireText=(value,max)=>{if(!text(value,max))fail('ZOOM_HTTP_INPUT_INVALID',400);return value;};
   function active(){if(!enabled)fail('ZOOM_LIVE_TRANSPORT_DISABLED',503);
     if(typeof fetchImpl!=='function')fail('ZOOM_FETCH_UNAVAILABLE',503);}
-  async function request(url,options) {
-    active();const abort=new AbortController();let timer,reader;
+  async function request(url,options,budgetMs=timeoutMs) {
+    active();if(budgetMs<1)fail('ZOOM_HTTP_TIMEOUT',504);
+    const abort=new AbortController();let timer,reader;
     const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{
       reject(new K135zZoomError(504,'ZOOM_HTTP_TIMEOUT','The Zoom request timed out.'));
       abort.abort();if(reader)void reader.cancel().catch(()=>{});
-    },timeoutMs);});
+    },budgetMs);});
     try {
       return await Promise.race([timeout,(async()=>{
         const res=await fetchImpl(url,{...options,redirect:'error',signal:abort.signal});
@@ -1332,11 +1333,49 @@ function createK135zOAuthHttpTransport({enabled=false,fetchImpl=globalThis.fetch
     },
     async listUpcomingMeetings({accessToken,userId='me',apiUrl='https://api.zoom.us'}) {
       active();if(userId!=='me'||apiUrl!=='https://api.zoom.us')fail('ZOOM_HTTP_TARGET_REJECTED',400);
-      const value=await request('https://api.zoom.us/v2/users/me/upcoming_meetings',bearer(accessToken));
-      if(!Array.isArray(value.meetings)||value.meetings.length>300||
-        (value.next_page_token!==undefined&&(typeof value.next_page_token!=='string'||value.next_page_token.length>300)))
-        fail('ZOOM_MEETINGS_RESPONSE_INVALID');
-      return {meetings:value.meetings,next_page_token:value.next_page_token||''};
+      const deadline=Date.now()+timeoutMs;
+      const read=async url=>{
+        const page=await request(url,bearer(accessToken),deadline-Date.now());
+        if(!Array.isArray(page.meetings)||page.meetings.length>300||
+          (page.next_page_token!==undefined&&(typeof page.next_page_token!=='string'||page.next_page_token.length>300)))
+          fail('ZOOM_MEETINGS_RESPONSE_INVALID');
+        return page;
+      };
+      const value=await read('https://api.zoom.us/v2/users/me/upcoming_meetings');
+      // upcoming_meetings omits uuid. Resolve only the current user's hosted meetings
+      // through the scheduled-meetings API (meeting:read:list_meetings scope).
+      // A numeric meeting ID must never substitute for an instance UUID.
+      const meetingId=value=>((typeof value==='number'&&Number.isSafeInteger(value))||typeof value==='string')&&
+        /^[1-9]\d{0,14}$/.test(String(value))?String(value):null;
+      const needsUuid=meeting=>meeting?.is_host===true&&!text(meeting.uuid,180);
+      const needed=new Set();
+      for(const meeting of value.meetings)if(needsUuid(meeting)){
+        const id=meetingId(meeting.id);if(!id)fail('ZOOM_MEETINGS_RESPONSE_INVALID');needed.add(id);
+      }
+      const hosted=new Map();
+      if(needed.size){
+        const seenTokens=new Set();let next='';
+        for(let page=0;page<3;page++){
+          const url=new URL('https://api.zoom.us/v2/users/me/meetings');
+          url.searchParams.set('page_size','100');
+          if(next)url.searchParams.set('next_page_token',next);
+          const result=await read(url.href);
+          for(const meeting of result.meetings){
+            const id=meetingId(meeting?.id);if(!id)fail('ZOOM_MEETINGS_RESPONSE_INVALID');
+            if(!needed.has(id))continue;
+            if(!text(meeting.uuid,180))fail('ZOOM_MEETINGS_RESPONSE_INVALID');
+            if(hosted.has(id)&&hosted.get(id)!==meeting.uuid)fail('ZOOM_MEETING_UUID_AMBIGUOUS');
+            hosted.set(id,meeting.uuid);
+          }
+          next=result.next_page_token||'';if(!next)break;
+          if(seenTokens.has(next)||page===2)fail('ZOOM_MEETINGS_LOOKUP_LIMIT');
+          seenTokens.add(next);
+        }
+      }
+      return {meetings:value.meetings.map(meeting=>{
+        const uuid=needsUuid(meeting)?hosted.get(meetingId(meeting.id)):null;
+        return uuid?{...meeting,uuid}:meeting;
+      }),next_page_token:value.next_page_token||''};
     },
     async revokeAccessToken({accessToken,clientId,clientSecret}) {
       active();requireText(accessToken);
