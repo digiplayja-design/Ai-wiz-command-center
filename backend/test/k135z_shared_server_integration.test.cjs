@@ -1759,3 +1759,61 @@ test('Gate6S OAuth and capture can compose with separate opt-ins without joining
   assert.equal(sdk.clients.length,0);assert.equal(requests,0);assert.equal(f.calls.length,0);
 });
 // K135Z_GATE6S_RUNTIME_OAUTH_TESTS_END
+
+test('Regional OAuth metadata keeps exchange refresh and discovery on fixed Zoom endpoints',async()=>{
+  const origins=['https://api.zoom.us',...['us','eu','au','ca','in','sa','sg','uk'].map(r=>`https://api-${r}.zoom.us`),
+    'https://korlix-example.zoom.us'];
+  for(const api_url of [undefined,...origins.flatMap(origin=>[origin,origin+'/'])]){
+    const reply={...token6r(),api_url};
+    const f=http6r([reply,{id:'zoom-user',account_id:'zoom-account'},reply,{meetings:[]}]);
+    const first=await f.transport.exchangeAuthorizationCode(input6r);
+    const refreshed=await f.transport.refreshAccessToken({...input6r,refreshToken:first.refresh_token});
+    assert.equal(first.api_url,'https://api.zoom.us');assert.equal(refreshed.api_url,'https://api.zoom.us');
+    await f.transport.listUpcomingMeetings({accessToken:refreshed.access_token,apiUrl:refreshed.api_url});
+    assert.deepEqual(f.calls.map(c=>c.url),['https://zoom.us/oauth/token','https://api.zoom.us/v2/users/me',
+      'https://zoom.us/oauth/token','https://api.zoom.us/v2/users/me/upcoming_meetings']);
+    assert(f.calls.every(c=>c.redirect==='error'));
+  }
+});
+
+test('Regional OAuth rejects foreign and malformed metadata without forwarding credentials',async()=>{
+  for(const api_url of [null,42,{},'','http://api-us.zoom.us','https://api-us.zoom.us.evil.example',
+    'https://api-us.zoom.us@evil.example','https://user@api-us.zoom.us','https://api-us.zoom.us:443',
+    'https://api-us.zoom.us/v2','https://api-us.zoom.us?x=1','https://api-us.zoom.us#x',
+    'https://api-us.zoom.us\n',' https://api-us.zoom.us','https://api-us.zoom.us\\@evil.example',
+    'https://127.0.0.1','https://api-us.zoom.us.','https://-invalid.zoom.us','https://nested.api-us.zoom.us']){
+    const f=http6r([{...token6r(),api_url},{...token6r(),api_url}]);
+    await assert.rejects(f.transport.exchangeAuthorizationCode(input6r),{code:'ZOOM_API_REGION_UNSUPPORTED'});
+    assert.equal(f.calls.length,1);
+    await assert.rejects(f.transport.refreshAccessToken({...input6r,refreshToken:'fixture'}),{code:'ZOOM_API_REGION_UNSUPPORTED'});
+    assert.equal(f.calls.length,2);assert(f.calls.every(c=>c.url==='https://zoom.us/oauth/token'));
+    await assert.rejects(f.transport.listUpcomingMeetings({accessToken:'fixture',apiUrl:api_url}),{code:'ZOOM_HTTP_TARGET_REJECTED'});
+    assert.equal(f.calls.length,2);
+  }
+});
+
+test('Regional OAuth connection survives encrypted storage refresh and meeting discovery',async()=>{
+  let now=Date.now();const clock=()=>now;
+  const f=http6r([{...token6r(),api_url:'https://api-us.zoom.us'},
+    {id:'zoom-user',account_id:'zoom-account'},
+    {...token6r(),api_url:'https://api-eu.zoom.us',access_token:'rotated-access',refresh_token:'rotated-refresh'},
+    {meetings:[{id:123,topic:'Regional fixture'}]}]);
+  const repository=new R.MemoryZoomRepository();
+  const vault=new V.ZoomTokenVault({repository,cipher:new V.EnvelopeCipher(Buffer.alloc(32,7)),clock});
+  const {ZoomOAuthService}=require('../k135z_zoom/zoom_oauth_service.cjs');
+  const service=new ZoomOAuthService({repository,tokenVault:vault,transport:f.transport,config:input6r,
+    clock,authorizeStoredIdentity:async()=>true});
+  const start=await service.startAuthorization({principal:P});
+  const callback={code:'fixture-code',state:new URL(start.authorizationUrl).searchParams.get('state')};
+  await service.completeAuthorization(callback);
+  const saved=await vault.getTokenBundle(P);
+  assert.equal(saved.tokens.apiUrl,'https://api.zoom.us');assert(!JSON.stringify(saved.record).includes('fixture-access'));
+  now+=3600000;
+  const {ZoomMeetingDiscovery}=require('../k135z_zoom/zoom_meeting_discovery.cjs');
+  await new ZoomMeetingDiscovery({oauthService:service,transport:f.transport}).listUpcoming(P);
+  assert.equal(f.calls.length,4);assert.equal(f.calls[3].headers.authorization,'Bearer rotated-access');
+  const rotated=await vault.getTokenBundle(P);
+  assert.equal(rotated.tokens.apiUrl,'https://api.zoom.us');assert.equal(rotated.tokens.refreshToken,'rotated-refresh');
+  await assert.rejects(service.completeAuthorization(callback),{code:'ZOOM_OAUTH_STATE_REPLAYED'});
+  assert.equal(f.calls.length,4);
+});

@@ -1304,7 +1304,12 @@ function createK135zOAuthHttpTransport({enabled=false,fetchImpl=globalThis.fetch
     if(!text(raw.access_token)||!text(raw.refresh_token)||typeof raw.token_type!=='string'||
        raw.token_type.toLowerCase()!=='bearer'||!Number.isSafeInteger(raw.expires_in)||raw.expires_in<1||raw.expires_in>2678400||
        typeof raw.scope!=='string'||raw.scope.length>4096||/[\x00-\x1f\x7f]/.test(raw.scope))fail('ZOOM_TOKEN_RESPONSE_INVALID');
-    if(raw.api_url!==undefined&&raw.api_url!=='https://api.zoom.us')fail('ZOOM_API_REGION_UNSUPPORTED');
+    // Zoom documents regional and vanity hosts; its global API supports every region.
+    // Treat api_url as metadata only. All outbound request targets remain fixed.
+    // https://developers.zoom.us/docs/api/using-zoom-apis/#regional-base-urls
+    if(raw.api_url!==undefined&&(!text(raw.api_url,253)||
+       !/^https:\/\/[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.zoom\.us\/?$/i.test(raw.api_url)))
+      fail('ZOOM_API_REGION_UNSUPPORTED');
     return {access_token:raw.access_token,refresh_token:raw.refresh_token,token_type:'bearer',
       expires_in:raw.expires_in,scope:raw.scope,api_url:'https://api.zoom.us'};
   }
