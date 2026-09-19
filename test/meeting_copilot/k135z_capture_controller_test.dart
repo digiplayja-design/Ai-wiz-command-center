@@ -13,6 +13,10 @@ class CaptureFixture {
   Completer<void>? previewHold;
   Map<String,dynamic>? previewOverride;
   int previewCode = 200;
+  Completer<void>? audioHold;
+  Map<String,dynamic>? audioOverride;
+  int audioCode = 200;
+  String consentError = 'K135Z_WORKSPACE_DENIED';
 
   int consentLatency = 0, consentCode = 200;
   final calls = <String>[];
@@ -33,6 +37,12 @@ class CaptureFixture {
         check(method == 'POST' && headers['authorization'] == 'Bearer offline' && headers['x-korlix-agent-id'] == 'agent');
         final b = body as Map<String,dynamic>, action = (b['action'] ?? uri.path.split('/').last) as String;
         calls.add(action);
+        if (action == 'audio-level') {
+          if (audioHold != null) await audioHold!.future;
+          return KorlixZoomTransportResponse(statusCode:audioCode,body:jsonEncode({'ok':true,
+            'audioLevel':audioOverride ?? {'schemaVersion':1,'context':b['context'],'active':true,
+              'available':true,'received':true,'packets':50,'ageMs':10,'level':65,'peak':80}}));
+        }
         if (action == 'transcript') {
           if (previewHold != null) await previewHold!.future;
           return KorlixZoomTransportResponse(statusCode:previewCode,body:jsonEncode({'ok':true,'transcript':previewOverride ?? {
@@ -44,7 +54,7 @@ class CaptureFixture {
           body:'{"ok":false,"error":{"code":"K135Z_WORKSPACE_BINDING_MISMATCH"}}');
         if (action == 'bind') {check(b['expectedBindingRevision'] == 0 && b['meetingUuid'] == 'meeting'); missing = false;}
         if (action == 'consent' && consentCode != 200) return KorlixZoomTransportResponse(
-          statusCode:consentCode,body:'{"ok":false,"error":{"code":"K135Z_WORKSPACE_DENIED"}}');
+          statusCode:consentCode,body:jsonEncode({'ok':false,'error':{'code':consentError}}));
         if (action == 'consent') now += consentLatency;
         if (action == 'consent' && hold != null) await hold!.future;
         if (action == 'renew' && failRenew) return const KorlixZoomTransportResponse(statusCode:503, body:'{}');
@@ -129,7 +139,7 @@ void main() {
   test('Gate6N renews every ten seconds without changing authority revision', () async {
     final f = CaptureFixture(); try {
       await f.start(); f.now = 10000; await f.c.tick();
-      check(f.calls.last == 'renew' && f.row['authorityRevision'] == 1 && f.c.statusLabel == 'Listening');
+      check(f.calls.sublist(f.calls.length-2).join(',') == 'renew,audio-level' && f.row['authorityRevision'] == 1 && f.c.statusLabel == 'Listening');
       await f.c.tick(); check(f.calls.where((x) => x == 'renew').length == 1);
     } finally {f.c.dispose();}
   });
@@ -246,9 +256,9 @@ void gate6pTests() {
   });
   test('Gate6P polling captions runs after higher priority session checks', () async {
     final f = CaptureFixture();try {
-      await f.start();f.now = 5000;await f.c.tick();check(f.calls.last == 'status');
-      f.now = 6000;await f.c.tick();check(f.calls.last == 'transcript');
-      f.now = 10000;await f.c.tick();check(f.calls.last == 'renew');
+      await f.start();f.now = 5000;await f.c.tick();check(f.calls.sublist(f.calls.length-2).join(',') == 'status,audio-level');
+      f.now = 6000;await f.c.tick();check(f.calls.sublist(f.calls.length-2).join(',') == 'transcript,audio-level');
+      f.now = 10000;await f.c.tick();check(f.calls.sublist(f.calls.length-2).join(',') == 'renew,audio-level');
     } finally {f.c.dispose();}
   });
   test('Gate6P preview remains readable after Pause and Stop without sending Start', () async {

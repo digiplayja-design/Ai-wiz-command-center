@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'k135z_capture_controller.dart';
 import 'k135z_feedback_button.dart';
+import 'k135z_audio_level.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -685,6 +686,8 @@ class _NovaControlPanel extends StatelessWidget {
             ),
           ),
           if (capture != null) ...[
+            const SizedBox(height: 12),
+            K135zAudioLevel(capture: capture!),
             const SizedBox(height: 12),
             Semantics(liveRegion: true, child: Text(capture!.listeningMessage,
               key: const Key('k135z-listening-feedback'),

@@ -21,6 +21,52 @@ class K135zCaptureController extends ChangeNotifier {
   final Stopwatch _stopwatch = Stopwatch()..start();
   late final int Function() _clock;
   final String _id = List.generate(16, (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+  Map<String,dynamic>? _audio;
+  bool _audioBusy = false, _audioFailed = false;
+  int _audioAt = 0, _audioPolled = -1000, _audioEpoch = 0;
+  bool get canCheckAudio => usable && _confirmed && _consent && _renew &&
+      statusLabel == 'Listening' && _row?['authority']['hostAuthorized'] == true &&
+      _row?['authority']['listeningAuthorized'] == true;
+  bool get audioReceived => canCheckAudio && !_audioFailed && _audio?['received'] == true &&
+      _audio?['active'] == true && _same(_audio?['context'], _row?['snapshot']['context']);
+  int? get audioAgeMs => audioReceived ? (_audio!['ageMs'] as int) + _clock() - _audioAt : null;
+  bool get audioRecent => audioAgeMs != null && audioAgeMs! < 2500;
+  double get audioLevel => audioRecent ? (_audio!['level'] as int) / 100 : 0;
+  String get audioMessage {
+    if (!canCheckAudio) return 'No audio received — listening is not active.';
+    if (_audioFailed) return 'Audio level unavailable. Tap Check audio to retry.';
+    if (_audio?['available'] == false) return 'Audio level is unavailable on this server.';
+    if (!audioReceived) return 'Waiting for meeting audio from Zoom.';
+    if (!audioRecent) return 'No recent audio. Last received ${(audioAgeMs! / 1000).floor()}s ago.';
+    return audioLevel > 0 ? 'Meeting audio is reaching KORLIX.' : 'Audio is reaching KORLIX — currently quiet.';
+  }
+  void _clearAudio() { _audio = null; _audioFailed = false; _audioAt = 0; _audioPolled = -1000;
+    _audioEpoch++; _audioBusy = false; }
+  Future<void> refreshAudio({bool automatic = false}) async {
+    if (!canCheckAudio || _audioBusy || (automatic && _audioFailed)) return;
+    final e = _epoch, ae = _audioEpoch, began = _clock();
+    final context = Map<String,dynamic>.from(_row!['snapshot']['context']);
+    _audioBusy = true;
+    try {
+      final a = _map((await _post('audio-level', {'context':context}, e))['audioLevel'],
+        'schemaVersion context active available received packets ageMs level peak');
+      _current(e); _context(a['context']);
+      _need(a['schemaVersion'] == 1 && _same(a['context'],context) && a['active'] is bool &&
+        a['available'] is bool && a['received'] is bool && _uint(a['packets']) &&
+        _uint(a['level']) && a['level'] <= 100 && _uint(a['peak']) && a['peak'] <= 100 &&
+        (a['ageMs'] == null || (_uint(a['ageMs']) && a['ageMs'] <= 86400000)) &&
+        (a['received'] == true ? a['active'] == true && a['packets'] > 0 && a['ageMs'] != null
+          : a['packets'] == 0 && a['ageMs'] == null && a['level'] == 0 && a['peak'] == 0));
+      if (ae != _audioEpoch || !canCheckAudio || !_same(context,_row?['snapshot']['context'])) return;
+      _audio = a; _audioAt = began; _audioFailed = false;
+    } catch (_) {
+      if (!_dead && e == _epoch && ae == _audioEpoch) { _audio = null; _audioFailed = true; }
+    } finally {
+      if (!_dead && e == _epoch && ae == _audioEpoch) {
+        _audioBusy = false; _audioPolled = _clock(); notifyListeners();
+      }
+    }
+  }
   Map<String,dynamic>? _preview;
   bool _previewBusy = false, _previewFailed = false;
   int _previewPolled = 0;
@@ -152,18 +198,39 @@ class K135zCaptureController extends ChangeNotifier {
     h.removeWhere((k, _) => ['content-type','x-korlix-agent-id'].contains(k.toLowerCase()));
     h['content-type'] = 'application/json'; h['x-korlix-agent-id'] = agentId;
     final response = await transport(method:'POST', uri:baseUri.resolve('/api/k135z/zoom/workspace/$path'),
-      headers:h, body:body).timeout(const Duration(seconds: 12));
+      headers:h, body:body).timeout(Duration(seconds: path == 'consent' && body['action'] == 'consent' ? 28 : 12));
     _current(epoch); _need(utf8.encode(response.body).length <= 65536);
     final decoded = jsonDecode(response.body);
     if (response.statusCode == 409 && path == 'status' && decoded is Map &&
       decoded['ok'] == false && decoded['error'] is Map &&
       decoded['error']['code'] == 'K135Z_WORKSPACE_BINDING_MISMATCH') throw const _NoCaptureBinding();
+    if (response.statusCode != 200 && decoded is Map && decoded['error'] is Map) {
+      const feedback = <String,String>{
+        'ZOOM_RTMS_SCOPE_REQUIRED':'Listening has not started. Add the Zoom permission meeting:update:participant_rtms_app_status, then reconnect Zoom to approve it.',
+        'ZOOM_RTMS_MEDIA_SCOPE_REQUIRED':'Listening has not started. Approve Zoom meeting audio and transcript permissions, then reconnect Zoom.',
+        'ZOOM_RTMS_REAUTHORIZE':'Listening has not started. Reconnect Zoom with the meeting host account to renew its permissions.',
+        'ZOOM_RTMS_MEETING_NOT_LIVE':'Listening has not started. Start this meeting in Zoom, then try Start Listening again.',
+        'ZOOM_RTMS_RESELECT_MEETING':'The Zoom meeting instance has changed. Stop this session, refresh the meeting list, and select the live meeting.',
+        'ZOOM_RTMS_HOST_REJECTED':'Zoom rejected the stream request. Sign in as this meeting’s host and approve realtime content sharing.',
+        'ZOOM_RTMS_ACCOUNT_REJECTED':'Zoom rejected RTMS with code 2310. Check RTMS eligibility and Developer Pack activation for the connected Zoom account.',
+        'ZOOM_RTMS_WEBHOOK_PENDING':'Zoom accepted the stream request, but its confirmation has not arrived. Check the RTMS event subscription and refresh this session before trying again.',
+        'ZOOM_RTMS_START_PENDING':'A Zoom stream request is already in progress. Wait, then refresh this session.',
+        'ZOOM_RTMS_BINDING_CHANGED':'The session changed while starting. Refresh this session before trying again.',
+        'ZOOM_RTMS_RATE_LIMITED':'Zoom is limiting requests. Wait a moment, then refresh this session before trying again.',
+        'ZOOM_RTMS_START_REJECTED':'Zoom rejected the stream-start request. Listening has not started.',
+        'ZOOM_RTMS_TIMEOUT':'Zoom did not confirm the stream request in time. Listening has not started.',
+        'ZOOM_RTMS_REQUEST_FAILED':'The Zoom stream request failed. Listening has not started.',
+      };
+      final message = feedback[decoded['error']['code']];
+      if (message != null) throw _CaptureFeedback(message);
+    }
     if (response.statusCode == 403 && path == 'consent') throw const _CaptureFeedback(
       'Listening has not started. Zoom streaming permission is not confirmed. Check host approval and realtime content sharing in Zoom, then refresh this session.');
     if (response.statusCode == 401) throw const _CaptureFeedback(
       'Your KORLIX sign-in needs refreshing. Reopen Meeting Copilot from Agent Hub.');
     _need(response.statusCode == 200);
-    final result = _map(decoded, path == 'command' ? 'ok reply' : path == 'transcript' ? 'ok transcript' : 'ok workspace');
+    final result = _map(decoded, path == 'command' ? 'ok reply' : path == 'transcript' ? 'ok transcript'
+      : path == 'audio-level' ? 'ok audioLevel' : 'ok workspace');
     _need(result['ok'] == true); return result;
   }
   void _accept(Map<String, dynamic> row, int started, {bool newBinding = false}) {
@@ -173,7 +240,7 @@ class K135zCaptureController extends ChangeNotifier {
         row['authorityRevision'] >= _row!['authorityRevision'] &&
         (row['snapshot']['revision'] != _row!['snapshot']['revision'] || _same(row['snapshot'], _row!['snapshot'])));
     }
-    if (_row == null || !_same(row['snapshot']['context'], _row!['snapshot']['context'])) _clearPreview();
+    if (_row == null || !_same(row['snapshot']['context'], _row!['snapshot']['context'])) { _clearPreview(); _clearAudio(); }
     _row = row; _deadline = started + (row['validForMs'] as int); _confirmed = true; _polled = _clock();
     if (row['pending'] == true || row['uncertain'] == true || _state != 'listening' ||
         row['captureActive'] != true || _clock() >= _deadline ||
@@ -187,7 +254,7 @@ class K135zCaptureController extends ChangeNotifier {
       if (!_dead && e == _epoch) {
         _actionError = error is _CaptureFeedback ? error.message
           : 'Request not confirmed. Refresh the session before trying again.';
-        _confirmed = false; _renew = false; _consent = false;
+        _confirmed = false; _renew = false; _consent = false; _clearAudio();
         _message = 'Request unconfirmed. Refresh session before continuing. No automatic restart.'; cancelRequests(); }
     } finally { if (!_dead && e == _epoch) { _busy = false; notifyListeners(); } }
   }
@@ -222,7 +289,7 @@ class K135zCaptureController extends ChangeNotifier {
     if (!usable || _busy) return;
     _consent = value;
     if (!value) {
-      _renew = false;
+      _renew = false; _clearAudio();
       if (_row != null) await _run((e) async { await _permission('revoke', e); _message = 'Consent withdrawn. Refresh to confirm capture has ended.'; });
     }
     if (!_dead) notifyListeners();
@@ -243,7 +310,7 @@ class K135zCaptureController extends ChangeNotifier {
   Future<void> pause() async { if (canPause) await _command('pause'); }
   Future<void> stop() async { if (canStop) await _command('stop'); }
   Future<void> _command(String action) => _run((e) async {
-    _renew = false; _actionError = null;
+    _renew = false; _actionError = null; _clearAudio();
     if (action == 'start') { _need(_consent); await _permission('consent', e); _current(e); _need(_consent); }
     final old = _row!['snapshot'] as Map<String, dynamic>;
     final op = {'requestId':'$_id-${++_number}', 'localEpoch':e, 'operationNumber':_number};
@@ -276,10 +343,12 @@ class K135zCaptureController extends ChangeNotifier {
       await _run((e) async { await _permission('renew', e); });
     } else if (_clock() - _polled >= 5000) { await refresh(); }
     else if (_clock() - _previewPolled >= 5000) { await refreshTranscript(automatic:true); }
+    if (canCheckAudio && _clock() - _audioPolled >= 1000) await refreshAudio(automatic:true);
+    if (!_dead && usable) notifyListeners();
   }
   void suspend() {
     if (_dead) return;
-    _clearPreview(); _previewBusy = false;
+    _clearPreview(); _previewBusy = false; _clearAudio();
     _foreground = false; _epoch++; _busy = false; _renew = false; _consent = false; _confirmed = false;
     cancelRequests(); _message = 'Capture status unconfirmed. Return and refresh; listening will not restart automatically.';
     notifyListeners();
