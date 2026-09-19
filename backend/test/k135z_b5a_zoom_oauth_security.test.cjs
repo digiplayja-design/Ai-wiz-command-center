@@ -7,6 +7,8 @@ const assert = require(
 const crypto = require(
   "node:crypto",
 );
+const http = require('node:http');
+const { K135zZoomError } = require('../k135z_zoom/b5b_contract.cjs');
 const fs = require(
   "node:fs",
 );
@@ -300,6 +302,103 @@ async function connect(
 
   return state;
 }
+
+async function callbackHttpFixture(t, fixture, returnTo = null) {
+  const logs = [];
+  t.mock.method(console, 'info', (...args) => logs.push(args));
+  const start = await fixture.oauthService.startAuthorization({principal: principal(), returnTo});
+  const state = new URL(start.authorizationUrl).searchParams.get('state');
+  const handler = createK135zZoomHandlers({oauthService: fixture.oauthService}).callback;
+  const server = http.createServer((req, res) => {
+    req.query = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams);
+    res.redirect = (status, location) => {
+      res.statusCode = status; res.setHeader('Location', location); res.end();
+    };
+    void handler(req, res);
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => {
+    server.close(resolve); server.closeAllConnections();
+  }));
+  const url = new URL(`http://127.0.0.1:${server.address().port}/oauth/callback`);
+  url.searchParams.set('state', state);
+  url.searchParams.set('code', 'private-authorization-code');
+  return {logs, state, request: (accept = 'text/html,application/xhtml+xml') =>
+    fetch(url, {headers: {accept}, redirect: 'manual'})};
+}
+
+test('browser OAuth callback renders success and rejects replay without a second exchange', async t => {
+  const f = makeFixture(), web = await callbackHttpFixture(t, f);
+  const result = await web.request(), body = await result.text();
+  assert.equal(result.status, 200);
+  assert.match(result.headers.get('content-type'), /^text\/html/);
+  assert.equal(result.headers.get('content-disposition'), 'inline');
+  assert.equal(result.headers.get('cache-control'), 'no-store');
+  assert.equal(result.headers.get('referrer-policy'), 'no-referrer');
+  assert.match(result.headers.get('content-security-policy'), /default-src 'none'/);
+  assert.match(body, /Zoom is connected/);
+  assert.match(body, /original KORLIX tab/);
+  assert.equal((await f.oauthService.getStatus(principal())).connected, true);
+  const replay = await web.request();
+  assert.equal(replay.status, 409);
+  assert.match(await replay.text(), /ZOOM_OAUTH_STATE_REPLAYED/);
+  assert.equal(f.calls.filter(call => call[0] === 'exchange').length, 1);
+  const visible = body + JSON.stringify(web.logs);
+  for (const secret of [web.state, 'private-authorization-code', 'access-one', 'refresh-one', 'client-secret'])
+    assert.equal(visible.includes(secret), false);
+});
+
+test('browser OAuth failure preserves the first error in safe logs before any replay', async t => {
+  const f = makeFixture(); let exchanges = 0;
+  f.transport.exchangeAuthorizationCode = async () => {
+    exchanges++;
+    throw new K135zZoomError(502, 'ZOOM_UPSTREAM_REQUEST_FAILED', '<script>private-provider-data</script>');
+  };
+  const web = await callbackHttpFixture(t, f), first = await web.request();
+  assert.equal(first.status, 502);
+  const body = await first.text();
+  assert.match(body, /ZOOM_UPSTREAM_REQUEST_FAILED/);
+  assert.doesNotMatch(body, /<script>|private-provider-data/);
+  assert.equal((await f.oauthService.getStatus(principal())).connected, false);
+  assert.deepEqual(web.logs[0], ['K135Z_ZOOM_OAUTH_CALLBACK', JSON.stringify({status:502, code:'ZOOM_UPSTREAM_REQUEST_FAILED'})]);
+  const second = await web.request();
+  assert.equal(second.status, 409);
+  assert.match(await second.text(), /ZOOM_OAUTH_STATE_REPLAYED/);
+  assert.equal(exchanges, 1);
+  assert.doesNotMatch(JSON.stringify(web.logs), /private-provider-data|private-authorization-code/);
+});
+
+test('browser callback redacts unexpected exceptions and malformed error codes', async t => {
+  for (const error of [new Error('private-token-detail'),
+    new K135zZoomError(502, '<script>private-code</script>', 'private-message')]) {
+    const f = makeFixture();
+    f.transport.exchangeAuthorizationCode = async () => { throw error; };
+    const web = await callbackHttpFixture(t, f), result = await web.request();
+    assert.equal(result.status, error instanceof K135zZoomError ? 502 : 500);
+    const body = await result.text();
+    assert.match(body, /K135Z_ZOOM_INTERNAL_ERROR/);
+    assert.doesNotMatch(body + JSON.stringify(web.logs), /private-|<script>/);
+  }
+});
+
+test('OAuth JSON clients retain success and replay response contracts', async t => {
+  const web = await callbackHttpFixture(t, makeFixture());
+  const success = await web.request('application/json');
+  assert.equal(success.status, 200);
+  assert.match(success.headers.get('content-type'), /^application\/json/);
+  assert.deepEqual(await success.json(), {ok:true, connected:true});
+  const replay = await web.request('application/json');
+  assert.equal(replay.status, 409);
+  assert.deepEqual(await replay.json(), {ok:false, error:{code:'ZOOM_OAUTH_STATE_REPLAYED', message:'ZOOM_OAUTH_STATE_REPLAYED'}});
+});
+
+test('OAuth callbacks preserve a validated return URL redirect', async t => {
+  const web = await callbackHttpFixture(t, makeFixture(), 'https://app.korlix.test/#/meeting-copilot');
+  const result = await web.request();
+  assert.equal(result.status, 302);
+  assert.equal(result.headers.get('location'), 'https://app.korlix.test/?zoom=connected#/meeting-copilot');
+  assert.equal(result.headers.get('cache-control'), 'no-store');
+});
 
 test(
   "OAuth start creates a backend-owned one-time state and exact authorization URL",

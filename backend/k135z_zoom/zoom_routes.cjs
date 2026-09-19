@@ -145,6 +145,33 @@ function safeHandler(handler) {
   };
 }
 
+// Browser callbacks must render once: downloading JSON can repeat a one-use URL.
+function oauthCallbackPage(req, res, status, code = null) {
+  if (typeof res.setHeader === 'function') {
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+  }
+  const browser = /\btext\/html\b/i.test(String(req?.headers?.accept || ''));
+  if (!browser || typeof res.end !== 'function') return false;
+  const title = code ? 'Zoom connection did not complete' : 'Zoom is connected';
+  const message = code
+    ? 'Return to your original KORLIX tab. Share the error code below before trying again.'
+    : 'Return to your original KORLIX tab and tap Refresh status. You can close this tab.';
+  res.statusCode = status;
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Content-Disposition', 'inline');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'");
+  res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>body{font:18px system-ui,sans-serif;background:#061725;color:#eefaff;margin:0;padding:32px}main{max-width:640px;margin:10vh auto;padding:28px;border:1px solid #21d4f4;border-radius:18px}h1{font-size:28px}p{line-height:1.6}code{display:block;overflow-wrap:anywhere;color:#63e5ff}</style></head><body><main><p>KORLIX AI</p><h1>${title}</h1><p>${message}</p>${code ? `<code>${code}</code>` : ''}</main></body></html>`);
+  return true;
+}
+
+function oauthCallbackAudit(status, code) {
+  // Never log the request URL, authorization code, state, tokens, or error text.
+  try { console.info('K135Z_ZOOM_OAUTH_CALLBACK', JSON.stringify({status, code})); }
+  catch (_) { /* Logging must not change the callback outcome. */ }
+}
+
 function principalFromRequest(req) {
   const candidates = [
     req?.korlixUser,
@@ -674,12 +701,8 @@ function createK135zZoomHandlers(
       },
     );
 
-  const callback =
-    safeHandler(
-      async (
-        req,
-        res,
-      ) => {
+  const callback = async (req, res) => {
+    try {
         const result =
           await deps
             .oauthService
@@ -691,6 +714,11 @@ function createK135zZoomHandlers(
                 req?.query?.state,
             });
 
+        oauthCallbackAudit(200, 'CONNECTED');
+        if (typeof res.setHeader === 'function') {
+          res.setHeader('Cache-Control', 'no-store');
+          res.setHeader('Referrer-Policy', 'no-referrer');
+        }
         if (
           result.returnTo &&
           typeof res.redirect ===
@@ -714,6 +742,7 @@ function createK135zZoomHandlers(
           );
         }
 
+        if (oauthCallbackPage(req, res, 200)) return;
         return jsonResponse(
           res,
           200,
@@ -722,8 +751,17 @@ function createK135zZoomHandlers(
             connected: true,
           },
         );
-      },
-    );
+    } catch (error) {
+      const known = error instanceof K135zZoomError;
+      const status = known && Number.isInteger(error.status) && error.status >= 400 && error.status <= 599
+        ? error.status : 500;
+      const code = known && /^(?:ZOOM|K135Z)_[A-Z0-9_]{1,80}$/.test(error.code)
+        ? error.code : 'K135Z_ZOOM_INTERNAL_ERROR';
+      oauthCallbackAudit(status, code);
+      if (oauthCallbackPage(req, res, status, code)) return;
+      return errorResponse(res, error);
+    }
+  };
 
   const status =
     safeHandler(
