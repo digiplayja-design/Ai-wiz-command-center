@@ -37,6 +37,10 @@ import 'live_convo/korlix_live_convo_test_screen.dart';
 import 'billing/korlix_apple_billing.dart';
 import 'privacy/korlix_third_party_ai_consent.dart';
 
+import 'meeting_copilot/korlix_meeting_copilot_route.dart';
+import 'meeting_copilot/korlix_meeting_copilot_auth_bridge.dart';
+import 'meeting_copilot/korlix_meeting_copilot_access.dart';
+
 const String kKorlixImaginePicturePrompt =
     'Describe the picture you want Korlix AI to create.';
 
@@ -276,6 +280,14 @@ class CheeChaiCheeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorObservers: <NavigatorObserver>[
+        kKorlixMeetingCopilotAuthObserver,
+      ],
+
+      routes: <String, WidgetBuilder>{
+        KorlixMeetingCopilotRoute.routeName: (_) =>
+            const KorlixMeetingCopilotRoute(),
+      },
       title: 'Korlix AI',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -10720,6 +10732,11 @@ Make the entire output professional, well-structured using Markdown, and product
 
   @override
   Widget build(BuildContext context) {
+    // K135Z_B4B_V11_SYNC_SHARED_ENTERPRISE_STATE
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      syncKorlixMeetingCopilotEnterpriseAccessFromTier(_currentTier);
+    });
+
     final t = _t;
 
     return Scaffold(
@@ -17065,6 +17082,9 @@ Make the entire output professional, well-structured using Markdown, and product
             kKorlixSelectedCharacterNotifier.value,
           ),
           language: _t.label,
+
+          meetingCopilotEnterpriseEnabled:
+              korlixMeetingCopilotEnterpriseEnabled(_currentTier),
         ),
       ),
     );
@@ -17072,6 +17092,7 @@ Make the entire output professional, well-structured using Markdown, and product
   // KORLIX_LIVE_CONVO_PHASE2B_OPEN_END
 
   Widget _buildCommandPanel() {
+    // K135Z_B4B_V11_GENERAL_COMMAND_ENTRY_REMOVED
     final t = _t;
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
     final hasText = _controller.text.trim().isNotEmpty;
@@ -17388,6 +17409,8 @@ Make the entire output professional, well-structured using Markdown, and product
                   runSpacing: 8,
                   alignment: WrapAlignment.center,
                   children: [
+                    // K135Z_B4A_MEETING_COPILOT_COMMAND_CENTER_ENTRY_BEGIN
+                    // K135Z_B4A_MEETING_COPILOT_COMMAND_CENTER_ENTRY_END
                     toolButton(
                       icon: Icons.attach_file_rounded,
                       label: 'Upload',

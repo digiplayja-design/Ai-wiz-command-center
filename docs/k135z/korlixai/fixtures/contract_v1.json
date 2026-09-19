@@ -1,0 +1,388 @@
+{
+  "schemaVersion": 1,
+  "contract": "K135Z-KAI-CONTRACT-v1 / MAIN-DECISIONS-01",
+  "fixtureOnly": true,
+  "context": {
+    "tenantId": "fixture-tenant",
+    "userId": "fixture-user",
+    "agentId": "fixture-agent",
+    "sessionId": "fixture-session",
+    "meetingUuid": "fixture-meeting",
+    "streamId": "fixture-stream",
+    "generation": 1
+  },
+  "events": [
+    {
+      "schemaVersion": 1,
+      "context": {
+        "tenantId": "fixture-tenant",
+        "userId": "fixture-user",
+        "agentId": "fixture-agent",
+        "sessionId": "fixture-session",
+        "meetingUuid": "fixture-meeting",
+        "streamId": "fixture-stream",
+        "generation": 1
+      },
+      "eventId": "fixture-event-1",
+      "segmentId": "S1",
+      "segmentRevision": 1,
+      "sequence": 1,
+      "speakerId": "fixture-alex",
+      "speakerName": "Alex",
+      "startMs": 10000,
+      "text": "We agreed to keep the pilot notes-only.",
+      "isFinal": true,
+      "receivedAt": "2026-09-12T13:00:10.000Z",
+      "source": "offline_fixture"
+    },
+    {
+      "schemaVersion": 1,
+      "context": {
+        "tenantId": "fixture-tenant",
+        "userId": "fixture-user",
+        "agentId": "fixture-agent",
+        "sessionId": "fixture-session",
+        "meetingUuid": "fixture-meeting",
+        "streamId": "fixture-stream",
+        "generation": 1
+      },
+      "eventId": "fixture-event-2",
+      "segmentId": "S2",
+      "segmentRevision": 1,
+      "sequence": 2,
+      "speakerId": "fixture-morgan",
+      "speakerName": "Morgan",
+      "startMs": 20000,
+      "text": "I will draft the pilot checklist.",
+      "isFinal": true,
+      "receivedAt": "2026-09-12T13:00:20.000Z",
+      "source": "offline_fixture"
+    },
+    {
+      "schemaVersion": 1,
+      "context": {
+        "tenantId": "fixture-tenant",
+        "userId": "fixture-user",
+        "agentId": "fixture-agent",
+        "sessionId": "fixture-session",
+        "meetingUuid": "fixture-meeting",
+        "streamId": "fixture-stream",
+        "generation": 1
+      },
+      "eventId": "fixture-event-3",
+      "segmentId": "S3",
+      "segmentRevision": 1,
+      "sequence": 3,
+      "speakerId": "fixture-alex",
+      "speakerName": "Alex",
+      "startMs": 30000,
+      "text": "The pilot checklist is due September 18, 2026, at 3 PM America/New_York.",
+      "isFinal": true,
+      "receivedAt": "2026-09-12T13:00:30.000Z",
+      "source": "offline_fixture"
+    },
+    {
+      "schemaVersion": 1,
+      "context": {
+        "tenantId": "fixture-tenant",
+        "userId": "fixture-user",
+        "agentId": "fixture-agent",
+        "sessionId": "fixture-session",
+        "meetingUuid": "fixture-meeting",
+        "streamId": "fixture-stream",
+        "generation": 1
+      },
+      "eventId": "fixture-event-4",
+      "segmentId": "S4",
+      "segmentRevision": 1,
+      "sequence": 4,
+      "speakerId": "fixture-morgan",
+      "speakerName": "Morgan",
+      "startMs": 40000,
+      "text": "Unstable Wi-Fi is a delivery risk.",
+      "isFinal": true,
+      "receivedAt": "2026-09-12T13:00:40.000Z",
+      "source": "offline_fixture"
+    },
+    {
+      "schemaVersion": 1,
+      "context": {
+        "tenantId": "fixture-tenant",
+        "userId": "fixture-user",
+        "agentId": "fixture-agent",
+        "sessionId": "fixture-session",
+        "meetingUuid": "fixture-meeting",
+        "streamId": "fixture-stream",
+        "generation": 1
+      },
+      "eventId": "fixture-event-5",
+      "segmentId": "S5",
+      "segmentRevision": 1,
+      "sequence": 5,
+      "speakerId": "fixture-alex",
+      "speakerName": "Alex",
+      "startMs": 50000,
+      "text": "We still need to decide the retention period.",
+      "isFinal": true,
+      "receivedAt": "2026-09-12T13:00:50.000Z",
+      "source": "offline_fixture"
+    },
+    {
+      "schemaVersion": 1,
+      "context": {
+        "tenantId": "fixture-tenant",
+        "userId": "fixture-user",
+        "agentId": "fixture-agent",
+        "sessionId": "fixture-session",
+        "meetingUuid": "fixture-meeting",
+        "streamId": "fixture-stream",
+        "generation": 1
+      },
+      "eventId": "fixture-event-6",
+      "segmentId": "S6",
+      "segmentRevision": 1,
+      "sequence": 6,
+      "speakerId": "fixture-morgan",
+      "speakerName": "Morgan",
+      "startMs": 60000,
+      "text": "Host approval is required before listening.",
+      "isFinal": true,
+      "receivedAt": "2026-09-12T13:01:00.000Z",
+      "source": "offline_fixture"
+    }
+  ],
+  "draft": {
+    "decisions": [
+      {
+        "category": "decision",
+        "title": "Notes-only pilot",
+        "detail": "Keep the pilot notes-only.",
+        "owner": null,
+        "deadlineText": null,
+        "deadlineAtUtc": null,
+        "deadlineTimeZone": null,
+        "evidence": [
+          {
+            "segmentId": "S1",
+            "segmentRevision": 1
+          }
+        ]
+      }
+    ],
+    "actionItems": [
+      {
+        "category": "actionItem",
+        "title": "Pilot checklist",
+        "detail": "Draft the pilot checklist.",
+        "owner": "Morgan",
+        "deadlineText": "The pilot checklist is due September 18, 2026, at 3 PM America/New_York.",
+        "deadlineAtUtc": null,
+        "deadlineTimeZone": "America/New_York",
+        "evidence": [
+          {
+            "segmentId": "S2",
+            "segmentRevision": 1
+          },
+          {
+            "segmentId": "S3",
+            "segmentRevision": 1
+          }
+        ]
+      }
+    ],
+    "deadlines": [
+      {
+        "category": "deadline",
+        "title": "Checklist deadline",
+        "detail": "The pilot checklist is due September 18, 2026, at 3 PM America/New_York.",
+        "owner": "Morgan",
+        "deadlineText": "The pilot checklist is due September 18, 2026, at 3 PM America/New_York.",
+        "deadlineAtUtc": null,
+        "deadlineTimeZone": "America/New_York",
+        "evidence": [
+          {
+            "segmentId": "S2",
+            "segmentRevision": 1
+          },
+          {
+            "segmentId": "S3",
+            "segmentRevision": 1
+          }
+        ]
+      }
+    ],
+    "risks": [
+      {
+        "category": "risk",
+        "title": "Delivery risk",
+        "detail": "Unstable Wi-Fi is a delivery risk.",
+        "owner": null,
+        "deadlineText": null,
+        "deadlineAtUtc": null,
+        "deadlineTimeZone": null,
+        "evidence": [
+          {
+            "segmentId": "S4",
+            "segmentRevision": 1
+          }
+        ]
+      }
+    ],
+    "openQuestions": [
+      {
+        "category": "openQuestion",
+        "title": "Retention period",
+        "detail": "We still need to decide the retention period.",
+        "owner": null,
+        "deadlineText": null,
+        "deadlineAtUtc": null,
+        "deadlineTimeZone": null,
+        "evidence": [
+          {
+            "segmentId": "S5",
+            "segmentRevision": 1
+          }
+        ]
+      }
+    ],
+    "takeaways": [
+      {
+        "category": "takeaway",
+        "title": "Host approval",
+        "detail": "Host approval is required before listening.",
+        "owner": null,
+        "deadlineText": null,
+        "deadlineAtUtc": null,
+        "deadlineTimeZone": null,
+        "evidence": [
+          {
+            "segmentId": "S6",
+            "segmentRevision": 1
+          }
+        ]
+      }
+    ]
+  },
+  "metadata": {
+    "title": "Fictional pilot planning",
+    "startedAtUtc": null,
+    "endedAtUtc": null,
+    "timeZone": null,
+    "participants": null,
+    "participantListScope": "unknown"
+  },
+  "expected": {
+    "manifest": [
+      {
+        "segmentId": "S1",
+        "segmentRevision": 1
+      },
+      {
+        "segmentId": "S2",
+        "segmentRevision": 1
+      },
+      {
+        "segmentId": "S3",
+        "segmentRevision": 1
+      },
+      {
+        "segmentId": "S4",
+        "segmentRevision": 1
+      },
+      {
+        "segmentId": "S5",
+        "segmentRevision": 1
+      },
+      {
+        "segmentId": "S6",
+        "segmentRevision": 1
+      }
+    ],
+    "transcriptCoverage": {
+      "scope": "transcriptWindow",
+      "completeness": "unknown",
+      "observedRange": null,
+      "knownCaptureGaps": [],
+      "omittedSegments": 0,
+      "rejectedEvents": 0,
+      "provisionalSegments": 0,
+      "ingestionBlocked": false,
+      "reasons": [
+        "COVERAGE_UNKNOWN"
+      ]
+    },
+    "taskEvidence": [
+      {
+        "segmentId": "S2",
+        "segmentRevision": 1
+      },
+      {
+        "segmentId": "S3",
+        "segmentRevision": 1
+      }
+    ],
+    "decisionId": "insight_994d506b4d77b8e7cd6bee42f65ab2b91dfdabf4814462c219963c163786d54e",
+    "decisionIdPreimageUtf8Hex": "7b2263617465676f7279223a226465636973696f6e222c22636f6e74657874223a7b226167656e744964223a22666978747572652d6167656e74222c2267656e65726174696f6e223a312c226d656574696e6755756964223a22666978747572652d6d656574696e67222c2273657373696f6e4964223a22666978747572652d73657373696f6e222c2273747265616d4964223a22666978747572652d73747265616d222c2274656e616e744964223a22666978747572652d74656e616e74222c22757365724964223a22666978747572652d75736572227d2c22646561646c696e654174557463223a6e756c6c2c22646561646c696e6554657874223a6e756c6c2c22646561646c696e6554696d655a6f6e65223a6e756c6c2c2264657461696c223a224b656570207468652070696c6f74206e6f7465732d6f6e6c792e222c2265766964656e6365223a5b7b227365676d656e744964223a225331222c227365676d656e745265766973696f6e223a317d5d2c226f776e6572223a6e756c6c2c227469746c65223a224e6f7465732d6f6e6c792070696c6f74227d",
+    "deadlineAtUtc": null,
+    "deadlineTimeZone": "America/New_York",
+    "reviewRequired": true,
+    "persisted": false
+  },
+  "canonicalCases": [
+    {
+      "id": "CAN-01",
+      "input": {
+        "z": 1,
+        "a": 2
+      },
+      "hex": "7b2261223a322c227a223a317d"
+    },
+    {
+      "id": "CAN-02",
+      "input": {
+        "text": "\"\\/\u0000\t\n\r"
+      },
+      "hex": "7b2274657874223a225c225c5c2f5c75303030305c75303030395c75303030615c7530303064227d"
+    },
+    {
+      "id": "CAN-03A",
+      "input": "\u00e9",
+      "hex": "22c3a922"
+    },
+    {
+      "id": "CAN-03B",
+      "input": "e\u0301",
+      "hex": "2265cc8122"
+    },
+    {
+      "id": "CAN-04",
+      "input": {
+        "\ud800\udc00": 1,
+        "\ue000": 1
+      },
+      "hex": "7b22ee8080223a312c22f0908080223a317d"
+    }
+  ],
+  "c2LifecycleExpectations": [
+    {
+      "id": "C2-LIFE-01",
+      "case": "Late Start after acknowledged Stop",
+      "expected": "Terminal stopped generation; older Start cannot reopen intake. New capture requires Main-issued generation."
+    },
+    {
+      "id": "C2-LIFE-02",
+      "case": "Stop conflict or timeout",
+      "expected": "Block local intake; retain last confirmed snapshot; remote outcome unconfirmed; no retry."
+    },
+    {
+      "id": "C2-LIFE-03",
+      "case": "Refresh after Pause or transport loss",
+      "expected": "No reopen without current correctly bound authorized explicit Start acknowledgment."
+    },
+    {
+      "id": "C2-LIFE-04",
+      "case": "Authority subscription replaced or access lost",
+      "expected": "Invalidate old callbacks synchronously; clear private data on access loss or rebinding."
+    }
+  ]
+}
