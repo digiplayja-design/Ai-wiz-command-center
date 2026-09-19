@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("node:crypto");
+const {pcmLevel, createAudioLevelMeter} = require('./audio_level.cjs');
 
 const {
   K135zZoomError,
@@ -665,7 +666,7 @@ class K135zSupabaseWorkspaceStore {
 // Internal SDK driver. The server must supply a verified binding, signed Zoom
 // endpoint and a synchronous check of its current authority lease. No HTTP
 // request may supply these dependencies. Nothing connects during construction.
-function createK135zRtmsStream({sdk,context,serverUrls,signature,authorize,onTranscript,
+function createK135zRtmsStream({sdk,context,serverUrls,signature,authorize,onTranscript,onAudioLevel,
   onClosed=()=>{},leaseMs=15000,joinTimeoutMs=10000,
   clock=()=>require('node:perf_hooks').performance.now()}={}) {
   const C=workspaceContract,ctx=C.context(context);
@@ -743,6 +744,17 @@ function createK135zRtmsStream({sdk,context,serverUrls,signature,authorize,onTra
       if(signal?.aborted||phase==='closed'){end('CANCELLED');return promise;}
       need(typeof sdk.configureLogger==='function','SDK_INVALID');sdk.configureLogger({enabled:false});
       client=new sdk.Client();
+      if(typeof onAudioLevel==='function') {
+        need(typeof client.setAudioParams==='function' && typeof client.onAudioData==='function','AUDIO_SDK_INVALID');
+        need(client.setAudioParams({contentType:2,codec:1,sampleRate:1,channel:1,
+          dataOpt:1,duration:20,frameSize:320})===true,'AUDIO_CONFIGURATION_FAILED');
+        need(client.onAudioData((buffer,size)=>{
+          if(phase!=='connected')return;
+          if(!permitted()){end('DENIED');return;}
+          const level=pcmLevel(buffer,size);
+          if(level)try{onAudioLevel(level);}catch{end('AUDIO_HANDLER_FAILED');}
+        })===true,'AUDIO_CALLBACK_FAILED');
+      }
       for(const [name,callback] of [['onJoinConfirm',confirm],['onTranscriptData',transcript],['onLeave',()=>end('REMOTE_CLOSED')]]){
         need(typeof client[name]==='function'&&client[name](callback)===true,'CALLBACK_REGISTRATION_FAILED');
       }
@@ -776,7 +788,7 @@ function createK135zRtmsStream({sdk,context,serverUrls,signature,authorize,onTra
 // validForMs is measured from BEFORE the resolver call; network time consumes it.
 function createK135zRtmsCommandTransport({sdk,resolveGrant,onTranscript,
   clock=()=>require('node:perf_hooks').performance.now(),grantTimeoutMs=2000,
-  maxSessions=64}={}) {
+  maxSessions=64,audioLevels=false}={}) {
   const C=workspaceContract,A=K135zAtomicWorkspaceAdapter;
   const need=(ok,code='PROTOCOL_ERROR')=>{if(!ok)throw new WorkspaceBoundaryFailure(code);};
   need(typeof sdk?.Client==='function' && sdk.RTMS_SDK_OK===0 &&
@@ -794,6 +806,7 @@ function createK135zRtmsCommandTransport({sdk,resolveGrant,onTranscript,
   }
   function release(e){
     e.deliver=false;account(e);clearTimeout(e.refresh);e.refresh=null;
+    e.meter?.clear();
     if(e.stream){const result=e.stream.close();e.released=e.released&&result.released;}
     return e.released;
   }
@@ -864,7 +877,8 @@ function createK135zRtmsCommandTransport({sdk,resolveGrant,onTranscript,
         if(s.state!=='ready'||s.context.streamId!==null)return A.failure(r,'UNAVAILABLE','unknown');
         need(entries.size<maxSessions,'UNAVAILABLE');
         e={principal:p,context:s.context,snapshot:s,pending:null,stream:null,released:true,
-          deliver:false,started:null,elapsed:s.activeSeconds*1000,deadline:0,refresh:null};
+          deliver:false,started:null,elapsed:s.activeSeconds*1000,deadline:0,refresh:null,
+          meter:createAudioLevelMeter({clock:now})};
         need(Number.isSafeInteger(e.elapsed));entries.set(k,e);
       }
       need(!e.pending&&C.canonical(e.snapshot)===C.canonical(s),'CONFLICT');
@@ -884,6 +898,9 @@ function createK135zRtmsCommandTransport({sdk,resolveGrant,onTranscript,
         e.stream=createK135zRtmsStream({sdk,context:e.context,serverUrls:g.serverUrls,signature:g.signature,
           leaseMs:Math.max(1,Math.floor(e.deadline-now())),authorize:()=>permitted(e),
           onTranscript:packet=>e.deliver?onTranscript(packet):true,
+          ...(audioLevels?{onAudioLevel:level=>{
+            if(e.deliver&&!e.pending&&permitted(e))e.meter.accept(level);
+          }}:{}),
           onClosed:result=>{e.deliver=false;account(e);clearTimeout(e.refresh);e.released=e.released&&result.released;}});
         changed=true;await e.stream.connect({signal:e.abort.signal});
         need(e.pending===token&&permitted(e)&&e.stream.status().phase==='connected','DENIED');schedule(e);
@@ -925,7 +942,13 @@ function createK135zRtmsCommandTransport({sdk,resolveGrant,onTranscript,
         permitted(e) && e.stream?.status().phase==='connected');
     } catch {return false;}
   }
-  return Object.freeze({request,settle,captureActive,close(){disposed=true;for(const e of entries.values())end(e);
+  function audioLevel({principal,context}) {
+    const active=captureActive({principal,context});
+    const e=entries.get(key(storageContract.identity(principal)));
+    return {schemaVersion:1,context,active,available:audioLevels,
+      ...(active&&e?e.meter.snapshot(true):{received:false,packets:0,ageMs:null,level:0,peak:0})};
+  }
+  return Object.freeze({request,settle,captureActive,audioLevel,close(){disposed=true;for(const e of entries.values())end(e);
     return [...entries.values()].every(e=>e.released);}});
 }
 // K135Z_GATE6J_RTMS_TRANSPORT_END

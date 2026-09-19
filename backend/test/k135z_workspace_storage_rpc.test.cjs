@@ -220,7 +220,7 @@ function register(sql) {
    const repository=new SupabaseZoomRepository({client});
    const vault=new ZoomTokenVault({repository,cipher:new EnvelopeCipher(Buffer.alloc(32,6)),clock:()=>1000});
    await vault.storeConnection(f.p,{access_token:'fixture-access',refresh_token:'fixture-refresh',expires_in:3600,
-     account_id:'capture-account',user_id:'capture-host',scope:'meeting:read:meeting_transcripts'});
+     account_id:'capture-account',user_id:'capture-host',scope:'meeting:read:meeting_transcript'});
    const plan=(status='started',extra={},ts=1100)=>C.eventPlan({body:{event:'meeting.rtms_'+status,event_ts:ts,
      payload:{meeting_uuid:context.meetingUuid,rtms_stream_id:'capture-stream-'+f.p.agentId,
        ...(status==='started'?{account_id:'capture-account',operator_id:'capture-host',is_original_host:true,
@@ -259,7 +259,8 @@ function register(sql) {
  });
  test('Gate6L SQL source requires transcript scope and a connection older than the event',async()=>{
    const f=await captureFixture();await f.apply(f.plan());const record=await f.repository.getConnection(f.query.key);
-   for(const fields of [{scope:'meeting:read'},{connectedAtMs:1200}]) {
+   for(const fields of [{scope:'meeting:read'},{scope:'meeting:read:meeting_transcripts'},
+     {scope:'meeting:read:meeting_transcript:admin'},{connectedAtMs:1200}]) {
      await f.repository.saveConnection(f.query.key,{...record,...fields});assert.equal(await f.source(),null);
    }
  });

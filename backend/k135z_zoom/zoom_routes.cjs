@@ -2,6 +2,7 @@
 
 const crypto = require("node:crypto");
 const { identity, eventPlan } = require("./b5b_contract.cjs");
+const {createZoomRtmsStarter} = require('./zoom_rtms_start.cjs');
 
 const {
   EnvelopeCipher,
@@ -569,10 +570,14 @@ function createK135zZoomDependencies(
   if(!options.workspaceCommandAdapter && !workspaceTransport && options.rtmsSdk) {
     const resolveGrant=createK135zRtmsGrantResolver({store:workspaceStore,repository,
       clientId:env.KORLIX_ZOOM_CLIENT_ID,clientSecret:env.KORLIX_ZOOM_CLIENT_SECRET});
-    workspaceTransport=createK135zRtmsCommandTransport({sdk:options.rtmsSdk,resolveGrant,onTranscript:options.onRtmsTranscript});
+    workspaceTransport=createK135zRtmsCommandTransport({sdk:options.rtmsSdk,resolveGrant,
+      onTranscript:options.onRtmsTranscript,audioLevels:options.audioLevels===true});
   }
   return {
     workspaceStore,
+    workspaceStartRtms:options.rtmsStartEnabled===true && workspaceStore
+      ? createZoomRtmsStarter({store:workspaceStore,repository,oauthService,transport,
+        clientId:env.KORLIX_ZOOM_CLIENT_ID,fetchImpl:options.fetchImpl||globalThis.fetch}) : null,
     workspaceTranscriptPreview:options.workspaceTranscriptPreview,
     workspaceHttpEnabled: options.workspaceHttpEnabled===true,
     workspaceTransport,
@@ -931,7 +936,7 @@ function createK135zZoomHandlers(
           if(kind==='command')C.control(body,'request');
           else if(kind==='bind'){C.object(body,['meetingUuid','expectedBindingRevision']);C.text(body.meetingUuid);C.uint(body.expectedBindingRevision);}
           else if(kind==='status')C.object(body,[]);
-          else if(kind==='transcript'){C.object(body,['context']);C.context(body.context);}
+          else if(kind==='transcript'||kind==='audio-level'){C.object(body,['context']);C.context(body.context);}
           else {
             C.object(body,['action','context','bindingRevision','authorityRevision'],body.action==='consent'?['listeningConsent']:[]);
             C.oneOf(body.action,['consent','renew','revoke']);C.context(body.context);
@@ -940,7 +945,8 @@ function createK135zZoomHandlers(
         }catch{throw new K135zZoomError(400,'K135Z_WORKSPACE_REQUEST_INVALID');}
         const ended=new Promise((_,reject)=>{fail=reject;});
         req.once?.('aborted',cancel);res.once?.('close',cancel);
-        timer=setTimeout(()=>{fail(new K135zZoomError(504,'K135Z_WORKSPACE_TIMEOUT'));abort.abort();},10000);
+        timer=setTimeout(()=>{fail(new K135zZoomError(504,'K135Z_WORKSPACE_TIMEOUT'));abort.abort();},
+          kind==='consent'&&body.action==='consent'?25000:10000);
         if(req.aborted || res.destroyed)cancel();
         const run=async()=>{
           check();
@@ -950,9 +956,25 @@ function createK135zZoomHandlers(
           if(!store)throw new K135zZoomError(503,'K135Z_WORKSPACE_UNAVAILABLE');
           let row;
           if(kind==='bind')row=await store.bindWorkspace({principal,...body,signal:abort.signal});
-          else if(kind==='consent')row=await store.changeConsent({principal,request:body,signal:abort.signal});
-          else row=await store.readCaptureLease({principal,...(kind==='transcript'?{context:body.context}:{}),signal:abort.signal});
+          else if(kind==='consent') {
+            if(body.action==='consent'&&deps.workspaceStartRtms) {
+              await deps.workspaceStartRtms({principal,request:body,signal:abort.signal});check();
+            }
+            row=await store.changeConsent({principal,request:body,signal:abort.signal});
+          }
+          else row=await store.readCaptureLease({principal,...(['transcript','audio-level'].includes(kind)?{context:body.context}:{}),signal:abort.signal});
           check();
+          if(kind==='audio-level') {
+            if(!C.sameContext(body.context,row.record.snapshot.context)||
+              !['tenantId','userId','agentId'].every(k=>body.context[k]===principal[k]))
+              throw new K135zZoomError(409,'K135Z_WORKSPACE_BINDING_MISMATCH');
+            if(row.authority.viewerAuthorized!==true)throw new K135zZoomError(403,'K135Z_WORKSPACE_DENIED');
+            const active=row.validForMs>0&&row.authority.hostAuthorized&&row.authority.listeningAuthorized&&
+              row.record.snapshot.state==='listening'&&!row.record.pending&&!row.record.uncertain;
+            const level=active?deps.workspaceTransport?.audioLevel?.({principal,context:body.context}):null;
+            return {audioLevel:level||{schemaVersion:1,context:body.context,active:false,available:true,
+              received:false,packets:0,ageMs:null,level:0,peak:0}};
+          }
           if(kind==='transcript') {
             if(!C.sameContext(body.context,row.record.snapshot.context)||
               !['tenantId','userId','agentId'].every(k=>body.context[k]===principal[k]))
@@ -986,6 +1008,7 @@ function createK135zZoomHandlers(
     workspaceBind:workspaceHandler('bind'),workspaceStatus:workspaceHandler('status'),
     workspaceConsent:workspaceHandler('consent'),workspaceCommand:workspaceHandler('command'),
     workspaceTranscript:workspaceHandler('transcript'),
+    workspaceAudioLevel:workspaceHandler('audio-level'),
     start,
     callback,
     status,
@@ -1064,6 +1087,8 @@ function registerK135zZoomRoutes(
       app.post(`${K135Z_ZOOM_ROUTE_PREFIX}/workspace/${path}`,handlers[handler]);
     if(typeof dependencies.workspaceTranscriptPreview==='function')
       app.post(`${K135Z_ZOOM_ROUTE_PREFIX}/workspace/transcript`,handlers.workspaceTranscript);
+    if(typeof dependencies.workspaceTransport?.audioLevel==='function')
+      app.post(`${K135Z_ZOOM_ROUTE_PREFIX}/workspace/audio-level`,handlers.workspaceAudioLevel);
   }
 
   return {
@@ -1183,7 +1208,7 @@ async function createK135zServerRuntime({env=process.env,database,fetchImpl=glob
         if(closed||!dependencies)fail('K135Z_OAUTH_RUNTIME_UNAVAILABLE');
         return provider[name](input);
       };
-    Object.assign(options,{env,transport:Object.freeze(transport)});
+    Object.assign(options,{env,transport:Object.freeze(transport),fetchImpl,rtmsStartEnabled:enabled});
   }
   if(enabled) {
     if(typeof database?.rpc!=='function'||typeof database?.from!=='function')
@@ -1195,9 +1220,9 @@ async function createK135zServerRuntime({env=process.env,database,fetchImpl=glob
     }
     let sdk;try {sdk=await loadSdk();}catch {fail('K135Z_RTMS_SDK_UNAVAILABLE');}
     if(typeof sdk?.Client!=='function'||sdk.RTMS_SDK_OK!==0||typeof sdk.configureLogger!=='function'||
-       !['join','leave','onJoinConfirm','onTranscriptData','onLeave'].every(k=>typeof sdk.Client.prototype?.[k]==='function'))
+       !['join','leave','onJoinConfirm','onTranscriptData','onLeave','setAudioParams','onAudioData'].every(k=>typeof sdk.Client.prototype?.[k]==='function'))
       fail('K135Z_RTMS_SDK_INVALID');
-    Object.assign(options,{workspaceHttpEnabled:true,workspaceCommandClient:database,rtmsSdk:sdk,
+    Object.assign(options,{workspaceHttpEnabled:true,workspaceCommandClient:database,rtmsSdk:sdk,audioLevels:true,
       workspaceTranscriptPreview:context=>inbox.preview(context),
       onRtmsTranscript(packet) {
         if(closed||!dependencies)return false;

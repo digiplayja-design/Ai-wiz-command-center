@@ -1027,7 +1027,7 @@ async function fixture6l(t,o={}) {
     ? {data:{...structuredClone(f.row),validForMs:leaseMs},error:null}:original(name,args);
   const vault=new V.ZoomTokenVault({repository,cipher:new V.EnvelopeCipher(Buffer.alloc(32,7)),clock:()=>now6h-10});
   await vault.storeConnection(P,{access_token:'fixture-access',refresh_token:'fixture-refresh',expires_in:3600,
-    account_id:'account-6l',user_id:'host-6l',scope:'meeting:read:meeting_transcripts'});
+    account_id:'account-6l',user_id:'host-6l',scope:'meeting:read:meeting_transcript'});
   class Client {
     constructor(){this.callbacks={};this.left=0;clients.push(this);}
     onJoinConfirm(fn){this.callbacks.join=fn;return true;} onTranscriptData(fn){this.callbacks.text=fn;return true;}
@@ -1074,7 +1074,8 @@ test('Gate6L webhook host proof alone cannot issue listening consent',async t=>{
   failure6d(await f.run(),'DENIED');assert.equal(f.clients.length,0);assert.equal(f.row.authority.listeningAuthorized,false);
 });
 test('Gate6L missing transcript scope or a newer OAuth connection rejects old stream proof',async t=>{
-  for(const fields of [{scope:'meeting:read'},{connectedAtMs:now6h+1}]) {
+  for(const fields of [{scope:'meeting:read'},{scope:'meeting:read:meeting_transcripts'},
+    {scope:'meeting:read:meeting_transcript:admin'},{connectedAtMs:now6h+1}]) {
     const f=await fixture6l(t),key=C.identityKey(P),record=await f.repository.getConnection(key);
     await f.repository.saveConnection(key,{...record,...fields});failure6d(await f.run(),'DENIED');assert.equal(f.clients.length,0);
   }
@@ -1261,6 +1262,8 @@ function sdk6o() {
   const clients=[];
   class Client {
     constructor(){this.callbacks={};this.left=0;clients.push(this);}
+    setAudioParams(params){this.audioParams=params;return true;}
+    onAudioData(fn){this.callbacks.audio=fn;return true;}
     onJoinConfirm(fn){this.callbacks.join=fn;return true;}
     onTranscriptData(fn){this.callbacks.text=fn;return true;}
     onLeave(fn){this.callbacks.leave=fn;return true;}
@@ -1307,7 +1310,8 @@ test('Gate6O composes shared RPC client and workspace routes without joining',as
   assert.equal(f.runtime.options.workspaceCommandClient,f.f.database);
   Z.registerK135zZoomRoutes({get(){},delete(){},post(p){paths.push(p);}},
     {...f.f.wiring,env:env6o,...f.runtime.options});
-  assert.equal(paths.filter(p=>p.includes('/workspace/')).length,5);
+  assert.equal(paths.filter(p=>p.includes('/workspace/')).length,6);
+  assert(paths.includes('/api/k135z/zoom/workspace/audio-level'));
   assert.equal(f.f.calls.length,0);assert.equal(f.clients.length,0);assert.equal(f.deps.transport.liveEnabled,false);
   assert.equal(f.runtime.close(),true);
 });
@@ -1756,6 +1760,7 @@ test('Gate6S OAuth and capture can compose with separate opt-ins without joining
   t.after(()=>runtime.close());const deps=Z.createK135zZoomDependencies({...f.wiring,env,...runtime.options});
   runtime.attach(deps);assert.equal(runtime.oauthEnabled,true);assert.equal(runtime.enabled,true);
   assert.equal(deps.workspaceHttpEnabled,true);assert(deps.workspaceCommands.adapter);
+  assert.equal(typeof deps.workspaceStartRtms,'function');assert.equal(runtime.options.audioLevels,true);
   assert.equal(sdk.clients.length,0);assert.equal(requests,0);assert.equal(f.calls.length,0);
 });
 // K135Z_GATE6S_RUNTIME_OAUTH_TESTS_END

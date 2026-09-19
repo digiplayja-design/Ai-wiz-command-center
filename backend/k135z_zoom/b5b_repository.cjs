@@ -100,7 +100,7 @@ class MemoryZoomRepository {
   async recordWebhookEvent(eventId,r) { C.keys(r,['event','eventTs','payloadHash']); return (await this.applyWebhookEvent({...r,eventId,mutation:{kind:'none'}})).accepted; }
   async getCaptureSource(query) {
     const q=C.captureQuery(query),c=this.connections.get(q.key);if(!c)return null;
-    if(!c.scope.split(/ +/).includes('meeting:read:meeting_transcripts'))return null;
+    if(!c.scope.split(/ +/).includes('meeting:read:meeting_transcript'))return null;
     const matches=[];
     for(const [key,s] of this.rtmsSessions) {
       const source=this.rtmsSources.get(key);
