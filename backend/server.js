@@ -1,3 +1,11 @@
+// K135Z_GATE5_ESM_IMPORTS_BEGIN
+import k135zGate5Routes from "./k135z_zoom/zoom_routes.cjs";
+import k135zGate5Repository from "./k135z_zoom/b5b_repository.cjs";
+import k135zGate5Contract from "./k135z_zoom/b5b_contract.cjs";
+import k135zGate5Vault from "./k135z_zoom/zoom_token_vault.cjs";
+const { registerK135zZoomRoutes, createK135zServerRuntime } = k135zGate5Routes;
+// K135Z_GATE5_ESM_IMPORTS_END
+
 import express from "express";
 import crypto from "crypto";
 import cors from "cors";
@@ -148,6 +156,13 @@ app.use(express.json({
     if (url.startsWith("/api/agent-email/resend/webhook")) {
       req.korlixAgentEmailRawBody = Buffer.from(buffer);
     }
+    // K135Z_GATE6H_ZOOM_RAW_BODY_BEGIN
+    const zoomPath = url.split("?", 1)[0];
+    if (req.method === "POST" &&
+        /^\/api\/k135z\/zoom\/(?:webhook|deauthorization)\/?$/i.test(zoomPath)) {
+      req.rawBody = Buffer.from(buffer);
+    }
+    // K135Z_GATE6H_ZOOM_RAW_BODY_END
   },
 })); // KORLIX_AGENT_EMAIL_RESEND_RAW_BODY_BUILD133
 
@@ -13127,6 +13142,101 @@ installKorlixVapiNovaRoutes(app, {
 // KORLIX_VAPI_NOVA_BUILD133_INSTALL_END
 
 k136sLearningMount.mountK136S(app, { supabaseAdmin, requireUser, korlixAgentSaveMemoryV1, korlixAgentListMemoriesV1 }); // K136S-F1
+// K135Z_GATE5_TRUSTED_WIRING_BEGIN
+function createK135zGate5Wiring({ database, authenticateUser, loadAgentProfile }) {
+  const { identity, identityKey, K135zZoomError } = k135zGate5Contract;
+  const trustedRequests = new WeakMap();
+  const fail = (status, code) => { throw new K135zZoomError(status, code); };
+  const repository = database && typeof database.rpc === "function"
+    ? new k135zGate5Repository.SupabaseZoomRepository({ client: database })
+    : new k135zGate5Vault.UnavailableZoomRepository();
+  function requestAgent(req) {
+    const values = [req?.query?.agent_id, req?.query?.agentId, req?.body?.agent_id,
+      req?.body?.agentId, req?.headers?.["x-korlix-agent-id"]]
+      .filter(value => value !== undefined && value !== null);
+    if (!values.length || values.some(value => typeof value !== "string" ||
+        !/^[A-Za-z0-9_-]{1,128}$/.test(value)) || new Set(values).size !== 1) {
+      fail(400, "KORLIX_AGENT_SELECTION_REQUIRED");
+    }
+    return values[0];
+  }
+  function checkAccount(req, principal) {
+    // This adapter uses the existing per-user profile namespace, not an organisation claim.
+    for (const source of [req?.query, req?.body]) {
+      for (const key of ["tenantId", "tenant_id", "userId", "user_id"]) {
+        if (source?.[key] !== undefined && source[key] !== principal.userId) {
+          fail(403, "KORLIX_ACCOUNT_BINDING_REQUIRED");
+        }
+      }
+    }
+    for (const key of ["x-korlix-tenant-id", "x-korlix-user-id"]) {
+      if (req?.headers?.[key] !== undefined && req.headers[key] !== principal.userId) {
+        fail(403, "KORLIX_ACCOUNT_BINDING_REQUIRED");
+      }
+    }
+  }
+  async function enterpriseAccount(principal) {
+    if (!database || typeof database.from !== "function") fail(503, "ZOOM_STORAGE_UNAVAILABLE");
+    let response;
+    try {
+      response = await database.from("user_profiles").select("id,tier")
+        .eq("id", principal.userId).maybeSingle();
+    } catch (_) { fail(503, "ZOOM_STORAGE_UNAVAILABLE"); }
+    if (!response || response.error) fail(503, "ZOOM_STORAGE_UNAVAILABLE");
+    const row = response.data;
+    return !!row && row.id === principal.userId && typeof row.tier === "string" &&
+      row.tier.trim().toLowerCase() === "enterprise";
+  }
+  async function ownedActiveAgent(principal) {
+    if (!database || typeof loadAgentProfile !== "function") fail(503, "ZOOM_STORAGE_UNAVAILABLE");
+    let profile;
+    try {
+      profile = await loadAgentProfile({ client: database, userId: principal.userId,
+        agentId: principal.agentId });
+    } catch (_) { fail(503, "ZOOM_STORAGE_UNAVAILABLE"); }
+    return !!profile && profile.id === principal.agentId && profile.active === true;
+  }
+  async function authenticateRequest(req) {
+    if (!req || typeof req !== "object" || typeof authenticateUser !== "function") fail(401, "KORLIX_AUTH_REQUIRED");
+    let user;
+    try { user = await authenticateUser(req); } catch (_) { fail(401, "KORLIX_AUTH_REQUIRED"); }
+    if (!user || typeof user.id !== "string") fail(401, "KORLIX_AUTH_REQUIRED");
+    const principal = Object.freeze(identity({ tenantId: user.id, userId: user.id,
+      agentId: requestAgent(req) }));
+    checkAccount(req, principal);
+    trustedRequests.set(req, principal);
+    return principal;
+  }
+  async function resolveEnterprise(principal, req) {
+    if (trustedRequests.get(req) !== principal) return false;
+    return enterpriseAccount(principal);
+  }
+  async function authorizeAgent(principal, req) {
+    const trusted = trustedRequests.get(req);
+    if (!trusted || identityKey(principal) !== identityKey(trusted)) return false;
+    return ownedActiveAgent(trusted);
+  }
+  async function authorizeStoredIdentity(value) {
+    let principal;
+    try { principal = identity(value); } catch (_) { return false; }
+    if (principal.tenantId !== principal.userId) return false;
+    return await enterpriseAccount(principal) && await ownedActiveAgent(principal);
+  }
+  return { repository, authenticateRequest, resolveEnterprise, authorizeAgent, authorizeStoredIdentity };
+}
+// K135Z_GATE5_TRUSTED_WIRING_END
+
+// K135Z_B5A_ZOOM_SERVER_REGISTRATION_BEGIN
+const k135zServerRuntime = await createK135zServerRuntime({env:process.env,database:supabaseAdmin});
+const k135zRegistered = registerK135zZoomRoutes(app, {
+  env: process.env,
+  ...k135zServerRuntime.options,
+  ...createK135zGate5Wiring({ database: supabaseAdmin,
+    authenticateUser: requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }),
+});
+k135zServerRuntime.attach(k135zRegistered.dependencies);
+// K135Z_B5A_ZOOM_SERVER_REGISTRATION_END
+
 app.use("/api", (req, res) => {
   return res.status(404).json({
     error: `API route not found: ${req.method} ${req.originalUrl}`,
@@ -13138,6 +13248,7 @@ app.use("/api", (req, res) => {
 // KORLIX_API_NOT_FOUND_FALLBACK_FINAL_END
 
 
-app.listen(port, () => {
+const k135zHttpServer = app.listen(port, () => {
   console.log(`Korlix AI backend running on port ${port}`);
 });
+k135zServerRuntime.bindServer(k135zHttpServer);
