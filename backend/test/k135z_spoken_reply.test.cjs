@@ -41,6 +41,30 @@ test('spoken question gets an answer and exact answer audio in one request',asyn
  assert.equal(reply.audio,mp3.toString('base64'));assert.equal(reply.wakeSequence,2);
  assert.equal(JSON.stringify(question).includes(user),false);
 });
+test('remember command proposes exact server captions without a model call or a write',async()=>{
+ for(const command of ['remember this: Our launch is October 15.','please remember that our launch is October 15.']){
+  const f=fixture();f.preview.lines[2].text=command;
+  const {reply}=await f.run();assert.match(reply.memoryRequest.text,/launch is October 15\./);
+  assert.equal(f.calls.length,1);assert(f.calls[0].url.endsWith('audio/speech'));
+  assert.match(reply.text,/review/i);assert(!/saved|I will remember/i.test(reply.text));
+  await assert.rejects(f.run(),e=>e.code==='K135Z_RESPONSE_ALREADY_ANSWERED');
+ }
+});
+test('bare remember asks for the fact and never guesses from previous captions',async()=>{
+ const f=fixture();f.preview.lines[2].text='remember this.';
+ const {reply}=await f.run();assert.equal(reply.memoryRequest.text,'');
+ assert.match(reply.text,/What would you like/);assert(!reply.text.includes('Friday'));
+});
+test('memory off has no save proposal; incidental remember mentions stay conversational',async()=>{
+ const f=fixture();f.runtime.agent.memoryEnabled=false;f.preview.lines[2].text='remember this: launch Friday';
+ const {reply}=await f.run();assert.equal(reply.memoryRequest,undefined);assert.match(reply.text,/turned off/);
+ const g=fixture();g.preview.lines[2].text='Do you remember this project?';
+ const result=await g.run();assert.equal(result.reply.memoryRequest,undefined);assert.equal(g.calls.length,2);
+});
+test('changed authority during memory acknowledgement withholds the proposal',async()=>{
+ const f=fixture();f.preview.lines[2].text='remember this: launch Friday';
+ f.changed(()=>f.row.authorityRevision++);await assert.rejects(f.run());
+});
 test('requires explicit mode, bounded server caption selection, and matching window',async()=>{
  for(const patch of [{enabled:false},{text:'injected'},{windowId:'b'.repeat(32)},
   {wakeSequence:1},{wakeSequence:2,endSequence:12},{wakeSequence:3},{endSequence:4}]){
