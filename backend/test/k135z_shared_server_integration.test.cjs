@@ -1310,7 +1310,9 @@ test('Gate6O composes shared RPC client and workspace routes without joining',as
   assert.equal(f.runtime.options.workspaceCommandClient,f.f.database);
   Z.registerK135zZoomRoutes({get(){},delete(){},post(p){paths.push(p);}},
     {...f.f.wiring,env:env6o,...f.runtime.options});
-  assert.equal(paths.filter(p=>p.includes('/workspace/')).length,6);
+  assert.equal(paths.filter(p=>p.includes('/workspace/')).length,8);
+  assert(paths.includes('/api/k135z/zoom/workspace/response'));
+  assert(paths.includes('/api/k135z/zoom/workspace/response-voice'));
   assert(paths.includes('/api/k135z/zoom/workspace/audio-level'));
   assert.equal(f.f.calls.length,0);assert.equal(f.clients.length,0);assert.equal(f.deps.transport.liveEnabled,false);
   assert.equal(f.runtime.close(),true);
