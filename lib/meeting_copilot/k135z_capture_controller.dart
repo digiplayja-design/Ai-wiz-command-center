@@ -311,7 +311,7 @@ class K135zCaptureController extends ChangeNotifier {
   }
   void _requireSettled() {
     if (_row!['pending'] == true || _row!['uncertain'] == true) throw const _CaptureFeedback(
-      'Zoom has an unfinished session request. Wait a moment, then try Start listening or Stop listening again.');
+      'The previous listening request is still settling. Try Start listening again in 60–90 seconds. No Zoom reconnect is needed.');
   }
   // Called only by the disclosed Start listening tap for this exact meeting.
   Future<void> listenTo(String uuid) => _run((e) async {

@@ -55,7 +55,11 @@ class K135zMeetingResponse extends ChangeNotifier {
       stop(
         'Meeting permission changed or the draft expired. Draft a new update.',
       );
+      return;
     }
+    // Start/Stop can change button availability before a draft exists.
+    if (!available && broadcast) broadcast = false;
+    notifyListeners();
   }
 
   void setBroadcast(bool value) {

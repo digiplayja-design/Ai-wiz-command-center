@@ -131,6 +131,28 @@ class Fixture {
 }
 
 void main() {
+  testWidgets('voice checkbox explains its prerequisite and enables as soon as listening starts', (tester) async {
+    final f = Fixture();
+    addTearDown(f.dispose);
+    f.capture.active = false;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(
+      child: K135zResponsePanel(response: f.response)))));
+    expect(tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).onChanged, isNull);
+    expect(find.textContaining('it does not enable transcription'), findsOneWidget);
+    f.capture.active = true;
+    f.capture.changed();
+    await tester.pump();
+    expect(tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).onChanged, isNotNull);
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.pump();
+    expect(f.response.broadcast, isTrue);
+    expect(f.player.plays, 0);
+    f.capture.active = false;
+    f.capture.changed();
+    await tester.pump();
+    expect(f.response.broadcast, isFalse);
+    await tester.pumpWidget(const SizedBox());
+  });
   test('draft and approval stay silent; broadcast acknowledgment plus Speak is required', () async {
     final f = Fixture();
     addTearDown(f.dispose);

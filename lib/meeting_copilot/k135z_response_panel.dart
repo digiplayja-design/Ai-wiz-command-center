@@ -83,9 +83,11 @@ class K135zResponsePanel extends StatelessWidget {
                 'I started Zoom screen broadcast with device audio.',
                 style: TextStyle(color: Colors.white),
               ),
-              subtitle: const Text(
-                'The meeting can see this screen. Keep this Chrome page open while Nova speaks.',
-                style: TextStyle(color: Color(0xFF9CB8CA)),
+              subtitle: Text(
+                response.available
+                  ? 'For Nova’s voice only. The meeting can see this screen. Keep this page open while Nova speaks.'
+                  : 'Available after listening starts. This box is only for Nova’s voice; it does not enable transcription.',
+                style: const TextStyle(color: Color(0xFF9CB8CA)),
               ),
             ),
           ),
