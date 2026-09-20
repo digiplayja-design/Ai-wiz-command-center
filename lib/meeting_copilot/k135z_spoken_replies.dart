@@ -29,6 +29,7 @@ class K135zSpokenReplies extends ChangeNotifier {
   int _epoch = 0, _seen = 0, _changedAt = 0, _beganAt = 0, _quietUntil = 0;
   bool _dead = false, enabled = false, busy = false, playing = false;
   String? _binding, _window, answer;
+  String? memoryStatus;
   final _question = <K135zTranscriptPreviewLine>[];
   static final _wake = RegExp(
     r'^(?:(?:hey|okay|ok)[,\s]+)?nova\b[\s,.:!?-]*',
@@ -57,6 +58,7 @@ class K135zSpokenReplies extends ChangeNotifier {
     final epoch = ++_epoch;
     busy = true;
     answer = null;
+    memoryStatus = null;
     message = 'Enabling Nova’s voice…';
     notifyListeners();
     try {
@@ -151,7 +153,7 @@ class K135zSpokenReplies extends ChangeNotifier {
         context = capture.responseBinding!['context'],
         window = _window;
     busy = true;
-    message = 'Nova is thinking…';
+    message = 'Nova is thinking with your agent’s memory and training…';
     notifyListeners();
     try {
       final headers = Map<String, String>.from(capture.headers());
@@ -176,7 +178,7 @@ class K135zSpokenReplies extends ChangeNotifier {
               'enabled': true,
             },
           )
-          .timeout(const Duration(seconds: 35));
+          .timeout(const Duration(seconds: 125));
       if (!_current(epoch) || !enabled) return;
       if (utf8.encode(response.body).length > 512 * 1024)
         throw StateError('Reply too large');
@@ -192,6 +194,14 @@ class K135zSpokenReplies extends ChangeNotifier {
         }
         if (code == 'K135Z_RESPONSE_LIMIT') {
           stop('Spoken reply limit reached. Try again later.');
+          return;
+        }
+        if (code == 'K135Z_RESPONSE_AGENT_UNAVAILABLE') {
+          stop('Could not load your selected agent’s memory and training. Enable spoken replies to retry.');
+          return;
+        }
+        if (code == 'K135Z_WORKSPACE_TIMEOUT') {
+          stop('Nova took too long to answer. Enable spoken replies and ask again.');
           return;
         }
         throw StateError('Reply unavailable');
@@ -218,6 +228,18 @@ class K135zSpokenReplies extends ChangeNotifier {
               (audio[0] == 255 && (audio[1] & 224) == 224)))
         throw StateError('Invalid audio');
       answer = r['text'];
+      final agent = r['agent'];
+      if (agent is Map) {
+        if (agent['id'] != capture.agentId ||
+            agent['name'] is! String || (agent['name'] as String).length > 80 ||
+            agent['memoryEnabled'] is! bool || agent['memoryCount'] is! int ||
+            agent['memoryCount'] < 0 || agent['memoryCount'] > 100) {
+          throw StateError('Invalid agent memory binding');
+        }
+        memoryStatus = agent['memoryEnabled'] == true
+            ? '${agent['name']} · ${agent['memoryCount']} saved memories loaded for this reply'
+            : '${agent['name']} · saved memory is off in Agent Hub';
+      }
       playing = true;
       message = 'Nova is speaking…';
       notifyListeners();
@@ -248,6 +270,7 @@ class K135zSpokenReplies extends ChangeNotifier {
     playing = false;
     capture.fastTranscript = false;
     answer = null;
+    memoryStatus = null;
     _binding = null;
     _window = null;
     _question.clear();

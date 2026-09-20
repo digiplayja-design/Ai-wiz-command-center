@@ -36,6 +36,7 @@ class SpokenFixture {
   final player = SpokenPlayer();
   Completer<void>? hold;
   bool bad = false;
+  Map<String, dynamic>? agent;
   late final SpokenCapture capture;
   late final K135zSpokenReplies spoken;
   SpokenFixture() {
@@ -49,6 +50,7 @@ class SpokenFixture {
         'windowId':b['windowId'], 'wakeSequence':b['wakeSequence'], 'coverage':'partial',
         'text':'We agreed to review the draft Friday.', 'mimeType':'audio/mpeg',
         'audio':base64Encode([73,68,51,...List.filled(100,0)]),
+        if (agent != null) 'agent': agent,
       }}));
     });
     spoken = K135zSpokenReplies(capture: capture, cancelRequest: () { cancels++; },
@@ -60,6 +62,27 @@ class SpokenFixture {
   void dispose() { spoken.dispose(); capture.dispose(); }
 }
 void main() {
+  test('shows the selected agent memory status and clears it on Stop', () async {
+    final f = SpokenFixture(); addTearDown(f.dispose);
+    f.agent = {'id':'agent','name':'NOVA','memoryEnabled':true,'memoryCount':34};
+    await f.spoken.enable(); await f.ask();
+    expect(f.spoken.memoryStatus, contains('34 saved memories'));
+    f.spoken.stop(); expect(f.spoken.memoryStatus, isNull);
+  });
+  test('foreign agent metadata prevents playback', () async {
+    final f = SpokenFixture(); addTearDown(f.dispose);
+    f.agent = {'id':'other','name':'OTHER','memoryEnabled':true,'memoryCount':1};
+    await f.spoken.enable(); await f.ask();
+    expect(f.player.plays, 0); expect(f.spoken.answer, isNull);
+  });
+  testWidgets('reasoning can pass the old 35-second deadline and Stop still cancels it', (tester) async {
+    final f = SpokenFixture(); addTearDown(f.dispose);
+    await f.spoken.enable(); f.hold = Completer<void>(); final pending = f.ask();
+    await tester.pump(const Duration(seconds:40));
+    expect(f.spoken.busy, true); expect(f.spoken.enabled, true); expect(f.player.plays, 0);
+    f.spoken.stop(); f.hold!.complete(); await pending;
+    expect(f.player.plays, 0); expect(f.cancels, 1);
+  });
   test('off by default; enabling skips historical questions then answers a fresh question', () async {
     final f = SpokenFixture(); addTearDown(f.dispose);
     f.capture.say('Nova, old question?'); await f.spoken.tick(); expect(f.calls, isEmpty);

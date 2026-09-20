@@ -290,7 +290,8 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
           body: utf8.decode(bytes.takeBytes()), headers: response.headers);
     }
     try {
-      return await request().timeout(isResponse ? const Duration(seconds:35)
+      return await request().timeout(uri.path.endsWith('/spoken-reply') ? const Duration(seconds:125)
+          : isResponse ? const Duration(seconds:35)
           : isStartConsent ? const Duration(seconds:28) : timeout);
     } finally {
       _requests.remove(client);

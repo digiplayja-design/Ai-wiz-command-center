@@ -40,7 +40,8 @@ class K135zSpokenPanel extends StatelessWidget {
           const SizedBox(height: 8),
           const Text(
             'Enable spoken replies to let Nova answer anyone who addresses her, without reviewing each reply. '
-            'Answers are AI-generated; meeting context comes from recent captions only.',
+            'She uses your selected agent’s saved memory and training with advanced reasoning. '
+            'Answers are AI-generated; meeting events come from recent captions only.',
             style: TextStyle(color: Color(0xFF9CB8CA)),
           ),
           const SizedBox(height: 8),
@@ -88,6 +89,12 @@ class K135zSpokenPanel extends StatelessWidget {
                 spoken.answer!,
                 style: const TextStyle(color: Colors.white, fontSize: 17),
               ),
+            ),
+          if (spoken.memoryStatus != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(spoken.memoryStatus!,
+                style: const TextStyle(color: Color(0xFF9CB8CA))),
             ),
         ],
       ),
