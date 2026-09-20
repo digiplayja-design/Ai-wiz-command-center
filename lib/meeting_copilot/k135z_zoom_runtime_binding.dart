@@ -11,7 +11,7 @@ import 'k135z_capture_controller.dart';
 import 'k135z_meeting_response.dart';
 import 'korlix_zoom_connection_controller.dart';
 
-// Gate6C: account connection only. This class never starts capture or speech.
+// Account discovery is read-only. Only the explicit Start listening action starts capture.
 class K135zZoomLaunch {
   K135zZoomLaunch({
     required this.agentId,
@@ -115,6 +115,29 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
       _controller.status?.accessTokenExpired == false;
   List<KorlixZoomMeetingSummary> get meetings => connected
       ? _controller.meetings : const <KorlixZoomMeetingSummary>[];
+  String? _chosenMeetingUuid;
+  KorlixZoomMeetingSummary? get listeningMeeting {
+    final choices = meetings.where((m) => m.uuid != null).toList();
+    final preferred = _chosenMeetingUuid ?? capture.meetingUuid;
+    for (final meeting in choices) {
+      if (meeting.uuid == preferred) return meeting;
+    }
+    if (_chosenMeetingUuid != null) return null;
+    return choices.length == 1 ? choices.single : null;
+  }
+  void chooseListeningMeeting(String uuid) {
+    if (!usable || busy || capture.busy || !meetings.any((m) => m.uuid == uuid)) return;
+    _chosenMeetingUuid = uuid;
+    notifyListeners();
+  }
+  bool get canStartListening => connected && !busy && capture.usable && !capture.busy &&
+      listeningMeeting != null && !(capture.statusLabel == 'Listening' &&
+      capture.meetingUuid == listeningMeeting!.uuid);
+  Future<void> startListening() async {
+    if (!canStartListening) return;
+    final uuid = listeningMeeting!.uuid!;
+    await capture.listenTo(uuid);
+  }
   bool get canOpenAuthorization => usable && !busy && _authorizationUri != null &&
       _preparedAt != null && _now().difference(_preparedAt!).inSeconds >= 0 &&
       _now().difference(_preparedAt!).inSeconds < 60;

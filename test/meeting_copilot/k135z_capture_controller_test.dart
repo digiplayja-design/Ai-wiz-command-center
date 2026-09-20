@@ -10,6 +10,8 @@ class CaptureFixture {
   bool current = true, failRenew = false, badReply = false, captureActive = true;
   Completer<void>? hold;
   bool missing = false;
+  int statusCode = 200, stopCode = 200;
+  List<Map<String, dynamic>> meetings = [{'id':'123','uuid':'meeting','topic':'Pilot','is_host':true}];
   Completer<void>? previewHold;
   Map<String,dynamic>? previewOverride;
   int previewCode = 200;
@@ -36,7 +38,7 @@ class CaptureFixture {
       transport:({required String method, required Uri uri, required Map<String,String> headers, Object? body}) async {
         if (method == 'GET') {
           return KorlixZoomTransportResponse(statusCode:200, body:jsonEncode(
-            uri.path.endsWith('/upcoming') ? {'meetings':[{'id':'123','uuid':'meeting','topic':'Pilot','is_host':true}]}
+            uri.path.endsWith('/upcoming') ? {'meetings':meetings}
             : {'status':{'connected':true,'requires_reauthorization':false,'access_token_expired':false}}));
         }
         check(method == 'POST' && headers['authorization'] == 'Bearer offline' && headers['x-korlix-agent-id'] == 'agent');
@@ -55,9 +57,24 @@ class CaptureFixture {
             'lines':[{'sequence':1,'speaker':'Host','text':'Meeting caption','providerTimestamp':10,'startTs':1,'endTs':10}],
             'truncated':false,'persisted':false,'coverage':'partial'}}));
         }
+        if (action == 'status' && statusCode != 200) return KorlixZoomTransportResponse(statusCode:statusCode,body:'{}');
+        if (action == 'stop' && stopCode != 200) return KorlixZoomTransportResponse(statusCode:stopCode,body:'{}');
         if (action == 'status' && missing) return const KorlixZoomTransportResponse(statusCode:409,
           body:'{"ok":false,"error":{"code":"K135Z_WORKSPACE_BINDING_MISMATCH"}}');
-        if (action == 'bind') {check(b['expectedBindingRevision'] == 0 && b['meetingUuid'] == 'meeting'); missing = false;}
+        if (action == 'bind') {
+          check(b['expectedBindingRevision'] == (missing ? 0 : row['bindingRevision']));
+          check(missing || row['snapshot']['state'] == 'stopped');
+          final generation = (b['expectedBindingRevision'] as int) + 1;
+          final context = {...Map<String,dynamic>.from(row['snapshot']['context']),
+            'sessionId':'session-$generation','meetingUuid':b['meetingUuid'],
+            'generation':generation,'streamId':null};
+          row = {'snapshot':{...Map<String,dynamic>.from(row['snapshot']), 'context':context,
+            'revision':0,'state':'ready','hostAuthorized':false,'listeningAuthorized':false,'activeSeconds':0},
+            'authority':{'context':context,'viewerAuthorized':true,'hostAuthorized':false,'listeningAuthorized':false},
+            'bindingRevision':generation,'authorityRevision':0,'validForMs':0,
+            'pending':false,'uncertain':false,'captureActive':false};
+          missing = false;
+        }
         if (action == 'consent' && consentCode != 200) return KorlixZoomTransportResponse(
           statusCode:consentCode,body:jsonEncode({'ok':false,'error':{'code':consentError}}));
         if (action == 'consent') now += consentLatency;
@@ -71,7 +88,7 @@ class CaptureFixture {
         }
         if (['start','pause','stop'].contains(action)) {
           check(b['expectedSnapshotRevision'] == row['snapshot']['revision']);
-          row['snapshot'] = {...row['snapshot'], 'context':{...row['snapshot']['context'], 'streamId':'stream'},
+          row['snapshot'] = {...row['snapshot'], 'context':{...row['snapshot']['context'], 'streamId':action == 'start' ? 'stream' : row['snapshot']['context']['streamId']},
             'revision':row['snapshot']['revision']+1,'state':{'start':'listening','pause':'paused','stop':'stopped'}[action],
             'hostAuthorized':true,'listeningAuthorized':true};
           row['authority']['context'] = row['snapshot']['context'];

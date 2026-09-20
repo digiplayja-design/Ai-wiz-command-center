@@ -145,7 +145,7 @@ class K135zCaptureController extends ChangeNotifier {
     if (statusLabel == 'Paused') return 'Listening is paused.';
     if (statusLabel == 'Stopped') return 'Listening is stopped.';
     return meetingUuid == null ? 'Choose your meeting to begin.'
-      : 'Tap Start Nova Copilot to check the session and resume listening.';
+      : 'Tap Start listening to check the session and resume listening.';
   }
   String? get meetingUuid => _row?['snapshot']['context']['meetingUuid'] as String?;
   int? get activeSeconds => _confirmed && usable ? (_row?['snapshot']['activeSeconds'] as int?) : null;
@@ -157,7 +157,8 @@ class K135zCaptureController extends ChangeNotifier {
       ['ready', 'paused', 'listening'].contains(_state) && statusLabel != 'Listening' &&
       _row!['pending'] == false && _row!['uncertain'] == false;
   bool get canPause => _safe && _state == 'listening';
-  bool get canStop => _safe && ['ready', 'paused', 'listening'].contains(_state);
+  // Stop can recover a persisted or unconfirmed session with one status read.
+  bool get canStop => usable && !_busy && (!_confirmed || _state != 'stopped');
   String get statusLabel {
     if (!usable || !_confirmed) return _row == null ? 'No session selected' : 'Session unconfirmed';
     if (_row!['pending'] == true || _row!['uncertain'] == true) return 'Session needs review';
@@ -221,7 +222,7 @@ class K135zCaptureController extends ChangeNotifier {
         'ZOOM_RTMS_SCOPE_REQUIRED':'Listening has not started. Add the Zoom permission meeting:update:participant_rtms_app_status, then reconnect Zoom to approve it.',
         'ZOOM_RTMS_MEDIA_SCOPE_REQUIRED':'Listening has not started. Approve Zoom meeting audio and transcript permissions, then reconnect Zoom.',
         'ZOOM_RTMS_REAUTHORIZE':'Listening has not started. Reconnect Zoom with the meeting host account to renew its permissions.',
-        'ZOOM_RTMS_MEETING_NOT_LIVE':'Listening has not started. Start this meeting in Zoom, then try Start Nova Copilot again.',
+        'ZOOM_RTMS_MEETING_NOT_LIVE':'Listening has not started. Start this meeting in Zoom, then try Start listening again.',
         'ZOOM_RTMS_RESELECT_MEETING':'The Zoom meeting instance has changed. Stop this session, refresh the meeting list, and select the live meeting.',
         'ZOOM_RTMS_HOST_REJECTED':'Zoom rejected the stream request. Sign in as this meeting’s host and approve realtime content sharing.',
         'ZOOM_RTMS_ACCOUNT_REJECTED':'Zoom rejected RTMS with code 2310. Check RTMS eligibility and Developer Pack activation for the connected Zoom account.',
@@ -274,12 +275,13 @@ class K135zCaptureController extends ChangeNotifier {
     catch (error) {
       if (!_dead && e == _epoch) {
         _actionError = error is _CaptureFeedback ? error.message
-          : 'Request not confirmed. Tap Start Nova Copilot to check and retry.';
+          : 'Request not confirmed. Try Start listening or Stop listening again.';
         _confirmed = false; _renew = false; _clearAudio();
-        _message = 'Connection interrupted. Tap Start Nova Copilot to check and retry.'; cancelRequests(); }
+        _message = 'Connection interrupted. Tap Start listening to check and retry.'; cancelRequests(); }
     } finally { if (!_dead && e == _epoch) { _busy = false; notifyListeners(); } }
   }
-  Future<void> selectMeeting(String uuid) => _run((e) async {
+  Future<void> selectMeeting(String uuid) => _run((e) => _selectMeeting(uuid, e));
+  Future<void> _selectMeeting(String uuid, int e, {bool replacePrevious = false}) async {
     _need(_text(uuid));
     if (uuid != meetingUuid || _state == 'stopped') { _renew = false; _consent = false; }
     Map<String, dynamic>? prior;
@@ -288,9 +290,14 @@ class K135zCaptureController extends ChangeNotifier {
     on _NoCaptureBinding { _need(_row == null); }
     if (prior != null && prior['snapshot']['state'] != 'stopped') {
       _accept(prior, started, newBinding:true);
-      if (prior['snapshot']['context']['meetingUuid'] != uuid) throw const _CaptureFeedback(
-        'Stop the previous session before selecting another meeting. Refresh session, then tap Stop Listening.');
-    } else {
+      if (prior['snapshot']['context']['meetingUuid'] != uuid) {
+        if (!replacePrevious) throw const _CaptureFeedback(
+          'Tap Start listening to switch meetings, or Stop listening to end the previous session.');
+        _requireSettled();
+        await _sendCommand('stop', e);
+      }
+    }
+    if (prior == null || prior['snapshot']['state'] == 'stopped' || _state == 'stopped') {
       final began = _clock();
       final row = _workspace((await _post('bind', {'meetingUuid':uuid,
         'expectedBindingRevision':prior?['bindingRevision'] ?? 0}, e))['workspace']);
@@ -300,7 +307,21 @@ class K135zCaptureController extends ChangeNotifier {
       _accept(row, began, newBinding:true);
     }
     _actionError = null;
-    _message = 'Meeting selected. Confirm consent, then tap Start Nova Copilot.';
+    _message = 'Meeting selected. Tap Start listening.';
+  }
+  void _requireSettled() {
+    if (_row!['pending'] == true || _row!['uncertain'] == true) throw const _CaptureFeedback(
+      'Zoom has an unfinished session request. Wait a moment, then try Start listening or Stop listening again.');
+  }
+  // Called only by the disclosed Start listening tap for this exact meeting.
+  Future<void> listenTo(String uuid) => _run((e) async {
+    _actionError = null;
+    await _selectMeeting(uuid, e, replacePrevious:true);
+    _current(e); _need(meetingUuid == uuid); _requireSettled();
+    _consent = true;
+    if (_state == 'listening') await _sendCommand('pause', e);
+    _need(_consent && ['ready', 'paused'].contains(_state));
+    await _sendCommand('start', e);
   });
   Future<void> refresh() => _run((e) async {
     final started = _clock();
@@ -344,7 +365,24 @@ class K135zCaptureController extends ChangeNotifier {
     });
   }
   Future<void> pause() async { if (canPause) await _command('pause'); }
-  Future<void> stop() async { if (canStop) await _command('stop'); }
+  Future<void> stop() async {
+    if (!canStop) return;
+    // Withdraw locally before waiting; a failed Stop must not keep renewing.
+    _consent = false; _renew = false; _clearAudio();
+    await _run((e) async {
+      _actionError = null;
+      final began = _clock();
+      Map<String, dynamic> row;
+      try { row = _workspace((await _post('status', {}, e))['workspace']); }
+      on _NoCaptureBinding {
+        _row = null; _confirmed = false; _clearPreview();
+        _message = 'No active listening session.'; return;
+      }
+      _accept(row, began, newBinding:true); _requireSettled();
+      if (_state != 'stopped') await _sendCommand('stop', e);
+      _message = 'Listening is stopped.';
+    });
+  }
   Future<void> _command(String action) => _run((e) => _sendCommand(action, e));
   Future<void> _sendCommand(String action, int e) async {
     _renew = false; _actionError = null; _clearAudio(); notifyListeners();
@@ -374,7 +412,7 @@ class K135zCaptureController extends ChangeNotifier {
     if (!usable) return;
     if (_renew && _state == 'listening' && _clock() >= _deadline) {
       _renew = false; _clearAudio();
-      _message = 'Listening paused after a connection interruption. Tap Start Nova Copilot to resume.'; notifyListeners();
+      _message = 'Listening paused after a connection interruption. Tap Start listening to resume.'; notifyListeners();
     }
     if (_busy || !_confirmed || _row == null) return;
     if (_renew && _consent && _clock() - _renewed >= 10000) {
@@ -390,7 +428,7 @@ class K135zCaptureController extends ChangeNotifier {
     if (!_foreground) return;
     _clearPreview(); _previewBusy = false; _clearAudio();
     _foreground = false; _epoch++; _busy = false; _renew = false; _confirmed = false;
-    cancelRequests(); _message = 'Listening suspended while this page is hidden. Return here and tap Start Nova Copilot.';
+    cancelRequests(); _message = 'Listening suspended while this page is hidden. Return here and tap Start listening.';
     notifyListeners();
   }
   Future<void> resume() async {
