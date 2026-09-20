@@ -33,7 +33,7 @@ test('checking capabilities never starts sharing or audio',async()=>{
 });
 test('rejects missing Zoom SDK and opening outside a meeting',async()=>{
   const {p,config}=await fixture();config.runningContext='inMainClient';await p.check();assert.equal(p.ready,false);
-  p.sdk=null;await p.check();assert.equal(p.ready,false);assert.match(p.message,/Could not check/);
+  p.sdk=null;await p.check();assert.equal(p.ready,false);assert.match(p.message,/Zoom SDK did not load/);
 });
 test('capability intersection blocks unsupported audio method',async()=>{
   const {p,config,calls}=await fixture();config.unsupportedApis=['shareComputerAudio'];await p.check();

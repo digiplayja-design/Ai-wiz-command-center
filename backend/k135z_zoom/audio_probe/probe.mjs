@@ -1,4 +1,18 @@
 // An SDK success is only an accepted request, never proof of remote audibility.
+function supportFailure(error, stage) {
+  const code = error?.code;
+  const safeCode = (typeof code === 'number' || typeof code === 'string') && /^\d{1,6}$/.test(String(code))
+    ? ` (Zoom code ${code})` : '';
+  const setup = 'In Marketplace > Development > Features > Surface > Zoom Apps SDK, check these APIs: ' +
+    'getSupportedJsApis, getRunningContext, shareApp, shareComputerAudio. Save, reopen the app in Zoom, then retry.';
+  if (error?.message === 'SDK_UNAVAILABLE') return 'Zoom SDK did not load. Check the app domain allow list includes appssdk.zoom.us, then reopen this app in Zoom.';
+  if (error?.message === 'The Zoom Apps SDK is not supported by this browser') return 'The Zoom SDK cannot reach the Zoom client. ' + setup;
+  if (error?.message === 'NOT_IN_MEETING') return 'Zoom reports this app is outside a meeting. Reopen Korlix Meeting Copilot from Apps inside the active meeting, then retry.';
+  if (error?.message === 'BAD_RESPONSE') return `${stage} returned an unexpected response. Reopen the app and retry; report this message if it continues.`;
+  if (error?.message === 'TIMEOUT') return `${stage} timed out. Close and reopen this app before retrying. ` + setup;
+  return `${stage} failed${safeCode}. ` + setup;
+}
+
 export class AudioProbe {
   constructor({sdk, player, changed = () => {}, timeoutMs = 10000}) {
     Object.assign(this, {sdk, player, changed, timeoutMs});
@@ -19,22 +33,33 @@ export class AudioProbe {
     if (this.busy || this.mode || this.pendingStart) return;
     const e = ++this.epoch; this.ready = false; this.supported.clear(); this.busy = true;
     this.heard = false; this.played = false; this.tell('Checking Zoom audio support…');
+    let stage = 'Zoom SDK loading';
     try {
-      if (!this.sdk) throw Error('SDK_UNAVAILABLE');
+      if (typeof this.sdk?.config !== 'function') throw Error('SDK_UNAVAILABLE');
+      stage = 'Zoom app authorization';
+      this.tell('Checking Zoom app authorization…');
       const c = await this.bounded(this.sdk.config({version:'0.16', capabilities:
         ['getSupportedJsApis','getRunningContext','shareComputerAudio','shareApp']}));
+      if (e !== this.epoch) return;
+      if (!c || typeof c.runningContext !== 'string') throw Error('BAD_RESPONSE');
+      stage = 'Meeting context check';
+      if (c.runningContext !== 'inMeeting') throw Error('NOT_IN_MEETING');
+      stage = 'Zoom API availability check';
+      this.tell('Checking which sharing controls Zoom allows…');
       const apis = await this.bounded(this.sdk.getSupportedJsApis());
       if (e !== this.epoch) return;
-      if (c.runningContext !== 'inMeeting') throw Error('NOT_IN_MEETING');
-      if (!Array.isArray(apis.supportedApis)) throw Error('BAD_RESPONSE');
+      if (!Array.isArray(apis?.supportedApis)) throw Error('BAD_RESPONSE');
       const excluded = new Set(c.unsupportedApis || []);
       this.supported = new Set(apis.supportedApis.filter(x => !excluded.has(x)));
       this.ready = this.supported.has('getRunningContext') &&
         (this.supported.has('shareComputerAudio') || this.supported.has('shareApp'));
       this.tell(this.ready ? 'Choose an available sharing option. Nothing is shared yet.' :
         'This Zoom client does not expose the required sharing controls. Try Zoom on Windows or Mac.');
-    } catch (_) {
-      if (e === this.epoch) this.tell('Could not check support. Open this page through the configured Zoom app during a meeting, then retry.');
+    } catch (error) {
+      if (e === this.epoch) {
+        this.ready = false; this.supported.clear();
+        this.tell(supportFailure(error, stage));
+      }
     } finally { if (e === this.epoch) { this.busy = false; this.changed(); } }
   }
   async share(mode) {
