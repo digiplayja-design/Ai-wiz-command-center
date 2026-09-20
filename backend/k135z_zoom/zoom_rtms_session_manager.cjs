@@ -871,6 +871,11 @@ function createK135zRtmsCommandTransport({sdk,resolveGrant,onTranscript,
       need(r.action!=='start'||['ready','paused'].includes(s.state),'CONFLICT');
       need(r.action!=='pause'||s.state==='listening','CONFLICT');
       e=entries.get(k);
+      // The locked store may have closed an abandoned generation. Retire its
+      // local handle before accepting the newly bound, explicitly started one.
+      if(e && s.context.generation>e.context.generation && s.state==='ready' && s.context.streamId===null){
+        end(e);need(e.released,'UNAVAILABLE');entries.delete(k);e=null;
+      }
       if(!e){
         // After a process restart, a listening/paused snapshot is not proof that
         // this process owns the native handle. Trusted recovery is required.

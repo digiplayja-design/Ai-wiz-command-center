@@ -109,6 +109,28 @@ function fakeSdk() {
   }
   return {Client,clients,RTMS_SDK_OK:0,configureLogger(){}};
 }
+test('a newly bound generation retires the abandoned local handle; old replies cannot revive it',async()=>{
+  const sdk=fakeSdk(),t=createK135zRtmsCommandTransport({sdk,onTranscript:()=>true,audioLevels:true,
+    resolveGrant:async({context})=>({context:{...context,streamId:'stream'},bindingRevision:context.generation,
+      authorityRevision:1,viewerAuthorized:true,hostAuthorized:true,listeningAuthorized:true,validForMs:5000,
+      serverUrls:'wss://media.zoom.us',signature:'a'.repeat(64)})});
+  const cancellation={isCancelled:()=>false,subscribe:()=>()=>{}};
+  const first=fixture().row.record.snapshot;
+  const make=(s,id)=>({schemaVersion:1,action:'start',operation:{requestId:id,localEpoch:1,operationNumber:1},
+    expectedContext:s.context,expectedSnapshotRevision:s.revision});
+  try{
+    const request=make(first,'first'),reply=await t.request({principal:p,request,snapshot:first,cancellation});
+    assert.equal(t.settle({principal:p,request,reply}),true);
+    const snapshot={...first,context:{...ctx,generation:2,sessionId:'new-session'}};
+    const next=make(snapshot,'next'),accepted=await t.request({principal:p,request:next,snapshot,cancellation});
+    assert.equal(accepted.outcome.kind,'acknowledged');assert.equal(t.settle({principal:p,request:next,reply:accepted}),true);
+    assert.equal(t.captureActive({principal:p,context:reply.outcome.snapshot.context}),false);
+    assert.equal(t.settle({principal:p,request,reply}),false);
+    assert.equal(t.captureActive({principal:p,context:accepted.outcome.snapshot.context}),true);
+    const stale=await t.request({principal:p,request,snapshot:first,cancellation});
+    assert.equal(stale.outcome.kind,'failed');assert.equal(sdk.clients.length,2);
+  }finally{t.close();}
+});
 test('SDK meter receives configured PCM only while connected and authorized',async()=>{
   const sdk=fakeSdk(),levels=[];let permitted=true;
   const stream=createK135zRtmsStream({sdk,context:{...ctx,streamId:'stream'},serverUrls:'wss://media.zoom.us',
