@@ -4,7 +4,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const PREFIX = '/k135z/audio-output-test/';
-const FILES = {'':'index.html','probe.mjs':'probe.mjs','page.mjs':'page.mjs','style.css':'style.css','media_player.mjs':'media_player.mjs'};
+const FILES = {'':'index.html','probe.mjs':'probe.mjs','page.mjs':'page.mjs','style.css':'style.css','media_player.mjs':'media_player.mjs',
+  'native/':'native.html','native.mjs':'native.mjs','native_session.mjs':'native_session.mjs'};
 function registerAudioProbe(app) {
   for (const [suffix, file] of Object.entries(FILES)) {
     const body = fs.readFileSync(path.join(__dirname, 'audio_probe', file));

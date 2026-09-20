@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KORLIX · Zoom broadcast audio test</title>
+<link rel="stylesheet" href="/k135z/audio-output-test/style.css">
+<script type="module" src="/k135z/audio-output-test/native.mjs"></script></head>
+<body><main><p class="brand">KORLIX · NOVA MEETING COPILOT</p>
+<h1>Test audio through your Zoom broadcast</h1>
+<p>This plays three short tones using your existing Zoom screen broadcast. Nova's speaking feature is not active yet.</p>
+<section><h2>1. Start sharing in Zoom</h2>
+<p>Stop the previous app-sharing test first. In Zoom, start a screen broadcast and enable device audio. Your whole screen will be visible to the meeting.</p>
+<p>Open this page in Safari on the broadcasting iPad. Keep Zoom's meeting microphone muted. Leave the other device joined to meeting audio.</p>
+<label><input id="broadcast" type="checkbox"> I started a Zoom screen broadcast with device audio.</label>
+<p class="foot">This is your confirmation. This page cannot check or change Zoom's sharing permissions.</p></section>
+<section><h2>2. Play and listen</h2>
+<p>Keep this page visible. Listen on the other device; hearing tones on the iPad alone does not confirm delivery.</p>
+<button id="play" disabled>Play three test tones</button>
+<button id="stop" class="stop">Stop test audio</button>
+<p id="message" role="status" aria-live="polite">Loading test controls…</p></section>
+<section><h2>3. Report what you heard</h2>
+<div class="buttons"><button id="yes" disabled>Heard on the other device</button>
+<button id="no" disabled>Not heard on the other device</button></div>
+<p id="result" aria-live="polite">No participant result reported.</p></section>
+<p><strong>Finish in Zoom: tap Stop Share to end the broadcast.</strong> Stop test audio only stops these tones.</p>
+<p class="foot">Audio check v5 — Zoom screen broadcast. No microphone capture, recording, or saved test results. Leaving this page stops the tones; it does not stop Zoom's broadcast.</p>
+</main></body></html>
