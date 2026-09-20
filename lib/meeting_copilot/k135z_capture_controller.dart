@@ -134,8 +134,8 @@ class K135zCaptureController extends ChangeNotifier {
   String get message => _message;
   String? _actionError;
   String? get actionError => _actionError;
-  bool isMeetingSelected(String uuid) => usable && _confirmed &&
-    meetingUuid == uuid && _row?['pending'] == false && _row?['uncertain'] == false && _state != 'stopped';
+  bool isMeetingSelected(String uuid) => usable &&
+    meetingUuid == uuid && _state != 'stopped';
   String get listeningMessage {
     if (_actionError != null) return _actionError!;
     if (statusLabel == 'Listening') return transcriptLines.isEmpty
@@ -144,19 +144,25 @@ class K135zCaptureController extends ChangeNotifier {
     if (statusLabel == 'Ready') return 'Ready to start. Nova is not listening yet.';
     if (statusLabel == 'Paused') return 'Listening is paused.';
     if (statusLabel == 'Stopped') return 'Listening is stopped.';
-    return 'Listening is not confirmed. Refresh the session.';
+    return meetingUuid == null ? 'Choose your meeting to begin.'
+      : 'Tap Start Nova Copilot to check the session and resume listening.';
   }
   String? get meetingUuid => _row?['snapshot']['context']['meetingUuid'] as String?;
   int? get activeSeconds => _confirmed && usable ? (_row?['snapshot']['activeSeconds'] as int?) : null;
   String get _state => _row?['snapshot']['state'] as String? ?? '';
   bool get _safe => usable && !_busy && _confirmed && _row?['pending'] == false && _row?['uncertain'] == false;
-  bool get canStart => _safe && _consent && ['ready', 'paused'].contains(_state);
+  // The checkbox records the user's choice for this meeting, not a server lease.
+  // Only an explicit Start may recover an interrupted or unconfirmed session.
+  bool get canStart => usable && !_busy && _consent && _row != null &&
+      ['ready', 'paused', 'listening'].contains(_state) && statusLabel != 'Listening' &&
+      _row!['pending'] == false && _row!['uncertain'] == false;
   bool get canPause => _safe && _state == 'listening';
   bool get canStop => _safe && ['ready', 'paused', 'listening'].contains(_state);
   String get statusLabel {
     if (!usable || !_confirmed) return _row == null ? 'No session selected' : 'Session unconfirmed';
     if (_row!['pending'] == true || _row!['uncertain'] == true) return 'Session needs review';
-    if (_state == 'listening') return _row!['captureActive'] == true && _clock() < _deadline
+    if (_state == 'listening') return _renew && _consent &&
+        _row!['captureActive'] == true && _clock() < _deadline
         ? 'Listening' : 'Capture interrupted';
     return {'ready':'Ready', 'paused':'Paused', 'stopped':'Stopped'}[_state] ?? 'Session unconfirmed';
   }
@@ -215,7 +221,7 @@ class K135zCaptureController extends ChangeNotifier {
         'ZOOM_RTMS_SCOPE_REQUIRED':'Listening has not started. Add the Zoom permission meeting:update:participant_rtms_app_status, then reconnect Zoom to approve it.',
         'ZOOM_RTMS_MEDIA_SCOPE_REQUIRED':'Listening has not started. Approve Zoom meeting audio and transcript permissions, then reconnect Zoom.',
         'ZOOM_RTMS_REAUTHORIZE':'Listening has not started. Reconnect Zoom with the meeting host account to renew its permissions.',
-        'ZOOM_RTMS_MEETING_NOT_LIVE':'Listening has not started. Start this meeting in Zoom, then try Start Listening again.',
+        'ZOOM_RTMS_MEETING_NOT_LIVE':'Listening has not started. Start this meeting in Zoom, then try Start Nova Copilot again.',
         'ZOOM_RTMS_RESELECT_MEETING':'The Zoom meeting instance has changed. Stop this session, refresh the meeting list, and select the live meeting.',
         'ZOOM_RTMS_HOST_REJECTED':'Zoom rejected the stream request. Sign in as this meeting’s host and approve realtime content sharing.',
         'ZOOM_RTMS_ACCOUNT_REJECTED':'Zoom rejected RTMS with code 2310. Check RTMS eligibility and Developer Pack activation for the connected Zoom account.',
@@ -241,12 +247,21 @@ class K135zCaptureController extends ChangeNotifier {
   }
   void _accept(Map<String, dynamic> row, int started, {bool newBinding = false}) {
     if (_row != null && !newBinding) {
-      _need(_same(row['snapshot']['context'], _row!['snapshot']['context']) &&
+      if (!_same(row['snapshot']['context'], _row!['snapshot']['context'])) {
+        _consent = false; _need(false);
+      }
+      _need(
         row['snapshot']['revision'] >= _row!['snapshot']['revision'] &&
         row['authorityRevision'] >= _row!['authorityRevision'] &&
         (row['snapshot']['revision'] != _row!['snapshot']['revision'] || _same(row['snapshot'], _row!['snapshot'])));
     }
-    if (_row == null || !_same(row['snapshot']['context'], _row!['snapshot']['context'])) { _clearPreview(); _clearAudio(); }
+    if (_row == null || !_same(row['snapshot']['context'], _row!['snapshot']['context'])) {
+      _consent = false; _clearPreview(); _clearAudio();
+    }
+    // A stop or a newer revocation invalidates the meeting-scoped choice.
+    if (row['snapshot']['state'] == 'stopped' || (_row != null &&
+        row['authorityRevision'] > _row!['authorityRevision'] &&
+        row['authority']['listeningAuthorized'] != true)) _consent = false;
     _row = row; _deadline = started + (row['validForMs'] as int); _confirmed = true; _polled = _clock();
     if (row['pending'] == true || row['uncertain'] == true || _state != 'listening' ||
         row['captureActive'] != true || _clock() >= _deadline ||
@@ -259,13 +274,14 @@ class K135zCaptureController extends ChangeNotifier {
     catch (error) {
       if (!_dead && e == _epoch) {
         _actionError = error is _CaptureFeedback ? error.message
-          : 'Request not confirmed. Refresh the session before trying again.';
-        _confirmed = false; _renew = false; _consent = false; _clearAudio();
-        _message = 'Request unconfirmed. Refresh session before continuing. No automatic restart.'; cancelRequests(); }
+          : 'Request not confirmed. Tap Start Nova Copilot to check and retry.';
+        _confirmed = false; _renew = false; _clearAudio();
+        _message = 'Connection interrupted. Tap Start Nova Copilot to check and retry.'; cancelRequests(); }
     } finally { if (!_dead && e == _epoch) { _busy = false; notifyListeners(); } }
   }
   Future<void> selectMeeting(String uuid) => _run((e) async {
-    _need(_text(uuid)); _renew = false; _consent = false;
+    _need(_text(uuid));
+    if (uuid != meetingUuid || _state == 'stopped') { _renew = false; _consent = false; }
     Map<String, dynamic>? prior;
     final started = _clock();
     try { prior = _workspace((await _post('status', {}, e))['workspace']); }
@@ -284,7 +300,7 @@ class K135zCaptureController extends ChangeNotifier {
       _accept(row, began, newBinding:true);
     }
     _actionError = null;
-    _message = 'Session selected. Start requires explicit consent and backend host approval.';
+    _message = 'Meeting selected. Confirm consent, then tap Start Nova Copilot.';
   });
   Future<void> refresh() => _run((e) async {
     final started = _clock();
@@ -312,10 +328,25 @@ class K135zCaptureController extends ChangeNotifier {
     else _need(row['validForMs'] == 0 && row['authority']['hostAuthorized'] == false && row['authority']['listeningAuthorized'] == false);
     _renewed = _clock();
   }
-  Future<void> start() async { if (canStart) await _command('start'); }
+  Future<void> start() async {
+    if (!canStart) return;
+    await _run((e) async {
+      _actionError = null;
+      if (!_confirmed || _state == 'listening') {
+        final began = _clock();
+        _accept(_workspace((await _post('status', {}, e))['workspace']), began);
+      }
+      _need(_consent && _confirmed && _row!['pending'] == false && _row!['uncertain'] == false);
+      // Reconcile the previous stream first; the server only starts ready/paused sessions.
+      if (_state == 'listening') await _sendCommand('pause', e);
+      _need(_consent && ['ready', 'paused'].contains(_state));
+      await _sendCommand('start', e);
+    });
+  }
   Future<void> pause() async { if (canPause) await _command('pause'); }
   Future<void> stop() async { if (canStop) await _command('stop'); }
-  Future<void> _command(String action) => _run((e) async {
+  Future<void> _command(String action) => _run((e) => _sendCommand(action, e));
+  Future<void> _sendCommand(String action, int e) async {
     _renew = false; _actionError = null; _clearAudio(); notifyListeners();
     if (action == 'start') { _need(_consent); await _permission('consent', e); _current(e); _need(_consent); }
     final old = _row!['snapshot'] as Map<String, dynamic>;
@@ -334,15 +365,16 @@ class K135zCaptureController extends ChangeNotifier {
     _row = {..._row!, 'snapshot':next, 'authority':{..._row!['authority'], 'context':next['context']},
       'captureActive':action == 'start'};
     _confirmed = true; _renew = action == 'start'; _polled = _clock();
-    if (action != 'start') _consent = false;
+    if (action == 'stop') _consent = false;
     _message = '${statusLabel}. Backend acknowledged ${action == 'start' ? 'Start' : action}.';
-  });
+  }
   Future<void> tick() async {
     if (_dead) return;
-    if (!isCurrent()) { suspend(); return; }
+    if (!isCurrent()) { suspend(clearConsent:true); return; }
     if (!usable) return;
-    if (_state == 'listening' && _clock() >= _deadline) {
-      _renew = false; _consent = false; _message = 'Consent expired. Capture needs confirmation.'; notifyListeners();
+    if (_renew && _state == 'listening' && _clock() >= _deadline) {
+      _renew = false; _clearAudio();
+      _message = 'Listening paused after a connection interruption. Tap Start Nova Copilot to resume.'; notifyListeners();
     }
     if (_busy || !_confirmed || _row == null) return;
     if (_renew && _consent && _clock() - _renewed >= 10000) {
@@ -352,14 +384,21 @@ class K135zCaptureController extends ChangeNotifier {
     if (canCheckAudio && _clock() - _audioPolled >= 1000) await refreshAudio(automatic:true);
     if (!_dead && usable) notifyListeners();
   }
-  void suspend() {
+  void suspend({bool clearConsent = false}) {
     if (_dead) return;
+    if (clearConsent || !isCurrent()) _consent = false;
+    if (!_foreground) return;
     _clearPreview(); _previewBusy = false; _clearAudio();
-    _foreground = false; _epoch++; _busy = false; _renew = false; _consent = false; _confirmed = false;
-    cancelRequests(); _message = 'Capture status unconfirmed. Return and refresh; listening will not restart automatically.';
+    _foreground = false; _epoch++; _busy = false; _renew = false; _confirmed = false;
+    cancelRequests(); _message = 'Listening suspended while this page is hidden. Return here and tap Start Nova Copilot.';
     notifyListeners();
   }
-  void resume() { if (!_dead) { _foreground = true; notifyListeners(); } }
+  Future<void> resume() async {
+    if (_dead || _foreground) return;
+    _foreground = true;
+    notifyListeners();
+    if (usable && _row != null) await refresh(); // Status only; never automatic capture.
+  }
   @override
   void dispose() { if (_dead) return; _dead = true; _epoch++; _preview = null; _timer?.cancel(); cancelRequests(); _stopwatch.stop(); super.dispose(); }
 }

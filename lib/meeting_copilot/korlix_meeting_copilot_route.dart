@@ -1,4 +1,5 @@
-import 'k135z_feedback_button.dart';
+import 'k135z_startup_panel.dart';
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -61,13 +62,25 @@ class _KorlixMeetingCopilotRouteState extends State<KorlixMeetingCopilotRoute> w
       _binding = K135zZoomRuntimeBinding(launch: launch,
           transport: widget.zoomTransport, openUrl: widget.zoomOpenUrl);
       _binding!.addListener(_changed);
+      final binding = _binding!;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && identical(binding, _binding)) unawaited(binding.initialize());
+      });
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) { _binding?.capture.resume(); }
-    else { _binding?.capture.suspend(); }
+    if (state == AppLifecycleState.resumed) {
+      final binding = _binding;
+      if (binding != null) {
+        unawaited(binding.capture.resume());
+        if (!binding.connected) unawaited(binding.initialize());
+      }
+    } else if (!(kIsWeb && state == AppLifecycleState.inactive)) {
+      // On web, inactive means visible but unfocused; hidden ends renewal.
+      _binding?.capture.suspend();
+    }
   }
 
   void _syncAccess() {
@@ -116,64 +129,6 @@ class _KorlixMeetingCopilotRouteState extends State<KorlixMeetingCopilotRoute> w
     super.dispose();
   }
 
-  Widget _connectionPanel() {
-    final b = _binding;
-    final available = b != null && b.usable && !b.busy;
-    return Material(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 270),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(b == null ? 'Open this page from an active Agent Hub selection.'
-                : 'Selected agent: ${b.launch.agentId}', key: const Key('g6c-agent')),
-            Text(b?.message ?? 'Zoom controls are unavailable without account and agent context.',
-                key: const Key('g6c-connection-message')),
-            const Text('Listening requires host approval and your consent. Speaking requires a reviewed update and an explicit Speak tap.'),
-            Wrap(spacing: 8, runSpacing: 6, children: [
-              K135zFeedbackButton.outlined(buttonKey: const Key('g6c-refresh'),
-                  onPressed: b != null && available ? () => b.refresh() : null,
-                  pendingLabel: 'Refreshing…', child: const Text('Refresh status')),
-              K135zFeedbackButton.outlined(buttonKey: const Key('g6c-prepare'),
-                  onPressed: b != null && available ? () => b.prepareAuthorization() : null,
-                  child: const Text('Prepare Zoom authorization')),
-              K135zFeedbackButton.filled(buttonKey: const Key('g6c-open'),
-                  onPressed: b?.canOpenAuthorization == true
-                      ? () => b!.openAuthorization() : null,
-                  child: const Text('Open Zoom authorization')),
-              K135zFeedbackButton.outlined(buttonKey: const Key('g6c-meetings'),
-                  onPressed: b != null && available && b.connected ? () => b.loadMeetings() : null,
-                  child: const Text('List meetings')),
-              K135zFeedbackButton.outlined(buttonKey: const Key('g6c-disconnect'),
-                  onPressed: b != null && available ? () => b.disconnect() : null,
-                  child: const Text('Disconnect Zoom')),
-            ]),
-            if (b != null && b.meetings.isNotEmpty)
-              ...b.meetings.map((m) => K135zFeedbackButton.outlined(
-                selected: m.uuid != null && b.capture.isMeetingSelected(m.uuid!),
-                pendingLabel: 'Selecting meeting…',
-                onPressed: available && !b.capture.busy && m.uuid != null
-                    ? () => b.capture.selectMeeting(m.uuid!) : null,
-                child: Text('${m.topic} — ${m.uuid == null ? "Meeting session unavailable" : b.capture.isMeetingSelected(m.uuid!) ? "Selected" : "Select meeting"}'))),
-            if (b != null) ...[
-              Text(b.capture.statusLabel, key:const Key('g6n-session-status')),
-              Text(b.capture.message, key:const Key('g6n-session-message')),
-              if (b.capture.meetingUuid != null) Text('Meeting session: ${b.capture.meetingUuid}'),
-              CheckboxListTile(key:const Key('g6n-consent'), contentPadding:EdgeInsets.zero,
-                title:const Text('I consent to listening and transcription for this meeting.'),
-                value:b.capture.consent,
-                onChanged:b.capture.usable && !b.capture.busy && b.capture.meetingUuid != null
-                    ? (v) => unawaited(b.capture.setConsent(v == true)) : null),
-              K135zFeedbackButton.outlined(buttonKey:const Key('g6n-refresh-session'),
-                onPressed:b.capture.usable && !b.capture.busy ? () => b.capture.refresh() : null,
-                pendingLabel: 'Refreshing session…', child:const Text('Refresh session')),
-              const Text('Use Stop before leaving. Closing or backgrounding stops consent renewal; remote capture ends when its permission expires.'),
-            ],
-          ]),
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -183,9 +138,8 @@ class _KorlixMeetingCopilotRouteState extends State<KorlixMeetingCopilotRoute> w
     }
     return Semantics(label: KorlixMeetingCopilotRoute.accessibilityLabel,
       child: KeyedSubtree(key: KorlixMeetingCopilotRoute.screenKey,
-        child: Scaffold(body: SafeArea(child: Column(children: [
-          _connectionPanel(),
-          Expanded(child: KorlixMeetingCopilotScreen(
+        child: KorlixMeetingCopilotScreen(
+            startupPanel: K135zStartupPanel(binding: _binding),
             controller: _controller,
             capture: _binding?.capture,
             meetingResponse: _binding?.response,
@@ -195,8 +149,7 @@ class _KorlixMeetingCopilotRouteState extends State<KorlixMeetingCopilotRoute> w
             notesOnly: true,
             korlixLogo: const AssetImage(KorlixMeetingCopilotAssets.korlixLogo),
             novaPortrait: const AssetImage(KorlixMeetingCopilotAssets.novaPortrait),
-          )),
-        ]))),
+          ),
       ),
     );
   }

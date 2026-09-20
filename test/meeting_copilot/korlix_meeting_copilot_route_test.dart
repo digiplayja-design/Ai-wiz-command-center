@@ -25,10 +25,10 @@ void main() {
     final screen = tester.widget<KorlixMeetingCopilotScreen>(find.byType(KorlixMeetingCopilotScreen));
     final capture = screen.capture!;
     await capture.selectMeeting('meeting'); await tester.pump();
-    expect(tester.widget<ElevatedButton>(find.byKey(const Key('start-listening-button'))).onPressed, isNull);
+    expect(tester.widget<FilledButton>(find.byKey(const Key('start-listening-button'))).onPressed, isNull);
     tester.widget<CheckboxListTile>(find.byKey(const Key('g6n-consent'))).onChanged!(true);
     await tester.pump();
-    tester.widget<ElevatedButton>(find.byKey(const Key('start-listening-button'))).onPressed!();
+    tester.widget<FilledButton>(find.byKey(const Key('start-listening-button'))).onPressed!();
     await tester.pumpAndSettle(); expect(capture.statusLabel, 'Listening');
     expect(screen.controller.state.status, isNot(NovaMeetingCopilotStatus.listening));
     tester.widget<OutlinedButton>(find.byKey(const Key('pause-listening-button'))).onPressed!();
@@ -118,7 +118,7 @@ void gate6cRouteTests() {
   testWidgets('Gate6C direct route lacks implicit selected-agent authority', (tester) async {
     setKorlixMeetingCopilotEnterpriseAccess(true);
     await tester.pumpWidget(const MaterialApp(home: KorlixMeetingCopilotRoute()));
-    expect(tester.widget<OutlinedButton>(find.byKey(const Key('g6c-refresh'))).onPressed, isNull);
+    expect(find.text('Open Meeting Copilot from your selected agent in Agent Hub.'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     setKorlixMeetingCopilotEnterpriseAccess(false);
   });
@@ -132,14 +132,13 @@ void gate6cRouteTests() {
       zoomTransport: ({required String method, required Uri uri,
           required Map<String, String> headers, Object? body}) async {
         requests++; expect(uri.queryParameters['agent_id'], 'custom_9');
+        if (uri.path.endsWith('/upcoming')) return const KorlixZoomTransportResponse(statusCode:200, body:'{"meetings":[]}');
         return const KorlixZoomTransportResponse(statusCode: 200,
           body: '{"status":{"connected":true,"requires_reauthorization":false,"access_token_expired":false}}');
       })));
-    expect(requests, 0);
-    await tester.tap(find.byKey(const Key('g6c-refresh')));
     await tester.pumpAndSettle();
-    expect(requests, 1);
-    expect(find.text('Zoom account connected. No meeting is being captured.'), findsOneWidget);
+    expect(requests, 2);
+    expect(find.text('Zoom connected · Choose your meeting below.'), findsOneWidget);
     final screen = tester.widget<KorlixMeetingCopilotScreen>(find.byType(KorlixMeetingCopilotScreen));
     expect(screen.controller.canStartListening, isFalse);
     expect(screen.controller.state.novaMuted, isTrue);

@@ -399,6 +399,7 @@ class KorlixMeetingCopilotScreen extends StatelessWidget {
     this.onConnectZoom,
     this.onAskNova,
     this.meetingResponse,
+    this.startupPanel,
     this.onThirtySecondUpdate,
     this.onSpeakNow,
     this.workspaceController,
@@ -411,6 +412,7 @@ class KorlixMeetingCopilotScreen extends StatelessWidget {
   final ImageProvider<Object> novaPortrait;
   final FutureOr<void> Function()? onConnectZoom;
   final K135zMeetingResponse? meetingResponse;
+  final Widget? startupPanel;
   final VoidCallback? onAskNova;
   final VoidCallback? onThirtySecondUpdate;
   final VoidCallback? onSpeakNow;
@@ -450,6 +452,9 @@ class KorlixMeetingCopilotScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
                       _Header(korlixLogo: korlixLogo, state: state, statusLabel:capture?.statusLabel),
+                      if (startupPanel != null) ...[
+                        const SizedBox(height:18), startupPanel!,
+                      ],
                       if (meetingResponse != null) ...[
                         const SizedBox(height:18),
                         K135zResponsePanel(response:meetingResponse!),
@@ -477,6 +482,7 @@ class KorlixMeetingCopilotScreen extends StatelessWidget {
                                 onSpeakNow: onSpeakNow,
                                 notesOnly: notesOnly,
                                 capture:capture,
+                                guidedStartup: startupPanel != null,
                               ),
                             ),
                             const SizedBox(width: 18),
@@ -497,6 +503,7 @@ class KorlixMeetingCopilotScreen extends StatelessWidget {
                           onSpeakNow: onSpeakNow,
                           notesOnly: notesOnly,
                           capture:capture,
+                            guidedStartup: startupPanel != null,
                         ),
                         const SizedBox(height: 18),
                         _TranscriptPanel(state: state, capture: capture),
@@ -610,6 +617,7 @@ class _NovaControlPanel extends StatelessWidget {
     required this.onSpeakNow,
     required this.notesOnly,
     this.capture,
+    this.guidedStartup = false,
   });
 
   final NovaMeetingCopilotController controller;
@@ -621,6 +629,7 @@ class _NovaControlPanel extends StatelessWidget {
   final VoidCallback? onSpeakNow;
   final bool notesOnly;
   final K135zCaptureController? capture;
+  final bool guidedStartup;
 
   @override
   Widget build(BuildContext context) {
@@ -703,7 +712,7 @@ class _NovaControlPanel extends StatelessWidget {
                 ? KorlixMeetingCopilotScreen._danger : KorlixMeetingCopilotScreen._cyan))),
           ],
           const SizedBox(height: 16),
-          Wrap(
+          if (!guidedStartup) Wrap(
             spacing: 10,
             runSpacing: 10,
             alignment: WrapAlignment.center,

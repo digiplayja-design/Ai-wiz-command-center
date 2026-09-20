@@ -34,6 +34,11 @@ class CaptureFixture {
       headers:() => {'authorization':'Bearer offline'},isCurrent:() => current,
       cancelRequests:() {cancels++;},milliseconds:() => now,watch:false,
       transport:({required String method, required Uri uri, required Map<String,String> headers, Object? body}) async {
+        if (method == 'GET') {
+          return KorlixZoomTransportResponse(statusCode:200, body:jsonEncode(
+            uri.path.endsWith('/upcoming') ? {'meetings':[{'id':'123','uuid':'meeting','topic':'Pilot','is_host':true}]}
+            : {'status':{'connected':true,'requires_reauthorization':false,'access_token_expired':false}}));
+        }
         check(method == 'POST' && headers['authorization'] == 'Bearer offline' && headers['x-korlix-agent-id'] == 'agent');
         final b = body as Map<String,dynamic>, action = (b['action'] ?? uri.path.split('/').last) as String;
         calls.add(action);
@@ -92,7 +97,7 @@ void main() {
       await f.c.setConsent(true); await f.c.start();
       expect(f.c.listeningMessage, contains('Listening has not started'));
       expect(f.calls.contains('start'), isFalse);
-      expect(f.c.isMeetingSelected('meeting'), isFalse);
+      expect(f.c.isMeetingSelected('meeting'), isTrue);
       await f.c.refresh();
       expect(f.c.listeningMessage, contains('Listening has not started'));
       expect(f.c.statusLabel, 'Ready');
@@ -132,7 +137,7 @@ void main() {
     final f = CaptureFixture(); try {
       await f.c.selectMeeting('meeting'); check(!f.c.canStart); await f.c.start(); check(f.calls.length == 1);
       await f.c.setConsent(true); await f.c.start(); check(f.c.statusLabel == 'Listening');
-      check(f.calls.join(',') == 'status,consent,start'); await f.c.pause(); check(f.c.statusLabel == 'Paused' && !f.c.consent);
+      check(f.calls.join(',') == 'status,consent,start'); await f.c.pause(); check(f.c.statusLabel == 'Paused' && f.c.consent);
       await f.c.setConsent(true); await f.c.start(); await f.c.stop(); check(f.c.statusLabel == 'Stopped' && !f.c.canStart);
     } finally {f.c.dispose();}
   });
@@ -143,10 +148,10 @@ void main() {
       await f.c.tick(); check(f.calls.where((x) => x == 'renew').length == 1);
     } finally {f.c.dispose();}
   });
-  test('Gate6N failed renewal requires manual recovery and never retries', () async {
+  test('Gate6N failed renewal requires explicit Start and never retries', () async {
     final f = CaptureFixture(); try {
       await f.start(); f.failRenew = true; f.now = 10000; await f.c.tick(); final n = f.calls.length;
-      f.now = 20000; await f.c.tick(); check(f.calls.length == n && f.c.statusLabel == 'Session unconfirmed' && !f.c.canStart);
+      f.now = 20000; await f.c.tick(); check(f.calls.length == n && f.c.statusLabel == 'Session unconfirmed' && f.c.canStart);
     } finally {f.c.dispose();}
   });
   test('Gate6N backgrounding during consent prevents a late Start', () async {
@@ -154,7 +159,7 @@ void main() {
       await f.c.selectMeeting('meeting'); await f.c.setConsent(true); f.hold = Completer<void>();
       final pending = f.c.start(); await Future<void>.delayed(Duration.zero); f.c.suspend();
       f.hold!.complete(); await pending; check(!f.calls.contains('start') && !f.c.canStart && f.cancels > 0);
-      f.c.resume(); check(f.c.statusLabel == 'Session unconfirmed');
+      await f.c.resume(); check(f.c.statusLabel == 'Ready');
     } finally {f.c.dispose();}
   });
   test('Gate6N disposal during consent prevents late command and notifications', () async {
@@ -172,10 +177,10 @@ void main() {
       f.now = 10000; await f.c.tick(); check(!f.calls.contains('renew'));
     } finally {f.c.dispose();}
   });
-  test('Gate6N expiration cannot revive consent or claim Listening', () async {
+  test('Gate6N expiration preserves choice but cannot renew or claim Listening', () async {
     final f = CaptureFixture(); try {
       await f.start(); f.row['validForMs'] = 0; f.now = 30001; await f.c.tick();
-      check(f.c.statusLabel == 'Capture interrupted' && !f.calls.contains('renew') && !f.c.consent);
+      check(f.c.statusLabel == 'Capture interrupted' && !f.calls.contains('renew') && f.c.consent);
     } finally {f.c.dispose();}
   });
   test('Gate6N withdrawing consent calls revoke and prevents renewal', () async {
@@ -192,8 +197,8 @@ void main() {
   });
   test('Gate6N reconnecting to an existing session never auto renews', () async {
     final f = CaptureFixture(); try {
-      await f.start(); f.c.suspend(); f.c.resume(); await f.c.refresh(); f.now = 10000; await f.c.tick();
-      check(!f.calls.contains('renew') && !f.c.consent);
+      await f.start(); f.c.suspend(); await f.c.resume(); await f.c.refresh(); f.now = 10000; await f.c.tick();
+      check(!f.calls.contains('renew') && f.c.consent);
     } finally {f.c.dispose();}
   });
   test('Gate6N foreign context and uncertain state disable controls', () async {

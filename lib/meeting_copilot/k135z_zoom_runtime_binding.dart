@@ -152,12 +152,17 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
   void invalidate() {
     if (_disposed || _invalid) return;
     _invalid = true;
-    capture.suspend();
+    capture.suspend(clearConsent:true);
     _authorizationUri = null;
     _watch?.cancel();
     for (final client in _requests.toList()) { client.close(); }
     _requests.clear();
     notifyListeners();
+  }
+
+  Future<void> initialize() async {
+    await refresh();
+    if (connected && !busy) await loadMeetings();
   }
 
   Future<void> refresh() async {
@@ -182,7 +187,7 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
     if (!usable || busy) return;
     _authorizationUri = null;
     _localMessage = null;
-    capture.suspend();
+    capture.suspend(clearConsent:true);
     await _controller.disconnect();
     checkContext();
   }
@@ -240,6 +245,8 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
       throw StateError('Zoom request binding is unavailable.');
     }
     final isResponse = uri.path.endsWith('/response') || uri.path.endsWith('/response-voice');
+    final isStartConsent = uri.path.endsWith('/consent') &&
+        body is Map<String, dynamic> && body['action'] == 'consent';
     final client = http.Client();
     if (isResponse) _responseRequests.add(client);
     _requests.add(client);
@@ -260,7 +267,8 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
           body: utf8.decode(bytes.takeBytes()), headers: response.headers);
     }
     try {
-      return await request().timeout(isResponse ? const Duration(seconds:35) : timeout);
+      return await request().timeout(isResponse ? const Duration(seconds:35)
+          : isStartConsent ? const Duration(seconds:28) : timeout);
     } finally {
       _requests.remove(client);
       _responseRequests.remove(client);
