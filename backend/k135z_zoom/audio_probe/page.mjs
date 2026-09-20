@@ -1,7 +1,9 @@
-import {AudioProbe,TonePlayer} from './probe.mjs';
+import {AudioProbe} from './probe.mjs';
+import {MediaTonePlayer} from './media_player.mjs';
 const el = id => document.getElementById(id);
-const probe = new AudioProbe({sdk:globalThis.zoomSdk,player:new TonePlayer(),changed:render});
+const probe = new AudioProbe({sdk:globalThis.zoomSdk,player:new MediaTonePlayer(),changed:render});
 function render() {
+  el('client').textContent = probe.clientInfo;
   el('message').textContent = probe.message;
   el('details').textContent = [probe.shareDetail,probe.stopDetail,probe.result].filter(Boolean).join(' ');
   el('support').textContent = probe.ready ? `Available: ${[

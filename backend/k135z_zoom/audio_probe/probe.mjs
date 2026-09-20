@@ -39,6 +39,7 @@ export class AudioProbe {
     this.pendingStart = false;
     this.cleanupPending = false;
     this.shareDetail = ''; this.stopDetail = ''; this.result = '';
+    this.clientInfo = '';
   }
   tell(message) { this.message = message; this.changed(); }
   async bounded(promise) {
@@ -51,6 +52,7 @@ export class AudioProbe {
     if (this.busy || this.mode || this.pendingStart || this.cleanupPending) return;
     const e = ++this.epoch; this.ready = false; this.supported.clear(); this.busy = true;
     this.shareDetail = ''; this.stopDetail = ''; this.result = '';
+    this.clientInfo = '';
     this.heard = false; this.played = false; this.tell('Checking Zoom audio support…');
     let stage = 'Zoom SDK loading';
     try {
@@ -61,6 +63,9 @@ export class AudioProbe {
         ['getSupportedJsApis','getRunningContext','shareComputerAudio','shareApp']}));
       if (e !== this.epoch) return;
       if (!c || typeof c.runningContext !== 'string') throw Error('BAD_RESPONSE');
+      const product = ['mobile','desktop'].includes(c.product) ? c.product : 'client';
+      const version = typeof c.clientVersion === 'string' && /^\d{1,3}(?:\.\d{1,8}){1,4}$/.test(c.clientVersion) ? c.clientVersion : '';
+      this.clientInfo = `Zoom ${product}${version ? ' ' + version : ''}. Audio-file test v4.`;
       stage = 'Meeting context check';
       if (c.runningContext !== 'inMeeting') throw Error('NOT_IN_MEETING');
       stage = 'Zoom API availability check';
