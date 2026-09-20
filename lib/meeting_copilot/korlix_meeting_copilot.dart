@@ -1,9 +1,10 @@
+import 'k135z_meeting_response.dart';
+import 'k135z_response_panel.dart';
 import 'dart:async';
 import 'k135z_capture_controller.dart';
 import 'k135z_feedback_button.dart';
 import 'k135z_audio_level.dart';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'k135z_copilot_contract.dart';
@@ -397,6 +398,7 @@ class KorlixMeetingCopilotScreen extends StatelessWidget {
     required this.novaPortrait,
     this.onConnectZoom,
     this.onAskNova,
+    this.meetingResponse,
     this.onThirtySecondUpdate,
     this.onSpeakNow,
     this.workspaceController,
@@ -408,6 +410,7 @@ class KorlixMeetingCopilotScreen extends StatelessWidget {
   final ImageProvider<Object> korlixLogo;
   final ImageProvider<Object> novaPortrait;
   final FutureOr<void> Function()? onConnectZoom;
+  final K135zMeetingResponse? meetingResponse;
   final VoidCallback? onAskNova;
   final VoidCallback? onThirtySecondUpdate;
   final VoidCallback? onSpeakNow;
@@ -447,6 +450,10 @@ class KorlixMeetingCopilotScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
                       _Header(korlixLogo: korlixLogo, state: state, statusLabel:capture?.statusLabel),
+                      if (meetingResponse != null) ...[
+                        const SizedBox(height:18),
+                        K135zResponsePanel(response:meetingResponse!),
+                      ],
                       if (workspaceController != null) ...<Widget>[
                         const SizedBox(height: 18),
                         K135zMeetingWorkspacePanel(
@@ -673,7 +680,7 @@ class _NovaControlPanel extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              state.novaMuted
+              capture != null ? 'NOVA SPEECH — use the meeting update controls above.' : state.novaMuted
                   ? 'NOVA IS MUTED — she may speak only after a host invite.'
                   : 'NOVA IS SPEAKING — host-controlled audio is active.',
               textAlign: TextAlign.center,
@@ -1050,9 +1057,11 @@ class _PrivacyBanner extends StatelessWidget {
             SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Disclosure and host control are required. Nova remains muted '
-                'by default. This foundation does not join meetings, collect '
-                'media, save transcripts, or inject audio.',
+                'Disclosure and host control are required. Listening requires '
+                'host permission and your consent. Recent '
+                'captions have partial coverage. Nova uses an AI-generated voice '
+                'and speaks only when you approve an update and tap Speak. '
+                'Zoom screen broadcast shares this screen and device audio.',
                 style: TextStyle(color: KorlixMeetingCopilotScreen._mutedText),
               ),
             ),

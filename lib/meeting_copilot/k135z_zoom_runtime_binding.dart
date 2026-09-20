@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'korlix_zoom_connection_client.dart';
 import 'k135z_capture_controller.dart';
+import 'k135z_meeting_response.dart';
 import 'korlix_zoom_connection_controller.dart';
 
 // Gate6C: account connection only. This class never starts capture or speech.
@@ -74,6 +75,7 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
     capture = K135zCaptureController(agentId:launch.agentId, baseUri:launch.backendBaseUri,
       headers:launch.headersBuilder, isCurrent:() => usable,
       transport:transport ?? _send, cancelRequests:_cancelCaptureRequests);
+    response = K135zMeetingResponse(capture:capture, cancelRequest:_cancelResponseRequests);
     capture.addListener(_changed);
     _controller.addListener(_changed);
     _watch = Timer.periodic(const Duration(seconds: 1), (_) => checkContext());
@@ -87,6 +89,12 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
   final Set<http.Client> _requests = <http.Client>{};
   late final KorlixZoomConnectionController _controller;
   late final K135zCaptureController capture;
+  late final K135zMeetingResponse response;
+  final Set<http.Client> _responseRequests = <http.Client>{};
+  void _cancelResponseRequests() {
+    for (final client in _responseRequests.toList()) { client.close(); }
+    _responseRequests.clear();
+  }
   final Set<http.Client> _captureRequests = <http.Client>{};
   void _cancelCaptureRequests() {
     for (final client in _captureRequests.toList()) { client.close(); }
@@ -228,10 +236,12 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
     if (!usable || uri.origin != launch.backendBaseUri.origin ||
         !((<String>{'GET', 'DELETE'}.contains(method) && body == null) ||
           (method == 'POST' && body is Map<String, dynamic> &&
-           <String>{'bind','status','consent','command','transcript','audio-level'}.any((p) => uri.path == '/api/k135z/zoom/workspace/$p')))) {
+           <String>{'bind','status','consent','command','transcript','audio-level','response','response-voice'}.any((p) => uri.path == '/api/k135z/zoom/workspace/$p')))) {
       throw StateError('Zoom request binding is unavailable.');
     }
+    final isResponse = uri.path.endsWith('/response') || uri.path.endsWith('/response-voice');
     final client = http.Client();
+    if (isResponse) _responseRequests.add(client);
     _requests.add(client);
     if (method == 'POST') _captureRequests.add(client);
     Future<KorlixZoomTransportResponse> request() async {
@@ -250,9 +260,10 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
           body: utf8.decode(bytes.takeBytes()), headers: response.headers);
     }
     try {
-      return await request().timeout(timeout);
+      return await request().timeout(isResponse ? const Duration(seconds:35) : timeout);
     } finally {
       _requests.remove(client);
+      _responseRequests.remove(client);
       _captureRequests.remove(client);
       client.close();
     }
@@ -267,6 +278,7 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
     for (final client in _requests.toList()) { client.close(); }
     _requests.clear();
     capture.removeListener(_changed);
+    response.dispose();
     capture.dispose();
     _controller.removeListener(_changed);
     _controller.dispose();

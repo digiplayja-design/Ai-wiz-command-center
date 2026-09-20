@@ -129,7 +129,7 @@ class _KorlixMeetingCopilotRouteState extends State<KorlixMeetingCopilotRoute> w
                 : 'Selected agent: ${b.launch.agentId}', key: const Key('g6c-agent')),
             Text(b?.message ?? 'Zoom controls are unavailable without account and agent context.',
                 key: const Key('g6c-connection-message')),
-            const Text('Listening requires host approval and your consent. Nova remains muted.'),
+            const Text('Listening requires host approval and your consent. Speaking requires a reviewed update and an explicit Speak tap.'),
             Wrap(spacing: 8, runSpacing: 6, children: [
               K135zFeedbackButton.outlined(buttonKey: const Key('g6c-refresh'),
                   onPressed: b != null && available ? () => b.refresh() : null,
@@ -188,6 +188,7 @@ class _KorlixMeetingCopilotRouteState extends State<KorlixMeetingCopilotRoute> w
           Expanded(child: KorlixMeetingCopilotScreen(
             controller: _controller,
             capture: _binding?.capture,
+            meetingResponse: _binding?.response,
             workspaceController: widget.workspaceController,
             onConnectZoom: _binding?.usable == true && _binding?.busy == false
                 ? () => _binding!.prepareAuthorization() : null,

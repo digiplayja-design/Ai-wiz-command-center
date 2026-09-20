@@ -31,6 +31,12 @@ class K135zCaptureController extends ChangeNotifier {
       _audio?['active'] == true && _same(_audio?['context'], _row?['snapshot']['context']);
   int? get audioAgeMs => audioReceived ? (_audio!['ageMs'] as int) + _clock() - _audioAt : null;
   bool get audioRecent => audioAgeMs != null && audioAgeMs! < 2500;
+  Map<String,dynamic>? get responseBinding => canCheckAudio &&
+      _row?['pending'] == false && _row?['uncertain'] == false ? {
+        'context':Map<String,dynamic>.from(_row!['snapshot']['context']),
+        'revision':_row!['snapshot']['revision'], 'authorityRevision':_row!['authorityRevision'],
+        'bindingRevision':_row!['bindingRevision'],
+      } : null;
   double get audioLevel => audioRecent ? (_audio!['level'] as int) / 100 : 0;
   String get audioMessage {
     if (!canCheckAudio) return 'No audio received — listening is not active.';
@@ -310,7 +316,7 @@ class K135zCaptureController extends ChangeNotifier {
   Future<void> pause() async { if (canPause) await _command('pause'); }
   Future<void> stop() async { if (canStop) await _command('stop'); }
   Future<void> _command(String action) => _run((e) async {
-    _renew = false; _actionError = null; _clearAudio();
+    _renew = false; _actionError = null; _clearAudio(); notifyListeners();
     if (action == 'start') { _need(_consent); await _permission('consent', e); _current(e); _need(_consent); }
     final old = _row!['snapshot'] as Map<String, dynamic>;
     final op = {'requestId':'$_id-${++_number}', 'localEpoch':e, 'operationNumber':_number};
