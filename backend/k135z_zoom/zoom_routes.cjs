@@ -940,7 +940,7 @@ function createK135zZoomHandlers(
           if(kind==='command')C.control(body,'request');
           else if(kind==='bind'){C.object(body,['meetingUuid','expectedBindingRevision']);C.text(body.meetingUuid);C.uint(body.expectedBindingRevision);}
           else if(kind==='status')C.object(body,[]);
-          else if(kind==='response'||kind==='response-voice')validateResponseRequest(kind,body);
+          else if(kind==='response'||kind==='response-voice'||kind==='spoken-reply')validateResponseRequest(kind,body);
           else if(kind==='transcript'||kind==='audio-level'){C.object(body,['context']);C.context(body.context);}
           else {
             C.object(body,['action','context','bindingRevision','authorityRevision'],body.action==='consent'?['listeningConsent']:[]);
@@ -951,7 +951,7 @@ function createK135zZoomHandlers(
         const ended=new Promise((_,reject)=>{fail=reject;});
         req.once?.('aborted',cancel);res.once?.('close',cancel);
         timer=setTimeout(()=>{fail(new K135zZoomError(504,'K135Z_WORKSPACE_TIMEOUT'));abort.abort();},
-          kind==='response'||kind==='response-voice'?30000:kind==='consent'&&body.action==='consent'?25000:10000);
+          kind==='response'||kind==='response-voice'||kind==='spoken-reply'?30000:kind==='consent'&&body.action==='consent'?25000:10000);
         if(req.aborted || res.destroyed)cancel();
         const run=async()=>{
           check();
@@ -959,7 +959,7 @@ function createK135zZoomHandlers(
           const principal=await authorize(req);check();
           const store=deps.workspaceStore;
           if(!store)throw new K135zZoomError(503,'K135Z_WORKSPACE_UNAVAILABLE');
-          if(kind==='response'||kind==='response-voice') {
+          if(kind==='response'||kind==='response-voice'||kind==='spoken-reply') {
             const verify=async()=>{
               check();const verified=await authorize(req);check();
               const lease=await store.readCaptureLease({principal:verified,context:body.context,signal:abort.signal});check();
@@ -1025,6 +1025,7 @@ function createK135zZoomHandlers(
     workspaceConsent:workspaceHandler('consent'),workspaceCommand:workspaceHandler('command'),
     workspaceTranscript:workspaceHandler('transcript'),
     workspaceAudioLevel:workspaceHandler('audio-level'),
+    workspaceSpokenReply:workspaceHandler('spoken-reply'),
     workspaceResponse:workspaceHandler('response'),workspaceResponseVoice:workspaceHandler('response-voice'),
     start,
     callback,
@@ -1107,6 +1108,7 @@ function registerK135zZoomRoutes(
     if(typeof dependencies.workspaceTranscriptPreview==='function')
       app.post(`${K135Z_ZOOM_ROUTE_PREFIX}/workspace/transcript`,handlers.workspaceTranscript);
     if(typeof dependencies.workspaceTranscriptPreview==='function') {
+      app.post(`${K135Z_ZOOM_ROUTE_PREFIX}/workspace/spoken-reply`,handlers.workspaceSpokenReply);
       app.post(`${K135Z_ZOOM_ROUTE_PREFIX}/workspace/response`,handlers.workspaceResponse);
       app.post(`${K135Z_ZOOM_ROUTE_PREFIX}/workspace/response-voice`,handlers.workspaceResponseVoice);
     }

@@ -1,10 +1,12 @@
 'use strict';
 const crypto = require('node:crypto');
+const {createSpokenReplies, validateSpokenRequest} = require('./spoken_reply.cjs');
 const C = require('../k135z_copilot_notes/contract.cjs');
 const {K135zZoomError} = require('./b5b_contract.cjs');
 const fail = (status, code) => { throw new K135zZoomError(status, `K135Z_RESPONSE_${code}`); };
 const VOICES = new Set(['alloy','ash','ballad','coral','echo','sage','shimmer','verse','marin','cedar']);
 function validateResponseRequest(kind, body) {
+  if (kind === 'spoken-reply') return validateSpokenRequest(body);
   C.object(body, kind === 'response' ? ['context'] : ['context','draftId','approved']);
   C.context(body.context);
   if (kind === 'response-voice') {
@@ -46,6 +48,7 @@ function createMeetingResponses({env = process.env, fetchImpl = globalThis.fetch
       return Buffer.concat(chunks);
     } catch (_) { fail(502,'PROVIDER_FAILED'); }
   }
+  const spoken = createSpokenReplies({env, provider, now});
   return {async run({kind, body, principal, check, preview, signal}) {
     validateResponseRequest(kind, body);
     for (const [key, d] of drafts) if (d.expires <= now()) drafts.delete(key);
@@ -57,6 +60,7 @@ function createMeetingResponses({env = process.env, fetchImpl = globalThis.fetch
       const fresh = await check();
       if (signal.aborted || stamp(fresh) !== initial) fail(409,'CONTEXT_CHANGED');
     };
+    if (kind === 'spoken-reply') return spoken.run({body, principal, preview, verify, signal});
     if (kind === 'response') {
       const captured = preview(body.context);
       if (!C.sameContext(captured.context, body.context)) fail(409,'CONTEXT_CHANGED');
