@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'k135z_meeting_response.dart';
+import 'k135z_spoken_panel.dart';
 import 'k135z_feedback_button.dart';
 
 class K135zResponsePanel extends StatelessWidget {
@@ -9,7 +10,11 @@ class K135zResponsePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: response,
-    builder: (context, _) => Container(
+    builder: (context, _) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      K135zSpokenPanel(spoken: response.spoken, onStop: () => response.stop()),
+      const SizedBox(height: 12),
+      ExpansionTile(title: const Text('Reviewed meeting updates', style: TextStyle(color: Colors.white)),
+      children: [Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: const Color(0xFF0A223A),
@@ -117,6 +122,7 @@ class K135zResponsePanel extends StatelessWidget {
           ),
         ],
       ),
-    ),
+    )]),
+    ]),
   );
 }

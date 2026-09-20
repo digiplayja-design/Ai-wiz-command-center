@@ -689,7 +689,7 @@ class _NovaControlPanel extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              capture != null ? 'NOVA SPEECH — use the meeting update controls above.' : state.novaMuted
+              capture != null ? 'NOVA VOICE — enable Spoken replies above, then say “Nova” and your question.' : state.novaMuted
                   ? 'NOVA IS MUTED — she may speak only after a host invite.'
                   : 'NOVA IS SPEAKING — host-controlled audio is active.',
               textAlign: TextAlign.center,
@@ -1069,7 +1069,7 @@ class _PrivacyBanner extends StatelessWidget {
                 'Disclosure and host control are required. Listening requires '
                 'host permission and your consent. Recent '
                 'captions have partial coverage. Nova uses an AI-generated voice '
-                'and speaks only when you approve an update and tap Speak. '
+                'and speaks when you enable Spoken replies and address her, or approve an update and tap Speak. '
                 'Zoom screen broadcast shares this screen and device audio.',
                 style: TextStyle(color: KorlixMeetingCopilotScreen._mutedText),
               ),

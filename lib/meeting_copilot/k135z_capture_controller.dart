@@ -83,6 +83,16 @@ class K135zCaptureController extends ChangeNotifier {
   List<K135zTranscriptPreviewLine> get transcriptLines => !_previewVisible ? const [] :
       List.unmodifiable((_preview!['lines'] as List).map((x) => K135zTranscriptPreviewLine(
         sequence:x['sequence'] as int, speaker:x['speaker'] as String, text:x['text'] as String)));
+  // Take a fresh baseline after enabling, even if a status/caption poll is in flight.
+  Future<void> prepareSpokenTranscript() async {
+    for (var n = 0; usable && !canRefreshTranscript && n < 100; n++) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    _need(canRefreshTranscript);
+    await refreshTranscript();
+  }
+  bool fastTranscript = false;
+  String? get transcriptWindowId => _previewVisible ? _preview!['windowId'] as String : null;
   bool get transcriptTruncated => _previewVisible && _preview!['truncated'] == true;
   String get transcriptMessage => !usable || !_confirmed ? 'Refresh the session to view captured captions.' : _previewMessage;
   void _clearPreview() { _preview = null; _previewFailed = false; _previewPolled = 0;
@@ -418,7 +428,7 @@ class K135zCaptureController extends ChangeNotifier {
     if (_renew && _consent && _clock() - _renewed >= 10000) {
       await _run((e) async { await _permission('renew', e); });
     } else if (_clock() - _polled >= 5000) { await refresh(); }
-    else if (_clock() - _previewPolled >= 5000) { await refreshTranscript(automatic:true); }
+    else if (_clock() - _previewPolled >= (fastTranscript ? 1500 : 5000)) { await refreshTranscript(automatic:true); }
     if (canCheckAudio && _clock() - _audioPolled >= 1000) await refreshAudio(automatic:true);
     if (!_dead && usable) notifyListeners();
   }

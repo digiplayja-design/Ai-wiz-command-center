@@ -5,8 +5,9 @@ import 'package:flutter/foundation.dart';
 
 import 'k135z_capture_controller.dart';
 import 'k135z_response_player.dart';
+import 'k135z_spoken_replies.dart';
 
-// A draft, approval and local playback are distinct actions. Never autoplay.
+// Reviewed updates stay explicit; spoken replies require their own session opt-in.
 class K135zMeetingResponse extends ChangeNotifier {
   K135zMeetingResponse({
     required this.capture,
@@ -15,8 +16,11 @@ class K135zMeetingResponse extends ChangeNotifier {
     int Function()? milliseconds,
   }) : player = player ?? createResponsePlayer() {
     _now = milliseconds ?? (() => _clock.elapsedMilliseconds);
+    spoken = K135zSpokenReplies(capture: capture, cancelRequest: cancelRequest, beforeEnable: () => stop());
+    spoken.addListener(notifyListeners);
     capture.addListener(_check);
   }
+  late final K135zSpokenReplies spoken;
   final K135zCaptureController capture;
   final VoidCallback cancelRequest;
   final K135zResponsePlayer player;
@@ -246,6 +250,7 @@ class K135zMeetingResponse extends ChangeNotifier {
   ]) {
     if (_dead) return;
     _epoch++;
+    spoken.stop();
     cancelRequest();
     player.stop();
     _audio = null;
@@ -265,6 +270,8 @@ class K135zMeetingResponse extends ChangeNotifier {
     capture.removeListener(_check);
     stop();
     _dead = true;
+    spoken.removeListener(notifyListeners);
+    spoken.dispose();
     _clock.stop();
     super.dispose();
   }

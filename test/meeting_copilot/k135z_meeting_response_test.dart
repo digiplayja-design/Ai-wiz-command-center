@@ -137,12 +137,15 @@ void main() {
     f.capture.active = false;
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(
       child: K135zResponsePanel(response: f.response)))));
+    await tester.tap(find.text('Reviewed meeting updates'));
+    await tester.pumpAndSettle();
     expect(tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).onChanged, isNull);
     expect(find.textContaining('it does not enable transcription'), findsOneWidget);
     f.capture.active = true;
     f.capture.changed();
     await tester.pump();
     expect(tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).onChanged, isNotNull);
+    await tester.ensureVisible(find.byType(CheckboxListTile));
     await tester.tap(find.byType(CheckboxListTile));
     await tester.pump();
     expect(f.response.broadcast, isTrue);
@@ -278,7 +281,11 @@ void main() {
           ),
         ),
       );
-      await tester.tap(find.byKey(const Key('nova-draft-update')));
+      await tester.ensureVisible(find.text('Reviewed meeting updates'));
+    await tester.tap(find.text('Reviewed meeting updates'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('nova-draft-update')));
+    await tester.tap(find.byKey(const Key('nova-draft-update')));
       await tester.pumpAndSettle();
       expect(find.text(f.response.text!), findsOneWidget);
       expect(f.player.plays, 0);
