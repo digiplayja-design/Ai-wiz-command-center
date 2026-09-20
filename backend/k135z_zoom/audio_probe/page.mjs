@@ -3,10 +3,11 @@ const el = id => document.getElementById(id);
 const probe = new AudioProbe({sdk:globalThis.zoomSdk,player:new TonePlayer(),changed:render});
 function render() {
   el('message').textContent = probe.message;
+  el('details').textContent = [probe.shareDetail,probe.stopDetail,probe.result].filter(Boolean).join(' ');
   el('support').textContent = probe.ready ? `Available: ${[
     probe.supported.has('shareComputerAudio') && 'computer audio',
     probe.supported.has('shareApp') && 'app sharing (sound still needs a live test)'].filter(Boolean).join('; ')}.` : '';
-  el('check').disabled = probe.busy || !!probe.mode || probe.pendingStart;
+  el('check').disabled = probe.busy || !!probe.mode || probe.pendingStart || probe.cleanupPending;
   el('check').setAttribute('aria-busy',String(probe.busy && !probe.mode));
   for (const [id,method] of [['computer','shareComputerAudio'],['app','shareApp']]) {
     el(id).disabled = !probe.ready || probe.busy || !!probe.mode || !probe.supported.has(method);
@@ -25,7 +26,7 @@ el('yes').onclick = () => probe.confirm(true);
 el('no').onclick = () => probe.confirm(false);
 el('stop').onclick = () => probe.stop();
 document.addEventListener('visibilitychange',() => {
-  if (document.hidden) void probe.stop();
+  if (document.hidden) void probe.stop('hidden');
 });
-window.addEventListener('pagehide',() => { void probe.stop(); });
+window.addEventListener('pagehide',() => { void probe.stop('pagehide'); });
 render();
