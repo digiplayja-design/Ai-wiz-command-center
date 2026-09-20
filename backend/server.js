@@ -6360,6 +6360,7 @@ async function korlixLiveConvoBuildAgentRuntimeV1({
   agentId,
   characterName,
   language,
+  memoryOptions = { maximumItems: 24, maximumCharacters: 12000 },
 }) {
   const client =
     korlixLiveConvoAgentPersistenceClientV1();
@@ -6389,8 +6390,7 @@ async function korlixLiveConvoBuildAgentRuntimeV1({
         client,
         userId: user?.id,
         agentId: profile.id,
-        maximumItems: 24,
-        maximumCharacters: 12000,
+        ...memoryOptions,
       })
     : [];
 
@@ -6428,6 +6428,7 @@ async function korlixLiveConvoBuildAgentRuntimeV1({
       korlixLiveConvoAgentModelProofV1(),
 
     persistenceConfigured: true,
+    memoryOptions,
   });
 }
 
@@ -13231,6 +13232,13 @@ const k135zServerRuntime = await createK135zServerRuntime({env:process.env,datab
 const k135zRegistered = registerK135zZoomRoutes(app, {
   env: process.env,
   ...k135zServerRuntime.options,
+  // Use the same owned Agent Hub profile and memory store as LIVE CONVO.
+  // This larger server-owned budget includes more saved knowledge for reasoning.
+  workspaceAgentRuntime: ({principal}) => korlixLiveConvoBuildAgentRuntimeV1({
+    user: {id: principal.userId}, agentId: principal.agentId,
+    characterName: 'Nova', language: 'English',
+    memoryOptions: {maximumItems: 100, maximumCharacters: 48000},
+  }),
   ...createK135zGate5Wiring({ database: supabaseAdmin,
     authenticateUser: requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }),
 });

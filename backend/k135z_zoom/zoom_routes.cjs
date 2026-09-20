@@ -578,7 +578,8 @@ function createK135zZoomDependencies(
   }
   return {
     workspaceStore,
-    workspaceResponses:createMeetingResponses({env,fetchImpl:options.fetchImpl||globalThis.fetch}),
+    workspaceResponses:createMeetingResponses({env,fetchImpl:options.fetchImpl||globalThis.fetch,
+      loadAgentRuntime:options.workspaceAgentRuntime}),
     workspaceStartRtms:options.rtmsStartEnabled===true && workspaceStore
       ? createZoomRtmsStarter({store:workspaceStore,repository,oauthService,transport,
         clientId:env.KORLIX_ZOOM_CLIENT_ID,fetchImpl:options.fetchImpl||globalThis.fetch}) : null,
@@ -951,7 +952,7 @@ function createK135zZoomHandlers(
         const ended=new Promise((_,reject)=>{fail=reject;});
         req.once?.('aborted',cancel);res.once?.('close',cancel);
         timer=setTimeout(()=>{fail(new K135zZoomError(504,'K135Z_WORKSPACE_TIMEOUT'));abort.abort();},
-          kind==='response'||kind==='response-voice'||kind==='spoken-reply'?30000:kind==='consent'&&body.action==='consent'?25000:10000);
+          kind==='spoken-reply'?120000:kind==='response'||kind==='response-voice'?30000:kind==='consent'&&body.action==='consent'?25000:10000);
         if(req.aborted || res.destroyed)cancel();
         const run=async()=>{
           check();

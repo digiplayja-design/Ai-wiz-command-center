@@ -1288,6 +1288,7 @@ function korlixAgentRuntimeInstructions({
   memories = [],
   characterName = "Korlix",
   language = "English",
+  memoryOptions = {},
 }) {
   if (
     !profile ||
@@ -1302,7 +1303,7 @@ function korlixAgentRuntimeInstructions({
 
   const selectedMemories =
     profile.memoryEnabled
-      ? korlixAgentRuntimeMemories(memories)
+      ? korlixAgentRuntimeMemories(memories, memoryOptions)
       : [];
 
   const training =
@@ -1483,6 +1484,7 @@ function korlixAgentRuntimeView({
   language = "English",
   modelProof = null,
   persistenceConfigured = false,
+  memoryOptions = {},
 }) {
   if (!profile) {
     throw korlixAgentInputError(
@@ -1493,7 +1495,7 @@ function korlixAgentRuntimeView({
 
   const selectedMemories =
     profile.memoryEnabled
-      ? korlixAgentRuntimeMemories(memories)
+      ? korlixAgentRuntimeMemories(memories, memoryOptions)
       : [];
 
   const safeModelProof =
@@ -1532,6 +1534,7 @@ function korlixAgentRuntimeView({
         memories: selectedMemories,
         characterName,
         language,
+        memoryOptions,
       }),
 
     toolIds:

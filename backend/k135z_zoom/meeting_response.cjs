@@ -22,7 +22,7 @@ function assertResponseAuthority(principal, context, row, captureActive) {
 }
 // Bounded, volatile drafts. This service never starts playback or changes Zoom sharing.
 // Limits are per process (the release runs one instance); drafts expire after 90 seconds.
-function createMeetingResponses({env = process.env, fetchImpl = globalThis.fetch, now = Date.now} = {}) {
+function createMeetingResponses({env = process.env, fetchImpl = globalThis.fetch, now = Date.now, loadAgentRuntime} = {}) {
   const drafts = new Map(), usage = new Map(), pending = new Set();
   let globalWindow = now(), globalCount = 0;
   function reserve(user) {
@@ -48,7 +48,7 @@ function createMeetingResponses({env = process.env, fetchImpl = globalThis.fetch
       return Buffer.concat(chunks);
     } catch (_) { fail(502,'PROVIDER_FAILED'); }
   }
-  const spoken = createSpokenReplies({env, provider, now});
+  const spoken = createSpokenReplies({env, provider, now, loadAgentRuntime});
   return {async run({kind, body, principal, check, preview, signal}) {
     validateResponseRequest(kind, body);
     for (const [key, d] of drafts) if (d.expires <= now()) drafts.delete(key);
