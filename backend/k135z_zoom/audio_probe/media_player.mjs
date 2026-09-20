@@ -22,12 +22,12 @@ export class MediaTonePlayer {
     const audio = document.createElement('audio');
     document.body.append(audio);
     return audio;
-  }, createUrl = bytes => URL.createObjectURL(new Blob([bytes], {type:'audio/wav'})),
+  }, createUrl = (bytes, type) => URL.createObjectURL(new Blob([bytes], {type})),
   revokeUrl = url => URL.revokeObjectURL(url), timeoutMs = 15000} = {}) {
     Object.assign(this, {createAudio, createUrl, revokeUrl, timeoutMs});
     this.current = null;
   }
-  play() {
+  play(bytes = makeToneWav(), type = 'audio/wav') {
     this.stop();
     return new Promise((resolve, reject) => {
       let audio, url, timer, settled = false, session;
@@ -50,7 +50,7 @@ export class MediaTonePlayer {
       session = {cancel:() => finish(Error('STOPPED'))};
       this.current = session;
       try {
-        audio = this.createAudio(); url = this.createUrl(makeToneWav());
+        audio = this.createAudio(); url = this.createUrl(bytes, type);
         audio.autoplay = false; audio.loop = false; audio.muted = false; audio.volume = 1;
         audio.preload = 'auto'; audio.setAttribute('playsinline', '');
         audio.addEventListener('ended', ended); audio.addEventListener('error', failed);

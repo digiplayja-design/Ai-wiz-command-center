@@ -1,11 +1,12 @@
 'use strict';
 
-// Public, synthetic-audio diagnostic. No credentials, capture, or meeting data.
+// Public audio diagnostic pages. No credentials, capture, or meeting data.
 const fs = require('node:fs');
 const path = require('node:path');
 const PREFIX = '/k135z/audio-output-test/';
 const FILES = {'':'index.html','probe.mjs':'probe.mjs','page.mjs':'page.mjs','style.css':'style.css','media_player.mjs':'media_player.mjs',
-  'native/':'native.html','native.mjs':'native.mjs','native_session.mjs':'native_session.mjs'};
+  'native/':'native.html','native.mjs':'native.mjs','native_session.mjs':'native_session.mjs',
+  'voice/':'voice.html','voice.mjs':'voice.mjs','voice_session.mjs':'voice_session.mjs'};
 function registerAudioProbe(app) {
   for (const [suffix, file] of Object.entries(FILES)) {
     const body = fs.readFileSync(path.join(__dirname, 'audio_probe', file));

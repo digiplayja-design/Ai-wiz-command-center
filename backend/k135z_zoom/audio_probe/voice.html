@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KORLIX · Nova voice preview</title>
+<link rel="stylesheet" href="/k135z/audio-output-test/style.css">
+<script type="module" src="/k135z/audio-output-test/voice.mjs"></script></head>
+<body><main><p class="brand">KORLIX · NOVA MEETING COPILOT</p>
+<h1>Let Nova say hello</h1>
+<p>A short greeting in an AI-generated voice. You choose when it plays.</p>
+<section><h2>1. Prepare the greeting</h2>
+<p>This preview reads the same greeting each time. Meeting questions and summaries are not connected yet.</p>
+<blockquote>Hello, I'm Nova, Korlix's AI meeting assistant. This is my voice preview. The host chooses when I speak. Thank you for helping test the meeting audio.</blockquote>
+<button id="prepare">Prepare greeting</button></section>
+<section><h2>2. Use your working Zoom broadcast</h2>
+<p>On the broadcasting iPad, open this page in Chrome. In Zoom, start a screen broadcast with device audio. Your whole screen will be visible to the meeting.</p>
+<p>Keep the iPad's Zoom microphone muted and this page visible. Listen on the iPhone joined to meeting audio.</p>
+<label><input id="broadcast" type="checkbox"> I have permission to share this greeting and started the Zoom broadcast with device audio.</label>
+<p class="foot">This page cannot check Zoom's host permissions or start a broadcast.</p>
+<div class="buttons"><button id="play" disabled>Play Nova greeting</button>
+<button id="stop" class="stop">Stop Nova voice</button></div>
+<p id="message" role="status" aria-live="polite">Loading voice controls…</p></section>
+<section><h2>3. Confirm on the other device</h2>
+<div class="buttons"><button id="yes" disabled>Greeting heard on the other device</button>
+<button id="no" disabled>Greeting not heard</button></div>
+<p id="result" aria-live="polite">No participant result reported.</p></section>
+<p><strong>Tap Stop Share in Zoom to end the broadcast.</strong> Stop Nova voice only stops this page's audio.</p>
+<p class="foot">Nova voice preview v6. No microphone capture or meeting transcript access. Leaving this page stops playback. Participant results are not saved.</p>
+</main></body></html>

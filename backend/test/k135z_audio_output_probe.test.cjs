@@ -17,7 +17,7 @@ async function fixture(overrides = {}) {
 }
 test('page and scripts use exact public paths, required Zoom headers, and no request reflection',()=>{
   const routes=new Map();registerAudioProbe({get:(path,fn)=>routes.set(path,fn)});
-  assert.equal(routes.size,8);
+  assert.equal(routes.size,11);
   for(const [path,handler] of routes){
     const headers={},r={setHeader:(k,v)=>{headers[k]=v;},status(n){assert.equal(n,200);return this;},end(b){this.body=b.toString();}};
     handler({query:{token:'private-marker'},headers:{'x-zoom-app-context':'private-marker'}},r);
