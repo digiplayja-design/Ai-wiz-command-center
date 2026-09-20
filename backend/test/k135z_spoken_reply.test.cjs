@@ -100,9 +100,9 @@ test('HTTP route authenticates and rejects arbitrary text before making provider
  assert.equal(r.statusCode,200);assert.equal(r.body.reply.audio,mp3.toString('base64'));
 });
 
-test('uses the selected agent runtime with Astra high reasoning, without sampling parameters',async()=>{
+test('uses the selected agent runtime with Astra conversational reasoning, without sampling parameters',async()=>{
  const f=fixture(),{reply}=await f.run(),b=f.calls[0].body;
- assert.equal(b.model,'gpt-6-astra');assert.equal(b.reasoning_effort,'high');
+ assert.equal(b.model,'gpt-6-astra');assert.equal(b.reasoning_effort,'low');
  assert(b.max_completion_tokens>=8192);assert(!('temperature' in b));assert(!('top_p' in b));
  assert.deepEqual(f.loaded,[principal]);assert.equal(b.messages[1].content,f.runtime.instructions);
  assert.deepEqual(reply.agent,{id:'nova',name:'NOVA',memoryEnabled:true,memoryCount:1});
@@ -138,4 +138,18 @@ test('forged memory, training and model input is rejected before reading memory'
   const f=fixture();await assert.rejects(f.run({body:{...f.body,...patch}}));
   assert.equal(f.calls.length,0);assert.equal(f.loaded.length,0);
  }
+});
+
+test('explicit deeper reasoning keeps Astra high with the same fresh agent runtime',async()=>{
+ const f=fixture();f.preview.lines[2].text='Think deeply about what we decided.';
+ await f.run();assert.equal(f.calls[0].body.reasoning_effort,'high');
+ assert.equal(f.calls[0].body.messages[1].content,f.runtime.instructions);
+});
+test('latency telemetry contains stage timings and no personal context',async()=>{
+ const f=fixture(),events=[];
+ const service=createMeetingResponses({env:{OPENAI_API_KEY:'offline'},fetchImpl:f.fetchImpl,
+  now:()=>0,loadAgentRuntime:f.loadAgentRuntime,log:e=>events.push(e)});
+ await service.run(f.input);
+ assert.deepEqual(events,[{event:'k135z_spoken_latency',outcome:'ok',stage:'permission',effort:'low',
+  memoryMs:0,answerMs:0,audioMs:0,totalMs:0}]);
 });
