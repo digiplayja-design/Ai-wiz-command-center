@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KORLIX · Meeting audio output test</title>
+<link rel="stylesheet" href="/k135z/audio-output-test/style.css">
+<script defer src="https://appssdk.zoom.us/sdk.min.js"></script>
+<script type="module" src="/k135z/audio-output-test/page.mjs"></script></head>
+<body><main><p class="brand">KORLIX · NOVA MEETING COPILOT</p><h1>Can the meeting hear this?</h1>
+<p>Test the connection Nova will need to speak. This plays three short tones; it does not activate Nova or capture your microphone.</p>
+<section><h2>1. Open inside Zoom</h2><p>Open this configured app during a Zoom meeting. Ask another participant to listen from a different device, with headphones or from another room.</p>
+<button id="check">Check Zoom audio support</button><p id="support"></p></section>
+<section><h2>2. Choose what to share</h2>
+<p>Computer audio can include sound from other apps. Sharing this test page also makes this page visible to the meeting. Choose one option intentionally.</p>
+<div class="buttons"><button id="computer" disabled>Share computer audio</button><button id="app" disabled>Share this page with sound</button></div></section>
+<section><h2>3. Test and confirm</h2><button id="play" disabled>Play three test tones</button>
+<p>Hearing the tones yourself does not confirm the meeting received them.</p>
+<div class="buttons"><button id="yes" disabled>Another participant heard them</button><button id="no" disabled>They did not hear them</button></div></section>
+<p id="message" role="status" aria-live="polite">Loading audio test…</p>
+<button id="stop" class="stop">Stop test sharing</button>
+<p class="foot">Use Stop test sharing before leaving. If sharing remains active, stop it in Zoom. This test result is not saved.</p>
+</main></body></html>

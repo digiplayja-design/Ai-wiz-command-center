@@ -3,6 +3,7 @@
 const crypto = require("node:crypto");
 const { identity, eventPlan } = require("./b5b_contract.cjs");
 const {createZoomRtmsStarter} = require('./zoom_rtms_start.cjs');
+const {registerAudioProbe} = require('./audio_probe_routes.cjs');
 
 const {
   EnvelopeCipher,
@@ -1046,6 +1047,7 @@ function registerK135zZoomRoutes(
     );
 
   // K135Z_B5A_ZOOM_ROUTE_REGISTRATION_BEGIN
+  registerAudioProbe(app);
   app.get(
     `${K135Z_ZOOM_ROUTE_PREFIX}/oauth/start`,
     handlers.start,
