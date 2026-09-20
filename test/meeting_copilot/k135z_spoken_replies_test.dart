@@ -8,6 +8,7 @@ import '../../lib/meeting_copilot/k135z_spoken_replies.dart';
 import '../../lib/meeting_copilot/k135z_spoken_player.dart';
 import '../../lib/meeting_copilot/k135z_spoken_panel.dart';
 import '../../lib/meeting_copilot/korlix_zoom_connection_client.dart';
+import '../../lib/live_convo/k136s_learning_panel.dart';
 import 'k135z_meeting_response_test.dart' show Capture;
 
 class SpokenCapture extends Capture {
@@ -42,9 +43,10 @@ class SpokenFixture {
   bool bad = false;
   String? errorCode;
   Map<String, dynamic>? agent;
+  Map<String, dynamic>? memoryRequest;
   late final SpokenCapture capture;
   late final K135zSpokenReplies spoken;
-  SpokenFixture() {
+  SpokenFixture({K136sLearningApiBase? learningApi}) {
     capture = SpokenCapture(({required String method, required Uri uri, required Map<String,String> headers, Object? body}) async {
       expect(uri.path, endsWith('/spoken-reply'));
       expect(headers['x-korlix-agent-id'], 'agent');
@@ -58,10 +60,11 @@ class SpokenFixture {
         'text':'We agreed to review the draft Friday.', 'mimeType':'audio/mpeg',
         'audio':base64Encode([73,68,51,...List.filled(100,0)]),
         if (agent != null) 'agent': agent,
+        if (memoryRequest != null) 'memoryRequest':memoryRequest,
       }}));
     });
     spoken = K135zSpokenReplies(capture: capture, cancelRequest: () { cancels++; },
-      beforeEnable: () {}, player: player, milliseconds: () => now, watch: false);
+      beforeEnable: () {}, player: player, learningApi:learningApi, milliseconds: () => now, watch: false);
   }
   Future<void> ask([String text = 'Nova, what did we decide?']) async {
     capture.say(text); now += 3000; await spoken.tick();

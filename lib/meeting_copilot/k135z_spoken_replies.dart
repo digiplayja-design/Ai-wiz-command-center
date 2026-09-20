@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 
 import 'k135z_capture_controller.dart';
 import 'k135z_spoken_player.dart';
+import 'k135z_remember_memory.dart';
+import '../live_convo/k136s_learning_panel.dart';
 
 class K135zSpokenReplies extends ChangeNotifier {
   K135zSpokenReplies({
@@ -12,16 +14,29 @@ class K135zSpokenReplies extends ChangeNotifier {
     required this.cancelRequest,
     required this.beforeEnable,
     K135zSpokenPlayer? player,
+    K136sLearningApiBase? learningApi,
     int Function()? milliseconds,
     bool watch = true,
   }) : player = player ?? createSpokenPlayer() {
     _now = milliseconds ?? (() => _clock.elapsedMilliseconds);
+    memory = K135zRememberMemory(agentId:capture.agentId,
+      currentBinding:() => enabled && !suspended ? _currentBinding : null,
+      api:learningApi ?? K136sLearningApi(baseUrl:capture.baseUri.resolve('/').toString(),
+        headersBuilder:() => capture.headers()));
+    memory.addListener(_memoryChanged);
     capture.addListener(_scan);
     _watch = watch;
   }
   final K135zCaptureController capture;
   final VoidCallback cancelRequest, beforeEnable;
   final K135zSpokenPlayer player;
+  late final K135zRememberMemory memory;
+  void _memoryChanged() {
+    if (_dead) return;
+    if (memory.visible) message = memory.message;
+    if (memory.phase == 'saved') memoryStatus = null;
+    notifyListeners();
+  }
   final Stopwatch _clock = Stopwatch()..start();
   late final int Function() _now;
   Timer? _timer;
@@ -98,6 +113,7 @@ class K135zSpokenReplies extends ChangeNotifier {
   // queue questions heard while away or replay an interrupted answer on return.
   void leavePage() {
     if (_dead) return;
+    if (memory.active) memory.cancel();
     if (suspended) {
       // A second switch while automatic audio activation is in flight cancels
       // that activation, but keeps the original session opt-in for the next return.
@@ -168,6 +184,7 @@ class K135zSpokenReplies extends ChangeNotifier {
 
   void _scan() {
     if (_dead) return;
+    memory.checkContext();
     if (suspended) {
       if (!capture.isCurrent()) stop();
       return;
@@ -196,7 +213,7 @@ class K135zSpokenReplies extends ChangeNotifier {
       if (line.sequence <= _seen) continue;
       _seen = line.sequence;
       // Never queue calls heard while answering or during the echo cooldown.
-      if (busy || playing || _now() < _quietUntil) continue;
+      if (busy || playing || memory.active || _now() < _quietUntil) continue;
       if (_wake.hasMatch(line.text.trim())) {
         _question
           ..clear()
@@ -221,12 +238,12 @@ class K135zSpokenReplies extends ChangeNotifier {
 
   Future<void> tick() async {
     _scan();
-    if (enabled && !suspended && !busy && !playing && _quietUntil > 0 && _now() >= _quietUntil) {
+    if (enabled && !suspended && !busy && !playing && !memory.active && _quietUntil > 0 && _now() >= _quietUntil) {
       _quietUntil = 0;
       message = 'Ready for your next question. Start with “Nova”.';
       notifyListeners();
     }
-    if (!enabled || suspended || busy || playing || _question.isEmpty) return;
+    if (!enabled || suspended || busy || playing || memory.active || _question.isEmpty) return;
     final bareWake = _question.length == 1 && _question.first.text.trim().replaceFirst(_wake, '').trim().isEmpty;
     if (_now() - _changedAt < (bareWake ? 2800 : 1600) && _now() - _beganAt < 12000) return;
     final first = _question.first.sequence, last = _question.last.sequence;
@@ -324,12 +341,20 @@ class K135zSpokenReplies extends ChangeNotifier {
             ? '${agent['name']} · ${agent['memoryCount']} saved memories loaded for this reply'
             : '${agent['name']} · saved memory is off in Agent Hub';
       }
+      if (r['memoryRequest'] != null) {
+        final request = r['memoryRequest'];
+        if (request is! Map || request.length != 1 || request['text'] is! String ||
+            (request['text'] as String).length > 1600 || agent is! Map || agent['memoryEnabled'] != true) {
+          throw StateError('Invalid memory proposal');
+        }
+        memory.propose(request['text'], agent['name']);
+      }
       playing = true;
       message = 'Nova is speaking…';
       notifyListeners();
       await player.play(audio);
       if (_current(epoch) && enabled)
-        message = 'Reply finished. Ready for another question in a few seconds…';
+        message = memory.visible ? memory.message : 'Reply finished. Ready for another question in a few seconds…';
     } catch (_) {
       if (_current(epoch))
         stop('Reply interrupted. Enable spoken replies, then ask again.');
@@ -350,6 +375,7 @@ class K135zSpokenReplies extends ChangeNotifier {
     final wasActive = enabled || busy || playing;
     _epoch++;
     enabled = false;
+    memory.cancel();
     suspended = false; needsAudioTap = false; _returnContext = null;
     busy = false;
     playing = false;
@@ -371,6 +397,8 @@ class K135zSpokenReplies extends ChangeNotifier {
     capture.removeListener(_scan);
     _timer?.cancel();
     stop();
+    memory.removeListener(_memoryChanged);
+    memory.dispose();
     _dead = true;
     _clock.stop();
     super.dispose();

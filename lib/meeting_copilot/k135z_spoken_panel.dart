@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'k135z_spoken_replies.dart';
+import 'k135z_remember_panel.dart';
 import 'k135z_feedback_button.dart';
 
 class K135zSpokenPanel extends StatelessWidget {
@@ -32,6 +33,9 @@ class K135zSpokenPanel extends StatelessWidget {
               fontWeight: FontWeight.bold,
             ),
           ),
+          const SizedBox(height: 8),
+          const Text('To save a fact, say “Nova, remember this” followed by the fact. Review and confirm it with your Brain Vault password.',
+            style: TextStyle(color: Color(0xFF9CB8CA))),
           const SizedBox(height: 8),
           const Text(
             'Say “Nova, what have we decided?” She replies aloud after your question.',
@@ -99,6 +103,8 @@ class K135zSpokenPanel extends StatelessWidget {
               child: Text(spoken.memoryStatus!,
                 style: const TextStyle(color: Color(0xFF9CB8CA))),
             ),
+          if (spoken.memory.visible)
+            K135zRememberPanel(key:ValueKey(spoken.memory.requestId), memory:spoken.memory),
         ],
       ),
     ),
