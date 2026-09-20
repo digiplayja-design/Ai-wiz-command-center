@@ -87,6 +87,7 @@ class _KorlixMeetingCopilotRouteState extends State<KorlixMeetingCopilotRoute> w
     final access = kKorlixMeetingCopilotEnterpriseAccess.value;
     widget.workspaceController?.setAccessGranted(access);
     if (!access) _binding?.invalidate();
+    else if (_launch?.current == true && (_binding == null || !_binding!.usable)) _bind(_launch);
     _changed();
   }
 

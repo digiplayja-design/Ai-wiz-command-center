@@ -61,7 +61,9 @@ void main() {
       contains("import 'meeting_copilot/korlix_meeting_copilot_route.dart';"),
     );
     expect(source, contains('KorlixMeetingCopilotRoute.routeName:'));
-    expect(source, contains('const KorlixMeetingCopilotRoute()'));
+    expect(source, contains('K135zCopilotEntry('));
+    expect(source, contains('authChanges: kKorlixAuthRevision'));
+    expect(source, contains('Uri.parse(kKorlixBackendBaseUrl)'));
   });
 
   test('pubspec declares both exact Meeting Copilot assets', () {

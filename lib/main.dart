@@ -38,6 +38,7 @@ import 'billing/korlix_apple_billing.dart';
 import 'privacy/korlix_third_party_ai_consent.dart';
 
 import 'meeting_copilot/korlix_meeting_copilot_route.dart';
+import 'meeting_copilot/k135z_copilot_entry.dart';
 import 'meeting_copilot/korlix_meeting_copilot_auth_bridge.dart';
 import 'meeting_copilot/korlix_meeting_copilot_access.dart';
 
@@ -286,7 +287,15 @@ class CheeChaiCheeApp extends StatelessWidget {
 
       routes: <String, WidgetBuilder>{
         KorlixMeetingCopilotRoute.routeName: (_) =>
-            const KorlixMeetingCopilotRoute(),
+            K135zCopilotEntry(
+              backendBaseUri: Uri.parse(kKorlixBackendBaseUrl),
+              authChanges: kKorlixAuthRevision,
+              headersBuilder: () => {
+                ...KorlixDeviceStore.headers(),
+                if (kKorlixAccessToken?.isNotEmpty == true)
+                  'Authorization': 'Bearer $kKorlixAccessToken',
+              },
+            ),
       },
       title: 'Korlix AI',
       debugShowCheckedModeBanner: false,
