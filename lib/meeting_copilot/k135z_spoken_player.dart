@@ -8,6 +8,8 @@ abstract interface class K135zSpokenPlayer {
   bool get supported;
   bool get ready;
   Future<void> enable();
+  Future<bool> resume();
+  void interrupt();
   Future<void> play(Uint8List bytes);
   void stop();
 }

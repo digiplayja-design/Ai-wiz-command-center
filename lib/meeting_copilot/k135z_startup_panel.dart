@@ -98,8 +98,8 @@ class K135zStartupPanel extends StatelessWidget {
                   onPressed: available ? b.disconnect : null, child: const Text('Disconnect Zoom')),
             ])],
           ),
-          const Text('Keep this page visible while listening. After switching apps, '
-            'tap Start listening again if listening was interrupted.',
+          const Text('Nova checks and reconnects this listening session when you return. '
+            'Stop listening ends the session.',
             style: TextStyle(color: muted, fontSize: 12)),
         ],
       )),

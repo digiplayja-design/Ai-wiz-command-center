@@ -25,6 +25,10 @@ class SpokenCapture extends Capture {
 class SpokenPlayer implements K135zSpokenPlayer {
   bool ready = false, supported = true;
   int plays = 0, stops = 0, enables = 0;
+  bool resumeAllowed = true;
+  Completer<void>? holdResume;
+  Future<bool> resume() async { if (holdResume != null) await holdResume!.future; return ready = resumeAllowed; }
+  void interrupt() {}
   Completer<void>? holdEnable, holdPlay;
   Future<void> enable() async { enables++; if (holdEnable != null) await holdEnable!.future; ready = true; }
   Future<void> play(Uint8List bytes) async { plays++; if (holdPlay != null) await holdPlay!.future; }
@@ -36,6 +40,7 @@ class SpokenFixture {
   final player = SpokenPlayer();
   Completer<void>? hold;
   bool bad = false;
+  String? errorCode;
   Map<String, dynamic>? agent;
   late final SpokenCapture capture;
   late final K135zSpokenReplies spoken;
@@ -45,6 +50,8 @@ class SpokenFixture {
       expect(headers['x-korlix-agent-id'], 'agent');
       final b = body as Map; calls.add(b);
       if (hold != null) await hold!.future;
+      if (errorCode != null) return KorlixZoomTransportResponse(statusCode:502,
+        body:jsonEncode({'ok':false,'error':{'code':errorCode}}));
       return KorlixZoomTransportResponse(statusCode: 200, body: jsonEncode({'ok': true, 'reply': {
         'context': bad ? {...b['context'], 'meetingUuid': 'other'} : b['context'],
         'windowId':b['windowId'], 'wakeSequence':b['wakeSequence'], 'coverage':'partial',
@@ -95,7 +102,7 @@ void main() {
   test('gathers caption fragments from the same speaker and waits for a pause', () async {
     final f = SpokenFixture(); addTearDown(f.dispose); await f.spoken.enable();
     f.capture.say('Hey Nova,'); f.now = 2000; await f.spoken.tick(); expect(f.calls, isEmpty);
-    f.capture.say('what did we decide?'); f.now = 4000; await f.spoken.tick(); expect(f.calls, isEmpty);
+    f.capture.say('what did we decide?'); f.now = 3500; await f.spoken.tick(); expect(f.calls, isEmpty);
     f.now = 5000; await f.spoken.tick(); expect(f.calls.single['endSequence'], 2);
   });
   test('incidental mentions do not trigger a reply', () async {
@@ -125,13 +132,12 @@ void main() {
     f.player.holdPlay!.complete(); await pending; expect(f.spoken.playing, false);
     expect(f.spoken.message, contains('off')); expect(f.player.ready, false);
   });
-  test('permission, account, meeting, caption window and browser-audio changes disarm mode', () async {
+  test('permission, account, meeting and caption window changes disarm mode', () async {
     for (final change in <void Function(SpokenFixture)>[
       (f) => f.capture.active = false,
       (f) => f.capture.binding['authorityRevision'] = 2,
       (f) => f.capture.binding['context']['meetingUuid'] = 'other',
       (f) => f.capture.window = 'b' * 32,
-      (f) => f.player.ready = false,
     ]) {
       final f = SpokenFixture(); await f.spoken.enable(); change(f); f.capture.changed();
       expect(f.spoken.enabled, false); expect(f.capture.fastTranscript, false); f.dispose();

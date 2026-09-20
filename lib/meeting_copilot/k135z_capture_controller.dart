@@ -342,6 +342,7 @@ class K135zCaptureController extends ChangeNotifier {
     if (!usable || _busy) return;
     _consent = value;
     if (!value) {
+      _returnBinding = null;
       _renew = false; _clearAudio();
       if (_row != null) await _run((e) async { await _permission('revoke', e); _message = 'Consent withdrawn. Refresh to confirm capture has ended.'; });
     }
@@ -374,8 +375,9 @@ class K135zCaptureController extends ChangeNotifier {
       await _sendCommand('start', e);
     });
   }
-  Future<void> pause() async { if (canPause) await _command('pause'); }
+  Future<void> pause() async { _returnBinding = null; if (canPause) await _command('pause'); }
   Future<void> stop() async {
+    _returnBinding = null;
     if (!canStop) return;
     // Withdraw locally before waiting; a failed Stop must not keep renewing.
     _consent = false; _renew = false; _clearAudio();
@@ -428,12 +430,43 @@ class K135zCaptureController extends ChangeNotifier {
     if (_renew && _consent && _clock() - _renewed >= 10000) {
       await _run((e) async { await _permission('renew', e); });
     } else if (_clock() - _polled >= 5000) { await refresh(); }
-    else if (_clock() - _previewPolled >= (fastTranscript ? 1500 : 5000)) { await refreshTranscript(automatic:true); }
+    else if (_clock() - _previewPolled >= (fastTranscript ? 750 : 5000)) { await refreshTranscript(automatic:true); }
     if (canCheckAudio && _clock() - _audioPolled >= 1000) await refreshAudio(automatic:true);
     if (!_dead && usable) notifyListeners();
   }
+  Map<String, dynamic>? _returnBinding;
+  // A hidden tab retains the user's listening choice and renews while the browser runs.
+  void leavePage() {
+    if (_returnBinding != null || !usable || !_consent || !_renew || _row == null) return;
+    _returnBinding = jsonDecode(jsonEncode({
+      'context':_row!['snapshot']['context'], 'revision':_row!['snapshot']['revision'],
+      'authorityRevision':_row!['authorityRevision'], 'bindingRevision':_row!['bindingRevision'],
+    })) as Map<String, dynamic>;
+  }
+  Future<bool> returnToPage() async {
+    final saved = _returnBinding;
+    _returnBinding = null;
+    if (saved == null || !usable || !_consent) return false;
+    // Let an existing renewal finish; never overlap start/pause commands.
+    for (var n = 0; _busy && usable && n < 600; n++) {
+      await Future<void>.delayed(const Duration(milliseconds:50));
+    }
+    if (!usable || _busy || !_consent) return false;
+    await refresh();
+    if (!usable || !_confirmed || !_consent || _row == null ||
+        !_same(saved['context'], _row!['snapshot']['context']) ||
+        saved['revision'] != _row!['snapshot']['revision'] ||
+        saved['authorityRevision'] != _row!['authorityRevision'] ||
+        saved['bindingRevision'] != _row!['bindingRevision'] ||
+        _state != 'listening' || _row!['pending'] != false || _row!['uncertain'] != false) return false;
+    // Resume only this already-started session after browser suspension. A changed
+    // meeting, Stop, Pause or revoked permission requires a new explicit Start.
+    if (statusLabel != 'Listening') await start();
+    return statusLabel == 'Listening';
+  }
   void suspend({bool clearConsent = false}) {
     if (_dead) return;
+    _returnBinding = null;
     if (clearConsent || !isCurrent()) _consent = false;
     if (!_foreground) return;
     _clearPreview(); _previewBusy = false; _clearAudio();

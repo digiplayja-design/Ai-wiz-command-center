@@ -12,10 +12,10 @@ class _SpokenPlayer implements K135zSpokenPlayer {
   web.AudioContext? _context;
   int _epoch = 0;
   void Function()? _cancel;
-  StreamSubscription<html.Event>? _visibility, _pageHide;
+  StreamSubscription<html.Event>? _pageHide;
   bool get supported => web.AudioContext.supported;
   bool get ready =>
-      _context?.state == 'running' && html.document.hidden != true;
+      _context?.state == 'running';
 
   Future<void> enable() async {
     stop();
@@ -23,9 +23,6 @@ class _SpokenPlayer implements K135zSpokenPlayer {
     final context = _context = web.AudioContext();
     // Resume in the button's synchronous call stack, before any network request.
     final resumed = context.resume();
-    _visibility = html.document.onVisibilityChange.listen((_) {
-      if (html.document.hidden == true) stop();
-    });
     _pageHide = html.window.onPageHide.listen((_) => stop());
     try {
       await resumed.timeout(const Duration(seconds: 5));
@@ -47,6 +44,21 @@ class _SpokenPlayer implements K135zSpokenPlayer {
       if (epoch == _epoch) stop();
       rethrow;
     }
+  }
+
+  Future<bool> resume() async {
+    final context = _context, epoch = _epoch;
+    if (context == null || html.document.hidden == true) return false;
+    try {
+      await context.resume().timeout(const Duration(seconds:3));
+      return epoch == _epoch && ready;
+    } catch (_) { return false; }
+  }
+
+  void interrupt() {
+    _epoch++;
+    _cancel?.call();
+    _cancel = null;
   }
 
   Future<void> play(Uint8List bytes) async {
@@ -95,12 +107,8 @@ class _SpokenPlayer implements K135zSpokenPlayer {
   }
 
   void stop() {
-    _epoch++;
-    _cancel?.call();
-    _cancel = null;
-    _visibility?.cancel();
+    interrupt();
     _pageHide?.cancel();
-    _visibility = null;
     _pageHide = null;
     final context = _context;
     _context = null;

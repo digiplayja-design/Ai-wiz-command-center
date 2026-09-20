@@ -10,5 +10,7 @@ class _Unsupported implements K135zSpokenPlayer {
   Future<void> enable() =>
       Future.error(StateError('Open Copilot in your browser.'));
   Future<void> play(Uint8List bytes) => enable();
+  Future<bool> resume() async => false;
+  void interrupt() {}
   void stop() {}
 }

@@ -74,12 +74,12 @@ class _KorlixMeetingCopilotRouteState extends State<KorlixMeetingCopilotRoute> w
     if (state == AppLifecycleState.resumed) {
       final binding = _binding;
       if (binding != null) {
-        unawaited(binding.capture.resume());
+        unawaited(binding.returnToPage());
         if (!binding.connected) unawaited(binding.initialize());
       }
     } else if (!(kIsWeb && state == AppLifecycleState.inactive)) {
-      // On web, inactive means visible but unfocused; hidden ends renewal.
-      _binding?.capture.suspend();
+      // Keep the existing listening choice while switching tabs/apps.
+      _binding?.leavePage();
     }
   }
 

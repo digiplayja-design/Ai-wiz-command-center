@@ -41,13 +41,14 @@ class K135zSpokenPanel extends StatelessWidget {
           const Text(
             'Enable spoken replies to let Nova answer anyone who addresses her, without reviewing each reply. '
             'She uses your selected agent’s saved memory and training with advanced reasoning. '
+            'Replies are brief for speed; say “think deeply” when you want extra reasoning. '
             'Answers are AI-generated; meeting events come from recent captions only.',
             style: TextStyle(color: Color(0xFF9CB8CA)),
           ),
           const SizedBox(height: 8),
           const Text(
             'For others to hear Nova, start Zoom screen broadcast with device audio. '
-            'The meeting can see this screen. Keep this page visible.',
+            'The meeting can see this screen. Voice resumes when you return to this page; your browser may require a Resume voice tap.',
             style: TextStyle(color: Color(0xFF9CB8CA)),
           ),
           const SizedBox(height: 14),
@@ -57,12 +58,14 @@ class K135zSpokenPanel extends StatelessWidget {
             children: [
               K135zFeedbackButton.filled(
                 buttonKey: const Key('nova-enable-spoken'),
-                onPressed: spoken.canEnable ? spoken.enable : null,
+                onPressed: spoken.needsAudioTap && !spoken.busy
+                    ? () => spoken.returnToPage(userGesture:true)
+                    : spoken.canEnable ? spoken.enable : null,
                 selected: spoken.enabled,
                 activeColor: const Color(0xFF63E6A1),
                 pendingLabel: 'Enabling…',
                 child: Text(
-                  spoken.enabled
+                  spoken.needsAudioTap ? 'Resume voice' : spoken.enabled
                       ? 'Spoken replies on'
                       : 'Enable spoken replies',
                 ),

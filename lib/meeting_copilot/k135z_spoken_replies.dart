@@ -30,6 +30,8 @@ class K135zSpokenReplies extends ChangeNotifier {
   bool _dead = false, enabled = false, busy = false, playing = false;
   String? _binding, _window, answer;
   String? memoryStatus;
+  bool suspended = false, needsAudioTap = false;
+  Map<String, dynamic>? _returnContext;
   final _question = <K135zTranscriptPreviewLine>[];
   static final _wake = RegExp(
     r'^(?:(?:hey|okay|ok)[,\s]+)?nova\b[\s,.:!?-]*',
@@ -76,9 +78,9 @@ class K135zSpokenReplies extends ChangeNotifier {
       _question.clear();
       _quietUntil = 0;
       enabled = true;
-      if (_watch) _timer = Timer.periodic(const Duration(milliseconds: 500), (_) => unawaited(tick()));
+      if (_watch) _timer = Timer.periodic(const Duration(milliseconds: 250), (_) => unawaited(tick()));
       capture.fastTranscript = true;
-      message = 'Spoken replies on. Say “Nova” and your question. Keep this page visible.';
+      message = 'Spoken replies on. Say “Nova” and your question.';
     } catch (_) {
       if (_current(epoch))
         stop(
@@ -92,8 +94,84 @@ class K135zSpokenReplies extends ChangeNotifier {
     }
   }
 
+  // Keep the opt-in and unlocked AudioContext across a window switch. Do not
+  // queue questions heard while away or replay an interrupted answer on return.
+  void leavePage() {
+    if (_dead) return;
+    if (suspended) {
+      // A second switch while automatic audio activation is in flight cancels
+      // that activation, but keeps the original session opt-in for the next return.
+      _epoch++; busy = false; needsAudioTap = false;
+      player.interrupt();
+      message = 'Voice will resume when you return.';
+      notifyListeners();
+      return;
+    }
+    if (!enabled) { if (busy) stop(); return; }
+    final binding = capture.responseBinding;
+    if (binding == null) { stop('Listening needs to reconnect before voice can resume.'); return; }
+    _returnContext = Map<String, dynamic>.from(binding['context']);
+    suspended = true;
+    needsAudioTap = false;
+    _epoch++;
+    busy = false; playing = false;
+    _question.clear();
+    player.interrupt();
+    cancelRequest();
+    message = 'Voice will resume when you return. Listening stays connected while your browser allows it.';
+    notifyListeners();
+  }
+
+  Future<void> returnToPage({bool userGesture = false}) async {
+    if (_dead || !enabled || !suspended || busy) return;
+    final binding = capture.responseBinding;
+    if (binding == null || !mapEquals(binding['context'], _returnContext)) {
+      stop('Listening changed while away. Tap Start listening, then enable voice.');
+      return;
+    }
+    _binding = jsonEncode(binding);
+    final epoch = _epoch;
+    busy = true;
+    message = 'Resuming Nova’s voice…';
+    notifyListeners();
+    try {
+      // On a fallback tap, create/unlock audio directly in the gesture stack.
+      final activated = userGesture ? player.enable().then((_) => player.ready) : player.resume();
+      final ready = await activated;
+      if (!_current(epoch)) return;
+      if (!ready) {
+        needsAudioTap = true;
+        message = 'Listening is connected. Tap Resume voice to let this browser play audio again.';
+        return;
+      }
+      await capture.prepareSpokenTranscript();
+      if (!_current(epoch)) return;
+      _window = capture.transcriptWindowId;
+      if (_window == null) throw StateError('Captions unavailable');
+      _seen = capture.transcriptLines.isEmpty ? 0 : capture.transcriptLines.last.sequence;
+      _question.clear(); _quietUntil = 0;
+      suspended = false; needsAudioTap = false; _returnContext = null;
+      message = 'Nova is ready again. Say “Nova” and your next question.';
+    } catch (_) {
+      if (_current(epoch)) {
+        needsAudioTap = true;
+        message = 'Tap Resume voice to try again. Listening does not need to be restarted.';
+      }
+    } finally {
+      if (!_dead && epoch == _epoch) {
+        if (!_current(epoch)) {
+          stop('Listening changed while resuming. Tap Start listening, then enable voice.');
+        } else { busy = false; notifyListeners(); }
+      }
+    }
+  }
+
   void _scan() {
     if (_dead) return;
+    if (suspended) {
+      if (!capture.isCurrent()) stop();
+      return;
+    }
     if (_binding != null && _binding != _currentBinding) {
       stop(
         'Spoken replies stopped because listening or meeting permission changed.',
@@ -102,7 +180,10 @@ class K135zSpokenReplies extends ChangeNotifier {
     }
     if (!enabled) return;
     if (!player.ready) {
-      stop('Voice was interrupted. Tap Enable spoken replies to resume.');
+      leavePage();
+      needsAudioTap = true;
+      message = 'Listening is connected. Tap Resume voice to restore browser audio.';
+      notifyListeners();
       return;
     }
     final window = capture.transcriptWindowId;
@@ -140,13 +221,14 @@ class K135zSpokenReplies extends ChangeNotifier {
 
   Future<void> tick() async {
     _scan();
-    if (enabled && !busy && !playing && _quietUntil > 0 && _now() >= _quietUntil) {
+    if (enabled && !suspended && !busy && !playing && _quietUntil > 0 && _now() >= _quietUntil) {
       _quietUntil = 0;
       message = 'Ready for your next question. Start with “Nova”.';
       notifyListeners();
     }
-    if (!enabled || busy || playing || _question.isEmpty) return;
-    if (_now() - _changedAt < 2800 && _now() - _beganAt < 12000) return;
+    if (!enabled || suspended || busy || playing || _question.isEmpty) return;
+    final bareWake = _question.length == 1 && _question.first.text.trim().replaceFirst(_wake, '').trim().isEmpty;
+    if (_now() - _changedAt < (bareWake ? 2800 : 1600) && _now() - _beganAt < 12000) return;
     final first = _question.first.sequence, last = _question.last.sequence;
     _question.clear();
     final epoch = _epoch,
@@ -200,8 +282,10 @@ class K135zSpokenReplies extends ChangeNotifier {
           stop('Could not load your selected agent’s memory and training. Enable spoken replies to retry.');
           return;
         }
-        if (code == 'K135Z_WORKSPACE_TIMEOUT') {
-          stop('Nova took too long to answer. Enable spoken replies and ask again.');
+        if (<String>{'K135Z_WORKSPACE_TIMEOUT','K135Z_RESPONSE_PROVIDER_FAILED',
+            'K135Z_RESPONSE_INVALID_DRAFT','K135Z_RESPONSE_INVALID_AUDIO',
+            'K135Z_RESPONSE_QUESTION_EXPIRED'}.contains(code)) {
+          message = 'That reply could not finish. Voice is still on—say “Nova” and ask again.';
           return;
         }
         throw StateError('Reply unavailable');
@@ -266,6 +350,7 @@ class K135zSpokenReplies extends ChangeNotifier {
     final wasActive = enabled || busy || playing;
     _epoch++;
     enabled = false;
+    suspended = false; needsAudioTap = false; _returnContext = null;
     busy = false;
     playing = false;
     capture.fastTranscript = false;

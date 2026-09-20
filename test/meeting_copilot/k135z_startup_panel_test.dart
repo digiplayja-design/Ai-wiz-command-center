@@ -34,8 +34,9 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden); await tester.pump();
       final before = f.calls.length;
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed); await tester.pumpAndSettle();
-      expect(f.calls.skip(before), ['status']);
-      await tester.tap(find.text('Start listening')); await tester.pumpAndSettle();
+      expect(f.calls.skip(before), contains('status'));
+      expect(f.calls.skip(before).where((x) => ['start','pause','stop','consent'].contains(x)), isEmpty);
+      // Returning keeps listening active without another Start tap.
       expect(capture.statusLabel, 'Listening');
       await tester.tap(find.text('Stop listening')); await tester.pumpAndSettle();
       expect(capture.consent, isFalse); expect(capture.statusLabel, 'Stopped');

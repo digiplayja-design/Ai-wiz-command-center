@@ -183,6 +183,27 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
     notifyListeners();
   }
 
+  int _pageEpoch = 0;
+  void leavePage() {
+    _pageEpoch++;
+    response.spoken.leavePage();
+    capture.leavePage();
+  }
+  Future<void>? _returning;
+  Future<void> returnToPage() => _returning ??= _restorePage().whenComplete(() { _returning = null; });
+  Future<void> _restorePage() async {
+    final epoch = _pageEpoch;
+    checkContext();
+    if (!usable) return;
+    final restored = await capture.returnToPage();
+    if (!usable || epoch != _pageEpoch) return;
+    if (restored) {
+      await response.spoken.returnToPage();
+    } else if (response.spoken.suspended) {
+      response.spoken.stop('Listening changed while away. Tap Start listening, then enable voice.');
+    }
+  }
+
   Future<void> initialize() async {
     await refresh();
     if (connected && !busy) await loadMeetings();
