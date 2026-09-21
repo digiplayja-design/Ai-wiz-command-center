@@ -1,3 +1,5 @@
+import 'contacts_crm/contacts_client.dart';
+import 'contacts_crm/contacts_screen.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -6078,6 +6080,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   // Hide inactive Utility tools until full native workflows are ready.
   // Keep active Utility tools visible.
   static const List<String> _utilityTools = <String>[
+    'Contacts CRM',
     'Voice-scribe',
     'Copy Box',
     'Background remover',
@@ -11147,7 +11150,19 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
+  Future<void> _openContactsCrm() async {
+    if (_currentTier.trim().toLowerCase() != 'enterprise') return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
+      ContactsScreen(client: ContactsClient(backendBaseUrl: kKorlixBackendBaseUrl,
+        headersBuilder: _authHeaders))));
+  }
+
   void _selectUtilityTool(String tool) {
+    if (tool == 'Contacts CRM') {
+      unawaited(_openContactsCrm());
+      return;
+    }
+
     // KORLIX_BUILD109_HIDE_INACTIVE_UTILITY_GUARD
     if (_hiddenInactiveUtilityTools.contains(tool)) {
       setState(() {
@@ -14251,6 +14266,7 @@ Make the entire output professional, well-structured using Markdown, and product
     };
 
     String statusFor(String tool) {
+      if (tool == 'Contacts CRM') return 'Enterprise contacts, imports and Nova connections';
       if (tool == 'Voice-scribe') {
         return 'Transcribe speech into saved voice boxes';
       }
@@ -14387,7 +14403,7 @@ Make the entire output professional, well-structured using Markdown, and product
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: _utilityTools.map((tool) {
+            children: _utilityTools.where((tool) => tool != 'Contacts CRM' || _currentTier.trim().toLowerCase() == 'enterprise').map((tool) {
               final selected = selectedTool == tool;
               final status = statusFor(tool);
               final statusColor = statusColorFor(tool);

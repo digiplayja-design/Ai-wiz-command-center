@@ -1,3 +1,5 @@
+import '../contacts_crm/contacts_client.dart';
+import '../contacts_crm/contacts_screen.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -763,6 +765,15 @@ class _KorlixLiveConvoAgentHubSheetState
                         ),
                       ),
                     // KORLIX_AGENT_EMAIL_BUTTON_BUILD133_END
+                    if (widget.meetingCopilotEnterpriseEnabled && agent.toolIds.contains('agent_email'))
+                      OutlinedButton.icon(
+                        onPressed: enabled ? () => Navigator.of(context).push(MaterialPageRoute<void>(
+                          builder: (_) => ContactsScreen(client: ContactsClient(
+                            backendBaseUrl: widget.client.backendBaseUrl,
+                            headersBuilder: widget.client.headersBuilder)))) : null,
+                        icon: const Icon(Icons.contacts_outlined),
+                        label: const Text('Contacts CRM'),
+                      ),
                     OutlinedButton.icon(
                       onPressed: enabled
                           ? () {
