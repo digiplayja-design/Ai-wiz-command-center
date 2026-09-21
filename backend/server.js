@@ -11,6 +11,8 @@ import crypto from "crypto";
 import cors from "cors";
 import dotenv from "dotenv";
 import OpenAI from "openai";
+import korlixAstra from "./korlix_astra.cjs";
+const {createTextResponse} = korlixAstra;
 import { toFile } from "openai/uploads";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -1515,7 +1517,7 @@ async function createAdvancedFileResponse({
     process.env.OPENAI_DOCUMENT_MODEL ||
     process.env.OPENAI_ULTRA_MODEL ||
     process.env.OPENAI_MODEL ||
-    "gpt-4o-mini";
+    "gpt-6-astra";
 
   const fileName = String(file.originalname || "uploaded-file");
   const mimeType = getUploadMimeType(file);
@@ -1531,7 +1533,7 @@ async function createAdvancedFileResponse({
   });
 
   if (isImageUpload(file)) {
-    return client.responses.create({
+    return createTextResponse(client, {
       model,
       input: [
         {
@@ -1552,7 +1554,7 @@ async function createAdvancedFileResponse({
   }
 
   if (isPdfUpload(file)) {
-    return client.responses.create({
+    return createTextResponse(client, {
       model,
       input: [
         {
@@ -1573,7 +1575,7 @@ async function createAdvancedFileResponse({
     });
   }
 
-  return client.responses.create({
+  return createTextResponse(client, {
     model,
     input: prompt,
   });
@@ -1584,14 +1586,14 @@ function getOpenAIModelForTier(profile, options = {}) {
   const tier = String(profile?.tier || "basic").toLowerCase();
 
   if (tier === "ultra") {
-    return process.env.OPENAI_ULTRA_MODEL || "gpt-5.5";
+    return process.env.OPENAI_ULTRA_MODEL || "gpt-6-astra";
   }
 
   if (tier === "enterprise") {
     return (
       process.env.OPENAI_ENTERPRISE_MODEL ||
       process.env.OPENAI_ULTRA_MODEL ||
-      "gpt-5.5"
+      "gpt-6-astra"
     );
   }
 
@@ -1599,14 +1601,14 @@ function getOpenAIModelForTier(profile, options = {}) {
     return (
       process.env.OPENAI_PRO_MODEL ||
       process.env.OPENAI_MODEL ||
-      "gpt-4o-mini"
+      "gpt-6-astra"
     );
   }
 
   return (
     process.env.OPENAI_BASIC_MODEL ||
     process.env.OPENAI_MODEL ||
-    "gpt-4o-mini"
+    "gpt-6-astra"
   );
 }
 
@@ -2023,7 +2025,7 @@ async function createOpenAIResponse(client, { model, input, useSearch }) {
     request.tool_choice = "required";
   }
 
-  return client.responses.create(request);
+  return createTextResponse(client, request);
 }
 
 
@@ -4274,12 +4276,12 @@ Instructions:
       }
     }
 
-    const response = await client.responses.create({
+    const response = await createTextResponse(client, {
       model:
         process.env.OPENAI_FILE_MODEL ||
         process.env.OPENAI_MODEL ||
         process.env.OPENAI_CHAT_MODEL ||
-        "gpt-4o-mini",
+        "gpt-6-astra",
       input: [
         {
           role: "user",
@@ -4456,7 +4458,7 @@ app.post("/api/analyze-document", documentUpload.single("file"), async (req, res
     process.env.OPENAI_DOCUMENT_MODEL ||
     process.env.OPENAI_ULTRA_MODEL ||
     process.env.OPENAI_MODEL ||
-    "gpt-4o-mini";
+    "gpt-6-astra";
 
         response = await createOpenAIResponse(client, {
           model,
@@ -4490,7 +4492,7 @@ app.post("/api/analyze-document", documentUpload.single("file"), async (req, res
     process.env.OPENAI_DOCUMENT_MODEL ||
     process.env.OPENAI_ULTRA_MODEL ||
     process.env.OPENAI_MODEL ||
-    "gpt-4o-mini";
+    "gpt-6-astra";
 
       response = await createOpenAIResponse(client, {
         model,
@@ -4615,7 +4617,7 @@ app.post("/api/generate", async (req, res) => {
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    const normalModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
+    const normalModel = process.env.OPENAI_MODEL || "gpt-6-astra";
     const searchModel = process.env.OPENAI_SEARCH_MODEL || normalModel;
 
     const modeInstruction = fileRequested
@@ -4914,8 +4916,8 @@ IMPORTANT RULES:
       }
     }
 
-    const response = await client.responses.create({
-      model: process.env.OPENAI_FILE_MODEL || process.env.OPENAI_MODEL || "gpt-4o-mini",
+    const response = await createTextResponse(client, {
+      model: process.env.OPENAI_FILE_MODEL || process.env.OPENAI_MODEL || "gpt-6-astra",
       input: [{ role: "user", content }],
     });
 
@@ -6248,8 +6250,8 @@ function korlixLiveConvoAgentModelProofV1() {
             process.env.OPENAI_FILE_MODEL ||
             process.env.OPENAI_MODEL ||
             process.env.OPENAI_CHAT_MODEL ||
-            "gpt-5.6",
-          ).trim() || "gpt-5.6"
+            "gpt-6-astra",
+          ).trim() || "gpt-6-astra"
         );
 
   return {
@@ -6261,7 +6263,7 @@ function korlixLiveConvoAgentModelProofV1() {
     liveDocsDocumentModel,
 
     liveDocsReasoningEffort:
-      /^(gpt-5|o[1-9])/i.test(liveDocsDocumentModel)
+      /^(gpt-[56]|o[1-9])/i.test(liveDocsDocumentModel)
         ? "high"
         : "",
 
@@ -7963,7 +7965,7 @@ app.post(
         });
 
       const response =
-        await openai.responses.create({
+        await createTextResponse(openai, {
           model:
             process.env.OPENAI_AGENT_TRAINING_FILE_MODEL ||
             process.env.OPENAI_AGENT_MEMORY_FILE_MODEL ||
@@ -7971,7 +7973,7 @@ app.post(
             process.env.OPENAI_DOCUMENT_MODEL ||
             process.env.OPENAI_MODEL ||
             process.env.OPENAI_CHAT_MODEL ||
-            "gpt-4o-mini",
+            "gpt-6-astra",
 
           input: [
             {
@@ -8281,14 +8283,14 @@ app.post(
         });
 
       const response =
-        await openai.responses.create({
+        await createTextResponse(openai, {
           model:
             process.env.OPENAI_AGENT_MEMORY_FILE_MODEL ||
             process.env.OPENAI_FILE_MODEL ||
             process.env.OPENAI_DOCUMENT_MODEL ||
             process.env.OPENAI_MODEL ||
             process.env.OPENAI_CHAT_MODEL ||
-            "gpt-4o-mini",
+            "gpt-6-astra",
 
           input: [
             {
@@ -12448,7 +12450,7 @@ function korlixLiveDocsDocumentModel() {
     }
   }
 
-  return "gpt-5.6";
+  return "gpt-6-astra";
 }
 
 function korlixLiveDocsDocumentModelRequest({ input }) {
@@ -12464,7 +12466,7 @@ function korlixLiveDocsDocumentModelRequest({ input }) {
     },
   };
 
-  if (/^(gpt-5|o[1-9])/i.test(model)) {
+  if (/^(gpt-[56]|o[1-9])/i.test(model)) {
     request.reasoning = { effort: "high" };
   }
 
@@ -12538,7 +12540,7 @@ async function korlixLiveDocsBuildReport({
     }
   }
 
-  const response = await client.responses.create(
+  const response = await createTextResponse(client,
     korlixLiveDocsDocumentModelRequest({
       input: [
         {

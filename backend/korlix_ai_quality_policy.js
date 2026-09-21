@@ -5,18 +5,18 @@ const KORLIX_OPENAI_QUALITY = Object.freeze({
     process.env.KORLIX_OPENAI_PREMIUM_MODEL ||
     process.env.KORLIX_OPENAI_TEXT_MODEL ||
     process.env.OPENAI_MODEL ||
-    'gpt-5.5-pro',
+    'gpt-6-astra',
 
   textModel:
     process.env.KORLIX_OPENAI_TEXT_MODEL ||
     process.env.KORLIX_OPENAI_PREMIUM_MODEL ||
     process.env.OPENAI_MODEL ||
-    'gpt-5.5-pro',
+    'gpt-6-astra',
 
   streamingModel:
     process.env.KORLIX_OPENAI_STREAMING_MODEL ||
     process.env.KORLIX_OPENAI_TEXT_MODEL ||
-    'gpt-5.5',
+    'gpt-6-astra',
 
   imageModel:
     process.env.KORLIX_OPENAI_IMAGE_MODEL ||

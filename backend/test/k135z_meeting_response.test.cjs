@@ -30,7 +30,9 @@ function fixture() {
 }
 test('draft uses server captions only, is partial, and does not synthesize or play audio',async()=>{
   const f=fixture(),r=await f.draft();assert.equal(r.draft.coverage,'partial');assert.equal(f.calls.length,1);
-  const body=f.calls[0].body;assert.equal(body.store,false);assert.equal(body.max_completion_tokens,220);
+  const body=f.calls[0].body;assert.equal(body.store,false);assert.equal(body.model,'gpt-6-astra');
+  assert.equal(body.max_completion_tokens,8192);assert.equal(body.reasoning_effort,'low');
+  assert.equal('temperature' in body,false);
   assert.match(body.messages[0].content,/untrusted/);assert.match(body.messages[1].content,/review the draft/);
   assert.equal(body.messages[1].content.includes(user),false);
 });

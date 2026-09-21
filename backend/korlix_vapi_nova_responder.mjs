@@ -1,3 +1,6 @@
+import korlixAstra from './korlix_astra.cjs';
+const {astraRequest} = korlixAstra;
+
 const DEFAULT_BASE_URL =
   'https://api.openai.com/v1';
 
@@ -634,7 +637,7 @@ export function createKorlixVapiNovaRuntime(
             },
 
             body:
-              JSON.stringify({
+              JSON.stringify(astraRequest({
                 model,
 
                 instructions:
@@ -656,7 +659,7 @@ export function createKorlixVapiNovaRuntime(
 
                 store:
                   false,
-              }),
+              })),
 
             signal:
               controller.signal,
@@ -673,7 +676,7 @@ export function createKorlixVapiNovaRuntime(
         payload = null;
       }
 
-      if (!response.ok) {
+      if (!response.ok || ['incomplete', 'failed'].includes(payload?.status)) {
         const providerMessage =
           safeProviderMessage(
             payload
