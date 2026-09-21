@@ -1,16 +1,16 @@
 const String kKorlixOpenAIPremiumModel = String.fromEnvironment(
   'KORLIX_OPENAI_PREMIUM_MODEL',
-  defaultValue: 'gpt-5.5-pro',
+  defaultValue: 'gpt-6-astra',
 );
 
 const String kKorlixOpenAITextModel = String.fromEnvironment(
   'KORLIX_OPENAI_TEXT_MODEL',
-  defaultValue: 'gpt-5.5-pro',
+  defaultValue: 'gpt-6-astra',
 );
 
 const String kKorlixOpenAIStreamingModel = String.fromEnvironment(
   'KORLIX_OPENAI_STREAMING_MODEL',
-  defaultValue: 'gpt-5.5',
+  defaultValue: 'gpt-6-astra',
 );
 
 const String kKorlixOpenAIImageModel = String.fromEnvironment(
@@ -26,10 +26,10 @@ const String kKorlixOpenAIReasoningEffort = String.fromEnvironment(
 const String kKorlixProductionQualityDirective = '''
 KORLIX AI PRODUCTION QUALITY POLICY:
 Use the highest-quality available OpenAI model path for this feature.
-Preferred text/reasoning model: gpt-5.5-pro.
-Preferred streaming fallback model: gpt-5.5.
-Preferred image model: gpt-image-2.
-Reasoning effort: xhigh where supported.
+Preferred text/reasoning model: $kKorlixOpenAIPremiumModel.
+Preferred streaming fallback model: $kKorlixOpenAIStreamingModel.
+Preferred image model: $kKorlixOpenAIImageModel.
+Reasoning effort: $kKorlixOpenAIReasoningEffort where supported.
 Create production-ready, premium, precise, complete, polished output.
 Never give shallow, placeholder, generic, unfinished, or low-quality output.
 For app creation, generate complete product-grade architecture, UI, flows, copy, testing notes, deployment notes, and edge-case handling.

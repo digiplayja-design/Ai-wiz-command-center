@@ -361,7 +361,7 @@ class _KorlixLiveConvoAgentHubSheetState
   }
 
   Widget _buildModelProofCard() {
-    final provesGpt56 = _modelProof.provesGpt56DocumentReasoning;
+    final provesAstra = _modelProof.provesAstraDocumentReasoning;
 
     final liveConvoModel = _modelProof.liveConvoModel.trim().isEmpty
         ? 'Unavailable'
@@ -380,7 +380,7 @@ class _KorlixLiveConvoAgentHubSheetState
               '$documentModel · '
               '$reasoningEffort';
 
-    final proofColor = provesGpt56
+    final proofColor = provesAstra
         ? const Color(0xFF62D6A7)
         : const Color(0xFFF2C14E);
 
@@ -398,7 +398,7 @@ class _KorlixLiveConvoAgentHubSheetState
           Row(
             children: [
               Icon(
-                provesGpt56
+                provesAstra
                     ? Icons.verified_rounded
                     : Icons.info_outline_rounded,
                 color: proofColor,
@@ -406,7 +406,7 @@ class _KorlixLiveConvoAgentHubSheetState
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
-                  provesGpt56
+                  provesAstra
                       ? 'Runtime model '
                             'proof verified'
                       : 'Runtime model proof',

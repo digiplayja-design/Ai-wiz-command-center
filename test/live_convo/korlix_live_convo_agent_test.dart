@@ -2,6 +2,15 @@ import 'package:ai_wiz_command_center/live_convo/korlix_live_convo_agent.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('Astra document proof requires the server to report Astra and high reasoning', () {
+    for (final value in <Map<String, dynamic>>[
+      <String, dynamic>{},
+      <String, dynamic>{'liveDocsDocumentModel': 'gpt-5.6', 'liveDocsReasoningEffort': 'high'},
+      <String, dynamic>{'liveDocsDocumentModel': 'gpt-6-astra', 'liveDocsReasoningEffort': 'low'},
+    ]) {
+      expect(KorlixLiveConvoAgentModelProof.fromJson(value).provesAstraDocumentReasoning, isFalse);
+    }
+  });
   group('Korlix LIVE CONVO Agent Hub model', () {
     test('provides the five built-in trainable fallback agents', () {
       final agents =
@@ -105,7 +114,7 @@ void main() {
           ],
           'modelProof': <String, dynamic>{
             'liveConvoModel': 'gpt-realtime-2.1',
-            'liveDocsDocumentModel': 'gpt-5.6',
+            'liveDocsDocumentModel': 'gpt-6-astra',
             'liveDocsReasoningEffort': 'high',
             'deterministicAuditEngine': true,
           },
@@ -124,10 +133,10 @@ void main() {
       );
       expect(
         runtime.modelProof.liveDocsDocumentModel,
-        'gpt-5.6',
+        'gpt-6-astra',
       );
       expect(
-        runtime.modelProof.provesGpt56DocumentReasoning,
+        runtime.modelProof.provesAstraDocumentReasoning,
         isTrue,
       );
       expect(
