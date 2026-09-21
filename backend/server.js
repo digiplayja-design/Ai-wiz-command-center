@@ -1,3 +1,4 @@
+import { registerContactsCrm } from './contacts_crm/routes.mjs'; // K137_ENTERPRISE_CONTACTS
 // K135Z_GATE5_ESM_IMPORTS_BEGIN
 import k135zGate5Routes from "./k135z_zoom/zoom_routes.cjs";
 import k135zGate5Repository from "./k135z_zoom/b5b_repository.cjs";
@@ -13075,6 +13076,8 @@ app.post(
 // KORLIX_LIVE_DOCS_GENERATION_BUILD131_END
 
 // KORLIX_AGENT_EMAIL_DRAFT_ROUTES_BUILD133_INSTALL_START
+registerContactsCrm(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }); // K137_ENTERPRISE_CONTACTS
+
 installKorlixAgentEmailDraftRoutes(app, {
   environment: process.env,
   supabaseAdmin,
