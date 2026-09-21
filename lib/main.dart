@@ -6078,6 +6078,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   // Hide inactive Utility tools until full native workflows are ready.
   // Keep active Utility tools visible.
   static const List<String> _utilityTools = <String>[
+    'Voice-scribe',
+    'Copy Box',
     'Background remover',
     'Songwriter',
   ];
@@ -11158,6 +11160,13 @@ Make the entire output professional, well-structured using Markdown, and product
       return;
     }
 
+    if (tool == 'Voice-scribe' || tool == 'Copy Box') {
+      unawaited(_openUtilityWorkspace(
+        tool == 'Voice-scribe' ? 'voice_scribe' : 'copybox',
+      ));
+      return;
+    }
+
     setState(() {
       if (_selectedUtilityTool == tool) {
         _clearUtilitySelection();
@@ -13291,8 +13300,10 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
-  Future<void> _showCustomAccessSheet() async {
-    await _refreshCustomAccess();
+  Future<void> _showCustomAccessSheet({bool refresh = true}) async {
+    if (refresh) {
+      await _refreshCustomAccess();
+    }
 
     if (!mounted) {
       return;
@@ -13509,22 +13520,21 @@ Make the entire output professional, well-structured using Markdown, and product
   }
   // KORLIX_CUSTOM_ACCESS_FRONTEND_V1_END
 
-  // KORLIX_CUSTOM_ACCESS_GATE_BUTTON_V1
-  Widget _buildEnterpriseCopyboxButton() {
-    final hasCustomAccess =
-        _customAccessHasFeature('copybox') ||
-        _customAccessHasFeature('voice_scribe');
+  Future<void> _openUtilityWorkspace(String featureKey) async {
+    if (_loading || _customAccessLoading) {
+      return;
+    }
 
-    return _buildKorlixBelowInputBeveledButton(
-      icon: hasCustomAccess
-          ? Icons.verified_user_rounded
-          : Icons.business_center_rounded,
-      label: 'Custom Access',
-      onPressed: _loading ? null : () => unawaited(_showCustomAccessSheet()),
-      active: hasCustomAccess,
-      success: hasCustomAccess,
-      locked: false,
-    );
+    await _refreshCustomAccess(showErrors: true);
+    if (!mounted || _customAccessMessage != null) {
+      return;
+    }
+
+    if (_customAccessHasFeature(featureKey)) {
+      await _openCustomAccessFeature(featureKey);
+    } else {
+      await _showCustomAccessSheet(refresh: false);
+    }
   }
 
   Widget _buildMusicStudioButton() {
@@ -14241,6 +14251,14 @@ Make the entire output professional, well-structured using Markdown, and product
     };
 
     String statusFor(String tool) {
+      if (tool == 'Voice-scribe') {
+        return 'Transcribe speech into saved voice boxes';
+      }
+
+      if (tool == 'Copy Box') {
+        return 'Open your saved text boxes';
+      }
+
       if (guidedOnlyTools.contains(tool)) {
         return 'Guided workflow — not a full native tool yet';
       }
@@ -14398,7 +14416,9 @@ Make the entire output professional, well-structured using Markdown, and product
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  onPressed: _loading ? null : () => _selectUtilityTool(tool),
+                  onPressed: _loading || _customAccessLoading
+                      ? null
+                      : () => _selectUtilityTool(tool),
                 ),
               );
             }).toList(),
@@ -17450,7 +17470,6 @@ Make the entire output professional, well-structured using Markdown, and product
                       onPressed: _loading ? null : _showLocatorOptions,
                       accentColor: skin.primary,
                     ),
-                    _buildEnterpriseCopyboxButton(),
                     _buildMusicStudioButton(),
                     ..._korlixMusicDistributionPrelaunchButtonSlots(),
                     _buildUtilityButton(),
