@@ -1590,6 +1590,29 @@ test("preapproved Autopilot trigger creates and sends from rule scope only", asy
   assert.equal(provider.calls[0].message.authorization_type, "preapproved_rule");
 });
 
+test("server workflows can target one approved rule without running another rule on the same trigger", async () => {
+  const { service, store, provider } = fixture();
+  seedSettings(store, { operating_mode: "autopilot" });
+  seedRecipient(store);
+  let target;
+  for (let i = 0; i < 2; i++) {
+    target = (await service.createRule({ userId: OWNER, agentId: AGENT, body: {
+      confirmed: true, preapproved: true, confirmationNonce: "workflow-confirmation-123",
+      name: "Workforce " + i, triggerKey: "workforce.shared", recipientIds: [RECIPIENT],
+      subjectTemplate: "Approved workforce notice", textTemplate: "{{report}}",
+      sendMode: "autopilot", enabled: true, allowedDays: [4],
+    } })).rule;
+  }
+  const result = await service.runAutopilot({ body: { ruleId: target.id, triggerKey: "workforce.shared", eventId: "workforce-targeted", variables: { report: "A work update is due." } } });
+  assert.equal(result.matchedRuleCount, 1);
+  assert.equal(result.sentCount, 1);
+  assert.equal(provider.calls.length, 1);
+  assert.equal(provider.calls[0].message.rule_id, target.id);
+  const missing = await service.runAutopilot({ body: { ruleId: OTHER, triggerKey: "workforce.shared", eventId: "workforce-missing", variables: {} } });
+  assert.equal(missing.matchedRuleCount, 0);
+  assert.equal(provider.calls.length, 1);
+});
+
 test("Autopilot trigger replay is idempotent and never sends twice", async () => {
   const { service, store, provider } = fixture();
   seedSettings(store, { operating_mode: "autopilot" });
@@ -1714,6 +1737,6 @@ for (const entry of tests) {
   console.log(`PASS ${passed}: ${entry.name}`);
 }
 
-assert.equal(passed, 39);
+assert.equal(passed, 40);
 console.log(`KORLIX_AGENT_EMAIL_DELIVERY_TEST_COUNT=${passed}`);
 console.log("KORLIX_AGENT_EMAIL_DELIVERY_TEST_PASS=true");
