@@ -13080,7 +13080,7 @@ app.post(
 // KORLIX_AGENT_EMAIL_DRAFT_ROUTES_BUILD133_INSTALL_START
 registerContactsCrm(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }); // K137_ENTERPRISE_CONTACTS
 registerWorkforce(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }); // K138_WORKFORCE
-registerFunnels(app, { database: supabaseAdmin, requireUser }); // K139_FUNNEL_STUDIO
+registerFunnels(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }); // K140_FUNNEL_FOLLOWUPS
 
 installKorlixAgentEmailDraftRoutes(app, {
   environment: process.env,
