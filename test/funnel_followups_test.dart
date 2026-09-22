@@ -23,6 +23,7 @@ Map<String, dynamic> fixture() => {
   },
   'page_state': 'published',
   'email_ready': true,
+  'scheduling_ready': true,
   'outbound_calling_enabled': false,
   'total': 2,
   'offset': 0,
@@ -95,6 +96,17 @@ void main() {
         if (r.method == 'POST' && r.url.path.endsWith('/send')) {
           data['tasks'][0]['state'] = 'sent';
           data['tasks'][0]['version'] = 2;
+        }
+        if (r.method == 'POST' && r.url.path.endsWith('/schedule')) {
+          data['tasks'][0]['state'] = 'scheduled';
+          data['tasks'][0]['version'] = 2;
+          data['tasks'][0]['scheduled_for'] = jsonDecode(
+            r.body,
+          )['scheduled_for'];
+        }
+        if (r.method == 'POST' && r.url.path.endsWith('/cancelSchedule')) {
+          data['tasks'][0]['state'] = 'review';
+          data['tasks'][0]['version'] = 3;
         }
         if (r.method == 'POST' && r.url.path.endsWith('/settings')) {
           data['settings'] = jsonDecode(r.body);
@@ -207,4 +219,72 @@ void main() {
       expect(jsonDecode(p.body)['state'], 'done');
     },
   );
+  for (final size in [const Size(1440, 1100), const Size(390, 844)]) {
+    testWidgets(
+      'Scheduled replies require approval and can be cancelled at ${size.width}',
+      (t) async {
+        final data = fixture(), calls = <http.Request>[];
+        await render(t, data, calls, size: size);
+        await t.ensureVisible(find.text('Schedule reply'));
+        await t.tap(find.text('Schedule reply'));
+        await t.pumpAndSettle();
+        expect(find.text('Schedule with NOVA'), findsOneWidget);
+        final approve = find.widgetWithText(FilledButton, 'Approve & schedule');
+        expect(t.widget<FilledButton>(approve).onPressed, isNull);
+        expect(calls.where((r) => r.method == 'POST'), isEmpty);
+        await t.ensureVisible(find.byType(CheckboxListTile));
+        await t.tap(find.byType(CheckboxListTile));
+        await t.pumpAndSettle();
+        await t.tap(approve);
+        await t.pumpAndSettle();
+        final post = calls.singleWhere((r) => r.method == 'POST');
+        final body = jsonDecode(post.body);
+        expect(post.url.path, endsWith('/schedule'));
+        expect(body['confirmed'], true);
+        expect(body['task_id'], 'email-task');
+        expect(body['version'], 1);
+        expect(DateTime.parse(body['scheduled_for']).isUtc, true);
+        expect(
+          DateTime.parse(body['scheduled_for']).isAfter(DateTime.now()),
+          true,
+        );
+        expect(find.text('APPROVED · SCHEDULED'), findsOneWidget);
+        await t.ensureVisible(find.text('Cancel scheduled reply'));
+        await t.tap(find.text('Cancel scheduled reply'));
+        await t.pumpAndSettle();
+        expect(calls.where((r) => r.method == 'POST').length, 1);
+        await t.tap(
+          find.widgetWithText(FilledButton, 'Cancel scheduled reply'),
+        );
+        await t.pumpAndSettle();
+        final cancel = calls.lastWhere((r) => r.method == 'POST');
+        expect(cancel.url.path, endsWith('/cancelSchedule'));
+        expect(jsonDecode(cancel.body)['version'], 2);
+        expect(find.text('READY FOR REVIEW'), findsWidgets);
+        expect(t.takeException(), isNull);
+      },
+    );
+  }
+  testWidgets('NOVA Autopilot permission is required to schedule', (t) async {
+    final data = fixture(), calls = <http.Request>[];
+    data['scheduling_ready'] = false;
+    await render(t, data, calls);
+    expect(
+      t
+          .widget<OutlinedButton>(
+            find.widgetWithText(OutlinedButton, 'Schedule reply'),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      t
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Review & send'),
+          )
+          .onPressed,
+      isNotNull,
+    );
+    expect(calls.where((r) => r.method == 'POST'), isEmpty);
+  });
 }

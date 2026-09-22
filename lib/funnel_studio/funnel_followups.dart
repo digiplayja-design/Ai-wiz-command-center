@@ -276,8 +276,8 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
     if (!await _confirm(
           enable ? 'Enable this workflow?' : 'Pause this workflow?',
           enable
-              ? 'New inquiries will create follow-up tasks automatically. Emails are sent only when you review a task and press Send. Calls remain review tasks. Existing inquiries are added individually from the Leads tab.'
-              : 'Stop creating new tasks and prevent email sends from this workflow. Existing tasks remain available for review. An email already accepted by the provider cannot be recalled.',
+              ? 'New inquiries will create follow-up tasks automatically. Review each reply to send now or approve a future send time. Calls remain review tasks. Existing inquiries are added individually from the Leads tab.'
+              : 'Stop new tasks and cancel pending scheduled replies. These return to review and require fresh approval. Emails already sending may finish.',
           enable ? 'Enable workflow' : 'Pause workflow',
         ) ||
         !mounted) {
@@ -341,14 +341,26 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
     if (result != null && mounted) await _post('edit', result);
   }
 
-  Future<void> _send(Map<String, dynamic> task) async {
+  Future<void> _send(Map<String, dynamic> task, {bool schedule = false}) async {
+    final due = DateTime.tryParse('${task['due_at']}')?.toLocal();
+    var selected = DateTime.now().add(const Duration(hours: 1));
+    if (due != null && due.isAfter(selected)) selected = due;
+    selected = DateTime(
+      selected.year,
+      selected.month,
+      selected.day,
+      selected.hour,
+      selected.minute,
+    ).add(const Duration(minutes: 1));
     bool acknowledged = false;
     final result =
         await showDialog<bool>(
           context: context,
           builder: (c) => StatefulBuilder(
             builder: (c, set) => AlertDialog(
-              title: const Text('Review & send with NOVA'),
+              title: Text(
+                schedule ? 'Schedule with NOVA' : 'Review & send with NOVA',
+              ),
               content: SizedBox(
                 width: 620,
                 child: SingleChildScrollView(
@@ -374,15 +386,95 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
                         style: const TextStyle(height: 1.6),
                       ),
                       const SizedBox(height: 20),
+                      if (schedule) ...[
+                        Text(
+                          'Send: ${_date(selected.toIso8601String())} (${selected.timeZoneName}, device local time)',
+                          style: const TextStyle(
+                            color: WfStyle.cyan,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final hours in [1, 4, 24])
+                              OutlinedButton(
+                                onPressed: () => set(() {
+                                  selected = DateTime.now().add(
+                                    Duration(hours: hours),
+                                  );
+                                  if (due != null && due.isAfter(selected)) {
+                                    selected = due;
+                                  }
+                                  acknowledged = false;
+                                }),
+                                child: Text(
+                                  hours == 24
+                                      ? 'Tomorrow'
+                                      : 'In $hours hour${hours == 1 ? '' : 's'}',
+                                ),
+                              ),
+                            OutlinedButton.icon(
+                              icon: const Icon(Icons.calendar_month_outlined),
+                              label: const Text('Choose date & time'),
+                              onPressed: () async {
+                                final now = DateTime.now();
+                                final date = await showDatePicker(
+                                  context: c,
+                                  initialDate: selected,
+                                  firstDate: now,
+                                  lastDate: now.add(const Duration(days: 30)),
+                                );
+                                if (date == null || !c.mounted) return;
+                                final time = await showTimePicker(
+                                  context: c,
+                                  initialTime: TimeOfDay.fromDateTime(selected),
+                                );
+                                if (time == null || !c.mounted) return;
+                                set(() {
+                                  selected = DateTime(
+                                    date.year,
+                                    date.month,
+                                    date.day,
+                                    time.hour,
+                                    time.minute,
+                                  );
+                                  acknowledged = false;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'NOVA checks about once a minute, even when this page is closed. Quiet hours and sending limits still apply. Cancel before sending starts.',
+                          style: TextStyle(color: WfStyle.muted, height: 1.5),
+                        ),
+                        if (selected.isBefore(
+                              DateTime.now().add(const Duration(minutes: 2)),
+                            ) ||
+                            (due != null && selected.isBefore(due)))
+                          const Text(
+                            'Choose a time at least two minutes from now and after this task is due.',
+                            style: TextStyle(color: WfStyle.gold),
+                          ),
+                        const SizedBox(height: 18),
+                      ],
                       CheckboxListTile(
                         contentPadding: EdgeInsets.zero,
                         value: acknowledged,
                         onChanged: (v) => set(() => acknowledged = v == true),
-                        title: const Text(
-                          'I reviewed this recipient and message and approve this response to their inquiry.',
+                        title: Text(
+                          schedule
+                              ? 'I reviewed this recipient, message, and time. I authorize NOVA to send this one reply automatically.'
+                              : 'I reviewed this recipient and message and approve this response to their inquiry.',
                         ),
-                        subtitle: const Text(
-                          'This links an eligible contact to NOVA Email if needed and sends one email. Submitted contact details are unverified.',
+                        subtitle: Text(
+                          schedule
+                              ? 'Submitted contact details are unverified. Changes to contact permission, page or workflow can stop this schedule.'
+                              : 'This links an eligible contact to NOVA Email if needed and sends one email. Submitted contact details are unverified.',
                         ),
                       ),
                     ],
@@ -395,9 +487,21 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
                   child: const Text('Cancel'),
                 ),
                 FilledButton.icon(
-                  onPressed: acknowledged ? () => Navigator.pop(c, true) : null,
+                  onPressed:
+                      acknowledged &&
+                          (!schedule ||
+                              (selected.isAfter(
+                                    DateTime.now().add(
+                                      const Duration(minutes: 2),
+                                    ),
+                                  ) &&
+                                  (due == null || !selected.isBefore(due))))
+                      ? () => Navigator.pop(c, true)
+                      : null,
                   icon: const Icon(Icons.send_outlined),
-                  label: const Text('Send email now'),
+                  label: Text(
+                    schedule ? 'Approve & schedule' : 'Send email now',
+                  ),
                 ),
               ],
             ),
@@ -405,12 +509,28 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
         ) ??
         false;
     if (result && mounted) {
-      await _post('send', {
+      await _post(schedule ? 'schedule' : 'send', {
         'task_id': task['id'],
         'version': task['version'],
         'confirmed': true,
+        if (schedule) 'scheduled_for': selected.toUtc().toIso8601String(),
       });
     }
+  }
+
+  Future<void> _cancelSchedule(Map<String, dynamic> task) async {
+    if (!await _confirm(
+          'Cancel scheduled reply?',
+          'Return this reply to review. Cancellation is available until sending starts.',
+          'Cancel scheduled reply',
+        ) ||
+        !mounted) {
+      return;
+    }
+    await _post('cancelSchedule', {
+      'task_id': task['id'],
+      'version': task['version'],
+    });
   }
 
   Future<void> _resolve(Map<String, dynamic> t, String outcome) async {
@@ -447,7 +567,8 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
         _data?['page_state'] == 'published';
     final status =
         {
-          'review': due ? 'Ready for review' : 'Scheduled',
+          'review': due ? 'Ready for review' : 'Review opens later',
+          'scheduled': 'Approved · scheduled',
           'processing': 'Sending',
           'needs_review': 'Check delivery',
           'sent': 'Provider accepted',
@@ -545,6 +666,17 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
                   style: TextStyle(color: WfStyle.gold),
                 ),
               ),
+            if (t['state'] == 'scheduled')
+              Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: Text(
+                  'Approved send time: ${_date(t['scheduled_for'])} · ${DateTime.tryParse('${t['scheduled_for']}')?.toLocal().timeZoneName ?? 'local time'}',
+                  style: const TextStyle(
+                    color: WfStyle.cyan,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             if ('${t['note'] ?? ''}'.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 14),
@@ -558,6 +690,12 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
               spacing: 10,
               runSpacing: 10,
               children: [
+                if (t['state'] == 'scheduled')
+                  _button(
+                    'Cancel scheduled reply',
+                    Icons.event_busy_outlined,
+                    () => _cancelSchedule(t),
+                  ),
                 if (review && email) ...[
                   _button(
                     'Review & send',
@@ -567,6 +705,14 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
                         : null,
                     primary: true,
                   ),
+                  if (t['message_id'] == null)
+                    _button(
+                      'Schedule reply',
+                      Icons.schedule_send_outlined,
+                      allowed && active && _data?['scheduling_ready'] == true
+                          ? () => _send(t, schedule: true)
+                          : null,
+                    ),
                   if (t['message_id'] == null)
                     _button(
                       'Edit response',
@@ -631,6 +777,7 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
                     color: s?['enabled'] == true ? WfStyle.cyan : WfStyle.gold,
                   ),
                   WfBadge('${counts['open'] ?? 0} OPEN'),
+                  WfBadge('${counts['scheduled'] ?? 0} SCHEDULED'),
                   WfBadge('${counts['sent'] ?? 0} EMAILS ACCEPTED'),
                   WfBadge('${counts['completed'] ?? 0} REVIEWED / DISMISSED'),
                 ],
@@ -667,6 +814,13 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
                 _data?['email_ready'] == true
                     ? 'NOVA Email connected · existing sending limits and quiet hours apply.'
                     : '${_data?['email_reason'] ?? 'Checking NOVA Email…'}',
+                style: const TextStyle(color: WfStyle.muted, height: 1.5),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _data?['scheduling_ready'] == true
+                    ? 'Scheduled replies ready · approve once, send later, even with this page closed.'
+                    : '${_data?['scheduling_reason'] ?? 'Connect approved NOVA Email Autopilot to schedule replies.'}',
                 style: const TextStyle(color: WfStyle.muted, height: 1.5),
               ),
               const SizedBox(height: 6),
