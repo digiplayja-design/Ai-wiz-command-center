@@ -1,3 +1,4 @@
+import { sequenceActions } from './sequences.mjs';
 import { fail, text, uuid, version } from './core.mjs';
 import { korlixAgentEmailNovaBinding, korlixAgentEmailDraftInput } from '../korlix_agent_email.mjs';
 import { createKorlixAgentEmailSupabaseStore, createKorlixAgentEmailDraftService } from '../korlix_agent_email_routes.mjs';
@@ -21,6 +22,14 @@ export function createFollowupStore(database) {
     if(r.error) {
       const status={'42501':403,'P0002':404,'40001':409,'P0001':400}[r.error.code];
       fail(status?r.error.message:'Follow-up storage is temporarily unavailable.',status||503);
+    }
+    return r.data;
+  }, async sequence(actor,action,id,data={}) {
+    if(!database) fail('Follow-up storage is not configured.',503);
+    const r=await database.rpc('korlix_funnel_sequence_v1',{p_actor:actor,p_action:action,p_id:id,p_data:data});
+    if(r.error) {
+      const status={'42501':403,'P0002':404,'40001':409,'P0001':400}[r.error.code];
+      fail(status?r.error.message:'Sequence storage is temporarily unavailable.',status||503);
     }
     return r.data;
   }, async due(owner) {
@@ -144,6 +153,7 @@ export function createFunnelFollowups({database,store,emailStore,drafts,delivery
       }
       return {checked:tasks.length,sent};
     },
+    ...sequenceActions({state,capabilities,binding}),
     send,reconcile,
   };
 }
