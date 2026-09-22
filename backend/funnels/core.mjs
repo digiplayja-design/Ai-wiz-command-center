@@ -16,6 +16,36 @@ export function httpsUrl(v) {
   return u.href;
 }
 export const defaultSections=()=>['main_image','benefits','inquiry','faq'].map(kind=>({kind,visible:true}));
+const questionText=(v,max,required=false)=>{
+  const value=text(v,max,required);
+  if(value.includes('\x7f'))fail('Check the length and format of your question or answer.');
+  return value;
+};
+export function inquiryQuestions(raw=[]) {
+  if(!Array.isArray(raw)||raw.length>4)fail('Use up to four inquiry questions.');
+  const ids=new Set();
+  return raw.map(q=>{
+    if(!q||typeof q!=='object'||Array.isArray(q)||typeof q.id!=='string'||!/^q-[1-4]$/.test(q.id)||ids.has(q.id)||!['text','choice'].includes(q.type)||typeof q.required!=='boolean')fail('Choose a valid inquiry question.');
+    ids.add(q.id);
+    const options=q.type==='choice'?q.options:[];
+    if(!Array.isArray(options)||options.length>8)fail('Use up to eight choices per question.');
+    return{id:q.id,type:q.type,label:questionText(q.label??'',120),required:q.required,options:options.map(o=>questionText(o,80))};
+  });
+}
+export function questionsReady(raw) {
+  const questions=inquiryQuestions(raw);
+  if(questions.some(q=>!q.label||(q.type==='choice'&&(q.options.length<2||q.options.some(o=>!o)||new Set(q.options).size!==q.options.length))))fail('Complete each question and give multiple-choice questions two to eight distinct choices before publishing.');
+  return questions;
+}
+export function inquiryAnswers(p,d={}) {
+  const questions=questionsReady(d.questions);
+  if(Object.keys(p).some(k=>k.startsWith('answer_')&&!questions.some(q=>k==='answer_'+q.id)))fail('This form changed. Reload before answering.');
+  return questions.map(q=>{
+    const value=questionText(p['answer_'+q.id]??'',q.type==='choice'?80:500,q.required);
+    if(q.type==='choice'&&value&&!q.options.includes(value))fail('Choose one of the listed answers.');
+    return{id:q.id,value};
+  });
+}
 export function pageSections(raw) {
   if(raw===undefined)return defaultSections();
   if(!Array.isArray(raw)||raw.length<4||raw.length>8)fail('Use the four standard sections and up to four text sections.');
@@ -47,10 +77,11 @@ export function document(raw) {
     benefits:raw.benefits.map(x=>text(x,180,true)),faq:raw.faq.map(x=>({q:text(x?.q,180,true),a:text(x?.a,700,true)})),
     privacy_url:httpsUrl(raw.privacy_url),booking_url:httpsUrl(raw.booking_url),
     contact_email:text(raw.contact_email ?? '',254),logo:imageReference(raw.logo),hero_image:imageReference(raw.hero_image),
-    ...(raw.sections===undefined?{}:{sections:pageSections(raw.sections)})};
+    ...(raw.sections===undefined?{}:{sections:pageSections(raw.sections)}),
+    ...(raw.questions===undefined?{}:{questions:inquiryQuestions(raw.questions)})};
   // Leave headroom for PostgreSQL's jsonb whitespace below its existing 18 KB
   // page limit. Legacy documents retain their existing validation behavior.
-  if(raw.sections!==undefined&&Buffer.byteLength(JSON.stringify(result),'utf8')>17200)fail('This page is too long. Shorten some copy or remove a text section before saving.');
+  if((raw.sections!==undefined||raw.questions!==undefined)&&Buffer.byteLength(JSON.stringify(result),'utf8')>17200)fail('This page is too long. Shorten some copy or remove a text section before saving.');
   return result;
 }
 export function imageReference(raw) {
@@ -60,6 +91,7 @@ export function imageReference(raw) {
 }
 export function publishReady(d) {
   d=document(d);
+  questionsReady(d.questions);
   if(pageSections(d.sections).some(s=>s.kind==='text'&&(!s.heading||!s.body)))fail('Complete the heading and copy in each text section before publishing.');
   if([d.logo,d.hero_image].some(x=>x&&!x.alt))fail('Add a description for each page image before publishing.');
   if (!d.privacy_url || !/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(d.contact_email)) fail('Add your privacy-policy URL and a valid business contact email before publishing.');
@@ -70,10 +102,11 @@ export function contactInput(p) {
   if (!/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(email)) fail('Enter a valid email address.');
   return {name:text(p.name,160,true),email,phone:text(p.phone ?? '',60)};
 }
-export function leadInput(p) {
+export function leadInput(p,d={}) {
   const contact=contactInput(p);
   if (p.consent !== 'yes') fail('Confirm that this business may respond to your request.');
   const utm={}; for(const k of ['utm_source','utm_medium','utm_campaign','utm_content','utm_term']) utm[k]=text(p[k] ?? '',120);
-  return {...contact,message:text(p.message ?? '',2000),utm};
+  const answers=inquiryAnswers(p,d);
+  return {...contact,message:text(p.message ?? '',2000),utm,...(d.questions===undefined?{}:{answers})};
 }
 export const esc = v => String(v ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

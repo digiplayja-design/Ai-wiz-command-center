@@ -407,3 +407,58 @@ existing database and replay/image protections. Old code renders the legacy
 order and may drop the new sections on a subsequent save, so avoid editing pages
 with custom sections until the updated editor is restored. This release does
 not introduce multi-page branching, custom form fields or automatic publication.
+
+## K153 · Custom inquiry questions
+
+The document's optional `questions` list contains up to four stable IDs (`q-1`
+through `q-4`), each with `type` (`text` or `choice`), label (120 characters),
+required flag and options. Text answers allow 500 characters. Choice questions
+require 2–8 distinct nonempty choices, each at most 80 characters. Drafts may
+have incomplete labels/choices; publication requires complete definitions.
+NOVA generation and duplication retain the owner's questions and choices.
+
+Single-page forms show questions with the request. Guided forms show them in
+step two and in the signed final review. Back/edit navigation carries answers
+without storing a partial inquiry. Required and choice-membership validation uses
+the published snapshot. Changed answers invalidate the review signature. The
+URL-encoded request ceiling is 64 KiB to accommodate maximum multilingual inputs;
+all individual limits, rate limits, cookie/nonce and published-version checks
+remain enforced. Public labels/values are escaped, including selects and review.
+
+The additive `funnel_inquiry_questions` migration adds a bounded private JSONB
+`answers` array to each lead. Capture saves `{id,label,type,value}` using labels
+and types from the locked published document, never supplied visitor metadata.
+The answer snapshot is inserted in the existing capture transaction. Failed
+capture rolls back the contact, inquiry and usage changes; repeated or deleted
+requests retain K149 idempotency. Existing inquiries have `[]`. Owner/tier guards
+and browser-role revocations continue to protect answers. The new validation
+helper is SECURITY INVOKER with pinned search path and service-only execution.
+
+Leads displays the original questions/answers in an expandable card. CSV adds a
+final **Question answers** column, preserving existing column positions, quoting,
+line breaks and formula protection. Existing inbox search continues to match
+name, email, phone and message. Answers do not update CRM contact attributes,
+owner notes/statuses, email permissions or calling permissions. Existing cleanup
+removes them with their lead; no separate retention store is created. Rehearsal
+uses clearly synthetic question answers and still performs no live actions.
+
+Deploy the additive migration, then backend, then frontend. Legacy pages work
+while the migration is ahead of app code. Preserve the migration and stored
+answers on rollback. K152 code does not understand custom questions: capture for
+pages with published questions will fail validation rather than silently drop
+answers. Restore K153 backend, or deliberately remove questions and republish
+those pages before reverting app code. Do not alter owner content automatically.
+
+Verification uses migration-backed HTTP capture, malformed/duplicate answers,
+required/choice validation, original-label snapshots, transactional rollback,
+owner/browser-role denial, guided tamper detection, uncertain-response retries,
+deleted-request replay suppression and maximum multilingual inputs. Flutter
+checks cover creation/types/options, required flags, reordering, max count,
+save/reload, copy preservation, preview/review and Leads answer display at
+1440/390/320 px with 1.3x text at 320. Real-device acceptance stays deferred.
+
+This release adds qualification questions within the current inquiry journey.
+Conditional branching, booking rules, custom CRM fields and automatic outreach
+based on answers remain separate work.
+
+Implementation reference: [Supabase database functions and privileges](https://supabase.com/docs/guides/database/functions).

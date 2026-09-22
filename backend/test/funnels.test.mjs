@@ -21,7 +21,7 @@ test.before(async()=>{
   db=new PGlite();
   await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create table user_profiles(id uuid primary key,tier text);create table korlix_agent_email_recipients(id uuid primary key default gen_random_uuid(),user_id uuid,email text,active boolean default true,consent_status text default 'transactional_only',source_reference text,suppressed_at timestamptz,suppression_reason text,updated_at timestamptz);grant usage on schema public to anon,authenticated,service_role;grant select,update on user_profiles to service_role;grant all on korlix_agent_email_recipients to service_role;`);
   for(const u of [owner,other,basic]) {await db.query('insert into auth.users values($1)',[u]);await db.query('insert into user_profiles values($1,$2)',[u,u===basic?'basic':'enterprise']);}
-  for(const file of ['20260921162128_enterprise_contacts_crm.sql','20260922023935_enterprise_funnel_studio.sql','20260922031813_funnel_followups.sql','20260922035232_funnel_scheduled_followups.sql','20260922042253_funnel_sequences.sql','20260922145937_funnel_lead_inbox.sql','20260922172151_funnel_lead_management.sql','20260922180817_funnel_inquiry_cleanup.sql']) await db.exec(await readFile(new URL('../../supabase/migrations/'+file,import.meta.url),'utf8'));
+  for(const file of ['20260921162128_enterprise_contacts_crm.sql','20260922023935_enterprise_funnel_studio.sql','20260922031813_funnel_followups.sql','20260922035232_funnel_scheduled_followups.sql','20260922042253_funnel_sequences.sql','20260922145937_funnel_lead_inbox.sql','20260922172151_funnel_lead_management.sql','20260922180817_funnel_inquiry_cleanup.sql','20260922211345_funnel_inquiry_questions.sql']) await db.exec(await readFile(new URL('../../supabase/migrations/'+file,import.meta.url),'utf8'));
   await db.exec('set role service_role');
   const store=createFunnelStore({rpc:async(_name,p)=>{try{
     const data=await rpc(p.p_actor,p.p_action,p.p_id,p.p_data);
@@ -242,4 +242,70 @@ test('An unfinished text section can be saved but cannot be published, without c
  const r=await http(path,{method:'PUT',...auth(owner,{version:f.version,name:f.name,document:{...doc,sections}})});assert.equal(r.status,200);f=(await r.json()).funnel;
  const blocked=await http(path+'/publish',{method:'POST',...auth(owner,{version:f.version,confirmed:true})});assert.equal(blocked.status,400);assert.match((await blocked.json()).error,/Complete the heading/);
  assert.equal((await rpc(null,'public',null,{slug:f.slug})).document.sections,undefined);
+});
+
+const customQuestions=[{id:'q-1',type:'text',label:'What is your goal?',required:true,options:[]},{id:'q-2',type:'choice',label:'Preferred timing',required:false,options:['Soon','Later']}];
+async function questionJourney(mode='guided',questions=customQuestions){
+ const funnel=await publish(await create(owner,{document:document({...doc,form_mode:mode,questions})}));
+ const page=await http('/f/'+funnel.slug),html=await page.text(),token=hiddenField(html,'token'),cookie=page.headers.get('set-cookie').split(';')[0];clock+=2000;
+ const body={token,name:'Question visitor',email:randomUUID()+'@example.com',message:'My request',consent:'yes','answer_q-1':'A useful goal','answer_q-2':'Soon'};
+ const post=(suffix,patch={})=>http(`/f/${funnel.slug}/${suffix}`,{method:'POST',redirect:'manual',headers:{'Content-Type':'application/x-www-form-urlencoded',Cookie:cookie},body:new URLSearchParams({...body,...patch})});
+ return{f:funnel,body,post};
+}
+test('Single-page question capture saves immutable wording, exports answers and retains transactional consent',async()=>{
+ const j=await questionJourney('single');
+ assert.equal((await j.post('lead',{'answer_q-1':''})).status,400);
+ assert.equal((await rpc(owner,'leads',j.f.id)).total,0);
+ assert.equal((await j.post('lead')).status,303);
+ const lead=(await rpc(owner,'leads',j.f.id)).leads[0];
+ assert.deepEqual(lead.answers,[{id:'q-1',label:'What is your goal?',type:'text',value:'A useful goal'},{id:'q-2',label:'Preferred timing',type:'choice',value:'Soon'}]);
+ const contact=(await db.query('select * from korlix_contacts where id=$1',[lead.contact_id])).rows[0];assert.equal(contact.call_permission,'none');assert.equal(contact.email_permission,'transactional');
+ const edited=await rpc(owner,'save',j.f.id,{version:j.f.version,name:'New questions',document:document({...doc,questions:[{...customQuestions[0],label:'New wording'}]})});await publish(edited);
+ assert.deepEqual((await rpc(owner,'leads',j.f.id)).leads[0].answers,lead.answers);
+ const inbox=(await db.query('select korlix_funnel_inbox_v1($1,$2,$3::jsonb) v',[owner,j.f.id,'{"export":true}'])).rows[0].v;assert.deepEqual(inbox.leads[0].answers,lead.answers);
+ await assert.rejects(db.query('select korlix_funnel_inbox_v1($1,$2,$3::jsonb)',[other,j.f.id,'{}']),/not found/);
+ assert.equal((await j.post('lead')).status,400);
+});
+test('Guided questions survive navigation and review; changed answers require fresh signed review',async()=>{
+ const j=await questionJourney();
+ const contact=await j.post('step',{step:'edit_contact'});assert.equal(hiddenField(await contact.text(),'answer_q-1'),'A useful goal');
+ const request=await j.post('step',{step:'request'});assert.match(await request.text(),/<textarea name="answer_q-1"[^>]*>A useful goal/);
+ const review=await j.post('step',{step:'review'});assert.equal(review.status,200);const html=await review.text();assert(html.includes('<dt>What is your goal?</dt><dd>A useful goal</dd>'));
+ const review_token=hiddenField(html,'review_token');assert(review_token);
+ assert.equal((await rpc(owner,'leads',j.f.id)).total,0);
+ assert.equal((await j.post('lead',{review_token,'answer_q-1':'Tampered'})).status,400);
+ assert.equal((await j.post('lead',{review_token})).status,303);
+ assert.equal((await j.post('lead',{review_token})).status,303);
+ const leads=await rpc(owner,'leads',j.f.id);assert.equal(leads.total,1);assert.equal(leads.leads[0].answers[0].value,'A useful goal');
+});
+test('Database capture checks required, duplicate and forged answers before any contact or usage mutation',async()=>{
+ const x=await publish(await create(owner,{document:document({...doc,questions:customQuestions})}));
+ const before=(await db.query('select count(*) n from korlix_contacts')).rows[0].n;
+ for(const answers of [[],null,{},[{id:'q-1',value:''},{id:'q-2',value:'Soon'}],[{id:'q-1',value:'x'},{id:'q-1',value:'y'}],[{id:'q-1',value:'x'},{id:'q-2',value:'Other'}],[{id:'q-1',value:'x'.repeat(501)},{id:'q-2',value:'Soon'}]])await assert.rejects(rpc(null,'lead',null,inquiry(x,{answers})));
+ assert.equal((await db.query('select count(*) n from korlix_contacts')).rows[0].n,before);assert.equal((await rpc(owner,'leads',x.id)).total,0);
+ assert.equal((await db.query('select count(*) n from korlix_funnel_usage where scope=$1',['lead:'+x.id])).rows[0].n,0);
+ const input=inquiry(x,{answers:[{id:'q-1',value:'Saved',label:'Forged label',type:'html'},{id:'q-2',value:''}]});await rpc(null,'lead',null,input);
+ await rpc(null,'lead',null,{...input,answers:[{id:'q-1',value:'Changed'},{id:'q-2',value:'Soon'}]});
+ const l=(await rpc(owner,'leads',x.id)).leads[0];assert.equal(l.answers[0].label,'What is your goal?');assert.equal(l.answers[0].value,'Saved');assert.equal(l.answers[1].value,'');
+ for(const role of ['anon','authenticated']){await db.exec('reset role;set role '+role);await assert.rejects(db.query("select korlix_funnel_answers_v1('{}','[]')"),/permission denied/);await assert.rejects(db.query('select answers from korlix_funnel_leads'),/permission denied/);}await db.exec('reset role;set role service_role');
+});
+test('Deleted custom inquiry replay remains suppressed and a failed capture rolls back its answers and contact',async()=>{
+ const x=await publish(await create(owner,{document:document({...doc,questions:customQuestions})}));
+ const input=inquiry(x,{email:randomUUID()+'@example.com',answers:[{id:'q-1',value:'Goal'},{id:'q-2',value:'Later'}]});
+ await db.query('insert into korlix_funnel_removed_requests values($1,$2,now()+interval \'1 hour\')',[x.id,input.request_id]);
+ await rpc(null,'lead',null,input);assert.equal((await rpc(owner,'leads',x.id)).total,0);
+ const fresh={...input,request_id:randomUUID(),message:'x'.repeat(2001)};await assert.rejects(rpc(null,'lead',null,fresh));
+ assert.equal((await db.query('select count(*) n from korlix_contacts where email=$1',[input.email])).rows[0].n,0);
+});
+test('Full-length multilingual questions survive URL encoding, final review and capture without truncation',async()=>{
+ const questions=Array.from({length:4},(_,i)=>({...customQuestions[0],id:'q-'+(i+1),label:'Question '+(i+1)}));
+ const j=await questionJourney('guided',questions),patch={message:'詳'.repeat(2000),...Object.fromEntries(questions.map(q=>['answer_'+q.id,'詳'.repeat(500)]))};
+ const reviewed=await j.post('step',{...patch,step:'review'});assert.equal(reviewed.status,200);
+ const review_token=hiddenField(await reviewed.text(),'review_token');assert.equal((await j.post('lead',{...patch,review_token})).status,303);
+ const l=(await rpc(owner,'leads',j.f.id)).leads[0];assert.equal(l.answers.length,4);assert(l.answers.every(a=>a.value.length===500));
+});
+test('Uncertain custom-question receipts retry once and keep the same answer snapshot',async()=>{
+ const j=await questionJourney(),review=await j.post('step',{step:'review'}),review_token=hiddenField(await review.text(),'review_token');
+ captureFailure=true;const uncertain=await j.post('lead',{review_token});assert.equal(uncertain.status,503);assert.equal(hiddenField(await uncertain.text(),'answer_q-1'),'A useful goal');
+ assert.equal((await j.post('lead',{review_token})).status,303);assert.equal((await rpc(owner,'leads',j.f.id)).total,1);
 });

@@ -120,7 +120,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   const reviewSignature=(token,input)=>sign('funnel-review-v1:'+token+':'+JSON.stringify(input));
   const showStep=(r,f,body,step,error='',status=200)=>{
     const values=formValues(body),utm=Object.fromEntries(utmFields.map(k=>[k,values[k]]));
-    const reviewToken=step==='review'?reviewSignature(body.token,leadInput(body)):'';
+    const reviewToken=step==='review'?reviewSignature(body.token,leadInput(body,document(f.document))):'';
     r.set('X-Robots-Tag','noindex, nofollow');
     return r.status(status).type('html').send(renderPage(document(f.document),{
       action:`/f/${f.slug}/lead#contact`,stepAction:`/f/${f.slug}/step#contact`,
@@ -139,7 +139,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
     r.set('Set-Cookie',`kf_${f.slug}=${token}; Path=/f/${f.slug}; HttpOnly; Secure; SameSite=Lax; Max-Age=1800`);
     r.type('html').send(renderPage(document(f.document),{action:`/f/${f.slug}/lead#contact`,stepAction:`/f/${f.slug}/step#contact`,token,utm,success:q.query.received==='1',mediaBase:`/f/${f.slug}/media`}));
   }));
-  app.post('/f/:slug/step',express.urlencoded({extended:false,limit:'32kb'}),publicRoute(async(q,r)=>{
+  app.post('/f/:slug/step',express.urlencoded({extended:false,limit:'64kb'}),publicRoute(async(q,r)=>{
     const f=await command(null,'public',null,{slug:slug(q.params.slug),count:false});
     verifyForm(q,f);
     if(document(f.document).form_mode!=='guided')fail('This form changed. Return to the page and start again.',409);
@@ -149,7 +149,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
     try {contactInput(q.body);for(const k of utmFields)text(q.body[k]??'',120);}
     catch(e){if(!(e instanceof FunnelError))throw e;return showStep(r,f,q.body,'contact',e.message,400);}
     if(direction==='review') {
-      try {leadInput(q.body);}
+      try {leadInput(q.body,document(f.document));}
       catch(e){if(!(e instanceof FunnelError))throw e;return showStep(r,f,q.body,'request',e.message,400);}
       return showStep(r,f,q.body,'review');
     }
@@ -157,14 +157,14 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
     catch(e){if(!(e instanceof FunnelError))throw e;return showStep(r,f,q.body,'request',e.message,400);}
     return showStep(r,f,q.body,'request');
   }));
-  app.post('/f/:slug/lead',express.urlencoded({extended:false,limit:'32kb'}),publicRoute(async(q,r)=>{
+  app.post('/f/:slug/lead',express.urlencoded({extended:false,limit:'64kb'}),publicRoute(async(q,r)=>{
     const f=await command(null,'public',null,{slug:slug(q.params.slug),count:false});
     const t=verifyForm(q,f),guided=document(f.document).form_mode==='guided';
     let input;
     try {contactInput(q.body);}
     catch(e){if(!guided||!(e instanceof FunnelError))throw e;return showStep(r,f,q.body,'contact',e.message,400);}
     try {
-      input=leadInput(q.body);
+      input=leadInput(q.body,document(f.document));
       if(guided) {
         const mac=q.body.review_token,expected=reviewSignature(q.body.token,input);
         if(typeof mac!=='string'||!/^[0-9a-f]{64}$/.test(mac)||!timingSafeEqual(Buffer.from(mac),Buffer.from(expected)))fail('Review your inquiry again before submitting.');

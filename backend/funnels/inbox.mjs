@@ -41,8 +41,8 @@ export function csvCell(value) {
   return '"' + s.replaceAll('"', '""') + '"';
 }
 export function leadCsv(leads) {
-  const headings = ['Inquiry ID','Received (UTC)','Name','Email','Phone','Message','Source','Campaign','Medium','Content','Term','CRM contact ID','Submitted consent','Identity verification','Lead status (owner-set)','Private note','Status / note updated (UTC)'];
-  const rows = leads.map(l => [l.id,l.created_at,l.name,l.email,l.phone,l.message,l.utm?.utm_source,l.utm?.utm_campaign,l.utm?.utm_medium,l.utm?.utm_content,l.utm?.utm_term,l.contact_id,l.consent_text,'Unverified',LEAD_STATUS_LABELS[l.inbox_status??'new'],l.private_note,l.inbox_updated_at]);
+  const headings = ['Inquiry ID','Received (UTC)','Name','Email','Phone','Message','Source','Campaign','Medium','Content','Term','CRM contact ID','Submitted consent','Identity verification','Lead status (owner-set)','Private note','Status / note updated (UTC)','Question answers'];
+  const rows = leads.map(l => [l.id,l.created_at,l.name,l.email,l.phone,l.message,l.utm?.utm_source,l.utm?.utm_campaign,l.utm?.utm_medium,l.utm?.utm_content,l.utm?.utm_term,l.contact_id,l.consent_text,'Unverified',LEAD_STATUS_LABELS[l.inbox_status??'new'],l.private_note,l.inbox_updated_at,(l.answers??[]).map(a=>a.label+': '+(a.value||'Not provided')).join('\n')]);
   return '\uFEFF' + [headings,...rows].map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }
 export function registerInbox(app, {base, owner, command}) {

@@ -1,4 +1,4 @@
-import {FunnelError, fail, text, uuid, version, publishReady, leadInput} from './core.mjs';
+import {FunnelError, fail, text, uuid, version, publishReady, leadInput, inquiryQuestions} from './core.mjs';
 
 const sampleFor = scenario => ({
   name:'Taylor Morgan', email:scenario==='invalid_email'?'not-an-email':'taylor@example.com',
@@ -29,7 +29,7 @@ export function rehearseFunnel(snapshot,body={}) {
   const sample=sampleFor(body.scenario);
   const checks=[
     check('page','Page content and required details',()=>{doc=publishReady(doc);}),
-    check('inquiry','Sample inquiry validation',()=>leadInput(sample)),
+    check('inquiry','Sample inquiry validation',()=>{for(const q of inquiryQuestions(doc?.questions))sample['answer_'+q.id]=q.type==='choice'?(q.options[0]??''):'Sample response';leadInput(sample,doc??{});}),
   ];
   if(checks[0].status==='pass')checks.push({id:'journey',title:'Visitor journey',status:'scenario',
     detail:doc.form_mode==='guided'?
