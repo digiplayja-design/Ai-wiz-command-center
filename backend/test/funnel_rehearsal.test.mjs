@@ -96,6 +96,9 @@ test('Saved workflow and existing database interpolation produce matching previe
  assert.deepEqual(normalized.receipt,{message:'Thank you',booking_url:'https://example.com/'});
 });
 test('Draft and published sources stay separate; paused pages block only the published scenario',async()=>{
+ const guided=await(await post(input({document:{...doc,form_mode:'guided'}}))).json();
+ assert.match(guided.checks.find(c=>c.id==='journey').detail,/Guided: contact details/);
+ assert.equal(guided.checks.find(c=>c.id==='journey').status,'scenario');
  const draft=await(await post(input({document:{...doc,brand:'Unsaved brand'}}))).json();
  assert.equal(draft.tasks[0].subject,'Your inquiry at Unsaved brand');
  const published=await(await post(input({source:'published',document:{...doc,brand:'Ignored'}}))).json();

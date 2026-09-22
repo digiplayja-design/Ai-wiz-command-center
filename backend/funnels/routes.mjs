@@ -1,7 +1,8 @@
 import express from 'express';
 import { randomBytes, randomUUID, createHmac, timingSafeEqual } from 'node:crypto';
-import { FunnelError, fail, text, uuid, version, slug, document, publishReady, leadInput, esc } from './core.mjs';
+import { FunnelError, fail, text, uuid, version, slug, document, publishReady, leadInput, contactInput, esc } from './core.mjs';
 import { renderPage, publicHeaders } from './render.mjs';
+import {formValues,utmFields} from './public_form.mjs';
 import astra from '../korlix_astra.cjs';
 import { createFunnelScheduler } from './scheduler.mjs';
 import { createFunnelFollowups } from './followups.mjs';
@@ -104,6 +105,24 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
     if(t.s!==f.slug || t.v!==f.published_version || now()-t.t>1800000 || now()-t.t<1500) fail('Please reload the form and take a moment to complete it.');
     uuid(t.n);return t;
   };
+  const verifyForm=(q,f)=>{
+    const cookie=(q.headers.cookie || '').split(';').map(x=>x.trim()).find(x=>x.startsWith(`kf_${f.slug}=`))?.slice(`kf_${f.slug}=`.length);
+    const t=verify(q.body?.token,f,cookie);
+    if(q.body.website)fail('Unable to submit this form.');
+    return t;
+  };
+  // The final review covers normalized fields and attribution, using the same
+  // cookie-bound form nonce. Editing the hidden fields cannot bypass review.
+  const reviewSignature=(token,input)=>sign('funnel-review-v1:'+token+':'+JSON.stringify(input));
+  const showStep=(r,f,body,step,error='',status=200)=>{
+    const values=formValues(body),utm=Object.fromEntries(utmFields.map(k=>[k,values[k]]));
+    const reviewToken=step==='review'?reviewSignature(body.token,leadInput(body)):'';
+    r.set('X-Robots-Tag','noindex, nofollow');
+    return r.status(status).type('html').send(renderPage(document(f.document),{
+      action:`/f/${f.slug}/lead#contact`,stepAction:`/f/${f.slug}/step#contact`,
+      token:body.token,utm,step,values,reviewToken,error,privateForm:true,
+    }));
+  };
   const publicRoute=fn=>async(q,r)=>{
     r.set(publicHeaders);
     try {limit('public:'+q.params.slug,300);await fn(q,r);}
@@ -113,15 +132,44 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
     const f=await command(null,'public',null,{slug:slug(q.params.slug),count:!q.query.received});
     const token=makeToken(f), utm={};for(const k of ['utm_source','utm_medium','utm_campaign','utm_content','utm_term']) utm[k]=text(typeof q.query[k]==='string'?q.query[k]:'',120);
     r.set('Set-Cookie',`kf_${f.slug}=${token}; Path=/f/${f.slug}; HttpOnly; Secure; SameSite=Lax; Max-Age=1800`);
-    r.type('html').send(renderPage(document(f.document),{action:`/f/${f.slug}/lead`,token,utm,success:q.query.received==='1'}));
+    r.type('html').send(renderPage(document(f.document),{action:`/f/${f.slug}/lead#contact`,stepAction:`/f/${f.slug}/step#contact`,token,utm,success:q.query.received==='1'}));
   }));
-  app.post('/f/:slug/lead',express.urlencoded({extended:false,limit:'16kb'}),publicRoute(async(q,r)=>{
+  app.post('/f/:slug/step',express.urlencoded({extended:false,limit:'32kb'}),publicRoute(async(q,r)=>{
     const f=await command(null,'public',null,{slug:slug(q.params.slug),count:false});
-    const cookie=(q.headers.cookie || '').split(';').map(x=>x.trim()).find(x=>x.startsWith(`kf_${f.slug}=`))?.slice(`kf_${f.slug}=`.length);
-    const t=verify(q.body?.token,f,cookie);
-    if(q.body.website) fail('Unable to submit this form.');
-    const input=leadInput(q.body);
-    await command(null,'lead',null,{...input,slug:f.slug,published_version:f.published_version,request_id:t.n});
+    verifyForm(q,f);
+    if(document(f.document).form_mode!=='guided')fail('This form changed. Return to the page and start again.',409);
+    const direction=q.body.step;
+    if(!['request','review','edit_contact','edit_request'].includes(direction))fail('Choose a valid inquiry step.');
+    if(direction==='edit_contact')return showStep(r,f,q.body,'contact');
+    try {contactInput(q.body);for(const k of utmFields)text(q.body[k]??'',120);}
+    catch(e){if(!(e instanceof FunnelError))throw e;return showStep(r,f,q.body,'contact',e.message,400);}
+    if(direction==='review') {
+      try {leadInput(q.body);}
+      catch(e){if(!(e instanceof FunnelError))throw e;return showStep(r,f,q.body,'request',e.message,400);}
+      return showStep(r,f,q.body,'review');
+    }
+    try {text(q.body.message??'',2000);}
+    catch(e){if(!(e instanceof FunnelError))throw e;return showStep(r,f,q.body,'request',e.message,400);}
+    return showStep(r,f,q.body,'request');
+  }));
+  app.post('/f/:slug/lead',express.urlencoded({extended:false,limit:'32kb'}),publicRoute(async(q,r)=>{
+    const f=await command(null,'public',null,{slug:slug(q.params.slug),count:false});
+    const t=verifyForm(q,f),guided=document(f.document).form_mode==='guided';
+    let input;
+    try {contactInput(q.body);}
+    catch(e){if(!guided||!(e instanceof FunnelError))throw e;return showStep(r,f,q.body,'contact',e.message,400);}
+    try {
+      input=leadInput(q.body);
+      if(guided) {
+        const mac=q.body.review_token,expected=reviewSignature(q.body.token,input);
+        if(typeof mac!=='string'||!/^[0-9a-f]{64}$/.test(mac)||!timingSafeEqual(Buffer.from(mac),Buffer.from(expected)))fail('Review your inquiry again before submitting.');
+      }
+    } catch(e){if(!guided||!(e instanceof FunnelError))throw e;return showStep(r,f,q.body,'request',e.message,400);}
+    try {await command(null,'lead',null,{...input,slug:f.slug,published_version:f.published_version,request_id:t.n});}
+    catch(e){
+      if(!guided||!(e instanceof FunnelError)||![429,503].includes(e.status))throw e;
+      return showStep(r,f,q.body,'review',`${e.message} Receipt was not confirmed. You can retry this reviewed inquiry; repeated submissions of this form are counted once.`,e.status);
+    }
     r.redirect(303,`/f/${f.slug}?received=1#contact`);
   }));
   return {close:()=>{counts.clear();scheduler.stop();}};

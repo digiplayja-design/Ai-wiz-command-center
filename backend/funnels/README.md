@@ -258,3 +258,54 @@ Rollback app commits to K148 if needed, retaining this schema and the updated
 public capture function. Do not restore the older capture function or remove
 replay markers while recent form tokens may still be valid. Reverting code does
 not recover permanently deleted inquiry data.
+
+## K150 · Guided inquiry forms
+
+Page documents now accept `form_mode: single | guided`, defaulting to `single`
+when absent. Existing live pages keep their current form until an owner saves
+and publishes a guided choice. Draft/public snapshots and optimistic versions
+remain unchanged. NOVA copy replacement and page duplication preserve the form
+choice. No database migration, new service, paid integration or credential is
+needed; deploy backend before frontend.
+
+Guided mode presents contact details, request/consent, then an explicit review
+and send step. Native HTML POST forms work without JavaScript. The intermediate
+`POST /f/:slug/step` endpoint validates the existing cookie-bound, version-bound
+form nonce and fresh published-page/Enterprise availability. It reuses the
+public read command with counting disabled and never calls capture, CRM,
+queueing, AI or delivery. Visitor fields are posted in bodies, not URL query
+strings. Responses are no-store, noindex, and retain the restrictive CSP.
+
+Validation errors redisplay bounded, escaped values. Back/edit retains details
+and clears consent from the editable request step. The review shows submitted
+identity, phone, message and inquiry-only consent. A domain-separated HMAC
+binds the normalized fields, all attribution tags and original form nonce.
+Guided final submission rejects a missing or changed review. No intermediate
+step extends the original 30-minute expiry or changes the nonce/cookie.
+
+The final capture endpoint uses the same database transaction and request ID
+as a single-page form. Existing CRM permissions, suppression checks and reviewed
+follow-up behavior remain. An uncertain storage response offers the same signed
+review/nonce for a safe retry without claiming success. K149 replay markers still
+prevent a recent deleted inquiry from being recreated. Progress steps are not
+partial leads, conversion events, completed bookings or message delivery.
+
+The Flutter preview offers all three steps using labeled sample details;
+preview interaction creates no edits or network activity. Rehearsal describes
+the selected journey while explicitly distinguishing the simulation from actual
+browser navigation. A long dashboard badge now wraps at narrow widths and
+enlarged text instead of overflowing.
+
+Verification uses actual migration-backed capture, public Express HTTP routes,
+role/tier and stale-page denial, field/UTM preservation, no-write intermediate
+snapshots, fresh consent, signed-review tampering, repeated final submissions,
+uncertain-response retry, XSS escaping and disabled previews. Flutter checks
+cover old-document defaults, save without publish, preserved copy/duplication,
+preview-only interaction, mode reset and 1440/390/320 px layouts (1.3x text at
+320). User live acceptance and Meta activation remain deferred.
+
+Rollback both app releases to K149 to restore single-page forms. Retain all
+database content and K149 replay protection. Open guided forms should be
+reloaded. Older editors ignore/drop the new form choice on subsequent saves;
+rollback does not remove existing inquiries. Arbitrary multi-page builders,
+branching questions, custom fields and partial-lead tracking are separate scope.

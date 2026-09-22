@@ -31,6 +31,10 @@ export function rehearseFunnel(snapshot,body={}) {
     check('page','Page content and required details',()=>{doc=publishReady(doc);}),
     check('inquiry','Sample inquiry validation',()=>leadInput(sample)),
   ];
+  if(checks[0].status==='pass')checks.push({id:'journey',title:'Visitor journey',status:'scenario',
+    detail:doc.form_mode==='guided'?
+      'Guided: contact details, request and consent, then review and send. Only the final submission creates an inquiry. This rehearsal does not exercise browser navigation.':
+      'Single-page inquiry form. This rehearsal models final submission; it does not exercise browser navigation.'});
   const publishedAvailable=snapshot.state==='published'&&snapshot.published!=null;
   const available=draft||publishedAvailable;
   checks.unshift({id:'availability',title:draft?'Draft publication scenario':'Current page availability',

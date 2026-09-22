@@ -19,9 +19,11 @@ export function document(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('A page draft is required.');
   if (!['consultation', 'product', 'event'].includes(raw.layout)) fail('Choose a page template.');
   if (!['cyan', 'violet', 'gold'].includes(raw.accent)) fail('Choose a brand color.');
+  const form_mode=raw.form_mode===undefined?'single':raw.form_mode;
+  if(!['single','guided'].includes(form_mode))fail('Choose a single-page or guided inquiry form.');
   if (!Array.isArray(raw.benefits) || raw.benefits.length > 6 || !Array.isArray(raw.faq) || raw.faq.length > 6) fail('Use up to six benefits and FAQs.');
   return {brand:text(raw.brand,80,true),headline:text(raw.headline,160,true),subheadline:text(raw.subheadline,600,true),
-    cta:text(raw.cta,60,true),thank_you:text(raw.thank_you,600,true),layout:raw.layout,accent:raw.accent,
+    cta:text(raw.cta,60,true),thank_you:text(raw.thank_you,600,true),layout:raw.layout,accent:raw.accent,form_mode,
     benefits:raw.benefits.map(x=>text(x,180,true)),faq:raw.faq.map(x=>({q:text(x?.q,180,true),a:text(x?.a,700,true)})),
     privacy_url:httpsUrl(raw.privacy_url),booking_url:httpsUrl(raw.booking_url),
     contact_email:text(raw.contact_email ?? '',254)};
@@ -31,11 +33,15 @@ export function publishReady(d) {
   if (!d.privacy_url || !/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(d.contact_email)) fail('Add your privacy-policy URL and a valid business contact email before publishing.');
   return d;
 }
-export function leadInput(p) {
+export function contactInput(p) {
   const email=text(p.email,254,true).toLowerCase();
   if (!/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(email)) fail('Enter a valid email address.');
+  return {name:text(p.name,160,true),email,phone:text(p.phone ?? '',60)};
+}
+export function leadInput(p) {
+  const contact=contactInput(p);
   if (p.consent !== 'yes') fail('Confirm that this business may respond to your request.');
   const utm={}; for(const k of ['utm_source','utm_medium','utm_campaign','utm_content','utm_term']) utm[k]=text(p[k] ?? '',120);
-  return {name:text(p.name,160,true),email,phone:text(p.phone ?? '',60),message:text(p.message ?? '',2000),utm};
+  return {...contact,message:text(p.message ?? '',2000),utm};
 }
 export const esc = v => String(v ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
