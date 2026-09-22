@@ -7,6 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
 import 'funnel_templates.dart';
+import 'funnel_create_dialog.dart';
+import 'funnel_launch_checklist.dart';
 import 'funnel_followups.dart';
 import 'funnel_campaigns.dart';
 
@@ -227,121 +229,37 @@ class _FunnelScreenState extends State<FunnelScreen> {
     }
   }
 
-  Future<void> _create() async {
-    final name = TextEditingController(), address = TextEditingController();
-    String layout = 'consultation';
-    String? error;
+  Future<void> _create({Map<String, dynamic>? source}) async {
+    if (_busy || _denied) return;
+    if (source != null && _dirty) {
+      _notice('Save your edits before duplicating this draft.');
+      return;
+    }
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
+      barrierDismissible: false,
       builder: (c) => Theme(
         data: WfStyle.theme,
-        child: StatefulBuilder(
-          builder: (c, update) => AlertDialog(
-            title: const Text('Start something great'),
-            content: SizedBox(
-              width: 480,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Choose a starting point. Every page is fully editable.',
-                    ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: name,
-                      maxLength: 100,
-                      decoration: const InputDecoration(
-                        labelText: 'Funnel name',
-                      ),
-                      onChanged: (v) {
-                        if (address.text.isEmpty) update(() {});
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: address,
-                      maxLength: 60,
-                      decoration: const InputDecoration(
-                        labelText: 'Public address',
-                        hintText: 'your-business-offer',
-                        helperText:
-                            '3–60 lowercase letters, numbers, or hyphens. Cannot be changed later.',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      initialValue: layout,
-                      decoration: const InputDecoration(labelText: 'Template'),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'consultation',
-                          child: Text('Consultation · start a conversation'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'product',
-                          child: Text('Product · showcase your offer'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'event',
-                          child: Text('Event · collect interest'),
-                        ),
-                      ],
-                      isExpanded: true,
-                      onChanged: (v) => update(() => layout = v!),
-                    ),
-                    if (error != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Text(
-                          error!,
-                          style: const TextStyle(color: WfStyle.danger),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(c),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  if (name.text.trim().isEmpty ||
-                      !RegExp(
-                        r'^[a-z0-9][a-z0-9-]{2,59}$',
-                      ).hasMatch(address.text.trim())) {
-                    update(
-                      () => error = 'Add a name and a valid public address.',
-                    );
-                    return;
-                  }
-                  Navigator.pop(c, {
-                    'name': name.text.trim(),
-                    'slug': address.text.trim(),
-                    'document': funnelTemplate(layout),
-                  });
-                },
-                child: const Text('Create draft'),
-              ),
-            ],
-          ),
+        child: FunnelCreateDialog(
+          source: source,
+          create: (payload) async {
+            final data = await widget.client.request('POST', '', body: payload);
+            return Map<String, dynamic>.from(data['funnel'] as Map);
+          },
         ),
       ),
     );
-    // Controllers stay alive until the dialog exit animation has finished.
-    Future<void>.delayed(const Duration(seconds: 1), () {
-      name.dispose();
-      address.dispose();
+    if (result == null || !mounted || _denied) return;
+    setState(() {
+      _tab = 'Page';
+      _error = null;
     });
-    if (result == null || !mounted) return;
-    await _run(() async {
-      final d = await widget.client.request('POST', '', body: result);
-      if (mounted) _take(Map<String, dynamic>.from(d['funnel'] as Map));
-    });
+    _take(result);
+    _notice(
+      source == null
+          ? 'Private draft created.'
+          : 'Draft duplicated. Your original is unchanged.',
+    );
   }
 
   Future<void> _generate() async {
@@ -869,6 +787,16 @@ class _FunnelScreenState extends State<FunnelScreen> {
                     ),
                     _button('Pause page', Icons.pause, _dirty ? null : _pause),
                   ],
+                  Tooltip(
+                    message: _dirty
+                        ? 'Save your edits before duplicating.'
+                        : 'Create a private copy of the saved page.',
+                    child: _button(
+                      'Duplicate draft',
+                      Icons.copy_all_outlined,
+                      _dirty ? null : () => _create(source: _selected),
+                    ),
+                  ),
                   _button('Reload saved', Icons.refresh, () async {
                     if (await _discard() && mounted) {
                       await _run(() async {
@@ -889,7 +817,7 @@ class _FunnelScreenState extends State<FunnelScreen> {
                 children: [
                   for (final t in [
                     'Page',
-                    if (box.maxWidth <= 1080) 'Preview',
+                    'Preview',
                     'Ads workspace',
                     'Campaign links',
                     'Leads',
@@ -904,6 +832,14 @@ class _FunnelScreenState extends State<FunnelScreen> {
                       },
                     ),
                 ],
+              ),
+              const SizedBox(height: 22),
+              FunnelLaunchChecklist(
+                key: ValueKey('launch-${_selected!['id']}'),
+                document: _draft,
+                dirty: _dirty,
+                onEdit: () => setState(() => _tab = 'Page'),
+                onPreview: () => setState(() => _tab = 'Preview'),
               ),
               const SizedBox(height: 22),
               if (_tab == 'Page') ...[
