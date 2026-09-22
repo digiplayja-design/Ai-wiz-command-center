@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
+import 'funnel_sequences.dart';
 
 class FunnelFollowups extends StatefulWidget {
   const FunnelFollowups({
@@ -555,9 +556,33 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
     });
   }
 
+  Future<void> _createSequence(Map<String, dynamic> task) async {
+    final payload = await showSequenceComposer(context, task: task);
+    if (payload == null || !mounted) return;
+    await _post('createSequence', {
+      ...payload,
+      'task_id': task['id'],
+      'version': task['version'],
+    });
+  }
+
+  Future<void> _openSequence(Map<String, dynamic> task) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => FunnelSequenceTimeline(
+        client: widget.client,
+        funnelId: widget.funnelId,
+        sequenceId: '${task['sequence_id']}',
+      ),
+    );
+    if (mounted) await _load();
+  }
+
   Widget _task(Map<String, dynamic> t) {
     final email = t['channel'] == 'email';
     final review = t['state'] == 'review';
+    final sequence = t['sequence'] as Map?;
+    final inSequence = t['sequence_id'] != null;
     final due =
         DateTime.tryParse('${t['due_at']}')?.isAfter(DateTime.now()) != true;
     final allowed = t[email ? 'email_allowed' : 'call_allowed'] == true;
@@ -598,6 +623,10 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+                if (inSequence)
+                  WfBadge(
+                    'STEP ${(t['sequence_step'] as num).toInt() + 1}/${sequence?['total'] ?? '?'} · ${'${sequence?['state'] ?? 'sequence'}'.toUpperCase()}',
+                  ),
                 WfBadge(
                   status.toUpperCase(),
                   color: t['state'] == 'needs_review'
@@ -690,13 +719,19 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
               spacing: 10,
               runSpacing: 10,
               children: [
-                if (t['state'] == 'scheduled')
+                if (inSequence)
+                  _button(
+                    'View sequence',
+                    Icons.timeline,
+                    () => _openSequence(t),
+                  ),
+                if (t['state'] == 'scheduled' && !inSequence)
                   _button(
                     'Cancel scheduled reply',
                     Icons.event_busy_outlined,
                     () => _cancelSchedule(t),
                   ),
-                if (review && email) ...[
+                if (review && email && !inSequence) ...[
                   _button(
                     'Review & send',
                     Icons.send_outlined,
@@ -711,6 +746,14 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
                       Icons.schedule_send_outlined,
                       allowed && active && _data?['scheduling_ready'] == true
                           ? () => _send(t, schedule: true)
+                          : null,
+                    ),
+                  if (t['message_id'] == null)
+                    _button(
+                      'Build sequence',
+                      Icons.account_tree_outlined,
+                      allowed && active && _data?['scheduling_ready'] == true
+                          ? () => _createSequence(t)
                           : null,
                     ),
                   if (t['message_id'] == null)
@@ -732,7 +775,7 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
                     Icons.sync,
                     () => _post('reconcile', {'task_id': t['id']}),
                   ),
-                if (review)
+                if (review && !inSequence)
                   _button(
                     'Dismiss',
                     Icons.close,
@@ -819,7 +862,7 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
               const SizedBox(height: 6),
               Text(
                 _data?['scheduling_ready'] == true
-                    ? 'Scheduled replies ready · approve once, send later, even with this page closed.'
+                    ? 'Scheduled replies and sequences ready · approve messages once and continue with this page closed.'
                     : '${_data?['scheduling_reason'] ?? 'Connect approved NOVA Email Autopilot to schedule replies.'}',
                 style: const TextStyle(color: WfStyle.muted, height: 1.5),
               ),

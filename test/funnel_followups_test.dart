@@ -111,8 +111,42 @@ void main() {
         if (r.method == 'POST' && r.url.path.endsWith('/settings')) {
           data['settings'] = jsonDecode(r.body);
         }
+        final timeline = data['_sequence'] as Map<String, dynamic>?;
+        if (timeline != null && r.method == 'POST') {
+          final q = timeline['sequence'] as Map;
+          final steps = (timeline['steps'] as List).cast<Map>();
+          if (r.url.path.endsWith('/pauseSequence')) {
+            q['state'] = 'paused';
+            q['version'] = 8;
+            for (final step in steps.where((s) => s['state'] != 'sent')) {
+              step['state'] = 'review';
+              step['version'] = 3;
+              step['scheduled_for'] = null;
+            }
+          }
+          if (r.url.path.endsWith('/resumeSequence')) {
+            q['state'] = 'active';
+            q['version'] = 9;
+            for (final step in steps.where((s) => s['state'] != 'sent')) {
+              step['state'] = 'scheduled';
+            }
+          }
+          if (r.url.path.endsWith('/replySequence')) {
+            q['state'] = 'replied';
+            q['version'] = 10;
+            for (final step in steps.where((s) => s['state'] != 'sent')) {
+              step['state'] = 'dismissed';
+            }
+          }
+        }
         return http.Response(
-          jsonEncode(r.method == 'GET' ? data : {}),
+          jsonEncode(
+            r.method == 'GET'
+                ? r.url.path.contains('/sequences/')
+                      ? timeline
+                      : data
+                : {},
+          ),
           200,
           headers: {'content-type': 'application/json; charset=utf-8'},
         );
@@ -287,4 +321,133 @@ void main() {
     );
     expect(calls.where((r) => r.method == 'POST'), isEmpty);
   });
+
+  for (final size in [const Size(1440, 1100), const Size(390, 844)]) {
+    testWidgets(
+      'Sequence approval reviews all messages before one UTC request at ${size.width}',
+      (t) async {
+        final data = fixture(), calls = <http.Request>[];
+        await render(t, data, calls, size: size);
+        await t.ensureVisible(find.text('Build sequence'));
+        await t.tap(find.text('Build sequence'));
+        await t.pumpAndSettle();
+        expect(find.text('Build a NOVA sequence'), findsOneWidget);
+        expect(calls.where((r) => r.method == 'POST'), isEmpty);
+        await t.tap(find.widgetWithText(FilledButton, 'Review sequence'));
+        await t.pumpAndSettle();
+        final approve = find.widgetWithText(FilledButton, 'Approve sequence');
+        expect(t.widget<FilledButton>(approve).onPressed, isNull);
+        await t.ensureVisible(find.byType(CheckboxListTile));
+        await t.tap(find.byType(CheckboxListTile));
+        await t.pumpAndSettle();
+        await t.tap(find.widgetWithText(TextButton, 'Back'));
+        await t.pumpAndSettle();
+        await t.tap(find.widgetWithText(FilledButton, 'Review sequence'));
+        await t.pumpAndSettle();
+        expect(t.widget<FilledButton>(approve).onPressed, isNull);
+        await t.ensureVisible(find.byType(CheckboxListTile));
+        await t.tap(find.byType(CheckboxListTile));
+        await t.pumpAndSettle();
+        await t.tap(approve);
+        await t.pumpAndSettle();
+        final post = calls.singleWhere((r) => r.method == 'POST');
+        expect(post.url.path, endsWith('/createSequence'));
+        final body = jsonDecode(post.body);
+        expect(body['confirmed'], true);
+        expect(body['task_id'], 'email-task');
+        expect(body['version'], 1);
+        expect(body['steps'].length, 3);
+        expect(body['steps'][0]['body'], data['tasks'][0]['body']);
+        for (final step in body['steps']) {
+          expect(DateTime.parse(step['scheduled_for']).isUtc, true);
+        }
+        expect(t.takeException(), isNull);
+      },
+    );
+  }
+  testWidgets(
+    'Timeline pauses and resumes only remaining steps, then marks replied without sending',
+    (t) async {
+      final data = fixture(), calls = <http.Request>[];
+      final task = data['tasks'][0] as Map;
+      task.addAll(<String, Object>{
+        'state': 'scheduled',
+        'sequence_id': 'sequence-id',
+        'sequence_step': 1,
+        'sequence': {'state': 'active', 'total': 3},
+      });
+      data['_sequence'] = {
+        'sequence': {
+          'id': 'sequence-id',
+          'name': 'Inquiry sequence',
+          'state': 'active',
+          'version': 7,
+          'note': 'Approved sequence running.',
+        },
+        'lead_name': 'Taylor Morgan',
+        'to_email': 'taylor@example.com',
+        'steps': List.generate(
+          3,
+          (i) => {
+            'id': 'step-$i',
+            'version': 2,
+            'sequence_step': i,
+            'state': i == 0 ? 'sent' : 'scheduled',
+            'message_id': i == 0 ? 'message-0' : null,
+            'subject': 'Exact subject $i',
+            'body': 'Exact message $i',
+            'due_at': '2026-01-01T12:00:00Z',
+            'scheduled_for': '2026-01-01T12:00:00Z',
+            'note': '',
+          },
+        ),
+      };
+      await render(t, data, calls, size: const Size(390, 844));
+      expect(find.text('Cancel scheduled reply'), findsNothing);
+      expect(find.text('Review & send'), findsNothing);
+      await t.ensureVisible(find.text('View sequence'));
+      await t.tap(find.text('View sequence'));
+      await t.pumpAndSettle();
+      expect(find.text('1/3 ACCEPTED'), findsOneWidget);
+      await t.ensureVisible(find.text('Pause sequence'));
+      await t.tap(find.widgetWithText(OutlinedButton, 'Pause sequence'));
+      await t.pumpAndSettle();
+      expect(calls.where((r) => r.method == 'POST'), isEmpty);
+      await t.tap(find.widgetWithText(FilledButton, 'Pause sequence'));
+      await t.pumpAndSettle();
+      expect(
+        jsonDecode(calls.lastWhere((r) => r.method == 'POST').body)['version'],
+        7,
+      );
+      await t.ensureVisible(find.text('Review & resume'));
+      await t.tap(find.text('Review & resume'));
+      await t.pumpAndSettle();
+      await t.tap(find.widgetWithText(FilledButton, 'Review sequence'));
+      await t.pumpAndSettle();
+      await t.ensureVisible(find.byType(CheckboxListTile));
+      await t.tap(find.byType(CheckboxListTile));
+      await t.pumpAndSettle();
+      await t.tap(find.widgetWithText(FilledButton, 'Approve & resume'));
+      await t.pumpAndSettle();
+      final resume = calls.lastWhere((r) => r.method == 'POST');
+      expect(resume.url.path, endsWith('/resumeSequence'));
+      final body = jsonDecode(resume.body);
+      expect(body['version'], 8);
+      expect(body['steps'].length, 2);
+      expect(body['steps'][0]['task_id'], 'step-1');
+      expect(body['steps'][1]['task_id'], 'step-2');
+      await t.ensureVisible(find.text('Mark replied'));
+      await t.tap(find.widgetWithText(OutlinedButton, 'Mark replied'));
+      await t.pumpAndSettle();
+      await t.tap(find.widgetWithText(FilledButton, 'Mark replied'));
+      await t.pumpAndSettle();
+      expect(find.text('REPLIED'), findsOneWidget);
+      expect(find.text('Review & resume'), findsNothing);
+      expect(
+        calls.lastWhere((r) => r.method == 'POST').url.path,
+        endsWith('/replySequence'),
+      );
+      expect(t.takeException(), isNull);
+    },
+  );
 }
