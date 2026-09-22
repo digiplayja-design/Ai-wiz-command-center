@@ -9,6 +9,7 @@ import 'funnel_client.dart';
 import 'funnel_inbox.dart';
 import 'funnel_templates.dart';
 import 'funnel_form_preview.dart';
+import 'funnel_images.dart';
 import 'funnel_create_dialog.dart';
 import 'funnel_launch_checklist.dart';
 import 'funnel_followups.dart';
@@ -16,8 +17,14 @@ import 'funnel_campaigns.dart';
 import 'funnel_rehearsal.dart';
 
 class FunnelScreen extends StatefulWidget {
-  const FunnelScreen({super.key, required this.client, this.onOpenContacts});
+  const FunnelScreen({
+    super.key,
+    required this.client,
+    this.onOpenContacts,
+    this.imagePicker = pickFunnelImage,
+  });
   final FunnelClient client;
+  final Future<FunnelPickedImage?> Function() imagePicker;
   final Future<void> Function()? onOpenContacts;
   @override
   State<FunnelScreen> createState() => _FunnelScreenState();
@@ -320,7 +327,7 @@ class _FunnelScreenState extends State<FunnelScreen> {
                     ),
                   ),
                   const Text(
-                    '10 draft requests per day. Your form style, privacy policy, booking link, and contact email are kept. Nothing is published automatically.',
+                    '10 draft requests per day. Your images, form style, privacy policy, booking link, and contact email are kept. Nothing is published automatically.',
                     style: TextStyle(color: WfStyle.muted, fontSize: 12),
                   ),
                 ],
@@ -1008,6 +1015,93 @@ class _FunnelScreenState extends State<FunnelScreen> {
       }),
     ),
   );
+  Future<void> _chooseImage(String slot, String label) async {
+    final selectedId = _selected?['id'];
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (c) => Theme(
+        data: WfStyle.theme,
+        child: FunnelImageLibrary(
+          client: widget.client,
+          slot: label,
+          picker: widget.imagePicker,
+          protectedIds: {
+            for (final key in ['logo', 'hero_image'])
+              if (_draft[key] is Map) _draft[key]['id'].toString(),
+          },
+        ),
+      ),
+    );
+    if (result == null ||
+        !mounted ||
+        _denied ||
+        _selected?['id'] != selectedId) {
+      return;
+    }
+    setState(() {
+      _draft[slot] = result;
+      _dirty = true;
+      _revision++;
+    });
+  }
+
+  Widget _imageField(String slot, String label) {
+    final asset = _draft[slot] as Map?;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => _chooseImage(slot, label.toLowerCase()),
+                icon: const Icon(Icons.add_photo_alternate_outlined),
+                label: Text('Choose ${label.toLowerCase()}'),
+              ),
+              if (asset != null)
+                TextButton(
+                  onPressed: () => setState(() {
+                    _draft[slot] = null;
+                    _dirty = true;
+                    _revision++;
+                  }),
+                  child: Text('Remove ${label.toLowerCase()}'),
+                ),
+            ],
+          ),
+          if (asset != null) ...[
+            const SizedBox(height: 8),
+            FunnelPrivateImage(
+              client: widget.client,
+              id: asset['id'].toString(),
+              description: asset['alt'].toString(),
+              height: 88,
+            ),
+            TextFormField(
+              key: ValueKey('$_revision:$slot-alt:${asset['id']}'),
+              initialValue: asset['alt'].toString(),
+              maxLength: 180,
+              decoration: InputDecoration(
+                labelText: '$label description',
+                helperText:
+                    'Required to publish. Describe what the image shows.',
+                helperMaxLines: 5,
+              ),
+              onChanged: (v) => setState(() {
+                _draft[slot] = {...asset, 'alt': v};
+                _dirty = true;
+              }),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _fields() => _card(
     Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1019,6 +1113,18 @@ class _FunnelScreenState extends State<FunnelScreen> {
         const SizedBox(height: 22),
         _field('name', 'Funnel name', 100),
         _field('brand', 'Business name', 80),
+        const Text(
+          'Page images',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Add your logo and a main image. Save and publish to update the live page.',
+          style: TextStyle(color: WfStyle.muted, fontSize: 12, height: 1.5),
+        ),
+        const SizedBox(height: 12),
+        _imageField('logo', 'Logo'),
+        _imageField('hero_image', 'Main image'),
         DropdownButtonFormField<String>(
           key: ValueKey('$_revision:layout'),
           initialValue: _draft['layout'] as String,
@@ -1216,13 +1322,31 @@ class _FunnelScreenState extends State<FunnelScreen> {
                   Container(
                     padding: const EdgeInsets.all(22),
                     color: Colors.white,
-                    child: Text(
-                      _draft['brand'].toString(),
-                      style: const TextStyle(
-                        color: Color(0xFF142B38),
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
-                      ),
+                    child: Row(
+                      children: [
+                        if (_draft['logo'] is Map) ...[
+                          SizedBox(
+                            width: 48,
+                            child: FunnelPrivateImage(
+                              client: widget.client,
+                              id: _draft['logo']['id'].toString(),
+                              description: _draft['logo']['alt'].toString(),
+                              height: 48,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
+                        Expanded(
+                          child: Text(
+                            _draft['brand'].toString(),
+                            style: const TextStyle(
+                              color: Color(0xFF142B38),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   Container(
@@ -1283,6 +1407,19 @@ class _FunnelScreenState extends State<FunnelScreen> {
                       ],
                     ),
                   ),
+                  if (_draft['hero_image'] is Map)
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: FunnelPrivateImage(
+                          client: widget.client,
+                          id: _draft['hero_image']['id'].toString(),
+                          description: _draft['hero_image']['alt'].toString(),
+                          height: 280,
+                        ),
+                      ),
+                    ),
                   Padding(
                     padding: const EdgeInsets.all(24),
                     child: Column(

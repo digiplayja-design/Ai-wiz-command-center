@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -23,7 +24,13 @@ class FunnelClient {
   final http.Client _http;
   final bool _ownsClient;
   void Function()? onAccessDenied;
+  final Set<void Function()> _accessListeners = {};
+  void addAccessDeniedListener(void Function() listener) =>
+      _accessListeners.add(listener);
+  void removeAccessDeniedListener(void Function() listener) =>
+      _accessListeners.remove(listener);
   void dispose() {
+    _accessListeners.clear();
     if (_ownsClient) _http.close();
   }
 
@@ -43,6 +50,30 @@ class FunnelClient {
         'Accept': 'application/json',
       });
     if (body != null) req.body = jsonEncode(body);
+    return _send(req);
+  }
+
+  Future<Map<String, dynamic>> uploadImage(String name, Uint8List bytes) async {
+    if (bytes.isEmpty || bytes.length > 5 * 1024 * 1024) {
+      throw const FunnelException('Choose an image up to 5 MB.');
+    }
+    final uri = Uri.parse(
+      '${backendBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/funnels/images',
+    );
+    final req = http.MultipartRequest('POST', uri)
+      ..headers.addAll({...headersBuilder(), 'Accept': 'application/json'})
+      ..files.add(http.MultipartFile.fromBytes('image', bytes, filename: name));
+    return _send(req);
+  }
+
+  Future<Uint8List> imageBytes(String id) async {
+    final data = await request('GET', '/images/$id');
+    return base64Decode(
+      (data['content'] as String).replaceAll(RegExp(r'\s'), ''),
+    );
+  }
+
+  Future<Map<String, dynamic>> _send(http.BaseRequest req) async {
     try {
       final response = await (() async => http.Response.fromStream(
         await _http.send(req),
@@ -56,6 +87,9 @@ class FunnelClient {
       if (response.statusCode < 200 || response.statusCode >= 300) {
         if (response.statusCode == 401 || response.statusCode == 403) {
           onAccessDenied?.call();
+          for (final listener in _accessListeners.toList()) {
+            listener();
+          }
         }
         throw FunnelException(
           result?['error']?.toString() ??

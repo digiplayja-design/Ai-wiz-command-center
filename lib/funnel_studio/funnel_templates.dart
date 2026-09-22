@@ -25,6 +25,8 @@ Map<String, dynamic> funnelTemplate(String layout) => {
   'layout': layout,
   'accent': 'cyan',
   'form_mode': 'single',
+  'logo': null,
+  'hero_image': null,
   'privacy_url': '',
   'booking_url': '',
   'contact_email': '',
@@ -46,6 +48,8 @@ String campaignLink(String url, Map<String, String> tags) => Uri.parse(url)
 Map<String, dynamic> generatedCopy(Map current, Map generated) => {
   ...generated,
   'form_mode': current['form_mode'] ?? 'single',
+  'logo': current['logo'],
+  'hero_image': current['hero_image'],
   for (final key in ['privacy_url', 'booking_url', 'contact_email'])
     key: current[key] ?? '',
 };

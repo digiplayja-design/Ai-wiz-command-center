@@ -34,6 +34,16 @@ class FunnelLaunchChecklist extends StatelessWidget {
         funnelContactEmail('${document['contact_email'] ?? ''}'),
         'Add a valid business email in the page editor.',
       ),
+      if (document['logo'] is Map || document['hero_image'] is Map)
+        (
+          'Add descriptions for your images',
+          ['logo', 'hero_image'].every(
+            (key) =>
+                document[key] is! Map ||
+                '${document[key]['alt'] ?? ''}'.trim().isNotEmpty,
+          ),
+          'Describe each selected image in Page images before publishing.',
+        ),
     ];
     final complete = checks.where((c) => c.$2).length;
     return Container(
