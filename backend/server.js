@@ -1,3 +1,4 @@
+import { registerFunnels } from './funnels/routes.mjs'; // K139_FUNNEL_STUDIO
 import { registerWorkforce } from './workforce/routes.mjs'; // K138_WORKFORCE
 import { registerContactsCrm } from './contacts_crm/routes.mjs'; // K137_ENTERPRISE_CONTACTS
 // K135Z_GATE5_ESM_IMPORTS_BEGIN
@@ -13079,6 +13080,7 @@ app.post(
 // KORLIX_AGENT_EMAIL_DRAFT_ROUTES_BUILD133_INSTALL_START
 registerContactsCrm(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }); // K137_ENTERPRISE_CONTACTS
 registerWorkforce(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }); // K138_WORKFORCE
+registerFunnels(app, { database: supabaseAdmin, requireUser }); // K139_FUNNEL_STUDIO
 
 installKorlixAgentEmailDraftRoutes(app, {
   environment: process.env,
