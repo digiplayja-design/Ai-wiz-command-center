@@ -1,3 +1,5 @@
+import 'workforce/workforce_client.dart';
+import 'workforce/workforce_screen.dart';
 import 'contacts_crm/contacts_client.dart';
 import 'contacts_crm/contacts_screen.dart';
 import 'dart:async';
@@ -6081,6 +6083,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   // Keep active Utility tools visible.
   static const List<String> _utilityTools = <String>[
     'Contacts CRM',
+    'Workforce',
     'Voice-scribe',
     'Copy Box',
     'Background remover',
@@ -11157,7 +11160,18 @@ Make the entire output professional, well-structured using Markdown, and product
         headersBuilder: _authHeaders))));
   }
 
+  Future<void> _openWorkforce() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
+      WorkforceScreen(client: WorkforceClient(backendBaseUrl: kKorlixBackendBaseUrl,
+        headersBuilder: _authHeaders))));
+  }
+
   void _selectUtilityTool(String tool) {
+    if (tool == 'Workforce') {
+      unawaited(_openWorkforce());
+      return;
+    }
+
     if (tool == 'Contacts CRM') {
       unawaited(_openContactsCrm());
       return;
@@ -14266,6 +14280,7 @@ Make the entire output professional, well-structured using Markdown, and product
     };
 
     String statusFor(String tool) {
+      if (tool == 'Workforce') return 'Enterprise attendance, work updates and employee access';
       if (tool == 'Contacts CRM') return 'Enterprise contacts, imports and Nova connections';
       if (tool == 'Voice-scribe') {
         return 'Transcribe speech into saved voice boxes';
