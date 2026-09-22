@@ -44,11 +44,12 @@ void main() {
       final font = File(
         '$root/bin/cache/artifacts/material_fonts/Roboto-Regular.ttf',
       );
-      if (font.existsSync())
+      if (font.existsSync()) {
         await (FontLoader('Roboto')..addFont(
               Future.value(ByteData.sublistView(font.readAsBytesSync())),
             ))
             .load();
+      }
     }
   });
   test(
@@ -89,14 +90,16 @@ void main() {
           expect(r.url.path, '/api/funnels');
           expect(r.headers['Authorization'], token);
           calls++;
-          if (calls == 1)
+          if (calls == 1) {
             return http.Response(
               '{"funnels":[]}',
               200,
               headers: {'content-type': 'application/json; charset=utf-8'},
             );
-          if (calls == 2)
+          }
+          if (calls == 2) {
             return http.Response('{"error":"Refresh this funnel."}', 409);
+          }
           return http.Response('<html>Bad gateway</html>', 502);
         }),
       );
@@ -125,12 +128,13 @@ void main() {
         headersBuilder: () => {'Authorization': 'session'},
         client: MockClient((r) async {
           calls.add(r);
-          if (r.url.path.endsWith('/leads'))
+          if (r.url.path.endsWith('/leads')) {
             return http.Response(
               jsonEncode({'total': 0, 'leads': [], 'campaigns': []}),
               200,
               headers: {'content-type': 'application/json; charset=utf-8'},
             );
+          }
           return http.Response(
             jsonEncode({
               'funnels': [f],
@@ -201,8 +205,9 @@ void main() {
         backendBaseUrl: 'https://example.com',
         headersBuilder: () => {},
         client: MockClient((r) async {
-          if (deny)
+          if (deny) {
             return http.Response('{"error":"Enterprise required"}', 403);
+          }
           if (r.method == 'PUT') {
             final b = jsonDecode(r.body);
             expect(b['version'], 1);
