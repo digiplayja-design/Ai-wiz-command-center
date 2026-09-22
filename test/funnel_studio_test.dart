@@ -128,9 +128,15 @@ void main() {
         headersBuilder: () => {'Authorization': 'session'},
         client: MockClient((r) async {
           calls.add(r);
-          if (r.url.path.endsWith('/leads')) {
+          if (r.url.path.endsWith('/inbox')) {
             return http.Response(
-              jsonEncode({'total': 0, 'leads': [], 'campaigns': []}),
+              jsonEncode({
+                'total': 0,
+                'filtered_total': 0,
+                'snapshot': '2026-09-22T12:00:00Z',
+                'leads': [],
+                'campaigns': [],
+              }),
               200,
               headers: {'content-type': 'application/json; charset=utf-8'},
             );
@@ -190,7 +196,7 @@ void main() {
       await t.ensureVisible(find.text('Leads'));
       await t.tap(find.text('Leads'));
       await t.pumpAndSettle();
-      expect(calls.where((r) => r.url.path.endsWith('/leads')), hasLength(1));
+      expect(calls.where((r) => r.url.path.endsWith('/inbox')), hasLength(1));
       expect(t.takeException(), isNull);
     });
   }

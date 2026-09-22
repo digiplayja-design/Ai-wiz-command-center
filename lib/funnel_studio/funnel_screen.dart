@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
+import 'funnel_inbox.dart';
 import 'funnel_templates.dart';
 import 'funnel_create_dialog.dart';
 import 'funnel_launch_checklist.dart';
@@ -24,7 +25,6 @@ class _FunnelScreenState extends State<FunnelScreen> {
   List<Map<String, dynamic>> _funnels = [];
   Map<String, dynamic>? _selected;
   Map<String, dynamic> _draft = {};
-  Map<String, dynamic>? _insights;
   String _name = '', _tab = 'Page', _search = '', _status = 'All';
   String? _error;
   bool _busy = false, _dirty = false, _aiReady = false, _denied = false;
@@ -46,7 +46,6 @@ class _FunnelScreenState extends State<FunnelScreen> {
           _funnels = [];
           _selected = null;
           _draft = {};
-          _insights = null;
         });
       }
     };
@@ -93,7 +92,6 @@ class _FunnelScreenState extends State<FunnelScreen> {
       _name = f['name'].toString();
       _dirty = false;
       _revision++;
-      _insights = null;
       final i = _funnels.indexWhere((x) => x['id'] == f['id']);
       if (i < 0) {
         _funnels.insert(0, f);
@@ -138,7 +136,6 @@ class _FunnelScreenState extends State<FunnelScreen> {
       setState(() {
         _selected = null;
         _dirty = false;
-        _insights = null;
         _tab = 'Page';
       });
     } else {
@@ -333,12 +330,6 @@ class _FunnelScreenState extends State<FunnelScreen> {
       }
     });
   }
-
-  Future<void> _loadInsights() => _run(() async {
-    final id = _selected!['id'];
-    final d = await widget.client.request('GET', '/$id/leads');
-    if (mounted && _selected?['id'] == id) setState(() => _insights = d);
-  });
 
   Future<void> _queueFollowup(String leadId) async {
     if (!await _confirm(
@@ -828,7 +819,6 @@ class _FunnelScreenState extends State<FunnelScreen> {
                       selected: _tab == t,
                       onSelected: (_) {
                         setState(() => _tab = t);
-                        if (t == 'Leads') unawaited(_loadInsights());
                       },
                     ),
                 ],
@@ -1375,94 +1365,12 @@ class _FunnelScreenState extends State<FunnelScreen> {
   );
 
   Widget _leads() => _card(
-    Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _title(
-          'Every conversation starts somewhere',
-          '${_insights?['total'] ?? _selected!['lead_count'] ?? 0} submissions · most recent 100 shown',
-        ),
-        const SizedBox(height: 18),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _button('Refresh leads', Icons.refresh, _loadInsights),
-            if (widget.onOpenContacts != null)
-              _button(
-                'Open Contacts CRM',
-                Icons.people_outline,
-                widget.onOpenContacts,
-              ),
-          ],
-        ),
-        const SizedBox(height: 22),
-        const Text(
-          'Submitted identities are unverified. A request permits a response to that inquiry; it does not grant marketing or outbound-call permission. Existing CRM preferences are preserved.',
-          style: TextStyle(color: WfStyle.muted, height: 1.5),
-        ),
-        const SizedBox(height: 22),
-        if (_insights != null && (_insights!['leads'] as List).isEmpty)
-          const Padding(
-            padding: EdgeInsets.all(30),
-            child: Text(
-              'Your next lead will appear here. Share a published page to get started.',
-            ),
-          ),
-        for (final campaign in _insights?['campaigns'] as List? ?? [])
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              '${campaign['source']} / ${campaign['campaign']}  ·  ${campaign['leads']} leads',
-              style: const TextStyle(color: WfStyle.cyan),
-            ),
-          ),
-        const SizedBox(height: 16),
-        for (final lead in _insights?['leads'] as List? ?? [])
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.only(bottom: 14),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: WfStyle.background,
-              border: Border.all(color: WfStyle.line),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  lead['name'].toString(),
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                SelectableText(
-                  '${lead['email']}${lead['phone'].toString().isEmpty ? '' : ' · ${lead['phone']}'}',
-                  style: const TextStyle(color: WfStyle.cyan),
-                ),
-                if (lead['message'].toString().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 14),
-                    child: Text(lead['message'].toString()),
-                  ),
-                const SizedBox(height: 12),
-                Text(
-                  '${DateTime.tryParse(lead['created_at'].toString())?.toLocal().toString().split('.').first ?? ''} · ${lead['utm']?['utm_source'] ?? ''} ${lead['utm']?['utm_campaign'] ?? ''}',
-                  style: const TextStyle(fontSize: 12, color: WfStyle.muted),
-                ),
-                const SizedBox(height: 14),
-                _button(
-                  'Queue follow-up',
-                  Icons.playlist_add,
-                  () => _queueFollowup('${lead['id']}'),
-                ),
-              ],
-            ),
-          ),
-      ],
+    FunnelInbox(
+      key: ValueKey('inbox-${_selected!['id']}'),
+      client: widget.client,
+      funnelId: _selected!['id'].toString(),
+      onQueue: _queueFollowup,
+      onOpenContacts: widget.onOpenContacts,
     ),
   );
 }
