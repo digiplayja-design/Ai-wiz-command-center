@@ -48,11 +48,11 @@ test('Performance has its own ten-per-minute request limit and platform setup re
  const environment={KORLIX_META_ENABLED:'true',KORLIX_META_APP_ID:'1234567',KORLIX_META_APP_SECRET:'fixture-secret-no-provider',KORLIX_META_LOGIN_CONFIG_ID:'7654321',KORLIX_META_TOKEN_KEY:Buffer.alloc(32,7).toString('base64'),KORLIX_META_REDIRECT_URI:'https://example.com/api/funnels/meta/callback'};
  const cfg=metaConfiguration(environment),c={version:1,config_hash:cfg.hash,expires_at:new Date(Date.now()+86400000).toISOString(),binding_id:binding,selected_account:account.id,accounts:[account],sealed:tokenCipher(cfg.key).seal('fixture-token',`korlix-meta:${user}:${binding}`)};
  for(const enabled of [true,false]){
-  let reads=0;const app=express(),handler=registerFunnels(app,{environment:{...environment,KORLIX_META_ENABLED:enabled?'true':'false'},requireUser:async()=>({id:user}),metaStore:{command:async()=>c},metaProvider:{account:async()=>account,insights:async()=>{reads++;return{rows:[],totals:{spend:'0.00',impressions:0,clicks:0},reported_days:0};}}});
+  let reads=0;const app=express(),handler=registerFunnels(app,{environment:{...environment,KORLIX_META_ENABLED:enabled?'true':'false'},requireUser:async()=>({id:user}),metaStore:{command:async()=>c},metaProvider:{account:async()=>account,insights:async()=>{reads++;return{rows:[],totals:{spend:'0.00',impressions:0,clicks:0},reported_days:0};},campaignInsights:async()=>{reads++;return{rows:[],totals:{spend:'0.00',impressions:0,clicks:0},reported_campaigns:0};}}});
   const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
   try{const url=`http://127.0.0.1:${server.address().port}/api/funnels/meta/performance?days=7&version=1&account_id=act_123`;
-   if(enabled){for(let i=0;i<10;i++)assert.equal((await fetch(url)).status,200);assert.equal((await fetch(url)).status,429);assert.equal(reads,10);}
-   else{assert.equal((await fetch(url)).status,503);assert.equal(reads,0);}
+   if(enabled){for(let i=0;i<10;i++)assert.equal((await fetch(i%2?url.replace('/performance?','/campaign-performance?'):url)).status,200);assert.equal((await fetch(url)).status,429);assert.equal(reads,10);}
+   else{assert.equal((await fetch(url)).status,503);assert.equal((await fetch(url.replace('/performance?','/campaign-performance?'))).status,503);assert.equal(reads,0);}
   }finally{handler.close();server.closeAllConnections();await new Promise(r=>server.close(r));}
  }
 });

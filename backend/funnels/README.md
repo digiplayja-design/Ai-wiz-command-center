@@ -629,3 +629,59 @@ backend. No owner documents or saved reporting data require conversion.
 Primary API references used for the implementation:
 - [Meta's official AdsInsights field definitions](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/adsinsights.py)
 - [Meta's official AdAccount get_insights parameter definitions](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/adaccount.py)
+
+## K157 · Meta campaign comparison
+
+`GET /api/funnels/meta/campaign-performance` takes the same `days`, `version`
+and `account_id` query as account performance. Both endpoints share the
+10-request-per-owner-per-minute reporting limit and the same before/after
+owner, Enterprise, credential and selected-account checks. No campaign ID,
+provider cursor, fields, filters, remote URL or arbitrary range is accepted
+from the browser.
+
+The provider requests account-scoped insights with `level=campaign`, the same
+bounded 7/30/90-completed-day `time_range`, and additional `campaign_id` and
+`campaign_name` fields. No daily `time_increment` is requested. Each returned
+row must span the full requested period, match the account/currency, and have
+a unique numeric campaign ID and a nonblank name of at most 1000 characters.
+Names are presentation text, not identities or links to local plans. Different
+campaigns may have identical names; IDs disambiguate them.
+
+Responses use `scope: campaign`, `reported_campaigns`, aggregate totals and rows
+of campaign ID/name, decimal-string spend, integer impressions and clicks (all).
+The same exact arithmetic and numeric bounds apply. All pages must validate
+before any report is returned. Three pages of at most 100 rows each cap the
+report at 300 campaigns. If Meta indicates more pages, the entire request fails
+and the owner can choose a shorter period; no truncated ranking or partial total
+is presented. Missing/repeated cursors and duplicate IDs, even across pages,
+fail. Fixed-host GET, header authentication, app-secret proof, timeouts and
+redacted errors retain K156 behavior.
+
+The performance panel switches explicitly between Account totals and Campaign
+comparison. Changing scope clears prior data and invalidates an in-flight
+response; loading remains a separate tap. Campaign results are searched by name
+or ID, sorted by highest spend/impressions/clicks or name, and paged locally
+20 at a time. Money sorting uses BigInt micro-units. Searches do not change the
+full-report totals; matching count and row range are shown separately. A fresh
+load resets search, sort and paging. Empty provider data and a local search with
+no matches have distinct messages. No zero-activity campaigns are invented.
+
+These reports do not associate Meta campaigns with local funnel plans, use
+matching names as proof, attribute leads/revenue or authorize publishing. No
+stored report, migration, credential/scope change, background synchronization,
+ad activation, ad edit or external campaign creation is added. User-run
+acceptance and Meta activation remain deferred. Provider totals can change
+between separate loads; comparison is not an atomic account-wide snapshot or
+billing reconciliation.
+
+Mock tests cover full-period queries, duplicate names/IDs, bounded pagination,
+malformed data, exact sums and sorting, common owner/tier/expiry/revocation and
+concurrency checks on both endpoints, shared rate limits, setup gates, scope
+switching, errors, empty/search states, fresh-load reset and responsive views.
+They do not prove Meta app approval, live connection or actual reported spend.
+
+After explicit production approval, deploy backend then frontend. K156 is a
+compatible rollback; restore its frontend first, then backend if needed. No
+schema, owner-document or report conversion is needed. Keep Meta activation
+separate. The official Meta SDK field/level and account-insights references in
+the K156 section also cover the campaign fields and `campaign` level used here.

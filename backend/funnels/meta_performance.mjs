@@ -27,24 +27,39 @@ function money(n) {
   const fraction=(n%1000000n).toString().padStart(6,'0').replace(/0+$/,'').padEnd(2,'0');
   return(n/1000000n).toString()+'.'+fraction;
 }
-export async function readMetaInsights(graph,token,account,range) {
+export async function readMetaInsights(graph,token,account,range,scope='account') {
+  if(!['account','campaign'].includes(scope))unreadable();
+  const campaign=scope==='campaign';
   if(!/^act_\d{1,40}$/.test(account.id)||!/^[A-Z]{3}$/.test(account.currency))unreadable();
-  const rows=[],dates=new Set(),cursors=new Set();let after,totalSpend=0n,totalImpressions=0n,totalClicks=0n;
+  const rows=[],identities=new Set(),cursors=new Set();let after,totalSpend=0n,totalImpressions=0n,totalClicks=0n;
   for(let page=0;page<3;page++){
     const result=await graph(`${account.id}/insights`,{
-      fields:'account_id,account_currency,date_start,date_stop,spend,impressions,clicks',level:'account',
-      time_range:JSON.stringify({since:range.from,until:range.to}),time_increment:1,limit:100,...(after?{after}:{}),
+      fields:'account_id,account_currency,date_start,date_stop,spend,impressions,clicks'+(campaign?',campaign_id,campaign_name':''),level:scope,
+      time_range:JSON.stringify({since:range.from,until:range.to}),...(!campaign?{time_increment:1}:{}),limit:100,...(after?{after}:{}),
     },token);
     if(!Array.isArray(result?.data)||result.data.length>100)unreadable();
     for(const row of result.data){
-      if(!row||row.account_id!==account.id.slice(4)||row.account_currency!==account.currency||typeof row.date_start!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(row.date_start)||row.date_stop!==row.date_start||row.date_start<range.from||row.date_start>range.to||dates.has(row.date_start))unreadable();
-      const parsed=Date.parse(row.date_start+'T00:00:00Z');if(!Number.isFinite(parsed)||new Date(parsed).toISOString().slice(0,10)!==row.date_start)unreadable();
-      const s=spend(row.spend),impressions=count(row.impressions),clicks=count(row.clicks);dates.add(row.date_start);
+      if(!row||row.account_id!==account.id.slice(4)||row.account_currency!==account.currency)unreadable();
+      let identity;
+      if(campaign){
+        if(typeof row.campaign_id!=='string'||!/^\d{1,40}$/.test(row.campaign_id)||typeof row.campaign_name!=='string'||!row.campaign_name.trim()||row.campaign_name.length>1000||row.date_start!==range.from||row.date_stop!==range.to)unreadable();
+        identity=row.campaign_id;
+      }else{
+        if(typeof row.date_start!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(row.date_start)||row.date_stop!==row.date_start||row.date_start<range.from||row.date_start>range.to)unreadable();
+        const parsed=Date.parse(row.date_start+'T00:00:00Z');if(!Number.isFinite(parsed)||new Date(parsed).toISOString().slice(0,10)!==row.date_start)unreadable();
+        identity=row.date_start;
+      }
+      if(identities.has(identity))unreadable();identities.add(identity);
+      const s=spend(row.spend),impressions=count(row.impressions),clicks=count(row.clicks);
       totalSpend+=s;totalImpressions+=impressions;totalClicks+=clicks;
-      if(rows.length>=range.days||totalSpend>MAX_SPEND||totalImpressions>MAX_COUNT||totalClicks>MAX_COUNT)unreadable();
-      rows.push({date:row.date_start,spend:money(s),impressions:Number(impressions),clicks:Number(clicks)});
+      if(rows.length>=(campaign?300:range.days)||totalSpend>MAX_SPEND||totalImpressions>MAX_COUNT||totalClicks>MAX_COUNT)unreadable();
+      rows.push({...(campaign?{campaign_id:identity,campaign_name:row.campaign_name.trim()}:{date:identity}),spend:money(s),impressions:Number(impressions),clicks:Number(clicks)});
     }
-    if(!result.paging?.next)return{rows:rows.sort((a,b)=>b.date.localeCompare(a.date)),totals:{spend:money(totalSpend),impressions:Number(totalImpressions),clicks:Number(totalClicks)},reported_days:rows.length};
+    if(!result.paging?.next)return{
+      rows:rows.sort((a,b)=>campaign?a.campaign_id.localeCompare(b.campaign_id):b.date.localeCompare(a.date)),
+      totals:{spend:money(totalSpend),impressions:Number(totalImpressions),clicks:Number(totalClicks)},
+      ...(campaign?{reported_campaigns:rows.length}:{reported_days:rows.length}),
+    };
     after=result.paging?.cursors?.after;
     if(typeof after!=='string'||!after||after.length>4000||cursors.has(after))unreadable();
     cursors.add(after); // Never follow the provider's pagination URL.
