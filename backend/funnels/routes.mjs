@@ -5,6 +5,7 @@ import { renderPage, publicHeaders } from './render.mjs';
 import astra from '../korlix_astra.cjs';
 import { createFunnelScheduler } from './scheduler.mjs';
 import { createFunnelFollowups } from './followups.mjs';
+import { registerCampaigns } from './campaigns.mjs';
 
 export function createFunnelStore(database) {
   return { async command(actor, action, id=null, data={}) {
@@ -27,7 +28,7 @@ export async function generateFunnel(brief, environment=process.env) {
   try { return document(JSON.parse(result.output_text.replace(/^```(?:json)?\s*|\s*```$/g,''))); }
   catch { fail('NOVA could not finish a valid draft. Your current page is unchanged. Try a more specific brief.',503); }
 }
-export function registerFunnels(app,{database,requireUser,store,followups,loadAgentProfile,generate=generateFunnel,environment=process.env,now=Date.now,autoStartScheduler=false,logger=console}={}) {
+export function registerFunnels(app,{database,requireUser,store,followups,campaignStore,generateAdCopy,loadAgentProfile,generate=generateFunnel,environment=process.env,now=Date.now,autoStartScheduler=false,logger=console}={}) {
   const persistence=store || (database?createFunnelStore(database):null);
   const followup=followups||createFunnelFollowups({database,loadAgentProfile,environment});
   const scheduler=createFunnelScheduler({run:()=>followup.runScheduled(),logger});
@@ -56,6 +57,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,loadAg
     } catch(e) {res.status(e instanceof FunnelError?e.status:503).json({error:e instanceof FunnelError?e.message:'Funnel Studio could not complete this request. Please retry.'});}
   };
   const base='/api/funnels';
+  registerCampaigns(app,{base,owner,command,database,campaignStore,generateAdCopy,environment,publicBase});
   app.get(base,owner(async(_q,r,u)=>{
     const v=await command(u,'list');r.json({...v,funnels:v.funnels.map(present),ai_ready:!!environment.OPENAI_API_KEY,ai_daily_limit:10});
   }));
