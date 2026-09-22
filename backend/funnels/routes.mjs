@@ -142,6 +142,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   app.post('/f/:slug/step',express.urlencoded({extended:false,limit:'64kb'}),publicRoute(async(q,r)=>{
     const f=await command(null,'public',null,{slug:slug(q.params.slug),count:false});
     verifyForm(q,f);
+    if(q.body.step==='refresh_questions')return showStep(r,f,q.body,'request');
     if(document(f.document).form_mode!=='guided')fail('This form changed. Return to the page and start again.',409);
     const direction=q.body.step;
     if(!['request','review','edit_contact','edit_request'].includes(direction))fail('Choose a valid inquiry step.');
@@ -162,14 +163,14 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
     const t=verifyForm(q,f),guided=document(f.document).form_mode==='guided';
     let input;
     try {contactInput(q.body);}
-    catch(e){if(!guided||!(e instanceof FunnelError))throw e;return showStep(r,f,q.body,'contact',e.message,400);}
+    catch(e){if(!(e instanceof FunnelError))throw e;return showStep(r,f,q.body,'contact',e.message,400);}
     try {
       input=leadInput(q.body,document(f.document));
       if(guided) {
         const mac=q.body.review_token,expected=reviewSignature(q.body.token,input);
         if(typeof mac!=='string'||!/^[0-9a-f]{64}$/.test(mac)||!timingSafeEqual(Buffer.from(mac),Buffer.from(expected)))fail('Review your inquiry again before submitting.');
       }
-    } catch(e){if(!guided||!(e instanceof FunnelError))throw e;return showStep(r,f,q.body,'request',e.message,400);}
+    } catch(e){if(!(e instanceof FunnelError))throw e;return showStep(r,f,q.body,'request',e.message,400);}
     try {await command(null,'lead',null,{...input,slug:f.slug,published_version:f.published_version,request_id:t.n});}
     catch(e){
       if(!guided||!(e instanceof FunnelError)||![429,503].includes(e.status))throw e;

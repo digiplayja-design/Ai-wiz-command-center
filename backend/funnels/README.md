@@ -462,3 +462,55 @@ Conditional branching, booking rules, custom CRM fields and automatic outreach
 based on answers remain separate work.
 
 Implementation reference: [Supabase database functions and privileges](https://supabase.com/docs/guides/database/functions).
+
+## K154 · Conditional inquiry questions
+
+An inquiry question can use `show_when: {question_id, equals}` to appear only
+when an earlier multiple-choice question has the selected answer. Dependencies
+may chain, but must point backward to an existing choice; publication rejects
+cycles, missing sources, changed types, and removed choices. Drafts may retain
+unfinished conditions. There are still at most four questions in total.
+
+Both public form styles reveal matching questions as choices change. Inactive
+controls are hidden, disabled, no longer required, and cleared. A fixed browser
+script is permitted by its exact SHA-256 CSP hash; user content remains escaped
+HTML attributes/text. There are no external scripts, requests or analytics.
+If the enhancement cannot run, **Update questions** posts to the cookie-bound
+step route without capture. It preserves contact/request fields, clears hidden
+answers and requests consent again. Native submission also redisplays missing
+required visible questions without losing the form. Refreshing does not extend
+the nonce lifetime, count an inquiry, or create a contact/task.
+
+Final validation resolves active questions in order on the server. Unknown
+answer fields are rejected; answers for known but inactive branches are omitted.
+The database validator independently resolves the same published graph, enforces
+visible required/choice answers, and stores only those answer snapshots. Existing
+inquiry wording, CSV behavior, cleanup, nonce replay, consent and the atomic
+capture transaction stay intact. Guided review binds the active answers and
+branch-driving choices; a changed path requires a new review.
+
+Rehearsal covers one synthetic path using first choices, explicitly not every
+branch. The Flutter preview lets owners try paths without changing drafts or
+saving preview answers. Source removal clears dependent rule values so reusing
+a question ID does not silently reconnect the condition. Owners repair invalid
+conditions before publication. NOVA generation and draft copies preserve rules.
+
+Release order: apply `20260922213311_funnel_conditional_questions.sql`, then
+backend, then frontend. The migration replaces only the service-only immutable
+answer helper, guarded against intervening K153 changes. No table, browser grant,
+external integration, owner funnel publication or outreach is added. This file
+is prepared and tested locally; production migration/deployment require approval.
+
+Rollback: retain the helper and submitted snapshots. K153 app code is compatible
+with existing unconditional pages but does not understand conditional definitions;
+its editor can strip rules on save and public forms show all questions. Once an
+owner publishes conditions, prefer restoring K154 or have the owner deliberately
+remove conditions and republish before reverting app code. Do not automatically
+rewrite owner drafts or published content.
+
+Validation includes real migration execution, branch chains, stale/forged hidden
+answers, independent database rejection, no partial records on refresh, native
+fallback, cookie/publication protections, signed-review tampering, idempotency,
+CSP hash/escaping, desktop/phone/enlarged-text layouts and existing regressions.
+Real-device acceptance remains deferred. Booking/routing and further ads work
+remain separate milestones; conditional questions do not route or contact leads.

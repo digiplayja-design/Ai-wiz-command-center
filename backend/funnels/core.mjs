@@ -29,18 +29,38 @@ export function inquiryQuestions(raw=[]) {
     ids.add(q.id);
     const options=q.type==='choice'?q.options:[];
     if(!Array.isArray(options)||options.length>8)fail('Use up to eight choices per question.');
-    return{id:q.id,type:q.type,label:questionText(q.label??'',120),required:q.required,options:options.map(o=>questionText(o,80))};
+    let show_when;
+    if(q.show_when!==undefined&&q.show_when!==null){
+      const rule=q.show_when;
+      if(typeof rule!=='object'||Array.isArray(rule)||typeof rule.question_id!=='string'||!/^q-[1-4]$/.test(rule.question_id))fail('Choose a valid question condition.');
+      show_when={question_id:rule.question_id,equals:questionText(rule.equals??'',80)};
+    }
+    return{id:q.id,type:q.type,label:questionText(q.label??'',120),required:q.required,options:options.map(o=>questionText(o,80)),...(show_when?{show_when}:{})};
   });
 }
 export function questionsReady(raw) {
   const questions=inquiryQuestions(raw);
   if(questions.some(q=>!q.label||(q.type==='choice'&&(q.options.length<2||q.options.some(o=>!o)||new Set(q.options).size!==q.options.length))))fail('Complete each question and give multiple-choice questions two to eight distinct choices before publishing.');
+  for(const [i,q] of questions.entries())if(q.show_when){
+    const source=questions.slice(0,i).find(p=>p.id===q.show_when.question_id);
+    if(!source||source.type!=='choice'||!q.show_when.equals||!source.options.includes(q.show_when.equals))fail('Check each question condition: choose an earlier multiple-choice question and one of its current choices.');
+  }
   return questions;
+}
+// Earlier-only dependencies make chains deterministic and prevent cycles.
+export function visibleQuestions(raw,values={}) {
+  const shown=[];
+  for(const q of inquiryQuestions(raw)){
+    const rule=q.show_when,source=rule&&shown.find(p=>p.id===rule.question_id);
+    if(!rule||(source?.type==='choice'&&rule.equals&&source.options.includes(rule.equals)&&typeof values['answer_'+source.id]==='string'&&values['answer_'+source.id].trim()===rule.equals))shown.push(q);
+  }
+  return shown;
 }
 export function inquiryAnswers(p,d={}) {
   const questions=questionsReady(d.questions);
   if(Object.keys(p).some(k=>k.startsWith('answer_')&&!questions.some(q=>k==='answer_'+q.id)))fail('This form changed. Reload before answering.');
-  return questions.map(q=>{
+  // Stale answers for a now-hidden branch are intentionally discarded.
+  return visibleQuestions(questions,p).map(q=>{
     const value=questionText(p['answer_'+q.id]??'',q.type==='choice'?80:500,q.required);
     if(q.type==='choice'&&value&&!q.options.includes(value))fail('Choose one of the listed answers.');
     return{id:q.id,value};

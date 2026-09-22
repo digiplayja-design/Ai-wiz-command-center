@@ -21,7 +21,7 @@ test.before(async()=>{
   db=new PGlite();
   await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create table user_profiles(id uuid primary key,tier text);create table korlix_agent_email_recipients(id uuid primary key default gen_random_uuid(),user_id uuid,email text,active boolean default true,consent_status text default 'transactional_only',source_reference text,suppressed_at timestamptz,suppression_reason text,updated_at timestamptz);grant usage on schema public to anon,authenticated,service_role;grant select,update on user_profiles to service_role;grant all on korlix_agent_email_recipients to service_role;`);
   for(const u of [owner,other,basic]) {await db.query('insert into auth.users values($1)',[u]);await db.query('insert into user_profiles values($1,$2)',[u,u===basic?'basic':'enterprise']);}
-  for(const file of ['20260921162128_enterprise_contacts_crm.sql','20260922023935_enterprise_funnel_studio.sql','20260922031813_funnel_followups.sql','20260922035232_funnel_scheduled_followups.sql','20260922042253_funnel_sequences.sql','20260922145937_funnel_lead_inbox.sql','20260922172151_funnel_lead_management.sql','20260922180817_funnel_inquiry_cleanup.sql','20260922211345_funnel_inquiry_questions.sql']) await db.exec(await readFile(new URL('../../supabase/migrations/'+file,import.meta.url),'utf8'));
+  for(const file of ['20260921162128_enterprise_contacts_crm.sql','20260922023935_enterprise_funnel_studio.sql','20260922031813_funnel_followups.sql','20260922035232_funnel_scheduled_followups.sql','20260922042253_funnel_sequences.sql','20260922145937_funnel_lead_inbox.sql','20260922172151_funnel_lead_management.sql','20260922180817_funnel_inquiry_cleanup.sql','20260922211345_funnel_inquiry_questions.sql','20260922213311_funnel_conditional_questions.sql']) await db.exec(await readFile(new URL('../../supabase/migrations/'+file,import.meta.url),'utf8'));
   await db.exec('set role service_role');
   const store=createFunnelStore({rpc:async(_name,p)=>{try{
     const data=await rpc(p.p_actor,p.p_action,p.p_id,p.p_data);
@@ -308,4 +308,43 @@ test('Uncertain custom-question receipts retry once and keep the same answer sna
  const j=await questionJourney(),review=await j.post('step',{step:'review'}),review_token=hiddenField(await review.text(),'review_token');
  captureFailure=true;const uncertain=await j.post('lead',{review_token});assert.equal(uncertain.status,503);assert.equal(hiddenField(await uncertain.text(),'answer_q-1'),'A useful goal');
  assert.equal((await j.post('lead',{review_token})).status,303);assert.equal((await rpc(owner,'leads',j.f.id)).total,1);
+});
+
+const branching=[{id:'q-1',type:'choice',label:'Service',required:true,options:['Install','Advice']},{id:'q-2',type:'choice',label:'Property',required:true,options:['Home','Office'],show_when:{question_id:'q-1',equals:'Install'}},{id:'q-3',type:'text',label:'Rooms',required:true,options:[],show_when:{question_id:'q-2',equals:'Home'}},{id:'q-4',type:'text',label:'Topic',required:false,options:[],show_when:{question_id:'q-1',equals:'Advice'}}];
+test('Conditional drafts retain rules; invalid publication leaves the current public page intact',async()=>{
+ let x=await publish(await create());const path='/api/funnels/'+x.id;
+ let r=await http(path,{method:'PUT',...auth(owner,{version:x.version,name:x.name,document:{...doc,questions:branching}})});assert.equal(r.status,200);x=(await r.json()).funnel;
+ r=await http(path+'/publish',{method:'POST',...auth(owner,{version:x.version,confirmed:true})});assert.equal(r.status,200);x=(await r.json()).funnel;
+ assert.deepEqual((await rpc(null,'public',null,{slug:x.slug})).document.questions,branching);
+ const invalid=structuredClone(branching);invalid[0].options=['New','Choices'];
+ r=await http(path,{method:'PUT',...auth(owner,{version:x.version,name:x.name,document:{...doc,questions:invalid}})});assert.equal(r.status,200);x=(await r.json()).funnel;
+ r=await http(path+'/publish',{method:'POST',...auth(owner,{version:x.version,confirmed:true})});assert.equal(r.status,400);assert.deepEqual((await rpc(null,'public',null,{slug:x.slug})).document.questions,branching);
+});
+for(const mode of ['single','guided'])test('Conditional '+mode+' refresh preserves fields without capture, excludes hidden branches and retains required checks',async()=>{
+ const j=await questionJourney(mode,branching),patch={'answer_q-1':'Install','answer_q-2':'Home','answer_q-3':'','answer_q-4':'Old topic'};
+ let r=await j.post('step',{...patch,step:'refresh_questions'});assert.equal(r.status,200);let html=await r.text();assert.match(html,/data-question-id="q-3"[^>]*>/);assert.match(html,/name="answer_q-3" maxlength="500" required>/);assert(!html.includes('Old topic'));
+ assert.equal((await rpc(owner,'leads',j.f.id)).total,0);assert.equal((await db.query('select count(*) n from korlix_contacts where email=$1',[j.body.email])).rows[0].n,0);
+ r=await j.post(mode==='guided'?'step':'lead',{...patch,step:'review'});assert.equal(r.status,400);html=await r.text();assert(html.includes('Complete the required fields'));assert(html.includes('Question visitor'));assert.equal((await rpc(owner,'leads',j.f.id)).total,0);
+ const advice={...patch,'answer_q-1':'Advice','answer_q-2':'Home','answer_q-3':'Should be ignored','answer_q-4':'Help me'};
+ let review_token='';if(mode==='guided'){r=await j.post('step',{...advice,step:'review'});assert.equal(r.status,200);html=await r.text();assert(!html.includes('Should be ignored'));review_token=hiddenField(html,'review_token');assert.equal((await j.post('lead',{...advice,review_token,'answer_q-1':'Install','answer_q-3':'Rooms'})).status,400);}
+ assert.equal((await j.post('lead',{...advice,review_token})).status,303);
+ assert.equal((await j.post('lead',{...advice,review_token})).status,303);
+ const leads=await rpc(owner,'leads',j.f.id);assert.equal(leads.total,1);assert.deepEqual(leads.leads[0].answers.map(a=>a.id),['q-1','q-4']);assert.equal(leads.leads[0].answers[1].value,'Help me');
+});
+test('Database independently enforces branching and discards hidden known answers before immutable capture',async()=>{
+ const x=await publish(await create(owner,{document:document({...doc,questions:branching})}));
+ const base=inquiry(x,{email:randomUUID()+'@example.com'});
+ for(const answers of [[{id:'q-1',value:'Install'}],[{id:'q-1',value:'Install'},{id:'q-2',value:'Home'}],[{id:'q-1',value:'Advice'},{id:'q-4',value:''},{id:'q-9',value:'Unknown'}],[{id:'q-1',value:'Advice'},{id:'q-4',value:''},{id:'q-4',value:'Duplicate'}]])await assert.rejects(rpc(null,'lead',null,{...base,answers}));
+ assert.equal((await rpc(owner,'leads',x.id)).total,0);assert.equal((await db.query('select count(*) n from korlix_contacts where email=$1',[base.email])).rows[0].n,0);
+ await rpc(null,'lead',null,{...base,answers:[{id:'q-1',value:'Advice'},{id:'q-2',value:'Home'},{id:'q-3',value:['Ignored hidden answer']},{id:'q-4',value:'Safe',label:'Forged'}]});
+ const lead=(await rpc(owner,'leads',x.id)).leads[0];assert.deepEqual(lead.answers.map(a=>[a.label,a.value]),[['Service','Advice'],['Topic','Safe']]);
+ const invalid=structuredClone(branching);invalid[1].show_when.question_id='q-3';
+ await assert.rejects(db.query('select korlix_funnel_answers_v1($1,$2)',[JSON.stringify({questions:invalid}),JSON.stringify([{id:'q-1',value:'Advice'},{id:'q-4',value:''}])]),/earlier/);
+});
+test('Conditional refresh uses current publication, cookie binding and the existing nonce age limit',async()=>{
+ const j=await questionJourney('single',branching);
+ assert.equal((await j.post('step',{step:'refresh_questions',token:'forged'})).status,400);
+ assert.equal((await j.post('step',{step:'refresh_questions',website:'bot'})).status,400);
+ const x=await rpc(owner,'save',j.f.id,{version:j.f.version,name:j.f.name,document:document({...doc,questions:branching})});await publish(x);
+ assert.equal((await j.post('step',{step:'refresh_questions'})).status,400);assert.equal((await rpc(owner,'leads',j.f.id)).total,0);
 });

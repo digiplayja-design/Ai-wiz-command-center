@@ -1,4 +1,4 @@
-import {FunnelError, fail, text, uuid, version, publishReady, leadInput, inquiryQuestions} from './core.mjs';
+import {FunnelError, fail, text, uuid, version, publishReady, leadInput, inquiryQuestions, visibleQuestions} from './core.mjs';
 
 const sampleFor = scenario => ({
   name:'Taylor Morgan', email:scenario==='invalid_email'?'not-an-email':'taylor@example.com',
@@ -31,6 +31,7 @@ export function rehearseFunnel(snapshot,body={}) {
     check('page','Page content and required details',()=>{doc=publishReady(doc);}),
     check('inquiry','Sample inquiry validation',()=>{for(const q of inquiryQuestions(doc?.questions))sample['answer_'+q.id]=q.type==='choice'?(q.options[0]??''):'Sample response';leadInput(sample,doc??{});}),
   ];
+  if(checks[0].status==='pass'&&inquiryQuestions(doc.questions).some(q=>q.show_when))checks.push({id:'branches',title:'Conditional questions',status:'scenario',detail:`The sample selects the first choice at each visible question: ${visibleQuestions(doc.questions,sample).length} of ${inquiryQuestions(doc.questions).length} questions apply. Use the page preview to explore other answers. This does not exercise every branch.`});
   if(checks[0].status==='pass')checks.push({id:'journey',title:'Visitor journey',status:'scenario',
     detail:doc.form_mode==='guided'?
       'Guided: contact details, request and consent, then review and send. Only the final submission creates an inquiry. This rehearsal does not exercise browser navigation.':

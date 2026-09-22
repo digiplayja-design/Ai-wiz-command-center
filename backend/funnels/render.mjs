@@ -1,3 +1,5 @@
+import {createHash} from 'node:crypto';
+import {questionScript} from './question_visibility.mjs';
 import { esc, pageSections } from './core.mjs';
 import {renderInquiryForm,formStyles} from './public_form.mjs';
 const colors={cyan:'#06b6ce',violet:'#7446d0',gold:'#94620a'};
@@ -26,6 +28,6 @@ ${pageSections(d.sections).map(section=>renderSection(section)).join('')}</main>
 }
 export const publicHeaders={
   'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'strict-origin-when-cross-origin',
-  'Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+  'Content-Security-Policy':`default-src 'none'; script-src 'sha256-${createHash('sha256').update(questionScript).digest('base64')}'; style-src 'unsafe-inline'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`,
   'Permissions-Policy':'camera=(), microphone=(), geolocation=()',
 };
