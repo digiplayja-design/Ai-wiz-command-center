@@ -29,7 +29,7 @@ test.before(async()=>{
  }
  for(const file of ['20260921162128_enterprise_contacts_crm.sql','20260922023935_enterprise_funnel_studio.sql','20260922031813_funnel_followups.sql',
   '20260922035232_funnel_scheduled_followups.sql','20260922042253_funnel_sequences.sql','20260922145937_funnel_lead_inbox.sql',
-  '20260922172151_funnel_lead_management.sql']) await db.exec(await readFile(new URL('../../supabase/migrations/'+file,import.meta.url),'utf8'));
+  '20260922172151_funnel_lead_management.sql','20260922180817_funnel_inquiry_cleanup.sql']) await db.exec(await readFile(new URL('../../supabase/migrations/'+file,import.meta.url),'utf8'));
  await db.exec('set role service_role');
  for(const [id,user] of [[f,owner],[foreign,other]]) {
   await db.query("insert into korlix_funnels(id,user_id,name,slug,draft) values($1,$2,'Lead management',$3,'{}')",[id,user,'lead-'+id]);

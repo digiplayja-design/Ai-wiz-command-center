@@ -10,10 +10,11 @@ import { registerMeta } from './meta.mjs';
 import { registerInbox } from './inbox.mjs';
 import { registerRehearsal } from './rehearsal.mjs';
 import { registerLeadManagement } from './lead_management.mjs';
+import { registerCleanup } from './cleanup.mjs';
 
 export function createFunnelStore(database) {
   return { async command(actor, action, id=null, data={}) {
-    const named={inbox:'korlix_funnel_inbox_v1',lead_manage:'korlix_funnel_lead_manage_v1'}[action];
+    const named={inbox:'korlix_funnel_inbox_v1',lead_manage:'korlix_funnel_lead_manage_v1',cleanup_preview:'korlix_funnel_cleanup_preview_v1',cleanup_delete:'korlix_funnel_cleanup_delete_v1'}[action];
     const result=await database.rpc(named??'korlix_funnel_v1',
       named?{p_actor:actor,p_id:id,p_data:data}:{p_actor:actor,p_action:action,p_id:id,p_data:data});
     if(result.error) {
@@ -67,6 +68,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   registerCampaigns(app,{base,owner,command,database,campaignStore,generateAdCopy,environment,publicBase});
   registerInbox(app,{base,owner,command});
   registerLeadManagement(app,{base,owner,command});
+  registerCleanup(app,{base,owner,command,secret,now});
   registerRehearsal(app,{base,owner,database,rehearsalStore});
   app.get(base,owner(async(_q,r,u)=>{
     const v=await command(u,'list');r.json({...v,funnels:v.funnels.map(present),ai_ready:!!environment.OPENAI_API_KEY,ai_daily_limit:10});

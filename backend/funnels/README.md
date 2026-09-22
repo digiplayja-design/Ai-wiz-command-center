@@ -205,3 +205,56 @@ checks cover fresh-version edits, discard/reload, access loss, pending saves,
 late responses and desktop/phone layouts. User acceptance is deferred.
 Rollback by reverting app commits while retaining the additive schema and
 saved status/note data. Dedicated deletion/retention controls remain separate.
+
+## K149 · Reviewed inquiry cleanup
+
+`POST /api/funnels/:id/inbox/cleanup/preview` accepts a single `lead_id`, or
+`mode: retention` with an exclusive UTC `before` date and `statuses` containing
+Won/Lost (lowercase API values). Retention selection is independent of inbox
+filters. It is manual, with no recurring deletion job. The database returns
+counts, up to five protected examples and the oldest 100 eligible inquiries,
+including the local resolved-task/stopped-sequence counts removed with each.
+The preview RPC is STABLE and works in a read-only transaction.
+
+Open tasks (review/scheduled/processing/needs_review), active/paused sequences,
+any recorded message ID or sent task, and mismatched child funnel associations
+protect an inquiry from removal. A completed task with a message ID remains
+protected. CRM contacts, permissions, suppressions and Email Center records
+are retained. This feature is inbox cleanup, not whole-account data erasure.
+Inquiry, stage and campaign totals reflect the remaining records after removal.
+
+The server signs a ten-minute review using the form secret, a separate HMAC
+domain, actor/funnel IDs, a random review ID, and exact inquiry IDs/fingerprints.
+No fingerprint is exposed as an editable API field. Deletion accepts only this
+review token and the exact `confirmation: DELETE`. A restart can invalidate
+reviews when no stable form secret is configured; a fresh preview is safe.
+The service-only delete RPC rechecks current Enterprise ownership, locks the
+funnel/inquiries/tasks/sequences, compares fingerprints and eligibility, and
+deletes all selected local records atomically. Newly changed records reject the
+whole selection. A short receipt containing no inquiry contents makes identical
+retries idempotent. Receipts older than 30 days are purged during owner cleanup.
+
+Recent deletions retain only a request UUID and expiry until 31 minutes after
+capture. Public capture checks this marker, so a still-valid 30-minute form
+token cannot recreate the deleted inquiry or enqueue its follow-ups. Expired
+markers are purged on subsequent funnel capture/cleanup. Neither expiry is a
+scheduled erasure promise. Existing account/funnel foreign-key cascades apply.
+
+Deploy `20260922180817_funnel_inquiry_cleanup.sql`, backend, then frontend.
+All new tables and functions remain service-only, with RLS on tables and
+SECURITY INVOKER/fixed search paths on functions. The migration only installs
+schema/functions: release work does not delete production inquiries.
+
+Verification: `node --test backend/test/funnel*.test.mjs`. The cleanup suite
+executes actual migrations against local Postgres-compatible PGlite fixtures,
+checking role/tier/owner denial, UTC boundaries, batch limits, blocked activity,
+signed review/confirmation, stale state, all-or-nothing failures, concurrent HTTP
+review outcomes, receipt retries, retained CRM/email records and public replay
+protection. PGlite serializes database work; this is not a claim of a production
+multi-connection load test. Base public capture and lead-management regressions
+also run with the new migration installed. User acceptance remains deferred.
+
+Rollback app commits to K148 if needed, retaining this schema and the updated
+public capture function. Do not restore the older capture function or remove
+replay markers while recent form tokens may still be valid. Reverting code does
+not recover permanently deleted inquiry data.
