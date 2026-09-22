@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {fail, uuid} from './core.mjs';
+import {LEAD_STATUSES,LEAD_STATUS_LABELS} from './lead_management.mjs';
 
 const scalar = (value, max, label) => {
   if (value === undefined || value === '') return '';
@@ -16,10 +17,11 @@ const date = (value, label) => {
   return s;
 };
 export function inboxQuery(query = {}, exporting = false) {
-  if (Object.keys(query).some(key => !['search','source','from','to','snapshot','cursor'].includes(key))) fail('Invalid inbox filter. Refresh and try again.');
-  const data = {search:scalar(query.search, 160, 'search'), source:scalar(query.source, 120, 'source'), from:date(query.from, 'start date'), to:date(query.to, 'end date'), export:exporting};
+  if (Object.keys(query).some(key => !['search','source','status','from','to','snapshot','cursor'].includes(key))) fail('Invalid inbox filter. Refresh and try again.');
+  const data = {search:scalar(query.search, 160, 'search'), source:scalar(query.source, 120, 'source'), status:scalar(query.status,20,'lead status'), from:date(query.from, 'start date'), to:date(query.to, 'end date'), export:exporting};
+  if(data.status&&!LEAD_STATUSES.includes(data.status))fail('Choose an available lead status.');
   if (data.from && data.to && data.from > data.to) fail('The end date must be on or after the start date.');
-  const fingerprint = createHash('sha256').update(JSON.stringify([data.search,data.source,data.from,data.to])).digest('hex');
+  const fingerprint = createHash('sha256').update(JSON.stringify([data.search,data.source,data.from,data.to,data.status])).digest('hex');
   if (query.snapshot !== undefined) data.snapshot = instant(query.snapshot);
   if (query.cursor !== undefined && query.cursor !== '') {
     if (exporting) fail('Export starts from the first matching inquiry.');
@@ -39,8 +41,8 @@ export function csvCell(value) {
   return '"' + s.replaceAll('"', '""') + '"';
 }
 export function leadCsv(leads) {
-  const headings = ['Inquiry ID','Received (UTC)','Name','Email','Phone','Message','Source','Campaign','Medium','Content','Term','CRM contact ID','Submitted consent','Identity verification'];
-  const rows = leads.map(l => [l.id,l.created_at,l.name,l.email,l.phone,l.message,l.utm?.utm_source,l.utm?.utm_campaign,l.utm?.utm_medium,l.utm?.utm_content,l.utm?.utm_term,l.contact_id,l.consent_text,'Unverified']);
+  const headings = ['Inquiry ID','Received (UTC)','Name','Email','Phone','Message','Source','Campaign','Medium','Content','Term','CRM contact ID','Submitted consent','Identity verification','Lead status (owner-set)','Private note','Status / note updated (UTC)'];
+  const rows = leads.map(l => [l.id,l.created_at,l.name,l.email,l.phone,l.message,l.utm?.utm_source,l.utm?.utm_campaign,l.utm?.utm_medium,l.utm?.utm_content,l.utm?.utm_term,l.contact_id,l.consent_text,'Unverified',LEAD_STATUS_LABELS[l.inbox_status??'new'],l.private_note,l.inbox_updated_at]);
   return '\uFEFF' + [headings,...rows].map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }
 export function registerInbox(app, {base, owner, command}) {

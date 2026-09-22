@@ -9,11 +9,13 @@ import { registerCampaigns } from './campaigns.mjs';
 import { registerMeta } from './meta.mjs';
 import { registerInbox } from './inbox.mjs';
 import { registerRehearsal } from './rehearsal.mjs';
+import { registerLeadManagement } from './lead_management.mjs';
 
 export function createFunnelStore(database) {
   return { async command(actor, action, id=null, data={}) {
-    const result=await database.rpc(action==='inbox'?'korlix_funnel_inbox_v1':'korlix_funnel_v1',
-      action==='inbox'?{p_actor:actor,p_id:id,p_data:data}:{p_actor:actor,p_action:action,p_id:id,p_data:data});
+    const named={inbox:'korlix_funnel_inbox_v1',lead_manage:'korlix_funnel_lead_manage_v1'}[action];
+    const result=await database.rpc(named??'korlix_funnel_v1',
+      named?{p_actor:actor,p_id:id,p_data:data}:{p_actor:actor,p_action:action,p_id:id,p_data:data});
     if(result.error) {
       const code=result.error.code, status={ '42501':403,'P0002':404,'40001':409,'54000':429,'23505':409,'P0001':400 }[code];
       if(status) fail(code==='23505'?'This address is already in use. Choose another.':result.error.message,status);
@@ -64,6 +66,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   registerMeta(app,{base,owner,database,metaStore,metaProvider,environment,now});
   registerCampaigns(app,{base,owner,command,database,campaignStore,generateAdCopy,environment,publicBase});
   registerInbox(app,{base,owner,command});
+  registerLeadManagement(app,{base,owner,command});
   registerRehearsal(app,{base,owner,database,rehearsalStore});
   app.get(base,owner(async(_q,r,u)=>{
     const v=await command(u,'list');r.json({...v,funnels:v.funnels.map(present),ai_ready:!!environment.OPENAI_API_KEY,ai_daily_limit:10});

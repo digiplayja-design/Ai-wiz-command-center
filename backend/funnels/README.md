@@ -167,3 +167,41 @@ check role/owner/tier denial, compare table contents before/after requests,
 preserve an intentionally stale processing task, check unconfigured workflows,
 draft/published separation, invalid samples and stale page versions.
 Rollback by deploying the prior app commits; retain the additive function.
+
+## K148 · Owner-managed lead stages and private notes
+
+Enterprise owners can assign **New**, **In review**, **Qualified**, **Won** or
+**Lost** and a private note of up to 4,000 characters from **Manage lead** in the
+inbox. The new `GET/PATCH /api/funnels/:id/inbox/:leadId` routes use the
+service-only `korlix_funnel_lead_manage_v1` RPC. Every request checks current
+Enterprise membership and funnel/lead ownership. PATCH accepts only `version`,
+`status` and `private_note`; row locking plus `inbox_version` prevents lost
+updates. No-op saves preserve the version and timestamp. Visitor-submitted
+identity/message/consent, contact permissions and delivery state are untouched.
+
+The editor reads the existing scheduled and delivery-review task counts without
+initializing settings or reconciling tasks. Changing an inbox stage does not
+stop an approved follow-up, grant outreach permission or record revenue. The
+interface says so and directs scheduling decisions to Follow-ups. New public
+submissions cannot choose these owner fields; their defaults are New/empty.
+
+Inbox and CSV routes accept the same optional `status` filter. Keyset cursors
+bind it along with existing filters. `status_totals` counts each stage over the
+applied search/source/date subset before applying the status filter. CSV appends
+owner-set status, private note and metadata-update time; spreadsheet-injection
+escaping and complete-export limits remain in force. Receipt-time cutoffs do
+not freeze later metadata edits. Older inbox/lead readers remain compatible.
+
+Deploy `20260922172151_funnel_lead_management.sql`, backend, then frontend.
+The migration adds only private lead metadata and service functions; existing
+browser table/RPC grants stay revoked. The inbox function remains STABLE and
+both functions use SECURITY INVOKER with a fixed search path. No real inquiry
+is edited and no workflow/email/call/ad is created by the release process.
+
+Verification uses real migration execution, tenant/tier/browser isolation,
+optimistic-conflict checks, preservation of other tables and original inquiry
+fields, filtered pagination/exports, and public capture isolation. Widget
+checks cover fresh-version edits, discard/reload, access loss, pending saves,
+late responses and desktop/phone layouts. User acceptance is deferred.
+Rollback by reverting app commits while retaining the additive schema and
+saved status/note data. Dedicated deletion/retention controls remain separate.
