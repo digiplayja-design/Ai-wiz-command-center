@@ -1,4 +1,4 @@
-import {FunnelError, fail, text, uuid, version, publishReady, leadInput, inquiryQuestions, visibleQuestions} from './core.mjs';
+import {FunnelError, fail, text, uuid, version, publishReady, leadInput, inquiryQuestions, visibleQuestions, bookingOutcome} from './core.mjs';
 
 const sampleFor = scenario => ({
   name:'Taylor Morgan', email:scenario==='invalid_email'?'not-an-email':'taylor@example.com',
@@ -61,9 +61,9 @@ export function rehearseFunnel(snapshot,body={}) {
     workflow_note:!accepted?'No follow-up tasks would be queued for this blocked scenario.':
       !s?.enabled?'Saved follow-ups are off. An inquiry would appear in Leads and CRM without automatic review tasks.':
       `${tasks.length} review task${tasks.length===1?'':'s'} would become due ${s.delay_minutes===0?'immediately':`after ${s.delay_minutes} minutes`}. This is task timing, not a send time.`,
-    receipt:accepted?{message:doc.thank_you,booking_url:doc.booking_url}:null,
+    receipt:accepted?bookingOutcome(doc,leadInput(sample,doc).answers??[]):null,
     performed_actions:[],delivery_tested:false,
-    limits:'Simulation only. No inquiry, contact, task, email, call or ad is created. Live form cookies, rate limits, existing contact permissions, provider readiness and delivery still need separate verification. New inquiries are not automatically enrolled in a sequence.',
+    limits:'Simulation only. No inquiry, contact, task, email, call or ad is created. Live form cookies, rate limits, existing contact permissions, provider readiness and delivery still need separate verification. New inquiries are not automatically enrolled in a sequence. Booking links offer a next step, not a confirmed appointment. Follow-up templates still use the default booking link.',
   };
 }
 

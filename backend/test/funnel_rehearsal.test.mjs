@@ -93,7 +93,7 @@ test('Saved workflow and existing database interpolation produce matching previe
  assert.equal(rehearsalText('🟦'.repeat(205),{name:'Taylor'},doc,'Name',200), '🟦'.repeat(200));
  const normalized=await(await post(input({document:{...doc,brand:'  Trimmed brand  ',thank_you:'  Thank you  ',booking_url:'https://example.com'}}))).json();
  assert.equal(normalized.tasks[0].subject,'Your inquiry at Trimmed brand');
- assert.deepEqual(normalized.receipt,{message:'Thank you',booking_url:'https://example.com/'});
+ assert.deepEqual(normalized.receipt,{route_id:'default',route_name:'Default next step',message:'Thank you',booking_url:'https://example.com/',button_label:'Continue →'});
 });
 test('Draft and published sources stay separate; paused pages block only the published scenario',async()=>{
  const guided=await(await post(input({document:{...doc,form_mode:'guided'}}))).json();

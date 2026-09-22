@@ -31,7 +31,7 @@ test.before(async()=>{
  create table korlix_agent_email_messages(id uuid primary key default gen_random_uuid(),user_id uuid,body text);
  grant usage on schema public to anon,authenticated,service_role;grant select,update on user_profiles to service_role;grant all on korlix_agent_email_recipients,korlix_agent_email_messages to service_role;`);
  for(const u of [owner,other,basic]){await db.query('insert into auth.users values($1)',[u]);await db.query('insert into user_profiles values($1,$2)',[u,u===basic?'basic':'enterprise']);}
- for(const file of ['20260921162128_enterprise_contacts_crm.sql','20260922023935_enterprise_funnel_studio.sql','20260922031813_funnel_followups.sql','20260922035232_funnel_scheduled_followups.sql','20260922042253_funnel_sequences.sql','20260922145937_funnel_lead_inbox.sql','20260922172151_funnel_lead_management.sql','20260922180817_funnel_inquiry_cleanup.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+file,import.meta.url),'utf8'));
+ for(const file of ['20260921162128_enterprise_contacts_crm.sql','20260922023935_enterprise_funnel_studio.sql','20260922031813_funnel_followups.sql','20260922035232_funnel_scheduled_followups.sql','20260922042253_funnel_sequences.sql','20260922145937_funnel_lead_inbox.sql','20260922172151_funnel_lead_management.sql','20260922180817_funnel_inquiry_cleanup.sql','20260922211345_funnel_inquiry_questions.sql','20260922215214_funnel_conditional_questions.sql','20260922220157_funnel_booking_routes.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+file,import.meta.url),'utf8'));
  await db.exec('set role service_role');
  const store=createFunnelStore({rpc:async(name,p)=>{try{return {data:(await db.query(`select ${name}($1,$2,$3) v`,[p.p_actor,p.p_id,p.p_data])).rows[0].v};}catch(error){return {error};}}});
  const app=express();app.use(express.json());registerFunnels(app,{store,now:()=>clock,environment:{KORLIX_FUNNEL_FORM_SECRET:secret},requireUser:async q=>{if(![owner,other,basic].includes(q.headers.authorization))throw Error('auth');return{id:q.headers.authorization};},followups:new Proxy({},{get:()=>()=>{throw Error('Cleanup attempted email delivery');}})});
@@ -123,10 +123,12 @@ test('A deleted recent public submission cannot be recreated by a valid form rep
  const input={slug:published.slug,published_version:published.published_version,request_id:randomUUID(),name:'Public visitor',email:'public@example.com'};
  await core('lead',null,input,null);
  const l=(await db.query('select id from korlix_funnel_leads where request_id=$1',[input.request_id])).rows[0].id;
+ assert.equal((await core('receipt',null,{slug:published.slug,request_id:input.request_id},null)).message,'Thank you.');
  assert.equal((await rpc('preview',f,single(l))).blocked,1);
  await db.query("update korlix_funnel_followup_tasks set state='dismissed',version=version+1 where lead_id=$1",[l]);
  await rpc('delete',f,deletion(await rpc('preview',f,single(l))));
  assert.equal(await count('korlix_funnel_removed_requests',f),1);
+ assert.equal(await core('receipt',null,{slug:published.slug,request_id:input.request_id},null),null);
  for(let i=0;i<2;i++)assert.deepEqual(await core('lead',null,input,null),{received:true});
  assert.equal(await count('korlix_funnel_leads',f),0);assert.equal(await count('korlix_funnel_followup_tasks',f),0);
  await core('lead',null,{...input,request_id:randomUUID(),private_note:'Injected note',inbox_status:'won'},null);

@@ -109,6 +109,21 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
     if(t.s!==f.slug || t.v!==f.published_version || now()-t.t>1800000 || now()-t.t<1500) fail('Please reload the form and take a moment to complete it.');
     uuid(t.n);return t;
   };
+  // A separate, browser-bound receipt token carries no submitted details or URL.
+  const receiptToken=(slug,nonce)=>{
+    const p=Buffer.from(JSON.stringify({s:slug,n:nonce,t:now()})).toString('base64url');
+    return p+'.'+sign('funnel-receipt-v1:'+p);
+  };
+  const receiptNonce=(q,slug)=>{
+    const value=(q.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(`kr_${slug}=`))?.slice(`kr_${slug}=`.length);
+    if(!value||value.length>1000)return null;
+    const [p,s,extra]=value.split('.');
+    if(extra||!s||!/^[0-9a-f]{64}$/.test(s)||!timingSafeEqual(Buffer.from(s),Buffer.from(sign('funnel-receipt-v1:'+p))))return null;
+    try{const t=JSON.parse(Buffer.from(p,'base64url').toString());
+      if(t.s!==slug||!Number.isSafeInteger(t.t)||now()-t.t<0||now()-t.t>1800000)return null;
+      return uuid(t.n);
+    }catch{return null;}
+  };
   const verifyForm=(q,f)=>{
     const cookie=(q.headers.cookie || '').split(';').map(x=>x.trim()).find(x=>x.startsWith(`kf_${f.slug}=`))?.slice(`kf_${f.slug}=`.length);
     const t=verify(q.body?.token,f,cookie);
@@ -137,7 +152,11 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
     const f=await command(null,'public',null,{slug:slug(q.params.slug),count:!q.query.received});
     const token=makeToken(f), utm={};for(const k of ['utm_source','utm_medium','utm_campaign','utm_content','utm_term']) utm[k]=text(typeof q.query[k]==='string'?q.query[k]:'',120);
     r.set('Set-Cookie',`kf_${f.slug}=${token}; Path=/f/${f.slug}; HttpOnly; Secure; SameSite=Lax; Max-Age=1800`);
-    r.type('html').send(renderPage(document(f.document),{action:`/f/${f.slug}/lead#contact`,stepAction:`/f/${f.slug}/step#contact`,token,utm,success:q.query.received==='1',mediaBase:`/f/${f.slug}/media`}));
+    const requestedReceipt=q.query.received==='1',nonce=requestedReceipt?receiptNonce(q,f.slug):null;
+    const receipt=nonce?await command(null,'receipt',null,{slug:f.slug,request_id:nonce}):null;
+    if(requestedReceipt)r.set('X-Robots-Tag','noindex, nofollow');
+    r.type('html').send(renderPage(document(f.document),{action:`/f/${f.slug}/lead#contact`,stepAction:`/f/${f.slug}/step#contact`,token,utm,success:!!receipt,receipt,
+      error:requestedReceipt&&!receipt?'This receipt is unavailable or has expired. If you already submitted, contact the business before sending another inquiry.':'',mediaBase:`/f/${f.slug}/media`}));
   }));
   app.post('/f/:slug/step',express.urlencoded({extended:false,limit:'64kb'}),publicRoute(async(q,r)=>{
     const f=await command(null,'public',null,{slug:slug(q.params.slug),count:false});
@@ -176,6 +195,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
       if(!guided||!(e instanceof FunnelError)||![429,503].includes(e.status))throw e;
       return showStep(r,f,q.body,'review',`${e.message} Receipt was not confirmed. You can retry this reviewed inquiry; repeated submissions of this form are counted once.`,e.status);
     }
+    r.set('Set-Cookie',`kr_${f.slug}=${receiptToken(f.slug,t.n)}; Path=/f/${f.slug}; HttpOnly; Secure; SameSite=Lax; Max-Age=1800`);
     r.redirect(303,`/f/${f.slug}?received=1#contact`);
   }));
   return {close:()=>{counts.clear();scheduler.stop();}};

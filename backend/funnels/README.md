@@ -513,3 +513,59 @@ fallback, cookie/publication protections, signed-review tampering, idempotency,
 CSP hash/escaping, desktop/phone/enlarged-text layouts and existing regressions.
 Real-device acceptance remains deferred. Booking/routing and further ads work
 remain separate milestones; conditional questions do not route or contact leads.
+
+## K155 · Answer-based booking links
+
+`booking_routes` contains up to four ordered rules: `id` (`route-1`…`route-4`),
+`name` (80 chars), `question_id`, `equals` (80 chars), `url` (public HTTPS,
+1000 chars) and `button_label` (60 chars). A rule references a current
+multiple-choice answer. Drafts may remain incomplete; publishing requires every
+field, valid choice references and distinct answer conditions. The first matching
+rule wins; otherwise the existing `booking_url` is used, or no button is shown.
+Only active validated answers can match. No contact or answer parameters are
+appended to the link and no external booking request or automatic redirect runs.
+
+Capture stores an immutable private `outcome` beside the answer snapshot in the
+same transaction. It records the original route ID/name, thank-you copy, URL and
+button label. The service-only `korlix_funnel_outcome_v1` independently checks
+route definitions and active answers. Existing leads receive `{}`: no historical
+outcome is inferred. Owner Leads/CSV show the next step offered, explicitly not
+a confirmed appointment. Cleanup deletes this snapshot with its inquiry.
+
+After successful capture the server issues a separate `kr_<slug>` receipt cookie
+(HttpOnly, Secure, SameSite=Lax, path-scoped, 30 minutes). Its domain-separated
+HMAC covers only the slug, nonce and issue time. The existing form secret signs
+it; if no stable secret is configured, a server restart invalidates receipts as
+it already does form tokens. `?received=1` alone cannot display confirmation.
+A verified receipt looks up only its saved message/link/button via the private
+`receipt` command. Republished copy cannot replace that outcome; absent/expired
+cookies and deleted/historical outcomes display an unavailable notice instead.
+Public reads retain current published-page and Enterprise checks. Neither
+contact details, answers, nor private route names are returned by this command.
+
+The editor offers rule ordering and a live synthetic receipt preview. Removing
+a source question clears its route reference so a reused question ID cannot
+silently reconnect. Generated copy and duplication preserve independent routes.
+Rehearsal reports its first-choice sample outcome; follow-up `{{booking_url}}`
+still uses the default link. This release does not reserve calendar slots,
+confirm appointments, enroll sequences, send messages, or activate ads.
+
+Release order, after explicit production approval:
+1. Apply `20260922220157_funnel_booking_routes.sql` (capture source guard
+   `a5ccdff3945815fd62cb96fae0fff2e7`).
+2. Deploy the backend; then deploy the frontend.
+3. Verify live versions, health, browser-role restrictions, and grants.
+
+Rollback preserves the additive column, helper, and saved outcomes. K154
+application code is compatible with documents without booking routes, but its
+editor can strip new rules on save and its public confirmation uses the default
+URL. After routes are published, prefer restoring K155. Any return to K154
+requires the owner to review and deliberately remove routes/republish first;
+never rewrite owner content automatically.
+
+Automated verification covers routing priority, conditional hidden answers,
+invalid publication, receipt cookie tampering/expiry/cross-page reuse,
+republished immutable outcomes, capture rollback, idempotent and uncertain
+responses, deletion/replay, browser-role denial, escaped HTML, CSV safety,
+synthetic rehearsal, editor save/reload, question deletion, and responsive views.
+User-run live acceptance and Meta activation remain deferred.

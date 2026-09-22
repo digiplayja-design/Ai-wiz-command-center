@@ -21,7 +21,7 @@ test.before(async()=>{
   db=new PGlite();
   await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create table user_profiles(id uuid primary key,tier text);create table korlix_agent_email_recipients(id uuid primary key default gen_random_uuid(),user_id uuid,email text,active boolean default true,consent_status text default 'transactional_only',source_reference text,suppressed_at timestamptz,suppression_reason text,updated_at timestamptz);grant usage on schema public to anon,authenticated,service_role;grant select,update on user_profiles to service_role;grant all on korlix_agent_email_recipients to service_role;`);
   for(const u of [owner,other,basic]) {await db.query('insert into auth.users values($1)',[u]);await db.query('insert into user_profiles values($1,$2)',[u,u===basic?'basic':'enterprise']);}
-  for(const file of ['20260921162128_enterprise_contacts_crm.sql','20260922023935_enterprise_funnel_studio.sql','20260922031813_funnel_followups.sql','20260922035232_funnel_scheduled_followups.sql','20260922042253_funnel_sequences.sql','20260922145937_funnel_lead_inbox.sql','20260922172151_funnel_lead_management.sql','20260922180817_funnel_inquiry_cleanup.sql','20260922211345_funnel_inquiry_questions.sql','20260922215214_funnel_conditional_questions.sql']) await db.exec(await readFile(new URL('../../supabase/migrations/'+file,import.meta.url),'utf8'));
+  for(const file of ['20260921162128_enterprise_contacts_crm.sql','20260922023935_enterprise_funnel_studio.sql','20260922031813_funnel_followups.sql','20260922035232_funnel_scheduled_followups.sql','20260922042253_funnel_sequences.sql','20260922145937_funnel_lead_inbox.sql','20260922172151_funnel_lead_management.sql','20260922180817_funnel_inquiry_cleanup.sql','20260922211345_funnel_inquiry_questions.sql','20260922215214_funnel_conditional_questions.sql','20260922220157_funnel_booking_routes.sql']) await db.exec(await readFile(new URL('../../supabase/migrations/'+file,import.meta.url),'utf8'));
   await db.exec('set role service_role');
   const store=createFunnelStore({rpc:async(_name,p)=>{try{
     const data=await rpc(p.p_actor,p.p_action,p.p_id,p.p_data);
@@ -245,8 +245,8 @@ test('An unfinished text section can be saved but cannot be published, without c
 });
 
 const customQuestions=[{id:'q-1',type:'text',label:'What is your goal?',required:true,options:[]},{id:'q-2',type:'choice',label:'Preferred timing',required:false,options:['Soon','Later']}];
-async function questionJourney(mode='guided',questions=customQuestions){
- const funnel=await publish(await create(owner,{document:document({...doc,form_mode:mode,questions})}));
+async function questionJourney(mode='guided',questions=customQuestions,extra={}){
+ const funnel=await publish(await create(owner,{document:document({...doc,form_mode:mode,questions,...extra})}));
  const page=await http('/f/'+funnel.slug),html=await page.text(),token=hiddenField(html,'token'),cookie=page.headers.get('set-cookie').split(';')[0];clock+=2000;
  const body={token,name:'Question visitor',email:randomUUID()+'@example.com',message:'My request',consent:'yes','answer_q-1':'A useful goal','answer_q-2':'Soon'};
  const post=(suffix,patch={})=>http(`/f/${funnel.slug}/${suffix}`,{method:'POST',redirect:'manual',headers:{'Content-Type':'application/x-www-form-urlencoded',Cookie:cookie},body:new URLSearchParams({...body,...patch})});
@@ -347,4 +347,64 @@ test('Conditional refresh uses current publication, cookie binding and the exist
  assert.equal((await j.post('step',{step:'refresh_questions',website:'bot'})).status,400);
  const x=await rpc(owner,'save',j.f.id,{version:j.f.version,name:j.f.name,document:document({...doc,questions:branching})});await publish(x);
  assert.equal((await j.post('step',{step:'refresh_questions'})).status,400);assert.equal((await rpc(owner,'leads',j.f.id)).total,0);
+});
+
+const bookingRoute={id:'route-1',name:'Priority consultation',question_id:'q-2',equals:'Soon',url:'https://example.com/priority',button_label:'Book consultation'};
+for(const mode of ['single','guided'])test('Booking '+mode+' receipts use a signed browser token and an immutable outcome after republishing',async()=>{
+ const j=await questionJourney(mode,customQuestions,{booking_url:'https://example.com/default',booking_routes:[bookingRoute]});
+ let review_token='';if(mode==='guided')review_token=hiddenField(await(await j.post('step',{step:'review'})).text(),'review_token');
+ const submission=await j.post('lead',{review_token,booking_url:'https://attacker.example',route_id:'route-4'});assert.equal(submission.status,303);
+ const rawCookie=submission.headers.get('set-cookie'),cookie=rawCookie.split(';')[0];assert.match(rawCookie,/HttpOnly; Secure; SameSite=Lax; Max-Age=1800/);assert(!rawCookie.includes('example.com'));assert(!rawCookie.includes('Question visitor'));
+ let page=await http(`/f/${j.f.slug}?received=1`,{headers:{Cookie:cookie}}),html=await page.text();assert.equal(page.status,200);assert.match(html,/href="https:\/\/example.com\/priority"/);assert.match(html,/>Book consultation<\/a>/);assert(!html.includes('attacker.example'));assert.equal(page.headers.get('x-robots-tag'),'noindex, nofollow');
+ const lead=(await rpc(owner,'leads',j.f.id)).leads[0];assert.equal(lead.outcome.route_name,bookingRoute.name);assert.equal(lead.outcome.booking_url,bookingRoute.url);
+ const replay=await j.post('lead',{review_token});assert.equal(replay.status,303);assert.equal((await rpc(owner,'leads',j.f.id)).total,1);
+ const edited=await rpc(owner,'save',j.f.id,{version:j.f.version,name:j.f.name,document:document({...doc,questions:customQuestions,form_mode:mode,thank_you:'New message',booking_routes:[{...bookingRoute,url:'https://example.com/changed',button_label:'Changed'}]})});await publish(edited);
+ html=await(await http(`/f/${j.f.slug}?received=1`,{headers:{Cookie:cookie}})).text();assert.match(html,/href="https:\/\/example.com\/priority"/);assert(!html.includes('New message'));assert(!html.includes('https://example.com/changed'));
+ const receipt=await rpc(null,'receipt',null,{slug:j.f.slug,request_id:lead.request_id});assert.deepEqual(Object.keys(receipt).sort(),['booking_url','button_label','message']);assert.equal(receipt.message,doc.thank_you);
+});
+test('Missing, tampered, expired and cross-page receipt cookies cannot display a received confirmation',async()=>{
+ const j=await questionJourney('single',customQuestions,{booking_routes:[bookingRoute]});const r=await j.post('lead'),cookie=r.headers.get('set-cookie').split(';')[0];
+ const other=await questionJourney('single');
+ for(const [slug,c] of [[j.f.slug,''],[j.f.slug,cookie+'X'],[other.f.slug,cookie],[other.f.slug,cookie.replace('kr_'+j.f.slug,'kr_'+other.f.slug)]]) {
+  const html=await(await http(`/f/${slug}?received=1&route_id=route-1`,{headers:{Cookie:c}})).text();assert.match(html,/receipt is unavailable/);assert(!html.includes('<div class="success">'));
+ }
+ clock+=1800001;
+ const expired=await(await http(`/f/${j.f.slug}?received=1`,{headers:{Cookie:cookie}})).text();assert.match(expired,/receipt is unavailable/);
+});
+test('Capture validates all route definitions atomically; hidden answers never route and browser roles cannot read outcomes',async()=>{
+ const hiddenRoute={...bookingRoute,question_id:'q-2',equals:'Home'};
+ const x=await publish(await create(owner,{document:document({...doc,questions:branching,booking_url:'https://example.com/default',booking_routes:[hiddenRoute]})}));
+ const input=inquiry(x,{answers:[{id:'q-1',value:'Advice'},{id:'q-2',value:'Home'},{id:'q-4',value:''}]});await rpc(null,'lead',null,input);
+ assert.equal((await rpc(owner,'leads',x.id)).leads[0].outcome.booking_url,'https://example.com/default');
+ const definitions=[{...hiddenRoute,url:'javascript:alert(1)'},{...hiddenRoute,equals:'Deleted'},hiddenRoute];
+ for(const invalid of definitions) {
+  const d={...doc,questions:branching,booking_routes:[hiddenRoute,{...invalid,id:'route-2'}]};
+  await db.query('update korlix_funnels set published=$2 where id=$1',[x.id,JSON.stringify(d)]);
+  const fresh=inquiry(x,{email:randomUUID()+'@example.com',answers:[{id:'q-1',value:'Install'},{id:'q-2',value:'Home'},{id:'q-3',value:'Three'}]});
+  await assert.rejects(rpc(null,'lead',null,fresh));assert.equal((await db.query('select count(*) n from korlix_contacts where email=$1',[fresh.email])).rows[0].n,0);
+ }
+ assert.equal((await rpc(owner,'leads',x.id)).total,1);
+ for(const role of ['anon','authenticated']){await db.exec('reset role;set role '+role);await assert.rejects(db.query('select outcome from korlix_funnel_leads'),/permission denied/);await assert.rejects(db.query("select korlix_funnel_outcome_v1('{}','[]')"),/permission denied/);await assert.rejects(rpc(null,'receipt',null,{slug:x.slug,request_id:input.request_id}),/permission denied/);}await db.exec('reset role;set role service_role');
+});
+test('Deleted receipt outcomes disappear, suppressed replays stay deleted, and uncertain responses retain one outcome',async()=>{
+ const j=await questionJourney('guided',customQuestions,{booking_routes:[bookingRoute]});const review_token=hiddenField(await(await j.post('step',{step:'review'})).text(),'review_token');
+ captureFailure=true;assert.equal((await j.post('lead',{review_token})).status,503);
+ const response=await j.post('lead',{review_token});assert.equal(response.status,303);const cookie=response.headers.get('set-cookie').split(';')[0];
+ const result=await rpc(owner,'leads',j.f.id);assert.equal(result.total,1);const lead=result.leads[0];assert.equal(lead.outcome.route_id,'route-1');
+ await db.query("insert into korlix_funnel_removed_requests values($1,$2,now()+interval '1 hour')",[j.f.id,lead.request_id]);await db.query('delete from korlix_funnel_leads where id=$1',[lead.id]);
+ assert.equal(await rpc(null,'receipt',null,{slug:j.f.slug,request_id:lead.request_id}),null);
+ assert.equal((await j.post('lead',{review_token})).status,303);assert.equal((await rpc(owner,'leads',j.f.id)).total,0);
+ assert.match(await(await http(`/f/${j.f.slug}?received=1`,{headers:{Cookie:cookie}})).text(),/receipt is unavailable/);
+});
+test('Incomplete booking drafts cannot replace the published page',async()=>{
+ let x=await publish(await create());const path='/api/funnels/'+x.id;
+ let r=await http(path,{method:'PUT',...auth(owner,{version:x.version,name:x.name,document:{...doc,questions:customQuestions,booking_routes:[{id:'route-1'}]}})});assert.equal(r.status,200);x=(await r.json()).funnel;
+ r=await http(path+'/publish',{method:'POST',...auth(owner,{version:x.version,confirmed:true})});assert.equal(r.status,400);assert.equal((await rpc(null,'public',null,{slug:x.slug})).document.booking_routes,undefined);
+});
+test('Different question-answer pairs stay distinct even when their values resemble question IDs',async()=>{
+ const questions=[{id:'q-1',label:'First',type:'choice',required:true,options:['q-2','Other']},{id:'q-2',label:'Second',type:'choice',required:true,options:['q-1','Other']}];
+ const routes=[{...bookingRoute,question_id:'q-1',equals:'q-2'},{...bookingRoute,id:'route-2',question_id:'q-2',equals:'q-1',url:'https://example.com/second'}];
+ const d=publishReady({...doc,questions,booking_routes:routes});
+ const outcome=(await db.query('select korlix_funnel_outcome_v1($1,$2) v',[JSON.stringify(d),JSON.stringify([{id:'q-1',value:'Other'},{id:'q-2',value:'q-1'}])])).rows[0].v;
+ assert.equal(outcome.route_id,'route-2');assert.equal(outcome.booking_url,'https://example.com/second');
 });

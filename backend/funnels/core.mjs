@@ -66,6 +66,32 @@ export function inquiryAnswers(p,d={}) {
     return{id:q.id,value};
   });
 }
+export function bookingRoutes(raw=[]) {
+  if(!Array.isArray(raw)||raw.length>4)fail('Use up to four booking routes.');
+  const ids=new Set();
+  return raw.map(r=>{
+    if(!r||typeof r!=='object'||Array.isArray(r)||typeof r.id!=='string'||!/^route-[1-4]$/.test(r.id)||ids.has(r.id))fail('Choose a valid booking route.');
+    ids.add(r.id);
+    const question_id=text(r.question_id??'',10);
+    if(question_id&&!/^q-[1-4]$/.test(question_id))fail('Choose an inquiry question for this route.');
+    return{id:r.id,name:text(r.name??'',80),question_id,equals:questionText(r.equals??'',80),url:httpsUrl(r.url),button_label:text(r.button_label??'',60)};
+  });
+}
+export function bookingRoutesReady(d) {
+  const routes=bookingRoutes(d.booking_routes),questions=questionsReady(d.questions),seen=new Set();
+  for(const r of routes){
+    const q=questions.find(q=>q.id===r.question_id),key=JSON.stringify([r.question_id,r.equals]);
+    if(!r.name||!r.url||!r.button_label||!q||q.type!=='choice'||!r.equals||!q.options.includes(r.equals)||seen.has(key))fail('Complete each booking route with a name, current multiple-choice answer, HTTPS link and button text. Use each answer condition once.');
+    seen.add(key);
+  }
+  return routes;
+}
+export function bookingOutcome(d,answers=[]) {
+  const active=new Set(visibleQuestions(d.questions,Object.fromEntries(answers.map(a=>['answer_'+a.id,a.value]))).map(q=>q.id));
+  const route=bookingRoutesReady(d).find(r=>active.has(r.question_id)&&answers.some(a=>a.id===r.question_id&&a.value.trim()===r.equals));
+  return{route_id:route?.id??'default',route_name:route?.name??'Default next step',message:d.thank_you,
+    booking_url:route?.url??d.booking_url??'',button_label:route?.button_label??'Continue →'};
+}
 export function pageSections(raw) {
   if(raw===undefined)return defaultSections();
   if(!Array.isArray(raw)||raw.length<4||raw.length>8)fail('Use the four standard sections and up to four text sections.');
@@ -98,10 +124,11 @@ export function document(raw) {
     privacy_url:httpsUrl(raw.privacy_url),booking_url:httpsUrl(raw.booking_url),
     contact_email:text(raw.contact_email ?? '',254),logo:imageReference(raw.logo),hero_image:imageReference(raw.hero_image),
     ...(raw.sections===undefined?{}:{sections:pageSections(raw.sections)}),
-    ...(raw.questions===undefined?{}:{questions:inquiryQuestions(raw.questions)})};
+    ...(raw.questions===undefined?{}:{questions:inquiryQuestions(raw.questions)}),
+    ...(raw.booking_routes===undefined?{}:{booking_routes:bookingRoutes(raw.booking_routes)})};
   // Leave headroom for PostgreSQL's jsonb whitespace below its existing 18 KB
   // page limit. Legacy documents retain their existing validation behavior.
-  if((raw.sections!==undefined||raw.questions!==undefined)&&Buffer.byteLength(JSON.stringify(result),'utf8')>17200)fail('This page is too long. Shorten some copy or remove a text section before saving.');
+  if((raw.sections!==undefined||raw.questions!==undefined||raw.booking_routes!==undefined)&&Buffer.byteLength(JSON.stringify(result),'utf8')>17200)fail('This page is too long. Shorten some copy or remove a text section before saving.');
   return result;
 }
 export function imageReference(raw) {
@@ -112,6 +139,7 @@ export function imageReference(raw) {
 export function publishReady(d) {
   d=document(d);
   questionsReady(d.questions);
+  bookingRoutesReady(d);
   if(pageSections(d.sections).some(s=>s.kind==='text'&&(!s.heading||!s.body)))fail('Complete the heading and copy in each text section before publishing.');
   if([d.logo,d.hero_image].some(x=>x&&!x.alt))fail('Add a description for each page image before publishing.');
   if (!d.privacy_url || !/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(d.contact_email)) fail('Add your privacy-policy URL and a valid business contact email before publishing.');
