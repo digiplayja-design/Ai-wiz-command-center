@@ -495,11 +495,10 @@ saving preview answers. Source removal clears dependent rule values so reusing
 a question ID does not silently reconnect the condition. Owners repair invalid
 conditions before publication. NOVA generation and draft copies preserve rules.
 
-Release order: apply `20260922213311_funnel_conditional_questions.sql`, then
+Release order: apply `20260922215214_funnel_conditional_questions.sql`, then
 backend, then frontend. The migration replaces only the service-only immutable
 answer helper, guarded against intervening K153 changes. No table, browser grant,
-external integration, owner funnel publication or outreach is added. This file
-is prepared and tested locally; production migration/deployment require approval.
+external integration, owner funnel publication or outreach is added. The database migration was applied after explicit production approval on 22 September 2026; its committed filename matches the applied version.
 
 Rollback: retain the helper and submitted snapshots. K153 app code is compatible
 with existing unconditional pages but does not understand conditional definitions;
