@@ -74,7 +74,8 @@ export function registerFunnels(app,{database,requireUser,store,followups,loadAg
   app.post(base+'/:id/pause',owner(async(q,r,u)=>r.json({funnel:present(await command(u,'pause',uuid(q.params.id),{version:version(q.body?.version)}))})));
   app.get(base+'/:id/leads',owner(async(q,r,u)=>r.json(await command(u,'leads',uuid(q.params.id)))));
   app.get(base+'/:id/followups',owner(async(q,r,u)=>r.json(await followup.get(u,uuid(q.params.id),q.query))));
-  for(const action of ['settings','enqueue','edit','resolve','send','schedule','cancelSchedule']) app.post(base+'/:id/followups/'+action,owner(async(q,r,u)=>r.json(await followup[action](u,uuid(q.params.id),q.body||{}))));
+  for(const action of ['settings','enqueue','edit','resolve','send','schedule','cancelSchedule','createSequence','resumeSequence','pauseSequence','cancelSequence','replySequence']) app.post(base+'/:id/followups/'+action,owner(async(q,r,u)=>r.json(await followup[action](u,uuid(q.params.id),q.body||{}))));
+  app.get(base+'/:id/followups/sequences/:sequenceId',owner(async(q,r,u)=>r.json(await followup.sequenceDetail(u,uuid(q.params.id),q.params.sequenceId))));
   app.post(base+'/:id/followups/reconcile',owner(async(q,r,u)=>r.json(await followup.reconcile(u,uuid(q.params.id),q.body?.task_id))));
   app.post(base+'/preview',owner(async(q,r,u)=>{
     await command(u,'list');r.json({html:renderPage(document(q.body?.document),{preview:true})});
