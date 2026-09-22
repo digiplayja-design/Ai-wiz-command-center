@@ -9,6 +9,7 @@ import 'funnel_client.dart';
 import 'funnel_inbox.dart';
 import 'funnel_templates.dart';
 import 'funnel_sections.dart';
+import 'funnel_questions.dart';
 import 'funnel_images.dart';
 import 'funnel_create_dialog.dart';
 import 'funnel_launch_checklist.dart';
@@ -327,7 +328,7 @@ class _FunnelScreenState extends State<FunnelScreen> {
                     ),
                   ),
                   const Text(
-                    '10 draft requests per day. Your images, section order, added text sections, form style, privacy policy, booking link, and contact email are kept. Nothing is published automatically.',
+                    '10 draft requests per day. Your images, section order, added text sections, inquiry questions, form style, privacy policy, booking link, and contact email are kept. Nothing is published automatically.',
                     style: TextStyle(color: WfStyle.muted, fontSize: 12),
                   ),
                 ],
@@ -1162,6 +1163,15 @@ class _FunnelScreenState extends State<FunnelScreen> {
           document: _draft,
           onChanged: (sections) => setState(() {
             _draft['sections'] = sections;
+            _dirty = true;
+          }),
+        ),
+        const SizedBox(height: 16),
+        FunnelQuestionEditor(
+          key: ValueKey('$_revision:questions'),
+          document: _draft,
+          onChanged: (questions) => setState(() {
+            _draft['questions'] = questions;
             _dirty = true;
           }),
         ),

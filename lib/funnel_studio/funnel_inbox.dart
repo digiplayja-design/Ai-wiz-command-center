@@ -8,6 +8,7 @@ import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
 import 'funnel_csv_save.dart';
 import 'funnel_lead_editor.dart';
+import 'funnel_questions.dart';
 import 'funnel_cleanup.dart';
 
 class FunnelInbox extends StatefulWidget {
@@ -635,6 +636,10 @@ class _FunnelInboxState extends State<FunnelInbox> {
             style: const TextStyle(fontSize: 12, color: WfStyle.muted),
           ),
           const SizedBox(height: 14),
+          FunnelAnswerSummary(
+            key: ValueKey('lead-answers-${lead['id']}'),
+            answers: lead['answers'] as List? ?? [],
+          ),
           if ('${lead['private_note'] ?? ''}'.isNotEmpty) ...[
             const Text(
               'Private note',

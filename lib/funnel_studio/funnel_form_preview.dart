@@ -7,9 +7,11 @@ class FunnelFormPreview extends StatefulWidget {
     required this.brand,
     required this.cta,
     required this.accent,
+    this.questions = const [],
   });
   final String mode, brand, cta;
   final Color accent;
+  final List<Map<String, dynamic>> questions;
   @override
   State<FunnelFormPreview> createState() => _FunnelFormPreviewState();
 }
@@ -97,6 +99,17 @@ class _FunnelFormPreviewState extends State<FunnelFormPreview> {
         ],
         if (!guided || _step == 1) ...[
           _field('How can we help? (optional)'),
+          for (final q in widget.questions)
+            KeyedSubtree(
+              key: ValueKey('question-preview-${q['id']}'),
+              child: _field(
+                '${q['label'].toString().isEmpty ? 'Your question' : q['label']}${q['required'] == true ? ' *' : ' (optional)'}',
+                q['type'] == 'choice'
+                    ? 'Choose one: ${(q['options'] as List).join(' · ')}'
+                    : 'Text answer · up to 500 characters',
+              ),
+            ),
+
           Text(
             '□ I agree that ${widget.brand} may contact me about this request.',
             style: const TextStyle(color: _muted, fontSize: 12, height: 1.5),
@@ -119,6 +132,13 @@ class _FunnelFormPreviewState extends State<FunnelFormPreview> {
             'Your request',
             'I would like to learn more about your services.',
           ),
+          for (final q in widget.questions)
+            _field(
+              '${q['label']}',
+              q['type'] == 'choice' && (q['options'] as List).isNotEmpty
+                  ? '${q['options'][0]}'
+                  : 'Sample response',
+            ),
           Text(
             'Visitors review their details and consent before pressing “${widget.cta}”. They can go back to edit.',
             style: const TextStyle(color: _muted, fontSize: 12, height: 1.5),

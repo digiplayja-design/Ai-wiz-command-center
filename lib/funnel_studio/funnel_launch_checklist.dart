@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_library.dart';
+import 'funnel_questions.dart';
 
 class FunnelLaunchChecklist extends StatelessWidget {
   const FunnelLaunchChecklist({
@@ -34,6 +35,12 @@ class FunnelLaunchChecklist extends StatelessWidget {
         funnelContactEmail('${document['contact_email'] ?? ''}'),
         'Add a valid business email in the page editor.',
       ),
+      if (funnelQuestions(document).isNotEmpty)
+        (
+          'Complete your inquiry questions',
+          funnelQuestionsComplete(document),
+          'Add a question label and 2–8 distinct choices for each multiple-choice question.',
+        ),
       if (document['sections'] is List &&
           (document['sections'] as List).any((s) => s['kind'] == 'text'))
         (

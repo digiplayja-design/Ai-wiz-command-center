@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'funnel_sections.dart';
+import 'funnel_questions.dart';
 
 Map<String, dynamic> funnelTemplate(String layout) => {
   'brand': 'Your business',
@@ -27,6 +28,7 @@ Map<String, dynamic> funnelTemplate(String layout) => {
   'accent': 'cyan',
   'form_mode': 'single',
   'sections': defaultFunnelSections(),
+  'questions': <Map<String, dynamic>>[],
   'logo': null,
   'hero_image': null,
   'privacy_url': '',
@@ -53,6 +55,7 @@ Map<String, dynamic> generatedCopy(Map current, Map generated) => {
   'logo': current['logo'],
   'hero_image': current['hero_image'],
   'sections': funnelSections(current),
+  'questions': funnelQuestions(current),
   for (final key in ['privacy_url', 'booking_url', 'contact_email'])
     key: current[key] ?? '',
 };

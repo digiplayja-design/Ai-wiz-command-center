@@ -3,6 +3,7 @@ import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
 import 'funnel_images.dart';
 import 'funnel_form_preview.dart';
+import 'funnel_questions.dart';
 
 List<Map<String, dynamic>> defaultFunnelSections() => [
   for (final kind in ['main_image', 'benefits', 'inquiry', 'faq'])
@@ -278,6 +279,7 @@ class FunnelSectionsPreview extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.all(24),
         child: FunnelFormPreview(
+          questions: funnelQuestions(document),
           mode: document['form_mode'] as String? ?? 'single',
           brand: '${document['brand']}',
           cta: '${document['cta']}',
