@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'funnel_questions.dart';
 
 class FunnelFormPreview extends StatefulWidget {
   const FunnelFormPreview({
@@ -18,11 +20,24 @@ class FunnelFormPreview extends StatefulWidget {
 
 class _FunnelFormPreviewState extends State<FunnelFormPreview> {
   int _step = 0;
+  final Map<String, String> _answers = {};
+  late String _questionSignature;
+  @override
+  void initState() {
+    super.initState();
+    _questionSignature = jsonEncode(widget.questions);
+  }
+
   static const _ink = Color(0xFF142B38), _muted = Color(0xFF526776);
   @override
   void didUpdateWidget(covariant FunnelFormPreview oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.mode != widget.mode) _step = 0;
+    final signature = jsonEncode(widget.questions);
+    if (signature != _questionSignature) {
+      _answers.clear();
+      _questionSignature = signature;
+    }
   }
 
   Widget _field(String label, [String? sample]) => Container(
@@ -46,9 +61,56 @@ class _FunnelFormPreviewState extends State<FunnelFormPreview> {
     ),
   );
 
+  Widget _choice(Map<String, dynamic> q) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: DropdownButtonFormField<String>(
+      key: ValueKey('branch-preview-${q['id']}-${_answers[q['id']] ?? ''}'),
+      initialValue: _answers[q['id']] ?? '',
+      isExpanded: true,
+      dropdownColor: Colors.white,
+      style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: _ink),
+      iconEnabledColor: _muted,
+      decoration: InputDecoration(
+        labelText:
+            '${q['label']}${q['required'] == true ? ' *' : ' (optional)'}',
+        labelStyle: const TextStyle(color: _muted),
+        fillColor: Colors.white,
+        filled: true,
+        enabledBorder: OutlineInputBorder(
+          borderSide: const BorderSide(color: Color(0xFFD8E0E3)),
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+      items: [
+        const DropdownMenuItem(
+          value: '',
+          child: Text('Choose a sample answer'),
+        ),
+        for (final o in funnelChoiceOptions(q))
+          DropdownMenuItem(
+            value: o,
+            child: Text(o, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+      ],
+      onChanged: (v) {
+        if (v == null) return;
+        setState(() {
+          _answers[q['id']] = v;
+          final active = visibleFunnelQuestions(
+            widget.questions,
+            _answers,
+          ).map((q) => q['id']).toSet();
+          _answers.removeWhere((id, _) => !active.contains(id));
+        });
+      },
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final guided = widget.mode == 'guided';
+    final conditional = widget.questions.any((q) => q['show_when'] != null);
+    final shown = visibleFunnelQuestions(widget.questions, _answers);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -99,15 +161,25 @@ class _FunnelFormPreviewState extends State<FunnelFormPreview> {
         ],
         if (!guided || _step == 1) ...[
           _field('How can we help? (optional)'),
-          for (final q in widget.questions)
+          if (conditional)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Try the choices to explore each question path. Preview answers are not saved.',
+                style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
+              ),
+            ),
+          for (final q in shown)
             KeyedSubtree(
               key: ValueKey('question-preview-${q['id']}'),
-              child: _field(
-                '${q['label'].toString().isEmpty ? 'Your question' : q['label']}${q['required'] == true ? ' *' : ' (optional)'}',
-                q['type'] == 'choice'
-                    ? 'Choose one: ${(q['options'] as List).join(' · ')}'
-                    : 'Text answer · up to 500 characters',
-              ),
+              child: conditional && q['type'] == 'choice'
+                  ? _choice(q)
+                  : _field(
+                      '${q['label'].toString().isEmpty ? 'Your question' : q['label']}${q['required'] == true ? ' *' : ' (optional)'}',
+                      q['type'] == 'choice'
+                          ? 'Choose one: ${(q['options'] as List).join(' · ')}'
+                          : 'Text answer · up to 500 characters',
+                    ),
             ),
 
           Text(
@@ -132,11 +204,15 @@ class _FunnelFormPreviewState extends State<FunnelFormPreview> {
             'Your request',
             'I would like to learn more about your services.',
           ),
-          for (final q in widget.questions)
+          for (final q in shown)
             _field(
               '${q['label']}',
               q['type'] == 'choice' && (q['options'] as List).isNotEmpty
-                  ? '${q['options'][0]}'
+                  ? conditional
+                        ? (_answers[q['id']]?.isNotEmpty == true
+                              ? _answers[q['id']]!
+                              : 'Not provided')
+                        : '${q['options'][0]}'
                   : 'Sample response',
             ),
           Text(

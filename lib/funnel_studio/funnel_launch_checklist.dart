@@ -39,7 +39,7 @@ class FunnelLaunchChecklist extends StatelessWidget {
         (
           'Complete your inquiry questions',
           funnelQuestionsComplete(document),
-          'Add a question label and 2–8 distinct choices for each multiple-choice question.',
+          'Finish labels, choices, and any conditions using an earlier multiple-choice question.',
         ),
       if (document['sections'] is List &&
           (document['sections'] as List).any((s) => s['kind'] == 'text'))
