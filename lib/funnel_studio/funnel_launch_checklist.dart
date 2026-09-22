@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_library.dart';
 import 'funnel_questions.dart';
+import 'funnel_booking.dart';
 
 class FunnelLaunchChecklist extends StatelessWidget {
   const FunnelLaunchChecklist({
@@ -40,6 +41,12 @@ class FunnelLaunchChecklist extends StatelessWidget {
           'Complete your inquiry questions',
           funnelQuestionsComplete(document),
           'Finish labels, choices, and any conditions using an earlier multiple-choice question.',
+        ),
+      if (funnelBookingRoutes(document).isNotEmpty)
+        (
+          'Complete your booking routes',
+          funnelBookingRoutesComplete(document),
+          'Choose a current multiple-choice answer, public HTTPS link, route name, and button text for every route.',
         ),
       if (document['sections'] is List &&
           (document['sections'] as List).any((s) => s['kind'] == 'text'))

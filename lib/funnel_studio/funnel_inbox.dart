@@ -9,6 +9,7 @@ import 'funnel_client.dart';
 import 'funnel_csv_save.dart';
 import 'funnel_lead_editor.dart';
 import 'funnel_questions.dart';
+import 'funnel_booking.dart';
 import 'funnel_cleanup.dart';
 
 class FunnelInbox extends StatefulWidget {
@@ -640,6 +641,7 @@ class _FunnelInboxState extends State<FunnelInbox> {
             key: ValueKey('lead-answers-${lead['id']}'),
             answers: lead['answers'] as List? ?? [],
           ),
+          FunnelOutcomeSummary(outcome: lead['outcome'] as Map? ?? {}),
           if ('${lead['private_note'] ?? ''}'.isNotEmpty) ...[
             const Text(
               'Private note',

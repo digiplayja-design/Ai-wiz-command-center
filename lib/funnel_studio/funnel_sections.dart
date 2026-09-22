@@ -279,6 +279,7 @@ class FunnelSectionsPreview extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.all(24),
         child: FunnelFormPreview(
+          document: document,
           questions: funnelQuestions(document),
           mode: document['form_mode'] as String? ?? 'single',
           brand: '${document['brand']}',

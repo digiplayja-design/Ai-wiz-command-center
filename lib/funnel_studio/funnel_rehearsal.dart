@@ -323,7 +323,7 @@ class _FunnelRehearsalState extends State<FunnelRehearsal> {
               if ('${receipt['booking_url'] ?? ''}'.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
-                  'Next-step link: ${receipt['booking_url']}',
+                  'Next step offered: ${receipt['route_name'] ?? 'Default next step'}\n${receipt['button_label'] ?? 'Continue →'} · ${receipt['booking_url']}\nThis is not a confirmed appointment.',
                   style: const TextStyle(color: WfStyle.muted, height: 1.5),
                 ),
               ],

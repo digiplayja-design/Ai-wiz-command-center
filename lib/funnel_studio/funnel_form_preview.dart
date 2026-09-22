@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'funnel_questions.dart';
+import 'funnel_booking.dart';
 
 class FunnelFormPreview extends StatefulWidget {
   const FunnelFormPreview({
@@ -10,8 +11,10 @@ class FunnelFormPreview extends StatefulWidget {
     required this.cta,
     required this.accent,
     this.questions = const [],
+    this.document = const {},
   });
   final String mode, brand, cta;
+  final Map<String, dynamic> document;
   final Color accent;
   final List<Map<String, dynamic>> questions;
   @override
@@ -110,6 +113,12 @@ class _FunnelFormPreviewState extends State<FunnelFormPreview> {
   Widget build(BuildContext context) {
     final guided = widget.mode == 'guided';
     final conditional = widget.questions.any((q) => q['show_when'] != null);
+    final interactive =
+        conditional || funnelBookingRoutes(widget.document).isNotEmpty;
+    final outcome = funnelBookingOutcome({
+      ...widget.document,
+      'questions': widget.questions,
+    }, _answers);
     final shown = visibleFunnelQuestions(widget.questions, _answers);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,18 +170,18 @@ class _FunnelFormPreviewState extends State<FunnelFormPreview> {
         ],
         if (!guided || _step == 1) ...[
           _field('How can we help? (optional)'),
-          if (conditional)
+          if (interactive)
             const Padding(
               padding: EdgeInsets.only(bottom: 12),
               child: Text(
-                'Try the choices to explore each question path. Preview answers are not saved.',
+                'Try the choices to explore question paths and the next-step link. Preview answers are not saved.',
                 style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
               ),
             ),
           for (final q in shown)
             KeyedSubtree(
               key: ValueKey('question-preview-${q['id']}'),
-              child: conditional && q['type'] == 'choice'
+              child: interactive && q['type'] == 'choice'
                   ? _choice(q)
                   : _field(
                       '${q['label'].toString().isEmpty ? 'Your question' : q['label']}${q['required'] == true ? ' *' : ' (optional)'}',
@@ -208,7 +217,7 @@ class _FunnelFormPreviewState extends State<FunnelFormPreview> {
             _field(
               '${q['label']}',
               q['type'] == 'choice' && (q['options'] as List).isNotEmpty
-                  ? conditional
+                  ? interactive
                         ? (_answers[q['id']]?.isNotEmpty == true
                               ? _answers[q['id']]!
                               : 'Not provided')
@@ -236,6 +245,71 @@ class _FunnelFormPreviewState extends State<FunnelFormPreview> {
             style: const TextStyle(color: _ink, fontWeight: FontWeight.w800),
           ),
         ),
+        if (widget.document.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Container(
+            key: const ValueKey('booking-outcome-preview'),
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE6FAF3),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'After successful submission · preview',
+                  style: TextStyle(color: _muted, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                if (!funnelBookingRoutesComplete(widget.document))
+                  const Text(
+                    'Complete your booking routes to preview the next step.',
+                    style: TextStyle(color: _ink, height: 1.5),
+                  )
+                else ...[
+                  Text(
+                    '${outcome['message']}',
+                    style: const TextStyle(color: _ink, height: 1.5),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '${outcome['route_name']}',
+                    style: const TextStyle(
+                      color: _ink,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if ('${outcome['booking_url']}'.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '${outcome['button_label']}',
+                      style: const TextStyle(
+                        color: _ink,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${outcome['booking_url']}',
+                      style: const TextStyle(color: _muted, fontSize: 12),
+                    ),
+                  ] else
+                    const Text(
+                      'No next-step link configured.',
+                      style: TextStyle(color: _muted, fontSize: 12),
+                    ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Uses the sample choices above. No inquiry or appointment is created.',
+                    style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
         if (guided) ...[
           const SizedBox(height: 12),
           const Text(

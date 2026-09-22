@@ -10,6 +10,7 @@ import 'funnel_inbox.dart';
 import 'funnel_templates.dart';
 import 'funnel_sections.dart';
 import 'funnel_questions.dart';
+import 'funnel_booking.dart';
 import 'funnel_images.dart';
 import 'funnel_create_dialog.dart';
 import 'funnel_launch_checklist.dart';
@@ -1171,6 +1172,10 @@ class _FunnelScreenState extends State<FunnelScreen> {
           key: ValueKey('$_revision:questions'),
           document: _draft,
           onChanged: (questions) => setState(() {
+            _draft['booking_routes'] = bookingRoutesAfterQuestions(
+              _draft,
+              questions,
+            );
             _draft['questions'] = questions;
             _dirty = true;
           }),
@@ -1289,8 +1294,18 @@ class _FunnelScreenState extends State<FunnelScreen> {
           'booking_url',
           'Booking / next-step URL (optional)',
           1000,
-          hint: 'Shown after a visitor submits. Use HTTPS.',
+          hint:
+              'Default when no route matches. Shown after submission. Use HTTPS.',
         ),
+        FunnelBookingEditor(
+          key: ValueKey('$_revision:booking-routes'),
+          document: _draft,
+          onChanged: (routes) => setState(() {
+            _draft['booking_routes'] = routes;
+            _dirty = true;
+          }),
+        ),
+        const SizedBox(height: 16),
         const Text(
           'Publish only offers and claims you can support. Review AI-generated copy before sharing.',
           style: TextStyle(color: WfStyle.muted, fontSize: 12, height: 1.5),
