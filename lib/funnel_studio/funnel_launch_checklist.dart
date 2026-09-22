@@ -34,6 +34,19 @@ class FunnelLaunchChecklist extends StatelessWidget {
         funnelContactEmail('${document['contact_email'] ?? ''}'),
         'Add a valid business email in the page editor.',
       ),
+      if (document['sections'] is List &&
+          (document['sections'] as List).any((s) => s['kind'] == 'text'))
+        (
+          'Complete your text sections',
+          (document['sections'] as List)
+              .where((s) => s['kind'] == 'text')
+              .every(
+                (s) =>
+                    '${s['heading'] ?? ''}'.trim().isNotEmpty &&
+                    '${s['body'] ?? ''}'.trim().isNotEmpty,
+              ),
+          'Add a heading and copy to each text section in Page sections.',
+        ),
       if (document['logo'] is Map || document['hero_image'] is Map)
         (
           'Add descriptions for your images',

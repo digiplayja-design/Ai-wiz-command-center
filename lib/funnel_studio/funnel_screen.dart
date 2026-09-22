@@ -8,7 +8,7 @@ import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
 import 'funnel_inbox.dart';
 import 'funnel_templates.dart';
-import 'funnel_form_preview.dart';
+import 'funnel_sections.dart';
 import 'funnel_images.dart';
 import 'funnel_create_dialog.dart';
 import 'funnel_launch_checklist.dart';
@@ -327,7 +327,7 @@ class _FunnelScreenState extends State<FunnelScreen> {
                     ),
                   ),
                   const Text(
-                    '10 draft requests per day. Your images, form style, privacy policy, booking link, and contact email are kept. Nothing is published automatically.',
+                    '10 draft requests per day. Your images, section order, added text sections, form style, privacy policy, booking link, and contact email are kept. Nothing is published automatically.',
                     style: TextStyle(color: WfStyle.muted, fontSize: 12),
                   ),
                 ],
@@ -1157,6 +1157,15 @@ class _FunnelScreenState extends State<FunnelScreen> {
           ],
         ),
         const SizedBox(height: 22),
+        FunnelSectionEditor(
+          key: ValueKey('$_revision:sections'),
+          document: _draft,
+          onChanged: (sections) => setState(() {
+            _draft['sections'] = sections;
+            _dirty = true;
+          }),
+        ),
+        const SizedBox(height: 16),
         _field('headline', 'Headline', 160, lines: 2),
         _field('subheadline', 'Supporting copy', 600, lines: 3),
         _field('cta', 'Button text', 60),
@@ -1407,90 +1416,10 @@ class _FunnelScreenState extends State<FunnelScreen> {
                       ],
                     ),
                   ),
-                  if (_draft['hero_image'] is Map)
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: FunnelPrivateImage(
-                          client: widget.client,
-                          id: _draft['hero_image']['id'].toString(),
-                          description: _draft['hero_image']['alt'].toString(),
-                          height: 280,
-                        ),
-                      ),
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (final benefit in _draft['benefits'] as List)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 14),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Icon(
-                                  Icons.check_circle_outline,
-                                  color: Color(0xFF147467),
-                                  size: 19,
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    benefit.toString(),
-                                    style: const TextStyle(
-                                      color: Color(0xFF142B38),
-                                      height: 1.4,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        const SizedBox(height: 16),
-                        FunnelFormPreview(
-                          mode: _draft['form_mode'] as String? ?? 'single',
-                          brand: '${_draft['brand']}',
-                          cta: '${_draft['cta']}',
-                          accent: accent,
-                        ),
-                        const SizedBox(height: 18),
-                        for (final faq in _draft['faq'] as List)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  faq['q'].toString(),
-                                  style: const TextStyle(
-                                    color: Color(0xFF142B38),
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: 5),
-                                Text(
-                                  faq['a'].toString(),
-                                  style: const TextStyle(
-                                    color: Color(0xFF526776),
-                                    height: 1.4,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Powered by KORLIX AI',
-                          style: TextStyle(
-                            color: Color(0xFF526776),
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
+                  FunnelSectionsPreview(
+                    document: _draft,
+                    client: widget.client,
+                    accent: accent,
                   ),
                 ],
               ),
