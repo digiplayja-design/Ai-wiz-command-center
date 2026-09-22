@@ -569,3 +569,63 @@ republished immutable outcomes, capture rollback, idempotent and uncertain
 responses, deletion/replay, browser-role denial, escaped HTML, CSV safety,
 synthetic rehearsal, editor save/reload, question deletion, and responsive views.
 User-run live acceptance and Meta activation remain deferred.
+
+## K156 · On-demand Meta account performance
+
+`GET /api/funnels/meta/performance?days=7&version=<connection-version>&account_id=act_<id>`
+returns a fresh account-level report for exactly 7, 30 or 90 completed calendar
+days in the selected ad account's timezone. The endpoint accepts only these
+three query keys. It reuses Enterprise/owner checks, the service-only encrypted
+Meta connection and existing `ads_read` permission. Platform configuration,
+credential expiry, the current selected account and connection version must
+pass before a request. Current account metadata supplies currency/timezone;
+access, binding and version are rechecked after remote work so a late response
+cannot survive disconnect, reselection or downgrade. The endpoint has its own
+10-requests-per-owner-per-minute limit and returns `Cache-Control: no-store`.
+
+The provider performs GET requests on the fixed Graph API host, using the
+existing configured API version, authorization header, app-secret proof,
+redirect rejection and 10-second per-request timeout. Account-level insights
+request `account_id`, `account_currency`, `date_start`, `date_stop`, `spend`,
+`impressions` and `clicks`, with `time_increment=1`, a bounded `time_range`, and
+`limit=100`. Up to three pages are allowed. Only an opaque `after` cursor is
+reused; provider-supplied next URLs are never followed. Missing/repeated cursors,
+page overflow or malformed rows fail the entire report without partial totals.
+
+Rows must have the exact selected account/currency, a unique real date inside
+the requested range, matching daily start/stop dates, nonnegative decimal spend
+(up to six fractional digits) and safe integer counts. BigInt arithmetic sums
+spend without floating-point rounding. Responses contain decimal strings for
+money, integer counts, newest-first daily rows, returned-row count, account
+name/ID/currency/timezone, date range and retrieval time. No token, provider
+identity, binding or encrypted credential is returned. Provider errors remain
+redacted; revoked access uses the existing local reconnect/invalidation flow.
+
+No reporting records or background jobs are created. Existing connection RPCs
+retain their OAuth-attempt cleanup and credential-invalidation behavior; this
+is not a new read-only SQL transaction. No database migration, environment key,
+permission scope or configuration activation is introduced.
+
+The owner panel loads only on an explicit tap, clears old values when changing
+period/account or starting another request, and suppresses stale responses.
+Totals cover the entire selected account and all campaigns, not this funnel's
+attributed performance, verified leads, revenue or ROAS. `clicks` is labeled
+“Clicks (all).” Missing days are not filled; no returned rows displays an empty
+state rather than zero-spend totals. Owner-entered campaign reports remain
+separate. Meta may revise historical figures; this is not billing reconciliation.
+
+Automated checks use mock Graph responses and local database fixtures. They
+cover bounds, exact decimals, timezone/DST/leap dates, invalid data, fixed-host
+pagination, redaction, owner isolation, expiry, request limits, revoked access,
+concurrent disconnect/reselection/downgrade, UI state, integration and responsive
+views. They do not verify real Meta app approval, an owner's live connection,
+or actual spend. User-run acceptance and Meta activation remain deferred.
+
+After explicit production approval, deploy backend then frontend. K155 is a
+compatible application rollback with no schema rollback needed. The frontend
+can be restored first to remove reporting controls before restoring K155's
+backend. No owner documents or saved reporting data require conversion.
+
+Primary API references used for the implementation:
+- [Meta's official AdsInsights field definitions](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/adsinsights.py)
+- [Meta's official AdAccount get_insights parameter definitions](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/adaccount.py)

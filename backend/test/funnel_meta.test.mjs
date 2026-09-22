@@ -6,14 +6,14 @@ import {PGlite} from '@electric-sql/pglite';
 import express from 'express';
 import {createMetaStore,registerMeta,metaConfiguration,tokenCipher,digest,createMetaProvider,verifiedMetaEvent} from '../funnels/meta.mjs';
 import {FunnelError} from '../funnels/core.mjs';
-let db,store,server,base,exchanges=0,accountReads=0;
+let db,store,server,base,exchanges=0,accountReads=0,reportReads=0,reportHook=null;
 const owner=randomUUID(),other=randomUUID(),basic=randomUUID();
 const env={KORLIX_META_ENABLED:'true',KORLIX_META_APP_ID:'1234567',KORLIX_META_APP_SECRET:'app-secret-fixture-not-real',KORLIX_META_LOGIN_CONFIG_ID:'7654321',KORLIX_META_TOKEN_KEY:Buffer.alloc(32,7).toString('base64'),KORLIX_META_REDIRECT_URI:'https://example.com/api/funnels/meta/callback'};
 const cfg=metaConfiguration(env);
 const command=(u,a,d={})=>store.command(u,a,d);
 const req=(path,body,actor=owner,method='POST')=>fetch(base+'/api/funnels/meta'+path,{method,headers:{Authorization:actor,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
 const acc={id:'act_1234',name:'Test business',currency:'USD',timezone:'America/New_York',status:1};
-const provider={authorizationUrl:s=>'https://www.facebook.com/v26.0/dialog/oauth?state='+s,exchange:async()=>{exchanges++;return {token:'fixture-token',meta_user_id:'10101',expires_at:new Date(Date.now()+86400000).toISOString()};},accounts:async()=>{accountReads++;return [acc];},account:async()=>acc};
+const provider={authorizationUrl:s=>'https://www.facebook.com/v26.0/dialog/oauth?state='+s,exchange:async()=>{exchanges++;return {token:'fixture-token',meta_user_id:'10101',expires_at:new Date(Date.now()+86400000).toISOString()};},accounts:async()=>{accountReads++;return [acc];},account:async()=>acc,insights:async(_token,_account,range)=>{reportReads++;if(reportHook)await reportHook();return{rows:[{date:range.to,spend:'12.30',impressions:100,clicks:4}],totals:{spend:'12.30',impressions:100,clicks:4},reported_days:1};}};
 async function begin(user=owner){const r=await req('/begin',{},user);assert.equal(r.status,200);return r.json();}
 async function callback(a){return fetch(base+'/api/funnels/meta/callback?state='+encodeURIComponent(new URL(a.authorization_url).searchParams.get('state'))+'&code=fixture-code');}
 async function connect(){const a=await begin();assert.equal((await callback(a)).status,200);const r=await req('/finish',{id:a.id,proof:a.proof});assert.equal(r.status,200);return r.json();}
@@ -27,7 +27,7 @@ test.before(async()=>{
  registerMeta(app,{base:'/api/funnels',owner:ownerRoute,metaStore:store,metaProvider:provider,environment:env});
  server=app.listen(0);await new Promise(r=>server.once('listening',r));base='http://127.0.0.1:'+server.address().port;
 });
-test.beforeEach(async()=>{await db.exec('delete from korlix_meta_connections;delete from korlix_meta_oauth_attempts;');exchanges=0;accountReads=0;});
+test.beforeEach(async()=>{await db.exec('delete from korlix_meta_connections;delete from korlix_meta_oauth_attempts;');exchanges=0;accountReads=0;reportReads=0;reportHook=null;});
 test.after(async()=>{server?.closeAllConnections();await new Promise(r=>server?.close(r));await db?.close();});
 test('Configuration fails closed and encrypted tokens are owner and attempt bound',()=>{
  assert.equal(cfg.ready,true);for(const key of ['KORLIX_META_APP_ID','KORLIX_META_APP_SECRET','KORLIX_META_LOGIN_CONFIG_ID','KORLIX_META_TOKEN_KEY','KORLIX_META_REDIRECT_URI','KORLIX_META_ENABLED'])assert.equal(metaConfiguration({...env,[key]:''}).ready,false);
@@ -113,4 +113,35 @@ test('Signed deauthorization is validated; old events cannot delete a newer conn
  await db.exec("update korlix_meta_connections set connected_at=now()-interval '1 minute'");
  assert.equal((await req('/deauthorize',{signed_request:signed})).status,200);assert.equal((await command(owner,'status')).connection,null);
  assert.equal((await req('/deauthorize',{signed_request:'fake'})).status,400);
+});
+async function reportConnection(){await connect();await req('/accounts',{});const state=await(await req('/connection',null,owner,'GET')).json();await req('/select',{account_id:acc.id,version:state.connection.version});return(await command(owner,'secret'));}
+const report=(c,actor=owner,extra={})=>req('/performance?'+new URLSearchParams({days:'7',account_id:acc.id,version:String(c.version),...extra}),null,actor,'GET');
+test('Performance is selected-account scoped, returns no credentials, and preserves saved connection data',async()=>{
+ const c=await reportConnection();const before=await db.query('select to_jsonb(c) v from korlix_meta_connections c');
+ const response=await report(c);assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');const r=await response.json();assert.equal(r.scope,'account');assert.equal(r.source,'meta');assert.equal(r.connection_version,c.version);assert.equal(r.account.id,acc.id);assert.equal(r.totals.spend,'12.30');
+ for(const secret of ['sealed','fixture-token','config_hash','binding_id','meta_user_id'])assert(!JSON.stringify(r).includes(secret));assert.deepEqual((await db.query('select to_jsonb(c) v from korlix_meta_connections c')).rows,before.rows);
+ assert.equal((await report(c,other)).status,404);assert.equal((await report(c,basic)).status,403);assert.equal((await report(c,'')).status,401);
+ assert.equal((await report(c,owner,{account_id:'act_999'})).status,409);assert.equal((await report(c,owner,{version:String(c.version+1)})).status,409);assert.equal(reportReads,1);
+});
+test('Performance refuses expired, unselected or malformed requests before asking Meta',async()=>{
+ const c=await reportConnection();
+ for(const extra of [{days:'365'},{fields:'token'},{version:'1e2'}])assert.equal((await report(c,owner,extra)).status,400);
+ await db.exec('update korlix_meta_connections set selected_account=null');assert.equal((await report(c)).status,409);
+ await db.query('update korlix_meta_connections set selected_account=$1,expires_at=now()-interval \'1 second\'',[acc.id]);assert.equal((await report(c)).status,409);assert.equal(reportReads,0);
+});
+test('Disconnect or changed selection during remote reporting discards the late response',async()=>{
+ for(const action of ['disconnect','select']){
+  const c=await reportConnection();reportHook=()=>command(owner,action,action==='disconnect'?{version:c.version}:{version:c.version,account_id:acc.id});
+  const response=await report(c);assert([404,409].includes(response.status));assert(!(await response.text()).includes('12.30'));
+  await db.exec('delete from korlix_meta_connections;delete from korlix_meta_oauth_attempts;');
+ }
+});
+test('A tier downgrade during remote reporting blocks the result and leaves no reporting data',async()=>{
+ const c=await reportConnection();reportHook=()=>db.query("update user_profiles set tier='basic' where id=$1",[owner]);
+ try{const response=await report(c);assert.equal(response.status,403);assert(!(await response.text()).includes('12.30'));}finally{await db.query("update user_profiles set tier='enterprise' where id=$1",[owner]);}
+});
+test('Revoked Meta reporting access marks the connection unavailable without exposing the provider error',async()=>{
+ const c=await reportConnection();reportHook=()=>createMetaProvider(cfg,{fetchImpl:async()=>({ok:false,json:async()=>({error:{code:190,message:'private-access-token'}})})}).insights('fixture-token',acc,{from:'2026-09-01',to:'2026-09-07',days:7});
+ const response=await report(c);assert.equal(response.status,409);assert(!(await response.text()).includes('private-access-token'));
+ const updated=await command(owner,'secret');assert.equal(updated.needs_reconnect,true);assert.equal(updated.selected_account,null);assert.notEqual(updated.version,c.version);
 });

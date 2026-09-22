@@ -1,4 +1,5 @@
 import express from 'express';
+import {metaReportQuery,metaReportRange,readMetaInsights} from './meta_performance.mjs';
 import {randomBytes,randomUUID,createHash,createHmac,createCipheriv,createDecipheriv,timingSafeEqual} from 'node:crypto';
 import {fail,FunnelError,text,uuid,version,esc} from './core.mjs';
 
@@ -72,7 +73,8 @@ export function createMetaProvider(config,{fetchImpl=fetch,now=Date.now}={}) {
       }
       fail('More than 500 ad accounts were returned. Limit the assets shared with KORLIX and reconnect.',409);
     },
-    async account(token,id){return account(await graph(id,{fields},token));}
+    async account(token,id){return account(await graph(id,{fields},token));},
+    async insights(token,account,range){return readMetaInsights(graph,token,account,range);}
   };
 }
 export function verifiedMetaEvent(value,secret,now=Date.now()) {
@@ -119,6 +121,21 @@ export function registerMeta(app,{base,owner,database,metaStore,metaProvider,env
     const id=text(q.body?.account_id,44,true);if(!/^act_\d{1,40}$/.test(id))fail('Choose an available Meta ad account.');
     await withAccess(u,async(c,token)=>{if(version(q.body?.version)!==c.version)fail('The connection changed. Refresh before selecting an account.',409);if(!c.accounts.some(a=>a.id===id))fail('Refresh your accounts before selecting.');const a=await provider.account(token,id);if(a.id!==id)fail('Meta returned a different account.',503);await store.command(u,'select',{version:c.version,account_id:id});});r.json(await status(u));
   }));
+  app.get(base+'/meta/performance',owner(async(q,r,u)=>{
+    const requested=metaReportQuery(q.query);
+    await withAccess(u,async(c,token)=>{
+      if(c.version!==requested.version||!c.selected_account||c.selected_account!==requested.account_id||!c.accounts.some(a=>a.id===c.selected_account))fail('The selected account changed. Check your Meta connection before reporting.',409);
+      const account=await provider.account(token,c.selected_account);
+      if(account.id!==c.selected_account)fail('Meta returned a different account.',503);
+      const range=metaReportRange(requested.days,account.timezone,now());
+      const report=await provider.insights(token,account,range);
+      // Recheck current entitlement and credentials after remote work. A late
+      // response must not expose data after disconnect, reselect or downgrade.
+      const latest=await access(u);
+      if(latest.c.version!==c.version||latest.c.binding_id!==c.binding_id||latest.c.selected_account!==c.selected_account)fail('The Meta connection changed while loading. Check your connection and try again.',409);
+      r.json({source:'meta',scope:'account',account:{id:account.id,name:account.name,currency:account.currency,timezone:account.timezone},connection_version:c.version,range,...report,fetched_at:new Date(now()).toISOString()});
+    });
+  },{ratePrefix:'meta-performance:',max:10}));
   app.post(base+'/meta/disconnect',owner(async(q,r,u)=>{if(q.body?.confirmed!==true)fail('Confirm disconnecting Meta first.');await store.command(u,'disconnect',{version:q.body.version==null?null:version(q.body.version)});r.json(await status(u));}));
   app.post(base+'/meta/deauthorize',express.urlencoded({extended:false,limit:'12kb'}),async(q,r)=>{
     r.set('Cache-Control','no-store');try{if(config.secret.length<16)fail('Meta callback unavailable.',503);const event=verifiedMetaEvent(q.body?.signed_request,config.secret,now());await store.command(null,'deauthorize',event);r.json({success:true});}catch(e){r.status(e instanceof FunnelError?e.status:503).json({error:'Meta callback could not be verified.'});}
