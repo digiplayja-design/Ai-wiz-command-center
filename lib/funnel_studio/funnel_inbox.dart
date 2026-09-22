@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
 import 'funnel_csv_save.dart';
+import 'funnel_lead_editor.dart';
 
 class FunnelInbox extends StatefulWidget {
   const FunnelInbox({
@@ -30,6 +31,7 @@ class _FunnelInboxState extends State<FunnelInbox> {
   final _exportKey = GlobalKey();
   final _search = TextEditingController(), _source = TextEditingController();
   DateTimeRange? _dates;
+  String _status = '';
   Map<String, String> _applied = {};
   Map<String, dynamic>? _data;
   List<String?> _cursors = [null];
@@ -40,6 +42,7 @@ class _FunnelInboxState extends State<FunnelInbox> {
   Map<String, String> get _edited => {
     if (_search.text.trim().isNotEmpty) 'search': _search.text.trim(),
     if (_source.text.trim().isNotEmpty) 'source': _source.text.trim(),
+    if (_status.isNotEmpty) 'status': _status,
     if (_dates != null) 'from': _date(_dates!.start),
     if (_dates != null) 'to': _date(_dates!.end),
   };
@@ -77,6 +80,7 @@ class _FunnelInboxState extends State<FunnelInbox> {
             _data = null;
             _search.clear();
             _source.clear();
+            _status = '';
             _applied = {};
           }
         });
@@ -86,9 +90,15 @@ class _FunnelInboxState extends State<FunnelInbox> {
     }
   }
 
-  Future<void> _load({bool reset = false, int? page}) => _run(() async {
+  Future<void> _load({
+    bool reset = false,
+    int? page,
+    bool keepFilters = false,
+  }) => _run(() async {
     final target = reset ? 0 : (page ?? _page);
-    final filters = reset ? _edited : Map<String, String>.from(_applied);
+    final filters = reset && !keepFilters
+        ? _edited
+        : Map<String, String>.from(_applied);
     final cursors = reset ? <String?>[null] : List<String?>.from(_cursors);
     final snapshot = reset ? null : _data?['snapshot']?.toString();
     if (reset) {
@@ -124,6 +134,33 @@ class _FunnelInboxState extends State<FunnelInbox> {
       _cursors = updated;
     });
   });
+
+  Future<void> _manageLead(String id) async {
+    if (_busy || _denied) return;
+    final saved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => FunnelLeadEditor(
+        client: widget.client,
+        funnelId: widget.funnelId,
+        leadId: id,
+        onAccessDenied: () {
+          if (!mounted) return;
+          setState(() {
+            _denied = true;
+            _data = null;
+            _search.clear();
+            _source.clear();
+            _status = '';
+            _applied = {};
+          });
+        },
+      ),
+    );
+    if (!mounted || _denied || saved != true) return;
+    await _load(reset: true, keepFilters: true);
+    if (mounted && !_denied) setState(() => _notice = 'Lead details saved.');
+  }
 
   Future<void> _pickDates() async {
     final today = DateTime.now().toUtc();
@@ -244,6 +281,30 @@ class _FunnelInboxState extends State<FunnelInbox> {
           },
         ),
         const SizedBox(height: 24),
+        if (_data?['status_totals'] is Map) ...[
+          const Text(
+            'Lead stages',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final stage in funnelLeadStatuses.entries)
+                WfBadge(
+                  '${stage.value} · ${_data!['status_totals'][stage.key] ?? 0}',
+                  color: WfStyle.violet,
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Owner-set stages across the applied search, source and dates.',
+            style: TextStyle(color: WfStyle.muted, fontSize: 12),
+          ),
+          const SizedBox(height: 24),
+        ],
         LayoutBuilder(
           builder: (context, constraints) => Wrap(
             spacing: 12,
@@ -284,6 +345,29 @@ class _FunnelInboxState extends State<FunnelInbox> {
                   ),
                 ),
               ),
+              SizedBox(
+                width: constraints.maxWidth < 650 ? constraints.maxWidth : 240,
+                child: DropdownButtonFormField<String>(
+                  key: ValueKey('inbox-status-$_status'),
+                  initialValue: _status,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Lead status'),
+                  items: [
+                    const DropdownMenuItem(
+                      value: '',
+                      child: Text('All statuses'),
+                    ),
+                    for (final stage in funnelLeadStatuses.entries)
+                      DropdownMenuItem(
+                        value: stage.key,
+                        child: Text(stage.value),
+                      ),
+                  ],
+                  onChanged: _busy
+                      ? null
+                      : (value) => setState(() => _status = value!),
+                ),
+              ),
             ],
           ),
         ),
@@ -309,6 +393,7 @@ class _FunnelInboxState extends State<FunnelInbox> {
                 _search.clear();
                 _source.clear();
                 _dates = null;
+                _status = '';
               });
               unawaited(_load(reset: true));
             }),
@@ -348,7 +433,7 @@ class _FunnelInboxState extends State<FunnelInbox> {
         ),
         const SizedBox(height: 10),
         const Text(
-          'Export up to 5,000 matching inquiries. For larger lists, narrow the date range. Source tags and identities are visitor-supplied.',
+          'Export up to 5,000 matching inquiries, including owner-set statuses and private notes. For larger lists, narrow the date range. Source tags and identities are visitor-supplied.',
           style: TextStyle(fontSize: 12, height: 1.5, color: WfStyle.muted),
         ),
         if (_busy)
@@ -482,6 +567,7 @@ class _FunnelInboxState extends State<FunnelInbox> {
                 lead['contact_id'] == null ? 'Inquiry' : 'CRM linked',
                 color: WfStyle.violet,
               ),
+              WfBadge(funnelLeadStatuses[lead['inbox_status']] ?? 'New'),
             ],
           ),
           const SizedBox(height: 10),
@@ -508,10 +594,34 @@ class _FunnelInboxState extends State<FunnelInbox> {
             style: const TextStyle(fontSize: 12, color: WfStyle.muted),
           ),
           const SizedBox(height: 14),
+          if ('${lead['private_note'] ?? ''}'.isNotEmpty) ...[
+            const Text(
+              'Private note',
+              style: TextStyle(
+                color: WfStyle.violet,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${lead['private_note']}',
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(height: 1.5),
+            ),
+            const SizedBox(height: 14),
+          ],
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
+              if (lead['inbox_version'] is int)
+                _button(
+                  'Manage lead',
+                  Icons.edit_note,
+                  () => _manageLead('${lead['id']}'),
+                ),
               _button(
                 'Queue follow-up',
                 Icons.playlist_add,
