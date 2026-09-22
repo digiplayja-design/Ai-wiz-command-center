@@ -2915,11 +2915,16 @@ export function createKorlixAgentEmailDeliveryService({
         );
       }
       const variables = normalizeVariables(source.variables);
-      const rules = await store.listEnabledRulesByTrigger(
+      const matchedRules = await store.listEnabledRulesByTrigger(
         identity.userId,
         identity.agentId,
         triggerKey,
       );
+      // Server-owned workflows can target one exact preapproved rule even when
+      // another rule shares its event trigger. This only narrows existing scope.
+      const requestedRuleId = source.ruleId ? uuid(source.ruleId,
+        "agent_email_rule_id_invalid", "Choose a valid Agent Email rule.") : null;
+      const rules = requestedRuleId ? matchedRules.filter(rule => rule.id === requestedRuleId) : matchedRules;
       const batchCap = boundedInteger(
         environment?.KORLIX_AGENT_EMAIL_AUTOPILOT_BATCH_CAP,
         20,

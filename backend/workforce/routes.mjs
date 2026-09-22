@@ -19,6 +19,7 @@ import {
   createKorlixAgentEmailSupabaseStore,
 } from "../korlix_agent_email_routes.mjs";
 import { korlixAgentEmailNovaBinding } from "../korlix_agent_email.mjs";
+import { createWorkforceAutomations } from "./automations.mjs";
 
 const timestamp = (v) => {
   const n = Date.parse(v);
@@ -112,6 +113,7 @@ export function registerWorkforce(
     emailService,
     now = Date.now,
     normalizePhoto,
+    automationService,
   } = {},
 ) {
   const persistence =
@@ -189,6 +191,22 @@ export function registerWorkforce(
     return data;
   };
   const base = "/api/workforce";
+  const automation = automationService || (database && !store
+    ? createWorkforceAutomations({ database, persistence, loadAgentProfile, environment, now }) : null);
+  const automationReady = () => {
+    if (!automation) fail("Workforce automations are not configured.", 503, "WORKFORCE_AUTOMATION_UNAVAILABLE");
+    return automation;
+  };
+  app.get(base + "/:org/automations", wrap(async (req, res, u) =>
+    res.json(await automationReady().get(u.id, id(req.params.org)))));
+  app.post(base + "/:org/automations", wrap(async (req, res, u) =>
+    res.status(201).json(await automationReady().create(u.id, id(req.params.org), req.body))));
+  app.post(base + "/:org/automations/toggle", wrap(async (req, res, u) =>
+    res.json(await automationReady().setEnabled(u.id, id(req.params.org), req.body || {}))));
+  app.post(base + "/:org/automations/pause-all", wrap(async (req, res, u) =>
+    res.json(await automationReady().pauseAll(u.id, id(req.params.org)))));
+  app.post(base + "/:org/automations/review", wrap(async (req, res, u) =>
+    res.json(await automationReady().resolve(u.id, id(req.params.org), req.body?.job_id))));
   app.get(
     base + "/workspaces",
     wrap(async (req, res, u) => res.json(await run(u, "workspaces", null, {}))),
@@ -440,5 +458,5 @@ export function registerWorkforce(
       ? setInterval(() => persistence.purge().catch(() => {}), 3600000)
       : null;
   purgeTimer?.unref?.();
-  return { close: () => clearInterval(purgeTimer) };
+  return { close: () => { clearInterval(purgeTimer); automation?.close?.(); } };
 }
