@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
-
-String metaCount(dynamic value) =>
-    '$value'.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
-String metaMoney(String currency, dynamic value) {
-  final parts = '$value'.split('.');
-  return '$currency ${metaCount(parts.first)}${parts.length > 1 ? '.${parts.last}' : ''}';
-}
+import 'funnel_meta_format.dart';
+import 'funnel_meta_campaign_results.dart';
+export 'funnel_meta_format.dart';
 
 class FunnelMetaPerformance extends StatefulWidget {
   const FunnelMetaPerformance({
@@ -25,6 +21,7 @@ class FunnelMetaPerformance extends StatefulWidget {
 
 class _FunnelMetaPerformanceState extends State<FunnelMetaPerformance> {
   int _days = 7, _request = 0;
+  String _scope = 'account';
   bool _busy = false, _accessDenied = false;
   Map<String, dynamic>? _report;
   String? _error;
@@ -94,7 +91,9 @@ class _FunnelMetaPerformanceState extends State<FunnelMetaPerformance> {
     try {
       final result = await widget.client.request(
         'GET',
-        '/meta/performance',
+        _scope == 'campaign'
+            ? '/meta/campaign-performance'
+            : '/meta/performance',
         query: {
           'days': '$_days',
           'account_id': '$account',
@@ -105,7 +104,7 @@ class _FunnelMetaPerformanceState extends State<FunnelMetaPerformance> {
         return;
       }
       if (result['source'] != 'meta' ||
-          result['scope'] != 'account' ||
+          result['scope'] != _scope ||
           result['account'] is! Map ||
           result['account']['id'] != account ||
           result['connection_version'] != version ||
@@ -157,6 +156,7 @@ class _FunnelMetaPerformanceState extends State<FunnelMetaPerformance> {
         rows = r['rows'] as List,
         totals = r['totals'] as Map,
         currency = '${account['currency']}';
+    final campaign = r['scope'] == 'campaign';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -177,11 +177,19 @@ class _FunnelMetaPerformanceState extends State<FunnelMetaPerformance> {
         ),
         const SizedBox(height: 16),
         if (rows.isEmpty)
-          const Text(
-            'Meta returned no daily rows for this period. No totals are available.',
-            style: TextStyle(color: WfStyle.muted, height: 1.5),
+          Text(
+            campaign
+                ? 'Meta returned no campaign rows for this period. No totals are available.'
+                : 'Meta returned no daily rows for this period. No totals are available.',
+            style: const TextStyle(color: WfStyle.muted, height: 1.5),
           )
         else ...[
+          if (campaign) ...[
+            _caption(
+              'Totals for all returned campaigns · search does not change these totals.',
+            ),
+            const SizedBox(height: 10),
+          ],
           LayoutBuilder(
             builder: (c, constraints) {
               final width = constraints.maxWidth >= 580
@@ -208,56 +216,69 @@ class _FunnelMetaPerformanceState extends State<FunnelMetaPerformance> {
           ),
           const SizedBox(height: 16),
           _caption(
-            '${r['reported_days']} daily rows returned. Totals sum these rows; missing days are not filled in. Meta may revise reporting.',
+            campaign
+                ? '${r['reported_campaigns']} campaigns returned for the full period. Campaigns without returned data are not listed. Meta may revise reporting.'
+                : '${r['reported_days']} daily rows returned. Totals sum these rows; missing days are not filled in. Meta may revise reporting.',
           ),
           const SizedBox(height: 18),
-          Material(
-            color: Colors.transparent,
-            child: ExpansionTile(
-              key: ValueKey('meta-daily-${r['fetched_at']}'),
-              tilePadding: EdgeInsets.zero,
-              expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
-              title: const Text(
-                'Daily results',
-                style: TextStyle(fontWeight: FontWeight.w700),
+          if (campaign)
+            FunnelMetaCampaignResults(
+              key: ValueKey('meta-campaign-results-$_request'),
+              rows: rows.cast<Map>(),
+              currency: currency,
+            )
+          else
+            Material(
+              color: Colors.transparent,
+              child: ExpansionTile(
+                key: ValueKey('meta-daily-${r['fetched_at']}'),
+                tilePadding: EdgeInsets.zero,
+                expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+                title: const Text(
+                  'Daily results',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                children: [
+                  for (final row in rows)
+                    Container(
+                      key: ValueKey('meta-day-${row['date']}'),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: const BoxDecoration(
+                        border: Border(bottom: BorderSide(color: WfStyle.line)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${row['date']}',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 20,
+                            runSpacing: 8,
+                            children: [
+                              Text(
+                                'Spent: ${metaMoney(currency, row['spend'])}',
+                              ),
+                              Text(
+                                'Impressions: ${metaCount(row['impressions'])}',
+                              ),
+                              Text('Clicks (all): ${metaCount(row['clicks'])}'),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               ),
-              children: [
-                for (final row in rows)
-                  Container(
-                    key: ValueKey('meta-day-${row['date']}'),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    decoration: const BoxDecoration(
-                      border: Border(bottom: BorderSide(color: WfStyle.line)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${row['date']}',
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 20,
-                          runSpacing: 8,
-                          children: [
-                            Text('Spent: ${metaMoney(currency, row['spend'])}'),
-                            Text(
-                              'Impressions: ${metaCount(row['impressions'])}',
-                            ),
-                            Text('Clicks (all): ${metaCount(row['clicks'])}'),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
             ),
-          ),
         ],
         const SizedBox(height: 12),
         _caption(
-          'Account totals cover all campaigns. They are not this funnel’s attributed results, verified leads, revenue or ROAS. Manual campaign reports remain separate.',
+          campaign
+              ? 'Campaigns belong to the selected Meta account. They are not linked to this funnel’s plans or attributed results. Matching names do not verify a link. Manual campaign reports remain separate.'
+              : 'Account totals cover all campaigns. They are not this funnel’s attributed results, verified leads, revenue or ROAS. Manual campaign reports remain separate.',
         ),
       ],
     );
@@ -289,6 +310,25 @@ class _FunnelMetaPerformanceState extends State<FunnelMetaPerformance> {
           spacing: 8,
           runSpacing: 8,
           children: [
+            for (final scope in ['account', 'campaign'])
+              ChoiceChip(
+                key: ValueKey('meta-scope-$scope'),
+                label: Text(
+                  scope == 'account' ? 'Account totals' : 'Campaign comparison',
+                ),
+                selected: _scope == scope,
+                onSelected: (_) => setState(() {
+                  _scope = scope;
+                  _clear();
+                }),
+              ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
             for (final days in [7, 30, 90])
               ChoiceChip(
                 key: ValueKey('meta-period-$days'),
@@ -308,7 +348,13 @@ class _FunnelMetaPerformanceState extends State<FunnelMetaPerformance> {
           key: const ValueKey('meta-load-performance'),
           onPressed: _ready && !_busy ? _load : null,
           icon: const Icon(Icons.insights_outlined),
-          label: Text(_busy ? 'Loading report…' : 'Load Meta performance'),
+          label: Text(
+            _busy
+                ? 'Loading report…'
+                : _scope == 'campaign'
+                ? 'Load campaign comparison'
+                : 'Load Meta performance',
+          ),
         ),
         if (!_ready) ...[
           const SizedBox(height: 12),

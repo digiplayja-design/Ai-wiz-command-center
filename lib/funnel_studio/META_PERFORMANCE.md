@@ -59,3 +59,46 @@ Deferred user walkthrough, once Meta activation and live access are authorized:
 
 Allow 5–10 minutes for the reporting walkthrough once working Meta access exists;
 platform setup/review time is separate and has not been estimated.
+
+# K157 — Campaign comparison
+
+Choose **Campaign comparison** in the existing performance panel, choose the
+completed-day period and tap **Load campaign comparison**. No request runs on
+scope/period selection. The backend fetches full-period campaign rows from the
+selected Meta account. Account totals remain available with their existing
+daily breakdown; campaign comparison does not add daily campaign drill-down.
+
+The report retains account identity, currency, timezone, dates and retrieval
+time. Totals sum all returned campaigns, regardless of local search or page.
+Search names or IDs, sort by highest spend/impressions/clicks (all) or name,
+and browse 20 rows per page. Names are selectable text and wrap on phones;
+IDs distinguish identically named campaigns. Sorting decimal-string spend uses
+BigInt micro-units rather than doubles. Counts and money keep K156 formatting.
+
+`FunnelMetaCampaignResults` displays the local snapshot. The parent uses a new
+request identity for each result widget so even an immediately completed reload
+resets search/sort/page. Scope changes clear and invalidate pending results.
+Connection changes, access denial, request failures and parent disposal keep
+the same clearing and stale-response protections as account reporting.
+
+Requests use `GET /meta/campaign-performance` with `days`, `account_id` and
+`version`, and responses must match the requested campaign scope and account
+binding. At most 300 campaigns (three provider pages) are supported; overflow
+fails with no partial figures. The owner may try a shorter period. A blank
+provider result does not imply zero spend; a search with no matches does not
+change full-report totals or claim Meta returned no data.
+
+There is no automatic mapping to funnel plans or attribution. Matching campaign
+names do not verify a relationship. Manual campaign reports remain separate.
+No launch, pause, budget edit, provider activation, database migration, stored
+report or new permission scope is added. Deploy backend then frontend after
+approval; K156 is compatible rollback, frontend first. Real Meta activation
+and the owner walkthrough remain deferred.
+
+Automated tests cover scope transitions, stale results, connection/access loss,
+errors, empty reports, search/sorting/paging, reload reset, precise money sorting
+and 1440/390/320 px layouts with enlarged text. Live acceptance should compare
+one same-period campaign report with Meta, distinguish duplicate names by ID,
+exercise searching/sorting/paging and switch account/scope during a pending
+request. Allow an additional 5–10 minutes once Meta access is available; platform
+setup/review time remains separate.
