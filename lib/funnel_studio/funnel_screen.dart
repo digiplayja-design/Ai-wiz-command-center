@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
 import 'funnel_templates.dart';
+import 'funnel_followups.dart';
 
 class FunnelScreen extends StatefulWidget {
   const FunnelScreen({super.key, required this.client, this.onOpenContacts});
@@ -419,6 +420,25 @@ class _FunnelScreenState extends State<FunnelScreen> {
     final d = await widget.client.request('GET', '/$id/leads');
     if (mounted && _selected?['id'] == id) setState(() => _insights = d);
   });
+
+  Future<void> _queueFollowup(String leadId) async {
+    if (!await _confirm(
+          'Queue this inquiry?',
+          'Create tasks using this funnel’s enabled workflow. Existing tasks will not be duplicated. This does not send an email or place a call.',
+          'Queue follow-up',
+        ) ||
+        !mounted) {
+      return;
+    }
+    await _run(() async {
+      await widget.client.request(
+        'POST',
+        '/${_selected!['id']}/followups/enqueue',
+        body: {'lead_id': leadId},
+      );
+      if (mounted) setState(() => _tab = 'Follow-ups');
+    });
+  }
 
   Widget _card(Widget child, {EdgeInsets padding = const EdgeInsets.all(22)}) =>
       Container(
@@ -871,6 +891,7 @@ class _FunnelScreenState extends State<FunnelScreen> {
                     if (box.maxWidth <= 1080) 'Preview',
                     'Campaign links',
                     'Leads',
+                    'Follow-ups',
                   ])
                     ChoiceChip(
                       label: Text(t),
@@ -943,6 +964,13 @@ class _FunnelScreenState extends State<FunnelScreen> {
               if (_tab == 'Preview') _preview(),
               if (_tab == 'Campaign links') _campaigns(),
               if (_tab == 'Leads') _leads(),
+              if (_tab == 'Follow-ups')
+                FunnelFollowups(
+                  key: ValueKey('followups-${_selected!['id']}'),
+                  client: widget.client,
+                  funnelId: '${_selected!['id']}',
+                  onOpenContacts: widget.onOpenContacts,
+                ),
               const SizedBox(height: 28),
             ],
           ),
@@ -1480,6 +1508,12 @@ class _FunnelScreenState extends State<FunnelScreen> {
                 Text(
                   '${DateTime.tryParse(lead['created_at'].toString())?.toLocal().toString().split('.').first ?? ''} · ${lead['utm']?['utm_source'] ?? ''} ${lead['utm']?['utm_campaign'] ?? ''}',
                   style: const TextStyle(fontSize: 12, color: WfStyle.muted),
+                ),
+                const SizedBox(height: 14),
+                _button(
+                  'Queue follow-up',
+                  Icons.playlist_add,
+                  () => _queueFollowup('${lead['id']}'),
                 ),
               ],
             ),
