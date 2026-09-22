@@ -1730,6 +1730,34 @@ test("route catalog contains controlled send, webhook, rule, event, and internal
   assert.match(KORLIX_AGENT_EMAIL_DELIVERY_ROUTES.events, /\/events$/);
 });
 
+test("scheduled owner-approved sends require existing Autopilot runtime", async () => {
+  const { service, store, provider } = fixture({env:environment({KORLIX_AGENT_EMAIL_AUTOPILOT_ENABLED:'false'})});
+  seedSettings(store,{operating_mode:'autopilot'});seedRecipient(store);const {nonce}=seedApprovedMessage(store);
+  await expectCode(()=>service.sendApprovedDraft({userId:OWNER,agentId:AGENT,messageId:MESSAGE,scheduled:true,body:{confirmed:true,confirmationNonce:nonce}}),'agent_email_autopilot_runtime_disabled');
+  assert.equal(provider.calls.length,0);
+});
+test("scheduled sends recheck Autopilot after claiming a message", async () => {
+  const { service, store, provider } = fixture();
+  seedSettings(store,{operating_mode:'autopilot'});seedRecipient(store);const {nonce}=seedApprovedMessage(store);
+  const original=store.claimMessageForSend.bind(store);
+  store.claimMessageForSend=async args=>{const result=await original(args);seedSettings(store,{operating_mode:'approval_required'});return result;};
+  await expectCode(()=>service.sendApprovedDraft({userId:OWNER,agentId:AGENT,messageId:MESSAGE,scheduled:true,body:{confirmed:true,confirmationNonce:nonce}}),'agent_email_autopilot_runtime_disabled');
+  assert.equal(provider.calls.length,0);assert.equal(store.state.restoreCalls.length,1);
+});
+test("funnel final permission check can abort a claim before provider execution", async () => {
+  const { service, store, provider } = fixture();
+  seedSettings(store,{operating_mode:'autopilot'});seedRecipient(store);const {nonce}=seedApprovedMessage(store);
+  await assert.rejects(()=>service.sendApprovedDraft({userId:OWNER,agentId:AGENT,messageId:MESSAGE,scheduled:true,body:{confirmed:true,confirmationNonce:nonce},beforeProvider:async()=>{throw Error('Funnel was paused');}}),/Funnel was paused/);
+  assert.equal(provider.calls.length,0);assert.equal(store.state.restoreCalls.length,1);
+});
+test("scheduled owner-approved delivery records its source and retains the exact nonce", async () => {
+  const { service, store, provider } = fixture();let checked=0;
+  seedSettings(store,{operating_mode:'autopilot'});seedRecipient(store);const {nonce}=seedApprovedMessage(store);
+  const result=await service.sendApprovedDraft({userId:OWNER,agentId:AGENT,messageId:MESSAGE,scheduled:true,body:{confirmed:true,confirmationNonce:nonce},beforeProvider:async()=>{checked++;}});
+  assert.equal(result.sent,true);assert.equal(provider.calls.length,1);assert.equal(checked,1);
+  assert.equal(store.state.messages.get(MESSAGE).metadata.lastSendSource,'owner_approved_funnel_schedule');
+});
+
 let passed = 0;
 for (const entry of tests) {
   await entry.callback();
@@ -1737,6 +1765,6 @@ for (const entry of tests) {
   console.log(`PASS ${passed}: ${entry.name}`);
 }
 
-assert.equal(passed, 40);
+assert.equal(passed, 44);
 console.log(`KORLIX_AGENT_EMAIL_DELIVERY_TEST_COUNT=${passed}`);
 console.log("KORLIX_AGENT_EMAIL_DELIVERY_TEST_PASS=true");

@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import express from 'express';
 import { createFunnelFollowups,createFollowupStore,followupSettings } from '../funnels/followups.mjs';
+import { createFunnelScheduler } from '../funnels/scheduler.mjs';
 import { registerFunnels } from '../funnels/routes.mjs';
 import { korlixAgentEmailDraftInput } from '../korlix_agent_email.mjs';
 
@@ -12,7 +13,8 @@ const owner=randomUUID(),other=randomUUID(),basic=randomUUID();
 let db;
 const funnel=async(u,a,f=null,p={})=>(await db.query('select korlix_funnel_v1($1,$2,$3,$4::jsonb) v',[u,a,f,JSON.stringify(p)])).rows[0].v;
 const cmd=async(u,a,f,p={})=>(await db.query('select korlix_funnel_followup_v1($1,$2,$3,$4::jsonb) v',[u,a,f,JSON.stringify(p)])).rows[0].v;
-const store=createFollowupStore({rpc:async(_name,p)=>{try{return {data:await cmd(p.p_actor,p.p_action,p.p_id,p.p_data)}}catch(error){return{error}}}});
+const due=async u=>(await db.query('select korlix_funnel_scheduled_due_v1($1) v',[u])).rows[0].v;
+const store=createFollowupStore({rpc:async(name,p)=>{try{return {data:name==='korlix_funnel_scheduled_due_v1'?await due(p.p_owner):await cmd(p.p_actor,p.p_action,p.p_id,p.p_data)}}catch(error){return{error}}}});
 const doc={brand:'Example',headline:'Example',subheadline:'Example',cta:'Ask',thank_you:'Thanks',benefits:[],faq:[],layout:'consultation',accent:'cyan',privacy_url:'https://example.com/privacy',contact_email:'team@example.com',booking_url:''};
 const settings=(s,extra={})=>({...s,enabled:true,confirmed:true,...extra});
 async function create(extra={}) {
@@ -28,7 +30,7 @@ async function lead(f,extra={}) {
   return (await db.query('select * from korlix_funnel_leads where request_id=$1',[p.request_id])).rows[0];
 }
 async function task(f,l) {return (await cmd(owner,'state',f.id,{filter:'all'})).tasks.find(t=>t.lead_id===l.id&&t.channel==='email');}
-function service({failSend=false,failBeforeProvider=false,changed=false,lateSuppression=false}={}) {
+function service({failSend=false,failBeforeProvider=false,changed=false,lateSuppression=false,autopilot=true}={}) {
   const records=new Map();let sends=0,recipients=0, approvals=0;
   const mailStore={findRecipientByEmail:async()=>null,findMessageByIdempotency:async(_u,_a,k)=>records.get(k)};
   const drafts={
@@ -47,7 +49,9 @@ function service({failSend=false,failBeforeProvider=false,changed=false,lateSupp
     getDraft:async({messageId})=>({draft:{...[...records.values()].find(x=>x.id===messageId)}}),
   };
   let currentF;
-  const delivery={getDeliveryStatus:async()=>({canSend:true}),sendApprovedDraft:async({messageId})=>{
+  const delivery={getDeliveryStatus:async()=>({canSend:true,canAutopilot:autopilot}),sendApprovedDraft:async({messageId,scheduled,beforeProvider})=>{
+    if(scheduled)assert(autopilot);
+    await beforeProvider?.();
     if(failBeforeProvider)throw Error('pre-provider unavailable');
     sends++;const raw=[...records.values()].find(x=>x.id===messageId);raw.attempt_count++;
     if(failSend){raw.status='sending';throw Error('provider timeout');}
@@ -60,7 +64,7 @@ test.before(async()=>{
   db=new PGlite();
   await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create table user_profiles(id uuid primary key,tier text);create table korlix_agent_email_recipients(id uuid primary key default gen_random_uuid(),user_id uuid,email text,active boolean default true,consent_status text default 'transactional_only',source_reference text,suppressed_at timestamptz,suppression_reason text,updated_at timestamptz);grant usage on schema public to anon,authenticated,service_role;grant select,update on user_profiles to service_role;grant all on korlix_agent_email_recipients to service_role;`);
   for(const u of [owner,other,basic]){await db.query('insert into auth.users values($1)',[u]);await db.query('insert into user_profiles values($1,$2)',[u,u===basic?'basic':'enterprise']);}
-  for(const file of ['20260921162128_enterprise_contacts_crm.sql','20260922023935_enterprise_funnel_studio.sql','20260922031813_funnel_followups.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+file,import.meta.url),'utf8'));
+  for(const file of ['20260921162128_enterprise_contacts_crm.sql','20260922023935_enterprise_funnel_studio.sql','20260922031813_funnel_followups.sql','20260922035232_funnel_scheduled_followups.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+file,import.meta.url),'utf8'));
   await db.exec('set role service_role');
 });
 test.after(async()=>db.close());
@@ -154,4 +158,83 @@ test('HTTP endpoints reject anonymous users and cross-owner task mutations',asyn
     assert.equal((await fetch(url,{headers:{Authorization:basic}})).status,403);assert.equal((await fetch(url,{headers:{Authorization:owner}})).status,200);
     assert.equal((await fetch(url+'/send',{method:'POST',headers:{Authorization:other,'Content-Type':'application/json'},body:JSON.stringify({task_id:randomUUID(),version:1,confirmed:true})})).status,404);
   }finally{await new Promise(r=>server.close(r));}
+});
+
+const later=()=>new Date(Date.now()+3600000).toISOString();
+async function scheduled(f,l,s=service()) {
+  s.setF(f.id);const t=await task(f,l);
+  const r=await s.svc.schedule(owner,f.id,{task_id:t.id,version:t.version,confirmed:true,scheduled_for:later()});
+  return {s,t:r.task};
+}
+async function ready(id) {await db.query("update korlix_funnel_followup_tasks set scheduled_for=now()-interval '1 minute' where id=$1",[id]);}
+test('Schedules require exact approval, valid timing, Autopilot and ownership; editing or manual send cannot bypass a schedule',async()=>{
+  const f=await create(),l=await lead(f),t=await task(f,l),s=service();s.setF(f.id);
+  for(const body of [
+    {task_id:t.id,version:t.version,scheduled_for:later()},
+    {task_id:t.id,version:t.version,confirmed:true,scheduled_for:'2026-09-22 12:00'},
+    {task_id:t.id,version:t.version,confirmed:true,scheduled_for:new Date().toISOString()},
+    {task_id:t.id,version:t.version,confirmed:true,scheduled_for:new Date(Date.now()+32*86400000).toISOString()},
+  ])await assert.rejects(s.svc.schedule(owner,f.id,body));
+  await assert.rejects(s.svc.schedule(other,f.id,{task_id:t.id,version:t.version,confirmed:true,scheduled_for:later()}),/not found/);
+  await assert.rejects(service({autopilot:false}).svc.schedule(owner,f.id,{task_id:t.id,version:t.version,confirmed:true,scheduled_for:later()}),/Autopilot/);
+  const r=await s.svc.schedule(owner,f.id,{task_id:t.id,version:t.version,confirmed:true,scheduled_for:later()});
+  assert.equal(r.task.state,'scheduled');assert(r.task.scheduled_approved_at);assert.equal(s.sends(),0);assert.equal(s.recipients(),0);assert.equal(s.records.size,0);
+  assert.equal((await cmd(owner,'state',f.id)).counts.scheduled,1);
+  await assert.rejects(s.svc.edit(owner,f.id,{task_id:t.id,version:r.task.version,subject:'Changed',body:'Changed'}),/Only/);
+  await assert.rejects(s.svc.send(owner,f.id,{task_id:t.id,version:r.task.version,confirmed:true}),/already/);
+  assert.deepEqual(await s.svc.runScheduled(),{checked:0,sent:0});
+  await s.svc.cancelSchedule(owner,f.id,{task_id:t.id,version:r.task.version});
+});
+test('Durable schedules send through NOVA after a simulated process restart and overlapping runners send once',async()=>{
+  const f=await create(),l=await lead(f);const {t}=await scheduled(f,l);await ready(t.id);
+  const restarted=service();restarted.setF(f.id);
+  const results=await Promise.all([restarted.svc.runScheduled(),restarted.svc.runScheduled()]);
+  assert.equal(results.reduce((n,r)=>n+r.sent,0),1);assert.equal(restarted.sends(),1);
+  assert.equal((await task(f,l)).state,'sent');assert.equal((await restarted.svc.runScheduled()).sent,0);
+});
+test('Cancel, workflow pause and page pause require fresh approval before another scheduled send',async()=>{
+  for(const action of ['cancel','workflow','page']) {
+    const f=await create(),l=await lead(f),{s,t}=await scheduled(f,l);
+    if(action==='cancel') {
+      await assert.rejects(s.svc.cancelSchedule(owner,f.id,{task_id:t.id,version:1}),/changed/);
+      await s.svc.cancelSchedule(owner,f.id,{task_id:t.id,version:t.version});
+    }
+    if(action==='workflow') {const st=(await cmd(owner,'state',f.id)).settings;await cmd(owner,'settings',f.id,settings(st,{enabled:false}));await cmd(owner,'settings',f.id,settings({...st,version:st.version+1}));}
+    if(action==='page') {const paused=await funnel(owner,'pause',f.id,{version:f.version});await funnel(owner,'publish',f.id,{version:paused.version,confirmed:true});}
+    const after=await task(f,l);assert.equal(after.state,'review');assert.equal(after.scheduled_approved_at,null);assert.equal(after.scheduled_for,null);
+    assert.equal((await s.svc.runScheduled()).sent,0);assert.equal(s.sends(),0);
+  }
+});
+test('Due-time downgrade, contact suppression, stale schedules and paused NOVA return to review without outreach',async()=>{
+  for(const change of ['downgrade','consent','address','archive','expired','autopilot']) {
+    const f=await create(),l=await lead(f),{t}=await scheduled(f,l);await ready(t.id);
+    if(change==='downgrade')await db.query("update user_profiles set tier='basic' where id=$1",[owner]);
+    if(change==='consent')await db.query('update korlix_contacts set do_not_contact=true where id=$1',[l.contact_id]);
+    if(change==='address')await db.query("update korlix_contacts set email='changed@example.com' where id=$1",[l.contact_id]);
+    if(change==='archive')await db.query('update korlix_contacts set archived_at=now() where id=$1',[l.contact_id]);
+    if(change==='expired')await db.query("update korlix_funnel_followup_tasks set scheduled_for=now()-interval '25 hours' where id=$1",[t.id]);
+    const s=service({autopilot:change!=='autopilot'});s.setF(f.id);assert.equal((await s.svc.runScheduled()).sent,0);assert.equal(s.sends(),0);
+    await db.query("update user_profiles set tier='enterprise' where id=$1",[owner]);assert.equal((await task(f,l)).state,'review');
+  }
+});
+test('Scheduled ambiguous provider outcome and interrupted claims never automatically retry',async()=>{
+  const f=await create(),l=await lead(f),{t}=await scheduled(f,l);await ready(t.id);
+  const s=service({failSend:true});s.setF(f.id);await s.svc.runScheduled();assert.equal(s.sends(),1);assert.equal((await task(f,l)).state,'needs_review');
+  await s.svc.runScheduled();assert.equal(s.sends(),1);
+  const l2=await lead(f),{t:t2}=await scheduled(f,l2);
+  await ready(t2.id);await cmd(owner,'claim_scheduled',f.id,{task_id:t2.id,version:t2.version,agent_id:'nova'});
+  await db.query("update korlix_funnel_followup_tasks set updated_at=now()-interval '6 minutes' where id=$1",[t2.id]);
+  await s.svc.runScheduled();assert.equal((await task(f,l2)).state,'needs_review');assert.equal(s.sends(),1);
+});
+test('Browser roles cannot scan due schedules and call tasks cannot be scheduled',async()=>{
+  const f=await create({email_enabled:false,call_enabled:true});await lead(f);const t=(await cmd(owner,'state',f.id)).tasks[0];
+  await assert.rejects(cmd(owner,'schedule',f.id,{task_id:t.id,version:t.version,confirmed:true,scheduled_for:later(),agent_id:'nova'}));
+  for(const role of ['anon','authenticated']){await db.exec('reset role;set role '+role);await assert.rejects(due(owner),/permission denied/);}
+  await db.exec('reset role;set role service_role');
+});
+test('Scheduler runs once per interval, preserves tasks on scan failure and stops cleanly',async()=>{
+  let calls=0,callback,logs=0,cleared=0;
+  const runner=createFunnelScheduler({run:async()=>{calls++;throw Error('offline');},logger:{warn:()=>logs++},setTimeoutImpl:fn=>{callback=fn;return 1;},clearTimeoutImpl:()=>cleared++});
+  runner.start();runner.start();await callback();assert.equal(calls,1);assert.equal(logs,1);
+  runner.stop();await callback();assert.equal(calls,1);assert.equal(cleared,1);
 });
