@@ -8,6 +8,7 @@ import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
 import 'funnel_templates.dart';
 import 'funnel_followups.dart';
+import 'funnel_campaigns.dart';
 
 class FunnelScreen extends StatefulWidget {
   const FunnelScreen({super.key, required this.client, this.onOpenContacts});
@@ -889,6 +890,7 @@ class _FunnelScreenState extends State<FunnelScreen> {
                   for (final t in [
                     'Page',
                     if (box.maxWidth <= 1080) 'Preview',
+                    'Ads workspace',
                     'Campaign links',
                     'Leads',
                     'Follow-ups',
@@ -962,6 +964,12 @@ class _FunnelScreenState extends State<FunnelScreen> {
                   _fields(),
               ],
               if (_tab == 'Preview') _preview(),
+              if (_tab == 'Ads workspace')
+                FunnelCampaigns(
+                  key: ValueKey('campaigns-${_selected!['id']}'),
+                  client: widget.client,
+                  funnelId: '${_selected!['id']}',
+                ),
               if (_tab == 'Campaign links') _campaigns(),
               if (_tab == 'Leads') _leads(),
               if (_tab == 'Follow-ups')
@@ -1423,7 +1431,7 @@ class _FunnelScreenState extends State<FunnelScreen> {
         ),
         const SizedBox(height: 16),
         const Text(
-          'Tracking records the tags submitted with the form. Ad account connections, budgets, spend reporting, and campaign publishing are coming in a later release.',
+          'Tracking records visitor-supplied tags. Use Ads workspace for saved campaign plans, planned budgets, and manual results. Ad-account connections and direct campaign publishing are not available yet.',
           style: TextStyle(color: WfStyle.muted, fontSize: 12, height: 1.5),
         ),
       ],
