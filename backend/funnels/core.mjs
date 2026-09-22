@@ -15,6 +15,26 @@ export function httpsUrl(v) {
   if (u.protocol !== 'https:' || u.username || u.password || !u.hostname.includes('.') || /^(localhost|127\.|0\.|169\.254\.)/.test(u.hostname)) fail('Enter a public HTTPS address.');
   return u.href;
 }
+export const defaultSections=()=>['main_image','benefits','inquiry','faq'].map(kind=>({kind,visible:true}));
+export function pageSections(raw) {
+  if(raw===undefined)return defaultSections();
+  if(!Array.isArray(raw)||raw.length<4||raw.length>8)fail('Use the four standard sections and up to four text sections.');
+  const seen=new Set();
+  const sections=raw.map(s=>{
+    if(!s||typeof s!=='object'||Array.isArray(s))fail('Choose a valid page section.');
+    const visible=s.visible===undefined?true:s.visible;
+    if(typeof visible!=='boolean')fail('Choose whether the section is visible.');
+    if(s.kind==='text'){
+      if(typeof s.id!=='string'||!/^text-[1-4]$/.test(s.id)||seen.has(s.id)||!visible)fail('Use up to four distinct text sections.');
+      seen.add(s.id);return{kind:'text',id:s.id,visible:true,heading:text(s.heading??'',120),body:text(s.body??'',1000)};
+    }
+    if(!['main_image','benefits','inquiry','faq'].includes(s.kind)||seen.has(s.kind))fail('Keep one of each standard page section.');
+    if(['inquiry','main_image'].includes(s.kind)&&!visible)fail('Keep the inquiry form and image position enabled. Remove an unwanted image in Page images.');
+    seen.add(s.kind);return{kind:s.kind,visible};
+  });
+  if(['main_image','benefits','inquiry','faq'].some(kind=>!seen.has(kind)))fail('Keep the inquiry form and all standard section positions.');
+  return sections;
+}
 export function document(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('A page draft is required.');
   if (!['consultation', 'product', 'event'].includes(raw.layout)) fail('Choose a page template.');
@@ -22,11 +42,16 @@ export function document(raw) {
   const form_mode=raw.form_mode===undefined?'single':raw.form_mode;
   if(!['single','guided'].includes(form_mode))fail('Choose a single-page or guided inquiry form.');
   if (!Array.isArray(raw.benefits) || raw.benefits.length > 6 || !Array.isArray(raw.faq) || raw.faq.length > 6) fail('Use up to six benefits and FAQs.');
-  return {brand:text(raw.brand,80,true),headline:text(raw.headline,160,true),subheadline:text(raw.subheadline,600,true),
+  const result={brand:text(raw.brand,80,true),headline:text(raw.headline,160,true),subheadline:text(raw.subheadline,600,true),
     cta:text(raw.cta,60,true),thank_you:text(raw.thank_you,600,true),layout:raw.layout,accent:raw.accent,form_mode,
     benefits:raw.benefits.map(x=>text(x,180,true)),faq:raw.faq.map(x=>({q:text(x?.q,180,true),a:text(x?.a,700,true)})),
     privacy_url:httpsUrl(raw.privacy_url),booking_url:httpsUrl(raw.booking_url),
-    contact_email:text(raw.contact_email ?? '',254),logo:imageReference(raw.logo),hero_image:imageReference(raw.hero_image)};
+    contact_email:text(raw.contact_email ?? '',254),logo:imageReference(raw.logo),hero_image:imageReference(raw.hero_image),
+    ...(raw.sections===undefined?{}:{sections:pageSections(raw.sections)})};
+  // Leave headroom for PostgreSQL's jsonb whitespace below its existing 18 KB
+  // page limit. Legacy documents retain their existing validation behavior.
+  if(raw.sections!==undefined&&Buffer.byteLength(JSON.stringify(result),'utf8')>17200)fail('This page is too long. Shorten some copy or remove a text section before saving.');
+  return result;
 }
 export function imageReference(raw) {
   if(raw===undefined||raw===null)return null;
@@ -35,6 +60,7 @@ export function imageReference(raw) {
 }
 export function publishReady(d) {
   d=document(d);
+  if(pageSections(d.sections).some(s=>s.kind==='text'&&(!s.heading||!s.body)))fail('Complete the heading and copy in each text section before publishing.');
   if([d.logo,d.hero_image].some(x=>x&&!x.alt))fail('Add a description for each page image before publishing.');
   if (!d.privacy_url || !/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(d.contact_email)) fail('Add your privacy-policy URL and a valid business contact email before publishing.');
   return d;

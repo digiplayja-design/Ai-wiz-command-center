@@ -218,3 +218,28 @@ test('A full-length non-ASCII request survives URL encoding through review and f
   assert.equal((await j.post('lead',{consent:'yes',message,review_token})).status,303);
   const leads=await rpc(owner,'leads',j.f.id);assert.equal(leads.total,1);assert.equal(leads.leads[0].message,message);
 });
+
+test('Section editor saves privately, rejects stale and foreign saves, and publishes the ordered snapshot deliberately',async()=>{
+ const sections=[{kind:'faq',visible:false},{kind:'text',id:'text-1',heading:'Our process',body:'Step one.\nStep two.'},{kind:'inquiry'},{kind:'benefits'},{kind:'main_image'}];
+ let f=await create();f=await publish(f);
+ const path='/api/funnels/'+f.id;
+ const saved=await http(path,{method:'PUT',...auth(owner,{version:f.version,name:f.name,document:{...doc,sections}})});
+ assert.equal(saved.status,200);const changed=(await saved.json()).funnel;
+ assert.equal((await rpc(null,'public',null,{slug:f.slug})).document.sections,undefined);
+ const before=await(await http('/f/'+f.slug)).text();assert(!before.includes('data-section="text-1"'));
+ assert.equal((await http(path,{method:'PUT',...auth(other,{version:changed.version,name:f.name,document:{...doc,sections}})})).status,404);
+ assert.equal((await http(path,{method:'PUT',...auth(owner,{version:f.version,name:f.name,document:{...doc,sections}})})).status,409);
+ const published=await http(path+'/publish',{method:'POST',...auth(owner,{version:changed.version,confirmed:true})});assert.equal(published.status,200);
+ const html=await(await http('/f/'+f.slug)).text();assert(html.includes('Our process'));assert(!html.includes('What next?'));
+ assert(html.indexOf('data-section="text-1"')<html.indexOf('id="contact"'));assert.equal((html.match(/id="contact"/g)||[]).length,1);
+ const copied=await http('/api/funnels',{method:'POST',...auth(owner,{name:'Copied page',slug:'copied-'+randomUUID(),document:changed.draft})});
+ assert.equal(copied.status,201);assert.deepEqual((await copied.json()).funnel.draft.sections,changed.draft.sections);
+ assert.equal((await rpc(owner,'leads',f.id)).total,0);
+});
+test('An unfinished text section can be saved but cannot be published, without changing the prior live page',async()=>{
+ let f=await publish(await create());const path='/api/funnels/'+f.id;
+ const sections=[{kind:'main_image'},{kind:'benefits'},{kind:'inquiry'},{kind:'faq'},{kind:'text',id:'text-1',heading:'',body:''}];
+ const r=await http(path,{method:'PUT',...auth(owner,{version:f.version,name:f.name,document:{...doc,sections}})});assert.equal(r.status,200);f=(await r.json()).funnel;
+ const blocked=await http(path+'/publish',{method:'POST',...auth(owner,{version:f.version,confirmed:true})});assert.equal(blocked.status,400);assert.match((await blocked.json()).error,/Complete the heading/);
+ assert.equal((await rpc(null,'public',null,{slug:f.slug})).document.sections,undefined);
+});

@@ -371,3 +371,39 @@ layouts. See the frontend `IMAGES.md` for the owner workflow.
 
 Implementation references: [Sharp input limits](https://sharp.pixelplumbing.com/api-constructor/),
 [Sharp output and metadata defaults](https://sharp.pixelplumbing.com/api-output/).
+
+## K152 · Configurable page sections
+
+An optional `sections` array controls content below the fixed hero. It contains
+exactly one `main_image`, `benefits`, `inquiry` and `faq`, plus zero to four `text`
+entries. Each text entry has a unique `text-1` through `text-4` ID, heading (120
+characters), body (1,000) and `visible:true`. Only benefits and FAQs may be hidden.
+The inquiry section always appears once; remove an unwanted image through its
+existing reference. Legacy documents without `sections` use the previous order.
+
+The owner editor uses arrows to reorder, switches for optional visibility, and
+plain-text fields. Hidden section copy remains in the document. Save updates the
+draft; explicit publication updates the live snapshot. Added text can be saved
+unfinished but publication and a publish-ready rehearsal reject missing heading
+or body. NOVA-generated copy and duplication retain the owner's section choices.
+All public text is escaped; no arbitrary HTML, URLs, scripts or image references
+are accepted through section definitions. The preview follows the same order.
+
+The existing JSONB draft/published columns carry the array. No migration is
+needed. Normalization limits explicit-section documents to 17,200 UTF-8 JSON
+bytes, leaving whitespace headroom under the existing 18,000-byte JSONB limit.
+The total budget may be reached before all individual text limits, especially
+with multilingual copy. A clear 400 asks the owner to shorten the page.
+
+Verification adds normalization/rendering tests and HTTP save/publish tests for
+legacy defaults, malformed/duplicate sections, mandatory form retention, XSS,
+guided forms, draft/live isolation, ownership, stale versions, duplication and
+unfinished copy. Flutter checks cover reordered text identity, visibility,
+save/reload, four-section limits, generation/clone preservation and layouts at
+1440/390/320 pixels (1.3x text at 320). Live owner acceptance remains deferred.
+
+Deploy backend then frontend. Roll back both to K151 if required; retain the
+existing database and replay/image protections. Old code renders the legacy
+order and may drop the new sections on a subsequent save, so avoid editing pages
+with custom sections until the updated editor is restored. This release does
+not introduce multi-page branching, custom form fields or automatic publication.
