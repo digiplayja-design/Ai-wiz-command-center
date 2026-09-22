@@ -8,6 +8,7 @@ import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
 import 'funnel_csv_save.dart';
 import 'funnel_lead_editor.dart';
+import 'funnel_cleanup.dart';
 
 class FunnelInbox extends StatefulWidget {
   const FunnelInbox({
@@ -172,6 +173,41 @@ class _FunnelInboxState extends State<FunnelInbox> {
       helpText: 'Filter inquiry dates (UTC)',
     );
     if (mounted && picked != null) setState(() => _dates = picked);
+  }
+
+  Future<void> _cleanup({String? leadId}) async {
+    if (_busy || _denied) return;
+    final removed = await showDialog<int>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => FunnelCleanup(
+        client: widget.client,
+        funnelId: widget.funnelId,
+        leadId: leadId,
+        onAccessDenied: () {
+          if (!mounted) return;
+          setState(() {
+            _denied = true;
+            _data = null;
+            _search.clear();
+            _source.clear();
+            _status = '';
+            _applied = {};
+          });
+        },
+      ),
+    );
+    if (!mounted || _denied || removed == null) return;
+    await _load(reset: true, keepFilters: true);
+    if (mounted && !_denied) {
+      setState(
+        () => _notice = removed < 0
+            ? (_error == null
+                  ? 'Inbox refreshed. Review the remaining inquiries before trying again.'
+                  : 'Deletion was not confirmed. Reload the inbox before trying again.')
+            : '$removed ${removed == 1 ? 'inquiry' : 'inquiries'} deleted. Linked CRM contacts and Email Center records were retained.',
+      );
+    }
   }
 
   Future<void> _export() => _run(() async {
@@ -429,6 +465,11 @@ class _FunnelInboxState extends State<FunnelInbox> {
                 Icons.people_outline,
                 widget.onOpenContacts,
               ),
+            _button(
+              'Clean up old inquiries',
+              Icons.delete_sweep_outlined,
+              () => _cleanup(),
+            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -622,6 +663,11 @@ class _FunnelInboxState extends State<FunnelInbox> {
                   Icons.edit_note,
                   () => _manageLead('${lead['id']}'),
                 ),
+              _button(
+                'Delete inquiry',
+                Icons.delete_outline,
+                () => _cleanup(leadId: '${lead['id']}'),
+              ),
               _button(
                 'Queue follow-up',
                 Icons.playlist_add,
