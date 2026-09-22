@@ -996,6 +996,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                     }, (v) => _segment = v),
                     _choice('Source', _source, const {
                       '': 'All sources',
+                      'funnel': 'Funnel Studio',
                       'manual': 'Manual',
                       'phone': 'Phone',
                       'email': 'Email',
