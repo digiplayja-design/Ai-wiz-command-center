@@ -1407,6 +1407,8 @@ export function createKorlixAgentEmailDeliveryService({
     authorizationType,
     source,
     confirmationNonceHash = null,
+    requireAutopilot = false,
+    beforeProvider = null,
   }) {
     const currentStatus = line(message.status, 40).toLowerCase();
     if (currentStatus === "sent" && message.provider_message_id) {
@@ -1536,7 +1538,7 @@ export function createKorlixAgentEmailDeliveryService({
     try {
       currentSettingsRow = (
         await settingsRequired(identity, {
-          autopilot: authorizationType === "preapproved_rule",
+          autopilot: requireAutopilot || authorizationType === "preapproved_rule",
         })
       ).row;
       assertMarketingSendBoundary(currentSettingsRow, claim);
@@ -1550,6 +1552,7 @@ export function createKorlixAgentEmailDeliveryService({
         claim.recipient_id,
         claim.message_kind === "marketing",
       );
+      if (typeof beforeProvider === 'function') await beforeProvider();
     } catch (error) {
       await restoreAfterPreProviderAbort({
         identity,
@@ -2521,9 +2524,9 @@ export function createKorlixAgentEmailDeliveryService({
       });
     },
 
-    async sendApprovedDraft({ userId, agentId, messageId, body }) {
+    async sendApprovedDraft({ userId, agentId, messageId, body, scheduled = false, beforeProvider = null }) {
       const identity = await context({ userId, agentId });
-      const { row: settingsRow } = await settingsRequired(identity);
+      const { row: settingsRow } = await settingsRequired(identity, { autopilot: scheduled === true });
       const source = objectValue(body);
       requireConfirmation(
         source,
@@ -2568,7 +2571,9 @@ export function createKorlixAgentEmailDeliveryService({
         message,
         allowedStatuses: ["approved", "failed"],
         authorizationType: "one_time_confirmation",
-        source: "authenticated_one_time_send",
+        source: scheduled ? "owner_approved_funnel_schedule" : "authenticated_one_time_send",
+        requireAutopilot: scheduled === true,
+        beforeProvider,
         confirmationNonceHash: safeHash(nonce),
       });
     },
