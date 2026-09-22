@@ -6,7 +6,7 @@ WORKDIR /app
 
 FROM base AS dependencies
 COPY package.json package-lock.json ./
-RUN npm ci --install-strategy=nested --no-audit --no-fund
+RUN npm ci --omit=dev --install-strategy=nested --no-audit --no-fund
 
 FROM base AS runtime
 ENV NODE_ENV=production

@@ -1,3 +1,4 @@
+import { registerWorkforce } from './backend/workforce/routes.mjs'; // K138_WORKFORCE
 import { registerContactsCrm } from './backend/contacts_crm/routes.mjs'; // K137_ENTERPRISE_CONTACTS
 import express from "express";
 import crypto from "crypto";
@@ -12352,6 +12353,7 @@ app.post(
 
 // KORLIX_AGENT_EMAIL_DRAFT_ROUTES_BUILD133_INSTALL_START
 registerContactsCrm(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }); // K137_ENTERPRISE_CONTACTS
+registerWorkforce(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }); // K138_WORKFORCE
 
 installKorlixAgentEmailDraftRoutes(app, {
   environment: process.env,
