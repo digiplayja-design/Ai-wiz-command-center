@@ -8,6 +8,7 @@ import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
 import 'funnel_inbox.dart';
 import 'funnel_templates.dart';
+import 'funnel_form_preview.dart';
 import 'funnel_create_dialog.dart';
 import 'funnel_launch_checklist.dart';
 import 'funnel_followups.dart';
@@ -319,7 +320,7 @@ class _FunnelScreenState extends State<FunnelScreen> {
                     ),
                   ),
                   const Text(
-                    '10 draft requests per day. Your privacy policy, booking link, and contact email are kept. Nothing is published automatically.',
+                    '10 draft requests per day. Your form style, privacy policy, booking link, and contact email are kept. Nothing is published automatically.',
                     style: TextStyle(color: WfStyle.muted, fontSize: 12),
                   ),
                 ],
@@ -554,9 +555,26 @@ class _FunnelScreenState extends State<FunnelScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const WfBadge(
-                        'FROM FIRST CLICK TO NEW CONNECTION',
-                        color: WfStyle.cyan,
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: WfStyle.cyan.withValues(alpha: .09),
+                          borderRadius: BorderRadius.circular(7),
+                          border: Border.all(
+                            color: WfStyle.cyan.withValues(alpha: .17),
+                          ),
+                        ),
+                        child: const Text(
+                          'FROM FIRST CLICK TO NEW CONNECTION',
+                          style: TextStyle(
+                            color: WfStyle.cyan,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 18),
                       const Text(
@@ -1036,6 +1054,29 @@ class _FunnelScreenState extends State<FunnelScreen> {
         _field('headline', 'Headline', 160, lines: 2),
         _field('subheadline', 'Supporting copy', 600, lines: 3),
         _field('cta', 'Button text', 60),
+        DropdownButtonFormField<String>(
+          key: ValueKey('$_revision:form-mode'),
+          initialValue: _draft['form_mode'] as String? ?? 'single',
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Inquiry form'),
+          items: const [
+            DropdownMenuItem(value: 'single', child: Text('Single page')),
+            DropdownMenuItem(
+              value: 'guided',
+              child: Text('Guided · three steps'),
+            ),
+          ],
+          onChanged: (v) => setState(() {
+            _draft['form_mode'] = v;
+            _dirty = true;
+          }),
+        ),
+        const SizedBox(height: 10),
+        const Text(
+          'Guided forms collect contact details, then the request and consent, then a final review. Only the final submission creates a lead. Save and publish to change the live page.',
+          style: TextStyle(color: WfStyle.muted, fontSize: 12, height: 1.5),
+        ),
+        const SizedBox(height: 22),
         TextFormField(
           key: ValueKey('$_revision:benefits'),
           initialValue: (_draft['benefits'] as List).join('\n'),
@@ -1272,43 +1313,11 @@ class _FunnelScreenState extends State<FunnelScreen> {
                             ),
                           ),
                         const SizedBox(height: 16),
-                        const Text(
-                          'Let’s connect',
-                          style: TextStyle(
-                            color: Color(0xFF142B38),
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        for (final field in [
-                          'Your name',
-                          'Email address',
-                          'Phone (optional)',
-                          'How can we help?',
-                        ])
-                          Container(
-                            width: double.infinity,
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              border: Border.all(
-                                color: const Color(0xFFD8E0E3),
-                              ),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              field,
-                              style: const TextStyle(color: Color(0xFF71808B)),
-                            ),
-                          ),
-                        Text(
-                          '□ I agree that ${_draft['brand']} may contact me about this request.',
-                          style: const TextStyle(
-                            color: Color(0xFF526776),
-                            fontSize: 12,
-                          ),
+                        FunnelFormPreview(
+                          mode: _draft['form_mode'] as String? ?? 'single',
+                          brand: '${_draft['brand']}',
+                          cta: '${_draft['cta']}',
+                          accent: accent,
                         ),
                         const SizedBox(height: 18),
                         for (final faq in _draft['faq'] as List)
