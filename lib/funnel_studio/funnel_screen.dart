@@ -1431,7 +1431,7 @@ class _FunnelScreenState extends State<FunnelScreen> {
         ),
         const SizedBox(height: 16),
         const Text(
-          'Tracking records visitor-supplied tags. Use Ads workspace for saved campaign plans, planned budgets, and manual results. Ad-account connections and direct campaign publishing are not available yet.',
+          'Tracking records visitor-supplied tags. Use Ads workspace for saved campaign plans, planned budgets, and manual results. Meta account connections are in Ads workspace. Direct campaign publishing is not available yet.',
           style: TextStyle(color: WfStyle.muted, fontSize: 12, height: 1.5),
         ),
       ],

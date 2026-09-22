@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
+import 'funnel_meta.dart';
 
 String campaignMoney(num cents) => '\$${(cents / 100).toStringAsFixed(2)}';
 String campaignChannel(String value) => switch (value) {
@@ -295,11 +296,13 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
               ),
               campaignSpace(),
               campaignCaption(
-                'Ad accounts are not connected in this release. Launch and manage ads in your ad platform using the campaign link. Budgets here are plans; results are entered manually.',
+                'Connect a Meta ad account below when available. Launch and manage ads in your ad platform using the campaign link. Budgets here are plans; results are entered manually.',
               ),
             ],
           ),
         ),
+        campaignSpace(20),
+        FunnelMetaConnection(client: widget.client),
         campaignSpace(20),
         if (_busy) const LinearProgressIndicator(),
         if (_error != null)
