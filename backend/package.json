@@ -24,7 +24,7 @@
     "k135z:verify-sdk": "node --input-type=module -e 'import assert from '\"'\"'node:assert/strict'\"'\"';\nimport {createRequire} from '\"'\"'node:module'\"'\"';\nprocess.env.ZM_RTMS_LOG_ENABLED='\"'\"'false'\"'\"';\nconst require=createRequire(import.meta.url);\nassert.equal(require('\"'\"'@zoom/rtms/package.json'\"'\"').version,'\"'\"'1.1.0'\"'\"');\nassert(Number(process.versions.node.split('\"'\"'.'\"'\"')[0])>=22);\nconst sdk=(await import('\"'\"'@zoom/rtms'\"'\"')).default;\nassert.equal(typeof sdk.Client,'\"'\"'function'\"'\"');assert.equal(sdk.RTMS_SDK_OK,0);\nassert.equal(typeof sdk.configureLogger,'\"'\"'function'\"'\"');\nfor(const name of ['\"'\"'join'\"'\"','\"'\"'leave'\"'\"','\"'\"'onJoinConfirm'\"'\"','\"'\"'onTranscriptData'\"'\"','\"'\"'onLeave'\"'\"'])\n  assert.equal(typeof sdk.Client.prototype[name],'\"'\"'function'\"'\"');\nconsole.log('\"'\"'K135Z_SDK_LOAD=PASS; SDK=1.1.0; MEETING_JOINED=false'\"'\"');\n'",
     "start": "node server.js",
     "test:workforce": "node --test test/workforce.test.mjs test/workforce_automations.test.mjs",
-    "test:funnels": "node --test test/funnels.test.mjs test/funnel_followups.test.mjs test/funnel_campaigns.test.mjs test/contacts_crm.test.mjs"
+    "test:funnels": "node --test test/funnels.test.mjs test/funnel_followups.test.mjs test/funnel_campaigns.test.mjs test/funnel_meta.test.mjs test/contacts_crm.test.mjs"
   },
   "start": "node server.js",
   "type": "module",

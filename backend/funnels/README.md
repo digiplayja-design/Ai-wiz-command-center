@@ -93,3 +93,33 @@ Results are explicitly owner-entered USD totals for UTC calendar dates. One row 
 Storage is additive and private: RLS enabled, client table and RPC grants revoked, SECURITY INVOKER service commands pinned to public/pg_temp, current Enterprise and funnel ownership checked on every call. HTTP responses are no-store. Rollback by redeploying the previous frontend/backend; keep the campaign data/schema. Existing inquiry follow-up and sequence execution are unchanged.
 
 Next integration: owner-scoped Meta OAuth, app permissions, account/page selection, secure token storage, reviewed campaign creation with platform budget controls, and authoritative spend synchronization. Google follows. Platform approvals and user account authorization are separate dependencies; reviewed local plans do not become launch authorization automatically.
+
+## K144 · Meta ad-account connection
+
+Enterprise owners can prepare a Meta sign-in, continue to Meta from a direct tap, return to the original KORLIX window and **Finish connection**. Choose **Use this account** after the account list loads. Connections belong to the signed-in owner and are shared across that owner's funnel workspaces. Cached names, account IDs, currency, timezone and provider status can be refreshed or searched. This milestone reads account details only: it does not publish ads, select Facebook Pages, upload creative, retrieve spend or authorize budget expenditure.
+
+Apply `funnel_meta_connection` before deploying the backend, then deploy the frontend. Two private RLS tables and one service-only SECURITY INVOKER command are added. Client table, sequence and RPC grants are revoked. Current Enterprise membership is checked for every owner command. Disconnect deletes the encrypted token, cached account details and pending authorization; manually entered plans/results remain. It does not stop externally running ads or itself revoke Meta permissions. Account deletion cascades both private tables.
+
+The backend requires all of these settings before Connect Meta is enabled:
+
+| Setting | Value |
+| --- | --- |
+| `KORLIX_META_ENABLED` | `true` after setup |
+| `KORLIX_META_APP_ID` | Numeric Meta app ID |
+| `KORLIX_META_APP_SECRET` | App secret, stored only in Render environment |
+| `KORLIX_META_LOGIN_CONFIG_ID` | Facebook Login for Business configuration ID |
+| `KORLIX_META_TOKEN_KEY` | Independent 32 random bytes encoded as standard base64 |
+| `KORLIX_META_REDIRECT_URI` | `https://chee-chai-chee-backend.onrender.com/api/funnels/meta/callback` |
+| `KORLIX_META_API_VERSION` | Optional; defaults to `v26.0` |
+
+Configure Facebook Login for Business with **User access tokens** and `ads_read`, allowing the owner to choose available assets. This implementation does not support system-user login. Register the exact redirect URI above. Set the deauthorization callback to `https://chee-chai-chee-backend.onrender.com/api/funnels/meta/deauthorize`. For Meta's User Data Deletion field, choose the **instructions URL** option and enter `https://chee-chai-chee-backend.onrender.com/api/funnels/meta/data-deletion`; that page is not a data-deletion callback. Configure the published KORLIX privacy-policy URL in the Meta app. Meta business verification, permission access level, app review and Live mode may be necessary for accounts outside the app's test roles. Verify those requirements in the app dashboard before opening access to customers.
+
+Use Meta's manual authorization-code flow with a single-use hashed state, ten-minute attempt and a separate private finish proof retained only by the initiating KORLIX window. The server exchanges for a long-lived user token and checks its app, type, `ads_read`, user ID and expiry. The token is encrypted using AES-256-GCM bound to the KORLIX owner and attempt. The browser never receives it. Pending candidates are encrypted and expire; expired attempts are removed on subsequent successful owner commands. Graph reads include `appsecret_proof`, fixed Graph hosts, bounded pagination and timeouts. API errors are redacted. Reconnect retains the previous connection until successfully finished; globally increasing versions reject late responses even across disconnect/reconnect. Verified Meta deauthorization deletes matching connections, with timestamps protecting newer authorizations.
+
+Changing the app, login configuration, encryption key, API version or redirect invalidates existing access and requires reconnecting. There is no refresh-token flow. The interface displays access expiry and reconnect guidance; provider revocation marks the connection unavailable. Keep the encryption key backed up in the platform's secret-management system. Do not include tokens, secrets or callback codes in support messages. `/api/funnels/meta/readiness` returns only configuration readiness and `ad_publishing_ready:false`.
+
+Validation uses mocked Meta HTTP responses, real PostgreSQL-compatible migration execution, private-role and owner/tier checks, single-use state, private finish proof, cancellation, expiry, account selection, stale response rejection, token encryption, signed deauthorization, and phone/desktop widget tests. These do not prove real Meta app approval or a successful live account connection. Complete one owner-controlled live sign-in and account selection after configuring the app; no ad spend is required.
+
+Rollback: disable `KORLIX_META_ENABLED`, deploy previous app commits, preserve the additive schema and encrypted records, and review stored connections before re-enabling. No campaign, outreach recipient, email, call or paid ad is created by this migration or deployment.
+
+Provider references: [manual login](https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow/), [Login for Business](https://developers.facebook.com/docs/facebook-login/facebook-login-for-business/), [long-lived tokens](https://developers.facebook.com/docs/facebook-login/guides/access-tokens/get-long-lived/), [deletion options](https://developers.facebook.com/docs/development/create-an-app/app-dashboard/data-deletion-callback/), [current official SDK API version](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/apiconfig.py).
