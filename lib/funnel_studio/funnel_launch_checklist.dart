@@ -9,10 +9,12 @@ class FunnelLaunchChecklist extends StatelessWidget {
     required this.dirty,
     required this.onEdit,
     required this.onPreview,
+    this.onEditField,
   });
   final Map<String, dynamic> document;
   final bool dirty;
   final VoidCallback onEdit, onPreview;
+  final ValueChanged<String>? onEditField;
 
   @override
   Widget build(BuildContext context) {
@@ -90,6 +92,23 @@ class FunnelLaunchChecklist extends StatelessWidget {
                                 fontSize: 12,
                                 height: 1.4,
                               ),
+                            ),
+                          ),
+                        if (!c.$2 &&
+                            onEditField != null &&
+                            (c.$1 == 'Add a privacy-policy URL' ||
+                                c.$1 == 'Add your business contact email'))
+                          TextButton.icon(
+                            onPressed: () => onEditField!(
+                              c.$1 == 'Add a privacy-policy URL'
+                                  ? 'privacy_url'
+                                  : 'contact_email',
+                            ),
+                            icon: const Icon(Icons.edit_outlined, size: 16),
+                            label: Text(
+                              c.$1 == 'Add a privacy-policy URL'
+                                  ? 'Edit privacy URL'
+                                  : 'Edit contact email',
                             ),
                           ),
                       ],

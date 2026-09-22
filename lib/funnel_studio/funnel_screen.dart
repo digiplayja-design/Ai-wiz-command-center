@@ -12,6 +12,7 @@ import 'funnel_create_dialog.dart';
 import 'funnel_launch_checklist.dart';
 import 'funnel_followups.dart';
 import 'funnel_campaigns.dart';
+import 'funnel_rehearsal.dart';
 
 class FunnelScreen extends StatefulWidget {
   const FunnelScreen({super.key, required this.client, this.onOpenContacts});
@@ -29,6 +30,9 @@ class _FunnelScreenState extends State<FunnelScreen> {
   String? _error;
   bool _busy = false, _dirty = false, _aiReady = false, _denied = false;
   int _revision = 0;
+  final _fieldAnchors = <String, GlobalKey>{};
+  final _fieldFocus = <String, FocusNode>{};
+  final _previewAnchor = GlobalKey(), _rehearsalAnchor = GlobalKey();
   final Map<String, String> _tags = {
     'source': '',
     'medium': 'paid',
@@ -54,10 +58,36 @@ class _FunnelScreenState extends State<FunnelScreen> {
 
   @override
   void dispose() {
+    for (final focus in _fieldFocus.values) {
+      focus.dispose();
+    }
     widget.client.onAccessDenied = null;
     widget.client.dispose();
     super.dispose();
   }
+
+  void _jumpTo(String tab, GlobalKey anchor, {String? field}) {
+    setState(() => _tab = tab);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final target = anchor.currentContext;
+      if (target == null) return;
+      await Scrollable.ensureVisible(
+        target,
+        alignment: 0.15,
+        duration: const Duration(milliseconds: 250),
+      );
+      if (mounted && _tab == tab && field != null) {
+        _fieldFocus[field]?.requestFocus();
+      }
+    });
+  }
+
+  void _editField(String field) => _jumpTo(
+    'Page',
+    _fieldAnchors.putIfAbsent(field, () => GlobalKey()),
+    field: field,
+  );
 
   Future<void> _run(Future<void> Function() task) async {
     if (_busy) return;
@@ -769,6 +799,11 @@ class _FunnelScreenState extends State<FunnelScreen> {
                     _dirty ? null : _publish,
                     primary: true,
                   ),
+                  _button(
+                    'Run rehearsal',
+                    Icons.play_circle_outline,
+                    () => _jumpTo('Rehearsal', _rehearsalAnchor),
+                  ),
                   if (_selected!['state'] == 'published') ...[
                     _button('Open live page', Icons.open_in_new, _openLive),
                     _button(
@@ -809,6 +844,7 @@ class _FunnelScreenState extends State<FunnelScreen> {
                   for (final t in [
                     'Page',
                     'Preview',
+                    'Rehearsal',
                     'Ads workspace',
                     'Campaign links',
                     'Leads',
@@ -828,8 +864,9 @@ class _FunnelScreenState extends State<FunnelScreen> {
                 key: ValueKey('launch-${_selected!['id']}'),
                 document: _draft,
                 dirty: _dirty,
-                onEdit: () => setState(() => _tab = 'Page'),
-                onPreview: () => setState(() => _tab = 'Preview'),
+                onEdit: () => _editField('name'),
+                onEditField: _editField,
+                onPreview: () => _jumpTo('Preview', _previewAnchor),
               ),
               const SizedBox(height: 22),
               if (_tab == 'Page') ...[
@@ -889,7 +926,20 @@ class _FunnelScreenState extends State<FunnelScreen> {
                 else
                   _fields(),
               ],
-              if (_tab == 'Preview') _preview(),
+              if (_tab == 'Preview')
+                KeyedSubtree(key: _previewAnchor, child: _preview()),
+              if (_tab == 'Rehearsal')
+                KeyedSubtree(
+                  key: _rehearsalAnchor,
+                  child: FunnelRehearsal(
+                    key: ValueKey('rehearsal-${_selected!['id']}-$_revision'),
+                    client: widget.client,
+                    funnel: _selected!,
+                    document: copyFunnel(_draft),
+                    name: _name,
+                    dirty: _dirty,
+                  ),
+                ),
               if (_tab == 'Ads workspace')
                 FunnelCampaigns(
                   key: ValueKey('campaigns-${_selected!['id']}'),
@@ -920,9 +970,11 @@ class _FunnelScreenState extends State<FunnelScreen> {
     int lines = 1,
     String? hint,
   }) => Padding(
+    key: _fieldAnchors.putIfAbsent(key, () => GlobalKey()),
     padding: const EdgeInsets.only(bottom: 16),
     child: TextFormField(
       key: ValueKey('$_revision:$key'),
+      focusNode: _fieldFocus.putIfAbsent(key, () => FocusNode()),
       initialValue: key == 'name' ? _name : _draft[key]?.toString() ?? '',
       maxLength: max,
       minLines: lines,
