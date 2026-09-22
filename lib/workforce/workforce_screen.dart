@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import 'workforce_client.dart';
 import 'workforce_forms.dart';
 import 'workforce_style.dart';
+import 'workforce_automations.dart';
 
 class WorkforceScreen extends StatefulWidget {
   const WorkforceScreen({super.key, required this.client});
@@ -866,6 +867,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
     ('Timesheets', Icons.receipt_long_outlined),
     ('Schedule', Icons.calendar_month_outlined),
     ('Policies', Icons.tune),
+    ('Automations', Icons.auto_awesome_outlined),
   ];
   Widget _nav(bool rail) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -922,7 +924,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
         ),
       ],
       for (var i = 0; i < _tabs.length; i++)
-        if ((_admin || i != 0) && (_admin || i != 5))
+        if ((_admin || i != 0) && (_admin || i != 5) && (_owner || i != 6))
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             child: Material(
@@ -1149,6 +1151,18 @@ class _WorkforceScreenState extends State<WorkforceScreen>
                                         2 => _workLog(),
                                         3 => _timesheets(),
                                         4 => _scheduleView(),
+                                        6 =>
+                                          _owner
+                                              ? WorkforceAutomations(
+                                                  key: ValueKey(_org),
+                                                  client: widget.client,
+                                                  orgId: _org!,
+                                                  members: _rows('members'),
+                                                  timezone:
+                                                      _data!['organization']['timezone']
+                                                          .toString(),
+                                                )
+                                              : _myDay(),
                                         _ => _policies(),
                                       },
                                     ],
