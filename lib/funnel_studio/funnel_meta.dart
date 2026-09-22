@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
+import 'funnel_meta_performance.dart';
 
 class FunnelMetaConnection extends StatefulWidget {
   const FunnelMetaConnection({super.key, required this.client, this.openUrl});
@@ -213,7 +214,7 @@ class _FunnelMetaConnectionState extends State<FunnelMetaConnection> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Choose the ad accounts you share with KORLIX. This connection reads account details. Ad publishing and automatic spend reporting are coming next.',
+            'Choose the ad accounts you share with KORLIX. Read account details and load performance reports. Ad publishing remains unavailable.',
             style: TextStyle(color: WfStyle.muted, height: 1.5),
           ),
           if (!ready) ...[
@@ -399,6 +400,11 @@ class _FunnelMetaConnectionState extends State<FunnelMetaConnection> {
                 ),
               ),
           ],
+          FunnelMetaPerformance(
+            client: widget.client,
+            connection: c,
+            available: ready && !reconnect && !_busy,
+          ),
         ],
       ),
     );
