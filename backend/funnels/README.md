@@ -309,3 +309,65 @@ database content and K149 replay protection. Open guided forms should be
 reloaded. Older editors ignore/drop the new form choice on subsequent saves;
 rollback does not remove existing inquiries. Arbitrary multi-page builders,
 branching questions, custom fields and partial-lead tracking are separate scope.
+
+## K151 · Private logo and main-image library
+
+Page documents optionally contain `logo` and `hero_image`, each `{id, alt}`.
+The page editor uploads or reuses an owner image, edits its description, and
+removes the reference without deleting the original. Selection is an unsaved
+edit until **Save draft**. Only reviewed publication changes the live images.
+NOVA copy replacement and draft duplication preserve these fields. Descriptions
+are required at publication. Public images use the same origin and CSP as the
+page; no external image URLs, embeds, scripts or image-fetch proxy are accepted.
+
+`GET/POST /api/funnels/images` lists/uploads images; authenticated
+`GET /api/funnels/images/:id` retrieves private bytes. `DELETE` requires
+`confirmed:true` and refuses any asset used by a saved draft or published
+snapshot, including paused pages. Unsaved editor selections are protected in
+the current picker, but are not durable references until saved. If another
+tab deletes an unused asset, saving a stale reference fails with a conflict.
+
+Uploads accept one still JPG, PNG or WebP, at most 5 MiB and 16 megapixels.
+Sharp verifies format, decodes, applies orientation, strips metadata and
+re-encodes WebP at at most 1600 × 1600 pixels and 512 KiB. Detailed images may
+be reduced further; review the optimized result. SVG, GIF, animation and video
+are excluded. Decode concurrency is capped at two per backend instance;
+uploads at ten per owner per minute. Owner image requests have a separate
+120/minute budget so thumbnails do not consume the general editing budget.
+
+The additive `funnel_images` migration stores these small optimized assets in
+a separate private table, capped at 50 assets / 20 MiB per owner. Bytes are
+never included in page documents or library list responses. This bounded brand
+image library uses the existing database, not a general-purpose media store.
+Account deletion cascades bytes and metadata together. Identical optimized
+bytes deduplicate per owner, so retrying an uncertain upload does not consume
+another slot. Failed/unconfirmed uploads should be reconciled with **Refresh
+library**. Uploaded assets are retained until the owner deletes them or deletes
+the account; there is no timed purge of unused images.
+
+The service-only RPC and document trigger use SECURITY INVOKER, pinned search
+paths and revoked browser grants; RLS is enabled. Document writes lock referenced
+image rows while checking ownership. Deletion locks the image and checks all
+saved references; quota checks serialize uploads per owner. Immutable asset IDs
+allow reuse across that owner's funnels and never grant another owner access.
+`GET /f/:slug/media/:id` serves only an image referenced by that currently
+published page, with a fresh Enterprise check and no-store headers. It does not
+increment page counts. Pause, downgrade, removal and republishing stop future
+reads. Images already downloaded by a visitor cannot be recalled.
+
+Deploy the migration, backend, then frontend. Rollback app code while retaining
+the image table and reference trigger. Older editors may drop image fields on
+save, so avoid editing image-bearing pages with the old frontend. No production
+image, draft or page is uploaded/edited/published by deployment. Tests use local
+fixtures; browser picking on the user's iPad/phone stays in the deferred pass.
+
+Verification: `node --test backend/test/funnel_images.test.mjs` uses actual
+migration execution, Sharp decoding and multipart HTTP, including privacy,
+metadata stripping, limits, snapshots, role/owner/tier denial, in-use deletion,
+stale refs and retry deduplication. PGlite serializes database calls; this is
+not a production concurrent-load test. Flutter coverage exercises upload,
+reuse, cancellation, pending work, access loss, deletion conflicts and narrow
+layouts. See the frontend `IMAGES.md` for the owner workflow.
+
+Implementation references: [Sharp input limits](https://sharp.pixelplumbing.com/api-constructor/),
+[Sharp output and metadata defaults](https://sharp.pixelplumbing.com/api-output/).

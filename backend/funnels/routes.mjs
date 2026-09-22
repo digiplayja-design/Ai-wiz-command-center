@@ -12,6 +12,7 @@ import { registerInbox } from './inbox.mjs';
 import { registerRehearsal } from './rehearsal.mjs';
 import { registerLeadManagement } from './lead_management.mjs';
 import { registerCleanup } from './cleanup.mjs';
+import { registerImages, createImageStore } from './images.mjs';
 
 export function createFunnelStore(database) {
   return { async command(actor, action, id=null, data={}) {
@@ -36,7 +37,8 @@ export async function generateFunnel(brief, environment=process.env) {
   try { return document(JSON.parse(result.output_text.replace(/^```(?:json)?\s*|\s*```$/g,''))); }
   catch { fail('NOVA could not finish a valid draft. Your current page is unchanged. Try a more specific brief.',503); }
 }
-export function registerFunnels(app,{database,requireUser,store,followups,campaignStore,generateAdCopy,metaStore,metaProvider,rehearsalStore,loadAgentProfile,generate=generateFunnel,environment=process.env,now=Date.now,autoStartScheduler=false,logger=console}={}) {
+export function registerFunnels(app,{database,requireUser,store,followups,campaignStore,generateAdCopy,metaStore,metaProvider,rehearsalStore,imageStore,loadAgentProfile,generate=generateFunnel,environment=process.env,now=Date.now,autoStartScheduler=false,logger=console}={}) {
+  const media=imageStore??createImageStore(database);
   const persistence=store || (database?createFunnelStore(database):null);
   const followup=followups||createFunnelFollowups({database,loadAgentProfile,environment});
   const scheduler=createFunnelScheduler({run:()=>followup.runScheduled(),logger});
@@ -54,12 +56,12 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   };
   const command=(...args)=>{if(!persistence) fail('Funnel Studio is not configured.',503); return persistence.command(...args);};
   const present=f=>({...f,url:`${publicBase}/f/${f.slug}`});
-  const owner=fn=>async(req,res)=>{
+  const owner=(fn,{ratePrefix='',max=50}={})=>async(req,res)=>{
     res.set('Cache-Control','no-store');
     try {
       let u; try{u=await requireUser(req);}catch{fail('Sign in to use Funnel Studio.',401);}
       if(!u?.id) fail('Sign in to use Funnel Studio.',401);
-      limit(u.id,50);
+      limit(ratePrefix+u.id,max);
       // Authoritative database entitlement checks are repeated inside every command.
       await fn(req,res,u.id);
     } catch(e) {res.status(e instanceof FunnelError?e.status:503).json({error:e instanceof FunnelError?e.message:'Funnel Studio could not complete this request. Please retry.'});}
@@ -93,7 +95,9 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   app.get(base+'/:id/followups/sequences/:sequenceId',owner(async(q,r,u)=>r.json(await followup.sequenceDetail(u,uuid(q.params.id),q.params.sequenceId))));
   app.post(base+'/:id/followups/reconcile',owner(async(q,r,u)=>r.json(await followup.reconcile(u,uuid(q.params.id),q.body?.task_id))));
   app.post(base+'/preview',owner(async(q,r,u)=>{
-    await command(u,'list');r.json({html:renderPage(document(q.body?.document),{preview:true})});
+    await command(u,'list');const d=document(q.body?.document),imageSources={};
+    for(const a of [d.logo,d.hero_image].filter(Boolean)){const image=await media.command(u,'get',a.id);imageSources[a.id]='data:image/webp;base64,'+Buffer.from(image.content,'base64').toString('base64');}
+    r.json({html:renderPage(d,{preview:true,imageSources})});
   }));
   const sign=payload=>createHmac('sha256',secret).update(payload).digest('hex');
   const makeToken=f=>{const p=Buffer.from(JSON.stringify({s:f.slug,v:f.published_version,n:randomUUID(),t:now()})).toString('base64url');return p+'.'+sign(p);};
@@ -120,7 +124,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
     r.set('X-Robots-Tag','noindex, nofollow');
     return r.status(status).type('html').send(renderPage(document(f.document),{
       action:`/f/${f.slug}/lead#contact`,stepAction:`/f/${f.slug}/step#contact`,
-      token:body.token,utm,step,values,reviewToken,error,privateForm:true,
+      token:body.token,utm,step,values,reviewToken,error,privateForm:true,mediaBase:`/f/${f.slug}/media`,
     }));
   };
   const publicRoute=fn=>async(q,r)=>{
@@ -128,11 +132,12 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
     try {limit('public:'+q.params.slug,300);await fn(q,r);}
     catch(e){r.status(e instanceof FunnelError?e.status:503).type('html').send(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Funnel Studio</title><main style="font:18px system-ui;max-width:700px;margin:15vh auto;padding:25px"><h1>We couldn’t complete that request.</h1><p>${esc(e instanceof FunnelError?e.message:'Please try again shortly.')}</p><p><a href="/f/${esc(/^[a-z0-9-]+$/.test(q.params.slug)?q.params.slug:'unavailable')}">Return to the page</a></p></main>`);}
   };
+  registerImages(app,{base,owner:fn=>owner(fn,{ratePrefix:'images:',max:120}),publicRoute,database,imageStore:media,limit});
   app.get('/f/:slug',publicRoute(async(q,r)=>{
     const f=await command(null,'public',null,{slug:slug(q.params.slug),count:!q.query.received});
     const token=makeToken(f), utm={};for(const k of ['utm_source','utm_medium','utm_campaign','utm_content','utm_term']) utm[k]=text(typeof q.query[k]==='string'?q.query[k]:'',120);
     r.set('Set-Cookie',`kf_${f.slug}=${token}; Path=/f/${f.slug}; HttpOnly; Secure; SameSite=Lax; Max-Age=1800`);
-    r.type('html').send(renderPage(document(f.document),{action:`/f/${f.slug}/lead#contact`,stepAction:`/f/${f.slug}/step#contact`,token,utm,success:q.query.received==='1'}));
+    r.type('html').send(renderPage(document(f.document),{action:`/f/${f.slug}/lead#contact`,stepAction:`/f/${f.slug}/step#contact`,token,utm,success:q.query.received==='1',mediaBase:`/f/${f.slug}/media`}));
   }));
   app.post('/f/:slug/step',express.urlencoded({extended:false,limit:'32kb'}),publicRoute(async(q,r)=>{
     const f=await command(null,'public',null,{slug:slug(q.params.slug),count:false});

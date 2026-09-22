@@ -26,10 +26,16 @@ export function document(raw) {
     cta:text(raw.cta,60,true),thank_you:text(raw.thank_you,600,true),layout:raw.layout,accent:raw.accent,form_mode,
     benefits:raw.benefits.map(x=>text(x,180,true)),faq:raw.faq.map(x=>({q:text(x?.q,180,true),a:text(x?.a,700,true)})),
     privacy_url:httpsUrl(raw.privacy_url),booking_url:httpsUrl(raw.booking_url),
-    contact_email:text(raw.contact_email ?? '',254)};
+    contact_email:text(raw.contact_email ?? '',254),logo:imageReference(raw.logo),hero_image:imageReference(raw.hero_image)};
+}
+export function imageReference(raw) {
+  if(raw===undefined||raw===null)return null;
+  if(typeof raw!=='object'||Array.isArray(raw))fail('Choose a saved image.');
+  return {id:uuid(raw.id).toLowerCase(),alt:text(raw.alt??'',180)};
 }
 export function publishReady(d) {
   d=document(d);
+  if([d.logo,d.hero_image].some(x=>x&&!x.alt))fail('Add a description for each page image before publishing.');
   if (!d.privacy_url || !/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(d.contact_email)) fail('Add your privacy-policy URL and a valid business contact email before publishing.');
   return d;
 }
