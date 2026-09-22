@@ -3,6 +3,7 @@ import { randomBytes, randomUUID, createHmac, timingSafeEqual } from 'node:crypt
 import { FunnelError, fail, text, uuid, version, slug, document, publishReady, leadInput, esc } from './core.mjs';
 import { renderPage, publicHeaders } from './render.mjs';
 import astra from '../korlix_astra.cjs';
+import { createFunnelFollowups } from './followups.mjs';
 
 export function createFunnelStore(database) {
   return { async command(actor, action, id=null, data={}) {
@@ -25,8 +26,9 @@ export async function generateFunnel(brief, environment=process.env) {
   try { return document(JSON.parse(result.output_text.replace(/^```(?:json)?\s*|\s*```$/g,''))); }
   catch { fail('NOVA could not finish a valid draft. Your current page is unchanged. Try a more specific brief.',503); }
 }
-export function registerFunnels(app,{database,requireUser,store,generate=generateFunnel,environment=process.env,now=Date.now}={}) {
+export function registerFunnels(app,{database,requireUser,store,followups,loadAgentProfile,generate=generateFunnel,environment=process.env,now=Date.now}={}) {
   const persistence=store || (database?createFunnelStore(database):null);
+  const followup=followups||createFunnelFollowups({database,loadAgentProfile,environment});
   const secret=environment.KORLIX_FUNNEL_FORM_SECRET || randomBytes(32).toString('hex');
   const publicBase=(environment.KORLIX_FUNNEL_PUBLIC_BASE_URL || 'https://chee-chai-chee-backend.onrender.com').replace(/\/$/,'');
   const counts=new Map();
@@ -68,6 +70,9 @@ export function registerFunnels(app,{database,requireUser,store,generate=generat
   }));
   app.post(base+'/:id/pause',owner(async(q,r,u)=>r.json({funnel:present(await command(u,'pause',uuid(q.params.id),{version:version(q.body?.version)}))})));
   app.get(base+'/:id/leads',owner(async(q,r,u)=>r.json(await command(u,'leads',uuid(q.params.id)))));
+  app.get(base+'/:id/followups',owner(async(q,r,u)=>r.json(await followup.get(u,uuid(q.params.id),q.query))));
+  for(const action of ['settings','enqueue','edit','resolve','send']) app.post(base+'/:id/followups/'+action,owner(async(q,r,u)=>r.json(await followup[action](u,uuid(q.params.id),q.body||{}))));
+  app.post(base+'/:id/followups/reconcile',owner(async(q,r,u)=>r.json(await followup.reconcile(u,uuid(q.params.id),q.body?.task_id))));
   app.post(base+'/preview',owner(async(q,r,u)=>{
     await command(u,'list');r.json({html:renderPage(document(q.body?.document),{preview:true})});
   }));
