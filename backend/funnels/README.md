@@ -20,7 +20,7 @@ Rollback by deploying the previous frontend/backend commits. Keep the additive m
 - Form messages and UTM tags live in the private lead inbox. Identities and tags are visitor-supplied. Do not use them as verified facts. No cookies for advertising, third-party pixels, or tracking scripts are added.
 - Counts are page requests (including bots and repeats) and submissions, not unique visitors, verified customers, revenue or multi-touch attribution.
 - Owner data follows the existing account lifecycle: funnel deletion cascades lead rows, account deletion cascades funnels. Archiving a CRM contact does not delete its funnel inquiry. Dedicated lead deletion/retention controls remain a follow-up before broad rollout.
-- Up to 50 funnels per owner; latest 100 leads and top 50 source/campaign groups shown. NOVA allows 10 attempts per owner per UTC day; failed generation attempts count. No streaming or automatic publication.
+- Up to 50 funnels per owner. The legacy leads endpoint returns the latest 100 leads; the K146 inbox pages through all matching inquiries and reports the top eight matching source/campaign pairs. NOVA allows 10 attempts per owner per UTC day; failed generation attempts count. No streaming or automatic publication.
 
 ## Verification
 
@@ -123,3 +123,14 @@ Validation uses mocked Meta HTTP responses, real PostgreSQL-compatible migration
 Rollback: disable `KORLIX_META_ENABLED`, deploy previous app commits, preserve the additive schema and encrypted records, and review stored connections before re-enabling. No campaign, outreach recipient, email, call or paid ad is created by this migration or deployment.
 
 Provider references: [manual login](https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow/), [Login for Business](https://developers.facebook.com/docs/facebook-login/facebook-login-for-business/), [long-lived tokens](https://developers.facebook.com/docs/facebook-login/guides/access-tokens/get-long-lived/), [deletion options](https://developers.facebook.com/docs/development/create-an-app/app-dashboard/data-deletion-callback/), [current official SDK API version](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/apiconfig.py).
+
+
+## K146: Lead inbox and filtered export
+
+Enterprise owners can search name, email, phone and message text, filter by exact source and inclusive UTC dates, and browse every matching inquiry 25 at a time. The inbox reports total and matching inquiry counts plus the top eight source/campaign pairs. It uses receipt-time and ID cursors with a server snapshot so newly received inquiries appear on refresh. This is a receipt-time cutoff, not a durable database snapshot: deletions still take effect. Source tags and submitted identities remain unverified.
+
+`GET /api/funnels/:id/inbox` accepts `search`, `source`, `from`, `to`, `snapshot`, and `cursor`. `GET /api/funnels/:id/inbox/export` accepts the same filters without a cursor and returns a UTF-8 CSV payload covering all matches at the requested cutoff. Exports above 5,000 matches fail without a partial file; narrow the dates or filters. Cells are quoted and formula-like input is prefixed as text. Browser downloads and native file sharing are supported. The service-only `korlix_funnel_inbox_v1` RPC rechecks current Enterprise entitlement and funnel ownership for each read/export. There are no contact, permission, email, call or ad mutations in this feature.
+
+Deploy the additive `20260922145937_funnel_lead_inbox.sql` migration before the backend, then deploy the frontend. Older frontend versions can keep using `/leads`. Meta activation is still deferred.
+
+Validation: `node --test backend/test/funnel_inbox.test.mjs` exercises the real migrations and HTTP handlers, including more than 100 tied-timestamp inquiries, snapshot paging, tenant boundaries, tier revocation, malformed filters, CSV injection and oversized exports. Flutter inbox tests cover server filters, pagination, export failures, access loss, navigation races and narrow layouts.
