@@ -134,3 +134,36 @@ Enterprise owners can search name, email, phone and message text, filter by exac
 Deploy the additive `20260922145937_funnel_lead_inbox.sql` migration before the backend, then deploy the frontend. Older frontend versions can keep using `/leads`. Meta activation is still deferred.
 
 Validation: `node --test backend/test/funnel_inbox.test.mjs` exercises the real migrations and HTTP handlers, including more than 100 tied-timestamp inquiries, snapshot paging, tenant boundaries, tier revocation, malformed filters, CSV injection and oversized exports. Flutter inbox tests cover server filters, pagination, export failures, access loss, navigation races and narrow layouts.
+
+## K147 · Read-only inquiry rehearsal
+
+`POST /api/funnels/:id/rehearsal` validates an owner-selected sample and previews
+its path using the actual public page/form validators and saved workflow.
+The body specifies `version`, `source` (`draft` or `published`) and `scenario`
+(`valid`, `missing_consent`, `invalid_email`). Draft mode additionally receives
+`name` and `document` from the current editor, including unsaved edits. It is
+explicitly hypothetical until reviewed publication. Published mode uses only
+the published snapshot and blocks capture predictions for paused/draft pages.
+
+Apply `20260922163931_funnel_rehearsal_readonly.sql` before the backend and then
+the frontend. Its sole new function is STABLE and SECURITY INVOKER, with a
+pinned search path and execution granted only to service_role. It checks the
+current Enterprise tier and funnel owner on every request, reads the page and
+optional workflow, and writes no rows. No tables or browser grants are added.
+The existing follow-up state command is deliberately not used: that command
+initializes settings and reconciles stale processing tasks.
+
+Rehearsal uses fictitious sample data. It never invokes capture, queueing,
+contact mutation, email services, calls, ads, schedulers, or NOVA generation.
+Preview template interpolation matches the SQL replacement order and character
+limits. Times represent task due delays, never automatic send times. No new
+inquiry is automatically enrolled in a sequence. Every response is no-store.
+Live form cookies, rate limits, existing contact permissions, provider readiness,
+delivery, real inquiry capture and CSV export remain separate checks.
+
+Verification: `node --test backend/test/funnel_rehearsal.test.mjs`. The tests
+execute the actual migrations, use read-only transactions for the new RPC,
+check role/owner/tier denial, compare table contents before/after requests,
+preserve an intentionally stale processing task, check unconfigured workflows,
+draft/published separation, invalid samples and stale page versions.
+Rollback by deploying the prior app commits; retain the additive function.
