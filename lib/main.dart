@@ -1,3 +1,5 @@
+import 'funnel_studio/funnel_client.dart';
+import 'funnel_studio/funnel_screen.dart';
 import 'workforce/workforce_client.dart';
 import 'workforce/workforce_screen.dart';
 import 'contacts_crm/contacts_client.dart';
@@ -6082,6 +6084,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   // Hide inactive Utility tools until full native workflows are ready.
   // Keep active Utility tools visible.
   static const List<String> _utilityTools = <String>[
+    'Funnel Studio',
     'Contacts CRM',
     'Workforce',
     'Voice-scribe',
@@ -11153,6 +11156,13 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
+  Future<void> _openFunnelStudio() async {
+    if (_currentTier.trim().toLowerCase() != 'enterprise') return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
+      FunnelScreen(client: FunnelClient(backendBaseUrl: kKorlixBackendBaseUrl,
+        headersBuilder: _authHeaders), onOpenContacts: _openContactsCrm)));
+  }
+
   Future<void> _openContactsCrm() async {
     if (_currentTier.trim().toLowerCase() != 'enterprise') return;
     await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
@@ -11167,6 +11177,11 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   void _selectUtilityTool(String tool) {
+    if (tool == 'Funnel Studio') {
+      unawaited(_openFunnelStudio());
+      return;
+    }
+
     if (tool == 'Workforce') {
       unawaited(_openWorkforce());
       return;
@@ -14280,6 +14295,7 @@ Make the entire output professional, well-structured using Markdown, and product
     };
 
     String statusFor(String tool) {
+      if (tool == 'Funnel Studio') return 'Enterprise pages, lead capture and campaign links';
       if (tool == 'Workforce') return 'Enterprise attendance, work updates and employee access';
       if (tool == 'Contacts CRM') return 'Enterprise contacts, imports and Nova connections';
       if (tool == 'Voice-scribe') {
@@ -14418,7 +14434,7 @@ Make the entire output professional, well-structured using Markdown, and product
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: _utilityTools.where((tool) => tool != 'Contacts CRM' || _currentTier.trim().toLowerCase() == 'enterprise').map((tool) {
+            children: _utilityTools.where((tool) => !['Contacts CRM', 'Funnel Studio'].contains(tool) || _currentTier.trim().toLowerCase() == 'enterprise').map((tool) {
               final selected = selectedTool == tool;
               final status = statusFor(tool);
               final statusColor = statusColorFor(tool);
