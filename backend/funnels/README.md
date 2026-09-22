@@ -551,7 +551,7 @@ still uses the default link. This release does not reserve calendar slots,
 confirm appointments, enroll sequences, send messages, or activate ads.
 
 Release order, after explicit production approval:
-1. Apply `20260922220157_funnel_booking_routes.sql` (capture source guard
+1. Apply `20260922222703_funnel_booking_routes.sql` (capture source guard
    `a5ccdff3945815fd62cb96fae0fff2e7`).
 2. Deploy the backend; then deploy the frontend.
 3. Verify live versions, health, browser-role restrictions, and grants.
