@@ -10,6 +10,7 @@ import 'funnel_google_preparation.dart';
 import 'funnel_google_creative.dart';
 import 'funnel_google_keywords.dart';
 import 'funnel_google_targeting.dart';
+import 'funnel_google_preflight.dart';
 
 String campaignMoney(num cents) => '\$${(cents / 100).toStringAsFixed(2)}';
 String campaignChannel(String value) => switch (value) {
@@ -378,6 +379,21 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
     );
   }
 
+  Future<void> _preflight(Map<String, dynamic> c) async {
+    if (_busy || _denied) return;
+    final client = widget.client, funnel = widget.funnelId;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => FunnelGooglePreflight(
+        client: client,
+        funnelId: funnel,
+        campaignId: c['id'],
+        scope: _scope,
+      ),
+    );
+  }
+
   String _brief(Map c) =>
       'KORLIX campaign plan — ${c['name']}\nChannel: ${campaignChannel('${c['platform']}')}\nPlanned budget: ${campaignMoney(c['daily_cents'])} USD/day for ${c['days']} days; ${campaignMoney(c['planned_total_cents'])} USD total.\nAudience: ${c['audience']}\nHeadline: ${c['headline']}\nMessage: ${c['body']}\nCTA: ${c['cta']}\nDestination: ${c['tracking_url']}\nPlan only. Review and launch separately in your ad platform.';
   @override
@@ -641,6 +657,12 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
                       ? null
                       : () => _review(c),
                   child: const Text('Review plan'),
+                ),
+              if (c['platform'] == 'google')
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : () => _preflight(c),
+                  icon: const Icon(Icons.fact_check_outlined),
+                  label: const Text('Preparation checklist'),
                 ),
               if (c['platform'] == 'google')
                 OutlinedButton.icon(
