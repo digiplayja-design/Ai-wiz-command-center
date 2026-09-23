@@ -5,6 +5,7 @@ import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
 import 'funnel_meta.dart';
 import 'funnel_google_ads.dart';
+import 'funnel_meta_preparation.dart';
 
 String campaignMoney(num cents) => '\$${(cents / 100).toStringAsFixed(2)}';
 String campaignChannel(String value) => switch (value) {
@@ -79,34 +80,87 @@ class FunnelCampaigns extends StatefulWidget {
 
 class _FunnelCampaignsState extends State<FunnelCampaigns> {
   List<Map<String, dynamic>> _items = [];
-  bool _busy = false, _ai = false;
+  bool _busy = false, _ai = false, _denied = false;
+  int _generation = 0;
+  final _scope = ValueNotifier<int>(0);
   String? _error;
   String _search = '', _channel = 'all', _state = 'all';
   String get _path => '/${widget.funnelId}/campaigns';
   @override
   void initState() {
     super.initState();
+    widget.client.addAccessDeniedListener(_deny);
     unawaited(_load());
   }
 
-  Future<void> _run(Future<void> Function() fn) async {
-    if (_busy) return;
+  bool _current(int g) => mounted && !_denied && g == _generation;
+  void _reset() {
+    _generation++;
+    _scope.value++;
+    _items = [];
+    _busy = false;
+    _ai = false;
+    _error = null;
+    _search = '';
+    _channel = 'all';
+    _state = 'all';
+  }
+
+  void _deny() {
+    if (!mounted) return;
+    setState(() {
+      _reset();
+      _denied = true;
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant FunnelCampaigns oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.client != widget.client ||
+        oldWidget.funnelId != widget.funnelId) {
+      oldWidget.client.removeAccessDeniedListener(_deny);
+      widget.client.addAccessDeniedListener(_deny);
+      _reset();
+      _denied = false;
+      unawaited(_load());
+    }
+  }
+
+  @override
+  void dispose() {
+    _generation++;
+    _scope.value++;
+    widget.client.removeAccessDeniedListener(_deny);
+    _scope.dispose();
+    super.dispose();
+  }
+
+  Future<void> _run(Future<void> Function(int) fn) async {
+    if (_busy || _denied) return;
+    final g = ++_generation;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      await fn();
+      await fn(g);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (_current(g)) {
+        setState(
+          () => _error = e is FunnelException
+              ? e.message
+              : 'The campaign workspace could not complete this request. Try again.',
+        );
+      }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (_current(g)) setState(() => _busy = false);
     }
   }
 
-  Future<void> _fetch() async {
+  Future<void> _fetch(int g) async {
     final r = await widget.client.request('GET', _path);
-    if (!mounted) return;
+    if (!_current(g)) return;
     setState(() {
       _items = (r['campaigns'] as List)
           .map((e) => Map<String, dynamic>.from(e as Map))
@@ -117,6 +171,8 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
 
   Future<void> _load() => _run(_fetch);
   Future<void> _edit([Map<String, dynamic>? c]) async {
+    if (_busy || _denied) return;
+    final generation = _generation;
     final saved = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -127,7 +183,7 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
         aiReady: _ai,
       ),
     );
-    if (saved == true && mounted) await _load();
+    if (saved == true && _current(generation)) await _load();
   }
 
   Future<void> _copy(String text) async {
@@ -140,7 +196,7 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
   }
 
   Future<void> _action(Map c, String action, {bool confirmed = false}) =>
-      _run(() async {
+      _run((g) async {
         await widget.client.request(
           'POST',
           '$_path/$action',
@@ -150,9 +206,11 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
             'confirmed': confirmed,
           },
         );
-        await _fetch();
+        if (_current(g)) await _fetch(g);
       });
   Future<void> _review(Map c) async {
+    if (_busy || _denied) return;
+    final generation = _generation;
     var checked = false;
     final ok = await showDialog<bool>(
       context: context,
@@ -206,10 +264,14 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
         ),
       ),
     );
-    if (ok == true && mounted) await _action(c, 'review', confirmed: true);
+    if (ok == true && _current(generation)) {
+      await _action(c, 'review', confirmed: true);
+    }
   }
 
   Future<void> _archive(Map c) async {
+    if (_busy || _denied) return;
+    final generation = _generation;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -229,23 +291,46 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
         ],
       ),
     );
-    if (ok == true && mounted) await _action(c, 'archive', confirmed: true);
+    if (ok == true && _current(generation)) {
+      await _action(c, 'archive', confirmed: true);
+    }
   }
 
   Future<void> _reports(Map<String, dynamic> c) async {
+    if (_busy || _denied) return;
+    final generation = _generation;
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) =>
           CampaignReports(client: widget.client, path: _path, campaign: c),
     );
-    if (mounted) await _load();
+    if (_current(generation)) await _load();
+  }
+
+  Future<void> _metaSetup(Map<String, dynamic> c) async {
+    if (_busy || _denied) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => FunnelMetaPreparation(
+        client: widget.client,
+        funnelId: widget.funnelId,
+        campaignId: c['id'],
+        scope: _scope,
+      ),
+    );
   }
 
   String _brief(Map c) =>
       'KORLIX campaign plan — ${c['name']}\nChannel: ${campaignChannel('${c['platform']}')}\nPlanned budget: ${campaignMoney(c['daily_cents'])} USD/day for ${c['days']} days; ${campaignMoney(c['planned_total_cents'])} USD total.\nAudience: ${c['audience']}\nHeadline: ${c['headline']}\nMessage: ${c['body']}\nCTA: ${c['cta']}\nDestination: ${c['tracking_url']}\nPlan only. Review and launch separately in your ad platform.';
   @override
   Widget build(BuildContext context) {
+    if (_denied) {
+      return const Text(
+        'Sign in with Enterprise access to manage campaign plans.',
+      );
+    }
     final shown = _items
         .where(
           (c) =>
@@ -255,6 +340,7 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
         )
         .toList();
     return Column(
+      key: ValueKey(_scope.value),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         campaignCard(
@@ -499,6 +585,12 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
                       ? null
                       : () => _review(c),
                   child: const Text('Review plan'),
+                ),
+              if (c['platform'] == 'meta')
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : () => _metaSetup(c),
+                  icon: const Icon(Icons.fact_check_outlined),
+                  label: const Text('Meta setup review'),
                 ),
               OutlinedButton(
                 onPressed: _busy ? null : () => _reports(c),
