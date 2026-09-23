@@ -868,3 +868,75 @@ Primary references checked on 23 September 2026:
 [zero metrics and omitted dates](https://developers.google.com/google-ads/api/docs/reporting/zero-metrics),
 [paging](https://developers.google.com/google-ads/api/docs/reporting/paging), and
 [ProtoJSON scalar representations](https://protobuf.dev/programming-guides/json/#representation).
+
+## K160 — Google Ads campaign comparison
+
+Adds a campaign comparison option beside the existing Google account totals.
+Owners explicitly load a 7-, 30- or 90-completed-day report for the currently
+selected advertising account. The period uses fresh account timezone metadata.
+Each returned campaign has its ID, name, current status, advertising channel,
+exact spend in account currency, impressions and clicks. Names/statuses reflect
+retrieval time, not historical status within the reporting period. Enabled,
+paused and removed campaign rows are accepted when returned; no status filter is
+applied. Google's default excludes draft entities.
+
+`GET /api/funnels/google-ads/campaign-performance` accepts the same four inputs
+as the account endpoint: `days`, `version`, `root_id` and `account_id`. The route
+selects campaign scope internally; callers cannot supply arbitrary scope, fields,
+queries or page tokens. Both report endpoints share the existing ten-request
+owner/minute reporting limit. The same authentication, current Enterprise,
+connection-version, selected-account, root-access, active-account and post-fetch
+entitlement/identity checks apply. Removed manager access or a concurrent
+connection/entitlement change prevents returning the report.
+
+The fixed GAQL query requests campaign-level totals over the entire interval,
+without selecting a date/device segment. Explicit campaign resource names must
+match both customer ID and campaign ID. Customer currency/timezone must match the
+fresh metadata. Campaign IDs remain decimal strings and are checked against
+positive signed INT64 bounds; names, statuses and channels are validated. Duplicate
+campaign IDs, unexpected segmentation, malformed metrics or overflow reject the
+whole response. K159's exact BigInt metric handling and totals are reused.
+
+Campaign reports support at most 500 rows across five provider pages. The query
+uses LIMIT 501 so excess rows are detected instead of silently truncating to 500.
+Excess rows/pages, invalid or repeated cursors and incomplete provider data fail
+the entire load. Fixed Google hosts, redirect rejection, ten-second per-request
+deadlines, 2 MiB response bounds, credential redaction and version-guarded revoked
+access handling remain in force. No retries or report persistence are introduced.
+The existing daily account report retains its original 90-row/three-page bounds.
+
+The response identifies `scope: campaign`, provides `reported_campaigns` and
+campaign rows, and carries account/root/connection identity, interval, retrieval
+time and totals. Flutter validates these bindings and reconciles all three
+metrics against the rows before rendering. Empty results show no totals, while
+returned zero metrics display zero. Results may omit campaigns with no returned
+data and are not an inventory guarantee or a billing statement. Independently
+retrieved account totals may differ. No funnel attribution, revenue or ROAS is
+inferred.
+
+The local campaign list searches names/IDs, sorts by spend, impressions, clicks
+or name, and displays 20 rows per page. Spend sorting is exact to one micro-unit;
+ties use campaign IDs. Search, sorting and pagination make no provider request and
+do not change totals for the full returned report. Reloading clears old figures,
+filters and pagination. Changing report scope, period, account/root/version,
+connection availability or client invalidates pending results. Global access loss
+also clears the current report. Manual campaign reports remain separate.
+
+No schema migration, environment variable, credential, permission scope,
+background sync, ad creation, budget change or provider activation is required.
+K158's already-applied private connection schema is unchanged. Rollback is K159
+frontend then backend, preserving all schema and owner records.
+
+Verification includes migration-backed owner/entitlement and connection-race
+checks, mocked fixed REST requests, exact totals, large campaign IDs, 500-row and
+five-page bounds, response corruption, shared rate limits, scope/period races,
+search/sort/pagination, stale UI responses and 1400/390/320 px screenshots (320 px
+with 1.3 text scale). No real provider report or owner acceptance is performed.
+
+Primary references checked on 23 September 2026:
+[campaign fields and attributed customer resource](https://developers.google.com/google-ads/api/fields/v25/campaign),
+[GAQL structure, core-date filters and draft defaults](https://developers.google.com/google-ads/api/docs/query/structure),
+[reporting example](https://developers.google.com/google-ads/api/docs/reporting/example),
+[campaign status](https://developers.google.com/google-ads/api/reference/rpc/v25/CampaignStatusEnum.CampaignStatus),
+[advertising channels](https://developers.google.com/google-ads/api/reference/rpc/v25/AdvertisingChannelTypeEnum.AdvertisingChannelType), and
+[zero metrics](https://developers.google.com/google-ads/api/docs/reporting/zero-metrics).

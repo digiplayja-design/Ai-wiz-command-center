@@ -69,21 +69,23 @@ export function registerGoogleAds(app,{base,owner,limit=()=>{},database,googleAd
     });r.json(await status(u));
   },limited));
   app.post(base+'/google-ads/disconnect',owner(async(q,r,u)=>{if(q.body?.confirmed!==true)fail('Confirm disconnecting Google Ads first.');await store.command(u,'disconnect',{version:q.body.version==null?null:version(q.body.version)});r.json(await status(u));}));
-  app.get(base+'/google-ads/performance',owner(async(q,r,u)=>{
+  const performance=scope=>owner(async(q,r,u)=>{
     const requested=googleReportQuery(q.query);
     await withAccess(u,requested.version,async(c,t)=>{
       if(!(await provider.roots(t)).includes(c.root_id))fail('Google access to this account was removed. Refresh access accounts.',409);
       const account=await provider.account(t,c.selected_account,c.login_customer_id);
       if(account.id!==c.selected_account||account.manager||account.status!=='ENABLED')fail('This Google advertising account is no longer active or accessible.',409);
       const range=googleReportRange(requested.days,account.timezone,now());
-      const report=await provider.performance(t,account,c.login_customer_id,range);
+      const report=await provider[scope==='campaign'?'campaignPerformance':'performance'](t,account,c.login_customer_id,range);
       // Recheck current entitlement and connection after remote work. Never
       // release a late report after disconnect, reselection or tier downgrade.
       const latest=await credentials(u);
       if(latest.version!==c.version||latest.binding_id!==c.binding_id||latest.root_id!==c.root_id||latest.login_customer_id!==c.login_customer_id||latest.selected_account!==c.selected_account)fail('The Google connection changed while loading. Check your connection and try again.',409);
-      r.json({source:'google_ads',scope:'account',connection_version:c.version,root_id:c.root_id,account:{id:account.id,name:account.name,currency:account.currency,timezone:account.timezone,test_account:account.test_account},range,...report,fetched_at:new Date(now()).toISOString()});
+      r.json({source:'google_ads',scope,connection_version:c.version,root_id:c.root_id,account:{id:account.id,name:account.name,currency:account.currency,timezone:account.timezone,test_account:account.test_account},range,...report,fetched_at:new Date(now()).toISOString()});
     },c=>{
       if(c.root_id!==requested.root_id||c.selected_account!==requested.account_id||!c.roots.includes(c.root_id)||!c.accounts.some(a=>a.id===requested.account_id&&!a.manager&&a.status==='ENABLED'))fail('The selected Google account changed. Check your connection before reporting.',409);
     });
-  },{ratePrefix:'google-ads-performance:',max:10}));
+  },{ratePrefix:'google-ads-performance:',max:10});
+  app.get(base+'/google-ads/performance',performance('account'));
+  app.get(base+'/google-ads/campaign-performance',performance('campaign'));
 }

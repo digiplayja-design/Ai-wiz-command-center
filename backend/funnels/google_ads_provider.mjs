@@ -86,6 +86,7 @@ export function createGoogleAdsProvider(config,{fetchImpl=fetch,now=Date.now}={}
     async roots(access){const r=await ads('customers:listAccessibleCustomers',access);if(r.resourceNames!==undefined&&!Array.isArray(r.resourceNames))fail('Google returned an unreadable access list.',503);const names=r.resourceNames||[];if(names.length>500)fail('More than 500 direct accounts were returned. Use a Google account with a smaller access list.',409);const ids=names.map(n=>{if(typeof n!=='string'||!/^customers\/\d{10}$/.test(n))fail('Google returned an unreadable access account.',503);return n.slice(10);});return [...new Set(ids)];},
     account,
     async performance(access,account,root,range){return readGooglePerformance(ads,access,account,root,range);},
+    async campaignPerformance(access,account,root,range){return readGooglePerformance(ads,access,account,root,range,'campaign');},
     async accounts(access,root){
       const a=await account(access,root);if(!a.manager)return {root:a,accounts:eligible(a)?[a]:[]};
       const rows=await search(access,root,root,`SELECT ${fields.map(f=>'customer_client.'+f).join(', ')} FROM customer_client WHERE customer_client.manager = FALSE AND customer_client.status = 'ENABLED' LIMIT 501`,'customerClient',500);
