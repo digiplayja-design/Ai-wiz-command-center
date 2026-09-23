@@ -16,6 +16,7 @@ import 'funnel_google_preflight.dart';
 import 'funnel_campaign_budget.dart';
 import 'funnel_meta_campaign_link.dart';
 import 'funnel_google_campaign_link.dart';
+import 'funnel_google_create.dart';
 
 String campaignMoney(num cents) => '\$${(cents / 100).toStringAsFixed(2)}';
 String campaignChannel(String value) => switch (value) {
@@ -348,6 +349,21 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
     );
   }
 
+  Future<void> _googleCreate(Map<String, dynamic> c) async {
+    if (_busy || _denied) return;
+    final client = widget.client, funnel = widget.funnelId;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => FunnelGoogleCreate(
+        client: client,
+        funnelId: funnel,
+        campaignId: c['id'],
+        scope: _scope,
+      ),
+    );
+  }
+
   Future<void> _googleLink(Map<String, dynamic> c) async {
     if (_busy || _denied) return;
     final client = widget.client, funnel = widget.funnelId;
@@ -519,7 +535,7 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
               ),
               campaignSpace(),
               campaignCaption(
-                'Connect a Meta or Google Ads account below when available. Launch and manage ads in your ad platform using the campaign link. Budgets here are plans; results are entered manually.',
+                'Plan campaigns, create paused Google Search campaigns when available, and connect provider reporting. Manual USD results and budget pacing remain separate. Activating ads is a separate step.',
               ),
             ],
           ),
@@ -777,6 +793,12 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
                 OutlinedButton(
                   onPressed: _busy ? null : () => _googleLink(c),
                   child: const Text('Linked Google campaign'),
+                ),
+              if (c['platform'] == 'google')
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : () => _googleCreate(c),
+                  icon: const Icon(Icons.pause_circle_outline),
+                  label: const Text('Create paused Google campaign'),
                 ),
               OutlinedButton(
                 onPressed: _busy ? null : () => _reports(c),
