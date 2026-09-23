@@ -7,6 +7,28 @@ import 'package:flutter/services.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
 
+const googleTargetingReviewConfirmation =
+    'I reviewed the target countries, exclusions, location reach, content languages and bidding preference against the published landing page. This is my KORLIX review only; provider eligibility, final setup and launch still require checking.';
+const googleTargetingReviewChecks = <String, String>{
+  'saved_draft': 'Save the draft first.',
+  'complete_choices':
+      'Choose target countries, content languages, location reach and bidding.',
+  'current_context':
+      'Check the current campaign context and save the draft again.',
+  'page_published': 'Publish the landing page.',
+  'plan_reviewed': 'Review the campaign plan against the published page.',
+};
+bool _equalTargeting(dynamic a, dynamic b) => a is Map && b is Map
+    ? a.length == b.length &&
+          a.keys.every((k) => b.containsKey(k) && _equalTargeting(a[k], b[k]))
+    : a is List && b is List
+    ? a.length == b.length &&
+          List.generate(
+            a.length,
+            (i) => i,
+          ).every((i) => _equalTargeting(a[i], b[i]))
+    : a == b;
+
 const googleLocationModes = <String, String>{
   'undecided': 'Choose later',
   'presence': 'People in or regularly in these countries',
@@ -191,6 +213,55 @@ Map<String, dynamic> validateGoogleTargeting(
       );
     }
   }
+  final checks = r['review_checks'], review = r['reviewed_snapshot'];
+  bool validReview(dynamic v) =>
+      v is Map &&
+      v.length == 6 &&
+      googleTargetingValid(v['assets'], r['catalog']) &&
+      contextValid(v['context']) &&
+      integer(v['draft_revision'], 1, r['draft_revision']) &&
+      googleTargetingComplete(v['assets']) &&
+      _labelsValid(v['labels'], v['assets']) &&
+      v['catalog_version'] is String &&
+      RegExp(
+        r'^google-reference-[0-9]{4}-[0-9]{2}-[0-9]{2}$',
+      ).hasMatch(v['catalog_version']) &&
+      v['saved_at'] is String &&
+      DateTime.tryParse(v['saved_at']) != null;
+  if (!integer(r['draft_revision'], version == 0 ? 0 : 1, version) ||
+      r['review_fingerprint'] is! String ||
+      !RegExp(r'^[a-f0-9]{64}$').hasMatch(r['review_fingerprint']) ||
+      checks is! Map ||
+      checks.length != googleTargetingReviewChecks.length ||
+      googleTargetingReviewChecks.keys.any((k) => checks[k] is! bool) ||
+      r['review_ready'] is! bool ||
+      r['review_ready'] != checks.values.every((v) => v == true) ||
+      checks['saved_draft'] != (version > 0) ||
+      checks['complete_choices'] != r['draft_complete'] ||
+      checks['current_context'] != r['draft_current'] ||
+      checks['page_published'] != (r['context']['page_state'] == 'published') ||
+      (checks['plan_reviewed'] == true &&
+          r['context']['campaign_state'] != 'reviewed') ||
+      r['review_current'] is! bool ||
+      (review == null
+          ? r['reviewed_at'] != null || r['review_current'] != false
+          : !validReview(review) ||
+                r['reviewed_at'] is! String ||
+                DateTime.tryParse(r['reviewed_at']) == null) ||
+      (r['review_current'] == true &&
+          (r['review_ready'] != true ||
+              review == null ||
+              review['draft_revision'] != r['draft_revision'] ||
+              review['saved_at'] != r['updated_at'] ||
+              !_equalTargeting(review['assets'], r['assets']) ||
+              !_equalTargeting(review['context'], r['saved_context']) ||
+              !_equalTargeting(review['labels'], r['saved_labels']) ||
+              review['catalog_version'] != r['catalog']['version']))) {
+    throw const FunnelException(
+      'The targeting review could not be verified. Reload the draft.',
+      503,
+    );
+  }
   return r;
 }
 
@@ -212,7 +283,7 @@ class FunnelGoogleTargeting extends StatefulWidget {
 class _FunnelGoogleTargetingState extends State<FunnelGoogleTargeting> {
   Map<String, dynamic> _choices = emptyGoogleTargeting();
   Map<String, dynamic>? _data;
-  bool _busy = false, _dirty = false, _conflict = false;
+  bool _busy = false, _dirty = false, _conflict = false, _reviewChecked = false;
   int _generation = 0;
   String? _error, _unavailable, _message;
   String get _path =>
@@ -231,6 +302,7 @@ class _FunnelGoogleTargetingState extends State<FunnelGoogleTargeting> {
     _data = null;
     _dirty = false;
     _conflict = false;
+    _reviewChecked = false;
     _message = null;
     _error = null;
   }
@@ -307,6 +379,7 @@ class _FunnelGoogleTargetingState extends State<FunnelGoogleTargeting> {
     final g = ++_generation;
     setState(() {
       _busy = true;
+      _reviewChecked = false;
       _error = null;
       _message = null;
     });
@@ -356,6 +429,187 @@ class _FunnelGoogleTargetingState extends State<FunnelGoogleTargeting> {
       _apply(await widget.client.request('POST', '$_path/save', body: body), g);
       if (_current(g)) setState(() => _message = 'Targeting draft saved.');
     });
+  }
+
+  Map<String, dynamic> _reviewDraft(Map<String, dynamic> d, Map snapshot) => {
+    ...d,
+    'assets': snapshot['assets'],
+    'saved_context': snapshot['context'],
+    'saved_labels': snapshot['labels'],
+    'updated_at': snapshot['saved_at'],
+    'draft_revision': snapshot['draft_revision'],
+    'draft_current': d['review_current'],
+    'draft_complete': googleTargetingComplete(snapshot['assets']),
+  };
+
+  bool get _canReview => _editable && !_dirty && _data?['review_ready'] == true;
+  Future<void> _review() async {
+    if (!_canReview || !_reviewChecked) return;
+    final body = {
+      'version': _data!['version'],
+      'review_fingerprint': _data!['review_fingerprint'],
+      'confirmed': true,
+    };
+    await _run((g) async {
+      _apply(
+        await widget.client.request('POST', '$_path/review', body: body),
+        g,
+      );
+      if (_current(g)) setState(() => _message = 'Targeting review saved.');
+    });
+  }
+
+  Future<void> _clearReview() async {
+    if (_busy ||
+        _dirty ||
+        _conflict ||
+        _unavailable != null ||
+        _data?['reviewed_snapshot'] == null) {
+      return;
+    }
+    final g = _generation, version = _data!['version'];
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear the targeting review?'),
+        content: const Text(
+          'Your saved draft stays available. Only its saved review will be removed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep review'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Clear review'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !_current(g) || _dirty || _busy || _conflict) return;
+    await _run((generation) async {
+      _apply(
+        await widget.client.request(
+          'POST',
+          '$_path/clear-review',
+          body: {'version': version, 'confirmed': true},
+        ),
+        generation,
+      );
+      if (_current(generation)) {
+        setState(
+          () => _message = 'Targeting review cleared. Your draft is unchanged.',
+        );
+      }
+    });
+  }
+
+  Future<void> _copyReview() async {
+    if (_busy ||
+        _dirty ||
+        _conflict ||
+        _unavailable != null ||
+        _data?['reviewed_snapshot'] == null) {
+      return;
+    }
+    final g = _generation, d = _data!, snapshot = d['reviewed_snapshot'];
+    final text =
+        'KORLIX OWNER TARGETING REVIEW — ${d['review_current'] == true ? 'CURRENT' : 'OUT OF DATE'}\nReviewed draft revision: ${snapshot['draft_revision']}\nReviewed at: ${d['reviewed_at']}\nReference catalog: ${snapshot['catalog_version']}\n${_export(_reviewDraft(d, snapshot))}';
+    await Clipboard.setData(ClipboardData(text: text));
+    if (_current(g)) {
+      setState(() => _message = 'Targeting review record copied.');
+    }
+  }
+
+  Widget _reviewPanel() {
+    final d = _data!, snapshot = d['reviewed_snapshot'];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _section('Review saved targeting'),
+        WfBadge(
+          _dirty
+              ? 'SAVE CHANGES BEFORE REVIEW'
+              : snapshot == null
+              ? 'TARGETING NOT REVIEWED'
+              : d['review_current'] == true
+              ? 'TARGETING REVIEW CURRENT'
+              : 'TARGETING REVIEW OUT OF DATE',
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Review the saved countries, exclusions, location reach, content languages and bidding preference against the published page. This records your review in KORLIX. Google eligibility, final account setup, local areas and launch remain separate.',
+        ),
+        if (_dirty)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text(
+              'Save or discard your targeting changes before reviewing.',
+            ),
+          ),
+        for (final e in googleTargetingReviewChecks.entries)
+          if (d['review_checks'][e.key] != true)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(e.value, style: const TextStyle(color: WfStyle.gold)),
+            ),
+        if (snapshot != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            'Reviewed draft ${snapshot['draft_revision']} · ${d['reviewed_at']}',
+          ),
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: const Text('Saved review record'),
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SelectableText(_export(_reviewDraft(d, snapshot))),
+                    Text('Saved: ${snapshot['saved_at']}'),
+                    SelectableText(snapshot['context']['destination']),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          value: _reviewChecked,
+          onChanged: _canReview
+              ? (v) => setState(() => _reviewChecked = v == true)
+              : null,
+          title: const Text(googleTargetingReviewConfirmation),
+        ),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            FilledButton(
+              onPressed: _canReview && _reviewChecked ? _review : null,
+              child: const Text('Save targeting review'),
+            ),
+            OutlinedButton(
+              onPressed: _busy || _dirty || _conflict || snapshot == null
+                  ? null
+                  : _copyReview,
+              child: const Text('Copy review record'),
+            ),
+            TextButton(
+              onPressed: _busy || _dirty || _conflict || snapshot == null
+                  ? null
+                  : _clearReview,
+              child: const Text('Clear targeting review'),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 
   Future<bool> _discard(String title) async {
@@ -408,7 +662,7 @@ class _FunnelGoogleTargetingState extends State<FunnelGoogleTargeting> {
                         : 'countries'][code],
               )
               .join(', ');
-    return 'KORLIX Google targeting draft — ${c['campaign_name']}\n${d['draft_current'] == true ? 'SAVED DRAFT' : 'OUT OF DATE — compare with the current campaign and published page.'}\n${d['draft_complete'] == true ? 'Draft choices filled; final review required.' : 'INCOMPLETE — finish your draft choices.'}\nSaved version: ${d['version']}\nSaved: ${d['updated_at']}\nDestination at save: ${c['destination']}\nAudience at save: ${c['audience']}\nTarget countries: ${names('countries')}\nExcluded countries: ${names('excluded_countries')}\nLocation reach: ${googleLocationModes[a['location_mode']]}\nExclusions: people in excluded countries.\nAd and landing-page languages (planning only): ${names('content_languages')}\nPlanned bidding: ${googleBiddingPlans[a['bidding']]}\nEmpty targets do not mean worldwide targeting. Country availability, local areas, account settings, conversion tracking and bid limits require final setup. Search language matching is based on ad content as Google rolls out its September 2026 change. No ad or spending has been created.';
+    return 'KORLIX Google targeting draft — ${c['campaign_name']}\n${d['draft_current'] == true ? 'SAVED DRAFT' : 'OUT OF DATE — compare with the current campaign and published page.'}\n${d['draft_complete'] == true ? 'Draft choices filled; final review required.' : 'INCOMPLETE — finish your draft choices.'}\nDraft revision: ${d['draft_revision']}\nSaved: ${d['updated_at']}\nDestination at save: ${c['destination']}\nAudience at save: ${c['audience']}\nTarget countries: ${names('countries')}\nExcluded countries: ${names('excluded_countries')}\nLocation reach: ${googleLocationModes[a['location_mode']]}\nExclusions: people in excluded countries.\nAd and landing-page languages (planning only): ${names('content_languages')}\nPlanned bidding: ${googleBiddingPlans[a['bidding']]}\nEmpty targets do not mean worldwide targeting. Country availability, local areas, account settings, conversion tracking and bid limits require final setup. Search language matching is based on ad content as Google rolls out its September 2026 change. No ad or spending has been created.';
   }
 
   Future<void> _copy() async {
@@ -434,6 +688,7 @@ class _FunnelGoogleTargetingState extends State<FunnelGoogleTargeting> {
   void _change(void Function() fn) => setState(() {
     fn();
     _dirty = true;
+    _reviewChecked = false;
     _message = null;
   });
   Future<void> _choose(String group, String title) async {
@@ -698,6 +953,7 @@ class _FunnelGoogleTargetingState extends State<FunnelGoogleTargeting> {
                     'Draft preparation only. Country options use Google reference data from August 2026. Account eligibility, country availability, local areas, bid limits and final review still need checking. Saving creates no ad and authorizes no spending.',
                     style: TextStyle(color: WfStyle.muted),
                   ),
+                  _reviewPanel(),
                 ] else if (!_busy)
                   TextButton(onPressed: _load, child: const Text('Retry')),
               ],
