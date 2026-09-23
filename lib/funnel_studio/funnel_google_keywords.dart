@@ -7,6 +7,27 @@ import 'package:flutter/services.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
 
+const googleKeywordReviewConfirmation =
+    'I reviewed all positive and negative keywords, their match types and any overlap warnings against the published landing page.';
+const googleKeywordReviewChecks = <String, String>{
+  'saved_draft': 'Save the draft first.',
+  'positive_keywords': 'Add at least one positive keyword.',
+  'current_context':
+      'Check the current campaign context and save the draft again.',
+  'page_published': 'Publish the landing page.',
+  'plan_reviewed': 'Review the campaign plan against the published page.',
+};
+bool _equalKeywords(dynamic a, dynamic b) => a is Map && b is Map
+    ? a.length == b.length &&
+          a.keys.every((k) => b.containsKey(k) && _equalKeywords(a[k], b[k]))
+    : a is List && b is List
+    ? a.length == b.length &&
+          List.generate(
+            a.length,
+            (i) => i,
+          ).every((i) => _equalKeywords(a[i], b[i]))
+    : a == b;
+
 const googleKeywordLabels = <String, String>{
   'exact': 'Exact match',
   'phrase': 'Phrase match',
@@ -135,6 +156,48 @@ Map<String, dynamic> validateGoogleKeywords(
       );
     }
   }
+  final checks = r['review_checks'], review = r['reviewed_snapshot'];
+  bool validReview(dynamic v) =>
+      v is Map &&
+      v.length == 4 &&
+      googleKeywordsValid(v['assets']) &&
+      contextValid(v['context']) &&
+      integer(v['draft_revision'], 1, r['draft_revision']) &&
+      _keywordCount(v['assets'], false) > 0 &&
+      v['saved_at'] is String &&
+      DateTime.tryParse(v['saved_at']) != null;
+  if (!integer(r['draft_revision'], version == 0 ? 0 : 1, version) ||
+      r['review_fingerprint'] is! String ||
+      !RegExp(r'^[a-f0-9]{64}$').hasMatch(r['review_fingerprint']) ||
+      checks is! Map ||
+      checks.length != googleKeywordReviewChecks.length ||
+      googleKeywordReviewChecks.keys.any((k) => checks[k] is! bool) ||
+      r['review_ready'] is! bool ||
+      r['review_ready'] != checks.values.every((v) => v == true) ||
+      checks['saved_draft'] != (version > 0) ||
+      checks['positive_keywords'] != (r['keyword_count'] > 0) ||
+      checks['current_context'] != r['draft_current'] ||
+      checks['page_published'] != (r['context']['page_state'] == 'published') ||
+      (checks['plan_reviewed'] == true &&
+          r['context']['campaign_state'] != 'reviewed') ||
+      r['review_current'] is! bool ||
+      (review == null
+          ? r['reviewed_at'] != null || r['review_current'] != false
+          : !validReview(review) ||
+                r['reviewed_at'] is! String ||
+                DateTime.tryParse(r['reviewed_at']) == null) ||
+      (r['review_current'] == true &&
+          (r['review_ready'] != true ||
+              review == null ||
+              review['draft_revision'] != r['draft_revision'] ||
+              review['saved_at'] != r['updated_at'] ||
+              !_equalKeywords(review['assets'], r['assets']) ||
+              !_equalKeywords(review['context'], r['saved_context'])))) {
+    throw const FunnelException(
+      'The keyword review could not be verified. Reload the draft.',
+      503,
+    );
+  }
   return r;
 }
 
@@ -158,7 +221,7 @@ class _FunnelGoogleKeywordsState extends State<FunnelGoogleKeywords> {
     for (final k in googleKeywordLabels.keys) k: TextEditingController(),
   };
   Map<String, dynamic>? _data;
-  bool _busy = false, _dirty = false, _conflict = false;
+  bool _busy = false, _dirty = false, _conflict = false, _reviewChecked = false;
   int _generation = 0;
   String? _error, _unavailable, _message;
   String get _path =>
@@ -182,6 +245,7 @@ class _FunnelGoogleKeywordsState extends State<FunnelGoogleKeywords> {
     _data = null;
     _dirty = false;
     _conflict = false;
+    _reviewChecked = false;
     _message = null;
     _error = null;
   }
@@ -270,6 +334,7 @@ class _FunnelGoogleKeywordsState extends State<FunnelGoogleKeywords> {
     final g = ++_generation;
     setState(() {
       _busy = true;
+      _reviewChecked = false;
       _error = null;
       _message = null;
     });
@@ -327,6 +392,177 @@ class _FunnelGoogleKeywordsState extends State<FunnelGoogleKeywords> {
     });
   }
 
+  bool get _canReview => _editable && !_dirty && _data?['review_ready'] == true;
+  Future<void> _review() async {
+    if (!_canReview || !_reviewChecked) return;
+    final body = {
+      'version': _data!['version'],
+      'review_fingerprint': _data!['review_fingerprint'],
+      'confirmed': true,
+    };
+    await _run((g) async {
+      _apply(
+        await widget.client.request('POST', '$_path/review', body: body),
+        g,
+      );
+      if (_current(g)) setState(() => _message = 'Keyword review saved.');
+    });
+  }
+
+  Future<void> _clearReview() async {
+    if (_busy ||
+        _dirty ||
+        _conflict ||
+        _unavailable != null ||
+        _data?['reviewed_snapshot'] == null) {
+      return;
+    }
+    final g = _generation, version = _data!['version'];
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear the keyword review?'),
+        content: const Text(
+          'Your saved draft stays available. Only its saved review will be removed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep review'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Clear review'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !_current(g) || _dirty || _busy || _conflict) return;
+    await _run((generation) async {
+      _apply(
+        await widget.client.request(
+          'POST',
+          '$_path/clear-review',
+          body: {'version': version, 'confirmed': true},
+        ),
+        generation,
+      );
+      if (_current(generation)) {
+        setState(
+          () => _message = 'Keyword review cleared. Your draft is unchanged.',
+        );
+      }
+    });
+  }
+
+  Future<void> _copyReview() async {
+    if (_busy ||
+        _dirty ||
+        _conflict ||
+        _unavailable != null ||
+        _data?['reviewed_snapshot'] == null) {
+      return;
+    }
+    final g = _generation, d = _data!, snapshot = d['reviewed_snapshot'];
+    final text =
+        'KORLIX OWNER KEYWORD REVIEW — ${d['review_current'] == true ? 'CURRENT' : 'OUT OF DATE'}\nReviewed draft revision: ${snapshot['draft_revision']}\nReviewed at: ${d['reviewed_at']}\n${_export({...d, 'assets': snapshot['assets'], 'saved_context': snapshot['context'], 'updated_at': snapshot['saved_at'], 'draft_revision': snapshot['draft_revision'], 'draft_current': d['review_current'], 'keyword_count': _keywordCount(snapshot['assets'], false), 'negative_count': _keywordCount(snapshot['assets'], true)})}';
+    await Clipboard.setData(ClipboardData(text: text));
+    if (_current(g)) setState(() => _message = 'Keyword review record copied.');
+  }
+
+  Widget _reviewPanel() {
+    final d = _data!, snapshot = d['reviewed_snapshot'];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _section('Review saved keywords'),
+        WfBadge(
+          _dirty
+              ? 'SAVE CHANGES BEFORE REVIEW'
+              : snapshot == null
+              ? 'KEYWORDS NOT REVIEWED'
+              : d['review_current'] == true
+              ? 'KEYWORD REVIEW CURRENT'
+              : 'KEYWORD REVIEW OUT OF DATE',
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Review all saved keywords, exclusions, match types and overlaps against the published page. This records your keyword review in KORLIX; targeting setup, Google approval and launch remain separate.',
+        ),
+        if (_dirty)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text(
+              'Save or discard your keyword changes before reviewing.',
+            ),
+          ),
+        for (final e in googleKeywordReviewChecks.entries)
+          if (d['review_checks'][e.key] != true)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(e.value, style: const TextStyle(color: WfStyle.gold)),
+            ),
+        if (snapshot != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            'Reviewed draft ${snapshot['draft_revision']} · ${d['reviewed_at']}',
+          ),
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: const Text('Saved review record'),
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final e in googleKeywordLabels.entries)
+                      Text(
+                        '${e.value}: ${(snapshot['assets'][e.key] as List).isEmpty ? '(none)' : (snapshot['assets'][e.key] as List).join(', ')}',
+                      ),
+                    Text('Saved: ${snapshot['saved_at']}'),
+                    SelectableText(snapshot['context']['destination']),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          value: _reviewChecked,
+          onChanged: _canReview
+              ? (v) => setState(() => _reviewChecked = v == true)
+              : null,
+          title: const Text(googleKeywordReviewConfirmation),
+        ),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            FilledButton(
+              onPressed: _canReview && _reviewChecked ? _review : null,
+              child: const Text('Save keyword review'),
+            ),
+            OutlinedButton(
+              onPressed: _busy || _dirty || _conflict || snapshot == null
+                  ? null
+                  : _copyReview,
+              child: const Text('Copy review record'),
+            ),
+            TextButton(
+              onPressed: _busy || _dirty || _conflict || snapshot == null
+                  ? null
+                  : _clearReview,
+              child: const Text('Clear keyword review'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   Future<bool> _discard(String title) async {
     if (!_dirty) return true;
     final g = _generation;
@@ -365,7 +601,7 @@ class _FunnelGoogleKeywordsState extends State<FunnelGoogleKeywords> {
 
   String _export(Map<String, dynamic> data) {
     final a = data['assets'] as Map, c = data['saved_context'];
-    return 'KORLIX Google keyword draft — ${c['campaign_name']}\n${data['draft_current'] == true ? 'SAVED DRAFT' : 'OUT OF DATE — compare with the current campaign and published page.'}\n${data['keyword_count'] == 0 ? 'INCOMPLETE — no positive keywords.' : '${data['keyword_count']} positive / ${data['negative_count']} negative keywords.'}\nSaved version: ${data['version']}\nSaved: ${data['updated_at']}\nDestination at save: ${c['destination']}\nAudience at save: ${c['audience']}\n${googleKeywordLabels.entries.map((e) => '${e.value}:\n${(a[e.key] as List).isEmpty ? '(none)' : (a[e.key] as List).join('\n')}').join('\n\n')}\nDraft only. Check keyword overlaps and Google eligibility. Locations, languages, bidding, final targeting review and launch are separate. No ad or spending has been created.';
+    return 'KORLIX Google keyword draft — ${c['campaign_name']}\n${data['draft_current'] == true ? 'SAVED DRAFT' : 'OUT OF DATE — compare with the current campaign and published page.'}\n${data['keyword_count'] == 0 ? 'INCOMPLETE — no positive keywords.' : '${data['keyword_count']} positive / ${data['negative_count']} negative keywords.'}\nDraft revision: ${data['draft_revision']}\nSaved: ${data['updated_at']}\nDestination at save: ${c['destination']}\nAudience at save: ${c['audience']}\n${googleKeywordLabels.entries.map((e) => '${e.value}:\n${(a[e.key] as List).isEmpty ? '(none)' : (a[e.key] as List).join('\n')}').join('\n\n')}\nDraft only. Check keyword overlaps and Google eligibility. Locations, languages, bidding, final targeting review and launch are separate. No ad or spending has been created.';
   }
 
   Future<void> _copy() async {
@@ -384,6 +620,7 @@ class _FunnelGoogleKeywordsState extends State<FunnelGoogleKeywords> {
 
   void _changed(String value) => setState(() {
     _dirty = true;
+    _reviewChecked = false;
     _message = null;
   });
   Widget _section(String title) => Padding(
@@ -608,6 +845,7 @@ class _FunnelGoogleKeywordsState extends State<FunnelGoogleKeywords> {
                       'Draft preparation only. Saving does not create an ad or authorize spending. Locations, languages, bidding and final targeting review remain separate.',
                       style: TextStyle(color: WfStyle.muted),
                     ),
+                    _reviewPanel(),
                   ] else if (!_busy)
                     TextButton(onPressed: _load, child: const Text('Retry')),
                 ],

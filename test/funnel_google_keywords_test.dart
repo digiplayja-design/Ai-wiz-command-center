@@ -54,6 +54,19 @@ Map<String, dynamic> fixture({bool saved = true}) {
     'keyword_count': saved ? 1 : 0,
     'negative_count': saved ? 1 : 0,
     'ad_publishing_ready': false,
+    'draft_revision': saved ? 1 : 0,
+    'review_fingerprint': 'b' * 64,
+    'review_checks': {
+      'saved_draft': saved,
+      'positive_keywords': saved,
+      'current_context': saved,
+      'page_published': true,
+      'plan_reviewed': true,
+    },
+    'review_ready': saved,
+    'review_current': false,
+    'reviewed_at': null,
+    'reviewed_snapshot': null,
   };
 }
 
@@ -236,7 +249,7 @@ void main() {
           contains('Exact match:\nbusiness support\nlocal services'),
         );
         expect(copied, contains('Negative broad match:\njobs'));
-        expect(copied, contains('Saved version: 1'));
+        expect(copied, contains('Draft revision: 1'));
         expect(copied, contains('https://example.com/f/growth'));
         if (Platform.environment['KORLIX_FUNNEL_SCREENSHOTS'] == '1') {
           await t.ensureVisible(find.text('Google keyword draft'));
@@ -249,7 +262,7 @@ void main() {
               format: ui.ImageByteFormat.png,
             );
             await File(
-              '/tmp/k166-keywords-${width.toInt()}.png',
+              '/tmp/k167-keywords-${width.toInt()}.png',
             ).writeAsBytes(bytes!.buffer.asUint8List());
             image.dispose();
           });
@@ -269,6 +282,8 @@ void main() {
           d['assets'] = jsonDecode(r.body)['assets'];
           d['keyword_count'] = 0;
           d['negative_count'] = 0;
+          d['review_checks']['positive_keywords'] = false;
+          d['review_ready'] = false;
           return reply(d);
         }
         return reply(fixture());
@@ -338,6 +353,9 @@ void main() {
       d['context']['campaign_name'] = 'Changed campaign';
       d['context']['campaign_state'] = 'archived';
       d['draft_current'] = false;
+      d['review_checks']['current_context'] = false;
+      d['review_checks']['plan_reviewed'] = false;
+      d['review_ready'] = false;
       d['editable'] = false;
       String? copied;
       t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -500,4 +518,318 @@ void main() {
     );
     expect(t.takeException(), isNull);
   });
+  for (final width in [1400.0, 390.0, 320.0]) {
+    testWidgets('Keyword review save export and clear fit $width', (t) async {
+      await t.binding.setSurfaceSize(Size(width, width == 1400 ? 1100 : 950));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      var data = fixture();
+      final calls = <http.Request>[];
+      String? copied;
+      t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = call.arguments['text'];
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      final c = makeClient((r) async {
+        calls.add(r);
+        if (r.method == 'POST') {
+          final body = jsonDecode(r.body);
+          if (r.url.path.endsWith('/review')) {
+            expect(body, {
+              'version': 1,
+              'review_fingerprint': 'b' * 64,
+              'confirmed': true,
+            });
+            data = {
+              ...data,
+              'version': 2,
+              'review_current': true,
+              'reviewed_at': '2026-09-23T10:00:00Z',
+              'reviewed_snapshot': {
+                'assets': clone(data['assets']),
+                'context': clone(data['saved_context']),
+                'draft_revision': 1,
+                'saved_at': '2026-09-23T08:00:00Z',
+              },
+            };
+          } else {
+            expect(r.url.path, endsWith('/clear-review'));
+            expect(body, {'version': 2, 'confirmed': true});
+            data = {
+              ...data,
+              'version': 3,
+              'review_current': false,
+              'reviewed_at': null,
+              'reviewed_snapshot': null,
+            };
+          }
+        }
+        return reply(data);
+      });
+      addTearDown(c.dispose);
+      final key = GlobalKey();
+      await t.pumpWidget(
+        app(c, captureKey: key, scale: width == 320 ? 1.3 : 1),
+      );
+      await t.pumpAndSettle();
+      expect(
+        t
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Save keyword review'),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tap(t, googleKeywordReviewConfirmation);
+      await tap(t, 'Save keyword review');
+      expect(find.text('KEYWORD REVIEW CURRENT'), findsOneWidget);
+      await t.ensureVisible(find.text('Save keyword review'));
+      await t.pumpAndSettle();
+      if (Platform.environment['KORLIX_FUNNEL_SCREENSHOTS'] == '1') {
+        await t.runAsync(() async {
+          final image =
+              await (key.currentContext!.findRenderObject()
+                      as RenderRepaintBoundary)
+                  .toImage(pixelRatio: 1.5);
+          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+          File(
+            '/tmp/k167-review-${width.toInt()}.png',
+          ).writeAsBytesSync(bytes!.buffer.asUint8List());
+        });
+      }
+      await tap(t, 'Copy review record');
+      expect(copied, contains('OWNER KEYWORD REVIEW — CURRENT'));
+      expect(copied, contains('business support'));
+      expect(copied, contains('Saved: 2026-09-23T08:00:00Z'));
+      expect(copied, contains('Draft revision: 1'));
+      expect(copied, contains('No ad or spending has been created.'));
+      await tap(t, 'Clear keyword review');
+      await tap(t, 'Keep review');
+      expect(calls.where((r) => r.method == 'POST').length, 1);
+      await tap(t, 'Clear keyword review');
+      await tap(t, 'Clear review');
+      expect(find.text('KEYWORDS NOT REVIEWED'), findsOneWidget);
+      expect(
+        t.widget<TextField>(field('Exact match')).controller!.text,
+        'business support',
+      );
+      expect(t.takeException(), isNull);
+    });
+  }
+  testWidgets(
+    'Unsaved keywords reset review confirmation and prevent reviewing different terms',
+    (t) async {
+      final c = makeClient((r) async => reply(fixture()));
+      addTearDown(c.dispose);
+      await t.pumpWidget(app(c));
+      await t.pumpAndSettle();
+      await tap(t, googleKeywordReviewConfirmation);
+      await t.enterText(field('Exact match'), 'My changed keyword');
+      await t.pump();
+      expect(
+        t.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value,
+        false,
+      );
+      expect(
+        t
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Save keyword review'),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(find.text('SAVE CHANGES BEFORE REVIEW'), findsOneWidget);
+    },
+  );
+  testWidgets(
+    'Stale review exports the reviewed assets rather than the latest draft',
+    (t) async {
+      final data = fixture();
+      data['version'] = 3;
+      data['draft_revision'] = 2;
+      data['reviewed_at'] = '2026-09-23T10:00:00Z';
+      data['reviewed_snapshot'] = {
+        'assets': clone(data['assets']),
+        'context': clone(data['saved_context']),
+        'draft_revision': 1,
+        'saved_at': '2026-09-23T08:00:00Z',
+      };
+      data['assets']['exact'] = ['New unreviewed keyword', 'Another keyword'];
+      data['assets']['negative_broad'] = [];
+      data['keyword_count'] = 2;
+      data['negative_count'] = 0;
+      data['updated_at'] = '2026-09-23T11:00:00Z';
+      String? copied;
+      t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = call.arguments['text'];
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      final c = makeClient((r) async => reply(data));
+      addTearDown(c.dispose);
+      await t.pumpWidget(app(c));
+      await t.pumpAndSettle();
+      await tap(t, 'Copy review record');
+      expect(copied, contains('OWNER KEYWORD REVIEW — OUT OF DATE'));
+      expect(copied, contains('1 positive / 1 negative keywords.'));
+      expect(copied, contains('Negative broad match:\njobs'));
+      expect(copied, isNot(contains('Saved: 2026-09-23T11:00:00Z')));
+      expect(copied, contains('business support'));
+      expect(copied, contains('Saved: 2026-09-23T08:00:00Z'));
+      expect(copied, contains('Draft revision: 1'));
+      expect(copied, isNot(contains('New unreviewed keyword')));
+    },
+  );
+  testWidgets(
+    'Conflict while reviewing blocks repeat approval until reload and renewed confirmation',
+    (t) async {
+      var posts = 0;
+      final c = makeClient((r) async {
+        if (r.method == 'POST') {
+          posts++;
+          return reply({'error': 'A different draft was saved.'}, 409);
+        }
+        return reply(fixture());
+      });
+      addTearDown(c.dispose);
+      await t.pumpWidget(app(c));
+      await t.pumpAndSettle();
+      await tap(t, googleKeywordReviewConfirmation);
+      await tap(t, 'Save keyword review');
+      expect(posts, 1);
+      expect(
+        t
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Save keyword review'),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tap(t, 'Reload saved draft');
+      expect(
+        t.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value,
+        false,
+      );
+      expect(
+        t
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Save keyword review'),
+            )
+            .onPressed,
+        isNull,
+      );
+    },
+  );
+  testWidgets(
+    'Access loss during pending keyword review removes its private record',
+    (t) async {
+      final pending = Completer<http.Response>();
+      final c = makeClient((r) async {
+        if (r.url.path.endsWith('/denied')) {
+          return reply({'error': 'Denied'}, 403);
+        }
+        return r.method == 'POST' ? pending.future : reply(fixture());
+      });
+      addTearDown(c.dispose);
+      await t.pumpWidget(app(c));
+      await t.pumpAndSettle();
+      await tap(t, googleKeywordReviewConfirmation);
+      await t.ensureVisible(find.text('Save keyword review'));
+      await t.tap(find.text('Save keyword review'));
+      await t.pump();
+      await expectLater(
+        c.request('GET', '/denied'),
+        throwsA(isA<FunnelException>()),
+      );
+      pending.complete(reply(fixture()));
+      await t.pumpAndSettle();
+      expect(find.text('Save keyword review'), findsNothing);
+      expect(find.text('Keyword review saved.'), findsNothing);
+      expect(find.textContaining('Enterprise access'), findsOneWidget);
+    },
+  );
+  test(
+    'Malformed keyword review and inconsistent reviewed assets fail closed',
+    () {
+      for (final mutate in <void Function(Map<String, dynamic>)>[
+        (d) => d['review_current'] = true,
+        (d) => d['review_ready'] = false,
+        (d) => d['review_fingerprint'] = 'x',
+        (d) => d['draft_revision'] = 3,
+        (d) => d['draft_revision'] = null,
+        (d) => d['review_checks']['positive_keywords'] = false,
+        (d) => d['review_checks']['page_published'] = false,
+        (d) => d['reviewed_at'] = '2026-09-23T10:00:00Z',
+      ]) {
+        final d = fixture();
+        mutate(d);
+        expect(
+          () => validateGoogleKeywords(d, fid, cid),
+          throwsA(isA<FunnelException>()),
+        );
+      }
+      final d = fixture();
+      d['review_current'] = true;
+      d['reviewed_at'] = '2026-09-23T10:00:00Z';
+      d['reviewed_snapshot'] = {
+        'assets': clone(d['assets']),
+        'context': clone(d['saved_context']),
+        'draft_revision': 1,
+        'saved_at': '2026-09-23T08:00:00Z',
+      };
+      d['reviewed_snapshot']['assets']['exact'][0] =
+          'Different reviewed keyword';
+      expect(
+        () => validateGoogleKeywords(d, fid, cid),
+        throwsA(isA<FunnelException>()),
+      );
+    },
+  );
+  testWidgets(
+    'Negative-only saved draft explains the missing positive keyword',
+    (t) async {
+      final d = fixture();
+      d['assets']['exact'] = [];
+      d['keyword_count'] = 0;
+      d['review_checks']['positive_keywords'] = false;
+      d['review_ready'] = false;
+      final c = makeClient((r) async => reply(d));
+      addTearDown(c.dispose);
+      await t.pumpWidget(app(c));
+      await t.pumpAndSettle();
+      expect(find.text('Add at least one positive keyword.'), findsOneWidget);
+      expect(
+        t.widget<CheckboxListTile>(find.byType(CheckboxListTile)).onChanged,
+        isNull,
+      );
+      expect(
+        t
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Save keyword review'),
+            )
+            .onPressed,
+        isNull,
+      );
+    },
+  );
 }
