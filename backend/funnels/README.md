@@ -1142,3 +1142,34 @@ responses. Conflict recovery preserves typed text until explicit discard/reload.
 No Google credentials or live provider calls are needed. No keywords, executable
 targeting, pinning, ad approval, ad creation, launch or spending is implemented.
 `ad_publishing_ready` remains false. No new packages or environment variables.
+
+### K165 owner copy reviews
+
+The search-ad draft editor now records an explicit **owner copy review**. This is
+separate from Google policy approval, campaign/account setup review, activation
+or spending. No provider operation is involved; `ad_publishing_ready` stays false.
+
+POST `.../google-creative/review` accepts exactly `version`,
+`review_fingerprint`, `confirmed: true`. POST `.../google-creative/clear-review`
+accepts exactly `version`, `confirmed: true`. All four creative routes share the
+existing 30/owner/minute limit, no-store responses and current DB Enterprise and
+ownership checks. Clear retains assets and is allowed for an archived campaign.
+
+The additive migration initializes `draft_revision` from existing row versions,
+without changing saved assets/context/timestamps/versions. Every subsequent draft
+save increments that revision, including an identical save. Reviews/clears only
+increment the entity version. Review requires a saved complete draft, current
+context, a published page and a plan reviewed against that page version. A hash
+binds the exact assets, current context fingerprint and draft revision. Both
+entity version and displayed hash are checked under the existing lock order.
+
+One saved review snapshot (assets, context, draft revision, timestamp) is retained
+until replaced or cleared. Later saves and published context changes mark it out
+of date; manual reports and unpublished page edits preserve it. A repeated save
+cannot silently revalidate an old review, even if text is identical. UI copy of a
+review uses that immutable snapshot and labels stale records. Unsaved changes,
+conflicts and owner/access loss disable review actions; typing resets confirmation.
+
+This release does not introduce an approval history ledger or automated launch.
+Rollback leaves the additive columns and updated RPC in place so older save
+clients continue to advance revisions correctly. Roll back the frontend first.
