@@ -1291,7 +1291,40 @@ late reads, saves and picker selections. Malformed server metadata fails closed.
 A catalog version change requires a coordinated client/SQL/catalog update.
 
 No provider call, ad creation, launch readiness or spending authorization is
-performed; `ad_publishing_ready` remains false. Owner targeting review, unified
-launch review, local-area targeting and Meta creative preparation remain later
-work. Rollback the frontend before the backend; retain the additive table and
+performed; `ad_publishing_ready` remains false. K169 adds owner targeting review
+below. Unified launch review, local-area targeting and Meta creative preparation
+remain later work. Rollback the frontend before the backend; retain the additive table and
 owner drafts.
+
+### K169 — Saved Google targeting review
+
+POST `.../google-targeting/review` accepts exactly `version`,
+`review_fingerprint`, and Boolean `confirmed: true`. The owner must have saved
+complete targeting choices against the current campaign and published page, with
+the campaign plan reviewed for that page. The fingerprint binds assets, saved
+labels, catalog version, current page/campaign context and draft revision. The
+server snapshots those exact assets, context, labels, catalog version, revision
+and original save time; clients cannot supply a review snapshot.
+
+POST `.../google-targeting/clear-review` accepts `version` and Boolean
+`confirmed: true`. Clearing preserves the saved draft and timestamp and is
+available for archived campaigns. Both actions increment the concurrency version
+without incrementing the draft revision. Every draft save increments its revision
+and makes any prior review stale, even when choices are identical. A stale review
+remains available for inspection/export until explicitly replaced or cleared.
+Reports and unpublished page edits preserve current reviews; published context
+changes invalidate them. Other setup/copy/keyword reviews remain unchanged.
+
+The additive migration backfills existing draft revisions from their versions,
+preserving original columns. It replaces only the targeting RPC, retaining
+service-only execution, SECURITY INVOKER, a fixed search path, and funnel →
+campaign → targeting lock order. Reads, saves, reviews and clears share the
+30-request owner/minute limit, live Enterprise/ownership checks and no-store.
+
+The screen requires explicit confirmation, resets it on editing/reloading, and
+blocks review/export/clear while dirty or conflicted. Review exports use the
+exact saved snapshot, including labels, catalog version and save time. Malformed
+review metadata fails closed; access/scope invalidation discards late responses.
+No provider call, ad creation, Google approval, launch readiness or spending
+occurs. Roll back the frontend first, then backend; retain the additive columns
+and saved records. K168 clients ignore the additional review response fields.

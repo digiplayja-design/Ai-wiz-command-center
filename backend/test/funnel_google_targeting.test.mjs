@@ -24,6 +24,13 @@ test.before(async()=>{
  db=new PGlite();await db.exec('create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create table user_profiles(id uuid primary key,tier text);create table korlix_agent_email_recipients(id uuid primary key default gen_random_uuid(),user_id uuid,email text,active boolean default true,consent_status text default \'transactional_only\',source_reference text,suppressed_at timestamptz,suppression_reason text,updated_at timestamptz);grant usage on schema public to anon,authenticated,service_role;grant select,update on user_profiles to service_role;grant all on korlix_agent_email_recipients to service_role;');
  for(const id of [owner,other,basic]){await db.query('insert into auth.users values($1)',[id]);await db.query('insert into user_profiles values($1,$2)',[id,id===basic?'basic':'enterprise']);}
  for(const file of ['20260921162128_enterprise_contacts_crm.sql','20260922023935_enterprise_funnel_studio.sql','20260922090333_funnel_campaign_workspace.sql','20260922233935_funnel_google_ads_connection.sql','20260923073916_funnel_google_campaign_preparation.sql','20260923085331_funnel_google_creative.sql','20260923094201_funnel_google_creative_review.sql','20260923103256_funnel_google_keywords.sql','20260923105943_funnel_google_keyword_review.sql','20260923112526_funnel_google_targeting.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+file,import.meta.url),'utf8'));
+ // Prove the additive migration preserves an existing revision-2 draft.
+ f=await funnel('create',{name:'Legacy',slug:'legacy',document:doc});f=await funnel('publish',{version:f.version,confirmed:true});c=await campaign('create',plan);await save();await save();
+ const legacy=(await db.query('select to_jsonb(t) row from korlix_funnel_google_targeting t')).rows[0].row;
+ await db.exec(await readFile(new URL('../../supabase/migrations/20260923120825_funnel_google_targeting_review.sql',import.meta.url),'utf8'));
+ const upgraded=(await db.query('select to_jsonb(t) row from korlix_funnel_google_targeting t')).rows[0].row;
+ assert.equal(upgraded.draft_revision,2);assert.equal(upgraded.reviewed_at,null);assert.equal(upgraded.reviewed_snapshot,null);assert.equal(upgraded.review_fingerprint,null);
+ for(const key of ['draft_revision','reviewed_at','reviewed_snapshot','review_fingerprint'])delete upgraded[key];assert.deepEqual(upgraded,legacy);
  await db.exec('set role service_role');
  const database={rpc:async(name,p)=>{try{return{data:await rpc(name,p)}}catch(error){return{error}}}};
  const app=express();app.use(express.json());registerFunnels(app,{database,requireUser:async q=>[owner,other,basic].includes(q.headers.authorization)?{id:q.headers.authorization}:null,environment:env,now:()=>clock,googleAdsProvider:new Proxy({},{get:()=>()=>{providerCalls++;throw Error('No provider operation is allowed');}})});
@@ -89,3 +96,43 @@ test('Non-Google campaigns are rejected; funnel deletion cascades its targeting 
  await save();await db.query("update korlix_funnel_campaigns set platform='meta' where id=$1",[c.id]);assert.equal((await req()).status,400);await db.query('delete from korlix_funnels where id=$1',[f.id]);assert.equal((await db.query('select count(*)::int n from korlix_funnel_google_targeting')).rows[0].n,0);
 });
 test('Read and save share 30 requests per owner per minute',async()=>{for(let i=0;i<30;i++)assert.equal((await req()).status,200);const r=await req('/save',{version:0,fingerprint:'a'.repeat(64),assets});assert.equal(r.status,429);assert.equal(r.headers.get('cache-control'),'no-store');});
+
+async function reviewTargeting(){const d=await targeting();return targeting('review',{version:d.version,review_fingerprint:d.review_fingerprint,confirmed:true});}
+test('K169 review snapshots exact choices, labels, reference version and original save time; clearing preserves draft',async()=>{
+ const draft=await save(),setupBefore=await setup();assert.equal(draft.review_ready,true);assert.equal(draft.review_current,false);assert.equal(draft.draft_revision,1);
+ const response=await req('/review',{version:draft.version,review_fingerprint:draft.review_fingerprint,confirmed:true});assert.equal(response.status,200);let d=await response.json();assert.equal(d.version,2);assert.equal(d.draft_revision,1);assert.equal(d.review_current,true);assert.equal(d.ad_publishing_ready,false);assert.deepEqual(d.reviewed_snapshot,{assets,context:draft.saved_context,labels:draft.saved_labels,catalog_version:catalog.version,draft_revision:1,saved_at:draft.updated_at});assert.equal(d.updated_at,draft.updated_at);assert.deepEqual(d.saved_labels,draft.saved_labels);
+ d=await (await req('/clear-review',{version:d.version,confirmed:true})).json();assert.equal(d.version,3);assert.equal(d.review_current,false);assert.equal(d.reviewed_snapshot,null);assert.equal(d.reviewed_at,null);assert.equal(d.draft_revision,1);assert.deepEqual(d.assets,assets);assert.equal(d.updated_at,draft.updated_at);assert.deepEqual(await setup(),setupBefore);assert.equal(providerCalls,0);
+});
+test('K169 every save stales a review even when choices are identical; old records stay intact',async()=>{
+ await save();const reviewed=await reviewTargeting();let next=await save();assert.equal(next.draft_revision,2);assert.equal(next.version,3);assert.equal(next.review_current,false);assert.deepEqual(next.reviewed_snapshot,reviewed.reviewed_snapshot);assert.notEqual(next.review_fingerprint,reviewed.review_fingerprint);
+ assert.equal((await req('/review',{version:next.version,review_fingerprint:reviewed.review_fingerprint,confirmed:true})).status,409);
+ next=await reviewTargeting();assert.equal(next.reviewed_snapshot.draft_revision,2);assert.equal(next.review_current,true);
+ next=await save(empty());assert.equal(next.review_ready,false);assert.equal(next.review_current,false);assert.deepEqual(next.reviewed_snapshot.assets,assets);assert.equal(next.reviewed_snapshot.draft_revision,2);
+});
+test('K169 review requires all explicit choices, a saved current context, a published page and a reviewed plan',async()=>{
+ let d=await targeting();assert.equal(d.review_ready,false);assert.equal((await req('/review',{version:d.version,review_fingerprint:d.review_fingerprint,confirmed:true})).status,400);
+ for(const patch of [{countries:[]},{content_languages:[]},{location_mode:'undecided'},{bidding:'undecided'}]){await save({...assets,...patch});d=await targeting();assert.equal(d.review_checks.complete_choices,false);await assert.rejects(reviewTargeting(),/complete current targeting/);}
+ await save();c=await campaign('save',{...plan,headline:'Changed'});d=await targeting();assert.equal(d.review_ready,false);assert.equal(d.review_checks.current_context,false);await save();assert.equal((await targeting()).review_checks.plan_reviewed,false);await assert.rejects(reviewTargeting(),/review the campaign/);
+ c=await campaign('review',{confirmed:true});await save();assert.equal((await targeting()).review_ready,true);f=await funnel('pause',{version:f.version});await save();assert.equal((await targeting()).review_checks.page_published,false);await assert.rejects(reviewTargeting(),/publish the page/);
+});
+test('K169 reports and unpublished edits preserve review; a published change invalidates review with snapshot intact',async()=>{
+ await save();const d=await reviewTargeting();c=await campaign('report',{day:new Date().toISOString().slice(0,10),spend_cents:100,clicks:1,impressions:2,note:'Fixture'});f=await funnel('save',{version:f.version,name:f.name,document:{...doc,headline:'Unpublished'}});let next=await targeting();assert.equal(next.review_current,true);assert.equal(next.review_fingerprint,d.review_fingerprint);f=await funnel('publish',{version:f.version,confirmed:true});next=await targeting();assert.equal(next.review_current,false);assert.deepEqual(next.reviewed_snapshot,d.reviewed_snapshot);
+});
+test('K169 review mutations reject forged confirmations, snapshots, query parameters and revisions',async()=>{
+ await save();const d=await targeting(),body={version:d.version,review_fingerprint:d.review_fingerprint,confirmed:true};
+ for(const patch of [{confirmed:false},{confirmed:'true'},{confirmed:1},{confirmed:null},{reviewed_snapshot:{}},{actor:other},{version:-1},{review_fingerprint:'bad'}])assert.equal((await req('/review',{...body,...patch})).status,400);
+ for(const patch of [{confirmed:'true'},{confirmed:false},{snapshot:{}},{review_fingerprint:d.review_fingerprint}])assert.equal((await req('/clear-review',{version:d.version,confirmed:true,...patch})).status,400);
+ assert.equal((await req('/review?force=true',body)).status,400);assert.equal((await req('/review',{...body,version:d.version+1})).status,409);
+ await assert.rejects(targeting('review',{...body,confirmed:'true'}),/confirm/);await assert.rejects(targeting('clear_review',{version:d.version,confirmed:1}),/confirm/);
+ await reviewTargeting();await assert.rejects(db.query("update korlix_funnel_google_targeting set reviewed_snapshot=reviewed_snapshot||'{\"extra\":true}'::jsonb"),/check constraint/);
+});
+test('K169 all review routes enforce current ownership/tier; archive blocks review and permits confirmed clearing',async()=>{
+ await save();const d=await reviewTargeting(),body={version:d.version,review_fingerprint:d.review_fingerprint,confirmed:true};
+ for(const [actor,status] of [['',401],[other,404],[basic,403]]){assert.equal((await req('/review',body,actor)).status,status);assert.equal((await req('/clear-review',{version:d.version,confirmed:true},actor)).status,status);}
+ await db.query("update user_profiles set tier='basic' where id=$1",[owner]);assert.equal((await req('/review',body)).status,403);assert.equal((await req('/clear-review',{version:d.version,confirmed:true})).status,403);await db.query("update user_profiles set tier='enterprise' where id=$1",[owner]);
+ c=await campaign('archive',{confirmed:true});const archived=await targeting();assert.equal(archived.review_current,false);assert.equal(archived.review_ready,false);await assert.rejects(reviewTargeting(),/review the campaign/);const cleared=await targeting('clear_review',{version:archived.version,confirmed:true});assert.equal(cleared.reviewed_snapshot,null);assert.deepEqual(cleared.assets,assets);assert.equal(cleared.updated_at,d.updated_at);
+});
+test('K169 review/save races have one winner; all four routes share a rate limit',async()=>{
+ const d=await save();const responses=await Promise.all([req('/review',{version:d.version,review_fingerprint:d.review_fingerprint,confirmed:true}),req('/save',{version:d.version,fingerprint:d.fingerprint,assets:{...assets,countries:['JM']}})]);assert.deepEqual(responses.map(x=>x.status).sort(),[200,409]);assert.equal(providerCalls,0);
+ clock+=60000;for(let i=0;i<30;i++)assert.equal((await req()).status,200);assert.equal((await req('/review',{version:d.version,review_fingerprint:d.review_fingerprint,confirmed:true})).status,429);assert.equal((await req('/clear-review',{version:d.version,confirmed:true})).status,429);
+});
