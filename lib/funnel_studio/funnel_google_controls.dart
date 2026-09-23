@@ -13,7 +13,26 @@ import 'funnel_google_locations.dart';
 const googleControlsBoundary =
     'Activation enables the saved Google campaign, ad group and ad. Delivery may begin within its schedule and incur charges. Pause changes the campaign only. Local edits and archiving do not change Google delivery. Status is a point-in-time observation; policy approval does not guarantee delivery.';
 const googleControlsBudget =
-    'Google uses an average daily budget and may spend more on individual days. The planned total is not a hard spending cap. Budget and schedule changes are not available here.';
+    'Google uses an average daily budget and may spend more on individual days. The planned total is not a hard spending cap. Budget changes need a separate review below. Schedule changes are not available here.';
+const googleBudgetImpact =
+    'Changing an average daily budget can change spending immediately on an enabled campaign. Lowering it does not undo earlier charges. For most campaigns, today’s charge limit uses the highest average daily budget set today, up to twice that amount. The monthly limit also changes. This is not a hard total cap and does not pause or activate the campaign.';
+bool _cents(dynamic v) => v is int && v >= 100 && v <= 1000000;
+String _money(dynamic cents) => '\$${(cents / 100).toStringAsFixed(2)} USD';
+int? parseGoogleBudget(String value) {
+  if (!RegExp(r'^(0|[1-9][0-9]{0,4})(\.[0-9]{1,2})?$').hasMatch(value.trim())) {
+    return null;
+  }
+  final parts = value.trim().split('.');
+  final cents =
+      int.parse(parts[0]) * 100 +
+      int.parse(parts.length == 1 ? '0' : parts[1].padRight(2, '0'));
+  return _cents(cents) ? cents : null;
+}
+
+bool _proof(dynamic v) =>
+    v is String &&
+    v.length <= 3000 &&
+    RegExp(r'^[-_A-Za-z0-9]+\.[-_A-Za-z0-9]{43}$').hasMatch(v);
 const _bad = FunnelException(
   'Campaign controls could not be verified. Refresh the record.',
   503,
@@ -66,7 +85,10 @@ Map<String, dynamic> validateGoogleControls(
   if (cmd != null) {
     if (cmd is! Map ||
         !_uuid(cmd['id']) ||
-        !['activate', 'pause'].contains(cmd['action']) ||
+        !['activate', 'pause', 'budget'].contains(cmd['action']) ||
+        (cmd['action'] == 'budget'
+            ? !_cents(cmd['daily_cents'])
+            : cmd['daily_cents'] != null) ||
         !['unknown', 'confirmed'].contains(cmd['state']) ||
         cmd['sequence'] is! int ||
         cmd['sequence'] < 1 ||
@@ -82,6 +104,81 @@ Map<String, dynamic> validateGoogleControls(
   if (checks['no_uncertain_command'] != (cmd?['state'] != 'unknown') ||
       checks['command_capacity'] != ((cmd?['sequence'] ?? 0) < 1000)) {
     throw _bad;
+  }
+  if (d['budget_enabled'] is! bool ||
+      (d['budget_enabled'] == true && checks['platform_enabled'] != true)) {
+    throw _bad;
+  }
+  final managed = d['managed_budget'];
+  if (checks['creation_recorded'] == true) {
+    if (managed is! Map ||
+        managed.length != 4 ||
+        !_cents(managed['daily_cents']) ||
+        managed['original_daily_cents'] !=
+            creation['attempt']['snapshot']['plan']['daily_cents'] ||
+        (managed['command_id'] == null
+            ? managed['confirmed_at'] != null ||
+                  managed['daily_cents'] != managed['original_daily_cents']
+            : !_uuid(managed['command_id']) ||
+                  !_stamp(managed['confirmed_at']))) {
+      throw _bad;
+    }
+    if (cmd?['action'] == 'budget' &&
+        cmd?['state'] == 'confirmed' &&
+        (managed['command_id'] != cmd['id'] ||
+            managed['daily_cents'] != cmd['daily_cents'] ||
+            managed['confirmed_at'] != cmd['confirmed_at'])) {
+      throw _bad;
+    }
+  } else if (managed != null) {
+    throw _bad;
+  }
+  final proposal = d['budget_preview'];
+  if (proposal != null) {
+    if (proposal is! Map ||
+        d['observation'] != null ||
+        d['budget_enabled'] != true ||
+        checks['creation_recorded'] != true ||
+        checks['no_uncertain_command'] != true ||
+        checks['command_capacity'] != true ||
+        proposal['kind'] != 'budget' ||
+        !_cents(proposal['daily_cents']) ||
+        proposal['daily_cents'] == managed['daily_cents'] ||
+        proposal['increase'] !=
+            (proposal['daily_cents'] > managed['daily_cents']) ||
+        proposal['status'] is! Map ||
+        !_text(proposal['status']['name']) ||
+        !['PAUSED', 'ENABLED'].contains(proposal['status']['status']) ||
+        proposal['status']['resource'] !=
+            creation['attempt']['resources']['campaign'] ||
+        proposal['budget'] is! Map ||
+        proposal['budget']['resource'] !=
+            creation['attempt']['resources']['budget'] ||
+        proposal['budget']['daily_cents'] != managed['daily_cents'] ||
+        !_stamp(proposal['checked_at']) ||
+        !_proof(proposal['proof'])) {
+      throw _bad;
+    }
+    final graph = proposal['graph'];
+    if (proposal['increase'] == true) {
+      final resources = creation['attempt']['resources'];
+      if (d['activation_ready'] != true ||
+          graph is! Map ||
+          graph['policy'] != 'APPROVED' ||
+          graph['resources'] is! Map ||
+          graph['resources'].length != 4 ||
+          resources.keys.any((k) => graph['resources'][k] != resources[k]) ||
+          graph['statuses'] is! Map ||
+          graph['statuses']['campaign'] != proposal['status']['status'] ||
+          [
+            'ad_group',
+            'ad',
+          ].any((k) => !['PAUSED', 'ENABLED'].contains(graph['statuses'][k]))) {
+        throw _bad;
+      }
+    } else if (graph != null) {
+      throw _bad;
+    }
   }
   final o = d['observation'];
   if (o != null) {
@@ -158,6 +255,7 @@ class FunnelGoogleControls extends StatefulWidget {
 }
 
 class _FunnelGoogleControlsState extends State<FunnelGoogleControls> {
+  final _budget = TextEditingController();
   Map<String, dynamic>? _data;
   bool _busy = false, _confirm = false, _spend = false;
   int _generation = 0;
@@ -177,6 +275,7 @@ class _FunnelGoogleControlsState extends State<FunnelGoogleControls> {
     if (!mounted) return;
     final g = ++_generation;
     _data = null;
+    _budget.clear();
     _busy = false;
     _error = null;
     _unavailable = message;
@@ -214,6 +313,7 @@ class _FunnelGoogleControlsState extends State<FunnelGoogleControls> {
         old.funnelId != widget.funnelId ||
         old.campaignId != widget.campaignId) {
       _generation++;
+      _budget.clear();
       _unavailable = null;
       _data = null;
       unawaited(_request());
@@ -225,6 +325,7 @@ class _FunnelGoogleControlsState extends State<FunnelGoogleControls> {
     _generation++;
     widget.client.removeAccessDeniedListener(_deny);
     widget.scope?.removeListener(_scopeChanged);
+    _budget.dispose();
     super.dispose();
   }
 
@@ -289,6 +390,32 @@ class _FunnelGoogleControlsState extends State<FunnelGoogleControls> {
     );
   }
 
+  Future<void> _reviewBudget() async {
+    final cents = parseGoogleBudget(_budget.text);
+    if (_busy || cents == null) return;
+    await _request(action: 'budget-preview', body: {'daily_cents': cents});
+  }
+
+  Future<void> _applyBudget() async {
+    final p = _data?['budget_preview'];
+    if (_busy ||
+        p == null ||
+        !_confirm ||
+        !_spend ||
+        parseGoogleBudget(_budget.text) != p['daily_cents']) {
+      return;
+    }
+    await _request(
+      action: 'budget-apply',
+      body: {
+        'proof': p['proof'],
+        'daily_cents': p['daily_cents'],
+        'confirmed': true,
+        'spend_acknowledged': true,
+      },
+    );
+  }
+
   Widget _line(String s, {Color? color}) => Padding(
     padding: const EdgeInsets.only(top: 12),
     child: Text(s, style: TextStyle(color: color, height: 1.4)),
@@ -298,6 +425,8 @@ class _FunnelGoogleControlsState extends State<FunnelGoogleControls> {
     final d = _data,
         o = d?['observation'],
         cmd = d?['latest_command'],
+        proposal = d?['budget_preview'],
+        managed = d?['managed_budget'],
         created = d?['creation']['attempt'],
         s = created?['snapshot'];
     return Dialog(
@@ -353,7 +482,7 @@ class _FunnelGoogleControlsState extends State<FunnelGoogleControls> {
                       'Campaign ID: ${(created['resources']['campaign'] as String).split('/').last}',
                     ),
                   _line(
-                    'Saved average daily budget: \$${(s['plan']['daily_cents'] / 100).toStringAsFixed(2)} USD',
+                    'Original average daily budget: \$${(s['plan']['daily_cents'] / 100).toStringAsFixed(2)} USD',
                   ),
                   _line(
                     'Saved schedule: ${s['start_date']} 00:00:00 through ${s['end_date']} 23:59:59 (${s['identity']['account']['timezone']}).',
@@ -396,11 +525,27 @@ class _FunnelGoogleControlsState extends State<FunnelGoogleControls> {
                     ],
                   ),
                 ],
+                if (managed != null) ...[
+                  _line(
+                    'Latest confirmed average daily budget: ${_money(managed['daily_cents'])}',
+                  ),
+                  _line(
+                    'This is the saved receipt value. Review Google to verify its current value. The original plan and creation history remain unchanged.',
+                  ),
+                ],
                 if (cmd != null) ...[
                   _line(
-                    'Last command: ${cmd['action'] == 'activate' ? 'ACTIVATE' : 'PAUSE'} · ${cmd['state'] == 'confirmed' ? 'GOOGLE ACCEPTED' : 'OUTCOME UNCERTAIN'}',
+                    'Last command: ${cmd['action'] == 'activate'
+                        ? 'ACTIVATE'
+                        : cmd['action'] == 'budget'
+                        ? 'BUDGET CHANGE'
+                        : 'PAUSE'} · ${cmd['state'] == 'confirmed' ? 'GOOGLE ACCEPTED' : 'OUTCOME UNCERTAIN'}',
                   ),
                   _line('Requested: ${cmd['created_at']}'),
+                  if (cmd['action'] == 'budget')
+                    _line(
+                      'Requested average daily budget: ${_money(cmd['daily_cents'])}',
+                    ),
                   if (cmd['state'] == 'unknown')
                     _line(
                       'Ads may be spending. Check and control this campaign directly in Google Ads. Further KORLIX commands are blocked; observing a status will not clear the uncertain request.',
@@ -437,7 +582,7 @@ class _FunnelGoogleControlsState extends State<FunnelGoogleControls> {
                             ? null
                             : (v) => setState(() => _spend = v == true),
                         title: const Text(
-                          'I authorize ad spending using the saved average daily budget and schedule. The planned total is not a hard cap.',
+                          'I authorize ad spending using the latest confirmed average daily budget and saved schedule. The planned total is not a hard cap.',
                         ),
                       ),
                     _line(
@@ -458,6 +603,90 @@ class _FunnelGoogleControlsState extends State<FunnelGoogleControls> {
                             : 'Pause Google campaign',
                       ),
                     ),
+                  ],
+                ],
+                if (created?['state'] == 'created') ...[
+                  const Divider(height: 32),
+                  const Text(
+                    'Change Google budget',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                  ),
+                  _line(googleBudgetImpact, color: WfStyle.muted),
+                  if (d['budget_enabled'] != true)
+                    _line(
+                      'Budget changes will be available after KORLIX Google budget activation.',
+                    )
+                  else if (d['checks']['no_uncertain_command'] == true &&
+                      d['checks']['command_capacity'] == true) ...[
+                    _line(
+                      'Enter \$1.00–\$10,000.00 USD. Increases require current preparation, matching saved content and an open schedule. A reduction still requires a fresh matching Google budget.',
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _budget,
+                      enabled: !_busy,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'New average daily budget (USD)',
+                        hintText: '25.00',
+                      ),
+                      onChanged: (_) => setState(() {
+                        _data?.remove('budget_preview');
+                        _data?.remove('observation');
+                        _confirm = false;
+                        _spend = false;
+                      }),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed:
+                          _busy ||
+                              parseGoogleBudget(_budget.text) == null ||
+                              parseGoogleBudget(_budget.text) ==
+                                  managed?['daily_cents']
+                          ? null
+                          : _reviewBudget,
+                      child: const Text('Review budget change'),
+                    ),
+                    if (proposal != null) ...[
+                      _line(
+                        'Google budget observed: ${_money(proposal['budget']['daily_cents'])} → ${_money(proposal['daily_cents'])}',
+                      ),
+                      _line(
+                        'Campaign status: ${proposal['status']['status']} · Observed at: ${proposal['checked_at']}',
+                      ),
+                      _line(
+                        'This review expires after five minutes. Avoid editing the campaign in another tool while confirming.',
+                      ),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _confirm,
+                        onChanged: _busy
+                            ? null
+                            : (v) => setState(() => _confirm = v == true),
+                        title: Text(
+                          'I confirm changing the average daily budget to ${_money(proposal['daily_cents'])}.',
+                        ),
+                      ),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _spend,
+                        onChanged: _busy
+                            ? null
+                            : (v) => setState(() => _spend = v == true),
+                        title: const Text(
+                          'I authorize this budget and acknowledge the spending impact, including earlier charges and today’s highest budget.',
+                        ),
+                      ),
+                      FilledButton(
+                        onPressed: _busy || !_confirm || !_spend
+                            ? null
+                            : _applyBudget,
+                        child: const Text('Apply Google budget change'),
+                      ),
+                    ],
                   ],
                 ],
                 const SizedBox(height: 16),

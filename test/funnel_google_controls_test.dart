@@ -17,6 +17,7 @@ Map<String, dynamic> fixture({
   String? status,
   bool enabled = true,
   bool unknown = false,
+  bool budget = false,
 }) {
   final c = creation.fixture(state: 'created');
   final resources = c['attempt']['resources'];
@@ -42,6 +43,13 @@ Map<String, dynamic> fixture({
       'schedule_open': true,
     },
     'activation_ready': ready,
+    'budget_enabled': enabled && budget,
+    'managed_budget': {
+      'daily_cents': c['attempt']['snapshot']['plan']['daily_cents'],
+      'original_daily_cents': c['attempt']['snapshot']['plan']['daily_cents'],
+      'command_id': null,
+      'confirmed_at': null,
+    },
     'latest_command': unknown
         ? {
             'id': creation.aid,
@@ -97,8 +105,50 @@ Future<void> confirm(WidgetTester t) async {
   );
   await creation.tap(
     t,
-    'I authorize ad spending using the saved average daily budget and schedule. The planned total is not a hard cap.',
+    'I authorize ad spending using the latest confirmed average daily budget and saved schedule. The planned total is not a hard cap.',
   );
+}
+
+Map<String, dynamic> budgetFixture({
+  int cents = 3000,
+  String status = 'PAUSED',
+}) {
+  final d = fixture(budget: true);
+  final old = d['managed_budget']['daily_cents'] as int;
+  final resources = d['creation']['attempt']['resources'];
+  d['budget_preview'] = {
+    'kind': 'budget',
+    'daily_cents': cents,
+    'increase': cents > old,
+    'status': {
+      'resource': resources['campaign'],
+      'name': 'Saved campaign',
+      'status': status,
+    },
+    'budget': {'resource': resources['budget'], 'daily_cents': old},
+    'graph': cents > old
+        ? {
+            'resources': resources,
+            'statuses': {
+              'campaign': status,
+              'ad_group': 'PAUSED',
+              'ad': 'PAUSED',
+            },
+            'policy': 'APPROVED',
+          }
+        : null,
+    'checked_at': '2026-09-23T13:00:00Z',
+    'proof': 'Yg.${'b' * 43}',
+  };
+  return d;
+}
+
+const budgetAck =
+    'I authorize this budget and acknowledge the spending impact, including earlier charges and today’s highest budget.';
+Future<void> reviewBudget(WidgetTester t, [String amount = '30.00']) async {
+  await t.ensureVisible(find.byType(TextField));
+  await t.enterText(find.byType(TextField), amount);
+  await creation.tap(t, 'Review budget change');
 }
 
 void main() {
@@ -333,5 +383,198 @@ void main() {
       await t.pumpAndSettle();
       expect(t.takeException(), isNull);
     });
+  }
+  test(
+    'K183 validates exact cents, proposal identity, budget receipt and increase eligibility',
+    () {
+      for (final amount in ['1', '1.00', '1.01', '10000.00']) {
+        expect(parseGoogleBudget(amount), isNotNull);
+      }
+      for (final amount in [
+        '0.99',
+        '10000.01',
+        '1.001',
+        '1e3',
+        '-1',
+        'NaN',
+        '2,500',
+        '01',
+      ]) {
+        expect(parseGoogleBudget(amount), isNull);
+      }
+      expect(parseGoogleBudget('12.34'), 1234);
+      validateGoogleControls(budgetFixture(), fid, cid);
+      validateGoogleControls(budgetFixture(cents: 100), fid, cid);
+      for (final change in <void Function(Map)>[
+        (d) => d['budget_enabled'] = false,
+        (d) => d['budget_preview']['budget']['daily_cents'] = 999,
+        (d) => d['budget_preview']['budget']['resource'] = 'wrong',
+        (d) => d['budget_preview']['daily_cents'] = 1.5,
+        (d) => d['budget_preview']['increase'] = false,
+        (d) => d['budget_preview']['graph']['policy'] = 'DISAPPROVED',
+        (d) => d['budget_preview']['status']['status'] = 'REMOVED',
+        (d) => d['budget_preview']['proof'] = 'bad',
+        (d) => d['managed_budget']['daily_cents'] = 500,
+      ]) {
+        final d = budgetFixture();
+        change(d);
+        expect(
+          () => validateGoogleControls(d, fid, cid),
+          throwsA(isA<FunnelException>()),
+        );
+      }
+    },
+  );
+  testWidgets(
+    'K183 budget change needs fresh proposal and two unticked confirmations',
+    (t) async {
+      final calls = <http.Request>[];
+      final c = creation.client((r) async {
+        calls.add(r);
+        return creation.reply(
+          r.url.path.endsWith('/budget-preview')
+              ? budgetFixture()
+              : fixture(budget: true),
+        );
+      });
+      addTearDown(c.dispose);
+      await t.pumpWidget(app(c));
+      await t.pumpAndSettle();
+      expect(calls.length, 1);
+      await reviewBudget(t);
+      expect(jsonDecode(calls.last.body), {'daily_cents': 3000});
+      expect(
+        t
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Apply Google budget change'),
+            )
+            .onPressed,
+        isNull,
+      );
+      await creation.tap(
+        t,
+        'I confirm changing the average daily budget to \$30.00 USD.',
+      );
+      expect(
+        t
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Apply Google budget change'),
+            )
+            .onPressed,
+        isNull,
+      );
+      await creation.tap(t, budgetAck);
+      await creation.tap(t, 'Apply Google budget change');
+      expect(calls.last.url.path.endsWith('/budget-apply'), true);
+      expect(jsonDecode(calls.last.body), {
+        'daily_cents': 3000,
+        'proof': 'Yg.${'b' * 43}',
+        'confirmed': true,
+        'spend_acknowledged': true,
+      });
+      expect(find.text('Apply Google budget change'), findsNothing);
+    },
+  );
+  testWidgets(
+    'K183 editing or refreshing the amount discards proposal and confirmations',
+    (t) async {
+      final c = creation.client(
+        (r) async => creation.reply(
+          r.url.path.endsWith('/budget-preview')
+              ? budgetFixture()
+              : fixture(budget: true),
+        ),
+      );
+      addTearDown(c.dispose);
+      await t.pumpWidget(app(c));
+      await t.pumpAndSettle();
+      await reviewBudget(t);
+      await creation.tap(
+        t,
+        'I confirm changing the average daily budget to \$30.00 USD.',
+      );
+      await creation.tap(t, budgetAck);
+      await t.ensureVisible(find.byType(TextField));
+      await t.enterText(find.byType(TextField), '40.00');
+      await t.pumpAndSettle();
+      expect(find.text('Apply Google budget change'), findsNothing);
+      await reviewBudget(t);
+      expect(
+        t
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Apply Google budget change'),
+            )
+            .onPressed,
+        isNull,
+      );
+      await creation.tap(t, 'Refresh command record');
+      expect(find.text('Apply Google budget change'), findsNothing);
+    },
+  );
+  testWidgets(
+    'K183 budget unknown retains prior receipt and blocks new budget proposals',
+    (t) async {
+      final d = fixture(unknown: true, budget: true);
+      d['latest_command']['action'] = 'budget';
+      d['latest_command']['daily_cents'] = 3000;
+      final c = creation.client((r) async => creation.reply(d));
+      addTearDown(c.dispose);
+      await t.pumpWidget(app(c));
+      await t.pumpAndSettle();
+      expect(find.textContaining('BUDGET CHANGE'), findsOneWidget);
+      expect(find.text('Review budget change'), findsNothing);
+      expect(
+        find.textContaining('Requested average daily budget: \$30.00 USD'),
+        findsOneWidget,
+      );
+    },
+  );
+  testWidgets('K183 delayed budget preview cannot survive workspace change', (
+    t,
+  ) async {
+    final pending = Completer<http.Response>(), scope = ValueNotifier(0);
+    final c = creation.client(
+      (r) => r.method == 'GET'
+          ? Future.value(creation.reply(fixture(budget: true)))
+          : pending.future,
+    );
+    addTearDown(c.dispose);
+    addTearDown(scope.dispose);
+    await t.pumpWidget(app(c, scope: scope));
+    await t.pumpAndSettle();
+    await t.ensureVisible(find.byType(TextField));
+    await t.enterText(find.byType(TextField), '30.00');
+    await t.ensureVisible(find.text('Review budget change'));
+    await t.tap(find.text('Review budget change'));
+    await t.pump();
+    scope.value++;
+    await t.pump();
+    pending.complete(creation.reply(budgetFixture()));
+    await t.pumpAndSettle();
+    expect(find.text('Apply Google budget change'), findsNothing);
+    expect(find.textContaining('Your workspace changed'), findsOneWidget);
+  });
+  for (final width in [1400.0, 390.0, 320.0]) {
+    testWidgets(
+      'K183 budget proposal fits ${width}px with enlarged real text',
+      (t) async {
+        await t.binding.setSurfaceSize(Size(width, 1000));
+        addTearDown(() => t.binding.setSurfaceSize(null));
+        final c = creation.client(
+          (r) async => creation.reply(
+            r.method == 'GET'
+                ? fixture(budget: true)
+                : budgetFixture(status: 'ENABLED'),
+          ),
+        );
+        addTearDown(c.dispose);
+        await t.pumpWidget(app(c, scale: 1.3));
+        await t.pumpAndSettle();
+        await reviewBudget(t);
+        await t.ensureVisible(find.text('Apply Google budget change'));
+        await t.pumpAndSettle();
+        expect(t.takeException(), isNull);
+      },
+    );
   }
 }
