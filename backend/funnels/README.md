@@ -1056,3 +1056,52 @@ conflict recovery, access loss and workspace changes with an open dialog, plus
 1400/390/320 px layouts and 1.3 text scaling at 320 px. Live owner/provider
 acceptance remains deferred. Roll back frontend then backend to K161 and retain
 the additive private table and RPC; do not delete saved owner reviews.
+
+## K163: Google campaign setup review
+
+Google campaign cards now offer a private setup review using the same frontend
+review flow as Meta. The owner sees planned copy, audience brief, USD daily/total
+budget, published landing page and tagged destination, selected Google advertising
+account, access root and direct/manager login context. Nine checks cover published
+page, reviewed plan, configuration, current refresh-token connection, matching
+access context, selected/active advertising account, USD currency and production
+account. A test account or manager account cannot pass this review.
+
+`GET /api/funnels/:id/campaigns/:campaign_id/google-setup` reads the current
+snapshot/checks/fingerprint and optional saved review. `POST .../review` accepts
+exactly `version`, `fingerprint` and `confirmed: true`; `POST .../clear` accepts
+exactly `version` and `confirmed: true`. Every operation verifies owner/current
+Enterprise tier, rejects extra input/query fields, uses no-store and shares a
+30-request-per-owner-per-minute limit. Destinations and configuration bindings
+come from the server. None of these routes calls Google or refreshes OAuth.
+
+The selected account must be cached under the chosen access root. A manager
+login must match that root; direct access must match the advertising account.
+The cached root must remain in the connection's roots. Unknown test-account
+identity fails closed. Account currency must be USD; no conversion is attempted.
+Connection access with no specified refresh-token expiry is permitted, while
+expired, reconnect-required and configuration-mismatched connections block review.
+Provider permissions are not rechecked by this local review; refresh accounts
+through the existing Google connection controls when fresh provider data is needed.
+
+Saved snapshots contain only campaign/page copy and nonsecret Google identity.
+Changes to published content, plan state/copy, account, access root, manager
+context, connection or configuration invalidate the review. Manual reporting and
+unpublished draft edits do not. Version/fingerprint conflicts reload safe state
+and require renewed confirmation. Saved briefs can be copied with an OUT OF DATE
+label when stale; clearing only removes the saved review. Client/funnel changes
+and access denial clear both provider dialogs and suppress late responses.
+
+Apply `20260923073916_funnel_google_campaign_preparation.sql` before the backend.
+It adds a private RLS table and a service-only SECURITY INVOKER RPC with a fixed
+search path, browser/PUBLIC access revoked, versioned saves and campaign cascade
+delete. Existing Google credentials/RPC and Meta setup data/RPC are unchanged.
+No provider permission or environment setting is activated, and no new package
+is introduced. The frontend lockfile records the Flutter 3.47 SDK-compatible
+transitive versions of matcher, meta, test_api and vector_math. Local PGlite and widget tests cover account contexts, currency/test-account restrictions,
+ownership, concurrency, stale data, malformed replies and responsive layouts.
+
+This is a planning review, not a Google ad-format, keyword, targeting, eligibility,
+creative, launch or spending approval. `ad_publishing_ready` stays false. Live
+owner/provider tests and external activation remain deferred. Ordinary rollback
+is frontend then backend to K162; retain the additive table/RPC and owner reviews.

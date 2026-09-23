@@ -8,6 +8,7 @@ import { createFunnelScheduler } from './scheduler.mjs';
 import { createFunnelFollowups } from './followups.mjs';
 import { registerCampaigns } from './campaigns.mjs';
 import { registerMetaPreparation } from './meta_preparation.mjs';
+import { registerGooglePreparation } from './google_preparation.mjs';
 import { registerMeta } from './meta.mjs';
 import { registerGoogleAds } from './google_ads.mjs';
 import { registerInbox } from './inbox.mjs';
@@ -39,7 +40,7 @@ export async function generateFunnel(brief, environment=process.env) {
   try { return document(JSON.parse(result.output_text.replace(/^```(?:json)?\s*|\s*```$/g,''))); }
   catch { fail('NOVA could not finish a valid draft. Your current page is unchanged. Try a more specific brief.',503); }
 }
-export function registerFunnels(app,{database,requireUser,store,followups,campaignStore,metaPreparationStore,generateAdCopy,metaStore,metaProvider,googleAdsStore,googleAdsProvider,rehearsalStore,imageStore,loadAgentProfile,generate=generateFunnel,environment=process.env,now=Date.now,autoStartScheduler=false,logger=console}={}) {
+export function registerFunnels(app,{database,requireUser,store,followups,campaignStore,metaPreparationStore,googlePreparationStore,generateAdCopy,metaStore,metaProvider,googleAdsStore,googleAdsProvider,rehearsalStore,imageStore,loadAgentProfile,generate=generateFunnel,environment=process.env,now=Date.now,autoStartScheduler=false,logger=console}={}) {
   const media=imageStore??createImageStore(database);
   const persistence=store || (database?createFunnelStore(database):null);
   const followup=followups||createFunnelFollowups({database,loadAgentProfile,environment});
@@ -73,6 +74,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   registerGoogleAds(app,{base,owner,limit,database,googleAdsStore,googleAdsProvider,environment,now});
   registerCampaigns(app,{base,owner,command,database,campaignStore,generateAdCopy,environment,publicBase});
   registerMetaPreparation(app,{base,owner,database,metaPreparationStore,environment,publicBase});
+  registerGooglePreparation(app,{base,owner,database,googlePreparationStore,environment,publicBase});
   registerInbox(app,{base,owner,command});
   registerLeadManagement(app,{base,owner,command});
   registerCleanup(app,{base,owner,command,secret,now});
