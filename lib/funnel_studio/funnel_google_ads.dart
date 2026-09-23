@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
+import 'funnel_google_performance.dart';
 
 Map<String, dynamic> googleAdsState(Map<String, dynamic> value) {
   bool id(dynamic x) => x is String && RegExp(r'^\d{10}$').hasMatch(x);
@@ -399,11 +400,11 @@ class _FunnelGoogleAdsConnectionState extends State<FunnelGoogleAdsConnection> {
           ),
           _gap(),
           _caption(
-            'Connect Google Ads and choose an advertising account. This release reads account details. Reporting and ad publishing are not available here yet.',
+            'Connect Google Ads, choose an advertising account, and load its performance reports. Ad publishing remains unavailable.',
           ),
           _gap(8),
           _caption(
-            'Google asks for permission to view and manage Ads data. KORLIX currently uses that permission only to read account details. Connecting does not launch ads or change budgets.',
+            'Google asks for permission to view and manage Ads data. KORLIX currently uses that permission to read account details and performance reports. Connecting does not launch ads or change budgets.',
           ),
           if (!_denied && _state != null && !ready) ...[
             _gap(),
@@ -618,6 +619,11 @@ class _FunnelGoogleAdsConnectionState extends State<FunnelGoogleAdsConnection> {
                 ),
             ],
           ],
+          FunnelGooglePerformance(
+            client: widget.client,
+            connection: c,
+            available: usable && _root == c?['root_id'],
+          ),
         ],
       ),
     );
