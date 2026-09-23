@@ -10,6 +10,7 @@ import { registerCampaigns } from './campaigns.mjs';
 import { registerMetaPreparation } from './meta_preparation.mjs';
 import { registerGooglePreparation } from './google_preparation.mjs';
 import { registerGoogleCreative } from './google_creative.mjs';
+import { registerGoogleTargeting } from './google_targeting.mjs';
 import { registerGoogleKeywords } from './google_keywords.mjs';
 import { registerMeta } from './meta.mjs';
 import { registerGoogleAds } from './google_ads.mjs';
@@ -79,6 +80,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   registerGooglePreparation(app,{base,owner,database,googlePreparationStore,environment,publicBase});
   registerGoogleCreative(app,{base,owner,database,publicBase});
   registerGoogleKeywords(app,{base,owner,database,publicBase});
+  registerGoogleTargeting(app,{base,owner,database,publicBase});
   registerInbox(app,{base,owner,command});
   registerLeadManagement(app,{base,owner,command});
   registerCleanup(app,{base,owner,command,secret,now});

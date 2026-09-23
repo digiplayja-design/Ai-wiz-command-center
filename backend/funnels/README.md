@@ -1242,3 +1242,56 @@ including when stale. Invalid metadata fails closed and existing scope/access
 invalidation protects late responses. No provider call, Google approval, targeting
 activation, ad creation or spending authorization occurs. Rollback can retain the
 additive migration; K166 clients ignore review metadata.
+
+
+### K168 — Google targeting drafts
+
+Google campaign cards expose **Targeting draft**. GET
+`/:id/campaigns/:campaign_id/google-targeting` reads the draft and pinned reference
+catalog; POST `.../google-targeting/save` accepts exactly `version`, `fingerprint`,
+and `assets`. Assets contain `countries`, `excluded_countries`,
+`content_languages`, `location_mode` and `bidding`. Empty drafts are saveable;
+empty targets never imply worldwide targeting. The draft is complete only with
+a target country, content language, explicit reach and bidding choice.
+
+Preparation limits are 20 unique target countries, 20 unique excluded countries
+and 10 unique content languages. Included/excluded country codes cannot overlap.
+All codes must exist in the pinned catalog. Reach is undecided, presence, or
+presence-or-interest; bidding is undecided, maximize clicks, or maximize
+conversions. These are preferences; bids, local areas, conversion goals and
+provider eligibility require final setup. No preference is preselected.
+
+The 219 country entries exactly match Active Country rows in Google's
+[August 12, 2026 geo reference](https://developers.google.com/google-ads/api/data/geotargets).
+The source ZIP SHA-256 and URL are retained in `google_targeting_catalog.json`.
+The 51 content language entries come from Google's
+[codes reference](https://developers.google.com/google-ads/api/data/codes-formats#languages).
+Language selections document planned ad/page content, not executable Search
+audience constraints: Google has announced removal of the Search campaign
+language setting starting September 2026
+([language targeting](https://support.google.com/google-ads/answer/1722078?hl=en)).
+Reach and bidding text follow Google's
+[location guidance](https://developers.google.com/google-ads/api/docs/targeting/location-targeting)
+and [bidding overview](https://developers.google.com/google-ads/api/docs/campaigns/bidding/overview).
+Catalog inclusion never claims that a country/account is currently eligible.
+
+The additive migration creates a private RLS-enabled, service-only table and
+three SECURITY INVOKER functions with fixed search paths. Each request checks
+current database Enterprise entitlement and funnel ownership. Reads/saves share
+a 30-request owner/minute limit and no-store. Funnel → campaign → draft locks
+and version/context fingerprints protect concurrent saves. Published content,
+reviewed-page version, campaign context and catalog version bind the draft.
+Reports and unpublished page edits do not invalidate it; targeting saves preserve
+setup, copy and keyword reviews. Archive allows read/export but blocks saves.
+
+Saved labels and campaign context are snapshotted so stale exports remain
+faithful. Unsaved changes and conflicts disable export. Reload/close confirms
+discarding edits. Client/funnel/owner changes erase private state and discard
+late reads, saves and picker selections. Malformed server metadata fails closed.
+A catalog version change requires a coordinated client/SQL/catalog update.
+
+No provider call, ad creation, launch readiness or spending authorization is
+performed; `ad_publishing_ready` remains false. Owner targeting review, unified
+launch review, local-area targeting and Meta creative preparation remain later
+work. Rollback the frontend before the backend; retain the additive table and
+owner drafts.
