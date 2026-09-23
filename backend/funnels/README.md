@@ -1875,3 +1875,112 @@ Primary references checked September 23, 2026: Meta's official
 and [changelog](https://supabase.com/changelog). Supabase documents match K178
 hashes; listed changes do not alter this private invoker-RPC design. No real
 provider account was queried during implementation.
+
+### K180 — Linked Google campaign reporting
+
+**Linked Google campaign** on Google plan cards adds the same explicit reporting
+association as K179 for Google Ads. Owners choose a campaign by exact ID from
+the selected advertising account's report and confirm the link. Names may
+repeat. A provider campaign can link to only one of the owner's plans per
+advertising account, even if that account is reachable through multiple
+managers. This reporting association does not certify that the saved plan
+matches the provider campaign, launch ads, change bids/budgets, or grant new
+Google permissions.
+
+Choice/report loading is explicit and uses 7, 30 or 90 completed account-calendar
+days. At most 500 returned campaigns are available, with search and 20-row UI
+pages. Existing Google campaign reporting supplies exact decimal cost, clicks,
+impressions, status and channel. Campaign IDs remain positive int64 strings all
+the way through storage and rendering, including values above JavaScript's
+safe integer range. Google cost_micros is converted by the existing adapter
+using integer arithmetic; account currency and up to six decimal places are
+preserved. Missing provider rows remain unknown; explicit zero stays zero.
+Saved and current names remain distinct. No conversion cost, revenue, ROAS or
+currency conversion is inferred. Manual USD results and Budget pacing stay
+separate.
+
+KORLIX inquiry counts use this local plan's exact k143 tag and Google UTM source.
+The database converts account-timezone calendar midnights to a half-open UTC
+interval and requires the requested 7/30/90-day period to end yesterday in that
+timezone. DST and fractional offsets are retained. Tags are visitor-supplied
+and are **not verified Google conversions**. The association applies to the
+whole chosen period, including dates before it was saved. Google test accounts
+are supported for read-only association/reporting and are visibly labeled as
+not live ad delivery; their test flag also appears in copied summaries.
+
+Five authenticated no-store routes live under
+`/:id/campaigns/:campaign_id/google-link`: GET the saved association, POST
+`/save`, POST `/clear`, GET `/campaigns`, and GET `/performance`. Local commands
+share 30 requests per owner/minute. Provider choices/performance share the
+existing Google reporting 10-request owner/minute quota. Save accepts exactly
+version, fingerprint, confirmed:true, provider_campaign_id,
+provider_campaign_name and proof. Clear accepts version, fingerprint and
+confirmation. Remote reads accept only days and fingerprint; browser-supplied
+accounts, manager headers, dates and timezones are rejected.
+
+The new private RLS-enabled `korlix_funnel_google_campaign_links` table stores
+the selected account and access-account/manager context, credential binding and
+config identity, name snapshot and optimistic version. It stores no token,
+choice receipt or metrics. Its owner/account/campaign uniqueness is independent
+of access manager. Browser and PUBLIC grants are revoked. The service-only
+SECURITY INVOKER RPC has a fixed public/pg_temp search path and repeats current
+Enterprise, ownership, Google platform and context checks. Commands lock funnel
+→ campaign → Google connection FOR SHARE → association. Clear keeps an empty
+versioned row and is available after disconnect, changed access paths and
+archive. Archived plans cannot save new links but can read/report a current link.
+The additive migration changes no existing RPC, provider connection, campaign
+review or manual result.
+
+Thirty-minute HMAC receipts bind owner, funnel, plan, fingerprint, provider
+ID/name and expiry using a Google-specific purpose and the existing OAuth
+client secret. Meta receipts cannot be reused. HTTP verifies and discards the
+receipt before SQL. SQL validates local shape/identity/readiness but does not
+independently prove provider membership or verify signatures; privileged
+service writers must preserve this HTTP boundary.
+
+Google-specific access checks include the current direct-access root list,
+root ID, login-customer-id relationship, selected non-manager enabled account,
+refresh-token expiry, currency, timezone and test-account identity. Direct
+access requires the root to equal the selected account and sends no manager
+header. Manager access requires the matching manager header. Each explicit
+remote read refreshes access using the existing encrypted refresh token,
+rechecks available roots and the selected account, and calls the existing
+read-only campaign search adapter. That adapter bounds each request to ten
+seconds/two MiB, at most five pages and 500 campaign rows. The new boundary also
+validates IDs, duplicates, enums, exact metrics and aggregate totals. Local
+context/entitlement, credentials and the reporting calendar day are rechecked
+after remote work. Changing root/manager, reconnecting, losing access or editing
+the plan/link rejects late data; a changed access path requires a fresh link.
+
+The UI validates account/root/manager context, identity, fingerprint, period
+shape, metrics and measurement context before display/export. SQL performs
+IANA timezone conversion. Private content and pending confirmations clear on
+workspace/client/access changes. Period changes, refreshes and errors remove
+old results. Copy includes saved access context, test-account status, exact
+reporting interval, provider status/channel and reporting limitations, without
+choice receipts. No automatic provider lookup occurs on opening the panel.
+
+Focused verification uses the actual migration and Express routes in a local
+database with provider mocks, plus Google reporting regressions and Flutter
+checks. Coverage includes manager/direct access, root removal or changes during
+loading, revoked/expiring refresh access, test-account identity, receipt replay,
+int64 IDs, 500-row bounds, duplicate names, clear/conflicts, no-store/shared
+quotas, exact monetary values and timezone boundaries. UI checks cover saved
+and stale link flows, response rejection, exports, late responses and desktop,
+390px and 320px layouts (1.3 text scale at 320px). No full suite, real provider
+account call or owner hands-on batch was run. Activation, ad creation, spending
+and outreach remain deferred.
+
+Apply the additive migration before the backend, verify it, then deploy the
+frontend. Roll back frontend then backend to K179 while retaining the private
+table/RPC and owner associations. K179 ignores this new link. No new dependency,
+environment variable, permission, scheduled worker or provider mutation is added.
+
+Primary references checked September 23, 2026: Google's official
+[REST examples](https://developers.google.com/google-ads/api/rest/examples)
+confirm manager-header/direct-access handling, campaign resources and reporting
+fields; the existing v25 reporting adapter is reused. The v25 field-reference
+pages were unavailable through web retrieval, so no changed field contract is
+assumed. [Supabase functions](https://supabase.com/docs/guides/database/functions)
+and [changelog](https://supabase.com/changelog) were fetched again and match K179
+hashes; reviewed changes do not alter this private invoker-RPC design.
