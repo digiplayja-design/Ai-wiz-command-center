@@ -1,15 +1,17 @@
 import {fail,uuid} from './core.mjs';
+import {googleRadiiValid} from './google_radius.mjs';
 import catalog from './google_targeting_catalog.json' with {type:'json'};
 export {catalog as googleTargetingCatalog};
 export function googleTargetingAssets(v) {
   const keys=['countries','excluded_countries','content_languages','location_mode','bidding'];
-  if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length!==5||keys.some(k=>!(k in v)))fail('Choose countries, content languages, reach and a bidding preference.');
+  if(!v||typeof v!=='object'||Array.isArray(v)||keys.some(k=>!Object.hasOwn(v,k))||Object.keys(v).some(k=>!keys.includes(k)&&k!=='proximities'))fail('Choose countries or radius areas, content languages, reach and a bidding preference.');
   if(!['undecided','presence','presence_or_interest'].includes(v.location_mode)||!['undecided','maximize_clicks','maximize_conversions'].includes(v.bidding))fail('Choose a listed location reach and bidding preference.');
   for(const k of keys.slice(0,3)) {
     const a=v[k],allowed=new Set(catalog[k==='content_languages'?'languages':'countries'].map(x=>x.code));
     if(!Array.isArray(a)||a.length>(k==='content_languages'?10:20)||a.some(s=>typeof s!=='string'||!allowed.has(s))||new Set(a).size!==a.length)fail('Choose different listed countries or content languages within the draft limits.');
   }
   if(v.countries.some(s=>v.excluded_countries.includes(s)))fail('A country cannot be both targeted and excluded.');
+  if(Object.hasOwn(v,'proximities')&&(!googleRadiiValid(v.proximities)||v.countries.length))fail('Choose up to 10 valid radius areas, with no whole-country targets.');
   return v;
 }
 export function googleTargetingInput(body) {

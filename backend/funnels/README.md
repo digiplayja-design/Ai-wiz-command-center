@@ -1468,3 +1468,38 @@ Some Meta documentation URLs returned HTTP 429; no live provider capability or
 complete policy validation is asserted. No dependencies, environment variables,
 credentials, provider calls, ads, budgets, spending or outbound messages are added.
 Roll back frontend then backend and retain the private additive schema and data.
+
+### K174 — Google radius targeting drafts
+
+The existing Google targeting routes accept an optional `proximities` array.
+Legacy country drafts retain their exact five-field shape. Radius mode requires
+an empty `countries` array and permits up to 10 distinct areas; a complete draft
+needs at least one area. Each area contains exactly `label`, `latitude_micro`,
+`longitude_micro` and `radius_meters`. Coordinates are integers within geographic
+bounds; distances are integer meters from 1,000 through 200,000. Labels have
+1–80 Unicode code points and exclude controls, angle brackets and surrounding
+ASCII spaces. Duplicate coordinate/distance triples are rejected. These limits
+are KORLIX planning choices, not a claim of provider eligibility.
+
+The additive migration replaces the private targeting validator and RPC without
+rewriting existing drafts or reviews. `radius_supported:true` enables the new
+editor only after the backend capability is present. Existing fingerprints,
+optimistic concurrency, owner checks, lock order, service-only permissions and
+historical review behavior are preserved. Radius changes invalidate the saved
+review, and combined preparation remains bound to the exact saved assets.
+
+The editor accepts an owner label, latitude/longitude with at most six decimal
+places and a kilometer distance with at most three. Decimal input is converted
+exactly to microdegrees/meters. Switching a populated target type requires
+confirmation before clearing its selections. Saved and historical targeting
+exports and the combined preparation summary include exact radius details.
+Country exclusions remain available and can remove part or all of an area.
+No negative radius, geocoding, map, city/region search, coordinate-to-country
+verification or Google account eligibility lookup is introduced.
+
+Primary reference checked 2026-09-23: Google's location-targeting documentation
+(`https://developers.google.com/google-ads/api/docs/targeting/location-targeting`)
+for ProximityInfo and microdegree coordinates, plus Supabase functions guidance
+and changelog. This remains preparation only: no provider calls, credentials,
+ads, spending or outbound messages. Roll back frontend then backend; retain the
+compatible validator/RPC to preserve radius drafts and historical reviews.

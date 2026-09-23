@@ -31,6 +31,14 @@ test.before(async()=>{
  const upgraded=(await db.query('select to_jsonb(t) row from korlix_funnel_google_targeting t')).rows[0].row;
  assert.equal(upgraded.draft_revision,2);assert.equal(upgraded.reviewed_at,null);assert.equal(upgraded.reviewed_snapshot,null);assert.equal(upgraded.review_fingerprint,null);
  for(const key of ['draft_revision','reviewed_at','reviewed_snapshot','review_fingerprint'])delete upgraded[key];assert.deepEqual(upgraded,legacy);
+ // K174 preserves existing reviewed country drafts byte-for-byte.
+ c=await campaign('review',{confirmed:true});await save();await reviewTargeting();
+ const beforeRadius=(await db.query('select to_jsonb(t) row from korlix_funnel_google_targeting t')).rows[0].row;
+ const beforeRead=await targeting();
+ await db.exec(await readFile(new URL('../../supabase/migrations/20260923153540_funnel_google_radius.sql',import.meta.url),'utf8'));
+ assert.deepEqual((await db.query('select to_jsonb(t) row from korlix_funnel_google_targeting t')).rows[0].row,beforeRadius);
+ const afterRead=await targeting();assert.equal(afterRead.radius_supported,true);delete afterRead.radius_supported;assert.deepEqual(afterRead,beforeRead);
+ await db.exec(await readFile(new URL('../../supabase/migrations/20260923123817_funnel_google_preflight.sql',import.meta.url),'utf8'));
  await db.exec('set role service_role');
  const database={rpc:async(name,p)=>{try{return{data:await rpc(name,p)}}catch(error){return{error}}}};
  const app=express();app.use(express.json());registerFunnels(app,{database,requireUser:async q=>[owner,other,basic].includes(q.headers.authorization)?{id:q.headers.authorization}:null,environment:env,now:()=>clock,googleAdsProvider:new Proxy({},{get:()=>()=>{providerCalls++;throw Error('No provider operation is allowed');}})});
@@ -135,4 +143,43 @@ test('K169 all review routes enforce current ownership/tier; archive blocks revi
 test('K169 review/save races have one winner; all four routes share a rate limit',async()=>{
  const d=await save();const responses=await Promise.all([req('/review',{version:d.version,review_fingerprint:d.review_fingerprint,confirmed:true}),req('/save',{version:d.version,fingerprint:d.fingerprint,assets:{...assets,countries:['JM']}})]);assert.deepEqual(responses.map(x=>x.status).sort(),[200,409]);assert.equal(providerCalls,0);
  clock+=60000;for(let i=0;i<30;i++)assert.equal((await req()).status,200);assert.equal((await req('/review',{version:d.version,review_fingerprint:d.review_fingerprint,confirmed:true})).status,429);assert.equal((await req('/clear-review',{version:d.version,confirmed:true})).status,429);
+});
+
+const radius={label:'Columbus service area',latitude_micro:39961176,longitude_micro:-82998794,radius_meters:15000};
+const radiusAssets=(areas=[radius])=>({...assets,countries:[],proximities:areas});
+test('K174 API and SQL agree on radius shape, precision, bounds, labels, duplicates and target modes',async()=>{
+ const malformed=[null,[],{}, {...radius,extra:1},{...radius,label:''},{...radius,label:' test'},{...radius,label:'test '},{...radius,label:'x'.repeat(81)},{...radius,label:'a\nb'},{...radius,label:'a\u0085b'},{...radius,label:'a\u2028b'},{...radius,label:'<point>'},{...radius,latitude_micro:'1'},{...radius,latitude_micro:90000001},{...radius,latitude_micro:-90000001},{...radius,latitude_micro:1.5},{...radius,longitude_micro:180000001},{...radius,longitude_micro:-180000001},{...radius,radius_meters:999},{...radius,radius_meters:200001},{...radius,radius_meters:1000.1}];
+ const bad=malformed.map(r=>radiusAssets([r]));bad.push({...assets,proximities:[radius]},radiusAssets([radius,{...radius,label:'duplicate point'}]),radiusAssets(Array.from({length:11},(_,i)=>({...radius,latitude_micro:i}))),radiusAssets(null),radiusAssets({}));
+ const d=await targeting();
+ for(const a of bad){assert.throws(()=>googleTargetingAssets(a));assert.equal((await db.query('select korlix_google_targeting_valid_v1($1::jsonb) ok',[JSON.stringify(a)])).rows[0].ok,false);assert.equal((await req('/save',{version:0,fingerprint:d.fingerprint,assets:a})).status,400);clock+=60000;}
+ for(const a of [radiusAssets(),radiusAssets([]),radiusAssets([{...radius,latitude_micro:-90000000,longitude_micro:180000000,radius_meters:1000}]),radiusAssets([{...radius,latitude_micro:90000000,longitude_micro:-180000000,radius_meters:200000,label:'🌍'.repeat(80)}]),radiusAssets(Array.from({length:10},(_,i)=>({...radius,latitude_micro:i})))]){googleTargetingAssets(a);assert.equal((await db.query('select korlix_google_targeting_valid_v1($1::jsonb) ok',[JSON.stringify(a)])).rows[0].ok,true);}
+});
+test('K174 radius HTTP saves and reviews work without provider activation and preserve exact coordinates',async()=>{
+ await db.exec('delete from korlix_google_ads_connections');let d=await targeting();assert.equal(d.radius_supported,true);
+ const r=await req('/save',{version:d.version,fingerprint:d.fingerprint,assets:radiusAssets()});assert.equal(r.status,200);d=await r.json();assert.deepEqual(d.assets,radiusAssets());assert.equal(d.draft_complete,true);assert.equal(d.review_ready,true);assert.equal(d.ad_publishing_ready,false);
+ const reviewed=await (await req('/review',{version:d.version,review_fingerprint:d.review_fingerprint,confirmed:true})).json();assert.equal(reviewed.review_current,true);assert.deepEqual(reviewed.reviewed_snapshot.assets.proximities,[radius]);assert.deepEqual(reviewed.saved_labels.countries,{CA:'Canada'});assert.equal(providerCalls,0);
+});
+test('K174 radius edits and switching target type invalidate only the targeting review with historical values intact',async()=>{
+ await save();const countryReview=await reviewTargeting();let d=await save(radiusAssets());assert.equal(d.review_current,false);assert.deepEqual(d.reviewed_snapshot,countryReview.reviewed_snapshot);
+ const firstRadius=await reviewTargeting();d=await save(radiusAssets([{...radius,radius_meters:15750}]));assert.equal(d.review_current,false);assert.deepEqual(d.reviewed_snapshot.assets.proximities,[radius]);assert.notEqual(d.review_fingerprint,firstRadius.review_fingerprint);
+ const secondRadius=await reviewTargeting();d=await save();assert.equal(d.review_current,false);assert.deepEqual(d.reviewed_snapshot,secondRadius.reviewed_snapshot);assert.deepEqual(d.assets,assets);
+ d=await save(radiusAssets([]));assert.equal(d.draft_complete,false);assert.equal(d.review_ready,false);await assert.rejects(reviewTargeting(),/complete current targeting/);
+});
+test('K174 combined preflight returns saved radius details and current targeting review without writes',async()=>{
+ await save(radiusAssets());await reviewTargeting();const before=(await db.query('select to_jsonb(t) row from korlix_funnel_google_targeting t')).rows[0].row;
+ const d=await rpc('korlix_funnel_google_preflight_v1',{p_actor:owner,p_action:'read',p_funnel:f.id,p_data:{campaign_id:c.id,configured:false,config_hash:config.hash,public_base:'https://example.com'}});
+ assert.equal(d.checks.targeting_reviewed,true);assert.equal(d.checks.setup_reviewed,false);assert.equal(d.preparation_complete,false);assert.equal(d.ad_publishing_ready,false);assert.deepEqual(d.targeting.assets.proximities,[radius]);assert.deepEqual((await db.query('select to_jsonb(t) row from korlix_funnel_google_targeting t')).rows[0].row,before);assert.equal(providerCalls,0);
+});
+test('K174 nested radius changes obey optimistic concurrency and preserve country-only callers',async()=>{
+ const d=await save(radiusAssets()),body={version:d.version,fingerprint:d.fingerprint,assets:radiusAssets([{...radius,longitude_micro:-83000000}])};
+ const responses=await Promise.all([req('/save',body),req('/save',{...body,assets})]);assert.deepEqual(responses.map(x=>x.status).sort(),[200,409]);assert.equal((await req('/save',{...body,assets})).status,409);
+ const fresh=await targeting();const r=await req('/save',{version:fresh.version,fingerprint:fresh.fingerprint,assets});assert.equal(r.status,200);assert.deepEqual((await r.json()).assets,assets);
+});
+test('K174 radius validation function and draft constraints stay private and reject malformed stored assets',async()=>{
+ await save(radiusAssets());await reviewTargeting();
+ await assert.rejects(db.query('update korlix_funnel_google_targeting set assets=$1',[JSON.stringify(radiusAssets([{...radius,radius_meters:0}]))]),/check constraint/);
+ await assert.rejects(db.query("update korlix_funnel_google_targeting set reviewed_snapshot=jsonb_set(reviewed_snapshot,'{assets,proximities,0,latitude_micro}','90000001')"),/check constraint/);
+ const fn=(await db.query("select prosecdef,proconfig from pg_proc where proname='korlix_google_radius_valid_v1'")).rows[0];assert.equal(fn.prosecdef,false);assert.deepEqual(fn.proconfig,['search_path=public, pg_temp']);
+ for(const role of ['anon','authenticated']){await db.exec('reset role;set role '+role);await assert.rejects(db.query('select korlix_google_radius_valid_v1($1)',[JSON.stringify(radius)]),/permission denied/);await db.exec('reset role;set role service_role');}
+ for(const [actor,status] of [['',401],[other,404],[basic,403]])assert.equal((await req('/save',{version:0,fingerprint:'a'.repeat(64),assets:radiusAssets()},actor)).status,status);
 });
