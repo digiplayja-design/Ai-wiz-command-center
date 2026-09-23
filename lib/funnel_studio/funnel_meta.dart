@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
 import 'funnel_meta_performance.dart';
+import 'funnel_meta_pages.dart';
 
 class FunnelMetaConnection extends StatefulWidget {
   const FunnelMetaConnection({super.key, required this.client, this.openUrl});
@@ -16,12 +17,14 @@ class FunnelMetaConnection extends StatefulWidget {
 class _FunnelMetaConnectionState extends State<FunnelMetaConnection> {
   Map<String, dynamic> _state = {};
   Map<String, dynamic>? _attempt;
-  bool _busy = false;
+  bool _busy = false, _denied = false;
+  int _generation = 0;
   String? _error, _message;
   String _search = '';
   @override
   void initState() {
     super.initState();
+    widget.client.addAccessDeniedListener(_deny);
     unawaited(_run(_refresh));
   }
 
@@ -30,39 +33,111 @@ class _FunnelMetaConnectionState extends State<FunnelMetaConnection> {
       : null;
   bool get ready => _state['configured'] == true;
   bool get reconnect => connection?['needs_reconnect'] == true;
-  Future<void> _refresh() async {
-    final result = await widget.client.request('GET', '/meta/connection');
-    if (mounted) setState(() => _state = result);
+  bool _current(int g) => mounted && !_denied && g == _generation;
+  void _clear() {
+    _generation++;
+    _state = {};
+    _attempt = null;
+    _search = '';
+    _error = null;
+    _message = null;
+    _busy = false;
   }
 
-  Future<void> _run(Future<void> Function() action) async {
-    if (_busy) return;
+  void _deny() {
+    if (!mounted) return;
+    setState(() {
+      _clear();
+      _denied = true;
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant FunnelMetaConnection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.client != widget.client) {
+      oldWidget.client.removeAccessDeniedListener(_deny);
+      widget.client.addAccessDeniedListener(_deny);
+      _clear();
+      _denied = false;
+      unawaited(_run(_refresh));
+    }
+  }
+
+  @override
+  void dispose() {
+    _generation++;
+    widget.client.removeAccessDeniedListener(_deny);
+    super.dispose();
+  }
+
+  void _apply(Map<String, dynamic> result, int g) {
+    if (!_current(g)) return;
+    try {
+      validateMetaPages(result);
+    } catch (_) {
+      setState(() => _state = {});
+      rethrow;
+    }
+    setState(() => _state = result);
+  }
+
+  Future<void> _refresh(int g) async {
+    final result = await widget.client.request('GET', '/meta/connection');
+    _apply(result, g);
+  }
+
+  Future<void> _run(Future<void> Function(int) action) async {
+    if (_busy || _denied) return;
+    final g = ++_generation;
     setState(() {
       _busy = true;
       _error = null;
       _message = null;
     });
     try {
-      await action();
+      await action(g);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (_current(g)) {
+        if (e is FunnelException && e.status == 409) {
+          // Permission/selection changes can clear saved Page details server-side.
+          // Hide the previous snapshot even if the status reload fails.
+          setState(() => _state = {});
+          try {
+            await _refresh(g);
+          } catch (_) {
+            /* Retain the actionable error. */
+          }
+        }
+        if (_current(g)) {
+          setState(
+            () => _error = e is FunnelException
+                ? e.message
+                : 'Meta could not complete this request. Try again.',
+          );
+        }
+      }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (_current(g)) setState(() => _busy = false);
     }
   }
 
-  Future<void> _begin() => _run(() async {
+  Future<void> _begin() => _run((g) async {
     final result = await widget.client.request('POST', '/meta/begin');
+    if (!_current(g)) return;
     final uri = Uri.tryParse('${result['authorization_url']}');
     if (uri == null ||
         uri.scheme != 'https' ||
         uri.host != 'www.facebook.com' ||
-        uri.userInfo.isNotEmpty) {
+        uri.userInfo.isNotEmpty ||
+        uri.port != 443 ||
+        uri.hasFragment ||
+        !RegExp(r'^/v\d{2,3}\.0/dialog/oauth$').hasMatch(uri.path)) {
       throw const FunnelException(
         'Meta sign-in could not be prepared. Try again.',
       );
     }
-    if (mounted) {
+    if (_current(g)) {
       setState(() {
         _attempt = result;
         _message =
@@ -71,10 +146,10 @@ class _FunnelMetaConnectionState extends State<FunnelMetaConnection> {
     }
   });
   Future<void> _open() async {
-    if (_busy || _attempt == null) return;
+    if (_busy || _denied || _attempt == null) return;
     final uri = Uri.parse('${_attempt!['authorization_url']}');
     // _run invokes its action synchronously, preserving the browser tap gesture.
-    await _run(() async {
+    await _run((g) async {
       final opened =
           await (widget.openUrl?.call(uri) ??
               launchUrl(
@@ -87,7 +162,7 @@ class _FunnelMetaConnectionState extends State<FunnelMetaConnection> {
           'The sign-in window did not open. Tap Continue to Meta again.',
         );
       }
-      if (mounted) {
+      if (_current(g)) {
         setState(
           () => _message =
               'Complete sign-in in Meta. Return here and tap Finish connection.',
@@ -96,47 +171,49 @@ class _FunnelMetaConnectionState extends State<FunnelMetaConnection> {
     });
   }
 
-  Future<void> _finish() => _run(() async {
+  Future<void> _finish() => _run((g) async {
     final attempt = _attempt!;
     final result = await widget.client.request(
       'POST',
       '/meta/finish',
       body: {'id': attempt['id'], 'proof': attempt['proof']},
     );
-    if (!mounted) return;
+    if (!_current(g)) return;
+    _apply(result, g);
     setState(() {
-      _state = result;
       _attempt = null;
       _message = 'Meta connected. Choose the ad account you want to use.';
     });
     final refreshed = await widget.client.request('POST', '/meta/accounts');
-    if (mounted) setState(() => _state = refreshed);
+    _apply(refreshed, g);
   });
-  Future<void> _accounts() => _run(() async {
+  Future<void> _accounts() => _run((g) async {
     final result = await widget.client.request('POST', '/meta/accounts');
-    if (mounted) setState(() => _state = result);
+    _apply(result, g);
   });
-  Future<void> _select(Map account) => _run(() async {
+  Future<void> _select(Map account) => _run((g) async {
     final result = await widget.client.request(
       'POST',
       '/meta/select',
       body: {'account_id': account['id'], 'version': connection!['version']},
     );
-    if (mounted) {
+    if (_current(g)) {
+      _apply(result, g);
       setState(() {
-        _state = result;
         _message =
             'Ad account selected. Campaign plans are still local to KORLIX.';
       });
     }
   });
   Future<void> _disconnect() async {
+    if (_busy || _denied) return;
+    final before = _generation, v = connection?['version'];
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Disconnect Meta?'),
         content: const Text(
-          'This removes the saved Meta connection and account details from KORLIX. Your campaign plans remain. Ads already running in Meta keep running. You can also remove KORLIX from Meta Business Integrations to revoke its permission.',
+          'This removes the saved Meta connection and account and Page details from KORLIX. Your campaign plans remain. Ads already running in Meta keep running. You can also remove KORLIX from Meta Business Integrations to revoke its permission.',
         ),
         actions: [
           TextButton(
@@ -150,16 +227,16 @@ class _FunnelMetaConnectionState extends State<FunnelMetaConnection> {
         ],
       ),
     );
-    if (confirmed != true || !mounted) return;
-    await _run(() async {
+    if (confirmed != true || !_current(before)) return;
+    await _run((g) async {
       final result = await widget.client.request(
         'POST',
         '/meta/disconnect',
-        body: {'confirmed': true, 'version': connection?['version']},
+        body: {'confirmed': true, 'version': v},
       );
-      if (mounted) {
+      if (_current(g)) {
+        _apply(result, g);
         setState(() {
-          _state = result;
           _attempt = null;
           _message = 'Meta connection removed from KORLIX.';
         });
@@ -167,8 +244,36 @@ class _FunnelMetaConnectionState extends State<FunnelMetaConnection> {
     });
   }
 
+  Future<void> _pageAction(String action, [String? pageId]) => _run((g) async {
+    final c = connection!;
+    final result = await widget.client.request(
+      'POST',
+      '/meta/$action',
+      body: {
+        'version': c['version'],
+        'account_id': c['selected_account'],
+        'page_id': ?pageId,
+      },
+    );
+    _apply(result, g);
+    if (_current(g)) {
+      setState(
+        () => _message = action == 'select-page'
+            ? 'Facebook Page selected for your Meta setup.'
+            : action == 'clear-page'
+            ? 'Facebook Page selection cleared.'
+            : 'Facebook Pages refreshed.',
+      );
+    }
+  });
+
   @override
   Widget build(BuildContext context) {
+    if (_denied) {
+      return const Text(
+        'Sign in with Enterprise access to manage your Meta connection.',
+      );
+    }
     final c = connection;
     final accounts = (c?['accounts'] as List? ?? [])
         .where(
@@ -400,6 +505,15 @@ class _FunnelMetaConnectionState extends State<FunnelMetaConnection> {
                 ),
               ),
           ],
+          if (c != null)
+            FunnelMetaPages(
+              key: ValueKey(
+                '${identityHashCode(widget.client)}:${c['version']}',
+              ),
+              connection: c,
+              available: ready && !reconnect && !_busy,
+              onAction: _pageAction,
+            ),
           FunnelMetaPerformance(
             client: widget.client,
             connection: c,
