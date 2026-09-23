@@ -9,6 +9,7 @@ import 'funnel_google_preparation.dart';
 import 'funnel_google_creative.dart';
 import 'funnel_google_keywords.dart';
 import 'funnel_google_targeting.dart';
+import 'funnel_google_locations.dart';
 import 'funnel_google_radius.dart';
 
 const googlePreflightChecks = <String, String>{
@@ -165,7 +166,7 @@ String googlePreparationSummary(Map<String, dynamic> d) {
                 )
                 .join(', ');
       out.writeln(
-        '${googleRadiusSummary(a)}\nTarget countries: ${names('countries')}\nExcluded countries: ${names('excluded_countries')}\nContent languages (planning only): ${names('content_languages')}\nLocation reach: ${googleLocationModes[a['location_mode']]}\nPlanned bidding: ${googleBiddingPlans[a['bidding']]}',
+        '${a.containsKey('geo_locations') ? googleLocationsSummary(a) : googleRadiusSummary(a)}\nTarget countries: ${names('countries')}\nExcluded countries: ${names('excluded_countries')}\nContent languages (planning only): ${names('content_languages')}\nLocation reach: ${googleLocationModes[a['location_mode']]}\nPlanned bidding: ${googleBiddingPlans[a['bidding']]}',
       );
     }
   }
