@@ -9,6 +9,7 @@ import { createFunnelFollowups } from './followups.mjs';
 import { registerCampaigns } from './campaigns.mjs';
 import { registerMetaPreparation } from './meta_preparation.mjs';
 import { registerGooglePreparation } from './google_preparation.mjs';
+import { registerGoogleCreative } from './google_creative.mjs';
 import { registerMeta } from './meta.mjs';
 import { registerGoogleAds } from './google_ads.mjs';
 import { registerInbox } from './inbox.mjs';
@@ -75,6 +76,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   registerCampaigns(app,{base,owner,command,database,campaignStore,generateAdCopy,environment,publicBase});
   registerMetaPreparation(app,{base,owner,database,metaPreparationStore,environment,publicBase});
   registerGooglePreparation(app,{base,owner,database,googlePreparationStore,environment,publicBase});
+  registerGoogleCreative(app,{base,owner,database,publicBase});
   registerInbox(app,{base,owner,command});
   registerLeadManagement(app,{base,owner,command});
   registerCleanup(app,{base,owner,command,secret,now});

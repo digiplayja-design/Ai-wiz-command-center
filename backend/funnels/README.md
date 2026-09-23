@@ -1105,3 +1105,40 @@ This is a planning review, not a Google ad-format, keyword, targeting, eligibili
 creative, launch or spending approval. `ad_publishing_ready` stays false. Live
 owner/provider tests and external activation remain deferred. Ordinary rollback
 is frontend then backend to K162; retain the additive table/RPC and owner reviews.
+
+### K164 Google search-ad text drafts
+
+Google campaign cards offer a private responsive-search text draft with up to 15
+headlines, 4 descriptions and two optional display paths. At least 3 headlines
+and 2 descriptions makes the text counts complete; incomplete drafts can be
+saved. Duplicate text within each asset group, control characters, dynamic braces
+and invalid paths are rejected. Paths are labels only: the server keeps the
+campaign's tagged landing-page destination. No destination override is accepted.
+
+Draft length is deliberately conservative: ASCII code points count as one and
+all other code points count as two, including accents. Limits are 30/90/15 for
+headlines/descriptions/paths. This covers double-width text without claiming
+Google's exact counting algorithm or policy approval. The interface explains
+this limitation. See [Google responsive search ads](https://support.google.com/google-ads/answer/7684791?hl=en)
+and [Google Ads API overview](https://developers.google.com/google-ads/api/docs/responsive-search-ads/overview).
+
+`GET /api/funnels/:id/campaigns/:campaign_id/google-creative` reads the draft;
+`POST .../google-creative/save` accepts exactly `version`, `fingerprint`, `assets`.
+Assets contain exactly `headlines`, `descriptions`, `path1`, `path2`. Both routes
+are no-store, share 30 requests per owner/minute, and verify current DB Enterprise
+and ownership in the service-only SECURITY INVOKER RPC. New table
+`korlix_funnel_google_creatives` has RLS and no browser grants/policies. Validation
+also runs inside PostgreSQL and a table constraint. Version conflicts are 409.
+
+The context fingerprint binds plan copy/state/budget and published page content,
+state and destination; unpublished edits and manual reporting do not stale it.
+Copy exports saved text/context and flags stale or incomplete drafts. Saving
+refreshes the draft context but is not owner creative approval. Setup reviews
+remain separate account/plan reviews; editing this draft does not claim to review
+creative or invalidate those account snapshots. Archived plans retain read/copy
+but block edits. Owner/client/funnel changes invalidate an open dialog and late
+responses. Conflict recovery preserves typed text until explicit discard/reload.
+
+No Google credentials or live provider calls are needed. No keywords, executable
+targeting, pinning, ad approval, ad creation, launch or spending is implemented.
+`ad_publishing_ready` remains false. No new packages or environment variables.
