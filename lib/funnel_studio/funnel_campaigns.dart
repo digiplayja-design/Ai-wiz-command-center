@@ -13,6 +13,7 @@ import 'funnel_meta_targeting.dart';
 import 'funnel_google_keywords.dart';
 import 'funnel_google_targeting.dart';
 import 'funnel_google_preflight.dart';
+import 'funnel_campaign_budget.dart';
 
 String campaignMoney(num cents) => '\$${(cents / 100).toStringAsFixed(2)}';
 String campaignChannel(String value) => switch (value) {
@@ -313,6 +314,21 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
           CampaignReports(client: widget.client, path: _path, campaign: c),
     );
     if (_current(generation)) await _load();
+  }
+
+  Future<void> _budget(Map<String, dynamic> c) async {
+    if (_busy || _denied) return;
+    final client = widget.client, funnel = widget.funnelId;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => FunnelCampaignBudget(
+        client: client,
+        funnelId: funnel,
+        campaignId: c['id'],
+        scope: _scope,
+      ),
+    );
   }
 
   Future<void> _setup(Map<String, dynamic> c) async {
@@ -716,6 +732,10 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
                         : 'Meta setup review',
                   ),
                 ),
+              OutlinedButton(
+                onPressed: _busy ? null : () => _budget(c),
+                child: const Text('Budget pacing'),
+              ),
               OutlinedButton(
                 onPressed: _busy ? null : () => _reports(c),
                 child: const Text('Results & reporting'),
