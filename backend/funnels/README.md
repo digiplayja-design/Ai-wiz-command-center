@@ -1774,3 +1774,104 @@ provider calls, provider activation, ad creation, spending or outreach are added
 Primary guidance checked September 23, 2026: [Supabase database functions](https://supabase.com/docs/guides/database/functions)
 and [changelog](https://supabase.com/changelog). Both fetched documents match the
 K177 hashes; the listed changes do not alter this private invoker-RPC design.
+
+### K179 — Linked Meta campaign reporting
+
+**Linked Meta campaign** on Meta plan cards lets an Enterprise owner associate
+one reported Meta campaign by its exact ID. Names can repeat; the picker shows
+IDs and requires confirmation. A Meta campaign can link to only one of the
+owner's plans per ad account. Loading choices and performance is explicit, with
+7, 30 or 90 completed ad-account calendar days. Search and 20-row client pages
+operate on at most 300 returned campaigns. A campaign absent from Meta's report
+cannot be newly selected in that period; try another period. This reuses the
+existing read-only insights adapter and ads_read access, with no new permission,
+environment variable, dependency, background sync or provider mutation.
+
+The report shows the linked campaign's spend, clicks (all) and impressions in
+the account currency, separately from KORLIX tagged inquiries. Exact decimal
+spend is preserved to six fractional digits; no currency conversion, inferred
+cost per conversion, revenue or ROAS is added. A missing provider row is unknown,
+not zero. An explicit zero remains zero. The saved name is a snapshot; the current
+reported name is shown separately if Meta renames the campaign. Provider figures
+can be revised. Manual USD daily results and Budget pacing remain separate.
+
+Inquiry counting requires this plan's exact k143 tracking tag and Facebook UTM
+source. PostgreSQL converts the account-timezone start midnight and midnight
+after the final day into a half-open UTC interval. This includes the first
+instant and excludes the last, handling daylight-saving changes and fractional
+timezone offsets. The database independently requires the period to end yesterday
+in that account timezone and match exactly 7, 30 or 90 days. Tags are
+visitor-supplied and are **not verified Meta conversions**. The owner-selected
+association covers the entire chosen period, including dates before linking.
+
+GET `/:id/campaigns/:campaign_id/meta-link`, POST `.../save`, and POST
+`.../clear` share a 30-request owner/minute limit. GET `.../campaigns` and
+GET `.../performance` share the existing Meta performance 10-request owner/minute
+quota. All routes use authenticated ownership, current Enterprise access,
+no-store and strict query/body shapes. Save requires the exact version,
+fingerprint, confirmed flag, provider campaign ID/name and a choice receipt.
+Clear requires version, fingerprint and confirmation. Report requests accept
+only days and the current fingerprint; the browser cannot choose dates or a
+timezone. Opening or refreshing the association only reads local state.
+
+Choice receipts expire after 30 minutes and bind owner, funnel, plan, context,
+provider ID and name using a domain-separated HMAC with the existing Meta app
+secret. The HTTP layer verifies the receipt, then strips it before the RPC.
+Receipts and performance metrics are never persisted. SQL validates shapes,
+ownership, entitlement, local Meta platform, selected account readiness, version
+and fingerprint. SQL does **not** independently verify the HMAC or provider
+membership: privileged service writers must preserve the HTTP boundary.
+
+The additive RLS-enabled private `korlix_funnel_meta_campaign_links` table has
+cascading campaign/owner references and an owner/account/provider uniqueness
+constraint. Browser and PUBLIC grants are revoked. Its service-only SECURITY
+INVOKER RPC has a fixed public/pg_temp search path. Commands lock funnel →
+campaign → Meta connection (shared) → association. The fingerprint binds plan
+and funnel versions, association version, connection version/binding, selected
+account, expiry and configuration. Clear retains a versioned empty row so a
+stale request cannot recreate an old link. Clearing works after disconnect and
+on archived plans; archived plans cannot save new links but can read/report a
+current link. No existing SQL function, review, manual result or provider
+connection is changed by saving or clearing an association.
+
+Remote reads recheck current secret/connection state, fetch the selected
+account, and require exact ID, currency, timezone and active status. The existing
+adapter limits reports to three pages/300 campaigns with per-request timeouts.
+The new adapter boundary checks IDs, duplicates, counts, decimal money and
+aggregate totals before returning data. After the provider read, context,
+entitlement, connection/binding and calendar day are checked again. Disconnect,
+reselection, reconnect, account currency/timezone changes, plan edits and
+concurrent relinking suppress stale results. Reconnect requires a fresh link;
+an ordinary account refresh can retain it if identity and reporting context
+remain the same. Only the linked row is returned in a performance response.
+
+The UI verifies response identity, account, fingerprint, source, period shape,
+currency/metric bounds and measurement context before display or copying. SQL,
+not Dart, performs IANA timezone conversion. Changing period, refreshing, failed
+requests, workspace/client changes and denied access clear prior results.
+Selection confirmation is inline so private candidate names disappear on scope
+invalidation. Export includes the saved association, reporting/check timestamps,
+exact UTC interval, source-separated figures and attribution/spending limits;
+choice receipts are excluded.
+
+Focused local checks execute the actual migration and Express routes, including
+private grants, ownership, entitlement loss, signed-choice tampering/expiry,
+one-to-one links, optimistic conflicts, clear/recreate, shared quotas, changed
+accounts, late responses, missing versus zero, money precision, and timezone
+boundaries. Flutter checks cover validation, exact save/clear, copy, period
+changes, search/pages, stale-state rejection and desktop/390px/320px layouts
+(320px at 1.3 text scale). Existing Meta reporting and campaign UI checks remain
+green. These use mocks/local databases: hands-on acceptance, real provider calls,
+activation, ad creation, spending and outreach remain deferred.
+
+Apply the additive migration before the backend, verify it, then deploy the
+frontend. Roll back frontend then backend while retaining the additive table,
+RPC and saved associations. K178 ignores this association and remains compatible.
+
+Primary references checked September 23, 2026: Meta's official
+[AdAccount SDK and insights parameters](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/adaccount.py),
+[PostgreSQL AT TIME ZONE](https://www.postgresql.org/docs/current/functions-datetime.html#FUNCTIONS-DATETIME-ZONECONVERT),
+[Supabase database functions](https://supabase.com/docs/guides/database/functions)
+and [changelog](https://supabase.com/changelog). Supabase documents match K178
+hashes; listed changes do not alter this private invoker-RPC design. No real
+provider account was queried during implementation.

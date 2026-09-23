@@ -17,6 +17,7 @@ import { registerGoogleCreative } from './google_creative.mjs';
 import { registerGoogleTargeting } from './google_targeting.mjs';
 import { registerGoogleKeywords } from './google_keywords.mjs';
 import { registerMeta } from './meta.mjs';
+import { registerMetaCampaignLink } from './meta_campaign_link.mjs';
 import { registerGoogleAds } from './google_ads.mjs';
 import { registerInbox } from './inbox.mjs';
 import { registerRehearsal } from './rehearsal.mjs';
@@ -78,6 +79,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   };
   const base='/api/funnels';
   registerMeta(app,{base,owner,database,metaStore,metaProvider,environment,now});
+  registerMetaCampaignLink(app,{base,owner,database,metaStore,metaProvider,environment,now});
   registerGoogleAds(app,{base,owner,limit,database,googleAdsStore,googleAdsProvider,environment,now});
   registerCampaigns(app,{base,owner,command,database,campaignStore,generateAdCopy,environment,publicBase});
   registerCampaignBudget(app,{base,owner,database});
