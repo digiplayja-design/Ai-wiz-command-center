@@ -8,6 +8,7 @@ import 'funnel_google_ads.dart';
 import 'funnel_meta_preparation.dart';
 import 'funnel_google_preparation.dart';
 import 'funnel_google_creative.dart';
+import 'funnel_meta_creative.dart';
 import 'funnel_google_keywords.dart';
 import 'funnel_google_targeting.dart';
 import 'funnel_google_preflight.dart';
@@ -340,12 +341,19 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => FunnelGoogleCreative(
-        client: client,
-        funnelId: funnel,
-        campaignId: c['id'],
-        scope: _scope,
-      ),
+      builder: (_) => c['platform'] == 'meta'
+          ? FunnelMetaCreative(
+              client: client,
+              funnelId: funnel,
+              campaignId: c['id'],
+              scope: _scope,
+            )
+          : FunnelGoogleCreative(
+              client: client,
+              funnelId: funnel,
+              campaignId: c['id'],
+              scope: _scope,
+            ),
     );
   }
 
@@ -664,11 +672,15 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
                   icon: const Icon(Icons.fact_check_outlined),
                   label: const Text('Preparation checklist'),
                 ),
-              if (c['platform'] == 'google')
+              if (c['platform'] == 'google' || c['platform'] == 'meta')
                 OutlinedButton.icon(
                   onPressed: _busy ? null : () => _creative(c),
                   icon: const Icon(Icons.text_fields),
-                  label: const Text('Search-ad draft'),
+                  label: Text(
+                    c['platform'] == 'meta'
+                        ? 'Meta ad creative'
+                        : 'Search-ad draft',
+                  ),
                 ),
               if (c['platform'] == 'google')
                 OutlinedButton.icon(

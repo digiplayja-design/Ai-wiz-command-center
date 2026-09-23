@@ -224,7 +224,7 @@ class _FunnelImageLibraryState extends State<FunnelImageLibrary> {
       builder: (c) => AlertDialog(
         title: const Text('Delete unused image?'),
         content: Text(
-          'Permanently remove “${image['label']}” from your image library? Saved drafts and published pages must not use it.',
+          'Permanently remove “${image['label']}” from your image library? Saved pages and Meta ad drafts must not use it.',
         ),
         actions: [
           TextButton(
@@ -322,6 +322,7 @@ class _FunnelImageLibraryState extends State<FunnelImageLibrary> {
                         final a = _images[i],
                             used =
                                 (a['page_count'] as num? ?? 0) > 0 ||
+                                (a['creative_count'] as num? ?? 0) > 0 ||
                                 widget.protectedIds.contains(a['id']);
                         return Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
