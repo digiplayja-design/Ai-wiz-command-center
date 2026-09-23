@@ -1361,3 +1361,49 @@ loading; failure cannot leave stale data copyable. Owner/scope/client changes
 invalidate data and pending responses, including open child dialogs. No ad,
 platform budget, spending approval or launch is created. Roll back frontend then
 backend and retain the additive read-only RPC.
+
+### K171 — Private Meta single-image creative draft
+
+GET `/:id/campaigns/:campaign_id/meta-creative` and POST `.../save` prepare a
+single-image draft without invoking Meta. Both require current Enterprise
+ownership, no query parameters, no-store responses and a shared 30-request
+owner/minute limit. Save accepts exactly `version`, the current setup
+`fingerprint`, and `assets` (`primary_text`, `headline`, `description`, `cta`,
+`image_id`, `image_alt`). Text limits are KORLIX preparation limits: 1,000 / 100 /
+200 / 180 Unicode code points, plain single-line text. These do not represent
+universal Meta placement limits. Button preferences are LEARN_MORE, CONTACT_US,
+SIGN_UP, SHOP_NOW and GET_QUOTE; eligibility remains a later provider check.
+
+The service-only SECURITY INVOKER RPC reuses the Meta setup reader's entitlement,
+owner, campaign/platform checks and funnel → campaign → connection → setup locks,
+then locks the private creative row. It reads cached identities only. Campaign,
+published-page and identity changes invalidate the context; old snapshots remain
+available for comparison/export. Incomplete drafts are allowed, versions prevent
+lost updates, and archived campaigns are read-only. Completion requires primary
+text, headline, an image and image description; ad_publishing_ready stays false.
+
+The RLS-enabled private table references immutable owner images. Image selection
+checks ownership under FOR KEY SHARE; an indexed deferred NO ACTION foreign key
+protects references while allowing auth-user/funnel cascades. The existing image
+RPC now includes `creative_count` in the owner library and rejects deletion while
+a Meta draft uses an image. Existing page references and public image access are
+unchanged: a creative reference never grants public delivery. The deferred key
+also protects direct service writes at transaction commit. No bytes are copied
+into drafts. Existing WebP previews are preparation assets, not Meta upload IDs.
+
+Meta campaign cards open a responsive text/image editor with private upload and
+selection, button preference, illustrative preview, current destination, saved
+context and saved-only clipboard export. Client validation rejects mismatched
+identity, destination, assets, image metadata and completion flags. Dirty edits
+require confirmation before discard; conflicts require reload. Owner/client/scope
+changes and denied access clear private content and invalidate pending loads,
+saves, image selection and file pickers. Referenced-image deletion is disabled in
+the shared library. No ad publishing, budget changes, spend, provider calls or
+outbound messages are introduced.
+
+Primary references checked 2026-09-23: Meta's official business SDK
+`facebook_business/adobjects/adcreativelinkdata.py` (message/name/description/link/
+image fields) and `adcreative.py` (CallToActionType), Supabase functions guidance
+and changelog, PostgreSQL foreign-key documentation. This chapter implements
+preparation only, not SDK payload generation. Roll back the frontend then backend;
+retain the additive table/RPC and image-reference protection to preserve drafts.
