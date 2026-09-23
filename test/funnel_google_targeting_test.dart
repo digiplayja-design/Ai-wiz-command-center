@@ -334,7 +334,7 @@ void main() {
       await t.pumpAndSettle();
       await t.tap(drop);
       await t.pumpAndSettle();
-      await tap(t, 'People in or interested in these countries');
+      await tap(t, 'People in or interested in these areas');
       drop = find.byType(DropdownButtonFormField<String>).last;
       await t.ensureVisible(drop);
       await t.pumpAndSettle();

@@ -6,13 +6,14 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
+import 'funnel_google_radius.dart';
 
 const googleTargetingReviewConfirmation =
-    'I reviewed the target countries, exclusions, location reach, content languages and bidding preference against the published landing page. This is my KORLIX review only; provider eligibility, final setup and launch still require checking.';
+    'I reviewed the target countries or radius areas, exclusions, location reach, content languages and bidding preference against the published landing page. This is my KORLIX review only; provider eligibility, final setup and launch still require checking.';
 const googleTargetingReviewChecks = <String, String>{
   'saved_draft': 'Save the draft first.',
   'complete_choices':
-      'Choose target countries, content languages, location reach and bidding.',
+      'Choose target countries or radius areas, content languages, location reach and bidding.',
   'current_context':
       'Check the current campaign context and save the draft again.',
   'page_published': 'Publish the landing page.',
@@ -31,8 +32,8 @@ bool _equalTargeting(dynamic a, dynamic b) => a is Map && b is Map
 
 const googleLocationModes = <String, String>{
   'undecided': 'Choose later',
-  'presence': 'People in or regularly in these countries',
-  'presence_or_interest': 'People in or interested in these countries',
+  'presence': 'People in or regularly in these areas',
+  'presence_or_interest': 'People in or interested in these areas',
 };
 const googleBiddingPlans = <String, String>{
   'undecided': 'Choose later',
@@ -81,7 +82,23 @@ bool googleTargetingCatalogValid(dynamic c) {
 
 bool googleTargetingValid(dynamic a, Map catalog) {
   if (a is! Map ||
-      a.length != 5 ||
+      !a.keys.toSet().containsAll([
+        'countries',
+        'excluded_countries',
+        'content_languages',
+        'location_mode',
+        'bidding',
+      ]) ||
+      a.keys.any(
+        (k) => ![
+          'countries',
+          'excluded_countries',
+          'content_languages',
+          'location_mode',
+          'bidding',
+          'proximities',
+        ].contains(k),
+      ) ||
       !googleLocationModes.containsKey(a['location_mode']) ||
       !googleBiddingPlans.containsKey(a['bidding'])) {
     return false;
@@ -100,13 +117,20 @@ bool googleTargetingValid(dynamic a, Map catalog) {
       return false;
     }
   }
+  if (a.containsKey('proximities') &&
+      (!googleRadiiValid(a['proximities']) ||
+          (a['countries'] as List).isNotEmpty)) {
+    return false;
+  }
   return !(a['countries'] as List).any(
     (v) => (a['excluded_countries'] as List).contains(v),
   );
 }
 
 bool googleTargetingComplete(Map a) =>
-    (a['countries'] as List).isNotEmpty &&
+    ((a['countries'] as List).isNotEmpty ||
+        (googleRadiiValid(a['proximities']) &&
+            (a['proximities'] as List).isNotEmpty)) &&
     (a['content_languages'] as List).isNotEmpty &&
     a['location_mode'] != 'undecided' &&
     a['bidding'] != 'undecided';
@@ -178,6 +202,9 @@ Map<String, dynamic> validateGoogleTargeting(
       !RegExp(r'^[a-f0-9]{64}$').hasMatch(r['fingerprint']) ||
       !googleTargetingCatalogValid(r['catalog']) ||
       !googleTargetingValid(r['assets'], r['catalog']) ||
+      (r.containsKey('radius_supported') && r['radius_supported'] is! bool) ||
+      (r['assets'].containsKey('proximities') &&
+          r['radius_supported'] != true) ||
       !contextValid(r['context']) ||
       r['ad_publishing_ready'] != false ||
       r['draft_current'] is! bool ||
@@ -192,7 +219,8 @@ Map<String, dynamic> validateGoogleTargeting(
                 (r['assets']['excluded_countries'] as List).isNotEmpty ||
                 (r['assets']['content_languages'] as List).isNotEmpty ||
                 r['assets']['location_mode'] != 'undecided' ||
-                r['assets']['bidding'] != 'undecided'
+                r['assets']['bidding'] != 'undecided' ||
+                r['assets'].containsKey('proximities')
           : !_labelsValid(r['saved_labels'], r['assets']) ||
                 !contextValid(r['saved_context']) ||
                 r['updated_at'] is! String ||
@@ -284,7 +312,7 @@ class _FunnelGoogleTargetingState extends State<FunnelGoogleTargeting> {
   Map<String, dynamic> _choices = emptyGoogleTargeting();
   Map<String, dynamic>? _data;
   bool _busy = false, _dirty = false, _conflict = false, _reviewChecked = false;
-  int _generation = 0;
+  int _generation = 0, _areaModeSerial = 0;
   String? _error, _unavailable, _message;
   String get _path =>
       '/${widget.funnelId}/campaigns/${widget.campaignId}/google-targeting';
@@ -539,7 +567,7 @@ class _FunnelGoogleTargetingState extends State<FunnelGoogleTargeting> {
         ),
         const SizedBox(height: 12),
         const Text(
-          'Review the saved countries, exclusions, location reach, content languages and bidding preference against the published page. This records your review in KORLIX. Google eligibility, final account setup, local areas and launch remain separate.',
+          'Review the saved countries or radius areas, exclusions, location reach, content languages and bidding preference against the published page. This records your review in KORLIX. Google eligibility, coordinate accuracy, final account setup and launch remain separate.',
         ),
         if (_dirty)
           const Padding(
@@ -662,7 +690,7 @@ class _FunnelGoogleTargetingState extends State<FunnelGoogleTargeting> {
                         : 'countries'][code],
               )
               .join(', ');
-    return 'KORLIX Google targeting draft — ${c['campaign_name']}\n${d['draft_current'] == true ? 'SAVED DRAFT' : 'OUT OF DATE — compare with the current campaign and published page.'}\n${d['draft_complete'] == true ? 'Draft choices filled; final review required.' : 'INCOMPLETE — finish your draft choices.'}\nDraft revision: ${d['draft_revision']}\nSaved: ${d['updated_at']}\nDestination at save: ${c['destination']}\nAudience at save: ${c['audience']}\nTarget countries: ${names('countries')}\nExcluded countries: ${names('excluded_countries')}\nLocation reach: ${googleLocationModes[a['location_mode']]}\nExclusions: people in excluded countries.\nAd and landing-page languages (planning only): ${names('content_languages')}\nPlanned bidding: ${googleBiddingPlans[a['bidding']]}\nEmpty targets do not mean worldwide targeting. Country availability, local areas, account settings, conversion tracking and bid limits require final setup. Search language matching is based on ad content as Google rolls out its September 2026 change. No ad or spending has been created.';
+    return 'KORLIX Google targeting draft — ${c['campaign_name']}\n${d['draft_current'] == true ? 'SAVED DRAFT' : 'OUT OF DATE — compare with the current campaign and published page.'}\n${d['draft_complete'] == true ? 'Draft choices filled; final review required.' : 'INCOMPLETE — finish your draft choices.'}\nDraft revision: ${d['draft_revision']}\nSaved: ${d['updated_at']}\nDestination at save: ${c['destination']}\nAudience at save: ${c['audience']}\n${googleRadiusSummary(a)}\nTarget countries: ${names('countries')}\nExcluded countries: ${names('excluded_countries')}\nLocation reach: ${googleLocationModes[a['location_mode']]}\nExclusions: people in excluded countries.\nAd and landing-page languages (planning only): ${names('content_languages')}\nPlanned bidding: ${googleBiddingPlans[a['bidding']]}\nEmpty targets do not mean worldwide targeting. Country availability, radius eligibility, coordinate accuracy, account settings, conversion tracking and bid limits require final setup. Search language matching is based on ad content as Google rolls out its September 2026 change. No ad or spending has been created.';
   }
 
   Future<void> _copy() async {
@@ -691,6 +719,52 @@ class _FunnelGoogleTargetingState extends State<FunnelGoogleTargeting> {
     _reviewChecked = false;
     _message = null;
   });
+  Future<void> _switchAreaMode(String mode) async {
+    if (!_editable || _data?['radius_supported'] != true) return;
+    final radius = mode == 'radius';
+    if (radius == _assets.containsKey('proximities')) return;
+    final g = _generation;
+    final populated = radius
+        ? (_assets['countries'] as List).isNotEmpty
+        : (_assets['proximities'] as List).isNotEmpty;
+    if (populated) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Change target area type?'),
+          content: Text(
+            radius
+                ? 'This removes your whole-country targets from this draft. Add radius areas before saving.'
+                : 'This removes your radius areas from this draft. Choose whole-country targets before saving.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Keep current targets'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Change target type'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) {
+        if (_current(g)) setState(() => _areaModeSerial++);
+        return;
+      }
+    }
+    if (!_current(g) || !_editable) return;
+    _change(() {
+      _choices['countries'] = <String>[];
+      if (radius) {
+        _choices['proximities'] = <Map<String, dynamic>>[];
+      } else {
+        _choices.remove('proximities');
+      }
+    });
+  }
+
   Future<void> _choose(String group, String title) async {
     if (!_editable) return;
     final g = _generation;
@@ -813,7 +887,7 @@ class _FunnelGoogleTargetingState extends State<FunnelGoogleTargeting> {
                 ],
               ),
               const Text(
-                'Plan country reach, content languages and bidding for this Search campaign.',
+                'Plan country or radius reach, content languages and bidding for this Search campaign.',
               ),
               if (_busy)
                 const Padding(
@@ -877,11 +951,62 @@ class _FunnelGoogleTargetingState extends State<FunnelGoogleTargeting> {
                       SelectableText(_data!['context']['destination']),
                     ],
                   ),
-                  _section('Target countries'),
-                  const Text(
-                    'Choose up to 20 countries from Google’s reference list. Empty targets do not mean worldwide targeting. Cities, regions and radius targeting need separate setup.',
-                  ),
-                  _selection('countries', 'Add target country'),
+                  if (_data!['radius_supported'] == true) ...[
+                    _section('Target area type'),
+                    DropdownButtonFormField<String>(
+                      key: ValueKey(
+                        'area-mode-${_assets.containsKey('proximities')}-$_areaModeSerial',
+                      ),
+                      initialValue: _assets.containsKey('proximities')
+                          ? 'radius'
+                          : 'countries',
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Choose country or radius targeting',
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'countries',
+                          child: Text('Whole countries'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'radius',
+                          child: Text('Radius areas'),
+                        ),
+                      ],
+                      onChanged: _editable
+                          ? (v) {
+                              if (v != null) unawaited(_switchAreaMode(v));
+                            }
+                          : null,
+                    ),
+                  ],
+                  if (_assets.containsKey('proximities')) ...[
+                    _section('Radius targets'),
+                    GoogleRadiusFields(
+                      areas: _assets['proximities'],
+                      enabled: _editable,
+                      onChange: (a, k, v) => _change(() => a[k] = v),
+                      onRemove: (a) => _change(
+                        () => (_choices['proximities'] as List).remove(a),
+                      ),
+                      onAdd: () => _change(
+                        () => (_choices['proximities'] as List)
+                            .add(<String, dynamic>{
+                              'label': '',
+                              'latitude_micro': null,
+                              'longitude_micro': null,
+                              'radius_meters': null,
+                            }),
+                      ),
+                    ),
+                  ] else ...[
+                    _section('Target countries'),
+                    const Text(
+                      'Choose up to 20 countries from Google’s reference list. Empty targets do not mean worldwide targeting. City and region lookup remain separate.',
+                    ),
+                    _selection('countries', 'Add target country'),
+                  ],
                   _section('Excluded countries · optional'),
                   const Text(
                     'Choose up to 20 different exclusions. A country cannot be both targeted and excluded. Exclusions apply to people in those countries.',
@@ -896,7 +1021,7 @@ class _FunnelGoogleTargetingState extends State<FunnelGoogleTargeting> {
                   const SizedBox(height: 10),
                   Text(googleLocationModes[_assets['location_mode']]!),
                   const Text(
-                    'Presence uses people in or regularly in your chosen countries. Presence or interest can also reach people elsewhere who show interest. Google uses location signals; exact location is not guaranteed.',
+                    'Presence uses people in or regularly in your chosen areas. Presence or interest can also reach people elsewhere who show interest. Google uses location signals; exact location is not guaranteed.',
                     style: TextStyle(color: WfStyle.muted),
                   ),
                   _section('Ad and landing-page languages'),
@@ -919,7 +1044,7 @@ class _FunnelGoogleTargetingState extends State<FunnelGoogleTargeting> {
                     const Padding(
                       padding: EdgeInsets.only(top: 14),
                       child: Text(
-                        'You can save an incomplete draft. Choose a target country, content language, location reach and bidding preference to finish these draft choices.',
+                        'You can save an incomplete draft. Choose a target country or radius area, content language, location reach and bidding preference to finish these draft choices.',
                         style: TextStyle(color: WfStyle.gold),
                       ),
                     ),
@@ -950,7 +1075,7 @@ class _FunnelGoogleTargetingState extends State<FunnelGoogleTargeting> {
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'Draft preparation only. Country options use Google reference data from August 2026. Account eligibility, country availability, local areas, bid limits and final review still need checking. Saving creates no ad and authorizes no spending.',
+                    'Draft preparation only. Country options use Google reference data from August 2026. Account eligibility, country availability, radius eligibility, coordinate accuracy, bid limits and final review still need checking. Saving creates no ad and authorizes no spending.',
                     style: TextStyle(color: WfStyle.muted),
                   ),
                   _reviewPanel(),

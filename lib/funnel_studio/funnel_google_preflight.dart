@@ -9,6 +9,7 @@ import 'funnel_google_preparation.dart';
 import 'funnel_google_creative.dart';
 import 'funnel_google_keywords.dart';
 import 'funnel_google_targeting.dart';
+import 'funnel_google_radius.dart';
 
 const googlePreflightChecks = <String, String>{
   'page_published': 'Landing page published',
@@ -19,7 +20,7 @@ const googlePreflightChecks = <String, String>{
   'targeting_reviewed': 'Targeting reviewed',
 };
 const googlePreflightBoundary =
-    'Preparation only. This checklist does not verify live Google eligibility, create an ad, set a platform budget or authorize spending. Final account setup, conversion tracking, local targeting and launch still require checking.';
+    'Preparation only. This checklist does not verify live Google eligibility, create an ad, set a platform budget or authorize spending. Final account setup, conversion tracking, location eligibility and launch still require checking.';
 
 bool _same(dynamic a, dynamic b) => a is Map && b is Map
     ? a.length == b.length &&
@@ -164,7 +165,7 @@ String googlePreparationSummary(Map<String, dynamic> d) {
                 )
                 .join(', ');
       out.writeln(
-        'Target countries: ${names('countries')}\nExcluded countries: ${names('excluded_countries')}\nContent languages (planning only): ${names('content_languages')}\nLocation reach: ${googleLocationModes[a['location_mode']]}\nPlanned bidding: ${googleBiddingPlans[a['bidding']]}',
+        '${googleRadiusSummary(a)}\nTarget countries: ${names('countries')}\nExcluded countries: ${names('excluded_countries')}\nContent languages (planning only): ${names('content_languages')}\nLocation reach: ${googleLocationModes[a['location_mode']]}\nPlanned bidding: ${googleBiddingPlans[a['bidding']]}',
       );
     }
   }
