@@ -7,6 +7,27 @@ import 'package:flutter/services.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
 
+const googleCopyReviewConfirmation =
+    'I reviewed every headline, description and display path against the published landing page.';
+const googleCopyReviewChecks = <String, String>{
+  'saved_draft': 'Save the draft first.',
+  'complete_text': 'Add at least 3 headlines and 2 descriptions.',
+  'current_context':
+      'Check the current campaign context and save the draft again.',
+  'page_published': 'Publish the landing page.',
+  'plan_reviewed': 'Review the campaign plan against the published page.',
+};
+bool _equalCreative(dynamic a, dynamic b) => a is Map && b is Map
+    ? a.length == b.length &&
+          a.keys.every((k) => b.containsKey(k) && _equalCreative(a[k], b[k]))
+    : a is List && b is List
+    ? a.length == b.length &&
+          List.generate(
+            a.length,
+            (i) => i,
+          ).every((i) => _equalCreative(a[i], b[i]))
+    : a == b;
+
 int googleDraftUnits(String value) =>
     value.runes.fold(0, (n, c) => n + (c > 127 ? 2 : 1));
 String? googleDraftTextError(String value, int limit, {bool path = false}) {
@@ -134,6 +155,46 @@ Map<String, dynamic> validateGoogleCreative(
       );
     }
   }
+  final checks = r['review_checks'], review = r['reviewed_snapshot'];
+  bool validReview(dynamic v) =>
+      v is Map &&
+      v.length == 3 &&
+      _assetsValid(v['assets']) &&
+      contextValid(v['context']) &&
+      integer(v['draft_revision'], 1, r['draft_revision']) &&
+      (v['assets']['headlines'] as List).length >= 3 &&
+      (v['assets']['descriptions'] as List).length >= 2;
+  if (!integer(r['draft_revision'], version == 0 ? 0 : 1, version) ||
+      r['review_fingerprint'] is! String ||
+      !RegExp(r'^[a-f0-9]{64}$').hasMatch(r['review_fingerprint']) ||
+      checks is! Map ||
+      checks.length != googleCopyReviewChecks.length ||
+      googleCopyReviewChecks.keys.any((k) => checks[k] is! bool) ||
+      r['review_ready'] is! bool ||
+      r['review_ready'] != checks.values.every((v) => v == true) ||
+      checks['saved_draft'] != (version > 0) ||
+      checks['complete_text'] != r['text_complete'] ||
+      checks['current_context'] != r['draft_current'] ||
+      checks['page_published'] != (r['context']['page_state'] == 'published') ||
+      (checks['plan_reviewed'] == true &&
+          r['context']['campaign_state'] != 'reviewed') ||
+      r['review_current'] is! bool ||
+      (review == null
+          ? r['reviewed_at'] != null || r['review_current'] != false
+          : !validReview(review) ||
+                r['reviewed_at'] is! String ||
+                DateTime.tryParse(r['reviewed_at']) == null) ||
+      (r['review_current'] == true &&
+          (r['review_ready'] != true ||
+              review == null ||
+              review['draft_revision'] != r['draft_revision'] ||
+              !_equalCreative(review['assets'], r['assets']) ||
+              !_equalCreative(review['context'], r['saved_context'])))) {
+    throw const FunnelException(
+      'The copy review could not be verified. Reload the draft.',
+      503,
+    );
+  }
   return r;
 }
 
@@ -157,7 +218,7 @@ class _FunnelGoogleCreativeState extends State<FunnelGoogleCreative> {
   final _descriptions = List.generate(4, (_) => TextEditingController());
   final _path1 = TextEditingController(), _path2 = TextEditingController();
   Map<String, dynamic>? _data;
-  bool _busy = false, _dirty = false, _conflict = false;
+  bool _busy = false, _dirty = false, _conflict = false, _reviewChecked = false;
   int _generation = 0, _headlineCount = 3, _descriptionCount = 2;
   String? _error, _unavailable, _message;
   String get _path =>
@@ -185,6 +246,7 @@ class _FunnelGoogleCreativeState extends State<FunnelGoogleCreative> {
     }
     _data = null;
     _dirty = false;
+    _reviewChecked = false;
     _conflict = false;
     _message = null;
     _error = null;
@@ -283,6 +345,7 @@ class _FunnelGoogleCreativeState extends State<FunnelGoogleCreative> {
     final g = ++_generation;
     setState(() {
       _busy = true;
+      _reviewChecked = false;
       _error = null;
       _message = null;
     });
@@ -346,6 +409,185 @@ class _FunnelGoogleCreativeState extends State<FunnelGoogleCreative> {
     });
   }
 
+  bool get _canReview => _editable && !_dirty && _data?['review_ready'] == true;
+  Future<void> _review() async {
+    if (!_canReview || !_reviewChecked) return;
+    final body = {
+      'version': _data!['version'],
+      'review_fingerprint': _data!['review_fingerprint'],
+      'confirmed': true,
+    };
+    await _run((g) async {
+      _apply(
+        await widget.client.request('POST', '$_path/review', body: body),
+        g,
+      );
+      if (_current(g)) setState(() => _message = 'Copy review saved.');
+    });
+  }
+
+  Future<void> _clearReview() async {
+    if (_busy ||
+        _dirty ||
+        _conflict ||
+        _unavailable != null ||
+        _data?['reviewed_snapshot'] == null) {
+      return;
+    }
+    final g = _generation, version = _data!['version'];
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear the copy review?'),
+        content: const Text(
+          'Your saved draft stays available. Only its saved review will be removed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep review'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Clear review'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !_current(g) || _dirty || _busy || _conflict) return;
+    await _run((generation) async {
+      _apply(
+        await widget.client.request(
+          'POST',
+          '$_path/clear-review',
+          body: {'version': version, 'confirmed': true},
+        ),
+        generation,
+      );
+      if (_current(generation)) {
+        setState(
+          () => _message = 'Copy review cleared. Your draft is unchanged.',
+        );
+      }
+    });
+  }
+
+  Future<void> _copyReview() async {
+    if (_busy ||
+        _dirty ||
+        _conflict ||
+        _unavailable != null ||
+        _data?['reviewed_snapshot'] == null) {
+      return;
+    }
+    final g = _generation, d = _data!, snapshot = d['reviewed_snapshot'];
+    final text =
+        'KORLIX OWNER COPY REVIEW — ${d['review_current'] == true ? 'CURRENT' : 'OUT OF DATE'}\nReviewed draft revision: ${snapshot['draft_revision']}\nReviewed at: ${d['reviewed_at']}\n${_export({
+          ...d,
+          'assets': snapshot['assets'],
+          'saved_context': snapshot['context'],
+          'updated_at': d['reviewed_at'],
+          'draft_current': d['review_current'],
+          'text_complete': true,
+        })}';
+    await Clipboard.setData(ClipboardData(text: text));
+    if (_current(g)) setState(() => _message = 'Copy review record copied.');
+  }
+
+  Widget _reviewPanel() {
+    final d = _data!, snapshot = d['reviewed_snapshot'];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _section('Review saved copy'),
+        WfBadge(
+          _dirty
+              ? 'SAVE CHANGES BEFORE REVIEW'
+              : snapshot == null
+              ? 'COPY NOT REVIEWED'
+              : d['review_current'] == true
+              ? 'COPY REVIEW CURRENT'
+              : 'COPY REVIEW OUT OF DATE',
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Review all saved text and its destination. This records your copy review in KORLIX; Google policy approval and launch remain separate.',
+        ),
+        if (_dirty)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text('Save or discard your text changes before reviewing.'),
+          ),
+        for (final e in googleCopyReviewChecks.entries)
+          if (d['review_checks'][e.key] != true)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(e.value, style: const TextStyle(color: WfStyle.gold)),
+            ),
+        if (snapshot != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            'Reviewed draft ${snapshot['draft_revision']} · ${d['reviewed_at']}',
+          ),
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: const Text('Saved review record'),
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final h in snapshot['assets']['headlines'])
+                      Text('Headline: $h'),
+                    for (final description
+                        in snapshot['assets']['descriptions'])
+                      Text('Description: $description'),
+                    Text(
+                      'Display paths: ${snapshot['assets']['path1']} / ${snapshot['assets']['path2']}',
+                    ),
+                    SelectableText(snapshot['context']['destination']),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          value: _reviewChecked,
+          onChanged: _canReview
+              ? (v) => setState(() => _reviewChecked = v == true)
+              : null,
+          title: const Text(googleCopyReviewConfirmation),
+        ),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            FilledButton(
+              onPressed: _canReview && _reviewChecked ? _review : null,
+              child: const Text('Save copy review'),
+            ),
+            OutlinedButton(
+              onPressed: _busy || _dirty || _conflict || snapshot == null
+                  ? null
+                  : _copyReview,
+              child: const Text('Copy review record'),
+            ),
+            TextButton(
+              onPressed: _busy || _dirty || _conflict || snapshot == null
+                  ? null
+                  : _clearReview,
+              child: const Text('Clear copy review'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   Future<bool> _discard(String title) async {
     if (!_dirty) return true;
     final g = _generation;
@@ -403,6 +645,7 @@ class _FunnelGoogleCreativeState extends State<FunnelGoogleCreative> {
 
   void _changed(String value) => setState(() {
     _dirty = true;
+    _reviewChecked = false;
     _message = null;
   });
   Widget _field(
@@ -674,6 +917,7 @@ class _FunnelGoogleCreativeState extends State<FunnelGoogleCreative> {
                       'You can save incomplete text. Saving does not create an ad or authorize spending.',
                       style: TextStyle(color: WfStyle.muted),
                     ),
+                    _reviewPanel(),
                   ] else if (!_busy)
                     TextButton(onPressed: _load, child: const Text('Retry')),
                 ],

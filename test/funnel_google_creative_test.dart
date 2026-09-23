@@ -58,6 +58,19 @@ Map<String, dynamic> fixture({bool saved = true}) {
     'editable': true,
     'text_complete': saved,
     'ad_publishing_ready': false,
+    'draft_revision': saved ? 1 : 0,
+    'review_fingerprint': 'b' * 64,
+    'review_checks': {
+      'saved_draft': saved,
+      'complete_text': saved,
+      'current_context': saved,
+      'page_published': true,
+      'plan_reviewed': true,
+    },
+    'review_ready': saved,
+    'review_current': false,
+    'reviewed_at': null,
+    'reviewed_snapshot': null,
   };
 }
 
@@ -243,6 +256,8 @@ void main() {
     (t) async {
       final data = fixture();
       data['draft_current'] = false;
+      data['review_checks']['current_context'] = false;
+      data['review_ready'] = false;
       data['context']['headline'] = 'New campaign offer';
       String? copied;
       t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -308,7 +323,10 @@ void main() {
     var data = fixture();
     data['context']['campaign_state'] = 'archived';
     data['editable'] = false;
+    data['review_checks']['plan_reviewed'] = false;
     data['draft_current'] = false;
+    data['review_checks']['current_context'] = false;
+    data['review_ready'] = false;
     final c = makeClient((r) async => reply(data));
     addTearDown(c.dispose);
     await t.pumpWidget(app(c));
@@ -449,4 +467,275 @@ void main() {
     );
     expect(t.takeException(), isNull);
   });
+  for (final width in [1400.0, 390.0, 320.0]) {
+    testWidgets('Copy review save export and clear fit $width', (t) async {
+      await t.binding.setSurfaceSize(Size(width, width == 1400 ? 1100 : 950));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      var data = fixture();
+      final calls = <http.Request>[];
+      String? copied;
+      t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = call.arguments['text'];
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      final c = makeClient((r) async {
+        calls.add(r);
+        if (r.method == 'POST') {
+          final body = jsonDecode(r.body);
+          if (r.url.path.endsWith('/review')) {
+            expect(body, {
+              'version': 1,
+              'review_fingerprint': 'b' * 64,
+              'confirmed': true,
+            });
+            data = {
+              ...data,
+              'version': 2,
+              'review_current': true,
+              'reviewed_at': '2026-09-23T10:00:00Z',
+              'reviewed_snapshot': {
+                'assets': clone(data['assets']),
+                'context': clone(data['saved_context']),
+                'draft_revision': 1,
+              },
+            };
+          } else {
+            expect(r.url.path, endsWith('/clear-review'));
+            expect(body, {'version': 2, 'confirmed': true});
+            data = {
+              ...data,
+              'version': 3,
+              'review_current': false,
+              'reviewed_at': null,
+              'reviewed_snapshot': null,
+            };
+          }
+        }
+        return reply(data);
+      });
+      addTearDown(c.dispose);
+      final key = GlobalKey();
+      await t.pumpWidget(
+        app(c, captureKey: key, scale: width == 320 ? 1.3 : 1),
+      );
+      await t.pumpAndSettle();
+      expect(
+        t
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Save copy review'),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tap(t, googleCopyReviewConfirmation);
+      await tap(t, 'Save copy review');
+      expect(find.text('COPY REVIEW CURRENT'), findsOneWidget);
+      await t.ensureVisible(find.text('Save copy review'));
+      await t.pumpAndSettle();
+      if (Platform.environment['KORLIX_FUNNEL_SCREENSHOTS'] == '1') {
+        await t.runAsync(() async {
+          final image =
+              await (key.currentContext!.findRenderObject()
+                      as RenderRepaintBoundary)
+                  .toImage(pixelRatio: 1.5);
+          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+          File(
+            '/tmp/k165-review-${width.toInt()}.png',
+          ).writeAsBytesSync(bytes!.buffer.asUint8List());
+        });
+      }
+      await tap(t, 'Copy review record');
+      expect(copied, contains('OWNER COPY REVIEW — CURRENT'));
+      expect(copied, contains('Meet our team'));
+      expect(copied, contains('No ad or spending has been created.'));
+      await tap(t, 'Clear copy review');
+      await tap(t, 'Keep review');
+      expect(calls.where((r) => r.method == 'POST').length, 1);
+      await tap(t, 'Clear copy review');
+      await tap(t, 'Clear review');
+      expect(find.text('COPY NOT REVIEWED'), findsOneWidget);
+      expect(
+        t.widget<TextField>(field('Headline 1')).controller!.text,
+        'Meet our team',
+      );
+      expect(t.takeException(), isNull);
+    });
+  }
+  testWidgets(
+    'Unsaved text resets review confirmation and prevents reviewing different text',
+    (t) async {
+      final c = makeClient((r) async => reply(fixture()));
+      addTearDown(c.dispose);
+      await t.pumpWidget(app(c));
+      await t.pumpAndSettle();
+      await tap(t, googleCopyReviewConfirmation);
+      await t.enterText(field('Headline 1'), 'My changed copy');
+      await t.pump();
+      expect(
+        t.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value,
+        false,
+      );
+      expect(
+        t
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Save copy review'),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(find.text('SAVE CHANGES BEFORE REVIEW'), findsOneWidget);
+    },
+  );
+  testWidgets(
+    'Stale review exports the reviewed assets rather than the latest draft',
+    (t) async {
+      final data = fixture();
+      data['version'] = 3;
+      data['draft_revision'] = 2;
+      data['reviewed_at'] = '2026-09-23T10:00:00Z';
+      data['reviewed_snapshot'] = {
+        'assets': clone(data['assets']),
+        'context': clone(data['saved_context']),
+        'draft_revision': 1,
+      };
+      data['assets']['headlines'][0] = 'New unreviewed headline';
+      String? copied;
+      t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = call.arguments['text'];
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      final c = makeClient((r) async => reply(data));
+      addTearDown(c.dispose);
+      await t.pumpWidget(app(c));
+      await t.pumpAndSettle();
+      await tap(t, 'Copy review record');
+      expect(copied, contains('OWNER COPY REVIEW — OUT OF DATE'));
+      expect(copied, contains('Meet our team'));
+      expect(copied, isNot(contains('New unreviewed headline')));
+    },
+  );
+  testWidgets(
+    'Conflict while reviewing blocks repeat approval until reload and renewed confirmation',
+    (t) async {
+      var posts = 0;
+      final c = makeClient((r) async {
+        if (r.method == 'POST') {
+          posts++;
+          return reply({'error': 'A different draft was saved.'}, 409);
+        }
+        return reply(fixture());
+      });
+      addTearDown(c.dispose);
+      await t.pumpWidget(app(c));
+      await t.pumpAndSettle();
+      await tap(t, googleCopyReviewConfirmation);
+      await tap(t, 'Save copy review');
+      expect(posts, 1);
+      expect(
+        t
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Save copy review'),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tap(t, 'Reload saved draft');
+      expect(
+        t.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value,
+        false,
+      );
+      expect(
+        t
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Save copy review'),
+            )
+            .onPressed,
+        isNull,
+      );
+    },
+  );
+  testWidgets(
+    'Access loss during pending copy review removes its private record',
+    (t) async {
+      final pending = Completer<http.Response>();
+      final c = makeClient((r) async {
+        if (r.url.path.endsWith('/denied')) {
+          return reply({'error': 'Denied'}, 403);
+        }
+        return r.method == 'POST' ? pending.future : reply(fixture());
+      });
+      addTearDown(c.dispose);
+      await t.pumpWidget(app(c));
+      await t.pumpAndSettle();
+      await tap(t, googleCopyReviewConfirmation);
+      await t.ensureVisible(find.text('Save copy review'));
+      await t.tap(find.text('Save copy review'));
+      await t.pump();
+      await expectLater(
+        c.request('GET', '/denied'),
+        throwsA(isA<FunnelException>()),
+      );
+      pending.complete(reply(fixture()));
+      await t.pumpAndSettle();
+      expect(find.text('Save copy review'), findsNothing);
+      expect(find.text('Copy review saved.'), findsNothing);
+      expect(find.textContaining('Enterprise access'), findsOneWidget);
+    },
+  );
+  test(
+    'Malformed copy approval and inconsistent reviewed assets fail closed',
+    () {
+      for (final mutate in <void Function(Map<String, dynamic>)>[
+        (d) => d['review_current'] = true,
+        (d) => d['review_ready'] = false,
+        (d) => d['review_fingerprint'] = 'x',
+        (d) => d['draft_revision'] = 3,
+        (d) => d['review_checks']['page_published'] = false,
+        (d) => d['reviewed_at'] = '2026-09-23T10:00:00Z',
+      ]) {
+        final d = fixture();
+        mutate(d);
+        expect(
+          () => validateGoogleCreative(d, fid, cid),
+          throwsA(isA<FunnelException>()),
+        );
+      }
+      final d = fixture();
+      d['review_current'] = true;
+      d['reviewed_at'] = '2026-09-23T10:00:00Z';
+      d['reviewed_snapshot'] = {
+        'assets': clone(d['assets']),
+        'context': clone(d['saved_context']),
+        'draft_revision': 1,
+      };
+      d['reviewed_snapshot']['assets']['headlines'][0] =
+          'Different reviewed text';
+      expect(
+        () => validateGoogleCreative(d, fid, cid),
+        throwsA(isA<FunnelException>()),
+      );
+    },
+  );
 }
