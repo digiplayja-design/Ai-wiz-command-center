@@ -9,6 +9,7 @@ import 'funnel_meta_preparation.dart';
 import 'funnel_google_preparation.dart';
 import 'funnel_google_creative.dart';
 import 'funnel_google_keywords.dart';
+import 'funnel_google_targeting.dart';
 
 String campaignMoney(num cents) => '\$${(cents / 100).toStringAsFixed(2)}';
 String campaignChannel(String value) => switch (value) {
@@ -362,6 +363,21 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
     );
   }
 
+  Future<void> _targeting(Map<String, dynamic> c) async {
+    if (_busy || _denied) return;
+    final client = widget.client, funnel = widget.funnelId;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => FunnelGoogleTargeting(
+        client: client,
+        funnelId: funnel,
+        campaignId: c['id'],
+        scope: _scope,
+      ),
+    );
+  }
+
   String _brief(Map c) =>
       'KORLIX campaign plan — ${c['name']}\nChannel: ${campaignChannel('${c['platform']}')}\nPlanned budget: ${campaignMoney(c['daily_cents'])} USD/day for ${c['days']} days; ${campaignMoney(c['planned_total_cents'])} USD total.\nAudience: ${c['audience']}\nHeadline: ${c['headline']}\nMessage: ${c['body']}\nCTA: ${c['cta']}\nDestination: ${c['tracking_url']}\nPlan only. Review and launch separately in your ad platform.';
   @override
@@ -637,6 +653,12 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
                   onPressed: _busy ? null : () => _keywords(c),
                   icon: const Icon(Icons.manage_search),
                   label: const Text('Search keywords'),
+                ),
+              if (c['platform'] == 'google')
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : () => _targeting(c),
+                  icon: const Icon(Icons.public),
+                  label: const Text('Targeting draft'),
                 ),
               if (['meta', 'google'].contains(c['platform']))
                 OutlinedButton.icon(
