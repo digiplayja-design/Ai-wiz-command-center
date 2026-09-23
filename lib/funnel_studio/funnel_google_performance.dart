@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
+import 'funnel_google_campaign_results.dart';
 import 'funnel_meta_format.dart' show metaCount, metaMoney;
 
 Map<String, dynamic> googlePerformanceReport(
   Map<String, dynamic> report,
   Map<String, dynamic> connection,
-  int days,
-) {
+  int days, {
+  String scope = 'account',
+}) {
   Never invalid() => throw const FunnelException(
     'Google performance data could not be verified. Check your connection and try again.',
   );
@@ -39,12 +41,14 @@ Map<String, dynamic> googlePerformanceReport(
     return value;
   }
 
+  final campaign = scope == 'campaign';
   final account = report['account'],
       range = report['range'],
       rows = report['rows'],
       totals = report['totals'];
-  if (report['source'] != 'google_ads' ||
-      report['scope'] != 'account' ||
+  if (!['account', 'campaign'].contains(scope) ||
+      report['source'] != 'google_ads' ||
+      report['scope'] != scope ||
       report['connection_version'] != connection['version'] ||
       report['root_id'] != connection['root_id'] ||
       account is! Map ||
@@ -61,8 +65,9 @@ Map<String, dynamic> googlePerformanceReport(
       range is! Map ||
       range['days'] != days ||
       rows is! List ||
-      rows.length > days ||
-      report['reported_days'] != rows.length ||
+      rows.length > (campaign ? 500 : days) ||
+      report[campaign ? 'reported_campaigns' : 'reported_days'] !=
+          rows.length ||
       totals is! Map ||
       report['fetched_at'] is! String ||
       DateTime.tryParse(report['fetched_at']) == null) {
@@ -75,14 +80,50 @@ Map<String, dynamic> googlePerformanceReport(
   DateTime? previous;
   for (final row in rows) {
     if (row is! Map) invalid();
-    final date = day(row['date']);
-    if (date.isBefore(from) ||
-        date.isAfter(to) ||
-        !dates.add(row['date']) ||
-        (previous != null && date.isAfter(previous))) {
-      invalid();
+    if (campaign) {
+      final id = row['campaign_id'];
+      if (id is! String ||
+          !RegExp(r'^[1-9]\d{0,18}$').hasMatch(id) ||
+          BigInt.parse(id) > BigInt.parse('9223372036854775807') ||
+          !dates.add(id) ||
+          row['campaign_name'] is! String ||
+          row['campaign_name'].trim().isEmpty ||
+          row['campaign_name'].length > 1000 ||
+          ![
+            'ENABLED',
+            'PAUSED',
+            'REMOVED',
+            'UNKNOWN',
+            'UNSPECIFIED',
+          ].contains(row['status']) ||
+          ![
+            'DEMAND_GEN',
+            'DISPLAY',
+            'HOTEL',
+            'LOCAL',
+            'LOCAL_SERVICES',
+            'MULTI_CHANNEL',
+            'PERFORMANCE_MAX',
+            'SEARCH',
+            'SHOPPING',
+            'SMART',
+            'TRAVEL',
+            'UNKNOWN',
+            'UNSPECIFIED',
+            'VIDEO',
+          ].contains(row['channel'])) {
+        invalid();
+      }
+    } else {
+      final date = day(row['date']);
+      if (date.isBefore(from) ||
+          date.isAfter(to) ||
+          !dates.add(row['date']) ||
+          (previous != null && date.isAfter(previous))) {
+        invalid();
+      }
+      previous = date;
     }
-    previous = date;
     totalSpend += spend(row['spend']);
     impressions += BigInt.from(count(row['impressions']));
     clicks += BigInt.from(count(row['clicks']));
@@ -112,6 +153,7 @@ class FunnelGooglePerformance extends StatefulWidget {
 
 class _FunnelGooglePerformanceState extends State<FunnelGooglePerformance> {
   int _days = 7, _generation = 0;
+  String _scope = 'account';
   bool _busy = false, _denied = false;
   Map<String, dynamic>? _report;
   String? _error;
@@ -169,7 +211,10 @@ class _FunnelGooglePerformanceState extends State<FunnelGooglePerformance> {
 
   Future<void> _load() async {
     if (!_ready || _busy) return;
-    final generation = ++_generation, binding = _binding, days = _days;
+    final generation = ++_generation,
+        binding = _binding,
+        days = _days,
+        scope = _scope;
     final connection = Map<String, dynamic>.from(widget.connection!);
     setState(() {
       _busy = true;
@@ -181,7 +226,9 @@ class _FunnelGooglePerformanceState extends State<FunnelGooglePerformance> {
     try {
       final r = await widget.client.request(
         'GET',
-        '/google-ads/performance',
+        scope == 'campaign'
+            ? '/google-ads/campaign-performance'
+            : '/google-ads/performance',
         query: {
           'days': '$days',
           'version': '${connection['version']}',
@@ -190,7 +237,12 @@ class _FunnelGooglePerformanceState extends State<FunnelGooglePerformance> {
         },
       );
       if (!current()) return;
-      final checked = googlePerformanceReport(r, connection, days);
+      final checked = googlePerformanceReport(
+        r,
+        connection,
+        days,
+        scope: scope,
+      );
       setState(() => _report = checked);
     } catch (e) {
       if (current()) {
@@ -238,6 +290,7 @@ class _FunnelGooglePerformanceState extends State<FunnelGooglePerformance> {
         rows = r['rows'] as List,
         totals = r['totals'] as Map,
         currency = '${account['currency']}';
+    final campaign = r['scope'] == 'campaign';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -263,9 +316,17 @@ class _FunnelGooglePerformanceState extends State<FunnelGooglePerformance> {
         _gap(16),
         if (rows.isEmpty)
           _caption(
-            'Google returned no daily rows for this period. No totals are displayed.',
+            campaign
+                ? 'Google returned no campaign rows for this period. No totals are displayed.'
+                : 'Google returned no daily rows for this period. No totals are displayed.',
           )
         else ...[
+          if (campaign) ...[
+            _caption(
+              'Totals for all returned campaigns · search does not change these totals.',
+            ),
+            _gap(),
+          ],
           LayoutBuilder(
             builder: (context, constraints) {
               final width = constraints.maxWidth >= 580
@@ -292,56 +353,69 @@ class _FunnelGooglePerformanceState extends State<FunnelGooglePerformance> {
           ),
           _gap(16),
           _caption(
-            '${r['reported_days']} daily rows returned. Totals sum these rows. Dates without returned activity are not filled in; Google may omit zero-activity days and revise reporting.',
+            campaign
+                ? '${r['reported_campaigns']} campaigns returned for the full period. Totals sum these rows; campaigns without returned data are not listed. Google may revise reporting. Names and statuses reflect retrieval time, not historical status. Draft campaigns are excluded.'
+                : '${r['reported_days']} daily rows returned. Totals sum these rows. Dates without returned activity are not filled in; Google may omit zero-activity days and revise reporting.',
           ),
           _gap(),
-          Material(
-            color: Colors.transparent,
-            child: ExpansionTile(
-              key: ValueKey('google-daily-$_generation'),
-              tilePadding: EdgeInsets.zero,
-              expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
-              title: const Text(
-                'Google daily results',
-                style: TextStyle(fontWeight: FontWeight.w700),
+          if (campaign)
+            FunnelGoogleCampaignResults(
+              key: ValueKey('google-campaign-results-$_generation'),
+              rows: rows.cast<Map>(),
+              currency: currency,
+            )
+          else
+            Material(
+              color: Colors.transparent,
+              child: ExpansionTile(
+                key: ValueKey('google-daily-$_generation'),
+                tilePadding: EdgeInsets.zero,
+                expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+                title: const Text(
+                  'Google daily results',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                children: [
+                  for (final row in rows)
+                    Container(
+                      key: ValueKey('google-day-${row['date']}'),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: const BoxDecoration(
+                        border: Border(bottom: BorderSide(color: WfStyle.line)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${row['date']}',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          _gap(8),
+                          Wrap(
+                            spacing: 20,
+                            runSpacing: 8,
+                            children: [
+                              Text(
+                                'Spent: ${metaMoney(currency, row['spend'])}',
+                              ),
+                              Text(
+                                'Impressions: ${metaCount(row['impressions'])}',
+                              ),
+                              Text('Clicks: ${metaCount(row['clicks'])}'),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               ),
-              children: [
-                for (final row in rows)
-                  Container(
-                    key: ValueKey('google-day-${row['date']}'),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    decoration: const BoxDecoration(
-                      border: Border(bottom: BorderSide(color: WfStyle.line)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${row['date']}',
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        _gap(8),
-                        Wrap(
-                          spacing: 20,
-                          runSpacing: 8,
-                          children: [
-                            Text('Spent: ${metaMoney(currency, row['spend'])}'),
-                            Text(
-                              'Impressions: ${metaCount(row['impressions'])}',
-                            ),
-                            Text('Clicks: ${metaCount(row['clicks'])}'),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
             ),
-          ),
         ],
         _gap(),
         _caption(
-          'Account totals cover all campaigns. They are not this funnel’s attributed results, verified leads, revenue, ROAS or a billing statement. Manual campaign reports remain separate.',
+          campaign
+              ? 'Campaign figures belong to the selected advertising account. They are not this funnel’s attributed results, verified leads, revenue, ROAS or a billing statement. Separately loaded account totals may differ. Manual campaign reports remain separate.'
+              : 'Account totals cover all campaigns. They are not this funnel’s attributed results, verified leads, revenue, ROAS or a billing statement. Manual campaign reports remain separate.',
         ),
       ],
     );
@@ -373,6 +447,25 @@ class _FunnelGooglePerformanceState extends State<FunnelGooglePerformance> {
           spacing: 8,
           runSpacing: 8,
           children: [
+            for (final scope in ['account', 'campaign'])
+              ChoiceChip(
+                key: ValueKey('google-scope-$scope'),
+                label: Text(
+                  scope == 'account' ? 'Account totals' : 'Campaign comparison',
+                ),
+                selected: _scope == scope,
+                onSelected: (_) => setState(() {
+                  _scope = scope;
+                  _clear();
+                }),
+              ),
+          ],
+        ),
+        _gap(14),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
             for (final days in [7, 30, 90])
               ChoiceChip(
                 key: ValueKey('google-period-$days'),
@@ -391,7 +484,11 @@ class _FunnelGooglePerformanceState extends State<FunnelGooglePerformance> {
           onPressed: _ready && !_busy ? _load : null,
           icon: const Icon(Icons.insights_outlined),
           label: Text(
-            _busy ? 'Loading Google report…' : 'Load Google performance',
+            _busy
+                ? 'Loading Google report…'
+                : _scope == 'campaign'
+                ? 'Load Google campaign comparison'
+                : 'Load Google performance',
           ),
         ),
         if (!_ready) ...[
