@@ -61,17 +61,17 @@ export function googlePausedMethods(ads){
     const r=await ads(`customers/${s.identity.account.id}/googleAds:search`,access,s.identity.login_customer_id,{query:query+' LIMIT 201'});
     if(r.nextPageToken||(r.results!==undefined&&!Array.isArray(r.results))||(r.results||[]).length>200)unclear();return r.results||[];
   }
-  async function find(access,s){
+  async function find(access,s,controls=null){
     const expected=googlePausedRequest(s).mutateOperations,id=s.identity.account.id;
     // Provider name contains only a fixed prefix and a server UUID; no GAQL input.
-    const list=await rows(access,s,`SELECT campaign.resource_name, campaign.name, campaign.status, campaign.advertising_channel_type, campaign.start_date_time, campaign.end_date_time, campaign.campaign_budget, campaign.bidding_strategy_type, campaign.network_settings.target_google_search, campaign.network_settings.target_search_network, campaign.network_settings.target_content_network, campaign.network_settings.target_partner_search_network, campaign.geo_target_type_setting.positive_geo_target_type, campaign.geo_target_type_setting.negative_geo_target_type, campaign.contains_eu_political_advertising, campaign_budget.resource_name, campaign_budget.amount_micros, campaign_budget.explicitly_shared FROM campaign WHERE campaign.name = '${s.provider_name}'`);
+    const list=await rows(access,s,`SELECT campaign.resource_name, campaign.name, campaign.status, campaign.advertising_channel_type, campaign.start_date_time, campaign.end_date_time, campaign.campaign_budget, campaign.bidding_strategy_type, campaign.network_settings.target_google_search, campaign.network_settings.target_search_network, campaign.network_settings.target_content_network, campaign.network_settings.target_partner_search_network, campaign.geo_target_type_setting.positive_geo_target_type, campaign.geo_target_type_setting.negative_geo_target_type, campaign.contains_eu_political_advertising, campaign_budget.resource_name, campaign_budget.amount_micros, campaign_budget.explicitly_shared, campaign_budget.reference_count FROM campaign WHERE campaign.name = '${s.provider_name}'`);
     if(list.length===0)return null;if(list.length!==1)unclear();
     const c=list[0].campaign,b=list[0].campaignBudget;
-    if(!resource(c?.resourceName,id,'campaigns')||!resource(b?.resourceName,id,'campaignBudgets')||c.name!==s.provider_name||c.status!=='PAUSED'||c.advertisingChannelType!=='SEARCH'||c.startDateTime!==s.start_date+' 00:00:00'||c.endDateTime!==s.end_date+' 23:59:59'||c.campaignBudget!==b.resourceName||c.biddingStrategyType!=='TARGET_SPEND'||b.amountMicros!==expected[0].campaignBudgetOperation.create.amountMicros||b.explicitlyShared===true||c.networkSettings?.targetGoogleSearch!==true||['targetSearchNetwork','targetContentNetwork','targetPartnerSearchNetwork'].some(k=>c.networkSettings[k]===true)||!same(c.geoTargetTypeSetting,expected[1].campaignOperation.create.geoTargetTypeSetting)||c.containsEuPoliticalAdvertising!=='DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING')unclear();
+    if(!resource(c?.resourceName,id,'campaigns')||!resource(b?.resourceName,id,'campaignBudgets')||c.name!==s.provider_name||!(controls?['PAUSED','ENABLED']:['PAUSED']).includes(c.status)||c.advertisingChannelType!=='SEARCH'||c.startDateTime!==s.start_date+' 00:00:00'||c.endDateTime!==s.end_date+' 23:59:59'||c.campaignBudget!==b.resourceName||c.biddingStrategyType!=='TARGET_SPEND'||b.amountMicros!==expected[0].campaignBudgetOperation.create.amountMicros||b.explicitlyShared===true||c.networkSettings?.targetGoogleSearch!==true||['targetSearchNetwork','targetContentNetwork','targetPartnerSearchNetwork'].some(k=>c.networkSettings[k]===true)||!same(c.geoTargetTypeSetting,expected[1].campaignOperation.create.geoTargetTypeSetting)||c.containsEuPoliticalAdvertising!=='DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING')unclear();
     const campaignId=c.resourceName.split('/')[3];
-    const adRows=await rows(access,s,`SELECT ad_group.resource_name, ad_group.name, ad_group.status, ad_group.type, ad_group_ad.resource_name, ad_group_ad.status, ad_group_ad.ad.final_urls, ad_group_ad.ad.responsive_search_ad.headlines, ad_group_ad.ad.responsive_search_ad.descriptions, ad_group_ad.ad.responsive_search_ad.path1, ad_group_ad.ad.responsive_search_ad.path2 FROM ad_group_ad WHERE campaign.id = ${campaignId}`);
+    const adRows=await rows(access,s,`SELECT ad_group.resource_name, ad_group.name, ad_group.status, ad_group.type, ad_group_ad.resource_name, ad_group_ad.status, ad_group_ad.policy_summary.approval_status, ad_group_ad.policy_summary.review_status, ad_group_ad.ad.final_urls, ad_group_ad.ad.responsive_search_ad.headlines, ad_group_ad.ad.responsive_search_ad.descriptions, ad_group_ad.ad.responsive_search_ad.path1, ad_group_ad.ad.responsive_search_ad.path2 FROM ad_group_ad WHERE campaign.id = ${campaignId}`);
     if(adRows.length!==1)unclear();const g=adRows[0].adGroup,a=adRows[0].adGroupAd;
-    if(g?.status!=='PAUSED'||g.type!=='SEARCH_STANDARD'||g.name!==s.provider_name+' group'||a?.status!=='PAUSED')unclear();
+    if(!(controls?['PAUSED','ENABLED']:['PAUSED']).includes(g?.status)||g.type!=='SEARCH_STANDARD'||g.name!==s.provider_name+' group'||!(controls?['PAUSED','ENABLED']:['PAUSED']).includes(a?.status))unclear();
     const expectedAd=expected[3].adGroupAdOperation.create.ad;
     const cleanAssets=assets=>Array.isArray(assets)?assets.map(x=>({text:x.text,pinnedField:x.pinnedField||'UNSPECIFIED'})):null;
     const cleanAd=ad=>({finalUrls:ad?.finalUrls,responsiveSearchAd:{headlines:cleanAssets(ad?.responsiveSearchAd?.headlines),descriptions:cleanAssets(ad?.responsiveSearchAd?.descriptions),path1:ad?.responsiveSearchAd?.path1||'',path2:ad?.responsiveSearchAd?.path2||''}});
@@ -84,7 +84,13 @@ export function googlePausedMethods(ads){
     const sorted=(values,fn)=>values.map(v=>stable(fn(v))).sort();
     const expectedCriteria=expected.filter(x=>x.campaignCriterionOperation).map(x=>x.campaignCriterionOperation.create),expectedKeywords=expected.filter(x=>x.adGroupCriterionOperation).map(x=>x.adGroupCriterionOperation.create);
     if(!same(sorted(cc.map(x=>x.campaignCriterion||{}),cleanCriterion),sorted(expectedCriteria,cleanCriterion))||!same(sorted(ac.map(x=>x.adGroupCriterion||{}),cleanKeyword),sorted(expectedKeywords,cleanKeyword)))unclear();
+    if(controls){
+      if(!same(result,creationResources(controls,id))||String(b.referenceCount)!=='1'||a.policySummary?.approvalStatus!=='APPROVED'||a.policySummary?.reviewStatus!=='REVIEWED')unclear();
+      const groups=await rows(access,s,`SELECT ad_group.resource_name FROM ad_group WHERE campaign.id = ${campaignId} AND ad_group.status != 'REMOVED'`);
+      if(groups.length!==1||groups[0].adGroup?.resourceName!==result.ad_group)unclear();
+      return {resources:result,statuses:{campaign:c.status,ad_group:g.status,ad:a.status},policy:'APPROVED'};
+    }
     return result;
   }
-  return {validatePausedSearch:(access,s)=>mutate(access,s,true),createPausedSearch:(access,s)=>mutate(access,s,false),findPausedSearch:find};
+  return {inspectCreatedSearch:(access,s,resources)=>find(access,s,resources),validatePausedSearch:(access,s)=>mutate(access,s,true),createPausedSearch:(access,s)=>mutate(access,s,false),findPausedSearch:find};
 }

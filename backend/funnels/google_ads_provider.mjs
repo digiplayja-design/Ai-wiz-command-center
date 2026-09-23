@@ -2,6 +2,7 @@ import {createHash,randomBytes,createCipheriv,createDecipheriv} from 'node:crypt
 import {fail,FunnelError,text} from './core.mjs';
 import {readGooglePerformance} from './google_ads_performance.mjs';
 import {googlePausedMethods} from './google_paused_provider.mjs';
+import {googleControlsMethods} from './google_controls_provider.mjs';
 
 export const googleAdsCallback='/api/funnels/google-ads/callback';
 export const googleAdsScope='https://www.googleapis.com/auth/adwords';
@@ -82,6 +83,7 @@ export function createGoogleAdsProvider(config,{fetchImpl=fetch,now=Date.now}={}
   }
   return {
     ...googlePausedMethods(ads),
+    ...googleControlsMethods(ads),
     authorizationUrl(state,challenge){const u=new URL('https://accounts.google.com/o/oauth2/v2/auth');u.search=new URLSearchParams({client_id:config.id,redirect_uri:config.callback,response_type:'code',scope:googleAdsScope,access_type:'offline',prompt:'consent select_account',state,code_challenge:challenge,code_challenge_method:'S256'}).toString();return u.href;},
     async exchange(code,verifier){const r=await token({grant_type:'authorization_code',code,code_verifier:verifier,redirect_uri:config.callback},true);return {refresh_token:r.refresh_token,refresh_expires_at:r.refresh_token_expires_in?new Date(now()+r.refresh_token_expires_in*1000).toISOString():null};},
     async refresh(refreshToken){return (await token({grant_type:'refresh_token',refresh_token:refreshToken})).access_token;},
