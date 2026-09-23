@@ -1407,3 +1407,64 @@ image fields) and `adcreative.py` (CallToActionType), Supabase functions guidanc
 and changelog, PostgreSQL foreign-key documentation. This chapter implements
 preparation only, not SDK payload generation. Roll back the frontend then backend;
 retain the additive table/RPC and image-reference protection to preserve drafts.
+
+### K172 — Meta targeting, placement and combined preparation review
+
+GET `/:id/campaigns/:campaign_id/meta-targeting`, POST `.../save`, `.../review`
+and `.../clear-review` provide private preparation. All use current Enterprise
+ownership, no query parameters, no-store and a shared 30 owner requests/minute.
+Save accepts exactly version, fingerprint and assets; review requires the exact
+version/review_fingerprint and confirmed:true. Clear requires version and a
+Boolean confirmation. Actor, account/Page context and destination are server
+controlled; no Meta endpoint is called.
+
+Assets hold up to 20 unique country codes, integer age_min/age_max (18 through
+65+, minimum <= maximum), placements (undecided / automatic / facebook_feed),
+and categories. Categories are UNDECIDED alone, NONE alone, or up to five unique
+special categories: HOUSING, EMPLOYMENT, FINANCIAL_PRODUCTS_SERVICES,
+ISSUES_ELECTIONS_POLITICS and ONLINE_GAMBLING_AND_GAMING. KORLIX keeps undecided
+and special-category drafts at its broad 18–65+ planning range; this is not a
+claim that the range satisfies any country/category's live eligibility. All
+genders are implicit. Country names/codes are a 249-entry ISO planning snapshot
+from pycountry, with source hash and version recorded in the JSON/SQL catalog.
+They are not a Meta availability list. No cities, radii, exclusions, interest IDs,
+audience expansion settings, optimization objective or final payload are inferred.
+
+The additive RLS-enabled service-only table stores draft assets, labels, setup
+context, revision, version and an optional combined review snapshot. SECURITY
+INVOKER RPCs have fixed search paths and no browser/public execute. Targeting
+invokes the existing Meta creative reader, preserving funnel → campaign →
+connection → setup → creative → targeting lock order. The draft fingerprint binds
+the setup and catalog; the review hash additionally binds the targeting revision
+and exact saved creative version, text, immutable-image metadata and context.
+
+Review needs complete/current creative and targeting, a published page and a
+reviewed campaign plan. It can be recorded before provider activation; it does
+not certify a selected account/Page, provider availability, policy approval or
+launch. ad_publishing_ready always remains false. Reviews do not mutate creative,
+setup, campaign or connection rows. Changed/resaved drafts invalidate the review,
+while the historical snapshot remains exportable and clearly marked out of date.
+Review/clear increments the concurrency version only; saved timestamps and draft
+revision remain intact. Archived drafts are readable/exportable and reviews can
+be cleared, but no new save/review is allowed.
+
+Historical reviewed image metadata is an audit snapshot, not an active image
+reference. After the active creative removes an image, the existing image library
+can delete it; historical review exports retain its label/hash/ID without fetching
+old bytes. K171 active-draft image deletion protection remains unchanged.
+
+The Meta campaign action opens a responsive country picker, category controls,
+age and placement preferences, saved-targeting export, current saved creative
+preview, and one combined owner preparation review. Opening the creative editor
+from this dialog refreshes preparation on return. Dirty edits block review/export,
+conflicts require reload, and owner/client/scope changes or denied access clear
+private content and late responses, including open child editors. Historical
+review exports use their original creative, not the current replacement draft.
+
+Current primary references checked 2026-09-23: Meta official business SDK
+Targeting, TargetingGeoLocation and Campaign.SpecialAdCategories definitions;
+pycountry iso3166-1 database; Supabase functions docs and unchanged changelog.
+Some Meta documentation URLs returned HTTP 429; no live provider capability or
+complete policy validation is asserted. No dependencies, environment variables,
+credentials, provider calls, ads, budgets, spending or outbound messages are added.
+Roll back frontend then backend and retain the private additive schema and data.
