@@ -10,13 +10,14 @@ import 'funnel_client.dart';
 import 'funnel_meta_creative.dart';
 import 'funnel_meta_preparation.dart';
 import 'funnel_images.dart';
+import 'funnel_meta_radius.dart';
 
 const metaTargetingReviewConfirmation =
-    'I reviewed the saved creative, image, destination, countries, ages, ad categories and placement preference. This records my KORLIX preparation review; Meta eligibility and launch remain separate.';
+    'I reviewed the saved creative, image, destination, countries or radius areas, ages, ad categories and placement preference. This records my KORLIX preparation review; Meta eligibility and launch remain separate.';
 const metaTargetingReviewChecks = {
   'saved_draft': 'Save the targeting draft.',
   'complete_choices':
-      'Choose target countries, ad categories and a placement preference.',
+      'Choose countries or supported radius areas, ad categories and a placement preference.',
   'current_context':
       'Compare the current campaign context and save targeting again.',
   'page_published': 'Publish the landing page.',
@@ -83,7 +84,23 @@ bool metaTargetingCatalogValid(dynamic c) {
 
 bool metaTargetingValid(dynamic a, Map catalog) {
   if (a is! Map ||
-      a.length != 5 ||
+      !a.keys.toSet().containsAll([
+        'countries',
+        'age_min',
+        'age_max',
+        'placements',
+        'categories',
+      ]) ||
+      a.keys.any(
+        (k) => ![
+          'countries',
+          'age_min',
+          'age_max',
+          'placements',
+          'categories',
+          'custom_locations',
+        ].contains(k),
+      ) ||
       a['countries'] is! List ||
       a['categories'] is! List ||
       a['age_min'] is! int ||
@@ -92,6 +109,11 @@ bool metaTargetingValid(dynamic a, Map catalog) {
       a['age_max'] > 65 ||
       a['age_min'] > a['age_max'] ||
       !metaPlacements.containsKey(a['placements'])) {
+    return false;
+  }
+  if (a.containsKey('custom_locations') &&
+      (!metaRadiiValid(a['custom_locations']) ||
+          (a['countries'] as List).isNotEmpty)) {
     return false;
   }
   final c = a['countries'] as List,
@@ -109,7 +131,10 @@ bool metaTargetingValid(dynamic a, Map catalog) {
 }
 
 bool metaTargetingComplete(Map a) =>
-    (a['countries'] as List).isNotEmpty &&
+    ((a['countries'] as List).isNotEmpty ||
+        (metaRadiiValid(a['custom_locations']) &&
+            (a['custom_locations'] as List).isNotEmpty &&
+            (a['categories'] as List).contains('NONE'))) &&
     a['placements'] != 'undecided' &&
     !(a['categories'] as List).contains('UNDECIDED');
 bool _labelsValid(dynamic labels, Map a) =>
@@ -150,6 +175,9 @@ Map<String, dynamic> validateMetaTargeting(
       !hash(r['fingerprint']) ||
       !metaTargetingCatalogValid(r['catalog']) ||
       !metaTargetingValid(r['assets'], r['catalog']) ||
+      (r.containsKey('radius_supported') && r['radius_supported'] is! bool) ||
+      (r['assets'].containsKey('custom_locations') &&
+          r['radius_supported'] != true) ||
       r['creative'] is! Map ||
       r['ad_publishing_ready'] != false ||
       r['draft_current'] is! bool ||
@@ -271,7 +299,7 @@ Map<String, dynamic> validateMetaTargeting(
 
 String metaTargetingExport(Map d) {
   final a = d['assets'], c = d['saved_context'], labels = d['saved_labels'];
-  return 'KORLIX Meta targeting draft — ${c['campaign']['name']}\n${d['draft_current'] == true ? 'SAVED DRAFT' : 'OUT OF DATE — compare with current context.'}\n${d['draft_complete'] == true ? 'Draft choices complete.' : 'INCOMPLETE draft choices.'}\nSaved: ${d['updated_at']}\nCountries: ${(a['countries'] as List).map((v) => '${labels[v]} ($v)').join(', ')}\nDraft ages: ${a['age_min']}–${a['age_max'] == 65 ? '65+' : a['age_max']} · all genders\nAd categories: ${(a['categories'] as List).map((v) => metaAdCategories[v]).join(', ')}\nPlacement preference: ${metaPlacements[a['placements']]}\nDestination at save: ${c['landing_page']['destination']}\nFacebook Page at save: ${c['meta']['page']?['name'] ?? 'Not selected'}\nCountry list is a planning reference. Account, category, country, age and placement eligibility need live Meta checks. Local areas, delivery expansion and launch are separate. No ad or spending has been created.';
+  return 'KORLIX Meta targeting draft — ${c['campaign']['name']}\n${d['draft_current'] == true ? 'SAVED DRAFT' : 'OUT OF DATE — compare with current context.'}\n${d['draft_complete'] == true ? 'Draft choices complete.' : 'INCOMPLETE draft choices.'}\nSaved: ${d['updated_at']}\n${metaRadiusSummary(a)}\nCountries: ${(a['countries'] as List).map((v) => '${labels[v]} ($v)').join(', ')}\nDraft ages: ${a['age_min']}–${a['age_max'] == 65 ? '65+' : a['age_max']} · all genders\nAd categories: ${(a['categories'] as List).map((v) => metaAdCategories[v]).join(', ')}\nPlacement preference: ${metaPlacements[a['placements']]}\nDestination at save: ${c['landing_page']['destination']}\nFacebook Page at save: ${c['meta']['page']?['name'] ?? 'Not selected'}\nCountry list is a planning reference. Account, category, country, age and placement eligibility need live Meta checks. Coordinate accuracy, location restrictions, delivery expansion and launch require checking. ${a.containsKey('custom_locations') && !(a['categories'] as List).contains('NONE') ? '$metaRadiusCategoryNotice\n' : ''}No ad or spending has been created.';
 }
 
 class FunnelMetaTargeting extends StatefulWidget {
@@ -293,7 +321,7 @@ class _FunnelMetaTargetingState extends State<FunnelMetaTargeting> {
   Map<String, dynamic> _choices = emptyMetaTargeting();
   Map<String, dynamic>? _data;
   bool _busy = false, _dirty = false, _conflict = false, _reviewChecked = false;
-  int _generation = 0;
+  int _generation = 0, _areaModeSerial = 0;
   String? _error, _unavailable, _message;
   String get _path =>
       '/${widget.funnelId}/campaigns/${widget.campaignId}/meta-targeting';
@@ -690,6 +718,52 @@ class _FunnelMetaTargetingState extends State<FunnelMetaTargeting> {
     _reviewChecked = false;
     _message = null;
   });
+  Future<void> _switchAreaMode(String mode) async {
+    if (!_editable || _data?['radius_supported'] != true) return;
+    final radius = mode == 'radius';
+    if (radius == _assets.containsKey('custom_locations')) return;
+    final g = _generation;
+    final populated = radius
+        ? (_assets['countries'] as List).isNotEmpty
+        : (_assets['custom_locations'] as List).isNotEmpty;
+    if (populated) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Change target area type?'),
+          content: Text(
+            radius
+                ? 'This removes your whole-country targets from this draft. Add radius areas before saving.'
+                : 'This removes your radius areas from this draft. Choose whole-country targets before saving.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Keep current targets'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Change target type'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) {
+        if (_current(g)) setState(() => _areaModeSerial++);
+        return;
+      }
+    }
+    if (!_current(g) || !_editable) return;
+    _change(() {
+      _choices['countries'] = <String>[];
+      if (radius) {
+        _choices['custom_locations'] = <Map<String, dynamic>>[];
+      } else {
+        _choices.remove('custom_locations');
+      }
+    });
+  }
+
   Future<void> _choose(String group, String title) async {
     if (!_editable) return;
     final g = _generation;
@@ -963,11 +1037,62 @@ class _FunnelMetaTargetingState extends State<FunnelMetaTargeting> {
                       ),
                     ],
                   ),
-                  _section('Target countries'),
-                  const Text(
-                    'Choose up to 20 countries or territories. This is a country-code planning list; it does not confirm Meta ad availability. Empty targets do not mean worldwide. Cities and radius targeting need separate setup.',
-                  ),
-                  _selection('countries', 'Add target country'),
+                  if (_data!['radius_supported'] == true) ...[
+                    _section('Target area type'),
+                    DropdownButtonFormField<String>(
+                      key: ValueKey(
+                        'area-mode-${_assets.containsKey('custom_locations')}-$_areaModeSerial',
+                      ),
+                      initialValue: _assets.containsKey('custom_locations')
+                          ? 'radius'
+                          : 'countries',
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Choose country or radius targeting',
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'countries',
+                          child: Text('Whole countries'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'radius',
+                          child: Text('Radius areas'),
+                        ),
+                      ],
+                      onChanged: _editable
+                          ? (v) {
+                              if (v != null) unawaited(_switchAreaMode(v));
+                            }
+                          : null,
+                    ),
+                  ],
+                  if (_assets.containsKey('custom_locations')) ...[
+                    _section('Radius targets'),
+                    MetaRadiusFields(
+                      areas: _assets['custom_locations'],
+                      enabled: _editable,
+                      onChange: (a, k, v) => _change(() => a[k] = v),
+                      onRemove: (a) => _change(
+                        () => (_choices['custom_locations'] as List).remove(a),
+                      ),
+                      onAdd: () => _change(
+                        () => (_choices['custom_locations'] as List)
+                            .add(<String, dynamic>{
+                              'label': '',
+                              'latitude_micro': null,
+                              'longitude_micro': null,
+                              'radius_meters': null,
+                            }),
+                      ),
+                    ),
+                  ] else ...[
+                    _section('Target countries'),
+                    const Text(
+                      'Choose up to 20 countries or territories. This planning list does not confirm Meta ad availability. Empty targets do not mean worldwide. City and region lookup remain separate.',
+                    ),
+                    _selection('countries', 'Add target country'),
+                  ],
                   _section('Ad categories'),
                   const Text(
                     'Choose every category that applies to your offer. Category eligibility and authorization are checked with Meta before launch.',
@@ -999,6 +1124,15 @@ class _FunnelMetaTargetingState extends State<FunnelMetaTargeting> {
                       onChanged: _editable
                           ? (v) => _category(key, v == true)
                           : null,
+                    ),
+                  if (_assets.containsKey('custom_locations') &&
+                      !(_assets['categories'] as List).contains('NONE'))
+                    const Padding(
+                      padding: EdgeInsets.only(top: 12),
+                      child: Text(
+                        metaRadiusCategoryNotice,
+                        style: TextStyle(color: WfStyle.gold),
+                      ),
                     ),
                   _section('Draft age range'),
                   const Text(
@@ -1037,7 +1171,7 @@ class _FunnelMetaTargetingState extends State<FunnelMetaTargeting> {
                     const Padding(
                       padding: EdgeInsets.only(top: 12),
                       child: Text(
-                        'You can save an incomplete draft. Choose countries, categories and a placement to complete these choices.',
+                        'You can save an incomplete draft. Choose countries or supported radius areas, categories and a placement to complete these choices.',
                         style: TextStyle(color: WfStyle.gold),
                       ),
                     ),
@@ -1069,7 +1203,7 @@ class _FunnelMetaTargetingState extends State<FunnelMetaTargeting> {
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'Preparation only. Meta eligibility, local areas, budgets, tracking and launch remain separate. Saving creates no ad and authorizes no spending.',
+                    'Preparation only. Meta location eligibility, delivery settings, budgets, tracking and launch remain separate. Saving creates no ad and authorizes no spending.',
                     style: TextStyle(color: WfStyle.muted),
                   ),
                   _creativePanel(),
