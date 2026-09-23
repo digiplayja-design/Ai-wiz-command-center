@@ -15,7 +15,9 @@ const config=metaConfiguration(env),account={id:'act_123',name:'Growth account',
 const doc={brand:'Test business',headline:'Your next step',subheadline:'Talk to our team.',cta:'Ask us',thank_you:'Thank you.',layout:'consultation',accent:'cyan',benefits:[],faq:[],privacy_url:'https://example.com/privacy',contact_email:'hello@example.com',booking_url:''};
 const plan={name:'Autumn campaign',platform:'meta',headline:'Explore our services',body:'Ask our team about your needs.',cta:'Learn more',audience:'Businesses seeking our services.',daily_cents:2500,days:14};
 let db,server,base,f,c,clock=Date.now(),providerCalls=0;
-const rpc=async(name,p)=>(await db.query(`select public.${name}($1,$2,$3,$4) r`,[p.p_actor,p.p_action,p.p_id??p.p_funnel,JSON.stringify(p.p_data??{})])).rows[0].r;
+const rpc=async(name,p)=>(await db.query(name==='korlix_meta_v1'?`select public.${name}($1,$2,$3) r`:`select public.${name}($1,$2,$3,$4) r`,name==='korlix_meta_v1'?[p.p_actor,p.p_action,JSON.stringify(p.p_data??{})]:[p.p_actor,p.p_action,p.p_id??p.p_funnel,JSON.stringify(p.p_data??{})])).rows[0].r;
+let locationProvider;
+const noLocation=()=>{throw Error('No provider operation is allowed');};
 const funnel=(action,data={})=>rpc('korlix_funnel_v1',{p_actor:owner,p_action:action,p_id:action==='create'?null:f.id,p_data:data});
 const campaign=(action,data={})=>rpc('korlix_funnel_campaign_v1',{p_actor:owner,p_action:action,p_funnel:f.id,p_data:{campaign_id:c?.id,version:c?.version,...data}});
 const setup=(action='read',data={},actor=owner)=>rpc('korlix_funnel_meta_preparation_v1',{p_actor:actor,p_action:action,p_funnel:f.id,p_data:{campaign_id:c.id,configured:true,config_hash:config.hash,public_base:'https://example.com',...data}});
@@ -32,12 +34,15 @@ test.before(async()=>{
  await db.exec(await readFile(new URL('../../supabase/migrations/20260923162339_funnel_meta_radius.sql',import.meta.url),'utf8'));
  assert.deepEqual((await db.query('select to_jsonb(t) row from korlix_funnel_meta_targeting t')).rows[0].row,beforeRadius);
  const afterRead=await targeting();assert.equal(afterRead.radius_supported,true);delete afterRead.radius_supported;assert.deepEqual(afterRead,beforeRead);
+ const beforeLocations=await targeting(),beforeLocationRow=(await db.query('select to_jsonb(t) row from korlix_funnel_meta_targeting t')).rows[0].row;
+ await db.exec(await readFile(new URL('../../supabase/migrations/20260923180917_funnel_meta_locations.sql',import.meta.url),'utf8'));
+ const afterLocations=await targeting();assert.equal(afterLocations.locations_supported,true);assert.equal(afterLocations.location_lookup_ready,true);delete afterLocations.locations_supported;delete afterLocations.location_lookup_ready;assert.deepEqual(afterLocations,beforeLocations);assert.deepEqual((await db.query('select to_jsonb(t) row from korlix_funnel_meta_targeting t')).rows[0].row,beforeLocationRow);
  await db.exec('set role service_role');
  const database={rpc:async(name,p)=>{try{return{data:await rpc(name,p)}}catch(error){return{error}}}};
- const app=express();app.use(express.json());registerFunnels(app,{database,requireUser:async q=>[owner,other,basic].includes(q.headers.authorization)?{id:q.headers.authorization}:null,environment:env,now:()=>clock,metaProvider:new Proxy({},{get:()=>()=>{providerCalls++;throw Error('No provider operation is allowed');}})});
+ const app=express();app.use(express.json());registerFunnels(app,{database,requireUser:async q=>[owner,other,basic].includes(q.headers.authorization)?{id:q.headers.authorization}:null,environment:env,now:()=>clock,metaProvider:new Proxy({},{get:(_t,k)=>(...args)=>{providerCalls++;return k==='locations'?locationProvider(...args):noLocation();}})});
  server=app.listen(0);await new Promise(r=>server.once('listening',r));base='http://127.0.0.1:'+server.address().port;
 });
-test.beforeEach(async()=>{clock+=60000;await db.exec('delete from korlix_funnels;delete from korlix_meta_connections;delete from korlix_funnel_images;');await db.query("update user_profiles set tier='enterprise' where id=$1",[owner]);f=await funnel('create',{name:'Services',slug:'services',document:doc});f=await funnel('publish',{version:f.version,confirmed:true});c=await campaign('create',plan);c=await campaign('review',{confirmed:true});await connect();providerCalls=0;});
+test.beforeEach(async()=>{clock+=60000;await db.exec('delete from korlix_funnels;delete from korlix_meta_connections;delete from korlix_funnel_images;');await db.query("update user_profiles set tier='enterprise' where id=$1",[owner]);f=await funnel('create',{name:'Services',slug:'services',document:doc});f=await funnel('publish',{version:f.version,confirmed:true});c=await campaign('create',plan);c=await campaign('review',{confirmed:true});await connect();providerCalls=0;locationProvider=noLocation;});
 test.after(async()=>{server.closeAllConnections();await new Promise(r=>server.close(r));await db.close();});
 
 const blank={primary_text:'',headline:'',description:'',cta:'LEARN_MORE',image_id:null,image_alt:''};
@@ -157,3 +162,55 @@ test('K175 radius function stays private and storage constraints reject malforme
  for(const role of ['anon','authenticated']){await db.exec('reset role;set role '+role);await assert.rejects(db.query('select korlix_meta_radius_valid_v1($1)',[JSON.stringify(radius)]),/permission denied/);await db.exec('reset role;set role service_role');}
  for(const [actor,status] of [['',401],[other,404],[basic,403]])assert.equal((await req('/save',{version:0,fingerprint:'a'.repeat(64),assets:radiusAssets()},actor)).status,status);
 });
+
+const city={key:'424242',name:'Columbus',country:'US',type:'city',region:'Ohio'};
+const region={key:'424242',name:'Ohio',country:'US',type:'region',region:''};
+const locationAssets=(rows=[city])=>({...choices,countries:[],geo_locations:rows});
+const search=async(extra={},actor=owner)=>{const d=await targeting();return req('/locations?'+new URLSearchParams({q:'Columbus',country:'US',kind:'all',fingerprint:d.fingerprint,...extra}),null,actor);};
+const mockLocations=()=>locationProvider=async(token,input)=>{assert.equal(token,'private-fixture-token');assert.equal(input.country,'US');return{locations:[city,region],more:true};};
+const proofBody=(d,r,rows=[city])=>({version:d.version,fingerprint:d.fingerprint,assets:locationAssets(rows),location_proofs:Object.fromEntries(r.locations.filter(x=>rows.some(y=>y.key===x.key&&y.type===x.type)).map(x=>[`${x.type}:${x.key}`,x.proof]))});
+test('K177 scoped Meta lookup returns signed bounded results without writing or leaking credentials',async()=>{
+ mockLocations();const before=(await db.query('select to_jsonb(t) r from korlix_meta_connections t')).rows;
+ const r=await search();assert.equal(r.status,200);assert.equal(r.headers.get('cache-control'),'no-store');const data=await r.json();assert.equal(data.source,'meta_location_search');assert.equal(data.more,true);assert.equal(data.locations.length,2);assert.match(data.locations[0].proof,/^\d{13}\.[a-f0-9]{64}$/);assert.equal(providerCalls,1);
+ for(const secret of ['private-fixture-token','sealed','config_hash','binding_id'])assert(!JSON.stringify(data).includes(secret));
+ assert.deepEqual((await db.query('select to_jsonb(t) r from korlix_meta_connections t')).rows,before);assert.equal((await db.query('select count(*)::int n from korlix_funnel_meta_targeting')).rows[0].n,0);
+ for(const [actor,status] of [['',401],[other,404],[basic,403]])assert.equal((await search({},actor)).status,status);assert.equal(providerCalls,1);
+});
+test('K177 new locations require exact signed results; saved locations remain editable without lookup access',async()=>{
+ mockLocations();await completeCreative();let d=await targeting();const found=await(await search()).json();
+ const body=proofBody(d,found,[city,region]);assert.equal((await req('/save',{...body,location_proofs:{}})).status,400);
+ assert.equal((await req('/save',{...body,assets:locationAssets([{...city,name:'Invented city'},region])})).status,400);
+ assert.equal((await req('/save',{...body,assets:locationAssets([{...city,key:'1234'},region])})).status,400);
+ let r=await req('/save',body);assert.equal(r.status,200);d=await r.json();assert.deepEqual(d.assets.geo_locations,[city,region]);assert(!JSON.stringify(d).includes('proof'));assert.equal(d.review_ready,true);const reviewed=await review();
+ await db.exec('delete from korlix_meta_connections');d=await targeting();assert.equal(d.location_lookup_ready,false);r=await req('/save',{version:d.version,fingerprint:d.fingerprint,assets:locationAssets([region])});assert.equal(r.status,200);d=await r.json();assert.equal(d.review_current,false);assert.deepEqual(d.reviewed_snapshot,reviewed.reviewed_snapshot);assert.deepEqual(d.assets.geo_locations,[region]);assert.equal(providerCalls,1);
+});
+test('K177 receipts expire and cannot cross campaign, connection or current context',async()=>{
+ mockLocations();let d=await targeting(),found=await(await search()).json(),body=proofBody(d,found);
+ clock+=31*60000;assert.equal((await req('/save',body)).status,400);
+ found=await(await search()).json();body=proofBody(d,found);c=await campaign('save',{...plan,name:'Changed context'});d=await targeting();assert.equal((await req('/save',{...body,fingerprint:d.fingerprint})).status,400);
+ const first=c;c=await campaign('create',{...plan,name:'Different campaign'});d=await targeting();assert.equal((await req('/save',{...body,version:d.version,fingerprint:d.fingerprint})).status,400);c=first;
+ d=await targeting();found=await(await search()).json();body=proofBody(d,found);await db.query('update korlix_meta_connections set version=version+1 where user_id=$1',[owner]);assert.equal((await req('/save',body)).status,409);
+});
+test('K177 lookup rejects invalid queries, archived/unconfigured connections and malformed adapter data',async()=>{
+ mockLocations();for(const patch of [{q:'x'},{q:' x'},{q:'x'.repeat(81)},{q:'<bad>'},{country:'ZZ'},{kind:'postal'},{fingerprint:'x'},{extra:'x'}])assert.equal((await search(patch)).status,400);assert.equal(providerCalls,0);
+ await db.exec('delete from korlix_meta_connections');assert.equal((await search()).status,409);assert.equal(providerCalls,0);await connect();
+ locationProvider=async()=>({locations:[{...city,country:'CA'}],more:false});assert.equal((await search()).status,503);
+ locationProvider=async()=>({locations:[city,city],more:false});assert.equal((await search()).status,503);
+ c=await campaign('archive',{confirmed:true});assert.equal((await search()).status,409);
+});
+test('K177 late lookup responses are discarded after disconnect, downgrade, archive or draft save',async()=>{
+ for(const change of [()=>db.exec('delete from korlix_meta_connections'),()=>db.query("update user_profiles set tier='basic' where id=$1",[owner]),()=>campaign('archive',{confirmed:true}),()=>saveTarget()]){
+  await db.query("update user_profiles set tier='enterprise' where id=$1",[owner]);await db.exec('delete from korlix_meta_connections');await connect();await db.query("update korlix_funnel_campaigns set state='draft' where id=$1",[c.id]);
+  locationProvider=async()=>{await change();return {locations:[city],more:false};};const r=await search();assert([403,409].includes(r.status),await r.text());clock+=60000;
+ }
+});
+test('K177 SQL validates named shapes, exclusive modes, categories and grants while preserving historical locations',async()=>{
+ const bad=[locationAssets([city,city]),locationAssets([{...city,name:'<x>'}]),locationAssets([{...city,country:'ZZ'}]),locationAssets([{...city,type:'postal'}]),locationAssets([{...city,key:42}]),locationAssets([{...city,proof:'x'}]),{...locationAssets(),countries:['US']},{...locationAssets(),custom_locations:[]},locationAssets(Array.from({length:21},(_,i)=>({...city,key:String(i)})))];
+ for(const a of bad){assert.throws(()=>metaTargetingAssets(a));assert.equal((await db.query('select korlix_meta_targeting_valid_v1($1::jsonb) ok',[JSON.stringify(a)])).rows[0].ok,false);}
+ await completeCreative();let d=await saveTarget(locationAssets([city,region]));assert.equal(d.draft_complete,true);const reviewed=await review();
+ for(const category of ['UNDECIDED','HOUSING','EMPLOYMENT','FINANCIAL_PRODUCTS_SERVICES','ISSUES_ELECTIONS_POLITICS','ONLINE_GAMBLING_AND_GAMING']){d=await saveTarget({...locationAssets(),age_min:18,categories:[category]});assert.equal(d.draft_complete,false);await assert.rejects(review(),/Save complete/);}
+ assert.deepEqual(d.reviewed_snapshot,reviewed.reviewed_snapshot);
+ const fn=(await db.query("select prosecdef,proconfig from pg_proc where proname='korlix_meta_location_valid_v1'")).rows[0];assert.equal(fn.prosecdef,false);assert.deepEqual(fn.proconfig,['search_path=public, pg_temp']);
+ for(const role of ['anon','authenticated']){await db.exec('reset role;set role '+role);await assert.rejects(db.query('select korlix_meta_location_valid_v1($1)',[JSON.stringify(city)]),/permission denied/);await db.exec('reset role;set role service_role');}
+});
+test('K177 lookup shares the existing targeting rate limit',async()=>{mockLocations();for(let i=0;i<30;i++)assert.equal((await req()).status,200);assert.equal((await search()).status,429);assert.equal(providerCalls,0);});

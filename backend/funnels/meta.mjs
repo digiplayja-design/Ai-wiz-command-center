@@ -1,4 +1,5 @@
 import express from 'express';
+import {readMetaLocations} from './meta_locations.mjs';
 import {MetaPageAccessError,metaPageInput,readMetaPages,boundedMetaPageJson} from './meta_pages.mjs';
 import {metaReportQuery,metaReportRange,readMetaInsights} from './meta_performance.mjs';
 import {randomBytes,randomUUID,createHash,createHmac,createCipheriv,createDecipheriv,timingSafeEqual} from 'node:crypto';
@@ -30,7 +31,7 @@ export function createMetaStore(database) {
     return r.data;
   }};
 }
-class MetaAccessError extends FunnelError {constructor(){super('Meta access expired or was removed. Reconnect your account.',409);}}
+export class MetaAccessError extends FunnelError {constructor(){super('Meta access expired or was removed. Reconnect your account.',409);}}
 export function createMetaProvider(config,{fetchImpl=fetch,now=Date.now}={}) {
   async function graph(path,params={},token,pageRead=false) {
     const url=new URL(`https://graph.facebook.com/${config.apiVersion}/${path}`);
@@ -38,7 +39,7 @@ export function createMetaProvider(config,{fetchImpl=fetch,now=Date.now}={}) {
     if(token)url.searchParams.set('appsecret_proof',createHmac('sha256',config.secret).update(token).digest('hex'));
     let response,body;
     try{response=await fetchImpl(url,{headers:token?{Authorization:`Bearer ${token}`}:{},redirect:'error',signal:AbortSignal.timeout(10000)});body=pageRead?await boundedMetaPageJson(response):await response.json();}catch{fail('Meta could not be reached. Please try again.',503);}
-    if(!response.ok||body.error){if(pageRead&&[10,200,283].includes(body.error?.code))throw new MetaPageAccessError();if(body.error?.code===190||body.error?.code===10||body.error?.code===200)throw new MetaAccessError();fail('Meta could not complete this request. Check your account access and try again.',503);}
+    if(!response.ok||body.error){if(pageRead===true&&[10,200,283].includes(body.error?.code))throw new MetaPageAccessError();if(body.error?.code===190||body.error?.code===10||body.error?.code===200)throw new MetaAccessError();fail('Meta could not complete this request. Check your account access and try again.',503);}
     return body;
   }
   const account=a=>{
@@ -75,6 +76,7 @@ export function createMetaProvider(config,{fetchImpl=fetch,now=Date.now}={}) {
       fail('More than 500 ad accounts were returned. Limit the assets shared with KORLIX and reconnect.',409);
     },
     async pages(token){return readMetaPages(graph,token);},
+    async locations(token,input){return readMetaLocations(graph,token,input);},
     async account(token,id){return account(await graph(id,{fields},token));},
     async insights(token,account,range){return readMetaInsights(graph,token,account,range);},
     async campaignInsights(token,account,range){return readMetaInsights(graph,token,account,range,'campaign');}

@@ -81,7 +81,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   registerCampaigns(app,{base,owner,command,database,campaignStore,generateAdCopy,environment,publicBase});
   registerMetaPreparation(app,{base,owner,database,metaPreparationStore,environment,publicBase});
   registerMetaCreative(app,{base,owner,database,environment,publicBase});
-  registerMetaTargeting(app,{base,owner,database,environment,publicBase});
+  registerMetaTargeting(app,{base,owner,database,environment,publicBase,metaStore,metaProvider,now});
   registerGooglePreflight(app,{base,owner,database,environment,publicBase});
   registerGooglePreparation(app,{base,owner,database,googlePreparationStore,environment,publicBase});
   registerGoogleCreative(app,{base,owner,database,publicBase});

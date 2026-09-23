@@ -1608,3 +1608,99 @@ Release migration before backend, then frontend. Keep the compatible migration
 and all saved rows during rollback. K175 clients cannot interpret newly saved
 `geo_locations` drafts; prefer a K176 fix-forward for such owners rather than
 removing or converting their choices. Do not rewrite their drafts to roll back.
+
+### K177 — Meta city and region lookup for targeting drafts
+
+The Meta targeting editor adds **Cities and regions**, mutually exclusive with
+whole countries and radius areas. `geo_locations` holds up to 20 unique
+`{key,name,country,type,region}` objects. Keys belong to Meta; Google criteria IDs
+are never substituted. City and region namespaces are separate. Names, country
+codes and optional region labels are preserved in saved drafts and historical
+combined creative/targeting review exports. No radius, boundary, delivery
+expansion or live eligibility is inferred from a name.
+
+GET `/:id/campaigns/:campaign_id/meta-targeting/locations` accepts exactly `q`
+(2–80 trimmed characters), `country`, `kind` (`all`, `city`, `region`) and the
+current targeting `fingerprint`. Search is an explicit action, not a keystroke
+request. The route uses the existing shared 30-request owner/minute targeting
+limit, no-store, current Enterprise entitlement, funnel/campaign ownership and
+an editable Meta campaign. It requires existing platform configuration, an
+unexpired owner connection and its selected active cached ad account. The
+existing service-only connection command supplies credentials; they never reach
+the browser. This release does not enable the platform or configure credentials.
+
+The provider adapter performs one GET to the fixed Graph `/{version}/search`
+endpoint with `type=adgeolocation`, a country, query, city/region location types
+and limit 31. Bearer authentication and appsecret_proof reuse existing Meta
+configuration. Redirects are rejected; timeout is ten seconds and the response
+body is capped at 1 MiB. At most 30 sanitized results are returned with a `more`
+flag. Provider pagination URLs, extra fields, tokens and error details are never
+returned or followed. Malformed, duplicate, unexpected-type or cross-country
+results fail closed. There is no new provider permission request or environment
+variable; real API access and account eligibility remain unverified until the
+explicitly deferred activation work.
+
+After remote work the route repeats the authoritative campaign/entitlement read
+and connection read. Downgrade, disconnect, account/Page/config changes,
+archiving or a concurrent targeting save discard the late response. It issues a
+30-minute HMAC receipt for each returned row, binding every displayed field,
+owner, funnel, campaign and current context fingerprint. The receipt has a
+separate domain string and uses the existing server Meta app secret. It is not
+a Meta authorization token or an eligibility certification.
+
+Save may include a `location_proofs` object keyed by `type:key` for new choices.
+The backend accepts an exact previously saved row or verifies its fresh receipt.
+It first checks authoritative saved version and fingerprint, then the SQL save
+checks them again atomically. A receipt cannot cross owners, campaigns, context
+changes or edited names/IDs. Receipts remain transient; they are stripped before
+SQL and never stored in drafts, review history or exports. Existing selections
+can be retained or removed after disconnection without a new provider request.
+Saving targeting, reading drafts, reviewing and exporting never call Meta.
+
+The migration creates the private `korlix_meta_location_valid_v1` and replaces
+the existing Meta asset validator and targeting RPC. It adds no table or policy,
+rewrites no rows, and preserves country/radius fingerprints and review history.
+All three functions use SECURITY INVOKER, fixed public/pg_temp search paths and
+service_role-only execution. SQL independently validates structure, type,
+country membership, limits and mutually exclusive target modes. SQL does not
+verify provider membership or receipt signatures: trusted service callers must
+preserve the HTTP boundary validation. The existing funnel → campaign →
+connection → setup → creative → targeting lock order is unchanged.
+
+`locations_supported:true` advertises the schema; `location_lookup_ready`
+reflects editable/current connected-account prerequisites. With platform setup
+deferred, the picker explains why search is unavailable while existing choices
+remain readable/removable. Mode replacement requires confirmation. Search/query,
+country/type changes, owner/scope/client changes and denied access clear stale
+results. Duplicate results are disabled. The UI keeps receipts separately from
+assets and includes exact Meta keys in saved/historical exports. Status badges
+wrap on narrow screens and at increased text sizes.
+
+Only **No special category** named-location drafts can complete preparation
+review in this chapter. Undecided/special-category local drafts may be saved at
+the existing broad age range, but review stays incomplete; this is a conservative
+KORLIX scope limit, not a statement of Meta policy. Actual publishing and
+spending remain disabled. Owner hands-on acceptance, real provider calls and
+activation remain deferred.
+
+Local verification covers SQL shape/grants and unchanged legacy snapshots,
+HTTP scope/rate/no-store, exact transient receipts and expiry, tampering,
+concurrent context changes, late results, bounded/redacted provider responses,
+legacy Page adapter behavior, picker/save/export flows, unavailable connection
+states, and desktop/narrow-phone layouts. These mocked checks do not establish
+live Meta access, search coverage or category eligibility.
+
+Apply the migration before backend deployment, verify the backend, then deploy
+the frontend. Keep additive SQL and saved choices on rollback. K176 clients
+cannot interpret `geo_locations` in Meta drafts, so prefer a fix-forward and
+preserve selections and snapshots rather than converting/deleting them.
+
+Primary references checked September 23, 2026: Meta's official
+[TargetingSearch SDK](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/targetingsearch.py),
+[city fields](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/targetinggeolocationcity.py),
+[region fields](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/targetinggeolocationregion.py),
+and [Supabase functions](https://supabase.com/docs/guides/database/functions).
+Meta targeting-search documentation returned HTTP 429; full current search
+parameter/permission behavior still needs live provider acceptance after
+activation. Supabase changelog was unchanged from K176. No live provider account
+was queried to prepare this chapter.
