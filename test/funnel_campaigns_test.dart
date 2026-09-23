@@ -75,6 +75,13 @@ void main() {
         headersBuilder: () => {},
         client: MockClient((r) async {
           calls.add(r);
+          if (r.url.path.endsWith('/meta/connection') ||
+              r.url.path.endsWith('/google-ads/connection')) {
+            return http.Response(
+              jsonEncode({'configured': false, 'connection': null}),
+              200,
+            );
+          }
           return http.Response(
             jsonEncode(
               r.method == 'GET'

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
 import 'funnel_meta.dart';
+import 'funnel_google_ads.dart';
 
 String campaignMoney(num cents) => '\$${(cents / 100).toStringAsFixed(2)}';
 String campaignChannel(String value) => switch (value) {
@@ -296,13 +297,15 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
               ),
               campaignSpace(),
               campaignCaption(
-                'Connect a Meta ad account below when available. Launch and manage ads in your ad platform using the campaign link. Budgets here are plans; results are entered manually.',
+                'Connect a Meta or Google Ads account below when available. Launch and manage ads in your ad platform using the campaign link. Budgets here are plans; results are entered manually.',
               ),
             ],
           ),
         ),
         campaignSpace(20),
         FunnelMetaConnection(client: widget.client),
+        campaignSpace(20),
+        FunnelGoogleAdsConnection(client: widget.client),
         campaignSpace(20),
         if (_busy) const LinearProgressIndicator(),
         if (_error != null)
