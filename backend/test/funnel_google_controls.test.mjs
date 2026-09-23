@@ -8,7 +8,7 @@ import {registerFunnels} from '../funnels/routes.mjs';
 import {googleAdsConfiguration,googleTokenCipher,GoogleAdsAccessError} from '../funnels/google_ads_provider.mjs';
 import {googleTargetingInput,googleTargetingAssets,googleTargetingCatalog as catalog} from '../funnels/google_targeting.mjs';
 const owner=randomUUID(),other=randomUUID(),basic=randomUUID();
-const env={KORLIX_GOOGLE_ADS_CONTROLS_ENABLED:'true',KORLIX_GOOGLE_ADS_CREATE_PAUSED_ENABLED:'true',KORLIX_GOOGLE_ADS_ENABLED:'true',KORLIX_GOOGLE_ADS_CLIENT_ID:'12345-fixture.apps.googleusercontent.com',KORLIX_GOOGLE_ADS_CLIENT_SECRET:'fixture-client-secret',KORLIX_GOOGLE_ADS_DEVELOPER_TOKEN:'fixture-developer-token',KORLIX_GOOGLE_ADS_TOKEN_KEY:Buffer.alloc(32,8).toString('base64'),KORLIX_GOOGLE_ADS_REDIRECT_URI:'https://example.com/api/funnels/google-ads/callback',KORLIX_FUNNEL_PUBLIC_BASE_URL:'https://example.com'};
+const env={KORLIX_GOOGLE_ADS_BUDGET_ENABLED:'true',KORLIX_GOOGLE_ADS_CONTROLS_ENABLED:'true',KORLIX_GOOGLE_ADS_CREATE_PAUSED_ENABLED:'true',KORLIX_GOOGLE_ADS_ENABLED:'true',KORLIX_GOOGLE_ADS_CLIENT_ID:'12345-fixture.apps.googleusercontent.com',KORLIX_GOOGLE_ADS_CLIENT_SECRET:'fixture-client-secret',KORLIX_GOOGLE_ADS_DEVELOPER_TOKEN:'fixture-developer-token',KORLIX_GOOGLE_ADS_TOKEN_KEY:Buffer.alloc(32,8).toString('base64'),KORLIX_GOOGLE_ADS_REDIRECT_URI:'https://example.com/api/funnels/google-ads/callback',KORLIX_FUNNEL_PUBLIC_BASE_URL:'https://example.com'};
 const config=googleAdsConfiguration(env),rootId='1234567890',account={id:'9876543210',name:'Growth account',currency:'USD',timezone:'UTC',manager:false,status:'ENABLED',test_account:false};
 const doc={brand:'Test business',headline:'Your next step',subheadline:'Talk to our team.',cta:'Ask us',thank_you:'Thank you.',layout:'consultation',accent:'cyan',benefits:[],faq:[],privacy_url:'https://example.com/privacy',contact_email:'hello@example.com',booking_url:''};
 const plan={name:'Autumn campaign',platform:'google',headline:'Explore our services',body:'Ask our team about your needs.',cta:'Learn more',audience:'Businesses seeking our services.',daily_cents:2500,days:14};
@@ -26,13 +26,13 @@ test.before(async()=>{
  for(const file of ['20260921162128_enterprise_contacts_crm.sql','20260922023935_enterprise_funnel_studio.sql','20260922090333_funnel_campaign_workspace.sql','20260922233935_funnel_google_ads_connection.sql','20260923073916_funnel_google_campaign_preparation.sql','20260923085331_funnel_google_creative.sql','20260923094201_funnel_google_creative_review.sql','20260923103256_funnel_google_keywords.sql','20260923105943_funnel_google_keyword_review.sql','20260923112526_funnel_google_targeting.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+file,import.meta.url),'utf8'));
  await db.exec(await readFile(new URL('../../supabase/migrations/20260923120825_funnel_google_targeting_review.sql',import.meta.url),'utf8'));
  await db.exec(await readFile(new URL('../../supabase/migrations/20260923123817_funnel_google_preflight.sql',import.meta.url),'utf8'));
- for(const file of ['20260923153540_funnel_google_radius.sql','20260923172253_funnel_google_locations.sql','20260923210921_funnel_google_paused_create.sql','20260923221038_funnel_google_controls.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+file,import.meta.url),'utf8'));
+ for(const file of ['20260923153540_funnel_google_radius.sql','20260923172253_funnel_google_locations.sql','20260923210921_funnel_google_paused_create.sql','20260923221038_funnel_google_controls.sql','20260923225318_funnel_google_budget.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+file,import.meta.url),'utf8'));
  await db.exec('set role service_role');
  database={rpc:async(name,p)=>{try{return{data:await rpc(name,p)}}catch(error){return{error}}}};
  const app=express();app.use(express.json());registerFunnels(app,{database,requireUser:async q=>[owner,other,basic].includes(q.headers.authorization)?{id:q.headers.authorization}:null,environment:env,now:()=>clock,googleAdsProvider:provider});
  server=app.listen(0);await new Promise(r=>server.once('listening',r));base='http://127.0.0.1:'+server.address().port;
 });
-test.beforeEach(async()=>{clock+=60000;await db.exec('delete from korlix_funnels;delete from korlix_google_ads_connections;');await db.query("update user_profiles set tier='enterprise' where id=$1",[owner]);f=await funnel('create',{name:'Services',slug:'services',document:doc});f=await funnel('publish',{version:f.version,confirmed:true});c=await campaign('create',plan);c=await campaign('review',{confirmed:true});await connect();providerCalls=0;createCalls=0;validateHook=null;createHook=null;findHook=null;controlCalls=0;controlHook=null;controlValidateHook=null;inspectionHook=null;observedStatus='PAUSED';});
+test.beforeEach(async()=>{clock+=60000;await db.exec('delete from korlix_funnels;delete from korlix_google_ads_connections;');await db.query("update user_profiles set tier='enterprise' where id=$1",[owner]);f=await funnel('create',{name:'Services',slug:'services',document:doc});f=await funnel('publish',{version:f.version,confirmed:true});c=await campaign('create',plan);c=await campaign('review',{confirmed:true});await connect();providerCalls=0;createCalls=0;validateHook=null;createHook=null;findHook=null;controlCalls=0;controlHook=null;controlValidateHook=null;inspectionHook=null;observedStatus='PAUSED';budgetCalls=0;budgetHook=null;budgetValidateHook=null;budgetInspectHook=null;effectiveCents=2500;});
 test.after(async()=>{server.closeAllConnections();await new Promise(r=>server.close(r));await db.close();});
 
 const empty=()=>({countries:[],excluded_countries:[],content_languages:[],location_mode:'undecided',bidding:'undecided'});
@@ -50,7 +50,11 @@ async function rows(){return (await db.query("select jsonb_build_object('funnels
 
 const resources={budget:'customers/9876543210/campaignBudgets/101',campaign:'customers/9876543210/campaigns/102',ad_group:'customers/9876543210/adGroups/103',ad:'customers/9876543210/adGroupAds/103~104'};
 let controlCalls=0,controlHook=null,controlValidateHook=null,inspectionHook=null,observedStatus='PAUSED';
+let budgetCalls=0,budgetHook=null,budgetValidateHook=null,budgetInspectHook=null,effectiveCents=2500;
 const provider={
+ inspectSearchBudget:async(a,s)=>{if(budgetInspectHook)return budgetInspectHook(s);if(s.plan.daily_cents!==effectiveCents)throw Error('budget drift');return {status:{resource:resources.campaign,name:s.provider_name,status:observedStatus},budget:{resource:resources.budget,daily_cents:effectiveCents}};},
+ validateSearchBudget:async()=>budgetValidateHook?budgetValidateHook():({validated:true}),
+ applySearchBudget:async(a,s,r,cents)=>{budgetCalls++;if(budgetHook)return budgetHook(cents);effectiveCents=cents;return {confirmed:true,action:'budget'};},
  createdSearchStatus:async()=>({resource:resources.campaign,name:'Created campaign',status:observedStatus}),
  inspectCreatedSearch:async()=>inspectionHook?inspectionHook():({resources,statuses:{campaign:observedStatus,ad_group:'PAUSED',ad:'PAUSED'},policy:'APPROVED'}),
  validateSearchControl:async()=>controlValidateHook?controlValidateHook():({validated:true}),
@@ -137,4 +141,54 @@ test('K182 revoked Google access marks reconnection and does not claim a command
 });
 test('K182 slow preflight cannot start a delayed mutation after the client timeout window',async()=>{
  await created();const d=await inspect();controlValidateHook=async()=>{clock+=76000;return {validated:true};};assert.equal((await controls('/apply',controlInput(d))).status,409);assert.equal(controlCalls,0);assert.deepEqual(await commands(),[]);
+});
+
+const proposal=async(cents=3000)=>{const r=await controls('/budget-preview',{daily_cents:cents});assert.equal(r.status,200,await r.clone().text());return r.json();};
+const budgetInput=d=>({proof:d.budget_preview.proof,daily_cents:d.budget_preview.daily_cents,confirmed:true,spend_acknowledged:true});
+test('K183 budget receipts change the effective provider amount without changing creation or plan history',async()=>{
+ await created();const old=await ledger(),beforePlan=(await db.query('select * from korlix_funnel_campaigns')).rows;
+ let d=await record();assert.equal(d.managed_budget.daily_cents,2500);assert.equal(budgetCalls,0);
+ d=await proposal();assert.equal(d.budget_preview.increase,true);assert.equal(d.budget_preview.graph.policy,'APPROVED');let r=await controls('/budget-apply',budgetInput(d));assert.equal(r.status,200,await r.clone().text());d=await r.json();assert.equal(d.latest_command.state,'confirmed');assert.equal(d.latest_command.daily_cents,3000);assert.equal(d.managed_budget.daily_cents,3000);assert.equal(d.managed_budget.original_daily_cents,2500);assert.equal(d.managed_budget.command_id,d.latest_command.id);
+ assert.deepEqual(await ledger(),old);assert.deepEqual((await db.query('select * from korlix_funnel_campaigns')).rows,beforePlan);
+ d=await proposal(1500);assert.equal(d.budget_preview.increase,false);assert.equal(d.budget_preview.graph,null);r=await controls('/budget-apply',budgetInput(d));assert.equal(r.status,200);assert.equal((await r.json()).managed_budget.daily_cents,1500);assert.equal(budgetCalls,2);
+ inspectionHook=async()=>({resources,statuses:{campaign:'PAUSED',ad_group:'PAUSED',ad:'PAUSED'},policy:'APPROVED'});
+ assert.equal((await inspect()).observation.can_activate,true);assert.deepEqual((await commands()).map(x=>x.sequence),[1,2]);
+});
+test('K183 simultaneous status and budget confirmations share one dispatch slot',async()=>{
+ await created();const status=await inspect(),budget=await proposal();const rs=await Promise.all([controls('/apply',controlInput(status)),controls('/budget-apply',budgetInput(budget))]);assert.deepEqual(rs.map(x=>x.status).sort(),[200,409]);assert.equal(controlCalls+budgetCalls,1);assert.equal((await commands()).length,1);
+});
+test('K183 replayed or altered budget proposals cannot dispatch',async()=>{
+ await created();const d=await proposal(),input=budgetInput(d);
+ for(const patch of [{daily_cents:3001},{confirmed:false},{spend_acknowledged:false},{budget_id:resources.budget}]){assert([400,409].includes((await controls('/budget-apply',{...input,...patch})).status));}
+ clock+=60000;assert.equal((await controls('/budget-apply',input)).status,200);assert.equal((await controls('/budget-apply',input)).status,409);assert.equal(budgetCalls,1);
+});
+test('K183 uncertain budget outcome blocks status and budget commands and retains prior effective amount',async()=>{
+ await created();const status=await inspect(),d=await proposal();budgetHook=async cents=>{effectiveCents=cents;throw Error('hidden');};const r=await controls('/budget-apply',budgetInput(d));assert.equal(r.status,200);const out=await r.json();assert.equal(out.latest_command.state,'unknown');assert.equal(out.managed_budget.daily_cents,2500);assert.match(out.notice,/uncertain/);assert.equal((await controls('/apply',controlInput(status))).status,409);assert.equal((await controls('/budget-preview',{daily_cents:2000})).status,409);assert.equal(budgetCalls,1);assert.equal(controlCalls,0);
+});
+test('K183 reductions can proceed with stale reviews while increases cannot',async()=>{
+ await created();c=await campaign('archive',{confirmed:true});observedStatus='ENABLED';assert.equal((await controls('/budget-preview',{daily_cents:3000})).status,409);
+ inspectionHook=async()=>{throw Error('not needed for reduction');};const d=await proposal(1000);assert.equal(d.activation_ready,false);assert.equal(d.budget_preview.status.status,'ENABLED');assert.equal((await controls('/budget-apply',budgetInput(d))).status,200);assert.equal(observedStatus,'ENABLED');assert.equal(budgetCalls,1);
+});
+test('K183 provider or local drift after validation prevents claim and leaves no journal entry',async()=>{
+ await created();let d=await proposal();budgetValidateHook=async()=>{effectiveCents=2600;return {validated:true};};assert.equal((await controls('/budget-apply',budgetInput(d))).status,503);assert.equal(budgetCalls,0);assert.deepEqual(await commands(),[]);
+ effectiveCents=2500;budgetValidateHook=async()=>{await db.query('update korlix_google_ads_connections set version=version+1 where user_id=$1',[owner]);return {validated:true};};d=await proposal();assert.equal((await controls('/budget-apply',budgetInput(d))).status,409);assert.equal(budgetCalls,0);
+});
+test('K183 malformed budgets, cross-purpose proofs, removed campaigns and unapproved increases fail closed',async()=>{
+ await created();for(const cents of [null,'3000',99,1000001,100.5])assert.equal((await controls('/budget-preview',{daily_cents:cents})).status,400);
+ const status=await inspect();assert.equal((await controls('/budget-apply',{proof:status.observation.proof,daily_cents:3000,confirmed:true,spend_acknowledged:true})).status,409);
+ observedStatus='REMOVED';assert.equal((await controls('/budget-preview',{daily_cents:2000})).status,409);observedStatus='PAUSED';inspectionHook=async()=>({resources,statuses:{campaign:'PAUSED',ad_group:'PAUSED',ad:'PAUSED'},policy:'DISAPPROVED'});assert.equal((await controls('/budget-preview',{daily_cents:3000})).status,409);assert.equal(budgetCalls,0);
+});
+test('K183 failed budget receipt persistence retains unknown and the prior effective amount',async()=>{
+ await created();let d=await proposal(),original=database.rpc;database.rpc=async(name,p)=>name==='korlix_funnel_google_controls_v1'&&p.p_action==='finish'?{error:{code:'XX000'}}:original(name,p);
+ try{const r=await controls('/budget-apply',budgetInput(d));assert.equal(r.status,200);assert.equal((await r.json()).latest_command.state,'unknown');}finally{database.rpc=original;}
+ assert.equal(budgetCalls,1);assert.equal((await record()).managed_budget.daily_cents,2500);
+});
+test('K183 actual SQL budget bounds and spending/current-review requirements are enforced',async()=>{
+ await created();const d=await proposal();const claim=(patch={})=>rpc('korlix_funnel_google_controls_v1',{p_actor:owner,p_action:'claim',p_funnel:f.id,p_data:{campaign_id:c.id,configured:true,config_hash:config.hash,public_base:'https://example.com',create_enabled:true,controls_enabled:true,budget_enabled:true,fingerprint:d.fingerprint,action:'budget',daily_cents:3000,confirmed:true,spend_acknowledged:true,command_id:randomUUID(),observed:d.budget_preview,...patch}});
+ for(const patch of [{daily_cents:99},{daily_cents:1000001},{daily_cents:2500},{daily_cents:null},{daily_cents:'3000'},{spend_acknowledged:false},{observed:{kind:'budget',daily_cents:3001,budget:{daily_cents:2500}}}])await assert.rejects(claim(patch));
+ assert.deepEqual(await commands(),[]);await assert.rejects(db.query("insert into korlix_funnel_google_commands(id,campaign_id,user_id,sequence,action,fingerprint,observed,daily_cents) values($1,$2,$3,1,'budget',$4,'{}',null)",[randomUUID(),c.id,owner,d.fingerprint]),/check constraint/);
+});
+test('K183 default-off budget gate never contacts Google and preserves status controls',async()=>{
+ await created();const app=express();app.use(express.json());registerFunnels(app,{database,requireUser:async()=>({id:owner}),environment:{...env,KORLIX_GOOGLE_ADS_BUDGET_ENABLED:undefined},googleAdsProvider:provider,now:()=>clock});const srv=app.listen(0);await new Promise(r=>srv.once('listening',r));
+ try{const url=`http://127.0.0.1:${srv.address().port}/api/funnels/${f.id}/campaigns/${c.id}/google-controls`;let r=await fetch(url);let d=await r.json();assert.equal(d.budget_enabled,false);assert.equal(d.checks.platform_enabled,true);r=await fetch(url+'/budget-preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({daily_cents:3000})});assert.equal(r.status,409);assert.equal(providerCalls,0);}finally{srv.closeAllConnections();await new Promise(r=>srv.close(r));}
 });

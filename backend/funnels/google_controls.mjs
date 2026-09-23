@@ -9,12 +9,13 @@ const stable=v=>Array.isArray(v)?'['+v.map(stable).join(',')+']':v&&typeof v==='
 const digest=v=>googleDigest(stable(v));
 export function registerGoogleControls(app,{base,owner,database,environment,publicBase,googleAdsStore,googleAdsProvider,now=Date.now}){
   const config=googleAdsConfiguration(environment),enabled=config.ready&&config.apiVersion==='v25'&&environment.KORLIX_GOOGLE_ADS_CONTROLS_ENABLED==='true';
+  const budgetEnabled=enabled&&environment.KORLIX_GOOGLE_ADS_BUDGET_ENABLED==='true';
   const store=googleAdsStore||createGoogleAdsStore(database),provider=googleAdsProvider||createGoogleAdsProvider(config,{now});
   const path=base+'/:id/campaigns/:campaign_id/google-controls';
   const context=q=>{
     let root;try{root=new URL(publicBase);}catch{fail('The campaign destination is not configured.',503);}
     if(root.protocol!=='https:'||root.username||root.password||root.search||root.hash)fail('The campaign destination is not configured.',503);
-    return {campaign_id:uuid(q.params.campaign_id),configured:config.ready,config_hash:config.hash,public_base:root.href.replace(/\/$/,''),create_enabled:config.ready&&config.apiVersion==='v25'&&environment.KORLIX_GOOGLE_ADS_CREATE_PAUSED_ENABLED==='true',controls_enabled:enabled};
+    return {campaign_id:uuid(q.params.campaign_id),configured:config.ready,config_hash:config.hash,public_base:root.href.replace(/\/$/,''),create_enabled:config.ready&&config.apiVersion==='v25'&&environment.KORLIX_GOOGLE_ADS_CREATE_PAUSED_ENABLED==='true',controls_enabled:enabled,budget_enabled:budgetEnabled};
   };
   const command=async(actor,funnel,action,data)=>{
     if(!database)fail('Google control storage is not configured.',503);
@@ -61,7 +62,9 @@ export function registerGoogleControls(app,{base,owner,database,environment,publ
     if(!enabled||saved?.state!=='created')fail('Google controls require platform setup and a recorded KORLIX creation.',409);
     const prior=saved.snapshot.identity;
     if(prior.account.id!==current.account?.id||prior.root_id!==current.root_id||prior.login_customer_id!==current.login_customer_id)fail('Select the saved Google account and access manager before controlling this campaign.',409);
-    return {snapshot:{...saved.snapshot,identity:current},resources:creationResources(saved.resources,current.account.id)};
+    const cents=d.managed_budget?.daily_cents??saved.snapshot.plan.daily_cents;
+    if(!Number.isSafeInteger(cents)||cents<100||cents>1000000)fail('The saved budget could not be verified.',503);
+    return {snapshot:{...saved.snapshot,plan:{...saved.snapshot.plan,daily_cents:cents,planned_total_cents:cents*saved.snapshot.plan.days},identity:current},resources:creationResources(saved.resources,current.account.id)};
   }
   async function inspect(actor,d,access,details){
     const {snapshot:s,resources}=details;
@@ -116,4 +119,52 @@ export function registerGoogleControls(app,{base,owner,database,environment,publ
     }catch(e){await invalidAccess(u,details.snapshot.identity,e);return r.json({...publicResult(await command(u,funnel,'read',data)),notice:'The command outcome is uncertain. Ads may be spending. Check and control the campaign directly in Google Ads. KORLIX will not repeat or replace this command.'});}
     r.json({...publicResult(await command(u,funnel,'read',data)),notice:action==='activate'?'Google accepted activation. Delivery may begin within the saved schedule and incur charges. Reload Google status to see a fresh observation.':'Google accepted campaign pause. Earlier delivery and charges may still appear. Reload Google status to see a fresh observation.'});
   },{ratePrefix:'google-controls-write:',max:5}));
+  const validBudget=v=>Number.isSafeInteger(v)&&v>=100&&v<=1000000;
+  async function inspectBudget(actor,d,access,details,cents){
+    if(!budgetEnabled||!d.budget_enabled||!d.checks.no_uncertain_command||!d.checks.command_capacity||!validBudget(cents)||cents===details.snapshot.plan.daily_cents)fail('Budget changes are unavailable, unchanged, or a command outcome is uncertain.',409);
+    const increase=cents>details.snapshot.plan.daily_cents;
+    if(increase&&!d.activation_ready)fail('A budget increase requires current preparation matching the created campaign and an open schedule.',409);
+    try{
+      const observed=await provider.inspectSearchBudget(access,details.snapshot,details.resources);
+      if(observed?.status?.resource!==details.resources.campaign||observed.status.name!==details.snapshot.provider_name||!['PAUSED','ENABLED'].includes(observed.status.status)||observed.budget?.resource!==details.resources.budget||observed.budget.daily_cents!==details.snapshot.plan.daily_cents)fail('Google budget details could not be verified. Check Google Ads for changes.',409);
+      let graph=null;
+      if(increase){
+        const g=await provider.inspectCreatedSearch(access,details.snapshot,details.resources);
+        if(!g||digest(g.resources)!==digest(details.resources)||g.policy!=='APPROVED'||g.statuses?.campaign!==observed.status.status||!['PAUSED','ENABLED'].includes(g.statuses?.ad_group)||!['PAUSED','ENABLED'].includes(g.statuses?.ad))fail('A budget increase requires the saved campaign structure and an approved ad.',409);
+        graph={resources:details.resources,statuses:{campaign:g.statuses.campaign,ad_group:g.statuses.ad_group,ad:g.statuses.ad},policy:'APPROVED'};
+      }
+      return {kind:'budget',status:{resource:observed.status.resource,name:observed.status.name,status:observed.status.status},budget:{resource:observed.budget.resource,daily_cents:observed.budget.daily_cents},daily_cents:cents,increase,graph};
+    }catch(e){await invalidAccess(actor,details.snapshot.identity,e);throw e;}
+  }
+  app.post(path+'/budget-preview',owner(async(q,r,u)=>{
+    if(Object.keys(q.query).length||!keys(q.body,['daily_cents'])||!validBudget(q.body.daily_cents))fail('Enter an average daily budget from $1.00 to $10,000.00 USD.');
+    const funnel=uuid(q.params.id),data=context(q),before=await command(u,funnel,'read',data),details=identity(before);
+    if(!budgetEnabled)fail('Google budget changes require platform activation.',409);
+    const access=await token(u,details.snapshot.identity),observation=await inspectBudget(u,before,access,details,q.body.daily_cents);
+    await connection(u,details.snapshot.identity);
+    const after=await command(u,funnel,'read',data);if(after.fingerprint!==before.fingerprint)fail('The campaign changed while loading. Review the budget again.',409);
+    r.json({...publicResult(after),budget_preview:{...observation,checked_at:new Date(now()).toISOString(),proof:proof(u,funnel,after,observation)}});
+  },{ratePrefix:'google-budget-preview:',max:10}));
+  app.post(path+'/budget-apply',owner(async(q,r,u)=>{
+    const started=now();
+    if(Object.keys(q.query).length||!keys(q.body,['proof','daily_cents','confirmed','spend_acknowledged'])||!validBudget(q.body.daily_cents)||q.body.confirmed!==true||q.body.spend_acknowledged!==true)fail('Confirm this budget change and acknowledge its spending impact.');
+    const funnel=uuid(q.params.id),data=context(q),before=await command(u,funnel,'read',data),p=decode(q.body.proof,u,funnel,before),details=identity(before);
+    if(!budgetEnabled)fail('Google budget changes require platform activation.',409);
+    const access=await token(u,details.snapshot.identity),cents=q.body.daily_cents,observation=await inspectBudget(u,before,access,details,cents);
+    if(p.observation!==digest(observation))fail('The budget proposal changed. Review it again before confirming.',409);
+    try{const v=await provider.validateSearchBudget(access,details.snapshot,details.resources,cents);if(v?.validated!==true)fail('Google did not validate this budget change.',409);}catch(e){await invalidAccess(u,details.snapshot.identity,e);throw e;}
+    if(digest(await inspectBudget(u,before,access,details,cents))!==p.observation)fail('Google details changed during validation. Review the budget again.',409);
+    await connection(u,details.snapshot.identity);
+    if(p.expires<=now()||now()-started>75000)fail('The budget confirmation expired or took too long. Review it again.',409);
+    const id=randomUUID(),claimed=await command(u,funnel,'claim',{...data,fingerprint:before.fingerprint,action:'budget',daily_cents:cents,confirmed:true,spend_acknowledged:true,command_id:id,observed:observation});
+    if(claimed.dispatch!==true||claimed.latest_command?.id!==id)fail('The budget command could not be claimed. Reload its record.',409);
+    try{
+      if(now()-started>85000)fail('The command claim took too long. Check its saved record.',409);
+      const result=await provider.applySearchBudget(access,details.snapshot,details.resources,cents);
+      if(result?.confirmed!==true||result.action!=='budget')fail('Google did not confirm this budget change.',409);
+      await command(u,funnel,'finish',{...data,command_id:id});
+    }catch(e){await invalidAccess(u,details.snapshot.identity,e);return r.json({...publicResult(await command(u,funnel,'read',data)),notice:'The budget change outcome is uncertain. Ads may be spending at the requested or another budget. Check and control the campaign directly in Google Ads. KORLIX will not repeat or replace this command.'});}
+    r.json({...publicResult(await command(u,funnel,'read',data)),notice:'Google accepted the average daily budget change. Delivery status and schedule were not changed. Earlier spending still counts; today’s charge limit may reflect a higher budget used earlier today. Review Google Ads for current delivery and billing.'});
+  },{ratePrefix:'google-budget-write:',max:5}));
+
 }

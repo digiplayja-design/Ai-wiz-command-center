@@ -63,3 +63,20 @@ test('K182 unapproved ads, budget changes, unexpected groups, resources and alte
  }
  const responses=controlGraph(snapshot());await assert.rejects(googlePausedMethods(async()=>({results:responses.shift()})).inspectCreatedSearch('a',snapshot(),{...expected,campaign:'customers/9876543210/campaigns/999'}));
 });
+
+function budgetRow(s=snapshot()){return {campaign:{resourceName:expected.campaign,name:s.provider_name,status:'ENABLED',advertisingChannelType:'SEARCH',campaignBudget:expected.budget},campaignBudget:{resourceName:expected.budget,amountMicros:'25000000',explicitlyShared:false,referenceCount:'1',period:'DAILY',deliveryMethod:'STANDARD'}};}
+test('K183 budget changes mutate only the saved amount with exact integer micros and strict receipt',async()=>{
+ const request=googleControlRequest(snapshot(),expected,'budget',12345);assert.deepEqual(request,{mutateOperations:[{campaignBudgetOperation:{update:{resourceName:expected.budget,amountMicros:'123450000'},updateMask:'amountMicros'}}],partialFailure:false,responseContentType:'RESOURCE_NAME_ONLY'});
+ const calls=[],p=googleControlsMethods(async(path,a,root,body)=>{calls.push(body);assert.equal(path,'customers/9876543210/googleAds:mutate');return body.validateOnly?{}:controlResponse(body);});
+ assert.deepEqual(await p.validateSearchBudget('a',snapshot(),expected,12345),{validated:true});assert.deepEqual(await p.applySearchBudget('a',snapshot(),expected,12345),{confirmed:true,action:'budget'});assert.equal(calls[0].validateOnly,true);assert.equal(calls[1].validateOnly,false);
+ for(const cents of [99,1000001,null,123.5,'2500'])assert.throws(()=>googleControlRequest(snapshot(),expected,'budget',cents));
+ await assert.rejects(googleControlsMethods(async()=>({mutateOperationResponses:[{campaignBudgetResult:{resourceName:'customers/9876543210/campaignBudgets/999'}}]})).applySearchBudget('a',snapshot(),expected,3000));
+});
+test('K183 budget inspection rejects sharing, drift, total budgets, removed campaigns and wrong resources',async()=>{
+ let query;const p=googleControlsMethods(async(path,a,root,body)=>{query=body.query;return {results:[budgetRow()]};});assert.deepEqual(await p.inspectSearchBudget('a',snapshot(),expected),{status:{resource:expected.campaign,name:snapshot().provider_name,status:'ENABLED'},budget:{resource:expected.budget,daily_cents:2500}});assert(query.includes('campaign.id = 102 LIMIT 2'));
+ for(const edit of [r=>r.campaign.campaignBudget='wrong',r=>r.campaign.name='Changed',r=>r.campaign.status='REMOVED',r=>r.campaign.advertisingChannelType='DISPLAY',r=>r.campaignBudget.resourceName='wrong',r=>r.campaignBudget.explicitlyShared=true,r=>r.campaignBudget.referenceCount='2',r=>r.campaignBudget.period='CUSTOM_PERIOD',r=>r.campaignBudget.deliveryMethod='ACCELERATED',r=>r.campaignBudget.amountMicros='25000001']){const row=budgetRow();edit(row);await assert.rejects(googleControlsMethods(async()=>({results:[row]})).inspectSearchBudget('a',snapshot(),expected));}
+ for(const response of [{results:[]},{results:[budgetRow(),budgetRow()]},{results:[budgetRow()],nextPageToken:'more'}])await assert.rejects(googleControlsMethods(async()=>response).inspectSearchBudget('a',snapshot(),expected));
+});
+test('K183 activation inspection accepts the latest confirmed budget and rejects the original amount after a change',async()=>{
+ const s=snapshot();s.plan.daily_cents=3000;let responses=controlGraph(s);assert.equal((await googlePausedMethods(async()=>({results:responses.shift()})).inspectCreatedSearch('a',s,expected)).policy,'APPROVED');responses=controlGraph(snapshot());await assert.rejects(googlePausedMethods(async()=>({results:responses.shift()})).inspectCreatedSearch('a',s,expected));
+});
