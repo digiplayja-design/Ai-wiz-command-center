@@ -1984,3 +1984,51 @@ pages were unavailable through web retrieval, so no changed field contract is
 assumed. [Supabase functions](https://supabase.com/docs/guides/database/functions)
 and [changelog](https://supabase.com/changelog) were fetched again and match K179
 hashes; reviewed changes do not alter this private invoker-RPC design.
+
+## K181 — Create a paused Google Search campaign
+
+K181 adds an owner/Enterprise creation flow to Google campaign cards. It compiles the current reviewed plan, published landing page, responsive search-ad copy, positive/negative keywords and country, city/region or radius targeting into one atomic Google Ads mutation. It creates a separate average daily budget, a Search campaign, one Search ad group and one responsive search ad. Campaign, ad group and ad are explicitly **PAUSED**. Positive keywords are enabled inside the paused group; this cannot activate delivery. Google Search is on, Search Partners and Display are off. Country exclusions use presence. Saved targeting language IDs become actual language criteria.
+
+This first version supports production USD accounts and the saved **Maximize Clicks** bidding choice. It does not silently change Maximize Conversions to another strategy. All six preparation checks must be current, the selected account and direct/manager access path must match fresh Google checks, and the owner must explicitly confirm paused creation, acknowledge the average-budget limits, and declare that the campaign does not contain EU political advertising. Start is chosen from today through the next 30 days in the account timezone; end is derived from the plan's 1–90-day duration. Google v25 uses `startDateTime` at `00:00:00` and `endDateTime` at `23:59:59`, interpreted in the customer timezone. No activation or resume operation exists.
+
+### Activation boundary
+
+`KORLIX_GOOGLE_ADS_CREATE_PAUSED_ENABLED=true` is a new, default-OFF server gate. It also requires valid existing Google configuration, `KORLIX_GOOGLE_ADS_ENABLED=true`, and exactly API `v25`. Configuring connections alone cannot enable creation. The K181 release must leave provider settings and this new gate unchanged; provider activation and owner acceptance remain deferred. Test accounts remain available for older read-only reporting but cannot enter this first production-creation flow. Existing `ad_publishing_ready` remains false; `create_ready` is limited to the paused operation. No provider credentials, real account requests, advertising, expenditure or outreach are required to install this chapter.
+
+### Routes and persistence
+
+All routes are authenticated, authoritative owner/Enterprise scoped, and `Cache-Control: no-store`, under `/api/funnels/:id/campaigns/:campaign_id/google-create`:
+
+| Method | Suffix | Input / behavior |
+| --- | --- | --- |
+| GET | none | Local preparation and saved creation record only; no provider request. 30 owner requests/minute. |
+| POST | `/create` | Exact keys: `fingerprint`, `start_date`, `confirmed:true`, `budget_acknowledged:true`, `no_eu_political_ads:true`. Five owner requests/minute. |
+| POST | `/reconcile` | Exact `attempt_id`. Read-only provider lookup of an existing uncertain attempt. Five owner requests/minute. |
+
+New migration: `supabase/migrations/20260923210921_funnel_google_paused_create.sql`. It adds `public.korlix_funnel_google_creations` and `public.korlix_funnel_google_create_v1(uuid,text,uuid,jsonb)`. RLS is enabled, PUBLIC/anon/authenticated privileges are revoked, and only service_role has required CRUD/EXECUTE. The RPC is SECURITY INVOKER with fixed `search_path=public,pg_temp`. Campaign primary key and unique attempt UUID enforce a single dispatch slot per plan. Owner/date index supports scoped operational investigation. Campaign and user references cascade on intentional parent deletion. No existing function is redefined.
+
+The snapshot stores the exact approved plan, page destination, account/access identity, copy, keywords, targeting, date window and declarations. It contains no OAuth token, secret configuration hash, receipt or provider metrics. The private ledger also stores the request hash, durable attempt ID, result resource names and timestamps. Browser output excludes the internal dispatch bit and request hash.
+
+### Dispatch and uncertain outcomes
+
+1. Read coherent current preparation and check the owner-supplied fingerprint/date/declarations.
+2. Refresh OAuth access, check accessible roots and fresh selected account, then send the exact grouped request with `validateOnly:true`. Validation errors create no ledger slot and no Google resource.
+3. Recheck connection identity. In a transaction with the established funnel → campaign → connection → component → ledger lock order, repeat current entitlement, reviews, fingerprint and account-calendar checks, then atomically claim the sole dispatch slot. The row starts `unknown` **before** the external write.
+4. Only the request whose claim returned `dispatch:true` may send once, with `partialFailure:false`, `validateOnly:false`, and resource-name-only results. Recompiled claimed content must match the previously validated request hash.
+5. Validate every returned resource name, account, operation count, uniqueness and parent identity, then record completion. The service-only internal `finish` action can record an already-dispatched result after entitlement or plan changes; it never authorizes a new send. Every HTTP response still repeats current owner/Enterprise checks.
+
+Concurrent or repeated create requests with any existing attempt return its record and do not send again. Network timeout, unreadable/malformed result, provider rejection after dispatch, process crash or failed local completion all preserve `unknown`. No background retry, timeout-based reset, resend button, force-complete endpoint or automatic compensation/delete exists. Unknown does not mean failed. Once the claim has committed, later local edits do not cancel that authorized paused snapshot; this is the dispatch boundary.
+
+An explicit result check searches only by a fixed `KORLIX <server UUID>` creation name. It uses four bounded GAQL reads to verify one campaign/budget, one paused ad/group and the expected keyword and location/language criteria. It verifies account, budget amount, schedule, network and bidding settings, political declaration, destination, copy and paused state before recording recovered resource IDs. It tolerates irrelevant provider text-asset performance labels but rejects changed text/pins. No missing, paginated, duplicate, externally enabled or edited structure is adopted. Absence does not authorize resending; if the result cannot be established, an operator must inspect Google Ads using the saved name. There is intentionally no self-service reset of an ambiguous dispatch. This is at-most-one KORLIX dispatch per retained plan, not a claim that Google offers a universal idempotency key or that a stored record monitors subsequent delivery.
+
+### Interface and spending limits
+
+The dialog shows account, timezone, average daily amount and the exact creation window, with three initially unchecked confirmations. Date changes, refreshes, errors and context changes clear confirmations. After a request failure the owner must reload the durable record; an uncertain attempt offers only read-only checking. Historical records preserve the submitted snapshot across later local edits. Scope, client, funnel and entitlement changes suppress late private responses, confirmations and copying. Copyable summaries include account/access context, dates, declarations, assets and resource IDs. No provider outcome or policy approval is inferred from local preparation.
+
+Google's average daily budget is **not a hard daily cap**, and multiplying it by the planned days is **not a hard total cap**. The campaign remains paused at creation. Real activation, provider-enforced budget/pause controls, Meta creation and verified conversion attribution remain separate unfinished work. K179/K180 reporting associations are separate from the creation ledger and are not silently replaced. A created campaign does not establish verified conversions. No real provider operation or deferred hands-on acceptance has been performed as part of local K181 implementation.
+
+### Focused local verification
+
+`node --test backend/test/funnel_google_paused_create.test.mjs backend/test/funnel_google_paused_provider.test.mjs backend/test/funnel_google_ads_provider.test.mjs backend/test/funnel_google_preflight.test.mjs` covers real PGlite migration/SQL and Express routes, narrow request compilation, single dispatch under concurrent requests, snapshots, independent grants, identity/entitlement changes, provider validation and response handling, incomplete outcomes, read-only recovery, disabled gates and retained provider/preparation behavior. Provider HTTP is mocked. Frontend checks cover narrow bodies, confirmations/date reset, unknown outcomes, scope invalidation, access denial, exact summaries and real-font layouts at 1400px, 390px and 320px/1.3 text scale, plus existing campaign UI regression checks. These checks do not certify live Google permissions, ad policy eligibility, billing setup or conversion tracking.
+
+Primary contracts checked September 23, 2026: [grouped REST mutations](https://developers.google.com/google-ads/api/rest/examples), [mutation transactions](https://developers.google.com/google-ads/api/docs/mutating/overview), [bidding strategies](https://developers.google.com/google-ads/api/docs/campaigns/bidding/assign-strategies), [targeting criteria](https://developers.google.com/google-ads/api/docs/targeting/criteria), [average daily budgets](https://support.google.com/google-ads/answer/6385083), and the official [v25 campaign schema](https://github.com/googleapis/googleapis/blob/master/google/ads/googleads/v25/resources/campaign.proto) and [mutation service schema](https://github.com/googleapis/googleapis/blob/master/google/ads/googleads/v25/services/google_ads_service.proto). The v25 protobuf definitions were read directly because some rendered reference pages were unavailable or exceeded retrieval limits. This caught the current date-time field names; older date-only mutation fields are not used.

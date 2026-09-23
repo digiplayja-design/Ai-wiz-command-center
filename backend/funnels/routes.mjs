@@ -19,6 +19,7 @@ import { registerGoogleKeywords } from './google_keywords.mjs';
 import { registerMeta } from './meta.mjs';
 import { registerMetaCampaignLink } from './meta_campaign_link.mjs';
 import { registerGoogleCampaignLink } from './google_campaign_link.mjs';
+import { registerGooglePausedCreate } from './google_paused_create.mjs';
 import { registerGoogleAds } from './google_ads.mjs';
 import { registerInbox } from './inbox.mjs';
 import { registerRehearsal } from './rehearsal.mjs';
@@ -83,6 +84,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   registerMetaCampaignLink(app,{base,owner,database,metaStore,metaProvider,environment,now});
   registerGoogleAds(app,{base,owner,limit,database,googleAdsStore,googleAdsProvider,environment,now});
   registerGoogleCampaignLink(app,{base,owner,database,googleAdsStore,googleAdsProvider,environment,now});
+  registerGooglePausedCreate(app,{base,owner,database,googleAdsStore,googleAdsProvider,environment,publicBase,now});
   registerCampaigns(app,{base,owner,command,database,campaignStore,generateAdCopy,environment,publicBase});
   registerCampaignBudget(app,{base,owner,database});
   registerMetaPreparation(app,{base,owner,database,metaPreparationStore,environment,publicBase});
