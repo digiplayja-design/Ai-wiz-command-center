@@ -1173,3 +1173,42 @@ conflicts and owner/access loss disable review actions; typing resets confirmati
 This release does not introduce an approval history ledger or automated launch.
 Rollback leaves the additive columns and updated RPC in place so older save
 clients continue to advance revisions correctly. Roll back the frontend first.
+
+## K166: Google search keyword drafts
+
+GET `/:id/campaigns/:campaign_id/google-keywords` reads a private keyword draft.
+POST `.../google-keywords/save` accepts exactly `version`, `fingerprint`, `assets`.
+Assets contain six arrays: `exact`, `phrase`, `broad`, `negative_exact`,
+`negative_phrase`, `negative_broad`. These are preparation lists, not Google
+account resources. No provider API, targeting deployment, ad or spend is created.
+
+KORLIX draft limits are 50 positive plus 50 negative keywords, 80 Unicode code
+points and 10 space-separated words per term. Text is trimmed with single spaces;
+the editor normalizes pasted whitespace. API and SQL validate the limits and reject
+duplicates within each match type, control characters, brackets, quotes and
+keyword operators. Different match types can share text. The editor highlights
+identical text across positive/negative lists; this is not exhaustive overlap
+detection or Google policy validation. Empty drafts may be saved.
+
+Both routes share 30 requests per owner/minute and no-store. Current database
+Enterprise and ownership checks protect reads and writes. Private table
+`korlix_funnel_google_keywords` uses RLS with no browser policy/grants; validator
+and RPC are service-only SECURITY INVOKER with fixed search_path. Lock order is
+funnel → campaign → keyword row; version and campaign-context hashes prevent
+lost updates. Parent deletion cascades. Archived drafts remain readable/copyable.
+
+Each save records assets, context and a new version. Campaign/published-page
+changes flag the saved draft as outdated; unsaved page edits and manual reports
+preserve it. Copy uses the saved snapshot with CURRENT/OUT OF DATE and incomplete
+labels. Unsaved edits/conflicts disable copy, and explicit discard is required
+for reload/close. Owner/client/funnel/overlay changes invalidate private state and
+late responses. Missing campaigns leave Close available; malformed responses fail
+closed. Keyword edits preserve existing setup and saved-copy review records.
+
+Locations, languages, bidding, final targeting review and launch remain separate.
+No dependency/environment changes. Rollback leaves the additive table/RPC in
+place; older clients ignore it. Existing creative and setup RPCs are unchanged.
+
+Match semantics verified 2026-09-23 against Google primary sources:
+[positive matches](https://support.google.com/google-ads/answer/7478529?hl=en),
+[negative matches](https://support.google.com/google-ads/answer/2453972?hl=en).
