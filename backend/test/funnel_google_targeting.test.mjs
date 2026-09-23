@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {searchGoogleLocations,googleLocationsValid} from '../funnels/google_locations.mjs';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
@@ -38,6 +39,11 @@ test.before(async()=>{
  await db.exec(await readFile(new URL('../../supabase/migrations/20260923153540_funnel_google_radius.sql',import.meta.url),'utf8'));
  assert.deepEqual((await db.query('select to_jsonb(t) row from korlix_funnel_google_targeting t')).rows[0].row,beforeRadius);
  const afterRead=await targeting();assert.equal(afterRead.radius_supported,true);delete afterRead.radius_supported;assert.deepEqual(afterRead,beforeRead);
+ const beforeLocations=(await db.query('select to_jsonb(t) row from korlix_funnel_google_targeting t')).rows[0].row;
+ const beforeLocationRead=await targeting();
+ await db.exec(await readFile(new URL('../../supabase/migrations/20260923172253_funnel_google_locations.sql',import.meta.url),'utf8'));
+ assert.deepEqual((await db.query('select to_jsonb(t) row from korlix_funnel_google_targeting t')).rows[0].row,beforeLocations);
+ const afterLocationRead=await targeting();assert.equal(afterLocationRead.locations_supported,true);assert.equal(afterLocationRead.location_catalog_version,'google-locations-2026-08-12');delete afterLocationRead.locations_supported;delete afterLocationRead.location_catalog_version;assert.deepEqual(afterLocationRead,beforeLocationRead);
  await db.exec(await readFile(new URL('../../supabase/migrations/20260923123817_funnel_google_preflight.sql',import.meta.url),'utf8'));
  await db.exec('set role service_role');
  const database={rpc:async(name,p)=>{try{return{data:await rpc(name,p)}}catch(error){return{error}}}};
@@ -146,6 +152,46 @@ test('K169 review/save races have one winner; all four routes share a rate limit
 });
 
 const radius={label:'Columbus service area',latitude_micro:39961176,longitude_micro:-82998794,radius_meters:15000};
+const city={id:'1023640',name:'Columbus,Ohio,United States',country:'US',type:'City'};
+const region={id:'21168',name:'Ohio,United States',country:'US',type:'State'};
+const locationAssets=(locations=[city])=>({...assets,countries:[],geo_locations:locations});
+test('K176 reference search disambiguates cities, filters regions, handles accents and bounds results',()=>{
+ const r=searchGoogleLocations({q:'Columbus',country:'US',kind:'all'});assert.ok(r.locations.some(x=>x.id===city.id));assert.ok(r.locations.length>1);assert.ok(r.locations.every(x=>x.country==='US'));
+ assert.deepEqual(searchGoogleLocations({q:'Columbus Ohio',country:'US',kind:'city'}).locations[0],city);
+ assert.deepEqual(searchGoogleLocations({q:'Ohio',country:'US',kind:'region'}).locations,[region]);
+ assert.ok(searchGoogleLocations({q:'Sao Paulo',country:'BR',kind:'city'}).locations.some(x=>x.name.startsWith('Sao Paulo,')));
+ const broad=searchGoogleLocations({q:'United States',country:'US',kind:'all'});assert.equal(broad.locations.length,30);assert.equal(broad.more,true);
+ assert.equal(searchGoogleLocations({q:'no-such-location-fixture',country:'US',kind:'all'}).locations.length,0);
+ for(const q of [{q:'x',country:'US',kind:'all'},{q:'x'.repeat(81),country:'US',kind:'all'},{q:'Ohio',country:'XX',kind:'all'},{q:'Ohio',country:'US',kind:'postal'},{q:' Ohio',country:'US',kind:'all'},{q:'Ohio',country:'US',kind:'all',limit:100},{q:['Ohio'],country:'US',kind:'all'}])assert.throws(()=>searchGoogleLocations(q));
+});
+test('K176 location search enforces owner, tier, campaign scope and no-store without provider calls or writes',async()=>{
+ await db.exec('delete from korlix_google_ads_connections');
+ const query='/locations?q=Columbus%20Ohio&country=US&kind=city';
+ for(const [actor,status] of [['',401],[other,404],[basic,403],[owner,200]]){const r=await req(query,null,actor);assert.equal(r.status,status);assert.equal(r.headers.get('cache-control'),'no-store');if(status===200)assert.deepEqual((await r.json()).locations[0],city);}
+ assert.equal((await req(query,null,owner,{campaign:randomUUID()})).status,404);
+ for(const q of ['/locations?q=Ohio&country=US&kind=all&force=true','/locations?q=Ohio&q=Texas&country=US&kind=all','/locations?q=x&country=US&kind=all'])assert.equal((await req(q)).status,400);
+ assert.equal((await db.query('select count(*)::int n from korlix_funnel_google_targeting')).rows[0].n,0);assert.equal(providerCalls,0);
+ for(let i=0;i<25;i++)assert.equal((await req(query)).status,200);
+ assert.equal((await req()).status,429);
+});
+test('K176 HTTP saves reject forged reference identity, while SQL enforces shape, modes and exclusions',async()=>{
+ const d=await targeting();
+ for(const a of [locationAssets([{...city,id:'9999999999'}]),locationAssets([{...city,name:'Fake name'}]),locationAssets([{...city,country:'JM'}]),locationAssets([{...city,type:'State'}])]){assert.throws(()=>googleTargetingAssets(a));assert.equal((await req('/save',{version:0,fingerprint:d.fingerprint,assets:a})).status,400);}
+ const invalid=[locationAssets(null),locationAssets([null]),locationAssets([city,city]),locationAssets([{...city,extra:true}]),locationAssets([{...city,id:1023640}]),locationAssets([{...city,name:'<Ohio>'}]),locationAssets([{...city,country:'XX'}]),locationAssets([{...city,type:'Airport'}]),{...locationAssets(),countries:['US']},{...locationAssets(),proximities:[]},{...locationAssets(),excluded_countries:['US']},locationAssets(Array(21).fill(city))];
+ for(const a of invalid){assert.throws(()=>googleTargetingAssets(a));assert.equal((await db.query('select korlix_google_targeting_valid_v1($1::jsonb) ok',[JSON.stringify(a)])).rows[0].ok,false);}
+ assert.equal(googleLocationsValid([city,region]),true);
+ for(const a of [locationAssets([]),locationAssets([city,region])]){googleTargetingAssets(a);assert.equal((await db.query('select korlix_google_targeting_valid_v1($1::jsonb) ok',[JSON.stringify(a)])).rows[0].ok,true);}
+ const r=await db.query("select prosecdef,proconfig,has_function_privilege('anon',oid,'execute') anon,has_function_privilege('authenticated',oid,'execute') authenticated,has_function_privilege('service_role',oid,'execute') service from pg_proc where proname='korlix_google_location_valid_v1'");assert.deepEqual(r.rows,[{prosecdef:false,proconfig:['search_path=public, pg_temp'],anon:false,authenticated:false,service:true}]);
+});
+test('K176 named locations save and review with exact historical values and preserve other target modes',async()=>{
+ await save(radiusAssets());const radiusReview=await reviewTargeting();
+ let d=await (await req('/save',{version:radiusReview.version,fingerprint:radiusReview.fingerprint,assets:locationAssets([city,region])})).json();assert.equal(d.draft_complete,true);assert.equal(d.review_current,false);assert.deepEqual(d.reviewed_snapshot,radiusReview.reviewed_snapshot);
+ d=await reviewTargeting();assert.equal(d.review_current,true);assert.deepEqual(d.reviewed_snapshot.assets.geo_locations,[city,region]);assert.equal(d.ad_publishing_ready,false);
+ const snapshot=d.reviewed_snapshot;d=await save(locationAssets());assert.equal(d.review_current,false);assert.deepEqual(d.reviewed_snapshot,snapshot);
+ d=await save(locationAssets([]));assert.equal(d.draft_complete,false);assert.equal(d.review_ready,false);await assert.rejects(reviewTargeting(),/complete current targeting/);
+ await save(locationAssets());await reviewTargeting();const before=(await db.query('select to_jsonb(t) row from korlix_funnel_google_targeting t')).rows[0].row;
+ const preflight=await rpc('korlix_funnel_google_preflight_v1',{p_actor:owner,p_action:'read',p_funnel:f.id,p_data:{campaign_id:c.id,configured:false,config_hash:config.hash,public_base:'https://example.com'}});assert.deepEqual(preflight.targeting.assets.geo_locations,[city]);assert.equal(preflight.targeting.review_current,true);assert.deepEqual((await db.query('select to_jsonb(t) row from korlix_funnel_google_targeting t')).rows[0].row,before);assert.equal(providerCalls,0);
+});
 const radiusAssets=(areas=[radius])=>({...assets,countries:[],proximities:areas});
 test('K174 API and SQL agree on radius shape, precision, bounds, labels, duplicates and target modes',async()=>{
  const malformed=[null,[],{}, {...radius,extra:1},{...radius,label:''},{...radius,label:' test'},{...radius,label:'test '},{...radius,label:'x'.repeat(81)},{...radius,label:'a\nb'},{...radius,label:'a\u0085b'},{...radius,label:'a\u2028b'},{...radius,label:'<point>'},{...radius,latitude_micro:'1'},{...radius,latitude_micro:90000001},{...radius,latitude_micro:-90000001},{...radius,latitude_micro:1.5},{...radius,longitude_micro:180000001},{...radius,longitude_micro:-180000001},{...radius,radius_meters:999},{...radius,radius_meters:200001},{...radius,radius_meters:1000.1}];

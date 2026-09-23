@@ -1543,3 +1543,68 @@ HTTP 429. No complete live targeting policy or account capability is asserted.
 No map, geocoding, city search, location exclusions, delivery expansion control,
 provider calls, credentials, ad creation, budgets, spending or outbound messages
 are added. Roll back frontend then backend; retain compatible SQL and draft data.
+
+
+### K176 — Google city and region target lookup
+
+Owners can choose **Cities and regions** in the existing Google targeting editor.
+The private `GET /:id/campaigns/:campaign_id/google-targeting/locations` route
+accepts exactly `q` (2–80 trimmed Unicode characters), `country` (a listed code)
+and `kind` (`all`, `city`, `region`). It reuses the targeting RPC's current
+Enterprise, funnel ownership and campaign-platform checks, `no-store` response
+headers and the shared 30-request owner/minute limit. Search is explicit, bounded
+to 30 matches and reports `more` when a narrower query is needed. No provider
+account, credential, network request or database mutation is needed for lookup.
+
+`google_locations_catalog.json.gz` contains 69,110 Active reference locations in
+201 countries, from Google's August 12, 2026 geo-target CSV. Included types are
+City, State, Province, Region, Department, Canton, Governorate, Prefecture,
+Autonomous Community, Division, Territory, Union Territory and Okrug. These are
+selected named-location types, not every geographic type. Postal codes, counties,
+municipalities, neighborhoods and Nielsen DMA/TV data are outside this chapter.
+Canonical names disambiguate similar place names; no parent hierarchy, coordinates,
+place boundaries or eligibility are inferred. Accents and case are folded for
+search only; saved canonical names and Google criteria IDs remain exact.
+
+Reference source and attribution: [Google Ads geo targets](https://developers.google.com/google-ads/api/data/geotargets),
+Google Developers, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
+with transformations described here: Active/type/country filtering, sorted compact
+rows and gzip packaging. The source ZIP SHA-256 is
+`d4a62971cb283e405a07d537a0af400816ff5a36283e60376a51c7657f3d1e89`.
+Rebuild deterministically with
+`python3 backend/funnels/build_google_locations.py /path/to/geotargets.zip`.
+The builder rejects any other archive. Runtime lookup uses bundled bytes and
+never downloads a catalog. Reference availability is not current ad eligibility;
+Google country/account/policy checks remain necessary before eventual launch.
+
+Draft assets optionally include `geo_locations`, at most 20 different objects
+with exactly `id`, `name` (canonical name), `country` and `type`. This mode excludes
+whole-country targets and the `proximities` key, including an empty radius list.
+A chosen location cannot be inside an explicitly excluded country. The API checks
+all four values against the bundled catalog before saving. The service-only SQL
+boundary independently validates object shape, known country, text limits, types,
+duplicate IDs and mode/exclusion rules; it does not contain a second geographic
+catalog. Direct service-role code remains trusted to enforce catalog membership.
+No caller-supplied labels or provider IDs bypass the private API checks.
+
+The additive migration creates `korlix_google_location_valid_v1` and replaces the
+existing targeting validator and RPC. All three use SECURITY INVOKER, fixed
+`search_path=public,pg_temp`, and service-role-only execution. No table or RLS
+policy is created, and no existing row, draft revision, review or fingerprint is
+rewritten. Existing country/radius drafts and reviews retain their representation.
+The response adds `locations_supported:true` and the pinned
+`location_catalog_version:google-locations-2026-08-12`; the UI gates the new mode
+on that capability. Saved/historical targeting exports and the combined Google
+preparation summary include exact location names, types and criteria IDs.
+
+Changing a populated target mode requires confirmation. Search results are
+cleared when query/country/type changes; late responses cannot populate a newer
+search or changed workspace. Losing access closes the search's useful state.
+Saved changes stale the targeting review while retaining its historical snapshot.
+No geocoding, map, Meta lookup, provider activation, ad creation or spend occurs.
+Owner hands-on acceptance remains deferred.
+
+Release migration before backend, then frontend. Keep the compatible migration
+and all saved rows during rollback. K175 clients cannot interpret newly saved
+`geo_locations` drafts; prefer a K176 fix-forward for such owners rather than
+removing or converting their choices. Do not rewrite their drafts to roll back.
