@@ -7,6 +7,7 @@ import astra from '../korlix_astra.cjs';
 import { createFunnelScheduler } from './scheduler.mjs';
 import { createFunnelFollowups } from './followups.mjs';
 import { registerCampaigns } from './campaigns.mjs';
+import { registerCampaignBudget } from './campaign_budget.mjs';
 import { registerMetaPreparation } from './meta_preparation.mjs';
 import { registerMetaCreative } from './meta_creative.mjs';
 import { registerMetaTargeting } from './meta_targeting.mjs';
@@ -79,6 +80,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   registerMeta(app,{base,owner,database,metaStore,metaProvider,environment,now});
   registerGoogleAds(app,{base,owner,limit,database,googleAdsStore,googleAdsProvider,environment,now});
   registerCampaigns(app,{base,owner,command,database,campaignStore,generateAdCopy,environment,publicBase});
+  registerCampaignBudget(app,{base,owner,database});
   registerMetaPreparation(app,{base,owner,database,metaPreparationStore,environment,publicBase});
   registerMetaCreative(app,{base,owner,database,environment,publicBase});
   registerMetaTargeting(app,{base,owner,database,environment,publicBase,metaStore,metaProvider,now});

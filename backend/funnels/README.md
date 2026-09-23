@@ -1704,3 +1704,73 @@ Meta targeting-search documentation returned HTTP 429; full current search
 parameter/permission behavior still needs live provider acceptance after
 activation. Supabase changelog was unchanged from K176. No live provider account
 was queried to prepare this chapter.
+
+### K178 — Campaign budget pacing from manual results
+
+Campaign cards expose **Budget pacing** for Meta, Google and Other plans. Owners
+save a UTC reporting start date; the window ends after the campaign's current
+1–90 day duration, inclusively. The current USD daily plan supplies the total
+planned amount. Plan edits update the comparison on refresh without changing the
+saved start date. A reporting window is not a provider flight schedule, spending
+authorization, enforced budget or automatic pause rule.
+
+The tracker sums only owner-entered daily reports within that window. A missing
+date is unknown, not zero. Today's entry contributes to recorded spend and total
+plan overrun detection, but remains partial and is excluded from completed-day
+comparisons. Future dates are pending; reports outside the window are counted as
+excluded. An explicit zero entry counts as reported. Completed-day variance uses
+only completed dates with entries and their matching daily planned amounts, so a
+reporting gap cannot manufacture underspend. The UI shows completed-day coverage,
+missing dates, total-plan overrun, and expandable daily coverage. Plan minus
+recorded spend is clearly distinguished from confirmed money available to spend.
+There is no forecast, currency conversion, imported-provider total or attribution
+claim. Arithmetic uses integer USD cents and UTC calendar dates, including leap
+days and year boundaries; at most 90 window days and 731 source rows are handled.
+
+GET `/:id/campaigns/:campaign_id/budget`, POST `.../save` and `.../clear` use the
+shared authenticated-owner wrapper, no-store and a shared 30-request owner/minute
+limit. Query parameters are rejected. Save accepts exactly `version`,
+`campaign_version`, `start_date`; clear accepts the two versions and
+`confirmed:true`. The start date must be an exact real YYYY-MM-DD date within the
+past 730 days or next 365 days, using the database's current UTC date. Both HTTP
+and SQL validate mutation shapes. The response includes server date/time, a
+point-in-time current plan and manual reports; `budget_enforced` and
+`ad_publishing_ready` always remain false.
+
+The additive RLS-enabled private `korlix_funnel_campaign_budget_windows` table
+references its campaign with cascading deletion. Browser and PUBLIC table/RPC
+grants are revoked. The service-only SECURITY INVOKER command repeats current
+Enterprise entitlement and ownership checks, locks funnel → campaign → window,
+and checks both window and campaign versions. Campaign/report edits therefore
+invalidate stale saves as well as concurrent window edits. Clearing retains a
+versioned empty row to prevent a stale save from recreating an old window; it
+does not delete daily reports. Archived campaigns are read-only. No existing
+function, campaign review, campaign version, report or provider connection is
+changed by this migration or by saving/clearing a reporting window.
+
+The client independently verifies identity, source, currency, dates, coverage
+and all derived totals before display or export. Dirty date changes hide the old
+comparison and block copying until saved; discard and clear require confirmation.
+Refresh and failed writes clear stale totals. Account/workspace/client changes
+and access denial clear private content and invalidate pending results. A copied
+saved summary includes the check timestamp, exact saved window/current plan,
+all daily coverage, and the manual-reporting/spending limits above.
+
+Focused local verification executes the actual migration and Express routes,
+covering browser roles, ownership, downgrade, archive, version conflicts,
+clear/recreate, cascade, invalid inputs, no-store/rate limiting, UTC boundaries,
+missing versus zero reports, partial today and integer precision. Flutter checks
+cover corrupted/mismatched responses, exact save/clear requests, conflict and
+refresh failures, saved export, late responses/scope changes and desktop/390px/
+320px (1.3 text scale) layouts. Existing campaign/report behavior is retained.
+These checks are not owner acceptance; all hands-on acceptance remains deferred.
+
+Apply the additive migration before the backend, verify it, then deploy the
+frontend. On rollback, roll back frontend then backend and retain the additive
+table/RPC and saved windows. K177 simply lacks the budget tracker; existing
+campaigns and reports remain usable. No environment changes, new dependencies,
+provider calls, provider activation, ad creation, spending or outreach are added.
+
+Primary guidance checked September 23, 2026: [Supabase database functions](https://supabase.com/docs/guides/database/functions)
+and [changelog](https://supabase.com/changelog). Both fetched documents match the
+K177 hashes; the listed changes do not alter this private invoker-RPC design.
