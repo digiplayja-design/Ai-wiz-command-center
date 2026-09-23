@@ -1212,3 +1212,33 @@ place; older clients ignore it. Existing creative and setup RPCs are unchanged.
 Match semantics verified 2026-09-23 against Google primary sources:
 [positive matches](https://support.google.com/google-ads/answer/7478529?hl=en),
 [negative matches](https://support.google.com/google-ads/answer/2453972?hl=en).
+
+
+### K167 — saved Google keyword review
+
+The keyword editor records an explicit owner review of its saved positive and
+negative lists, match types and overlap warnings against the published page.
+POST `google-keywords/review` accepts exactly `{version, review_fingerprint,
+confirmed:true}`; POST `google-keywords/clear-review` accepts exactly
+`{version, confirmed:true}`. Both share the existing owner rate limit, current
+Enterprise/ownership checks and no-store behavior.
+
+Review requires a saved positive keyword, current context, a published page and
+current campaign-plan review. An immutable record preserves all six lists, saved
+context, draft revision and original save timestamp. Every draft save increments
+the draft revision and stales the previous review, even for identical keywords.
+Review/clear change only entity version and review metadata; saved time and assets
+are preserved. Campaign/published changes stale review, while manual reports and
+unpublished edits preserve it. Clearing is confirmed and allowed after archive.
+
+The additive migration backfills existing draft revisions without changing prior
+assets, versions, save times, setup reviews or copy reviews. Snapshot size permits
+maximum Unicode keyword lists and bounded context. RPC remains service-only,
+SECURITY INVOKER with fixed search_path; table keeps RLS and no browser grants.
+
+UI review and export require saved, conflict-free data; editing/reloading resets
+confirmation. Export uses the exact reviewed revision, counts and save timestamp,
+including when stale. Invalid metadata fails closed and existing scope/access
+invalidation protects late responses. No provider call, Google approval, targeting
+activation, ad creation or spending authorization occurs. Rollback can retain the
+additive migration; K166 clients ignore review metadata.
