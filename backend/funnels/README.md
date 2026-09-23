@@ -802,3 +802,69 @@ and [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-
 The current Supabase changelog was also checked; no listed breaking change affects
 these additive tables or service-only RPC. Mocked checks do not establish live
 Google compatibility or platform approval.
+
+## K159 — Google Ads account performance
+
+Adds on-demand account totals and daily spend, impressions and clicks to the
+existing Google Ads connection card. Choose 7, 30 or 90 completed calendar days;
+the backend derives the interval using fresh account timezone metadata, ending
+yesterday in that timezone. Currency is shown explicitly, with cost micros
+converted and summed using exact integer arithmetic. No conversion estimates,
+funnel attribution, revenue, ROAS or billing reconciliation are inferred.
+
+`GET /api/funnels/google-ads/performance` accepts only `days` (`7`, `30`, `90`),
+`version`, `root_id` and `account_id`. The IDs must match the current owner's
+selected advertising account and loaded access root before refreshing a token.
+Current Enterprise entitlement, configuration, refresh expiry and version are
+checked first. Fresh accessible roots and active non-manager account details are
+checked before a fixed customer-level GAQL report is requested with the saved
+`login-customer-id` context. Entitlement and connection identity are checked again
+before returning data, so disconnect, reselection, root refresh and downgrade
+prevent an in-flight result from being released. Requests have a separate limit
+of ten per owner per minute and inherit owner response `no-store` behavior.
+
+The response includes `source: google_ads`, `scope: account`, connection/root
+identity, fresh account metadata, the date range, retrieval time, totals, returned
+row count and descending daily rows. Each returned row must match the requested
+customer, currency, timezone and a unique date within the interval. Requested
+scalar metrics omitted by ProtoJSON are interpreted as zero; explicit null,
+negative, non-integer, unsafe or malformed values reject the report. Spend is
+bounded to 10^18 micros and counts to JavaScript's maximum safe integer, including
+summed totals. At most three pages and one daily row per requested day are
+accepted. Missing/invalid/repeated cursors, excess rows/pages and inconsistent
+metadata reject the whole load. The existing fixed host, redirect rejection,
+ten-second deadline and 2 MiB response bound apply to each request. No automatic
+retry is added.
+
+Google can omit dates with no activity. The UI does not fill missing dates or
+interpret an empty response as a verified zero total. Nonempty reports show the
+sum of returned rows, and the daily section exposes exactly those rows. Google
+may revise reporting. The frontend validates identity, date bounds, ordering,
+metric types and exact row-to-total reconciliation before displaying a report.
+Changing the period, selected root/account/version, connection availability or
+client clears old data and invalidates pending results. Access denial clears data
+and disables loading. Reports load only when requested and are not persisted.
+
+There is no schema migration, new environment variable, OAuth scope, background
+sync, conversion upload or ad mutation. K158's private service-only connection
+schema and encrypted refresh credentials are reused. Google and Meta activation
+remain deferred. The Ads scope still grants Google view/manage permission; this
+implementation uses it only for account discovery and reporting.
+
+Local checks cover the real owner middleware and migration-backed connection
+store with mocked Google reports; fixed REST headers/GAQL; exact arithmetic;
+account-calendar/DST/leap dates; malformed, mismatched and oversized reports;
+concurrent access changes; rate limits; UI validation and stale-result handling;
+and 1400, 390 and 320 px layouts (320 px at 1.3 text scale). No real Google account
+or report was requested. These checks do not establish live provider acceptance.
+
+Rollback: restore K158 frontend then backend and retain the K158 connection
+schema/records. K159 writes no report data and requires no database rollback.
+
+Primary references checked on 23 September 2026:
+[Google Ads reporting](https://developers.google.com/google-ads/api/docs/reporting/overview),
+[customer metrics and date fields](https://developers.google.com/google-ads/api/fields/v25/customer),
+[date ranges](https://developers.google.com/google-ads/api/docs/query/date-ranges),
+[zero metrics and omitted dates](https://developers.google.com/google-ads/api/docs/reporting/zero-metrics),
+[paging](https://developers.google.com/google-ads/api/docs/reporting/paging), and
+[ProtoJSON scalar representations](https://protobuf.dev/programming-guides/json/#representation).

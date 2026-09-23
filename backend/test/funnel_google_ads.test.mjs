@@ -17,6 +17,7 @@ const provider={
  refresh:async t=>{calls.push(['refresh',t]);if(hook)await hook('refresh');return'private-access-fixture';},
  roots:async()=>{calls.push(['roots']);if(hook)await hook('roots');return availableRoots;},
  accounts:async(_t,r)=>{calls.push(['accounts',r]);if(hook)await hook('accounts');return{root:{...account,id:root,name:'Fixture manager',manager:true},accounts:[account]};},
+ performance:async(_t,a,r,range)=>{calls.push(['performance',a.id,r,range]);if(hook)await hook('performance');return{rows:[{date:range.to,spend:'12.345678',impressions:100,clicks:3}],totals:{spend:'12.345678',impressions:100,clicks:3},reported_days:1};},
  account:async(_t,a,r)=>{calls.push(['account',a,r]);if(hook)await hook('account');return account;},
 };
 const command=(u,a,d={})=>store.command(u,a,d);
@@ -116,4 +117,34 @@ test('Google owner commands are rate limited before more provider work',async()=
  const c=await connect();let limited=false;
  for(let i=0;i<20;i++){const r=await req('/roots',{version:c.version});if(r.status===429){limited=true;break;}}
  assert(limited);assert.equal(calls.filter(c=>c[0]==='roots').length,1);
+});
+
+async function reportConnection(){let c=await load();return(await(await select(c)).json()).connection;}
+const performance=(c,actor=owner,extra={})=>req('/performance?'+new URLSearchParams({days:'7',version:String(c.version),root_id:root,account_id:id,...extra}),null,actor,'GET');
+test('Google performance is owner-scoped and selected-account scoped with no report persistence or credentials',async()=>{
+ const c=await reportConnection();const before=(await db.query('select to_jsonb(c) value from korlix_google_ads_connections c')).rows;
+ const r=await performance(c);assert.equal(r.status,200);assert.equal(r.headers.get('cache-control'),'no-store');const body=await r.json();assert.equal(body.source,'google_ads');assert.equal(body.scope,'account');assert.equal(body.connection_version,c.version);assert.equal(body.root_id,root);assert.equal(body.account.id,id);assert.equal(body.totals.spend,'12.345678');
+ for(const secret of ['sealed','config_hash','binding_id','private-refresh-fixture','private-access-fixture'])assert(!JSON.stringify(body).includes(secret));
+ assert.deepEqual((await db.query('select to_jsonb(c) value from korlix_google_ads_connections c')).rows,before);
+ assert.equal((await performance(c,'')).status,401);assert.equal((await performance(c,other)).status,404);assert.equal((await performance(c,basic)).status,403);
+ assert.equal(calls.filter(c=>c[0]==='performance').length,1);
+});
+test('Invalid or stale Google report identity fails before token refresh or reporting',async()=>{
+ const c=await reportConnection();calls=[];
+ for(const change of [{version:String(c.version+1)},{root_id:id},{account_id:root},{days:'365'},{query:'secret'}])assert([400,409].includes((await performance(c,owner,change)).status));
+ await db.exec('update korlix_google_ads_connections set selected_account=null');assert.equal((await performance(c)).status,409);assert.equal(calls.length,0);
+});
+for(const change of ['disconnect','select','roots','downgrade'])test('A '+change+' while Google reporting discards the late result',async()=>{
+ const c=await reportConnection();hook=async action=>{if(action!=='performance')return;
+  if(change==='downgrade')await db.query("update user_profiles set tier='basic' where id=$1",[owner]);
+  else await command(owner,change,{version:c.version,config_hash:cfg.hash,root_id:root,account_id:id,roots:[root]});
+ };
+ const r=await performance(c);assert([403,404,409].includes(r.status));assert(!(await r.text()).includes('12.345678'));
+});
+test('Removed Google manager access and revoked reporting permissions fail closed',async()=>{
+ const c=await reportConnection();availableRoots=[];assert.equal((await performance(c)).status,409);assert.equal(calls.filter(c=>c[0]==='performance').length,0);
+ availableRoots=[root];hook=async action=>{if(action==='performance')throw new GoogleAdsAccessError();};assert.equal((await performance(c)).status,409);const state=await command(owner,'secret');assert(state.needs_reconnect);assert.equal(state.selected_account,null);
+});
+test('Google performance has a separate ten-request owner rate limit',async()=>{
+ const c=await reportConnection();for(let i=0;i<10;i++)assert.equal((await performance(c)).status,200);assert.equal((await performance(c)).status,429);assert.equal(calls.filter(c=>c[0]==='performance').length,10);
 });

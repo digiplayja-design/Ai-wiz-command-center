@@ -1,6 +1,7 @@
 import {randomBytes,randomUUID} from 'node:crypto';
 import {fail,FunnelError,text,uuid,version,esc} from './core.mjs';
 import {googleAdsCallback,googleAdsConfiguration,googleDigest,googleChallenge,googleCustomerId,googleTokenCipher,GoogleAdsAccessError,createGoogleAdsProvider} from './google_ads_provider.mjs';
+import {googleReportQuery,googleReportRange} from './google_ads_performance.mjs';
 
 const opaque=value=>{if(typeof value!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(value))fail('Start a new Google connection.');return value;};
 export function createGoogleAdsStore(database) {
@@ -19,8 +20,8 @@ export function registerGoogleAds(app,{base,owner,limit=()=>{},database,googleAd
   async function credentials(u){configured();const c=await store.command(u,'secret');if(c.config_hash!==config.hash||c.needs_reconnect||(c.refresh_expires_at&&Date.parse(c.refresh_expires_at)<=now()+60000))fail('Reconnect Google Ads to renew access.',409);return c;}
   // Check the browser's version BEFORE contacting Google, and again in the
   // service-only transaction after remote work. A disconnect/downgrade wins.
-  async function withAccess(u,requestedVersion,fn){
-    const c=await credentials(u);if(version(requestedVersion)!==c.version)fail('The Google connection changed. Refresh before trying again.',409);
+  async function withAccess(u,requestedVersion,fn,validate=()=>{}){
+    const c=await credentials(u);if(version(requestedVersion)!==c.version)fail('The Google connection changed. Refresh before trying again.',409);validate(c);
     try{const refresh=googleTokenCipher(config.key).open(c.sealed,binding(u,c.binding_id,'refresh'));const token=await provider.refresh(refresh);return await fn(c,token);}catch(e){if(e instanceof GoogleAdsAccessError)await store.command(u,'invalid',{version:c.version});throw e;}
   }
   const mutation=(u,c,action,data)=>store.command(u,action,{...data,version:c.version,config_hash:config.hash});
@@ -68,4 +69,21 @@ export function registerGoogleAds(app,{base,owner,limit=()=>{},database,googleAd
     });r.json(await status(u));
   },limited));
   app.post(base+'/google-ads/disconnect',owner(async(q,r,u)=>{if(q.body?.confirmed!==true)fail('Confirm disconnecting Google Ads first.');await store.command(u,'disconnect',{version:q.body.version==null?null:version(q.body.version)});r.json(await status(u));}));
+  app.get(base+'/google-ads/performance',owner(async(q,r,u)=>{
+    const requested=googleReportQuery(q.query);
+    await withAccess(u,requested.version,async(c,t)=>{
+      if(!(await provider.roots(t)).includes(c.root_id))fail('Google access to this account was removed. Refresh access accounts.',409);
+      const account=await provider.account(t,c.selected_account,c.login_customer_id);
+      if(account.id!==c.selected_account||account.manager||account.status!=='ENABLED')fail('This Google advertising account is no longer active or accessible.',409);
+      const range=googleReportRange(requested.days,account.timezone,now());
+      const report=await provider.performance(t,account,c.login_customer_id,range);
+      // Recheck current entitlement and connection after remote work. Never
+      // release a late report after disconnect, reselection or tier downgrade.
+      const latest=await credentials(u);
+      if(latest.version!==c.version||latest.binding_id!==c.binding_id||latest.root_id!==c.root_id||latest.login_customer_id!==c.login_customer_id||latest.selected_account!==c.selected_account)fail('The Google connection changed while loading. Check your connection and try again.',409);
+      r.json({source:'google_ads',scope:'account',connection_version:c.version,root_id:c.root_id,account:{id:account.id,name:account.name,currency:account.currency,timezone:account.timezone,test_account:account.test_account},range,...report,fetched_at:new Date(now()).toISOString()});
+    },c=>{
+      if(c.root_id!==requested.root_id||c.selected_account!==requested.account_id||!c.roots.includes(c.root_id)||!c.accounts.some(a=>a.id===requested.account_id&&!a.manager&&a.status==='ENABLED'))fail('The selected Google account changed. Check your connection before reporting.',409);
+    });
+  },{ratePrefix:'google-ads-performance:',max:10}));
 }
