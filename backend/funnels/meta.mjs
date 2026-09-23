@@ -1,4 +1,5 @@
 import express from 'express';
+import {MetaPageAccessError,metaPageInput,readMetaPages,boundedMetaPageJson} from './meta_pages.mjs';
 import {metaReportQuery,metaReportRange,readMetaInsights} from './meta_performance.mjs';
 import {randomBytes,randomUUID,createHash,createHmac,createCipheriv,createDecipheriv,timingSafeEqual} from 'node:crypto';
 import {fail,FunnelError,text,uuid,version,esc} from './core.mjs';
@@ -31,13 +32,13 @@ export function createMetaStore(database) {
 }
 class MetaAccessError extends FunnelError {constructor(){super('Meta access expired or was removed. Reconnect your account.',409);}}
 export function createMetaProvider(config,{fetchImpl=fetch,now=Date.now}={}) {
-  async function graph(path,params={},token) {
+  async function graph(path,params={},token,pageRead=false) {
     const url=new URL(`https://graph.facebook.com/${config.apiVersion}/${path}`);
     for(const [k,v] of Object.entries(params))url.searchParams.set(k,String(v));
     if(token)url.searchParams.set('appsecret_proof',createHmac('sha256',config.secret).update(token).digest('hex'));
     let response,body;
-    try{response=await fetchImpl(url,{headers:token?{Authorization:`Bearer ${token}`}:{},redirect:'error',signal:AbortSignal.timeout(10000)});body=await response.json();}catch{fail('Meta could not be reached. Please try again.',503);}
-    if(!response.ok||body.error){if(body.error?.code===190||body.error?.code===10||body.error?.code===200)throw new MetaAccessError();fail('Meta could not complete this request. Check your account access and try again.',503);}
+    try{response=await fetchImpl(url,{headers:token?{Authorization:`Bearer ${token}`}:{},redirect:'error',signal:AbortSignal.timeout(10000)});body=pageRead?await boundedMetaPageJson(response):await response.json();}catch{fail('Meta could not be reached. Please try again.',503);}
+    if(!response.ok||body.error){if(pageRead&&[10,200,283].includes(body.error?.code))throw new MetaPageAccessError();if(body.error?.code===190||body.error?.code===10||body.error?.code===200)throw new MetaAccessError();fail('Meta could not complete this request. Check your account access and try again.',503);}
     return body;
   }
   const account=a=>{
@@ -73,6 +74,7 @@ export function createMetaProvider(config,{fetchImpl=fetch,now=Date.now}={}) {
       }
       fail('More than 500 ad accounts were returned. Limit the assets shared with KORLIX and reconnect.',409);
     },
+    async pages(token){return readMetaPages(graph,token);},
     async account(token,id){return account(await graph(id,{fields},token));},
     async insights(token,account,range){return readMetaInsights(graph,token,account,range);},
     async campaignInsights(token,account,range){return readMetaInsights(graph,token,account,range,'campaign');}
@@ -96,7 +98,7 @@ export function registerMeta(app,{base,owner,database,metaStore,metaProvider,env
   const status=async user=>({...await store.command(user,'status',{config_hash:config.hash}),configured:config.ready,ad_publishing_ready:false});
   async function access(user){configured();const c=await store.command(user,'secret');if(c.config_hash!==config.hash||c.needs_reconnect||Date.parse(c.expires_at)<=now()+60000)fail('Reconnect Meta to renew access.',409);return {c,token:tokenCipher(config.key).open(c.sealed,binding(user,c.binding_id))};}
   async function withAccess(user,fn){const {c,token}=await access(user);try{return await fn(c,token);}catch(e){if(e instanceof MetaAccessError)await store.command(user,'invalid',{version:c.version});throw e;}}
-  app.get(base+'/meta/data-deletion',(_q,r)=>r.set({'Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",'X-Content-Type-Options':'nosniff'}).type('html').send(`<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KORLIX · Remove Meta data</title><body style="background:#061827;color:#e5f3f8;font:18px system-ui;line-height:1.6;max-width:760px;margin:8vh auto;padding:24px"><h1>Remove your Meta connection data</h1><p>In KORLIX, open Enterprise Funnel Studio, open a funnel, and choose Ads workspace. In Meta ad accounts, select Disconnect and confirm.</p><p>This deletes your stored Meta access token, cached ad account details, selected account, and pending sign-in attempt from KORLIX. Campaign plans and results you entered yourself remain available.</p><p>You can also remove KORLIX in Meta Business Integrations to revoke its permission. Disconnecting does not stop ads running on Meta.</p><p>If you cannot access your KORLIX account, contact support@korlixdeveloper.com from your registered email address and request removal of your Meta connection data. Never send your password or access token.</p></body></html>`));
+  app.get(base+'/meta/data-deletion',(_q,r)=>r.set({'Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",'X-Content-Type-Options':'nosniff'}).type('html').send(`<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KORLIX · Remove Meta data</title><body style="background:#061827;color:#e5f3f8;font:18px system-ui;line-height:1.6;max-width:760px;margin:8vh auto;padding:24px"><h1>Remove your Meta connection data</h1><p>In KORLIX, open Enterprise Funnel Studio, open a funnel, and choose Ads workspace. In Meta ad accounts, select Disconnect and confirm.</p><p>This deletes your stored Meta access token, cached ad account and Page details, selected account and Page, and pending sign-in attempt from KORLIX. Campaign plans and results you entered yourself remain available.</p><p>You can also remove KORLIX in Meta Business Integrations to revoke its permission. Disconnecting does not stop ads running on Meta.</p><p>If you cannot access your KORLIX account, contact support@korlixdeveloper.com from your registered email address and request removal of your Meta connection data. Never send your password or access token.</p></body></html>`));
   app.get(base+'/meta/readiness',(_q,r)=>r.set('Cache-Control','no-store').json({configured:config.ready,ad_publishing_ready:false}));
   app.get(base+'/meta/connection',owner(async(_q,r,u)=>r.json(await status(u))));
   app.post(base+'/meta/begin',owner(async(_q,r,u)=>{
@@ -121,6 +123,30 @@ export function registerMeta(app,{base,owner,database,metaStore,metaProvider,env
   app.post(base+'/meta/select',owner(async(q,r,u)=>{
     const id=text(q.body?.account_id,44,true);if(!/^act_\d{1,40}$/.test(id))fail('Choose an available Meta ad account.');
     await withAccess(u,async(c,token)=>{if(version(q.body?.version)!==c.version)fail('The connection changed. Refresh before selecting an account.',409);if(!c.accounts.some(a=>a.id===id))fail('Refresh your accounts before selecting.');const a=await provider.account(token,id);if(a.id!==id)fail('Meta returned a different account.',503);await store.command(u,'select',{version:c.version,account_id:id});});r.json(await status(u));
+  }));
+  const pageAction=select=>owner(async(q,r,u)=>{
+    const requested=metaPageInput(q.body,select);
+    await withAccess(u,async(c,token)=>{
+      if(c.version!==requested.version||c.selected_account!==requested.account_id||!c.accounts.some(a=>a.id===requested.account_id))fail('The selected account changed. Check your Meta connection.',409);
+      const data={version:c.version,account_id:c.selected_account,config_hash:config.hash};
+      // Every write rechecks entitlement, expiry and the same account/version in SQL.
+      let pages;
+      try{pages=await provider.pages(token);}catch(e){
+        if(e instanceof MetaPageAccessError)await store.command(u,'pagesDenied',data);
+        throw e;
+      }
+      const found=!select||pages.some(p=>p.id===requested.page_id);
+      await store.command(u,'pages',{...data,pages,...(select&&found?{page_id:requested.page_id}:{})});
+      if(!found)fail('That Page is no longer shared with KORLIX. Refresh Pages and choose an available Page.',409);
+    });
+    r.json(await status(u));
+  },{ratePrefix:'meta-pages:',max:10});
+  app.post(base+'/meta/pages',pageAction(false));
+  app.post(base+'/meta/select-page',pageAction(true));
+  app.post(base+'/meta/clear-page',owner(async(q,r,u)=>{
+    const requested=metaPageInput(q.body);
+    await withAccess(u,async(c)=>{await store.command(u,'clearPage',{...requested,config_hash:config.hash});});
+    r.json(await status(u));
   }));
   const performance=scope=>owner(async(q,r,u)=>{
     const requested=metaReportQuery(q.query);

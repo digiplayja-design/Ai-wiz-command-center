@@ -940,3 +940,74 @@ Primary references checked on 23 September 2026:
 [campaign status](https://developers.google.com/google-ads/api/reference/rpc/v25/CampaignStatusEnum.CampaignStatus),
 [advertising channels](https://developers.google.com/google-ads/api/reference/rpc/v25/AdvertisingChannelTypeEnum.AdvertisingChannelType), and
 [zero metrics](https://developers.google.com/google-ads/api/docs/reporting/zero-metrics).
+
+## K161 — Facebook Page identity for Meta setup
+
+Owners can explicitly refresh Facebook Pages, select a Page, or clear that
+selection after choosing a Meta ad account. Page identity is stored for that
+owner's current account setup. This does not create an ad, grant ad permissions,
+verify that the Page can advertise through the account, or change
+`ad_publishing_ready: false`. Actual provider activation and owner acceptance
+remain deferred.
+
+Endpoints: `POST /api/funnels/meta/pages`, `/select-page`, `/clear-page`.
+Requests accept only the current integer `version` and `account_id`, with
+`page_id` required for selection. Discovery and selection share ten requests per
+owner per minute. All routes require authentication and current database
+Enterprise entitlement. Writes recheck connection version, account, configuration,
+credential expiry, and entitlement after remote work. Stale results are rejected.
+
+The provider checks `pages_show_list` on `/me/permissions`, then reads
+`/me/accounts` with explicit `id,name,category` fields. It never requests, stores,
+or returns Page access tokens. Each selection discovers the currently shared
+Pages again; a public Page lookup cannot establish membership. Graph hosts and
+paths are fixed, credentials use the existing bearer header/app-secret proof,
+redirects are rejected, and pagination follows only validated cursors. Reads are
+bounded to one permission response plus five Page responses, 100 rows per Page
+response, 500 unique Pages, 1 MiB per response and ten seconds per request.
+Incomplete lists, repeated IDs/cursors and malformed metadata fail without
+saving a partial snapshot.
+
+A missing Page grant or Graph permission error clears cached Pages and the Page
+selection while preserving the ad account, encrypted user token and account
+reporting access. Expired/revoked user access uses the existing reconnect path
+and also clears Page state. Account reselection, disappearance during account
+refresh, successful reconnection, disconnect and deauthorization clear Page state.
+A normal account refresh that retains the selected account preserves its Page
+snapshot and permission-needed flag. A withdrawn Page disappears on the next
+Page refresh/reselection. Cached details are a timestamped snapshot, not a
+continuing permission guarantee.
+
+Frontend controls include local name/ID/category search, 20 Pages per list page,
+last-checked time and selection/clear actions. Search and pagination make no
+provider requests. A new connection version resets the Page list controls.
+Changing clients or losing application access clears owner data and invalidates
+late results. Unreadable Page state is rejected, and conflict/permission failures
+reload the safe connection state. Desktop, 390 px and 320 px layouts (the latter
+at 1.3 text scale) are covered by widget checks and screenshots.
+
+Apply `20260923011934_funnel_meta_page_identity.sql` before deploying the backend.
+It adds four nonsecret columns to the existing private Meta connection table and
+replaces the existing service-only `SECURITY INVOKER` RPC. Existing RLS, browser
+revocations, encrypted credentials and monotonically increasing versions remain.
+No new table, dependency, environment variable or provider permission is activated
+by this release. The Meta Business Login configuration will need approved
+`pages_show_list` and appropriate Page sharing when activation is undertaken;
+existing `ads_read` reporting remains usable without that grant. Additional
+provider requirements must be verified during live activation. Page selection
+alone is not ad-account/Page compatibility or publishing approval.
+
+Local tests execute the historical and additive migration on PGlite with real
+PostgreSQL grants, constraints and RPC behavior. They also cover fixed mocked
+Graph requests, input/permission failures, account/expiry/tier races, response
+bounds and the real owner middleware's shared rate limit. No real Meta user,
+Page, ad account or paid-ad request is made. Roll back frontend then backend to
+K160 and retain the additive schema and encrypted owner data; do not drop columns
+or reverse the migration during ordinary rollback.
+
+Primary references checked on 23 September 2026:
+[User accounts edge](https://developers.facebook.com/docs/graph-api/reference/user/accounts/),
+[Pages API setup](https://developers.facebook.com/docs/pages-api/getting-started/),
+[official Meta User SDK](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/user.py),
+[official Meta Page SDK fields](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/page.py),
+and [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security).

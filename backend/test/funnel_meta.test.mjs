@@ -6,14 +6,17 @@ import {PGlite} from '@electric-sql/pglite';
 import express from 'express';
 import {createMetaStore,registerMeta,metaConfiguration,tokenCipher,digest,createMetaProvider,verifiedMetaEvent} from '../funnels/meta.mjs';
 import {FunnelError} from '../funnels/core.mjs';
-let db,store,server,base,exchanges=0,accountReads=0,reportReads=0,reportHook=null;
+import {MetaPageAccessError} from '../funnels/meta_pages.mjs';
+let db,store,server,base,exchanges=0,accountReads=0,reportReads=0,reportHook=null,pageHook=null;
 const owner=randomUUID(),other=randomUUID(),basic=randomUUID();
 const env={KORLIX_META_ENABLED:'true',KORLIX_META_APP_ID:'1234567',KORLIX_META_APP_SECRET:'app-secret-fixture-not-real',KORLIX_META_LOGIN_CONFIG_ID:'7654321',KORLIX_META_TOKEN_KEY:Buffer.alloc(32,7).toString('base64'),KORLIX_META_REDIRECT_URI:'https://example.com/api/funnels/meta/callback'};
 const cfg=metaConfiguration(env);
 const command=(u,a,d={})=>store.command(u,a,d);
 const req=(path,body,actor=owner,method='POST')=>fetch(base+'/api/funnels/meta'+path,{method,headers:{Authorization:actor,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
 const acc={id:'act_1234',name:'Test business',currency:'USD',timezone:'America/New_York',status:1};
+const pageIdentity={id:'98765432109876543210',name:'KORLIX Pages',category:'Education'};
 const provider={authorizationUrl:s=>'https://www.facebook.com/v26.0/dialog/oauth?state='+s,exchange:async()=>{exchanges++;return {token:'fixture-token',meta_user_id:'10101',expires_at:new Date(Date.now()+86400000).toISOString()};},accounts:async()=>{accountReads++;return [acc];},account:async()=>acc,insights:async(_token,_account,range)=>{reportReads++;if(reportHook)await reportHook();return{rows:[{date:range.to,spend:'12.30',impressions:100,clicks:4}],totals:{spend:'12.30',impressions:100,clicks:4},reported_days:1};}};
+provider.pages=async()=>{if(pageHook)return pageHook();return [pageIdentity];};
 provider.campaignInsights=async(token,account,range)=>{const r=await provider.insights(token,account,range);return{rows:[{campaign_id:'6789',campaign_name:'Campaign report',...r.totals}],totals:r.totals,reported_campaigns:1};};
 async function begin(user=owner){const r=await req('/begin',{},user);assert.equal(r.status,200);return r.json();}
 async function callback(a){return fetch(base+'/api/funnels/meta/callback?state='+encodeURIComponent(new URL(a.authorization_url).searchParams.get('state'))+'&code=fixture-code');}
@@ -22,13 +25,14 @@ test.before(async()=>{
  db=new PGlite();await db.exec('create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create table user_profiles(id uuid primary key,tier text);grant usage on schema public to anon,authenticated,service_role;grant select on user_profiles to service_role;');
  for(const u of [owner,other,basic]){await db.query('insert into auth.users values($1)',[u]);await db.query('insert into user_profiles values($1,$2)',[u,u===basic?'basic':'enterprise']);}
  await db.exec(await readFile(new URL('../../supabase/migrations/20260922111502_funnel_meta_connection.sql',import.meta.url),'utf8'));
+ await db.exec(await readFile(new URL('../../supabase/migrations/20260923011934_funnel_meta_page_identity.sql',import.meta.url),'utf8'));
  store=createMetaStore({rpc:async(_name,p)=>{try{return {data:(await db.query('select korlix_meta_v1($1,$2,$3) r',[p.p_actor,p.p_action,JSON.stringify(p.p_data)])).rows[0].r};}catch(error){return {error};}}});
  const app=express();app.use(express.json());
  const ownerRoute=fn=>async(q,r)=>{r.set('Cache-Control','no-store');try{const u=q.headers.authorization;if(!u)return r.status(401).json({error:'Sign in'});await fn(q,r,u);}catch(e){r.status(e instanceof FunnelError?e.status:503).json({error:e.message});}};
  registerMeta(app,{base:'/api/funnels',owner:ownerRoute,metaStore:store,metaProvider:provider,environment:env});
  server=app.listen(0);await new Promise(r=>server.once('listening',r));base='http://127.0.0.1:'+server.address().port;
 });
-test.beforeEach(async()=>{await db.exec('delete from korlix_meta_connections;delete from korlix_meta_oauth_attempts;');exchanges=0;accountReads=0;reportReads=0;reportHook=null;});
+test.beforeEach(async()=>{await db.exec('delete from korlix_meta_connections;delete from korlix_meta_oauth_attempts;');exchanges=0;accountReads=0;reportReads=0;reportHook=null;pageHook=null;});
 test.after(async()=>{server?.closeAllConnections();await new Promise(r=>server?.close(r));await db?.close();});
 test('Configuration fails closed and encrypted tokens are owner and attempt bound',()=>{
  assert.equal(cfg.ready,true);for(const key of ['KORLIX_META_APP_ID','KORLIX_META_APP_SECRET','KORLIX_META_LOGIN_CONFIG_ID','KORLIX_META_TOKEN_KEY','KORLIX_META_REDIRECT_URI','KORLIX_META_ENABLED'])assert.equal(metaConfiguration({...env,[key]:''}).ready,false);
@@ -149,3 +153,67 @@ test(scope+' · Revoked Meta reporting access marks the connection unavailable w
 });
 
 }
+
+const pageReq=(c,path='/pages',extra={})=>req(path,{version:c.version,account_id:acc.id,...extra});
+test('Page discovery, live reselection and clearing are private, versioned, and token-free',async()=>{
+ let c=await reportConnection();const token=c.sealed;
+ let r=await pageReq(c);assert.equal(r.status,200);let state=await r.json();assert.deepEqual(state.connection.pages,[pageIdentity]);assert.equal(state.connection.selected_page,null);assert.equal(state.ad_publishing_ready,false);
+ assert.equal((await pageReq(c,'/select-page',{page_id:pageIdentity.id})).status,409);
+ c=await command(owner,'secret');r=await pageReq(c,'/select-page',{page_id:pageIdentity.id});assert.equal(r.status,200);state=await r.json();assert.equal(state.connection.selected_page,pageIdentity.id);assert.deepEqual((await command(owner,'secret')).sealed,token);
+ for(const key of ['sealed','fixture-token','config_hash','meta_user_id','binding_id','access_token'])assert(!JSON.stringify(state).includes(key));
+ assert.equal((await(await req('/connection',null,other,'GET')).json()).connection,null);
+ c=await command(owner,'secret');r=await pageReq(c,'/clear-page');assert.equal(r.status,200);state=await r.json();assert.equal(state.connection.selected_page,null);assert.equal(state.connection.pages.length,1);
+});
+test('Pages require current owner, tier, selection and exact inputs before provider discovery',async()=>{
+ let reads=0;pageHook=async()=>{reads++;return[pageIdentity];};const c=await reportConnection();
+ for(const actor of ['',basic,other])assert([401,403,404].includes((await req('/pages',{version:c.version,account_id:acc.id},actor)).status));
+ for(const body of [{},{version:c.version,account_id:acc.id,fields:'access_token'},{version:c.version,account_id:'https://evil.example'},{version:'7',account_id:acc.id}])assert.equal((await req('/pages',body)).status,400);
+ assert.equal((await pageReq(c,'/select-page',{page_id:123})).status,400);
+ assert.equal((await pageReq({...c,version:c.version+1})).status,409);
+ await db.exec('update korlix_meta_connections set selected_account=null');assert.equal((await pageReq(c)).status,409);assert.equal(reads,0);
+});
+test('Page selection discovers current membership and removes a withdrawn choice',async()=>{
+ let c=await reportConnection();await pageReq(c,'/select-page',{page_id:pageIdentity.id});c=await command(owner,'secret');
+ pageHook=async()=>[];assert.equal((await pageReq(c,'/select-page',{page_id:pageIdentity.id})).status,409);
+ c=await command(owner,'secret');assert.deepEqual(c.pages,[]);assert.equal(c.selected_page,null);assert(c.pages_refreshed_at);assert.equal(c.selected_account,acc.id);
+});
+test('Page permission loss clears only Page identity; account reporting remains available',async()=>{
+ let c=await reportConnection();await pageReq(c,'/select-page',{page_id:pageIdentity.id});c=await command(owner,'secret');
+ pageHook=async()=>{throw new MetaPageAccessError();};const r=await pageReq(c);assert.equal(r.status,409);
+ let latest=await command(owner,'secret');assert(latest.pages_access_denied);assert.equal(latest.needs_reconnect,false);assert.equal(latest.selected_account,acc.id);assert.equal(latest.selected_page,null);assert.deepEqual(latest.pages,[]);assert.deepEqual(latest.sealed,c.sealed);
+ assert.equal((await req('/performance?'+new URLSearchParams({days:'7',account_id:acc.id,version:String(latest.version)}),null,owner,'GET')).status,200);
+ pageHook=null;assert.equal((await pageReq(latest)).status,200);assert.equal((await command(owner,'secret')).pages_access_denied,false);
+});
+test('Account reselection, missing account, reconnect and invalid token clear Page state',async()=>{
+ for(const action of ['select','accounts','invalid','finish']) {
+  let c=await reportConnection();await pageReq(c,'/select-page',{page_id:pageIdentity.id});c=await command(owner,'secret');
+  if(action==='finish')await connect();else await command(owner,action,{version:c.version,account_id:acc.id,accounts:[]});
+  const latest=await command(owner,'secret');assert.deepEqual(latest.pages,[]);assert.equal(latest.selected_page,null);assert.equal(latest.pages_refreshed_at,null);
+  await db.exec('delete from korlix_meta_connections;delete from korlix_meta_oauth_attempts;');
+ }
+});
+test('Late Page responses cannot survive disconnect, reselection, expiry, or tier downgrade',async()=>{
+ for(const action of ['disconnect','select','expire','downgrade']) {
+  const c=await reportConnection();pageHook=async()=>{
+   if(action==='expire')await db.exec("update korlix_meta_connections set expires_at=now()");
+   else if(action==='downgrade')await db.query("update user_profiles set tier='basic' where id=$1",[owner]);
+   else await command(owner,action,{version:c.version,account_id:acc.id});
+   return [pageIdentity];
+  };
+  const r=await pageReq(c);assert([403,409].includes(r.status));assert(!(await r.text()).includes(pageIdentity.name));
+  await db.query("update user_profiles set tier='enterprise' where id=$1",[owner]);
+  assert((await db.query('select pages from korlix_meta_connections')).rows.every(x=>x.pages.length===0));
+  await db.exec('delete from korlix_meta_connections;delete from korlix_meta_oauth_attempts;');pageHook=null;
+ }
+});
+test('Private Page writes reject tokens, malformed lists, duplicates and stale versions in real SQL',async()=>{
+ const c=await reportConnection(),data={version:c.version,account_id:acc.id,config_hash:cfg.hash};
+ await db.exec('set role service_role');
+ for(const pages of [[{...pageIdentity,access_token:'never-store'}],[{...pageIdentity,id:42}],[{...pageIdentity,name:''}],[pageIdentity,pageIdentity],{},Array(501).fill(pageIdentity)])await assert.rejects(command(owner,'pages',{...data,pages}),/Invalid Page list/);
+ await command(owner,'pages',{...data,pages:[pageIdentity],page_id:pageIdentity.id});
+ await assert.rejects(command(owner,'clearPage',data),/changed/);await db.exec('reset role');
+ assert.equal((await command(owner,'secret')).selected_page,pageIdentity.id);
+ for(const role of ['anon','authenticated']){
+  await db.exec('set role '+role);await assert.rejects(db.query('select pages,selected_page from korlix_meta_connections'),/permission denied/);await assert.rejects(db.query('select korlix_meta_v1($1,$2,$3)',[owner,'pages',JSON.stringify(data)]),/permission denied/);await db.exec('reset role');
+ }
+});
