@@ -1011,3 +1011,48 @@ Primary references checked on 23 September 2026:
 [official Meta User SDK](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/user.py),
 [official Meta Page SDK fields](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/page.py),
 and [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security).
+
+## K162: campaign-level Meta setup review
+
+Each Meta campaign plan can open a private setup review that brings together its
+copy, audience brief, planned USD budget, current published landing page and
+selected cached Meta ad account/Facebook Page. Eight server-calculated checks
+cover publication, plan review, platform configuration, current connection,
+selected/active account, USD currency and selected Page. This is a saved planning
+review: `ad_publishing_ready` remains false. No creative, executable targeting,
+ad eligibility, ad creation, platform budget or spending authorization is implied.
+
+- `GET /api/funnels/:id/campaigns/:campaign_id/meta-setup` reads current checks,
+  snapshot and fingerprint, plus the last reviewed snapshot if one exists.
+- `POST .../meta-setup/review` accepts exactly `version`, `fingerprint` and
+  `confirmed: true`; all checks must still pass and the fingerprint must match.
+- `POST .../meta-setup/clear` accepts exactly `version` and `confirmed: true`.
+  It clears only the saved review, retaining its increasing version.
+
+The owner and current Enterprise tier are verified for every operation. The
+server builds the tagged HTTPS destination and configuration binding, ignoring
+no caller-controlled extra fields. All three routes share 30 requests per owner
+per minute, use no-store responses and make no Meta API calls. Saved snapshots
+contain only campaign/page copy and nonsecret account/Page details. Copying a
+saved review labels it OUT OF DATE when current content or identity differs.
+
+A SHA-256 fingerprint binds the snapshot to full published page content, plan and
+page state, reviewed page version, Meta connection identity and configuration.
+Copy edits, publication, account/Page changes, reconnects and configuration changes
+invalidate a saved review; expiry/access checks also prevent it being current.
+Manual report entries and unpublished draft edits do not invalidate the review.
+The existing campaign planner is USD, so a non-USD Meta account blocks review;
+there is no currency conversion. Cached details must be refreshed in the Meta
+connection card when the owner needs updated provider information.
+
+Apply `20260923015323_funnel_meta_campaign_preparation.sql` before the backend.
+It creates one RLS-protected private table with service-role-only CRUD and a
+service-role-only SECURITY INVOKER RPC with a fixed search path. No existing RPC,
+provider permission, environment variable or dependency is changed. Local tests
+exercise actual PostgreSQL constraints/grants, ownership and tier boundaries,
+concurrent saves, stale fingerprints, preserved reporting/drafts and cascade
+cleanup. Widget tests cover the complete review/copy/clear flow, bad responses,
+conflict recovery, access loss and workspace changes with an open dialog, plus
+1400/390/320 px layouts and 1.3 text scaling at 320 px. Live owner/provider
+acceptance remains deferred. Roll back frontend then backend to K161 and retain
+the additive private table and RPC; do not delete saved owner reviews.
