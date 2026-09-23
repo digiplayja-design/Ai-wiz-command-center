@@ -347,6 +347,23 @@ void main() {
       expect(find.text('Search-ad draft saved.'), findsNothing);
     },
   );
+  testWidgets('Missing campaign clears fields and keeps Close available', (
+    t,
+  ) async {
+    final c = makeClient(
+      (r) async => reply({'error': 'Campaign not found.'}, 404),
+    );
+    addTearDown(c.dispose);
+    await t.pumpWidget(app(c));
+    await t.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(
+      t.widget<TextButton>(find.widgetWithText(TextButton, 'Close')).onPressed,
+      isNotNull,
+    );
+    expect(find.textContaining('no longer available'), findsOneWidget);
+  });
   testWidgets('Client and funnel changes ignore earlier reads', (t) async {
     final pending = Completer<http.Response>();
     final a = makeClient((r) => pending.future),

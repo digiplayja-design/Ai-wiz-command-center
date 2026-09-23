@@ -293,6 +293,7 @@ class _FunnelGoogleCreativeState extends State<FunnelGoogleCreative> {
         setState(() {
           if (e is FunnelException && [401, 403, 404].contains(e.status)) {
             _empty();
+            _busy = false;
             _unavailable =
                 'This campaign is no longer available. Close this draft.';
           } else {
