@@ -1328,3 +1328,36 @@ review metadata fails closed; access/scope invalidation discards late responses.
 No provider call, ad creation, Google approval, launch readiness or spending
 occurs. Roll back the frontend first, then backend; retain the additive columns
 and saved records. K168 clients ignore the additional review response fields.
+
+### K170 — Combined Google preparation checklist
+
+GET `/:id/campaigns/:campaign_id/google-preflight` returns the published-page,
+plan, account-setup, copy, keyword and targeting review checks together. It rejects
+query parameters, requires current Enterprise ownership, uses no-store and has a
+30-request owner/minute limit. No POST endpoint or combined approval is added.
+
+The additive `korlix_funnel_google_preflight_v1` RPC invokes the four existing
+component readers in one transaction under their funnel → campaign → connection
+lock order. It never modifies saved rows, calls a provider or changes a review.
+Execution stays service-only, SECURITY INVOKER, with a fixed search path. The
+existing readers, tables, grants and constraints are unchanged. `checked_at`
+identifies this point-in-time view. `preparation_complete` requires all six
+checks; `ad_publishing_ready` is always false, including when every review is
+current. Cached account identity is explicitly distinguished from live provider
+eligibility.
+
+Google campaign cards expose **Preparation checklist**. Each review shows its
+current/missing/out-of-date status and relevant incomplete prerequisites, and
+opens the existing review editor. Closing a child editor refreshes the combined
+checklist. Owners can inspect/copy a timestamped preparation summary with the
+current plan, cached selected account, saved copy, keywords, targeting labels,
+original draft timestamps and review status. This summary describes the latest
+saved drafts at check time; old reviewed snapshots remain in their individual
+editors and are not substituted into the latest draft section.
+
+Component validators and cross-component context/check comparisons reject
+malformed or mismatched responses. Refresh clears the previous summary while
+loading; failure cannot leave stale data copyable. Owner/scope/client changes
+invalidate data and pending responses, including open child dialogs. No ad,
+platform budget, spending approval or launch is created. Roll back frontend then
+backend and retain the additive read-only RPC.
