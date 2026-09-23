@@ -1,13 +1,16 @@
 import {fail,uuid} from './core.mjs';
+import {radiusAreasValid} from './radius.mjs';
 import {metaConfiguration} from './meta.mjs';
 import catalog from './meta_targeting_catalog.json' with {type:'json'};
 export {catalog as metaTargetingCatalog};
 export const metaAdCategories=['UNDECIDED','NONE','HOUSING','EMPLOYMENT','FINANCIAL_PRODUCTS_SERVICES','ISSUES_ELECTIONS_POLITICS','ONLINE_GAMBLING_AND_GAMING'];
+export const metaRadiiValid=v=>radiusAreasValid(v,80000);
 export function metaTargetingAssets(v) {
   const keys=['countries','age_min','age_max','placements','categories'];
-  if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length!==5||keys.some(k=>!(k in v)))fail('Choose countries, ages, placement and ad categories.');
+  if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).some(k=>![...keys,'custom_locations'].includes(k))||keys.some(k=>!Object.hasOwn(v,k)))fail('Choose countries, ages, placement and ad categories.');
   const allowed=new Set(catalog.countries.map(x=>x.code));
   if(!Array.isArray(v.countries)||v.countries.length>20||v.countries.some(s=>typeof s!=='string'||!allowed.has(s))||new Set(v.countries).size!==v.countries.length)fail('Choose up to 20 different listed countries.');
+  if(Object.hasOwn(v,'custom_locations')&&(!metaRadiiValid(v.custom_locations)||v.countries.length))fail('Choose countries or up to 10 distinct radius areas from 1 to 80 km.');
   if(!Number.isInteger(v.age_min)||!Number.isInteger(v.age_max)||v.age_min<18||v.age_max>65||v.age_max<v.age_min)fail('Choose a draft age range from 18 through 65+.');
   if(!['undecided','automatic','facebook_feed'].includes(v.placements))fail('Choose a listed placement preference.');
   if(!Array.isArray(v.categories)||!v.categories.length||v.categories.length>5||v.categories.some(s=>!metaAdCategories.includes(s))||new Set(v.categories).size!==v.categories.length||v.categories.some(s=>['UNDECIDED','NONE'].includes(s))&&v.categories.length!==1)fail('Choose no special category, choose later, or the applicable special categories.');

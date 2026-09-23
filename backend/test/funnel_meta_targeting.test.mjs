@@ -26,6 +26,12 @@ test.before(async()=>{
  db=new PGlite();await db.exec('create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create table user_profiles(id uuid primary key,tier text);create table korlix_agent_email_recipients(id uuid primary key default gen_random_uuid(),user_id uuid,email text,active boolean default true,consent_status text default \'transactional_only\',source_reference text,suppressed_at timestamptz,suppression_reason text,updated_at timestamptz);grant usage on schema public to anon,authenticated,service_role;grant select,update on user_profiles to service_role;grant all on korlix_agent_email_recipients to service_role;');
  for(const id of [owner,other,basic]){await db.query('insert into auth.users values($1)',[id]);await db.query('insert into user_profiles values($1,$2)',[id,id===basic?'basic':'enterprise']);}
  for(const file of ['20260921162128_enterprise_contacts_crm.sql','20260922023935_enterprise_funnel_studio.sql','20260922090333_funnel_campaign_workspace.sql','20260922111502_funnel_meta_connection.sql','20260923011934_funnel_meta_page_identity.sql','20260923015323_funnel_meta_campaign_preparation.sql','20260922194529_funnel_images.sql','20260923133926_funnel_meta_creative.sql','20260923140507_funnel_meta_targeting.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+file,import.meta.url),'utf8'));
+ // K175 keeps existing country drafts and combined creative reviews identical.
+ f=await funnel('create',{name:'Legacy',slug:'legacy',document:doc});f=await funnel('publish',{version:f.version,confirmed:true});c=await campaign('create',plan);c=await campaign('review',{confirmed:true});await connect();await ready();await review();
+ const beforeRadius=(await db.query('select to_jsonb(t) row from korlix_funnel_meta_targeting t')).rows[0].row,beforeRead=await targeting();
+ await db.exec(await readFile(new URL('../../supabase/migrations/20260923162339_funnel_meta_radius.sql',import.meta.url),'utf8'));
+ assert.deepEqual((await db.query('select to_jsonb(t) row from korlix_funnel_meta_targeting t')).rows[0].row,beforeRadius);
+ const afterRead=await targeting();assert.equal(afterRead.radius_supported,true);delete afterRead.radius_supported;assert.deepEqual(afterRead,beforeRead);
  await db.exec('set role service_role');
  const database={rpc:async(name,p)=>{try{return{data:await rpc(name,p)}}catch(error){return{error}}}};
  const app=express();app.use(express.json());registerFunnels(app,{database,requireUser:async q=>[owner,other,basic].includes(q.headers.authorization)?{id:q.headers.authorization}:null,environment:env,now:()=>clock,metaProvider:new Proxy({},{get:()=>()=>{providerCalls++;throw Error('No provider operation is allowed');}})});
@@ -109,3 +115,45 @@ test('Targeting reads and saves preserve all existing creative, setup and campai
  await completeCreative();await saveReview();const rows=async()=>(await db.query("select jsonb_build_object('creative',(select jsonb_agg(to_jsonb(t)) from korlix_funnel_meta_creatives t),'setup',(select jsonb_agg(to_jsonb(t)) from korlix_funnel_meta_preparations t),'campaign',(select jsonb_agg(to_jsonb(t)) from korlix_funnel_campaigns t),'connection',(select jsonb_agg(to_jsonb(t)) from korlix_meta_connections t)) r")).rows[0].r;const before=await rows();await targeting();await saveTarget();await review();assert.deepEqual(await rows(),before);assert.equal(providerCalls,0);
 });
 test('All targeting actions share a thirty-request owner rate limit',async()=>{for(let i=0;i<30;i++)assert.equal((await req()).status,200);assert.equal((await req('/clear-review',{version:0,confirmed:true})).status,429);assert.equal(providerCalls,0);});
+
+const radius={label:'Columbus service area',latitude_micro:39961176,longitude_micro:-82998794,radius_meters:15125};
+const radiusAssets=(areas=[radius])=>({...choices,countries:[],custom_locations:areas});
+test('K175 API and SQL agree on precise radius bounds, duplicate areas, labels and exclusive target type',async()=>{
+ const malformed=[null,[],{}, {...radius,extra:1},{...radius,label:''},{...radius,label:' test'},{...radius,label:'test '},{...radius,label:'x'.repeat(81)},{...radius,label:'a\nb'},{...radius,label:'a\u0085b'},{...radius,label:'a\u2028b'},{...radius,label:'<point>'},{...radius,latitude_micro:'1'},{...radius,latitude_micro:90000001},{...radius,latitude_micro:-90000001},{...radius,latitude_micro:1.5},{...radius,longitude_micro:180000001},{...radius,longitude_micro:-180000001},{...radius,radius_meters:999},{...radius,radius_meters:80001},{...radius,radius_meters:1000.1}];
+ const bad=malformed.map(r=>radiusAssets([r]));bad.push({...choices,custom_locations:[radius]},radiusAssets([radius,{...radius,label:'Duplicate point'}]),radiusAssets(Array.from({length:11},(_,i)=>({...radius,latitude_micro:i}))),radiusAssets(null),radiusAssets({}));
+ const d=await targeting();
+ for(const a of bad){assert.throws(()=>metaTargetingAssets(a));assert.equal((await db.query('select korlix_meta_targeting_valid_v1($1::jsonb) ok',[JSON.stringify(a)])).rows[0].ok,false);assert.equal((await req('/save',{version:0,fingerprint:d.fingerprint,assets:a})).status,400);clock+=60000;}
+ for(const a of [radiusAssets(),radiusAssets([]),radiusAssets([{...radius,latitude_micro:-90000000,longitude_micro:180000000,radius_meters:1000}]),radiusAssets([{...radius,latitude_micro:90000000,longitude_micro:-180000000,radius_meters:80000,label:'🌍'.repeat(80)}]),radiusAssets(Array.from({length:10},(_,i)=>({...radius,latitude_micro:i})))]){metaTargetingAssets(a);assert.equal((await db.query('select korlix_meta_targeting_valid_v1($1::jsonb) ok',[JSON.stringify(a)])).rows[0].ok,true);}
+});
+test('K175 radius HTTP save and combined review preserve coordinates without provider activation',async()=>{
+ await db.exec('delete from korlix_meta_connections');await completeCreative();let d=await targeting();assert.equal(d.radius_supported,true);
+ const r=await req('/save',{version:d.version,fingerprint:d.fingerprint,assets:radiusAssets()});assert.equal(r.status,200);d=await r.json();assert.deepEqual(d.assets,radiusAssets());assert.equal(d.draft_complete,true);assert.equal(d.review_ready,true);assert.equal(d.ad_publishing_ready,false);assert.deepEqual(d.saved_labels,{});
+ const rr=await req('/review',{version:d.version,review_fingerprint:d.review_fingerprint,confirmed:true});assert.equal(rr.status,200);const reviewed=await rr.json();assert.equal(reviewed.review_current,true);assert.deepEqual(reviewed.reviewed_snapshot.assets.custom_locations,[radius]);assert.deepEqual(reviewed.reviewed_snapshot.creative.assets,reviewed.creative.assets);assert.equal(providerCalls,0);
+});
+test('K175 special-category and undecided radii save as incomplete without claiming a preparation review',async()=>{
+ await completeCreative();
+ for(const category of ['UNDECIDED','HOUSING','EMPLOYMENT','FINANCIAL_PRODUCTS_SERVICES','ISSUES_ELECTIONS_POLITICS','ONLINE_GAMBLING_AND_GAMING']){
+   const a={...radiusAssets(),age_min:18,categories:[category]},d=await saveTarget(a);assert.deepEqual(d.assets,a);assert.equal(d.draft_complete,false);assert.equal(d.review_checks.complete_choices,false);assert.equal(d.review_ready,false);await assert.rejects(review(),/Save complete/);
+ }
+ const d=await saveTarget({...choices,age_min:18,categories:['HOUSING']});assert.equal(d.draft_complete,true);assert.equal((await review()).review_current,true);
+ await saveTarget(radiusAssets([]));assert.equal((await targeting()).draft_complete,false);
+});
+test('K175 changing radius, category or target type invalidates review and retains exact historical creative and area',async()=>{
+ await ready();const old=await review();let d=await saveTarget(radiusAssets());assert.equal(d.review_current,false);assert.deepEqual(d.reviewed_snapshot,old.reviewed_snapshot);
+ const reviewed=await review();d=await saveTarget(radiusAssets([{...radius,radius_meters:20000}]));assert.equal(d.review_current,false);assert.deepEqual(d.reviewed_snapshot.assets.custom_locations,[radius]);assert.deepEqual(d.reviewed_snapshot.creative,reviewed.reviewed_snapshot.creative);
+ await review();d=await saveTarget({...radiusAssets(),age_min:18,categories:['HOUSING']});assert.equal(d.review_current,false);assert.equal(d.review_ready,false);assert.equal(d.reviewed_snapshot.assets.custom_locations[0].radius_meters,20000);
+ d=await saveTarget();assert.deepEqual(d.assets,choices);assert.equal(d.review_current,false);assert.equal((await review()).review_current,true);
+});
+test('K175 nested radius edits obey stale-save concurrency and preserve legacy country callers and other rows',async()=>{
+ await completeCreative();const d=await saveTarget(radiusAssets());const before=JSON.stringify((await targeting()).creative);
+ const body={version:d.version,fingerprint:d.fingerprint,assets:radiusAssets([{...radius,longitude_micro:-83000000}])};const rr=await Promise.all([req('/save',body),req('/save',{...body,assets:choices})]);assert.deepEqual(rr.map(r=>r.status).sort(),[200,409]);assert.equal((await req('/save',body)).status,409);
+ const n=await targeting();assert.equal((await req('/save',{version:n.version,fingerprint:n.fingerprint,assets:choices})).status,200);assert.deepEqual((await targeting()).assets,choices);assert.equal(JSON.stringify((await targeting()).creative),before);assert.equal(providerCalls,0);
+});
+test('K175 radius function stays private and storage constraints reject malformed current and historical areas',async()=>{
+ await completeCreative();await saveTarget(radiusAssets());await review();
+ await assert.rejects(db.query('update korlix_funnel_meta_targeting set assets=$1',[JSON.stringify(radiusAssets([{...radius,radius_meters:80001}]))]),/check constraint/);
+ await assert.rejects(db.query("update korlix_funnel_meta_targeting set reviewed_snapshot=jsonb_set(reviewed_snapshot,'{assets,custom_locations,0,latitude_micro}','90000001')"),/check constraint/);
+ const fn=(await db.query("select prosecdef,proconfig from pg_proc where proname='korlix_meta_radius_valid_v1'")).rows[0];assert.equal(fn.prosecdef,false);assert.deepEqual(fn.proconfig,['search_path=public, pg_temp']);
+ for(const role of ['anon','authenticated']){await db.exec('reset role;set role '+role);await assert.rejects(db.query('select korlix_meta_radius_valid_v1($1)',[JSON.stringify(radius)]),/permission denied/);await db.exec('reset role;set role service_role');}
+ for(const [actor,status] of [['',401],[other,404],[basic,403]])assert.equal((await req('/save',{version:0,fingerprint:'a'.repeat(64),assets:radiusAssets()},actor)).status,status);
+});

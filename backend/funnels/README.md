@@ -1503,3 +1503,43 @@ for ProximityInfo and microdegree coordinates, plus Supabase functions guidance
 and changelog. This remains preparation only: no provider calls, credentials,
 ads, spending or outbound messages. Roll back frontend then backend; retain the
 compatible validator/RPC to preserve radius drafts and historical reviews.
+
+### K175 — Meta radius targeting drafts
+
+The existing Meta targeting routes accept optional `custom_locations`, using
+the same exact four-field label/microdegree/meter model as Google drafts. The
+array has at most ten distinct center/distance combinations and requires an
+empty `countries` array. Meta draft radii range from 1,000 to 80,000 integer
+meters. These are KORLIX planning limits, not provider eligibility guarantees.
+Existing five-field country drafts retain their original representation.
+
+The compatible migration adds a private radius validator and replaces the
+targeting validator/RPC. It rewrites no rows and preserves country draft/review
+fingerprints, versions and snapshots. New responses include radius_supported.
+All functions remain SECURITY INVOKER with fixed search paths and service-only
+execute privileges; ownership, existing lock order, route limits and optimistic
+concurrency are unchanged. No new table or RLS policy is introduced.
+
+Radius drafts with categories NONE may complete the existing combined creative
+and targeting preparation review. Undecided or special-category radius drafts
+remain saveable but incomplete and cannot be reviewed in KORLIX yet. Keep all
+accurate category selections; this is an application support boundary, not an
+assertion of Meta's rules. Existing broad age defaults and country-only special
+category reviews remain unchanged. Every review remains preparation only.
+
+A shared radius entry component and validators serve Google and Meta with their
+own bounds. Google's limits, API shape and display behavior are preserved.
+The Meta editor confirms populated target-type changes, saves exact coordinates,
+and includes radius details in saved/historical exports. A radius or category
+change invalidates the combined review while retaining its original creative
+and image metadata. Dirty edits, stale saves, archive restrictions, owner/scope
+changes and private image protections retain their existing behavior.
+
+Primary references checked 2026-09-23: Meta's official business SDK
+TargetingGeoLocation.custom_locations and TargetingGeoLocationCustomLocation
+latitude/longitude/radius/distance_unit fields (raw GitHub source), plus Supabase
+functions guidance and unchanged changelog. Meta basic-targeting docs returned
+HTTP 429. No complete live targeting policy or account capability is asserted.
+No map, geocoding, city search, location exclusions, delivery expansion control,
+provider calls, credentials, ad creation, budgets, spending or outbound messages
+are added. Roll back frontend then backend; retain compatible SQL and draft data.
