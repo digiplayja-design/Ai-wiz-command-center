@@ -6,6 +6,7 @@ import 'funnel_client.dart';
 import 'funnel_meta.dart';
 import 'funnel_google_ads.dart';
 import 'funnel_meta_preparation.dart';
+import 'funnel_google_preparation.dart';
 
 String campaignMoney(num cents) => '\$${(cents / 100).toStringAsFixed(2)}';
 String campaignChannel(String value) => switch (value) {
@@ -308,17 +309,24 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
     if (_current(generation)) await _load();
   }
 
-  Future<void> _metaSetup(Map<String, dynamic> c) async {
+  Future<void> _setup(Map<String, dynamic> c) async {
     if (_busy || _denied) return;
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => FunnelMetaPreparation(
-        client: widget.client,
-        funnelId: widget.funnelId,
-        campaignId: c['id'],
-        scope: _scope,
-      ),
+      builder: (_) => c['platform'] == 'google'
+          ? FunnelGooglePreparation(
+              client: widget.client,
+              funnelId: widget.funnelId,
+              campaignId: c['id'],
+              scope: _scope,
+            )
+          : FunnelMetaPreparation(
+              client: widget.client,
+              funnelId: widget.funnelId,
+              campaignId: c['id'],
+              scope: _scope,
+            ),
     );
   }
 
@@ -586,11 +594,15 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
                       : () => _review(c),
                   child: const Text('Review plan'),
                 ),
-              if (c['platform'] == 'meta')
+              if (['meta', 'google'].contains(c['platform']))
                 OutlinedButton.icon(
-                  onPressed: _busy ? null : () => _metaSetup(c),
+                  onPressed: _busy ? null : () => _setup(c),
                   icon: const Icon(Icons.fact_check_outlined),
-                  label: const Text('Meta setup review'),
+                  label: Text(
+                    c['platform'] == 'google'
+                        ? 'Google Ads setup review'
+                        : 'Meta setup review',
+                  ),
                 ),
               OutlinedButton(
                 onPressed: _busy ? null : () => _reports(c),
