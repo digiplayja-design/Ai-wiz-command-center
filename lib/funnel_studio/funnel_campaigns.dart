@@ -15,6 +15,7 @@ import 'funnel_google_targeting.dart';
 import 'funnel_google_preflight.dart';
 import 'funnel_campaign_budget.dart';
 import 'funnel_meta_campaign_link.dart';
+import 'funnel_google_campaign_link.dart';
 
 String campaignMoney(num cents) => '\$${(cents / 100).toStringAsFixed(2)}';
 String campaignChannel(String value) => switch (value) {
@@ -339,6 +340,21 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
       context: context,
       barrierDismissible: false,
       builder: (_) => FunnelMetaCampaignLink(
+        client: client,
+        funnelId: funnel,
+        campaignId: c['id'],
+        scope: _scope,
+      ),
+    );
+  }
+
+  Future<void> _googleLink(Map<String, dynamic> c) async {
+    if (_busy || _denied) return;
+    final client = widget.client, funnel = widget.funnelId;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => FunnelGoogleCampaignLink(
         client: client,
         funnelId: funnel,
         campaignId: c['id'],
@@ -756,6 +772,11 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
                 OutlinedButton(
                   onPressed: _busy ? null : () => _metaLink(c),
                   child: const Text('Linked Meta campaign'),
+                ),
+              if (c['platform'] == 'google')
+                OutlinedButton(
+                  onPressed: _busy ? null : () => _googleLink(c),
+                  child: const Text('Linked Google campaign'),
                 ),
               OutlinedButton(
                 onPressed: _busy ? null : () => _reports(c),
