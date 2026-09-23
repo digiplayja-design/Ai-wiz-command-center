@@ -685,3 +685,120 @@ compatible rollback; restore its frontend first, then backend if needed. No
 schema, owner-document or report conversion is needed. Keep Meta activation
 separate. The official Meta SDK field/level and account-insights references in
 the K156 section also cover the campaign fields and `campaign` level used here.
+
+## K158 · Google Ads connection and account selection
+
+This milestone adds a separate Google Ads connection card in the Ads workspace.
+It prepares OAuth sign-in and account selection. Google reporting, campaign
+creation, budget edits, conversion uploads, background jobs and ad publishing are
+not implemented by these routes. Google and Meta activation remain deferred.
+Deployment leaves the connection disabled unless all setup values and the
+explicit enable flag are present. No new paid infrastructure is required.
+
+Apply `20260922233935_funnel_google_ads_connection.sql` before the backend, then
+deploy the frontend. It adds two private RLS tables, one monotonic version
+sequence and one service-only SECURITY INVOKER function with a fixed search path.
+Browser roles and PUBLIC have no table, sequence or function grants. Every command
+checks the authenticated owner and current `user_profiles.tier` in PostgreSQL.
+Advisory owner locks and connection versions reject stale writes after a refresh,
+selection, reconnect, disconnect or tier downgrade.
+
+### Deferred platform setup
+
+| Backend variable | Required value |
+|---|---|
+| `KORLIX_GOOGLE_ADS_ENABLED` | `true` only when separately ready to activate |
+| `KORLIX_GOOGLE_ADS_CLIENT_ID` | Google Cloud web application OAuth client ID |
+| `KORLIX_GOOGLE_ADS_CLIENT_SECRET` | Client secret, stored only in the backend environment |
+| `KORLIX_GOOGLE_ADS_DEVELOPER_TOKEN` | Google Ads developer token with the required access/approval |
+| `KORLIX_GOOGLE_ADS_TOKEN_KEY` | Independent 32 random bytes encoded as standard base64; do not reuse Meta's key |
+| `KORLIX_GOOGLE_ADS_REDIRECT_URI` | `https://chee-chai-chee-backend.onrender.com/api/funnels/google-ads/callback` |
+| `KORLIX_GOOGLE_ADS_API_VERSION` | Optional; defaults to `v25` |
+
+Use a Web application OAuth client with the exact HTTPS redirect URI, enable the
+Google Ads API, configure consent and the Ads scope, and meet applicable Google
+Cloud project, developer-token, verification and production-access requirements.
+An OAuth connection alone does not establish API approval. Test-account access
+and production-account access can differ. No credentials or flags are configured
+by this release. The public readiness route only checks configuration shape; it
+cannot establish that Google has approved the project or token.
+
+Google's Ads scope is `https://www.googleapis.com/auth/adwords`, which permits
+viewing and managing Ads data. The UI states this breadth accurately; this release
+uses only customer listing and fixed account-detail search queries. No profile,
+email, contacts or other Google scope is requested. No Google token is sent to
+Flutter, rendered in callback HTML, placed in URLs or written into application
+logs by this implementation.
+
+### Sign-in and account behavior
+
+- The owner starts a ten-minute attempt. State and the original-window finish
+  proof are stored only as SHA-256 hashes. The PKCE verifier is encrypted with
+  AES-256-GCM and bound to purpose, owner and attempt. It is returned internally
+  once when the callback consumes state, then removed from the attempt.
+- Authorization uses S256 PKCE, offline access and explicit Google consent/account
+  choice. The callback exchanges the code using the web client secret and PKCE
+  verifier. It verifies the granted Ads scope, bearer token and expiry, and requires
+  a refresh token. Only an encrypted, owner/attempt-bound refresh token is staged.
+- The user taps Continue to Google directly so Safari has a user gesture for the
+  new window. Finish Google connection requires the private proof from the
+  original authenticated window. Reloading loses that proof; finish in the
+  original window or start again. The callback never auto-connects an owner.
+- Refresh tokens remain encrypted server-side. Access tokens are obtained only
+  for an explicit account operation and are not persisted. Known refresh-token
+  expiry and configuration changes require reconnect. Unknown refresh expiry is
+  supported. `invalid_grant` or an Ads API 401 marks the matching connection for
+  reconnect; a 403 reports access/platform restrictions without misclassifying a
+  valid refresh token as revoked. No blind refresh or API retries occur.
+- Refresh access accounts lists IDs directly accessible to that Google login.
+  Choose one and load its active advertising accounts. A direct advertiser returns
+  itself if enabled; a manager query includes all direct and indirect enabled
+  non-manager clients. IDs, names, currency, timezone and test-account status are
+  shown. Suspended/cancelled/closed advertisers are not selectable.
+- The chosen manager context is stored separately as `login_customer_id` and
+  passed as the `login-customer-id` header when validating a client selection.
+  The browser can choose only cached account/root IDs; fresh direct-root access
+  and target account access are rechecked before saving. A later failure cannot
+  restore or change a newer connection.
+- Refreshing access roots clears the loaded list and selection. Loading a different
+  root clears selection; reloading the same root keeps it only if still available.
+  Selecting a different root in the dropdown disables old-list selection until
+  loading. Account data is explicitly a last-refresh snapshot.
+- Up to 500 direct root IDs and 500 active advertisers for the chosen root are
+  supported. Five search pages, a 2 MiB response bound and ten-second request
+  deadlines prevent unbounded discovery. Exceeding a bound fails the whole load;
+  the app does not present a partial list as complete. Users with larger manager
+  hierarchies need a smaller directly accessible manager account.
+- Fixed Google hosts, fixed GAQL queries, validated numeric customer IDs, redirect
+  rejection and opaque page-token handling prevent arbitrary URL/query execution.
+  Provider error messages are redacted. Google owner mutations share a limit of
+  15 requests per owner per minute; public callbacks allow 30 per IP per minute.
+- Current access denial clears UI state/proof immediately. Client replacement,
+  disposal and late replies cannot restore another session's details. Disconnect
+  requires confirmation and a current version, and deletes credentials, account
+  cache and pending attempt. It does not revoke Google consent or stop ads already
+  running in Google. The dialog explains removal through Google Account connections.
+
+Local verification uses the migration in PGlite under the service role, HTTP owner
+middleware, mocked Google protocol responses and Flutter widget tests. It covers
+role denial/RLS, tier/owner checks, state/proof replay, PKCE binding, cancellation,
+expiry, superseded attempts, concurrent disconnect/selection/downgrade, response
+redaction, manager headers, paging/capacity, popup handling, mobile layout and late
+UI responses. It makes no real Google request or owner account change.
+
+Rollback: disable Google connections if activated later, deploy the K157 frontend
+then backend, and preserve this additive schema and encrypted records. Do not drop
+tables during an application rollback. Activation, live provider acceptance and
+permission revocation require their own later operational work.
+
+Primary references checked on 22 September 2026:
+[Google Ads release notes](https://developers.google.com/google-ads/api/docs/release-notes),
+[listing accessible accounts](https://developers.google.com/google-ads/api/docs/account-management/listing-accounts),
+[customer_client including indirect clients](https://developers.google.com/google-ads/api/fields/v25/customer_client),
+[REST authorization headers](https://developers.google.com/google-ads/api/rest/auth),
+[web-server OAuth and offline access](https://developers.google.com/identity/protocols/oauth2/web-server),
+[Google PKCE](https://developers.google.com/identity/protocols/oauth2/native-app),
+and [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security).
+The current Supabase changelog was also checked; no listed breaking change affects
+these additive tables or service-only RPC. Mocked checks do not establish live
+Google compatibility or platform approval.
