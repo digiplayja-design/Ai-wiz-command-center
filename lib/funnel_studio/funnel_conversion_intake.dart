@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
+import 'funnel_google_destination.dart';
 
 const conversionIntakeBoundary =
     'These are local inquiry consent receipts. Awaiting setup means a visitor allowed measurement and supplied a supported click identifier in the campaign URL. The identifier is unverified. Nothing has been sent to Google or Meta; these are not accepted or attributed provider conversions.';
@@ -323,6 +324,23 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
                             child: Text(_notice!),
                           ),
                         if (d != null) ...[
+                          if (d['platform'] == 'google') ...[
+                            OutlinedButton(
+                              onPressed: () => showDialog<void>(
+                                context: context,
+                                builder: (_) => FunnelGoogleDestination(
+                                  client: widget.client,
+                                  funnelId: widget.funnelId,
+                                  campaignId: widget.campaignId,
+                                  scope: widget.scope,
+                                ),
+                              ),
+                              child: const Text(
+                                'Google conversion destination',
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
                           Text(
                             d['name'],
                             style: const TextStyle(
