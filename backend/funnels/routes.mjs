@@ -9,6 +9,7 @@ import { createFunnelFollowups } from './followups.mjs';
 import { registerCampaigns } from './campaigns.mjs';
 import { registerCampaignBudget } from './campaign_budget.mjs';
 import { createCampaignAttribution, registerCampaignAttribution } from './campaign_attribution.mjs';
+import {createConversionIntake,registerConversionIntake,measurementChoice} from './conversion_intake.mjs';
 import { registerMetaPreparation } from './meta_preparation.mjs';
 import { registerMetaCreative } from './meta_creative.mjs';
 import { registerMetaTargeting } from './meta_targeting.mjs';
@@ -64,6 +65,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   const publicBase=(environment.KORLIX_FUNNEL_PUBLIC_BASE_URL || 'https://chee-chai-chee-backend.onrender.com').replace(/\/$/,'');
   const counts=new Map();
   const attribution=createCampaignAttribution(database);
+  const intake=createConversionIntake(database,secret,now);
   const limit=(key,max) => {
     const minute=Math.floor(now()/60000); let r=counts.get(key);
     if(!r || r.minute!==minute) r={minute,n:0};
@@ -96,6 +98,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   registerCampaigns(app,{base,owner,command,database,campaignStore,generateAdCopy,environment,publicBase});
   registerCampaignBudget(app,{base,owner,database});
   registerCampaignAttribution(app,{base,owner,attribution,publicBase});
+  registerConversionIntake(app,{base,owner,intake});
   registerMetaPreparation(app,{base,owner,database,metaPreparationStore,environment,publicBase});
   registerMetaCreative(app,{base,owner,database,environment,publicBase});
   registerMetaTargeting(app,{base,owner,database,environment,publicBase,metaStore,metaProvider,now});
@@ -167,14 +170,14 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   };
   // The final review covers normalized fields and attribution, using the same
   // cookie-bound form nonce. Editing the hidden fields cannot bypass review.
-  const reviewSignature=(token,input)=>sign('funnel-review-v1:'+token+':'+JSON.stringify(input));
+  const reviewSignature=(token,input,body)=>sign('funnel-review-v1:'+token+':'+JSON.stringify({...input,...(body.measurement_token?{measurement_token:body.measurement_token,measurement_consent:measurementChoice(body)}:{})}));
   const showStep=(r,f,body,step,error='',status=200)=>{
-    const values=formValues(body),utm=Object.fromEntries(utmFields.map(k=>[k,values[k]]));
-    const reviewToken=step==='review'?reviewSignature(body.token,leadInput(body,document(f.document))):'';
+    const values=formValues(body),utm=Object.fromEntries(utmFields.map(k=>[k,values[k]])),measurement=intake.open(body.measurement_token,body.token);
+    const reviewToken=step==='review'?reviewSignature(body.token,leadInput(body,document(f.document)),body):'';
     r.set('X-Robots-Tag','noindex, nofollow');
     return r.status(status).type('html').send(renderPage(document(f.document),{
       action:`/f/${f.slug}/lead#contact`,stepAction:`/f/${f.slug}/step#contact`,
-      token:body.token,utm,step,values,reviewToken,error,privateForm:true,mediaBase:`/f/${f.slug}/media`,
+      token:body.token,utm,step,values,reviewToken,error,measurement,measurementConsent:body.measurement_consent==='yes',privateForm:true,mediaBase:`/f/${f.slug}/media`,
     }));
   };
   const publicRoute=fn=>async(q,r)=>{
@@ -189,14 +192,17 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
     const token=makeToken(f,link), utm={};for(const k of ['utm_source','utm_medium','utm_campaign','utm_content','utm_term']) utm[k]=text(typeof q.query[k]==='string'?q.query[k]:'',120);
     r.set('Set-Cookie',`kf_${f.slug}=${token}; Path=/f/${f.slug}; HttpOnly; Secure; SameSite=Lax; Max-Age=1800`);
     const requestedReceipt=q.query.received==='1',nonce=requestedReceipt?receiptNonce(q,f.slug):null;
+    const measurement=requestedReceipt?null:await intake.resolve(f,link,q.query,token);
     const receipt=nonce?await command(null,'receipt',null,{slug:f.slug,request_id:nonce}):null;
     if(requestedReceipt)r.set('X-Robots-Tag','noindex, nofollow');
-    r.type('html').send(renderPage(document(f.document),{action:`/f/${f.slug}/lead#contact`,stepAction:`/f/${f.slug}/step#contact`,token,utm,success:!!receipt,receipt,
+    r.type('html').send(renderPage(document(f.document),{action:`/f/${f.slug}/lead#contact`,stepAction:`/f/${f.slug}/step#contact`,token,utm,success:!!receipt,receipt,measurement,
       error:requestedReceipt&&!receipt?'This receipt is unavailable or has expired. If you already submitted, contact the business before sending another inquiry.':'',mediaBase:`/f/${f.slug}/media`}));
   }));
   app.post('/f/:slug/step',express.urlencoded({extended:false,limit:'64kb'}),publicRoute(async(q,r)=>{
     const f=await command(null,'public',null,{slug:slug(q.params.slug),count:false});
     verifyForm(q,f);
+    intake.open(q.body.measurement_token,q.body.token);
+    measurementChoice(q.body);
     if(q.body.step==='refresh_questions')return showStep(r,f,q.body,'request');
     if(document(f.document).form_mode!=='guided')fail('This form changed. Return to the page and start again.',409);
     const direction=q.body.step;
@@ -215,20 +221,22 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   }));
   app.post('/f/:slug/lead',express.urlencoded({extended:false,limit:'64kb'}),publicRoute(async(q,r)=>{
     const f=await command(null,'public',null,{slug:slug(q.params.slug),count:false});
-    const t=verifyForm(q,f),guided=document(f.document).form_mode==='guided';
+    const t=verifyForm(q,f),guided=document(f.document).form_mode==='guided',measurement=intake.open(q.body.measurement_token,q.body.token);
+    const choice=measurementChoice(q.body);
     let input;
     try {contactInput(q.body);}
     catch(e){if(!(e instanceof FunnelError))throw e;return showStep(r,f,q.body,'contact',e.message,400);}
     try {
       input=leadInput(q.body,document(f.document));
       if(guided) {
-        const mac=q.body.review_token,expected=reviewSignature(q.body.token,input);
+        const mac=q.body.review_token,expected=reviewSignature(q.body.token,input,q.body);
         if(typeof mac!=='string'||!/^[0-9a-f]{64}$/.test(mac)||!timingSafeEqual(Buffer.from(mac),Buffer.from(expected)))fail('Review your inquiry again before submitting.');
       }
     } catch(e){if(!(e instanceof FunnelError))throw e;return showStep(r,f,q.body,'request',e.message,400);}
     try {
       const data={...input,slug:f.slug,published_version:f.published_version,request_id:t.n};
-      if(t.a)await attribution.capture(f,data,t.a);else await command(null,'lead',null,data);
+      if(t.a&&measurement)await intake.capture(f,data,t.a,measurement,choice);
+      else if(t.a)await attribution.capture(f,data,t.a);else await command(null,'lead',null,data);
     }
     catch(e){
       if(!guided||!(e instanceof FunnelError)||![429,503].includes(e.status))throw e;
