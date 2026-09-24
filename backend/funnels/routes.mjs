@@ -22,6 +22,7 @@ import { registerMeta } from './meta.mjs';
 import { registerMetaPausedCreate } from './meta_paused_create.mjs';
 import { registerMetaControls } from './meta_controls.mjs';
 import { registerMetaCampaignLink } from './meta_campaign_link.mjs';
+import { registerGoogleConversionDestination } from './google_conversion_destination.mjs';
 import { registerGoogleCampaignLink } from './google_campaign_link.mjs';
 import { registerGoogleControls } from './google_controls.mjs';
 import { registerGooglePausedCreate } from './google_paused_create.mjs';
@@ -92,6 +93,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   registerMetaControls(app,{base,owner,database,metaStore,metaProvider,environment,publicBase,now});
   registerMetaCampaignLink(app,{base,owner,database,metaStore,metaProvider,environment,now});
   registerGoogleAds(app,{base,owner,limit,database,googleAdsStore,googleAdsProvider,environment,now});
+  registerGoogleConversionDestination(app,{base,owner,database,googleAdsStore,googleAdsProvider,environment,now});
   registerGoogleCampaignLink(app,{base,owner,database,googleAdsStore,googleAdsProvider,environment,now});
   registerGoogleControls(app,{base,owner,database,googleAdsStore,googleAdsProvider,environment,publicBase,now});
   registerGooglePausedCreate(app,{base,owner,database,googleAdsStore,googleAdsProvider,environment,publicBase,now});
