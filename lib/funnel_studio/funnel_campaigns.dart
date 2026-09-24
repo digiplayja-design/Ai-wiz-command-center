@@ -18,6 +18,7 @@ import 'funnel_meta_campaign_link.dart';
 import 'funnel_google_campaign_link.dart';
 import 'funnel_google_create.dart';
 import 'funnel_meta_create.dart';
+import 'funnel_meta_controls.dart';
 import 'funnel_google_controls.dart';
 
 String campaignMoney(num cents) => '\$${(cents / 100).toStringAsFixed(2)}';
@@ -358,6 +359,21 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
       context: context,
       barrierDismissible: false,
       builder: (_) => FunnelMetaCreate(
+        client: client,
+        funnelId: funnel,
+        campaignId: c['id'],
+        scope: _scope,
+      ),
+    );
+  }
+
+  Future<void> _metaControls(Map<String, dynamic> c) async {
+    if (_busy || _denied) return;
+    final client = widget.client, funnel = widget.funnelId;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => FunnelMetaControls(
         client: client,
         funnelId: funnel,
         campaignId: c['id'],
@@ -831,6 +847,12 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
                   onPressed: _busy ? null : () => _metaCreate(c),
                   icon: const Icon(Icons.pause_circle_outline),
                   label: const Text('Create paused Meta campaign'),
+                ),
+              if (c['platform'] == 'meta')
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : () => _metaControls(c),
+                  icon: const Icon(Icons.tune),
+                  label: const Text('Meta campaign controls'),
                 ),
               if (c['platform'] == 'google')
                 OutlinedButton.icon(
