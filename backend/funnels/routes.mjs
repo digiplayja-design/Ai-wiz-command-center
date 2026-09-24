@@ -9,6 +9,7 @@ import { createFunnelFollowups } from './followups.mjs';
 import { registerCampaigns } from './campaigns.mjs';
 import { registerCampaignBudget } from './campaign_budget.mjs';
 import { createCampaignAttribution, registerCampaignAttribution } from './campaign_attribution.mjs';
+import {createMetaWebsiteConsent,registerMetaWebsiteConsent} from './meta_website_consent.mjs';
 import {createConversionIntake,registerConversionIntake,measurementChoice} from './conversion_intake.mjs';
 import { registerMetaPreparation } from './meta_preparation.mjs';
 import { registerMetaCreative } from './meta_creative.mjs';
@@ -69,7 +70,8 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   const publicBase=(environment.KORLIX_FUNNEL_PUBLIC_BASE_URL || 'https://chee-chai-chee-backend.onrender.com').replace(/\/$/,'');
   const counts=new Map();
   const attribution=createCampaignAttribution(database);
-  const intake=createConversionIntake(database,secret,now);
+  const metaConsent=createMetaWebsiteConsent(database,publicBase,environment.KORLIX_META_CONTEXT_ENABLED==='true');
+  const intake=createConversionIntake(database,secret,now,metaConsent);
   const limit=(key,max) => {
     const minute=Math.floor(now()/60000); let r=counts.get(key);
     if(!r || r.minute!==minute) r={minute,n:0};
@@ -106,6 +108,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   registerCampaigns(app,{base,owner,command,database,campaignStore,generateAdCopy,environment,publicBase});
   registerCampaignBudget(app,{base,owner,database});
   registerCampaignAttribution(app,{base,owner,attribution,publicBase});
+  registerMetaWebsiteConsent(app,{base,owner,consent:metaConsent});
   registerConversionIntake(app,{base,owner,intake});
   registerMetaPreparation(app,{base,owner,database,metaPreparationStore,environment,publicBase});
   registerMetaCreative(app,{base,owner,database,environment,publicBase});
@@ -243,7 +246,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
     } catch(e){if(!(e instanceof FunnelError))throw e;return showStep(r,f,q.body,'request',e.message,400);}
     try {
       const data={...input,slug:f.slug,published_version:f.published_version,request_id:t.n};
-      if(t.a&&measurement)await intake.capture(f,data,t.a,measurement,choice);
+      if(t.a&&measurement)await intake.capture(f,data,t.a,measurement,choice,q.headers);
       else if(t.a)await attribution.capture(f,data,t.a);else await command(null,'lead',null,data);
     }
     catch(e){

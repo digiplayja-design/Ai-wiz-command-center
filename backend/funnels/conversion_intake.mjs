@@ -1,5 +1,6 @@
 import {createCipheriv,createDecipheriv,createHash,randomBytes} from 'node:crypto';
 import {fail,uuid} from './core.mjs';
+import {metaWebsitePolicy} from './meta_website_consent.mjs';
 export const measurementDisclosure=(brand,platform)=>`Optional: I allow ${brand} to store the advertising click identifier from this link and share it, with the time of this inquiry, with ${platform==='google'?'Google':'Meta'} to measure advertising results. My name, email, phone and message are not included. I can send my inquiry without agreeing.`;
 export function measurementCandidate(query,platform){
  const keys=platform==='google'?['gclid','gbraid','wbraid']:['fbclid'];
@@ -12,7 +13,7 @@ export const measurementChoice=body=>{
  if(body.measurement_consent!==undefined&&body.measurement_consent!=='yes')fail('Choose the optional measurement setting again.');
  return body.measurement_consent==='yes'?'granted':'declined';
 };
-export function createConversionIntake(database,secret,now){
+export function createConversionIntake(database,secret,now,metaConsent=null){
  const key=createHash('sha256').update('korlix-measurement-envelope-v1\0').update(secret).digest();
  const command=async(actor,action,funnel,data)=>{
   if(!database)fail('Conversion intake is not configured.',503);
@@ -26,21 +27,21 @@ export function createConversionIntake(database,secret,now){
   try{
    const b=Buffer.from(value,'base64url'),cipher=createDecipheriv('aes-256-gcm',key,b.subarray(0,12));cipher.setAAD(Buffer.from(token));cipher.setAuthTag(b.subarray(12,28));
    const d=JSON.parse(Buffer.concat([cipher.update(b.subarray(28)),cipher.final()]).toString());
-   if(d.policy_version!=='measurement_v1'||!['google','meta'].includes(d.platform)||!Number.isSafeInteger(d.observed)||now()-d.observed<0||now()-d.observed>1800000)throw Error();
+   if(!(d.policy_version==='measurement_v1'&&['google','meta'].includes(d.platform)||d.policy_version===metaWebsitePolicy&&d.platform==='meta')||!Number.isSafeInteger(d.observed)||now()-d.observed<0||now()-d.observed>1800000)throw Error();
    uuid(d.revision);return {...d,token:value};
   }catch{fail('Reload the measurement choice before submitting.');}
  };
  return {command,open,
   async resolve(f,code,query,token){
    if(!code)return null;
-   const d=await command(null,'resolve',f.id,{slug:f.slug,code});if(!d)return null;
-   if(!['meta','google'].includes(d.platform)||d.policy_version!=='measurement_v1')fail('Conversion intake could not be verified.',503);uuid(d.revision);
+   const d=await metaConsent?.resolve(f,code)??await command(null,'resolve',f.id,{slug:f.slug,code});if(!d)return null;
+   if(!(d.policy_version==='measurement_v1'&&['meta','google'].includes(d.platform)||d.policy_version===metaWebsitePolicy&&d.platform==='meta'))fail('Conversion intake could not be verified.',503);uuid(d.revision);
    const context={...d,click:measurementCandidate(query,d.platform),observed:now()};
    const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',key,iv);cipher.setAAD(Buffer.from(token));
    const encrypted=Buffer.concat([cipher.update(JSON.stringify(context)),cipher.final()]);
    return {...context,token:Buffer.concat([iv,cipher.getAuthTag(),encrypted]).toString('base64url')};
   },
-  capture(f,input,code,context,choice){return command(null,'capture',f.id,{...input,code,settings_revision:context.revision,platform:context.platform,policy_version:context.policy_version,measurement_consent:choice,
+  capture(f,input,code,context,choice,headers={}){if(context.policy_version===metaWebsitePolicy){if(!metaConsent)fail('Reload the measurement choice before submitting.');return metaConsent.capture(f,input,code,context,choice,headers);}return command(null,'capture',f.id,{...input,code,settings_revision:context.revision,platform:context.platform,policy_version:context.policy_version,measurement_consent:choice,
    ...(choice==='granted'&&context.click?{click_type:context.click.type,click_id:context.click.id,observed_at:new Date(context.observed).toISOString()}:{})});}
  };
 }
