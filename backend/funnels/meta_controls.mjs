@@ -7,11 +7,12 @@ const sameAccount=(a,b)=>a&&b&&['id','name','currency','timezone','status'].ever
 const accessError=e=>e instanceof MetaAccessError||e instanceof MetaPausedAccessError;
 export function registerMetaControls(app,{base,owner,database,environment,publicBase,metaStore,metaProvider,now=Date.now}){
  const config=metaConfiguration(environment),enabled=config.ready&&config.apiVersion==='v26.0'&&environment.KORLIX_META_CONTROLS_ENABLED==='true';
+ const budgetEnabled=enabled&&environment.KORLIX_META_BUDGET_ENABLED==='true';
  const store=metaStore||createMetaStore(database),provider=metaProvider||createMetaProvider(config,{now}),path=base+'/:id/campaigns/:campaign_id/meta-controls';
  const context=q=>{
   let root;try{root=new URL(publicBase);}catch{fail('The campaign destination is not configured.',503);}
   if(root.protocol!=='https:'||root.username||root.password||root.search||root.hash)fail('The campaign destination is not configured.',503);
-  return {campaign_id:uuid(q.params.campaign_id),configured:config.ready,config_hash:config.hash,public_base:root.href.replace(/\/$/,''),create_enabled:config.ready&&config.apiVersion==='v26.0'&&environment.KORLIX_META_CREATE_PAUSED_ENABLED==='true',controls_enabled:enabled};
+  return {campaign_id:uuid(q.params.campaign_id),configured:config.ready,config_hash:config.hash,public_base:root.href.replace(/\/$/,''),create_enabled:config.ready&&config.apiVersion==='v26.0'&&environment.KORLIX_META_CREATE_PAUSED_ENABLED==='true',controls_enabled:enabled,budget_enabled:budgetEnabled};
  };
  const command=async(actor,funnel,action,data)=>{
   if(!database)fail('Meta control storage is not configured.',503);
@@ -45,7 +46,9 @@ export function registerMetaControls(app,{base,owner,database,environment,public
   const saved=d.creation.attempt,current=d.creation.draft.identity;
   if(!enabled||saved?.state!=='created')fail('Meta controls require platform setup and a recorded KORLIX creation.',409);
   if(saved.snapshot.identity.account.id!==current.account?.id)fail('Select the saved Meta ad account before controlling this campaign.',409);
-  return {identity:current,snapshot:{...saved.snapshot,identity:{...current,page:saved.snapshot.identity.page}},resources:metaCreationResources(saved.resources,true)};
+  const cents=d.managed_budget?.daily_cents??saved.snapshot.plan.daily_cents;
+  if(!Number.isSafeInteger(cents)||cents<100||cents>1000000)fail('The saved Meta budget could not be verified.',503);
+  return {identity:current,snapshot:{...saved.snapshot,plan:{...saved.snapshot.plan,daily_cents:cents,planned_total_cents:cents*saved.snapshot.plan.days},identity:{...current,page:saved.snapshot.identity.page}},resources:metaCreationResources(saved.resources,true)};
  }
  function graph(g,r){
   if(!g||digest(g.resources)!==digest(r)||!keys(g.statuses,['campaign','ad_set','ad'])||Object.values(g.statuses).some(v=>!['PAUSED','ACTIVE'].includes(v))||!keys(g.effective_statuses,['campaign','ad_set','ad'])||Object.values(g.effective_statuses).some(v=>!['PAUSED','ACTIVE','CAMPAIGN_PAUSED','ADSET_PAUSED','PENDING_REVIEW','IN_PROCESS','PREAPPROVED'].includes(v)))fail('Meta campaign details could not be verified.',409);
@@ -121,4 +124,58 @@ export function registerMetaControls(app,{base,owner,database,environment,public
   }catch(e){await invalid(u,details.identity,e);return r.json({...publicResult(await command(u,funnel,'read',data)),notice:'The command is incomplete or uncertain. Some statuses may have changed and ads may be spending. Check and control the campaign directly in Meta Ads Manager. KORLIX will not retry, resume or replace this command.'});}
   r.json({...publicResult(await command(u,funnel,'read',data)),notice:action==='activate'?'Meta accepted the requested activation steps. Delivery can incur charges within the saved schedule; Meta review and eligibility still apply. Reload status for a fresh observation.':'Meta accepted campaign pause. Earlier delivery and charges may still appear. Reload status for a fresh observation.'});
  },{ratePrefix:'meta-controls-write:',max:5}));
+
+ const validBudget=v=>Number.isSafeInteger(v)&&v>=100&&v<=1000000;
+ async function inspectBudget(actor,d,auth,details,cents,claimed=false){
+  if(!budgetEnabled||d.budget_enabled!==true||!validBudget(cents)||cents===details.snapshot.plan.daily_cents||!claimed&&(!d.checks.no_uncertain_command||!d.checks.command_capacity))fail('Budget changes are unavailable, unchanged, or a command is uncertain.',409);
+  const increase=cents>details.snapshot.plan.daily_cents;
+  if(increase&&['platform_enabled','creation_recorded','preparation_current','saved_content_current','identity_current','schedule_open'].some(k=>d.checks[k]!==true))fail('A budget increase requires current reviews matching the saved campaign and an open schedule.',409);
+  try{
+   const b=await provider.inspectMetaBudget(auth.value,details.snapshot,details.resources);
+   if(b?.status?.resource!==details.resources.campaign||b.status.name!==details.snapshot.provider_name+' Campaign'||!['PAUSED','ACTIVE'].includes(b.status.status)||typeof b.status.effective_status!=='string'||!/^[A-Z_]{1,40}$/.test(b.status.effective_status)||b.budget?.resource!==details.resources.ad_set||b.budget.daily_cents!==details.snapshot.plan.daily_cents||!['PAUSED','ACTIVE'].includes(b.budget.status)||typeof b.budget.effective_status!=='string'||!/^[A-Z_]{1,40}$/.test(b.budget.effective_status))fail('Meta budget details changed or could not be verified. Check Meta Ads Manager.',409);
+   let g=null;
+   if(increase){
+    if((await provider.verifyCreationAccess(auth.value,auth.user,details.identity.page))?.verified!==true)fail('Meta Page advertising access could not be verified.',409);
+    g=graph(await provider.inspectCreatedMeta(auth.value,details.snapshot,details.resources),details.resources);
+    if(g.statuses.campaign!==b.status.status||g.effective_statuses.campaign!==b.status.effective_status||g.statuses.ad_set!==b.budget.status||g.effective_statuses.ad_set!==b.budget.effective_status)fail('Meta status changed during budget review.',409);
+   }
+   return {kind:'budget',status:{resource:b.status.resource,name:b.status.name,status:b.status.status,effective_status:b.status.effective_status},budget:{resource:b.budget.resource,daily_cents:b.budget.daily_cents,status:b.budget.status,effective_status:b.budget.effective_status},daily_cents:cents,increase,graph:g};
+  }catch(e){await invalid(actor,details.identity,e);throw e;}
+ }
+ app.post(path+'/budget-preview',owner(async(q,r,u)=>{
+  if(Object.keys(q.query).length||!keys(q.body,['daily_cents'])||!validBudget(q.body.daily_cents))fail('Enter an average daily budget from $1.00 to $10,000.00 USD.');
+  const funnel=uuid(q.params.id),data=context(q),before=await command(u,funnel,'read',data),details=identity(before);
+  if(!budgetEnabled)fail('Meta budget changes require platform activation.',409);
+  const auth=await token(u,details.identity),observation=await inspectBudget(u,before,auth,details,q.body.daily_cents);
+  await connection(u,details.identity);const after=await command(u,funnel,'read',data);
+  if(after.fingerprint!==before.fingerprint)fail('The campaign changed while loading. Review the budget again.',409);
+  r.json({...publicResult(after),budget_preview:{...observation,checked_at:new Date(now()).toISOString(),proof:proof(u,funnel,after,observation)}});
+ },{ratePrefix:'meta-budget-preview:',max:10}));
+ app.post(path+'/budget-apply',owner(async(q,r,u)=>{
+  const started=now();
+  if(Object.keys(q.query).length||!keys(q.body,['proof','daily_cents','confirmed','spend_acknowledged'])||!validBudget(q.body.daily_cents)||q.body.confirmed!==true||q.body.spend_acknowledged!==true)fail('Confirm the budget change and acknowledge its spending impact.');
+  const funnel=uuid(q.params.id),data=context(q),before=await command(u,funnel,'read',data),p=decode(q.body.proof,u,funnel,before),details=identity(before);
+  if(!budgetEnabled)fail('Meta budget changes require platform activation.',409);
+  const auth=await token(u,details.identity),cents=q.body.daily_cents,observation=await inspectBudget(u,before,auth,details,cents);
+  if(p.observation!==digest(observation))fail('The budget proposal changed. Review it again.',409);
+  try{if((await provider.validateMetaBudget(auth.value,details.snapshot,details.resources,cents))?.validated!==true)fail('Meta did not validate the budget change.',409);}catch(e){await invalid(u,details.identity,e);throw e;}
+  if(digest(await inspectBudget(u,before,auth,details,cents))!==p.observation)fail('Meta details changed during validation. Review the budget again.',409);
+  await connection(u,details.identity);
+  if(p.expires<=now()||now()-started>75000)fail('Budget confirmation expired or took too long. Review it again.',409);
+  const id=randomUUID(),claimed=await command(u,funnel,'claim',{...data,fingerprint:before.fingerprint,action:'budget',daily_cents:cents,confirmed:true,spend_acknowledged:true,command_id:id,observed:observation});
+  if(claimed.dispatch!==true||claimed.latest_command?.id!==id||claimed.latest_command.daily_cents!==cents||digest(claimed.latest_command.steps)!==digest(['budget']))fail('The budget claim could not be verified. Refresh its record.',409);
+  try{
+   if(now()-started>85000)fail('The budget claim took too long.',409);
+   const local=await command(u,funnel,'read',data);await connection(u,details.identity);
+   if(local.latest_command?.id!==id||local.latest_command.state!=='unknown'||local.creation.fingerprint!==before.creation.fingerprint||local.managed_budget.daily_cents!==before.managed_budget.daily_cents)fail('The campaign changed after the budget claim.',409);
+   if(digest(await inspectBudget(u,local,auth,details,cents,true))!==p.observation)fail('Meta details changed after the budget claim.',409);
+   const again=await command(u,funnel,'read',data);await connection(u,details.identity);
+   if(again.fingerprint!==local.fingerprint||now()-started>85000)fail('The campaign changed or the budget command took too long.',409);
+   const result=await provider.applyMetaBudget(auth.value,details.snapshot,details.resources,cents);
+   if(result?.confirmed!==true||result.resource!==details.resources.ad_set||result.daily_cents!==cents)fail('Meta did not confirm the exact budget change.',409);
+   await command(u,funnel,'progress',{...data,command_id:id,stage:'budget',resource:result.resource,daily_cents:cents});
+   await command(u,funnel,'finish',{...data,command_id:id});
+  }catch(e){await invalid(u,details.identity,e);return r.json({...publicResult(await command(u,funnel,'read',data)),notice:'The budget outcome is uncertain. Ads may be spending at the requested or another budget. Check and control this campaign directly in Meta Ads Manager. KORLIX will not retry or replace the command.'});}
+  r.json({...publicResult(await command(u,funnel,'read',data)),notice:'Meta accepted the average daily budget change. Status and schedule were not changed. Earlier spending still counts and lowering a budget does not reverse charges. Check Meta Ads Manager for current delivery and billing.'});
+ },{ratePrefix:'meta-budget-write:',max:5}));
 }

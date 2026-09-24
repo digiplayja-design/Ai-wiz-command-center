@@ -101,7 +101,7 @@ export function createMetaPausedProvider(config,{fetchImpl=fetch,now=Date.now}={
     metaCreationResources(known,controls);if(!known.image_hash)return null;
     const p=metaPausedPlan(s),account=s.identity.account.id.slice(4);let campaign=null,after;const cursors=new Set();
     const allowed=controls?['PAUSED','ACTIVE']:['PAUSED'];
-    const cf='id,account_id,name,objective,buying_type,special_ad_categories,status,is_adset_budget_sharing_enabled'+(controls?',effective_status':'');
+    const cf='id,account_id,name,objective,buying_type,special_ad_categories,status,is_adset_budget_sharing_enabled'+(controls?',effective_status,daily_budget,lifetime_budget,is_budget_schedule_enabled':'');
     if(known.campaign)campaign=await call(known.campaign,{fields:cf},token);
     else {
       for(let n=0;n<5;n++){
@@ -113,7 +113,7 @@ export function createMetaPausedProvider(config,{fetchImpl=fetch,now=Date.now}={
     }
     if(!campaign)return null;
     if(!id(campaign.id)||campaign.account_id!==account||campaign.name!==p.campaign.name||!allowed.includes(campaign.status)||campaign.objective!=='OUTCOME_TRAFFIC'||campaign.buying_type!=='AUCTION'||stable(campaign.special_ad_categories)!=='[]'||campaign.is_adset_budget_sharing_enabled!==false)uncertain();
-    const sets=await call(campaign.id+'/adsets',{fields:'id,account_id,campaign_id,name,status,daily_budget,billing_event,optimization_goal,bid_strategy,destination_type,start_time,end_time,is_dynamic_creative,targeting'+(controls?',effective_status':''),limit:2},token);
+    const sets=await call(campaign.id+'/adsets',{fields:'id,account_id,campaign_id,name,status,daily_budget,billing_event,optimization_goal,bid_strategy,destination_type,start_time,end_time,is_dynamic_creative,targeting'+(controls?',effective_status,lifetime_budget,is_budget_schedule_enabled':''),limit:2},token);
     const ads=await call(campaign.id+'/ads',{fields:'id,account_id,campaign_id,adset_id,name,status,creative{id}'+(controls?',effective_status,issues_info,ad_review_feedback,failed_delivery_checks':''),limit:2},token);
     if(!Array.isArray(sets.data)||!Array.isArray(ads.data)||sets.paging?.next||ads.paging?.next||sets.data.length>1||ads.data.length>1)uncertain();
     if(!sets.data.length||!ads.data.length)return null;
@@ -144,6 +144,7 @@ export function createMetaPausedProvider(config,{fetchImpl=fetch,now=Date.now}={
     const found=metaCreationResources({image_hash:known.image_hash,campaign:campaign.id,ad_set:a.id,creative:cr.id,ad:ad.id},true);
     for(const [k,v]of Object.entries(known))if(found[k]!==v)uncertain();
     if(controls){
+      budgetModes(campaign,a);
       const effective={campaign:campaign.effective_status,ad_set:a.effective_status,ad:ad.effective_status};
       if(!['ACTIVE','PAUSED'].includes(effective.campaign)||!['ACTIVE','PAUSED','CAMPAIGN_PAUSED','IN_PROCESS'].includes(effective.ad_set)||!['ACTIVE','PAUSED','CAMPAIGN_PAUSED','ADSET_PAUSED','PENDING_REVIEW','IN_PROCESS','PREAPPROVED'].includes(effective.ad))fail('Meta reports a delivery or review restriction. Check Ads Manager before activation.',409);
       for(const key of ['issues_info','failed_delivery_checks'])if(ad[key]!=null&&(!Array.isArray(ad[key])||ad[key].length))fail('Meta reports an ad issue. Review it in Ads Manager.',409);
@@ -166,5 +167,26 @@ export function createMetaPausedProvider(config,{fetchImpl=fetch,now=Date.now}={
     if(out.success!==true||Object.keys(out).some(k=>k!=='success'))uncertain();
     return validateOnly?{validated:true}:{confirmed:true,resource:r[stage],stage,status:target};
   }
-  return {verifyMetaControlAccess:(token,user)=>access(token,user,null),createdMetaStatus:status,inspectCreatedMeta:(token,s,r)=>find(token,s,r,true),validateMetaControl:(token,s,r,action,stage)=>control(token,s,r,action,stage,true),applyMetaControlStage:control,verifyCreationAccess:access,validatePausedMeta:validate,createPausedMetaResource:create,findPausedMeta:find};
+  const zero=v=>v==null||v===0||v==='0';
+  function budgetModes(c,a){
+    if(c.is_adset_budget_sharing_enabled!==false||c.is_budget_schedule_enabled!==false||a.is_budget_schedule_enabled!==false||!zero(c.daily_budget)||!zero(c.lifetime_budget)||!zero(a.lifetime_budget))fail('Meta budget sharing, scheduling or lifetime budgets are not supported here. Check Ads Manager.',409);
+  }
+  async function budget(token,s,r){
+    metaCreationResources(r,true);const p=metaPausedPlan(s),account=s.identity.account.id.slice(4);
+    const c=await call(r.campaign,{fields:'id,account_id,name,status,effective_status,daily_budget,lifetime_budget,is_adset_budget_sharing_enabled,is_budget_schedule_enabled'},token);
+    const sets=await call(r.campaign+'/adsets',{fields:'id,account_id,campaign_id,name,status,effective_status,daily_budget,lifetime_budget,is_budget_schedule_enabled',limit:2},token);
+    if(c.id!==r.campaign||c.account_id!==account||c.name!==p.campaign.name||!['ACTIVE','PAUSED'].includes(c.status)||!Array.isArray(sets.data)||sets.data.length!==1||sets.paging?.next)uncertain();
+    const a=sets.data[0];if(a.id!==r.ad_set||a.account_id!==account||a.campaign_id!==r.campaign||a.name!==p.ad_set.name||!['ACTIVE','PAUSED'].includes(a.status)||String(a.daily_budget)!==String(s.plan.daily_cents))uncertain();
+    for(const v of [c.effective_status,a.effective_status])if(typeof v!=='string'||!/^[A-Z_]{1,40}$/.test(v))uncertain();
+    budgetModes(c,a);
+    return {status:{resource:c.id,name:c.name,status:c.status,effective_status:c.effective_status},budget:{resource:a.id,daily_cents:s.plan.daily_cents,status:a.status,effective_status:a.effective_status}};
+  }
+  async function budgetWrite(token,s,r,cents,validateOnly=false){
+    metaCreationResources(r,true);metaPausedPlan(s);
+    if(!Number.isSafeInteger(cents)||cents<100||cents>1000000||cents===s.plan.daily_cents)fail('Choose a changed Meta average daily budget from $1.00 to $10,000.00 USD.',409);
+    const out=await call(r.ad_set,{daily_budget:cents,...(validateOnly?{execution_options:['validate_only']}:{})},token,true);
+    if(out.success!==true||Object.keys(out).some(k=>k!=='success'))uncertain();
+    return validateOnly?{validated:true}:{confirmed:true,resource:r.ad_set,daily_cents:cents};
+  }
+  return {inspectMetaBudget:budget,validateMetaBudget:(token,s,r,cents)=>budgetWrite(token,s,r,cents,true),applyMetaBudget:budgetWrite,verifyMetaControlAccess:(token,user)=>access(token,user,null),createdMetaStatus:status,inspectCreatedMeta:(token,s,r)=>find(token,s,r,true),validateMetaControl:(token,s,r,action,stage)=>control(token,s,r,action,stage,true),applyMetaControlStage:control,verifyCreationAccess:access,validatePausedMeta:validate,createPausedMetaResource:create,findPausedMeta:find};
 }
