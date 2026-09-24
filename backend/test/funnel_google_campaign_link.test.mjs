@@ -10,7 +10,7 @@ import {metaCampaignChoiceProof} from '../funnels/meta_campaign_link.mjs';
 import {googleReportRange} from '../funnels/google_ads_performance.mjs';
 import {linkedGoogleRows,googleCampaignChoiceProof,googleCampaignChoiceProofValid} from '../funnels/google_campaign_link.mjs';
 const owner=randomUUID(),other=randomUUID(),basic=randomUUID();
-const env={KORLIX_GOOGLE_ADS_ENABLED:'true',KORLIX_GOOGLE_ADS_CLIENT_ID:'fixture-google-client.apps.googleusercontent.com',KORLIX_GOOGLE_ADS_CLIENT_SECRET:'fixture-google-secret-not-real',KORLIX_GOOGLE_ADS_DEVELOPER_TOKEN:'fixture_developer_token',KORLIX_GOOGLE_ADS_TOKEN_KEY:Buffer.alloc(32,7).toString('base64'),KORLIX_GOOGLE_ADS_REDIRECT_URI:'https://example.com/api/funnels/google-ads/callback'};
+const env={KORLIX_GOOGLE_ADS_ENABLED:'true',KORLIX_GOOGLE_ADS_CLIENT_ID:'fixture-google-client.apps.googleusercontent.com',KORLIX_GOOGLE_ADS_CLIENT_SECRET:'fixture-google-secret-not-real',KORLIX_GOOGLE_ADS_ACCESS_MODEL:'cloud_project',KORLIX_GOOGLE_ADS_TOKEN_KEY:Buffer.alloc(32,7).toString('base64'),KORLIX_GOOGLE_ADS_REDIRECT_URI:'https://example.com/api/funnels/google-ads/callback'};
 const config=googleAdsConfiguration(env),rootId='1111111111',defaultAccount={id:'1234567890',name:'Growth account',currency:'KWD',timezone:'America/New_York',status:'ENABLED',manager:false,test_account:false};
 const doc={brand:'Test',headline:'Next step',subheadline:'Contact us',cta:'Ask',thank_you:'Thank you',layout:'consultation',accent:'cyan',benefits:[],faq:[],privacy_url:'',contact_email:'',booking_url:''};
 const plan={name:'Growth plan',platform:'google',headline:'Explore',body:'Talk to us',cta:'Learn more',audience:'Businesses',daily_cents:2500,days:14};
@@ -34,8 +34,8 @@ test.before(async()=>{
  const app=express();app.use(express.json());handler=registerFunnels(app,{database,requireUser:async q=>[owner,other,basic].includes(q.headers.authorization)?{id:q.headers.authorization}:null,environment:env,now:()=>clock,googleAdsProvider:{refresh:async(...args)=>{providerCalls++;return refreshImpl(...args);},roots:async(...args)=>{providerCalls++;return rootsImpl(...args);},account:async(...args)=>{providerCalls++;return accountImpl(...args);},campaignPerformance:async(...args)=>{providerCalls++;return reportImpl(...args);}}});
  server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));base='http://127.0.0.1:'+server.address().port;
 });
-test.beforeEach(async()=>{clock=Date.now()+60000*counter++;await db.exec('delete from korlix_funnels;delete from korlix_google_ads_connections;');await db.query("update user_profiles set tier='enterprise' where id=$1",[owner]);account={...defaultAccount};f=await funnel('create',{name:'Services',slug:'services',document:doc});c=await campaign('create',plan);await connect();providerCalls=0;accountImpl=async()=>account;reportImpl=async()=>providerReport();rootsImpl=async()=>[rootId];refreshImpl=async()=>"private-access-token";});
-let counter=1;
+test.beforeEach(async()=>{handler.close();clock=Date.now(); // Reset rate counters without advancing the report beyond the database's local day.
+ await db.exec('delete from korlix_funnels;delete from korlix_google_ads_connections;');await db.query("update user_profiles set tier='enterprise' where id=$1",[owner]);account={...defaultAccount};f=await funnel('create',{name:'Services',slug:'services',document:doc});c=await campaign('create',plan);await connect();providerCalls=0;accountImpl=async()=>account;reportImpl=async()=>providerReport();rootsImpl=async()=>[rootId];refreshImpl=async()=>"private-access-token";});
 test.after(async()=>{handler.close();server.closeAllConnections();await new Promise(r=>server.close(r));await db.close();});
 test('Local read is private, owner/tier/platform-scoped and never calls Google or leaks credentials',async()=>{
  const r=await request(),d=await r.json();assert.equal(r.status,200);assert.equal(r.headers.get('cache-control'),'no-store');assert.equal(d.lookup_ready,true);assert.equal(d.report_ready,false);assert.equal(d.link,null);assert.equal(d.version,0);assert.equal(providerCalls,0);
@@ -56,7 +56,7 @@ test('Choice receipts reject forgery, altered labels, cross-plan reuse, expiry a
  const {d,out}=await choices(),choice=out.choices[0],body={version:d.version,fingerprint:d.fingerprint,confirmed:true,...choice};
  for(const patch of [{proof:'bad'},{provider_campaign_id:'999'},{provider_campaign_name:'Changed'},{proof:choice.proof.slice(0,-1)+(choice.proof.endsWith('0')?'1':'0')}])assert.equal((await request('/save',{...body,...patch})).status,400);
  const original=c;c=await campaign('create',{...plan,name:'Second plan'});const second=await link();assert.equal((await request('/save',{...body,version:second.version,fingerprint:second.fingerprint})).status,400);c=original;
- clock+=31*60000;assert.equal((await request('/save',body)).status,400);clock=Date.now()+60000*counter;
+ clock+=31*60000;assert.equal((await request('/save',body)).status,400);clock=Date.now();
  c=await campaign('save',{...plan,name:'Updated plan'});assert.equal((await request('/save',body)).status,409);
 });
 test('One provider campaign cannot be linked to two of the same owner plans; clear preserves monotonic versions',async()=>{
@@ -137,7 +137,7 @@ test('Direct access sends no manager header; changing test-account identity requ
  const saved=await saveLink();assert.equal(saved.link.root_id,account.id);assert.equal(saved.link.login_customer_id,null);
  await assert.rejects(db.query("update korlix_funnel_google_campaign_links set root_id='2222222222',login_customer_id=null"),/check constraint/);
  account.test_account=true;await db.query('update korlix_google_ads_connections set accounts=$1,version=nextval(\'korlix_google_ads_version_seq\')',[JSON.stringify([account])]);
- assert.equal((await link()).link_current,false);const again=await saveLink();assert.equal(again.link.account.test_account,true);assert.equal((await performance()).status,200);
+ assert.equal((await link()).link_current,false);const again=await saveLink();assert.equal(again.link.account.test_account,true);const performanceResult=await performance();assert.equal(performanceResult.status,200,await performanceResult.clone().text());
 });
 test('Expired refresh credentials and inconsistent manager context cannot reach Google; OAuth revocation invalidates access',async()=>{
  await db.exec("update korlix_google_ads_connections set refresh_expires_at=now()+interval '30 seconds'");let d=await link();assert.equal(d.lookup_ready,false);assert.equal((await request(`/campaigns?days=7&fingerprint=${d.fingerprint}`)).status,409);assert.equal(providerCalls,0);
@@ -147,7 +147,7 @@ test('Expired refresh credentials and inconsistent manager context cannot reach 
 test('Google receipts cannot reuse Meta proofs; int64 campaign IDs are preserved without numeric rounding',async()=>{
  const d=await link(),row={provider_campaign_id:'456',provider_campaign_name:'Same name'},scope={actor:owner,funnel:f.id,campaign:c.id,fingerprint:d.fingerprint};
  assert.equal((await request('/save',{version:d.version,fingerprint:d.fingerprint,confirmed:true,...row,proof:metaCampaignChoiceProof(config.secret,scope,row,clock)})).status,400);
- reportImpl=async()=>{const r=providerReport();r.rows[0].campaign_id='9223372036854775807';return r;};const saved=await saveLink();assert.equal(saved.link.provider_campaign_id,'9223372036854775807');const r=await(await performance()).json();assert.equal(r.row.campaign_id,'9223372036854775807');
+ reportImpl=async()=>{const r=providerReport();r.rows[0].campaign_id='9223372036854775807';return r;};const saved=await saveLink();assert.equal(saved.link.provider_campaign_id,'9223372036854775807');const response=await performance();assert.equal(response.status,200,await response.clone().text());const r=await response.json();assert.equal(r.row.campaign_id,'9223372036854775807');
  await assert.rejects(link('save',{version:saved.version,fingerprint:saved.fingerprint,confirmed:true,provider_campaign_id:'9223372036854775808',provider_campaign_name:'Too large'}));
 });
 test('Choice boundary accepts 500 complete campaigns and rejects oversized or inconsistent data',async()=>{

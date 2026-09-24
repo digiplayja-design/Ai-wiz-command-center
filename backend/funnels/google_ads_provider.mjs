@@ -10,11 +10,11 @@ export const googleDigest=value=>createHash('sha256').update(value).digest('hex'
 export const googleChallenge=value=>createHash('sha256').update(value).digest('base64url');
 export const googleCustomerId=value=>{if(typeof value!=='string'||!/^\d{10}$/.test(value))fail('Choose an available Google Ads account.');return value;};
 export function googleAdsConfiguration(env={}) {
-  const id=env.KORLIX_GOOGLE_ADS_CLIENT_ID||'',secret=env.KORLIX_GOOGLE_ADS_CLIENT_SECRET||'',developerToken=env.KORLIX_GOOGLE_ADS_DEVELOPER_TOKEN||'',key=env.KORLIX_GOOGLE_ADS_TOKEN_KEY||'',callback=env.KORLIX_GOOGLE_ADS_REDIRECT_URI||'',apiVersion=env.KORLIX_GOOGLE_ADS_API_VERSION||'v25';
+  const id=env.KORLIX_GOOGLE_ADS_CLIENT_ID||'',secret=env.KORLIX_GOOGLE_ADS_CLIENT_SECRET||'',accessModel=env.KORLIX_GOOGLE_ADS_ACCESS_MODEL||'',key=env.KORLIX_GOOGLE_ADS_TOKEN_KEY||'',callback=env.KORLIX_GOOGLE_ADS_REDIRECT_URI||'',apiVersion=env.KORLIX_GOOGLE_ADS_API_VERSION||'v25';
   let validCallback=false;
   try{const u=new URL(callback);validCallback=u.protocol==='https:'&&!u.username&&!u.password&&!u.search&&!u.hash&&u.pathname===googleAdsCallback;}catch{}
-  const ready=env.KORLIX_GOOGLE_ADS_ENABLED==='true'&&/^[A-Za-z0-9_-]{10,200}\.apps\.googleusercontent\.com$/.test(id)&&/^[\x21-\x7e]{16,500}$/.test(secret)&&/^[A-Za-z0-9_-]{10,200}$/.test(developerToken)&&/^[A-Za-z0-9+/]{43}=$/.test(key)&&Buffer.from(key,'base64').length===32&&/^v\d{2,3}$/.test(apiVersion)&&validCallback;
-  return {ready,id,secret,developerToken,key,callback,apiVersion,hash:googleDigest(JSON.stringify([id,secret,developerToken,key,callback,apiVersion]))};
+  const ready=env.KORLIX_GOOGLE_ADS_ENABLED==='true'&&/^[A-Za-z0-9_-]{10,200}\.apps\.googleusercontent\.com$/.test(id)&&/^[\x21-\x7e]{16,500}$/.test(secret)&&accessModel==='cloud_project'&&/^[A-Za-z0-9+/]{43}=$/.test(key)&&Buffer.from(key,'base64').length===32&&/^v\d{2,3}$/.test(apiVersion)&&validCallback;
+  return {ready,id,secret,accessModel,key,callback,apiVersion,hash:googleDigest(JSON.stringify([id,secret,accessModel,key,callback,apiVersion]))};
 }
 export function googleTokenCipher(key) {
   const bytes=Buffer.from(key,'base64');if(bytes.length!==32)fail('Google Ads secure storage is not configured.',503);
@@ -42,6 +42,7 @@ export function createGoogleAdsProvider(config,{fetchImpl=fetch,now=Date.now}={}
     }catch{fail('Google Ads could not be reached or returned an unreadable response. Try again.',503);}
     if(!response.ok||body.error){
       if((oauth&&body.error==='invalid_grant')||(!oauth&&response.status===401))throw new GoogleAdsAccessError();
+      if(!oauth&&Array.isArray(body.error?.details)&&body.error.details.some(d=>Array.isArray(d?.errors)&&d.errors.some(e=>e?.errorCode?.authorizationError==='CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION')))fail('The Google Cloud project needs approval for production Google Ads access. Ask the platform administrator to review its API access level.',409);
       if(response.status===429)fail('Google Ads is limiting requests. Please wait and try again.',429);
       if(!oauth&&response.status===403)fail('Google Ads access is unavailable. Check account permissions and KORLIX platform approval.',409);
       fail(oauth?'Google sign-in could not be completed. Start a new connection.':'Google Ads could not complete this request. Check account access and platform setup.',503);
@@ -57,7 +58,7 @@ export function createGoogleAdsProvider(config,{fetchImpl=fetch,now=Date.now}={}
     return r;
   }
   async function ads(path,access,root,body){
-    return request(`https://googleads.googleapis.com/${config.apiVersion}/${path}`,{method:body?'POST':'GET',headers:{Authorization:`Bearer ${access}`,'developer-token':config.developerToken,...(root?{'login-customer-id':googleCustomerId(root)}:{}),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
+    return request(`https://googleads.googleapis.com/${config.apiVersion}/${path}`,{method:body?'POST':'GET',headers:{Authorization:`Bearer ${access}`,...(root?{'login-customer-id':googleCustomerId(root)}:{}),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
   }
   function clean(a){
     // Protobuf JSON can omit false boolean fields.

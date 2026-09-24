@@ -710,18 +710,19 @@ selection, reconnect, disconnect or tier downgrade.
 | `KORLIX_GOOGLE_ADS_ENABLED` | `true` only when separately ready to activate |
 | `KORLIX_GOOGLE_ADS_CLIENT_ID` | Google Cloud web application OAuth client ID |
 | `KORLIX_GOOGLE_ADS_CLIENT_SECRET` | Client secret, stored only in the backend environment |
-| `KORLIX_GOOGLE_ADS_DEVELOPER_TOKEN` | Google Ads developer token with the required access/approval |
+| `KORLIX_GOOGLE_ADS_ACCESS_MODEL` | `cloud_project`; explicitly acknowledges the post-September-2026 API access model |
 | `KORLIX_GOOGLE_ADS_TOKEN_KEY` | Independent 32 random bytes encoded as standard base64; do not reuse Meta's key |
 | `KORLIX_GOOGLE_ADS_REDIRECT_URI` | `https://chee-chai-chee-backend.onrender.com/api/funnels/google-ads/callback` |
 | `KORLIX_GOOGLE_ADS_API_VERSION` | Optional; defaults to `v25` |
 
 Use a Web application OAuth client with the exact HTTPS redirect URI, enable the
 Google Ads API, configure consent and the Ads scope, and meet applicable Google
-Cloud project, developer-token, verification and production-access requirements.
+Cloud project, OAuth verification and production-access requirements. K189 removes
+the retired developer-token header; see [the compatibility guide](../../docs/K189_GOOGLE_API_COMPATIBILITY.md).
 An OAuth connection alone does not establish API approval. Test-account access
 and production-account access can differ. No credentials or flags are configured
 by this release. The public readiness route only checks configuration shape; it
-cannot establish that Google has approved the project or token.
+cannot establish that Google has approved the project.
 
 Google's Ads scope is `https://www.googleapis.com/auth/adwords`, which permits
 viewing and managing Ads data. The UI states this breadth accurately; this release
@@ -1987,7 +1988,7 @@ hashes; reviewed changes do not alter this private invoker-RPC design.
 
 ## K181 — Create a paused Google Search campaign
 
-K181 adds an owner/Enterprise creation flow to Google campaign cards. It compiles the current reviewed plan, published landing page, responsive search-ad copy, positive/negative keywords and country, city/region or radius targeting into one atomic Google Ads mutation. It creates a separate average daily budget, a Search campaign, one Search ad group and one responsive search ad. Campaign, ad group and ad are explicitly **PAUSED**. Positive keywords are enabled inside the paused group; this cannot activate delivery. Google Search is on, Search Partners and Display are off. Country exclusions use presence. Saved targeting language IDs become actual language criteria.
+K181 adds an owner/Enterprise creation flow to Google campaign cards. It compiles the current reviewed plan, published landing page, responsive search-ad copy, positive/negative keywords and country, city/region or radius targeting into one atomic Google Ads mutation. It creates a separate average daily budget, a Search campaign, one Search ad group and one responsive search ad. Campaign, ad group and ad are explicitly **PAUSED**. Positive keywords are enabled inside the paused group; this cannot activate delivery. Google Search is on, Search Partners and Display are off. Country exclusions use presence. At K181, saved targeting language IDs became actual language criteria. K189 supersedes this for new requests: content languages are planning notes and no manual language criteria are sent; historical records retain their original contract.
 
 This first version supports production USD accounts and the saved **Maximize Clicks** bidding choice. It does not silently change Maximize Conversions to another strategy. All six preparation checks must be current, the selected account and direct/manager access path must match fresh Google checks, and the owner must explicitly confirm paused creation, acknowledge the average-budget limits, and declare that the campaign does not contain EU political advertising. Start is chosen from today through the next 30 days in the account timezone; end is derived from the plan's 1–90-day duration. Google v25 uses `startDateTime` at `00:00:00` and `endDateTime` at `23:59:59`, interpreted in the customer timezone. No activation or resume operation exists.
 
@@ -2270,3 +2271,8 @@ Verification: actual PGlite SQL and Express tests cover hosted grants, ownership
 Provider implementation note (official docs reviewed September 24, 2026): Google's [offline conversion guidance](https://developers.google.com/google-ads/api/docs/conversions/upload-offline) restricts new adopters of the older upload path and points to [Data Manager API](https://developers.google.com/data-manager/api/devguides/events/google-ads/offline). Its [current deprecations](https://developers.google.com/google-ads/api/docs/deprecations) also describe September API access changes. Before implementing delivery, verify the current access/authentication contract and existing Google adapter compatibility; do not assume old developer-token upload requests work. Meta's parameter documentation required login/rate-limited retrieval in this session, so no new Meta delivery contract is claimed. Existing provider activation remains deferred.
 
 Standing user authorization covers routine public code/tests/docs, migrations and both existing-service deployments; no repeat chapter approval. Owner hands-on A–G and live provider/account actions remain deferred. Whole-funnel estimates remain provisional until real integration is accepted.
+
+
+## K189 — Google API compatibility
+
+See [Cloud project access and versioned Search language creation](../../docs/K189_GOOGLE_API_COMPATIBILITY.md) for the new explicit access-model gate, historical snapshot handling, migration and deferred provider setup.

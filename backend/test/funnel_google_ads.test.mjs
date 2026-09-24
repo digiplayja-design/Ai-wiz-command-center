@@ -7,7 +7,7 @@ import express from 'express';
 import {registerFunnels} from '../funnels/routes.mjs';
 import {createGoogleAdsStore} from '../funnels/google_ads.mjs';
 import {googleAdsConfiguration,googleTokenCipher,googleChallenge,GoogleAdsAccessError} from '../funnels/google_ads_provider.mjs';
-const env={KORLIX_GOOGLE_ADS_ENABLED:'true',KORLIX_GOOGLE_ADS_CLIENT_ID:'12345-fixture.apps.googleusercontent.com',KORLIX_GOOGLE_ADS_CLIENT_SECRET:'fixture-client-secret',KORLIX_GOOGLE_ADS_DEVELOPER_TOKEN:'fixture-developer-token',KORLIX_GOOGLE_ADS_TOKEN_KEY:Buffer.alloc(32,8).toString('base64'),KORLIX_GOOGLE_ADS_REDIRECT_URI:'https://example.com/api/funnels/google-ads/callback'};
+const env={KORLIX_GOOGLE_ADS_ENABLED:'true',KORLIX_GOOGLE_ADS_CLIENT_ID:'12345-fixture.apps.googleusercontent.com',KORLIX_GOOGLE_ADS_CLIENT_SECRET:'fixture-client-secret',KORLIX_GOOGLE_ADS_ACCESS_MODEL:'cloud_project',KORLIX_GOOGLE_ADS_TOKEN_KEY:Buffer.alloc(32,8).toString('base64'),KORLIX_GOOGLE_ADS_REDIRECT_URI:'https://example.com/api/funnels/google-ads/callback'};
 const cfg=googleAdsConfiguration(env),[owner,other,basic]=Array.from({length:3},()=>randomUUID());
 const root='1234567890',id='9876543210',account={id,name:'Fixture advertiser',currency:'USD',timezone:'America/New_York',manager:false,status:'ENABLED',test_account:false};
 let db,store,server,base,clock=Date.now(),calls=[],hook,exchangeHook,availableRoots;

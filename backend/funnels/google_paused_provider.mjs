@@ -17,6 +17,8 @@ export function creationResources(value,account){
   return {budget:value.budget,campaign:value.campaign,ad_group:value.ad_group,ad:value.ad};
 }
 export function googlePausedRequest(s){
+  // Unversioned snapshots remain readable for historical reconciliation only.
+  if(s&&Object.hasOwn(s,'search_language_mode')&&s.search_language_mode!=='automatic_from_creative_v1')wrong();
   const p=s?.plan,a=s?.identity?.account,i=s?.identity;
   if(!p||!a||!customer(a.id)||a.currency!=='USD'||a.manager!==false||a.status!=='ENABLED'||a.test_account!==false||!customer(i.root_id)||!(i.login_customer_id===i.root_id||(i.login_customer_id===null&&i.root_id===a.id))||!integer(p.daily_cents,100,1000000)||!integer(p.days,1,90)||!date(s.start_date)||!date(s.end_date)||s.no_eu_political_ads!==true||s.budget_acknowledged!==true)wrong();
   const expectedEnd=new Date(Date.parse(s.start_date+'T00:00:00Z')+(p.days-1)*86400000).toISOString().slice(0,10);
@@ -36,7 +38,7 @@ export function googlePausedRequest(s){
   for(const [key,negative] of [['countries',false],['excluded_countries',true]])for(const code of t[key])criterion({location:{geoTargetConstant:'geoTargetConstants/'+googleTargetingCatalog.countries.find(x=>x.code===code).id}},negative);
   for(const location of t.geo_locations||[])criterion({location:{geoTargetConstant:'geoTargetConstants/'+location.id}});
   for(const area of t.proximities||[])criterion({proximity:{geoPoint:{latitudeInMicroDegrees:area.latitude_micro,longitudeInMicroDegrees:area.longitude_micro},radius:area.radius_meters/1000,radiusUnits:'KILOMETERS'}});
-  for(const code of t.content_languages)criterion({language:{languageConstant:'languageConstants/'+googleTargetingCatalog.languages.find(x=>x.code===code).id}});
+  if(!Object.hasOwn(s,'search_language_mode'))for(const code of t.content_languages)criterion({language:{languageConstant:'languageConstants/'+googleTargetingCatalog.languages.find(x=>x.code===code).id}});
   for(const key of Object.keys(kw))for(const text of kw[key]){const negative=key.startsWith('negative_'),matchType=key.replace('negative_','').toUpperCase();operations.push({adGroupCriterionOperation:{create:{adGroup:group,negative,...(negative?{}:{status:'ENABLED'}),keyword:{text,matchType}}}});}
   if(operations.length>160)wrong();
   return {mutateOperations:operations,partialFailure:false,responseContentType:'RESOURCE_NAME_ONLY'};
@@ -45,6 +47,7 @@ export function googlePausedRequest(s){
 // Only these narrow methods can mutate; the generic transport remains private.
 export function googlePausedMethods(ads){
   async function mutate(access,s,validateOnly){
+    if(s?.search_language_mode!=='automatic_from_creative_v1')wrong();
     const request=googlePausedRequest(s),account=s.identity.account.id;
     const response=await ads(`customers/${account}/googleAds:mutate`,access,s.identity.login_customer_id,{...request,validateOnly});
     if(response.partialFailureError)unclear();

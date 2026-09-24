@@ -5,10 +5,11 @@ import {readFile} from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
 import express from 'express';
 import {registerFunnels} from '../funnels/routes.mjs';
-import {googleAdsConfiguration,googleTokenCipher,GoogleAdsAccessError} from '../funnels/google_ads_provider.mjs';
+import {googleAdsConfiguration,googleTokenCipher,GoogleAdsAccessError,googleDigest,createGoogleAdsProvider} from '../funnels/google_ads_provider.mjs';
 import {googleTargetingInput,googleTargetingAssets,googleTargetingCatalog as catalog} from '../funnels/google_targeting.mjs';
+import {googlePausedRequest} from '../funnels/google_paused_provider.mjs';
 const owner=randomUUID(),other=randomUUID(),basic=randomUUID();
-const env={KORLIX_GOOGLE_ADS_CREATE_PAUSED_ENABLED:'true',KORLIX_GOOGLE_ADS_ENABLED:'true',KORLIX_GOOGLE_ADS_CLIENT_ID:'12345-fixture.apps.googleusercontent.com',KORLIX_GOOGLE_ADS_CLIENT_SECRET:'fixture-client-secret',KORLIX_GOOGLE_ADS_DEVELOPER_TOKEN:'fixture-developer-token',KORLIX_GOOGLE_ADS_TOKEN_KEY:Buffer.alloc(32,8).toString('base64'),KORLIX_GOOGLE_ADS_REDIRECT_URI:'https://example.com/api/funnels/google-ads/callback',KORLIX_FUNNEL_PUBLIC_BASE_URL:'https://example.com'};
+const env={KORLIX_GOOGLE_ADS_CREATE_PAUSED_ENABLED:'true',KORLIX_GOOGLE_ADS_ENABLED:'true',KORLIX_GOOGLE_ADS_CLIENT_ID:'12345-fixture.apps.googleusercontent.com',KORLIX_GOOGLE_ADS_CLIENT_SECRET:'fixture-client-secret',KORLIX_GOOGLE_ADS_ACCESS_MODEL:'cloud_project',KORLIX_GOOGLE_ADS_TOKEN_KEY:Buffer.alloc(32,8).toString('base64'),KORLIX_GOOGLE_ADS_REDIRECT_URI:'https://example.com/api/funnels/google-ads/callback',KORLIX_FUNNEL_PUBLIC_BASE_URL:'https://example.com'};
 const config=googleAdsConfiguration(env),rootId='1234567890',account={id:'9876543210',name:'Growth account',currency:'USD',timezone:'UTC',manager:false,status:'ENABLED',test_account:false};
 const doc={brand:'Test business',headline:'Your next step',subheadline:'Talk to our team.',cta:'Ask us',thank_you:'Thank you.',layout:'consultation',accent:'cyan',benefits:[],faq:[],privacy_url:'https://example.com/privacy',contact_email:'hello@example.com',booking_url:''};
 const plan={name:'Autumn campaign',platform:'google',headline:'Explore our services',body:'Ask our team about your needs.',cta:'Learn more',audience:'Businesses seeking our services.',daily_cents:2500,days:14};
@@ -27,6 +28,7 @@ test.before(async()=>{
  await db.exec(await readFile(new URL('../../supabase/migrations/20260923120825_funnel_google_targeting_review.sql',import.meta.url),'utf8'));
  await db.exec(await readFile(new URL('../../supabase/migrations/20260923123817_funnel_google_preflight.sql',import.meta.url),'utf8'));
  for(const file of ['20260923153540_funnel_google_radius.sql','20260923172253_funnel_google_locations.sql','20260923210921_funnel_google_paused_create.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+file,import.meta.url),'utf8'));
+ await db.exec(await readFile(new URL('../../supabase/migrations/20260924034142_funnel_google_search_language_contract.sql',import.meta.url),'utf8'));
  await db.exec('set role service_role');
  database={rpc:async(name,p)=>{try{return{data:await rpc(name,p)}}catch(error){return{error}}}};
  const app=express();app.use(express.json());registerFunnels(app,{database,requireUser:async q=>[owner,other,basic].includes(q.headers.authorization)?{id:q.headers.authorization}:null,environment:env,now:()=>clock,googleAdsProvider:provider});
@@ -64,7 +66,7 @@ test('K181 reads local preparation without provider calls or creation writes',as
 });
 test('K181 creates one full paused campaign after current reviews, then repeated taps only read the record',async()=>{
  await ready();const d=await read();assert.equal(d.create_ready,true);const before=await rows();let captured;createHook=async s=>{captured=s;return resources;};
- const r=await req('/create',input(d));assert.equal(r.status,201,await r.clone().text());const out=await r.json();assert.equal(out.attempt.state,'created');assert.equal(out.create_ready,false);assert.equal(out.attempt.snapshot.start_date,d.today);assert.deepEqual(out.attempt.resources,resources);assert.equal(captured.identity.account.id,account.id);assert.equal(captured.creative.headlines.length,3);assert.equal(captured.targeting.countries[1],'JM');assert.equal(captured.no_eu_political_ads,true);assert.equal(createCalls,1);assert.deepEqual(await rows(),before);
+ const r=await req('/create',input(d));assert.equal(r.status,201,await r.clone().text());const out=await r.json();assert.equal(out.attempt.state,'created');assert.equal(out.create_ready,false);assert.equal(out.attempt.snapshot.start_date,d.today);assert.deepEqual(out.attempt.resources,resources);assert.equal(captured.identity.account.id,account.id);assert.equal(captured.creative.headlines.length,3);assert.equal(captured.targeting.countries[1],'JM');assert.equal(captured.no_eu_political_ads,true);assert.equal(captured.search_language_mode,'automatic_from_creative_v1');assert.equal(out.draft.search_language_mode,'automatic_from_creative_v1');assert.equal((await ledger())[0].request_hash,googleDigest(JSON.stringify(googlePausedRequest(captured))));assert.equal(createCalls,1);assert.deepEqual(await rows(),before);
  const again=await req('/create',input(d));assert.equal(again.status,200);assert.equal((await again.json()).attempt.id,out.attempt.id);assert.equal(createCalls,1);assert.equal((await ledger()).length,1);
  for(const secret of ['sealed','binding_id','config_hash','private-fixture-token','request_hash'])assert(!JSON.stringify(out).includes(secret));
 });
@@ -127,4 +129,26 @@ test('K181 failed durable claim sends no mutation and invalid OAuth requires rec
  await ready();const original=database.rpc;database.rpc=async(name,p)=>name==='korlix_funnel_google_create_v1'&&p.p_action==='claim'?{error:{code:'XX000'}}:original(name,p);
  try{assert.equal((await create()).status,503);assert.equal(createCalls,0);assert.deepEqual(await ledger(),[]);}finally{database.rpc=original;}
  validateHook=async()=>{throw new GoogleAdsAccessError();};assert.equal((await create()).status,409);assert.equal(createCalls,0);const row=(await db.query('select needs_reconnect from korlix_google_ads_connections where user_id=$1',[owner])).rows[0];assert.equal(row.needs_reconnect,true);
+});
+async function installCreationContract(legacy=false){
+ let sql=await readFile(new URL('../../supabase/migrations/'+(legacy?'20260923210921_funnel_google_paused_create.sql':'20260924034142_funnel_google_search_language_contract.sql'),import.meta.url),'utf8');
+ if(legacy)sql='begin;\n'+sql.slice(sql.indexOf('create function public.korlix_funnel_google_create_v1')).replace('create function','create or replace function');
+ await db.exec('reset role');await db.exec(sql);await db.exec('set role service_role');
+}
+test('K189 migration invalidates old confirmations before provider access without rewriting historical attempts',async()=>{
+ await ready();let old;
+ try{await installCreationContract(true);old=await read();assert(!Object.hasOwn(old.draft,'search_language_mode'));}finally{await installCreationContract();}
+ const current=await read();assert.notEqual(current.fingerprint,old.fingerprint);assert.equal((await req('/create',input(old))).status,409);assert.equal(providerCalls,0);assert.equal(createCalls,0);
+ let saved;
+ try{
+  await installCreationContract(true);old=await read();const id=randomUUID(),snapshot={...old.draft,start_date:old.today,end_date:new Date(Date.parse(old.today+'T00:00:00Z')+(old.draft.plan.days-1)*86400000).toISOString().slice(0,10),provider_name:'KORLIX '+id,no_eu_political_ads:true,budget_acknowledged:true};
+  await rpc('korlix_funnel_google_create_v1',{p_actor:owner,p_action:'claim',p_funnel:f.id,p_data:{campaign_id:c.id,configured:true,config_hash:config.hash,public_base:'https://example.com',create_enabled:true,...input(old),attempt_id:id,request_hash:googleDigest(JSON.stringify(googlePausedRequest(snapshot)))}});saved=await ledger();
+ }finally{await installCreationContract();}
+ assert.deepEqual(await ledger(),saved);const d=await read();assert.equal(d.draft.search_language_mode,'automatic_from_creative_v1');assert(!Object.hasOwn(d.attempt.snapshot,'search_language_mode'));
+ findHook=async s=>{assert.deepEqual(s,saved[0].snapshot);return resources;};assert.equal((await req('/reconcile',{attempt_id:d.attempt.id})).status,200);assert.equal(createCalls,0);assert.deepEqual((await ledger())[0].snapshot,saved[0].snapshot);assert.equal((await ledger())[0].request_hash,saved[0].request_hash);
+});
+test('K189 project access error neither claims a dispatch nor invalidates encrypted OAuth credentials',async()=>{
+ await ready();const before=(await rows()).connections;
+ const p=createGoogleAdsProvider(config,{fetchImpl:async()=>new Response(JSON.stringify({error:{details:[{errors:[{errorCode:{authorizationError:'CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION'}}]}]}}),{status:403})});
+ validateHook=async()=>p.roots('fixture');const r=await create();assert.equal(r.status,409);assert.match(await r.text(),/Cloud project needs approval/);assert.deepEqual((await rows()).connections,before);assert.equal(createCalls,0);assert.deepEqual(await ledger(),[]);
 });

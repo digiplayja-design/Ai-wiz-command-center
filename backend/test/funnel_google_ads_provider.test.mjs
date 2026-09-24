@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createGoogleAdsProvider,googleAdsConfiguration,googleTokenCipher,googleAdsScope,GoogleAdsAccessError} from '../funnels/google_ads_provider.mjs';
-const env={KORLIX_GOOGLE_ADS_ENABLED:'true',KORLIX_GOOGLE_ADS_CLIENT_ID:'12345-fixture.apps.googleusercontent.com',KORLIX_GOOGLE_ADS_CLIENT_SECRET:'fixture-client-secret',KORLIX_GOOGLE_ADS_DEVELOPER_TOKEN:'fixture-developer-token',KORLIX_GOOGLE_ADS_TOKEN_KEY:Buffer.alloc(32,8).toString('base64'),KORLIX_GOOGLE_ADS_REDIRECT_URI:'https://example.com/api/funnels/google-ads/callback'},cfg=googleAdsConfiguration(env);
+const env={KORLIX_GOOGLE_ADS_ENABLED:'true',KORLIX_GOOGLE_ADS_CLIENT_ID:'12345-fixture.apps.googleusercontent.com',KORLIX_GOOGLE_ADS_CLIENT_SECRET:'fixture-client-secret',KORLIX_GOOGLE_ADS_ACCESS_MODEL:'cloud_project',KORLIX_GOOGLE_ADS_TOKEN_KEY:Buffer.alloc(32,8).toString('base64'),KORLIX_GOOGLE_ADS_REDIRECT_URI:'https://example.com/api/funnels/google-ads/callback'},cfg=googleAdsConfiguration(env);
 const root='1234567890',id='9876543210';
 const raw={id,descriptiveName:'Advertiser',currencyCode:'USD',timeZone:'UTC',status:'ENABLED'};
 const tokens={access_token:'access-fixture',refresh_token:'refresh-fixture',scope:googleAdsScope,token_type:'Bearer',expires_in:3600};
@@ -32,7 +32,7 @@ test('Direct account and nested manager clients use fixed queries and correct lo
  const result=await p.accounts('access',root);assert.equal(result.accounts.length,2);assert.equal(result.accounts[1].test_account,true);assert.equal(calls[1].options.headers['login-customer-id'],root);
  const query=JSON.parse(calls[1].options.body).query;assert(query.includes('customer_client.manager = FALSE'));assert(!query.includes('level'));assert(query.endsWith('LIMIT 501'));
  assert.equal(JSON.parse(calls[2].options.body).pageToken,'opaque-page');await p.account('access',id,root);assert.equal(calls[3].options.headers['login-customer-id'],root);
- for(const call of calls){assert.equal(call.url.hostname,'googleads.googleapis.com');assert.equal(call.url.search,'');assert.equal(call.options.headers.Authorization,'Bearer access');assert.equal(call.options.headers['developer-token'],cfg.developerToken);assert.equal(call.options.redirect,'error');}
+ for(const call of calls){assert.equal(call.url.hostname,'googleads.googleapis.com');assert.equal(call.url.search,'');assert.equal(call.options.headers.Authorization,'Bearer access');assert(!Object.hasOwn(call.options.headers,'developer-token'));assert.equal(call.options.redirect,'error');}
 });
 test('Pagination, duplicate IDs, incorrect target and oversized lists fail without returning partial account lists',async()=>{
  const manager={results:[{customer:{...raw,id:root,manager:true}}]};
@@ -56,4 +56,17 @@ test('Provider failures are redacted, oversized bodies bounded, and only revoked
  for(const code of [403,429,500]){const p=mock([new Response(JSON.stringify({error:{message:secret}}),{status:code})]).provider;await assert.rejects(p.roots('access'),e=>!(e instanceof GoogleAdsAccessError)&&!e.message.includes(secret));}
  await assert.rejects(mock([new Response('x'.repeat(2*1024*1024+1))]).provider.roots('access'),/unreadable/);
  await assert.rejects(mock([new Error(secret)]).provider.roots('access'),e=>!e.message.includes(secret));
+});
+test('K189 Cloud-project access is explicit, ignores retired tokens and changes credential binding',async()=>{
+ assert(cfg.ready);assert.equal(cfg.accessModel,'cloud_project');assert(!Object.hasOwn(cfg,'developerToken'));
+ for(const value of [undefined,'developer_token','true'])assert.equal(googleAdsConfiguration({...env,KORLIX_GOOGLE_ADS_ACCESS_MODEL:value,KORLIX_GOOGLE_ADS_DEVELOPER_TOKEN:'legacy-token'}).ready,false);
+ for(const value of ['legacy-one','legacy-two','malformed\nignored'])assert.equal(googleAdsConfiguration({...env,KORLIX_GOOGLE_ADS_DEVELOPER_TOKEN:value}).hash,cfg.hash);
+ assert.notEqual(googleAdsConfiguration({...env,KORLIX_GOOGLE_ADS_CLIENT_SECRET:'changed-client-secret'}).hash,cfg.hash);
+ let calls=0;const p=createGoogleAdsProvider({...cfg,developerToken:'must-never-send'},{fetchImpl:async(url,o)=>{calls++;assert(!Object.hasOwn(o.headers,'developer-token'));return new Response('{}');}});await p.roots('access');assert.equal(calls,1);
+});
+test('K189 project approval failure provides fixed guidance without revoking user authorization',async()=>{
+ for(const status of [400,403]){
+  const p=mock([new Response(JSON.stringify({error:{message:'private-project-id',details:[{'@type':'type.googleapis.com/google.ads.googleads.v25.errors.GoogleAdsFailure',errors:[{errorCode:{authorizationError:'CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION'},message:'secret-token'}]}]}}),{status})]).provider;
+  await assert.rejects(p.roots('access'),e=>e.status===409&&!(e instanceof GoogleAdsAccessError)&&/Cloud project needs approval/.test(e.message)&&!e.message.includes('secret')&&!e.message.includes('private'));
+ }
 });

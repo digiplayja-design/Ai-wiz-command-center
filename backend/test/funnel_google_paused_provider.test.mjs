@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {googlePausedRequest,googlePausedMethods,creationResources} from '../funnels/google_paused_provider.mjs';
 import {createGoogleAdsProvider} from '../funnels/google_ads_provider.mjs';
 const clone=v=>structuredClone(v);
-const snapshot=()=>({plan:{id:'00000000-0000-4000-8000-000000000003',daily_cents:2500,days:14},page:{destination:'https://example.com/f/services?utm_source=google&utm_medium=paid&utm_campaign=k143_00000000000040008000000000000003'},identity:{root_id:'1234567890',login_customer_id:'1234567890',account:{id:'9876543210',currency:'USD',timezone:'America/New_York',manager:false,status:'ENABLED',test_account:false}},creative:{headlines:['Meet the team','Explore services','Start here'],descriptions:['Find support for your business.','Talk with our team today.'],path1:'services',path2:''},keywords:{exact:['service'],phrase:['business support'],broad:[],negative_exact:['free'],negative_phrase:[],negative_broad:[]},targeting:{countries:['US','JM'],excluded_countries:['CA'],content_languages:['en','es'],location_mode:'presence',bidding:'maximize_clicks'},start_date:'2026-11-01',end_date:'2026-11-14',provider_name:'KORLIX 00000000-0000-4000-8000-000000000099',no_eu_political_ads:true,budget_acknowledged:true});
+const snapshot=()=>({search_language_mode:'automatic_from_creative_v1',plan:{id:'00000000-0000-4000-8000-000000000003',daily_cents:2500,days:14},page:{destination:'https://example.com/f/services?utm_source=google&utm_medium=paid&utm_campaign=k143_00000000000040008000000000000003'},identity:{root_id:'1234567890',login_customer_id:'1234567890',account:{id:'9876543210',currency:'USD',timezone:'America/New_York',manager:false,status:'ENABLED',test_account:false}},creative:{headlines:['Meet the team','Explore services','Start here'],descriptions:['Find support for your business.','Talk with our team today.'],path1:'services',path2:''},keywords:{exact:['service'],phrase:['business support'],broad:[],negative_exact:['free'],negative_phrase:[],negative_broad:[]},targeting:{countries:['US','JM'],excluded_countries:['CA'],content_languages:['en','es'],location_mode:'presence',bidding:'maximize_clicks'},start_date:'2026-11-01',end_date:'2026-11-14',provider_name:'KORLIX 00000000-0000-4000-8000-000000000099',no_eu_political_ads:true,budget_acknowledged:true});
 const expected={budget:'customers/9876543210/campaignBudgets/101',campaign:'customers/9876543210/campaigns/102',ad_group:'customers/9876543210/adGroups/103',ad:'customers/9876543210/adGroupAds/103~104'};
 function mutationResponse(body){return {mutateOperationResponses:body.mutateOperations.map((op,n)=>{
  const key=Object.keys(op)[0],type=key.replace('Operation','Result');
@@ -29,7 +29,7 @@ test('K181 compiler creates all three delivery levels paused, separate exact USD
  assert.equal(r.partialFailure,false);assert.equal(r.responseContentType,'RESOURCE_NAME_ONLY');assert.equal(ops[0].campaignBudgetOperation.create.amountMicros,'25000000');assert.equal(ops[0].campaignBudgetOperation.create.explicitlyShared,false);
  for(const [n,key]of [[1,'campaignOperation'],[2,'adGroupOperation'],[3,'adGroupAdOperation']])assert.equal(ops[n][key].create.status,'PAUSED');
  const c=ops[1].campaignOperation.create;assert.deepEqual(c.targetSpend,{});assert.equal(c.startDateTime,'2026-11-01 00:00:00');assert.equal(c.endDateTime,'2026-11-14 23:59:59');assert(!Object.hasOwn(c,'startDate'));assert.equal(c.containsEuPoliticalAdvertising,'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING');assert.equal(c.networkSettings.targetSearchNetwork,false);assert.equal(c.networkSettings.targetContentNetwork,false);assert.equal(c.geoTargetTypeSetting.negativeGeoTargetType,'PRESENCE');
- const criteria=ops.filter(x=>x.campaignCriterionOperation).map(x=>x.campaignCriterionOperation.create);assert(criteria.some(c=>c.location?.geoTargetConstant==='geoTargetConstants/2840'&&!c.negative));assert(criteria.some(c=>c.location?.geoTargetConstant==='geoTargetConstants/2124'&&c.negative));assert(criteria.some(c=>c.language?.languageConstant==='languageConstants/1000'));
+ const criteria=ops.filter(x=>x.campaignCriterionOperation).map(x=>x.campaignCriterionOperation.create);assert(criteria.some(c=>c.location?.geoTargetConstant==='geoTargetConstants/2840'&&!c.negative));assert(criteria.some(c=>c.location?.geoTargetConstant==='geoTargetConstants/2124'&&c.negative));assert(criteria.every(c=>!Object.hasOwn(c,'language')));
  const kw=ops.filter(x=>x.adGroupCriterionOperation).map(x=>x.adGroupCriterionOperation.create);assert.deepEqual(kw.map(k=>[k.keyword.text,k.keyword.matchType,k.negative,k.status]),[['service','EXACT',false,'ENABLED'],['business support','PHRASE',false,'ENABLED'],['free','EXACT',true,undefined]]);
 });
 test('K181 compiler rejects unsupported bidding, dates, declaration, test/currency accounts and arbitrary destinations',()=>{
@@ -73,4 +73,16 @@ test('K181 recovery never equates missing, duplicate, changed or enabled resourc
   const s=snapshot(),responses=recovered(s);change(responses);await assert.rejects(googlePausedMethods(async()=>({results:responses.shift()})).findPausedSearch('a',s));
  }
  await assert.rejects(googlePausedMethods(async()=>({nextPageToken:'more',results:[]})).findPausedSearch('a',snapshot()));
+});
+test('K189 legacy language snapshots remain strictly readable but can never create or validate again',async()=>{
+ const s=snapshot();delete s.search_language_mode;
+ const criteria=googlePausedRequest(s).mutateOperations.filter(x=>x.campaignCriterionOperation).map(x=>x.campaignCriterionOperation.create);
+ assert.deepEqual(criteria.filter(c=>c.language).map(c=>c.language.languageConstant),['languageConstants/1000','languageConstants/1003']);
+ for(const method of ['validatePausedSearch','createPausedSearch']){let calls=0;await assert.rejects(googlePausedMethods(async()=>{calls++;})[method]('a',s));assert.equal(calls,0);}
+ const responses=recovered(s);assert.deepEqual(await googlePausedMethods(async()=>({results:responses.shift()})).findPausedSearch('a',s),expected);
+ const changed=recovered(s);changed[2]=changed[2].filter(x=>!x.campaignCriterion.language);await assert.rejects(googlePausedMethods(async()=>({results:changed.shift()})).findPausedSearch('a',s));
+});
+test('K189 unknown language contracts and unexpected provider language criteria fail closed',async()=>{
+ for(const value of [null,'automatic',{},1]){const s={...snapshot(),search_language_mode:value};assert.throws(()=>googlePausedRequest(s));let calls=0;await assert.rejects(googlePausedMethods(async()=>{calls++;}).createPausedSearch('a',s));assert.equal(calls,0);}
+ const s=snapshot(),responses=recovered(s);responses[2].push({campaignCriterion:{negative:false,language:{languageConstant:'languageConstants/1000'}}});await assert.rejects(googlePausedMethods(async()=>({results:responses.shift()})).findPausedSearch('a',s));
 });
