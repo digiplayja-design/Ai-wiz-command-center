@@ -22,6 +22,7 @@ import { registerMeta } from './meta.mjs';
 import { registerMetaPausedCreate } from './meta_paused_create.mjs';
 import { registerMetaControls } from './meta_controls.mjs';
 import { registerMetaCampaignLink } from './meta_campaign_link.mjs';
+import { registerGoogleConversionDelivery } from './google_conversion_delivery.mjs';
 import { registerGoogleUploadAccess } from './google_upload_access.mjs';
 import { registerGoogleConversionDestination } from './google_conversion_destination.mjs';
 import { registerGoogleCampaignLink } from './google_campaign_link.mjs';
@@ -57,7 +58,7 @@ export async function generateFunnel(brief, environment=process.env) {
   try { return document(JSON.parse(result.output_text.replace(/^```(?:json)?\s*|\s*```$/g,''))); }
   catch { fail('NOVA could not finish a valid draft. Your current page is unchanged. Try a more specific brief.',503); }
 }
-export function registerFunnels(app,{database,requireUser,store,followups,campaignStore,metaPreparationStore,googlePreparationStore,generateAdCopy,metaStore,metaProvider,googleAdsStore,googleAdsProvider,googleUploadProvider,rehearsalStore,imageStore,loadAgentProfile,generate=generateFunnel,environment=process.env,now=Date.now,autoStartScheduler=false,logger=console}={}) {
+export function registerFunnels(app,{database,requireUser,store,followups,campaignStore,metaPreparationStore,googlePreparationStore,generateAdCopy,metaStore,metaProvider,googleAdsStore,googleAdsProvider,googleUploadProvider,googleDeliveryProvider,rehearsalStore,imageStore,loadAgentProfile,generate=generateFunnel,environment=process.env,now=Date.now,autoStartScheduler=false,logger=console}={}) {
   const media=imageStore??createImageStore(database);
   const persistence=store || (database?createFunnelStore(database):null);
   const followup=followups||createFunnelFollowups({database,loadAgentProfile,environment});
@@ -94,6 +95,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   registerMetaControls(app,{base,owner,database,metaStore,metaProvider,environment,publicBase,now});
   registerMetaCampaignLink(app,{base,owner,database,metaStore,metaProvider,environment,now});
   registerGoogleAds(app,{base,owner,limit,database,googleAdsStore,googleAdsProvider,environment,now});
+  registerGoogleConversionDelivery(app,{base,owner,database,googleAdsProvider,googleUploadProvider,googleDeliveryProvider,environment,now});
   registerGoogleUploadAccess(app,{base,owner,limit,database,googleAdsProvider,googleUploadProvider,environment,now});
   registerGoogleConversionDestination(app,{base,owner,database,googleAdsStore,googleAdsProvider,environment,now});
   registerGoogleCampaignLink(app,{base,owner,database,googleAdsStore,googleAdsProvider,environment,now});
