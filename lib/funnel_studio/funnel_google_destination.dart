@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'funnel_client.dart';
+import 'funnel_google_upload_access.dart';
 
 const googleDestinationBoundary =
     'Save where future inquiry conversions should go. This stores a destination only. Upload authorization and delivery still need separate setup; no inquiries are sent and no Google ad settings are changed.';
@@ -490,6 +491,20 @@ class _FunnelGoogleDestinationState extends State<FunnelGoogleDestination> {
                         if (_notice != null) _note(_notice!),
                         if (d != null) ...[
                           _note(d['campaign_name']),
+                          OutlinedButton(
+                            onPressed: _busy
+                                ? null
+                                : () => showDialog<void>(
+                                    context: context,
+                                    builder: (_) => FunnelGoogleUploadAccess(
+                                      client: widget.client,
+                                      funnelId: widget.funnelId,
+                                      campaignId: widget.campaignId,
+                                      scope: widget.scope,
+                                    ),
+                                  ),
+                            child: const Text('Google upload access'),
+                          ),
                           if (s == null)
                             _note('No conversion destination saved.'),
                           if (s != null) ...[
