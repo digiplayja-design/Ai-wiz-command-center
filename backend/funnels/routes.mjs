@@ -8,6 +8,7 @@ import { createFunnelScheduler } from './scheduler.mjs';
 import { createFunnelFollowups } from './followups.mjs';
 import { registerCampaigns } from './campaigns.mjs';
 import { registerCampaignBudget } from './campaign_budget.mjs';
+import { createCampaignAttribution, registerCampaignAttribution } from './campaign_attribution.mjs';
 import { registerMetaPreparation } from './meta_preparation.mjs';
 import { registerMetaCreative } from './meta_creative.mjs';
 import { registerMetaTargeting } from './meta_targeting.mjs';
@@ -62,6 +63,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   const secret=environment.KORLIX_FUNNEL_FORM_SECRET || randomBytes(32).toString('hex');
   const publicBase=(environment.KORLIX_FUNNEL_PUBLIC_BASE_URL || 'https://chee-chai-chee-backend.onrender.com').replace(/\/$/,'');
   const counts=new Map();
+  const attribution=createCampaignAttribution(database);
   const limit=(key,max) => {
     const minute=Math.floor(now()/60000); let r=counts.get(key);
     if(!r || r.minute!==minute) r={minute,n:0};
@@ -93,6 +95,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   registerGooglePausedCreate(app,{base,owner,database,googleAdsStore,googleAdsProvider,environment,publicBase,now});
   registerCampaigns(app,{base,owner,command,database,campaignStore,generateAdCopy,environment,publicBase});
   registerCampaignBudget(app,{base,owner,database});
+  registerCampaignAttribution(app,{base,owner,attribution,publicBase});
   registerMetaPreparation(app,{base,owner,database,metaPreparationStore,environment,publicBase});
   registerMetaCreative(app,{base,owner,database,environment,publicBase});
   registerMetaTargeting(app,{base,owner,database,environment,publicBase,metaStore,metaProvider,now});
@@ -132,7 +135,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
     r.json({html:renderPage(d,{preview:true,imageSources})});
   }));
   const sign=payload=>createHmac('sha256',secret).update(payload).digest('hex');
-  const makeToken=f=>{const p=Buffer.from(JSON.stringify({s:f.slug,v:f.published_version,n:randomUUID(),t:now()})).toString('base64url');return p+'.'+sign(p);};
+  const makeToken=(f,link=null)=>{const p=Buffer.from(JSON.stringify({s:f.slug,v:f.published_version,n:randomUUID(),t:now(),...(link?{a:link}:{})})).toString('base64url');return p+'.'+sign(p);};
   const verify=(value,f,cookie)=>{
     if(typeof value!=='string' || value.length>1000 || cookie!==value) fail('Reload this page before submitting.');
     const [p,s,extra]=value.split('.'); const mac=sign(p);
@@ -182,7 +185,8 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   registerImages(app,{base,owner:fn=>owner(fn,{ratePrefix:'images:',max:120}),publicRoute,database,imageStore:media,limit});
   app.get('/f/:slug',publicRoute(async(q,r)=>{
     const f=await command(null,'public',null,{slug:slug(q.params.slug),count:!q.query.received});
-    const token=makeToken(f), utm={};for(const k of ['utm_source','utm_medium','utm_campaign','utm_content','utm_term']) utm[k]=text(typeof q.query[k]==='string'?q.query[k]:'',120);
+    const link=await attribution.resolve(f,q.query.kl);
+    const token=makeToken(f,link), utm={};for(const k of ['utm_source','utm_medium','utm_campaign','utm_content','utm_term']) utm[k]=text(typeof q.query[k]==='string'?q.query[k]:'',120);
     r.set('Set-Cookie',`kf_${f.slug}=${token}; Path=/f/${f.slug}; HttpOnly; Secure; SameSite=Lax; Max-Age=1800`);
     const requestedReceipt=q.query.received==='1',nonce=requestedReceipt?receiptNonce(q,f.slug):null;
     const receipt=nonce?await command(null,'receipt',null,{slug:f.slug,request_id:nonce}):null;
@@ -222,7 +226,10 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
         if(typeof mac!=='string'||!/^[0-9a-f]{64}$/.test(mac)||!timingSafeEqual(Buffer.from(mac),Buffer.from(expected)))fail('Review your inquiry again before submitting.');
       }
     } catch(e){if(!(e instanceof FunnelError))throw e;return showStep(r,f,q.body,'request',e.message,400);}
-    try {await command(null,'lead',null,{...input,slug:f.slug,published_version:f.published_version,request_id:t.n});}
+    try {
+      const data={...input,slug:f.slug,published_version:f.published_version,request_id:t.n};
+      if(t.a)await attribution.capture(f,data,t.a);else await command(null,'lead',null,data);
+    }
     catch(e){
       if(!guided||!(e instanceof FunnelError)||![429,503].includes(e.status))throw e;
       return showStep(r,f,q.body,'review',`${e.message} Receipt was not confirmed. You can retry this reviewed inquiry; repeated submissions of this form are counted once.`,e.status);
