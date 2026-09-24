@@ -15,6 +15,7 @@ import 'funnel_google_targeting.dart';
 import 'funnel_google_preflight.dart';
 import 'funnel_campaign_budget.dart';
 import 'funnel_campaign_attribution.dart';
+import 'funnel_conversion_intake.dart';
 import 'funnel_meta_campaign_link.dart';
 import 'funnel_google_campaign_link.dart';
 import 'funnel_google_create.dart';
@@ -345,6 +346,21 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
       context: context,
       barrierDismissible: false,
       builder: (_) => FunnelCampaignAttribution(
+        client: client,
+        funnelId: funnel,
+        campaignId: c['id'],
+        scope: _scope,
+      ),
+    );
+  }
+
+  Future<void> _measurement(Map<String, dynamic> c) async {
+    if (_busy || _denied) return;
+    final client = widget.client, funnel = widget.funnelId;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => FunnelConversionIntake(
         client: client,
         funnelId: funnel,
         campaignId: c['id'],
@@ -851,6 +867,10 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
               OutlinedButton(
                 onPressed: _busy ? null : () => _attribution(c),
                 child: const Text('Inquiry attribution'),
+              ),
+              OutlinedButton(
+                onPressed: _busy ? null : () => _measurement(c),
+                child: const Text('Conversion intake'),
               ),
               if (c['platform'] == 'meta')
                 OutlinedButton(
