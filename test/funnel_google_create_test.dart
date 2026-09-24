@@ -21,6 +21,7 @@ Map<String, dynamic> fixture({String? state, bool enabled = true}) {
   final prep = preparation.fixture();
   final setup = prep['setup']['current_snapshot'];
   final draft = clone({
+    'search_language_mode': 'automatic_from_creative_v1',
     'plan': setup['campaign'],
     'page': setup['landing_page'],
     'identity': setup['google_ads'],
@@ -185,6 +186,44 @@ void main() {
         change(d);
         expect(
           () => validateGoogleCreation(d, fid, cid),
+          throwsA(isA<FunnelException>()),
+        );
+      }
+    },
+  );
+  test(
+    'K189 new language contract and legacy history are distinct and validated',
+    () {
+      final current = fixture(state: 'created');
+      expect(
+        googleCreationSummary(current),
+        contains('Language matching: automatic from ads and landing page.'),
+      );
+      expect(
+        googleCreationSummary(current),
+        contains('Content languages (planning):'),
+      );
+      final legacy = fixture(state: 'created');
+      legacy['attempt']['snapshot'].remove('search_language_mode');
+      expect(
+        validateGoogleCreation(legacy, fid, cid)['attempt']['state'],
+        'created',
+      );
+      expect(
+        googleCreationSummary(legacy),
+        contains('Language settings: historical manual criteria'),
+      );
+      final oldDraft = fixture();
+      oldDraft['draft'].remove('search_language_mode');
+      expect(
+        () => validateGoogleCreation(oldDraft, fid, cid),
+        throwsA(isA<FunnelException>()),
+      );
+      for (final mode in [null, 'automatic', 1, <String, dynamic>{}]) {
+        final bad = fixture(state: 'created');
+        bad['attempt']['snapshot']['search_language_mode'] = mode;
+        expect(
+          () => validateGoogleCreation(bad, fid, cid),
           throwsA(isA<FunnelException>()),
         );
       }

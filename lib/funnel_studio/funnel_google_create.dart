@@ -13,7 +13,7 @@ import 'funnel_google_radius.dart';
 import 'funnel_google_locations.dart';
 
 const googleCreationBoundary =
-    'Creates a Google Search campaign, one ad group and one responsive search ad, all paused. Uses your saved keywords and targeting. Google Search only; Search Partners and Display are off. This does not start ad delivery, authorize activation or verify conversions. Local edits and archiving do not change Google resources.';
+    'Creates a Google Search campaign, one ad group and one responsive search ad, all paused. Uses your saved keywords and geographic targets. Google matches languages from your ads and landing page; content languages are planning notes. Google Search only; Search Partners and Display are off. This does not start ad delivery, authorize activation or verify conversions. Local edits and archiving do not change Google resources.';
 const googleCreationBudget =
     'Google uses an average daily budget and may spend more on individual days after activation. Your planned total is not a hard spending cap. This step does not activate the campaign.';
 const _bad = FunnelException(
@@ -57,6 +57,8 @@ bool _resource(dynamic v, String account, String type) {
 
 void _snapshot(dynamic s, String campaign, String attempt, Map catalog) {
   if (s is! Map ||
+      (s.containsKey('search_language_mode') &&
+          s['search_language_mode'] != 'automatic_from_creative_v1') ||
       s['plan'] is! Map ||
       s['page'] is! Map ||
       s['identity'] is! Map ||
@@ -158,6 +160,7 @@ Map<String, dynamic> validateGoogleCreation(
   final prep = validateGooglePreflight(d['preparation'], funnel, campaign),
       setup = prep['setup']['current_snapshot'];
   final expected = {
+    'search_language_mode': 'automatic_from_creative_v1',
     'plan': setup['campaign'],
     'page': setup['landing_page'],
     'identity': setup['google_ads'],
@@ -257,7 +260,12 @@ String googleCreationSummary(Map<String, dynamic> d) {
     );
   }
   out.writeln(
-    'Target countries: ${(t['countries'] as List).join(', ')}\nExcluded countries: ${(t['excluded_countries'] as List).join(', ')}\nContent languages: ${(t['content_languages'] as List).join(', ')}\nLocation reach: ${googleLocationModes[t['location_mode']]}\nCountry exclusions: presence\nBidding: ${googleBiddingPlans[t['bidding']]}',
+    'Target countries: ${(t['countries'] as List).join(', ')}\nExcluded countries: ${(t['excluded_countries'] as List).join(', ')}\nContent languages (planning): ${(t['content_languages'] as List).join(', ')}\nLocation reach: ${googleLocationModes[t['location_mode']]}\nCountry exclusions: presence\nBidding: ${googleBiddingPlans[t['bidding']]}',
+  );
+  out.writeln(
+    s['search_language_mode'] == 'automatic_from_creative_v1'
+        ? 'Language matching: automatic from ads and landing page. No manual language criteria are sent.'
+        : 'Language settings: historical manual criteria preserved in this creation record; Google now matches Search languages from content.',
   );
   if (t.containsKey('geo_locations')) out.writeln(googleLocationsSummary(t));
   if (t.containsKey('proximities')) out.writeln(googleRadiusSummary(t));

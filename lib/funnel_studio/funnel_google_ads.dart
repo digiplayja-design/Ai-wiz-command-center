@@ -409,7 +409,7 @@ class _FunnelGoogleAdsConnectionState extends State<FunnelGoogleAdsConnection> {
           if (!_denied && _state != null && !ready) ...[
             _gap(),
             _caption(
-              'Google Ads connections need platform setup. Your campaign plans and manual results remain available.',
+              'Google Ads connections need platform setup and Google Cloud project approval. Your campaign plans and manual results remain available.',
             ),
           ],
           if (_denied) ...[
