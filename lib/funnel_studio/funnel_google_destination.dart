@@ -165,7 +165,7 @@ Map<String, dynamic> validateGoogleDestinationState(
       d['selection_current'] is! bool ||
       d['lookup_ready'] && !_ready(d['context']) ||
       d['event_name'] != 'inquiry_submitted' ||
-      d['delivery_state'] != 'not_implemented' ||
+      !['not_implemented', 'separate_workflow'].contains(d['delivery_state']) ||
       d['send_ready'] != false ||
       d['provider_verified'] != false) {
     throw _bad;

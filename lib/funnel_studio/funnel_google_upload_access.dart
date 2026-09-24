@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'funnel_client.dart';
+import 'funnel_google_delivery.dart';
 
 const googleUploadBoundary =
     'Authorize Google Ads and Data Manager access for future inquiry uploads. Ads access is used here to check your selected account and conversion action. No inquiries are uploaded and no ad settings are changed in this step.';
@@ -85,7 +86,7 @@ Map<String, dynamic> validateGoogleUploadAccess(
       d['fingerprint'] is! String ||
       !RegExp(r'^[a-f0-9]{64}$').hasMatch(d['fingerprint']) ||
       d['scope_set'] != 'ads_datamanager_v1' ||
-      d['delivery_state'] != 'not_implemented' ||
+      !['not_implemented', 'separate_workflow'].contains(d['delivery_state']) ||
       d['send_ready'] != false ||
       d['provider_verified'] != false) {
     throw _bad;
@@ -509,6 +510,21 @@ class _FunnelGoogleUploadAccessState extends State<FunnelGoogleUploadAccess> {
                         if (_notice != null) _note(_notice!),
                         if (d != null) ...[
                           _note(d['campaign_name']),
+                          OutlinedButton.icon(
+                            onPressed: _busy
+                                ? null
+                                : () => showDialog(
+                                    context: context,
+                                    builder: (_) => FunnelGoogleDelivery(
+                                      client: widget.client,
+                                      funnelId: widget.funnelId,
+                                      campaignId: widget.campaignId,
+                                      scope: widget.scope,
+                                    ),
+                                  ),
+                            icon: const Icon(Icons.send_outlined),
+                            label: const Text('Google conversion delivery'),
+                          ),
                           Text(
                             a == null
                                 ? 'Upload permission is not connected'

@@ -5,9 +5,10 @@ import 'package:flutter/scheduler.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
 import 'funnel_google_destination.dart';
+import 'funnel_google_delivery.dart';
 
 const conversionIntakeBoundary =
-    'These are local inquiry consent receipts. Awaiting setup means a visitor allowed measurement and supplied a supported click identifier in the campaign URL. The identifier is unverified. Nothing has been sent to Google or Meta; these are not accepted or attributed provider conversions.';
+    'These are local inquiry consent receipts. Consented click means a visitor allowed measurement and supplied a supported click identifier in the campaign URL. The identifier is unverified. This intake view does not report uploads or provider acceptance. Open Google conversion delivery to review its upload attempts and processing status. Meta delivery remains off.';
 const _bad = FunnelException(
   'Conversion intake could not be verified. Refresh it.',
   503,
@@ -43,7 +44,10 @@ Map<String, dynamic> validateConversionIntake(
               ).hasMatch(d['revision'])) ||
       d['event_name'] != 'inquiry_submitted' ||
       d['policy_version'] != 'measurement_v1' ||
-      d['provider_delivery'] != 'not_implemented' ||
+      ![
+        'not_implemented',
+        'separate_workflow',
+      ].contains(d['provider_delivery']) ||
       d['provider_verified'] != false ||
       ![7, 30, 90].contains(days) ||
       d['days'] != days ||
@@ -339,6 +343,18 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
                                 'Google conversion destination',
                               ),
                             ),
+                            OutlinedButton(
+                              onPressed: () => showDialog<void>(
+                                context: context,
+                                builder: (_) => FunnelGoogleDelivery(
+                                  client: widget.client,
+                                  funnelId: widget.funnelId,
+                                  campaignId: widget.campaignId,
+                                  scope: widget.scope,
+                                ),
+                              ),
+                              child: const Text('Google conversion delivery'),
+                            ),
                             const SizedBox(height: 12),
                           ],
                           Text(
@@ -452,7 +468,7 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
                                   numeric: true,
                                 ),
                                 DataColumn(
-                                  label: Text('Awaiting setup'),
+                                  label: Text('Consented click'),
                                   numeric: true,
                                 ),
                               ],
