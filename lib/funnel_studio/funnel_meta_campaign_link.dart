@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
+import 'funnel_meta_destination.dart';
 import 'funnel_meta_format.dart';
 
 const metaCampaignLinkBoundary =
@@ -764,6 +765,20 @@ class _FunnelMetaCampaignLinkState extends State<FunnelMetaCampaignLink> {
                     ),
                     _gap(),
                     _saved(d),
+                    OutlinedButton(
+                      onPressed: _busy
+                          ? null
+                          : () => showDialog<void>(
+                              context: context,
+                              builder: (_) => FunnelMetaDestination(
+                                client: widget.client,
+                                funnelId: widget.funnelId,
+                                campaignId: widget.campaignId,
+                                scope: widget.scope,
+                              ),
+                            ),
+                      child: const Text('Meta conversion destination'),
+                    ),
                     _gap(),
                     if (d['configured'] != true)
                       _caption(

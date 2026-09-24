@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
 import 'funnel_google_destination.dart';
+import 'funnel_meta_destination.dart';
 import 'funnel_google_delivery.dart';
 
 const conversionIntakeBoundary =
@@ -328,6 +329,21 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
                             child: Text(_notice!),
                           ),
                         if (d != null) ...[
+                          if (d['platform'] == 'meta') ...[
+                            OutlinedButton(
+                              onPressed: () => showDialog<void>(
+                                context: context,
+                                builder: (_) => FunnelMetaDestination(
+                                  client: widget.client,
+                                  funnelId: widget.funnelId,
+                                  campaignId: widget.campaignId,
+                                  scope: widget.scope,
+                                ),
+                              ),
+                              child: const Text('Meta conversion destination'),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
                           if (d['platform'] == 'google') ...[
                             OutlinedButton(
                               onPressed: () => showDialog<void>(
