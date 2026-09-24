@@ -21,6 +21,7 @@ import { registerGoogleKeywords } from './google_keywords.mjs';
 import { registerMeta } from './meta.mjs';
 import { registerMetaPausedCreate } from './meta_paused_create.mjs';
 import { registerMetaControls } from './meta_controls.mjs';
+import { registerMetaConversionDestination } from './meta_conversion_destination.mjs';
 import { registerMetaCampaignLink } from './meta_campaign_link.mjs';
 import { registerGoogleConversionDelivery } from './google_conversion_delivery.mjs';
 import { registerGoogleUploadAccess } from './google_upload_access.mjs';
@@ -93,6 +94,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   registerMeta(app,{base,owner,database,metaStore,metaProvider,environment,now});
   registerMetaPausedCreate(app,{base,owner,database,metaStore,metaProvider,environment,publicBase,imageStore:media,now});
   registerMetaControls(app,{base,owner,database,metaStore,metaProvider,environment,publicBase,now});
+  registerMetaConversionDestination(app,{base,owner,database,metaStore,metaProvider,environment,now});
   registerMetaCampaignLink(app,{base,owner,database,metaStore,metaProvider,environment,now});
   registerGoogleAds(app,{base,owner,limit,database,googleAdsStore,googleAdsProvider,environment,now});
   registerGoogleConversionDelivery(app,{base,owner,database,googleAdsProvider,googleUploadProvider,googleDeliveryProvider,environment,now});

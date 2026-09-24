@@ -1,4 +1,5 @@
 import express from 'express';
+import {readMetaDestinations,MetaConversionAccessError} from './meta_conversion_provider.mjs';
 import {createMetaPausedProvider} from './meta_paused_provider.mjs';
 import {readMetaLocations} from './meta_locations.mjs';
 import {MetaPageAccessError,metaPageInput,readMetaPages,boundedMetaPageJson} from './meta_pages.mjs';
@@ -40,7 +41,7 @@ export function createMetaProvider(config,{fetchImpl=fetch,now=Date.now}={}) {
     if(token)url.searchParams.set('appsecret_proof',createHmac('sha256',config.secret).update(token).digest('hex'));
     let response,body;
     try{response=await fetchImpl(url,{headers:token?{Authorization:`Bearer ${token}`}:{},redirect:'error',signal:AbortSignal.timeout(10000)});body=pageRead?await boundedMetaPageJson(response):await response.json();}catch{fail('Meta could not be reached. Please try again.',503);}
-    if(!response.ok||body.error){if(pageRead===true&&[10,200,283].includes(body.error?.code))throw new MetaPageAccessError();if(body.error?.code===190||body.error?.code===10||body.error?.code===200)throw new MetaAccessError();fail('Meta could not complete this request. Check your account access and try again.',503);}
+    if(!response.ok||body.error){if(pageRead==='conversion'&&[10,200,283].includes(body.error?.code))throw new MetaConversionAccessError();if(pageRead===true&&[10,200,283].includes(body.error?.code))throw new MetaPageAccessError();if(body.error?.code===190||body.error?.code===10||body.error?.code===200)throw new MetaAccessError();fail('Meta could not complete this request. Check your account access and try again.',503);}
     return body;
   }
   const account=a=>{
@@ -78,6 +79,7 @@ export function createMetaProvider(config,{fetchImpl=fetch,now=Date.now}={}) {
       fail('More than 500 ad accounts were returned. Limit the assets shared with KORLIX and reconnect.',409);
     },
     async pages(token){return readMetaPages(graph,token);},
+    async conversionDestinations(token,accountId){return readMetaDestinations(graph,token,accountId);},
     async locations(token,input){return readMetaLocations(graph,token,input);},
     async account(token,id){return account(await graph(id,{fields},token));},
     async insights(token,account,range){return readMetaInsights(graph,token,account,range);},
