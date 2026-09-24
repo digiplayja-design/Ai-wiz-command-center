@@ -47,6 +47,13 @@ Map<String, dynamic> fixture({
       'schedule_open': true,
     },
     'activation_ready': ready,
+    'budget_enabled': enabled,
+    'managed_budget': {
+      'daily_cents': c['attempt']['snapshot']['plan']['daily_cents'],
+      'original_daily_cents': c['attempt']['snapshot']['plan']['daily_cents'],
+      'command_id': null,
+      'confirmed_at': null,
+    },
     'latest_command': unknown
         ? {
             'id': creation.aid,
@@ -118,7 +125,7 @@ Future<void> confirm(WidgetTester t) async {
   );
   await creation.tap(
     t,
-    'I authorize ad spending using the saved average daily budget and schedule. The planned total is not a hard cap.',
+    'I authorize ad spending using the latest confirmed average daily budget and saved schedule. The planned total is not a hard cap.',
   );
 }
 
@@ -389,6 +396,7 @@ void main() {
       for (final state in [null, 'unknown']) {
         final d = fixture();
         d['creation'] = creation.fixture(state: state);
+        d['managed_budget'] = null;
         if (state == 'unknown') d['creation']['attempt']['resources'] = {};
         d['checks']['creation_recorded'] = false;
         d['checks']['saved_content_current'] = state != null;

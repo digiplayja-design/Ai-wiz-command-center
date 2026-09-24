@@ -9,7 +9,26 @@ import 'funnel_meta_create.dart';
 const metaControlsBoundary =
     'Activation enables paused ads and ad sets first, then the saved Meta campaign. These are separate changes; an incomplete result blocks further KORLIX commands. Delivery may incur charges. Pause changes the campaign only. Local edits and archiving do not change Meta delivery. Status is a point-in-time observation; Meta review and eligibility still apply.';
 const metaControlsBudget =
-    'Meta uses an average daily budget and may spend more on individual days. The planned total is not a hard spending cap. Budget and schedule changes are not available here.';
+    'Meta uses an average daily budget and may spend more on individual days. The planned total is not a hard spending cap. Budget changes need a separate review below. Schedule changes are not available here.';
+const metaBudgetImpact =
+    'Changing the average daily budget can change spending on an active campaign. Lowering it does not undo earlier charges or guarantee a lower bill today. Meta may spend more on individual days. This is not a hard total cap and does not pause or activate the campaign.';
+bool _cents(dynamic v) => v is int && v >= 100 && v <= 1000000;
+String _money(dynamic cents) => '\$${(cents / 100).toStringAsFixed(2)} USD';
+int? parseMetaBudget(String value) {
+  if (!RegExp(r'^(0|[1-9][0-9]{0,4})(\.[0-9]{1,2})?$').hasMatch(value.trim())) {
+    return null;
+  }
+  final parts = value.trim().split('.');
+  final cents =
+      int.parse(parts[0]) * 100 +
+      int.parse(parts.length == 1 ? '0' : parts[1].padRight(2, '0'));
+  return _cents(cents) ? cents : null;
+}
+
+bool _proof(dynamic v) =>
+    v is String &&
+    v.length <= 3000 &&
+    RegExp(r'^[-_A-Za-z0-9]+\.[-_A-Za-z0-9]{43}$').hasMatch(v);
 const _bad = FunnelException(
   'Campaign controls could not be verified. Refresh the record.',
   503,
@@ -97,6 +116,61 @@ void _observation(dynamic o, Map creation) {
   }
 }
 
+void _budgetObservation(dynamic o, Map creation) {
+  final resources = creation['attempt']?['resources'];
+  if (o is! Map ||
+      creation['attempt']?['state'] != 'created' ||
+      o['kind'] != 'budget' ||
+      !_cents(o['daily_cents']) ||
+      o['status'] is! Map ||
+      !_text(o['status']['name']) ||
+      o['status']['resource'] != resources['campaign'] ||
+      !['ACTIVE', 'PAUSED'].contains(o['status']['status']) ||
+      !_effective(o['status']['effective_status']) ||
+      o['budget'] is! Map ||
+      o['budget']['resource'] != resources['ad_set'] ||
+      !_cents(o['budget']['daily_cents']) ||
+      o['daily_cents'] == o['budget']['daily_cents'] ||
+      !['ACTIVE', 'PAUSED'].contains(o['budget']['status']) ||
+      !_effective(o['budget']['effective_status']) ||
+      o['increase'] != (o['daily_cents'] > o['budget']['daily_cents'])) {
+    throw _bad;
+  }
+  final g = o['graph'];
+  if (o['increase']) {
+    const effective = {
+      'campaign': ['ACTIVE', 'PAUSED'],
+      'ad_set': ['ACTIVE', 'PAUSED', 'CAMPAIGN_PAUSED', 'IN_PROCESS'],
+      'ad': [
+        'ACTIVE',
+        'PAUSED',
+        'CAMPAIGN_PAUSED',
+        'ADSET_PAUSED',
+        'PENDING_REVIEW',
+        'IN_PROCESS',
+        'PREAPPROVED',
+      ],
+    };
+    if (g is! Map ||
+        !_same(g['resources'], resources) ||
+        !_keys(g['statuses'], ['campaign', 'ad_set', 'ad']) ||
+        !_keys(g['effective_statuses'], ['campaign', 'ad_set', 'ad']) ||
+        g['statuses']['campaign'] != o['status']['status'] ||
+        g['statuses']['ad_set'] != o['budget']['status'] ||
+        g['effective_statuses']['campaign'] !=
+            o['status']['effective_status'] ||
+        g['effective_statuses']['ad_set'] != o['budget']['effective_status'] ||
+        g['statuses'].values.any((v) => !['ACTIVE', 'PAUSED'].contains(v)) ||
+        effective.keys.any(
+          (k) => !effective[k]!.contains(g['effective_statuses'][k]),
+        )) {
+      throw _bad;
+    }
+  } else if (g != null) {
+    throw _bad;
+  }
+}
+
 Map<String, dynamic> validateMetaControls(
   Map<String, dynamic> d,
   String funnel,
@@ -109,6 +183,9 @@ Map<String, dynamic> validateMetaControls(
       d['creation'] is! Map<String, dynamic> ||
       d['checks'] is! Map ||
       d['activation_ready'] is! bool ||
+      d['budget_enabled'] is! bool ||
+      (d['budget_enabled'] == true &&
+          d['checks']['platform_enabled'] != true) ||
       (d['notice'] != null && !_text(d['notice']))) {
     throw _bad;
   }
@@ -163,7 +240,7 @@ Map<String, dynamic> validateMetaControls(
   if (cmd != null) {
     if (cmd is! Map ||
         !_uuid(cmd['id']) ||
-        !['activate', 'pause'].contains(cmd['action']) ||
+        !['activate', 'pause', 'budget'].contains(cmd['action']) ||
         !['unknown', 'confirmed'].contains(cmd['state']) ||
         cmd['sequence'] is! int ||
         cmd['sequence'] < 1 ||
@@ -174,34 +251,95 @@ Map<String, dynamic> validateMetaControls(
             : cmd['confirmed_at'] != null)) {
       throw _bad;
     }
-    _observation(cmd['observed'], creation);
     final observed = cmd['observed'];
-    if (observed[cmd['action'] == 'activate' ? 'can_activate' : 'can_pause'] !=
-        true) {
-      throw _bad;
-    }
-    final steps = cmd['action'] == 'pause'
-        ? ['campaign']
-        : [
-            'ad',
-            'ad_set',
-            'campaign',
-          ].where((k) => observed['graph']['statuses'][k] == 'PAUSED').toList();
-    final progress = cmd['progress'];
-    if (!_same(cmd['steps'], steps) ||
-        progress is! Map ||
-        progress.length > steps.length ||
-        progress.keys.any((k) => !steps.take(progress.length).contains(k)) ||
-        progress.values.any(
-          (v) => v != (cmd['action'] == 'activate' ? 'ACTIVE' : 'PAUSED'),
-        ) ||
-        (cmd['state'] == 'confirmed' && progress.length != steps.length)) {
-      throw _bad;
+    if (cmd['action'] == 'budget') {
+      _budgetObservation(observed, creation);
+      if (!_cents(cmd['daily_cents']) ||
+          cmd['daily_cents'] != observed['daily_cents'] ||
+          !_same(cmd['steps'], ['budget']) ||
+          !(_same(cmd['progress'], {}) ||
+              _same(cmd['progress'], {'budget': cmd['daily_cents']})) ||
+          (cmd['state'] == 'confirmed' &&
+              !_same(cmd['progress'], {'budget': cmd['daily_cents']}))) {
+        throw _bad;
+      }
+    } else {
+      if (cmd['daily_cents'] != null) throw _bad;
+      _observation(observed, creation);
+      if (observed[cmd['action'] == 'activate'
+              ? 'can_activate'
+              : 'can_pause'] !=
+          true) {
+        throw _bad;
+      }
+      final steps = cmd['action'] == 'pause'
+          ? ['campaign']
+          : ['ad', 'ad_set', 'campaign']
+                .where((k) => observed['graph']['statuses'][k] == 'PAUSED')
+                .toList();
+      final progress = cmd['progress'];
+      if (!_same(cmd['steps'], steps) ||
+          progress is! Map ||
+          progress.length > steps.length ||
+          progress.keys.any((k) => !steps.take(progress.length).contains(k)) ||
+          progress.values.any(
+            (v) => v != (cmd['action'] == 'activate' ? 'ACTIVE' : 'PAUSED'),
+          ) ||
+          (cmd['state'] == 'confirmed' && progress.length != steps.length)) {
+        throw _bad;
+      }
     }
   }
   if (checks['no_uncertain_command'] != (cmd?['state'] != 'unknown') ||
       checks['command_capacity'] != ((cmd?['sequence'] ?? 0) < 1000)) {
     throw _bad;
+  }
+  final managed = d['managed_budget'];
+  if (checks['creation_recorded']) {
+    if (!_keys(managed, [
+          'daily_cents',
+          'original_daily_cents',
+          'command_id',
+          'confirmed_at',
+        ]) ||
+        !_cents(managed['daily_cents']) ||
+        managed['original_daily_cents'] != snapshot['plan']['daily_cents'] ||
+        (managed['command_id'] == null
+            ? managed['confirmed_at'] != null ||
+                  managed['daily_cents'] != managed['original_daily_cents']
+            : !_uuid(managed['command_id']) ||
+                  !_stamp(managed['confirmed_at']))) {
+      throw _bad;
+    }
+    if (cmd?['action'] == 'budget') {
+      if (cmd['state'] == 'confirmed') {
+        if (managed['command_id'] != cmd['id'] ||
+            managed['daily_cents'] != cmd['daily_cents'] ||
+            managed['confirmed_at'] != cmd['confirmed_at']) {
+          throw _bad;
+        }
+      } else if (managed['command_id'] == cmd['id'] ||
+          managed['daily_cents'] != cmd['observed']['budget']['daily_cents']) {
+        throw _bad;
+      }
+    }
+  } else if (managed != null) {
+    throw _bad;
+  }
+  final proposal = d['budget_preview'];
+  if (proposal != null) {
+    _budgetObservation(proposal, creation);
+    if (d['observation'] != null ||
+        d['budget_enabled'] != true ||
+        checks['creation_recorded'] != true ||
+        checks['no_uncertain_command'] != true ||
+        checks['command_capacity'] != true ||
+        proposal['budget']['daily_cents'] != managed['daily_cents'] ||
+        (proposal['increase'] && d['activation_ready'] != true) ||
+        !_stamp(proposal['checked_at']) ||
+        !_proof(proposal['proof'])) {
+      throw _bad;
+    }
   }
   final o = d['observation'];
   if (o != null) {
@@ -223,7 +361,9 @@ Map<String, dynamic> validateMetaControls(
     if (o['can_activate'] || o['can_pause']) {
       if (o['proof'] is! String ||
           o['proof'].length > 3000 ||
-          !RegExp(r'^[-_A-Za-z0-9]+\.[-_A-Za-z0-9]{43}$').hasMatch(o['proof'])) {
+          !RegExp(
+            r'^[-_A-Za-z0-9]+\.[-_A-Za-z0-9]{43}$',
+          ).hasMatch(o['proof'])) {
         throw _bad;
       }
     } else if (o['proof'] != null) {
@@ -249,6 +389,7 @@ class FunnelMetaControls extends StatefulWidget {
 }
 
 class _FunnelMetaControlsState extends State<FunnelMetaControls> {
+  final _budget = TextEditingController();
   Map<String, dynamic>? _data;
   bool _busy = false, _confirm = false, _spend = false;
   int _generation = 0;
@@ -268,6 +409,7 @@ class _FunnelMetaControlsState extends State<FunnelMetaControls> {
     if (!mounted) return;
     final g = ++_generation;
     _data = null;
+    _budget.clear();
     _busy = false;
     _error = null;
     _unavailable = message;
@@ -305,6 +447,7 @@ class _FunnelMetaControlsState extends State<FunnelMetaControls> {
         old.funnelId != widget.funnelId ||
         old.campaignId != widget.campaignId) {
       _generation++;
+      _budget.clear();
       _unavailable = null;
       _data = null;
       unawaited(_request());
@@ -316,6 +459,7 @@ class _FunnelMetaControlsState extends State<FunnelMetaControls> {
     _generation++;
     widget.client.removeAccessDeniedListener(_deny);
     widget.scope?.removeListener(_scopeChanged);
+    _budget.dispose();
     super.dispose();
   }
 
@@ -380,6 +524,32 @@ class _FunnelMetaControlsState extends State<FunnelMetaControls> {
     );
   }
 
+  Future<void> _reviewBudget() async {
+    final cents = parseMetaBudget(_budget.text);
+    if (_busy || cents == null) return;
+    await _request(action: 'budget-preview', body: {'daily_cents': cents});
+  }
+
+  Future<void> _applyBudget() async {
+    final p = _data?['budget_preview'];
+    if (_busy ||
+        p == null ||
+        !_confirm ||
+        !_spend ||
+        parseMetaBudget(_budget.text) != p['daily_cents']) {
+      return;
+    }
+    await _request(
+      action: 'budget-apply',
+      body: {
+        'proof': p['proof'],
+        'daily_cents': p['daily_cents'],
+        'confirmed': true,
+        'spend_acknowledged': true,
+      },
+    );
+  }
+
   Widget _line(String s, {Color? color}) => Padding(
     padding: const EdgeInsets.only(top: 12),
     child: Text(s, style: TextStyle(color: color, height: 1.4)),
@@ -389,6 +559,8 @@ class _FunnelMetaControlsState extends State<FunnelMetaControls> {
     final d = _data,
         o = d?['observation'],
         cmd = d?['latest_command'],
+        proposal = d?['budget_preview'],
+        managed = d?['managed_budget'],
         created = d?['creation']['attempt'],
         s = created?['state'] == 'created' ? created['snapshot'] : null;
     return Dialog(
@@ -442,7 +614,7 @@ class _FunnelMetaControlsState extends State<FunnelMetaControls> {
                   if (created?['resources'] != null)
                     _line('Campaign ID: ${created['resources']['campaign']}'),
                   _line(
-                    'Saved average daily budget: \$${(s['plan']['daily_cents'] / 100).toStringAsFixed(2)} USD',
+                    'Original average daily budget: \$${(s['plan']['daily_cents'] / 100).toStringAsFixed(2)} USD',
                   ),
                   _line(
                     'Saved schedule: ${s['start_date']} 00:00:00 through ${s['end_date']} 23:59:59 (${s['identity']['account']['timezone']}).',
@@ -461,11 +633,27 @@ class _FunnelMetaControlsState extends State<FunnelMetaControls> {
                     ],
                   ),
                 ],
+                if (managed != null) ...[
+                  _line(
+                    'Latest confirmed average daily budget: ${_money(managed['daily_cents'])}',
+                  ),
+                  _line(
+                    'This is the saved receipt value. Review Meta to verify its current value. The original plan and creation history remain unchanged.',
+                  ),
+                ],
                 if (cmd != null) ...[
                   _line(
-                    'Last command: ${cmd['action'] == 'activate' ? 'ACTIVATE' : 'PAUSE'} · ${cmd['state'] == 'confirmed' ? 'META ACCEPTED' : 'OUTCOME UNCERTAIN'}',
+                    'Last command: ${cmd['action'] == 'activate'
+                        ? 'ACTIVATE'
+                        : cmd['action'] == 'budget'
+                        ? 'BUDGET CHANGE'
+                        : 'PAUSE'} · ${cmd['state'] == 'confirmed' ? 'META ACCEPTED' : 'OUTCOME UNCERTAIN'}',
                   ),
                   _line('Requested: ${cmd['created_at']}'),
+                  if (cmd['action'] == 'budget')
+                    _line(
+                      'Requested average daily budget: ${_money(cmd['daily_cents'])}',
+                    ),
                   if (cmd['confirmed_at'] != null)
                     _line('Accepted: ${cmd['confirmed_at']}'),
                   for (final stage in cmd['steps'])
@@ -474,7 +662,13 @@ class _FunnelMetaControlsState extends State<FunnelMetaControls> {
                           ? 'Ad set'
                           : stage == 'ad'
                           ? 'Ad'
-                          : 'Campaign'}: ${cmd['progress'][stage] ?? 'not confirmed'}',
+                          : stage == 'budget'
+                          ? 'Ad set budget'
+                          : 'Campaign'}: ${cmd['progress'][stage] == null
+                          ? 'not confirmed'
+                          : stage == 'budget'
+                          ? _money(cmd['progress'][stage])
+                          : cmd['progress'][stage]}',
                     ),
                   if (cmd['state'] == 'unknown')
                     _line(
@@ -520,7 +714,7 @@ class _FunnelMetaControlsState extends State<FunnelMetaControls> {
                             ? null
                             : (v) => setState(() => _spend = v == true),
                         title: const Text(
-                          'I authorize ad spending using the saved average daily budget and schedule. The planned total is not a hard cap.',
+                          'I authorize ad spending using the latest confirmed average daily budget and saved schedule. The planned total is not a hard cap.',
                         ),
                       ),
                     _line(
@@ -541,6 +735,90 @@ class _FunnelMetaControlsState extends State<FunnelMetaControls> {
                             : 'Pause Meta campaign',
                       ),
                     ),
+                  ],
+                ],
+                if (created?['state'] == 'created') ...[
+                  const Divider(height: 32),
+                  const Text(
+                    'Change Meta budget',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                  ),
+                  _line(metaBudgetImpact, color: WfStyle.muted),
+                  if (d['budget_enabled'] != true)
+                    _line(
+                      'Budget changes will be available after KORLIX Meta budget activation.',
+                    )
+                  else if (d['checks']['no_uncertain_command'] == true &&
+                      d['checks']['command_capacity'] == true) ...[
+                    _line(
+                      'Enter \$1.00–\$10,000.00 USD. Increases require current preparation, matching saved content and an open schedule. A reduction still requires a fresh matching Meta budget.',
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _budget,
+                      enabled: !_busy,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'New average daily budget (USD)',
+                        hintText: '25.00',
+                      ),
+                      onChanged: (_) => setState(() {
+                        _data?.remove('budget_preview');
+                        _data?.remove('observation');
+                        _confirm = false;
+                        _spend = false;
+                      }),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed:
+                          _busy ||
+                              parseMetaBudget(_budget.text) == null ||
+                              parseMetaBudget(_budget.text) ==
+                                  managed?['daily_cents']
+                          ? null
+                          : _reviewBudget,
+                      child: const Text('Review budget change'),
+                    ),
+                    if (proposal != null) ...[
+                      _line(
+                        'Meta budget observed: ${_money(proposal['budget']['daily_cents'])} → ${_money(proposal['daily_cents'])}',
+                      ),
+                      _line(
+                        'Campaign status: ${proposal['status']['status']} · Observed at: ${proposal['checked_at']}',
+                      ),
+                      _line(
+                        'This review expires after five minutes. Avoid editing the campaign in another tool while confirming.',
+                      ),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _confirm,
+                        onChanged: _busy
+                            ? null
+                            : (v) => setState(() => _confirm = v == true),
+                        title: Text(
+                          'I confirm changing the average daily budget to ${_money(proposal['daily_cents'])}.',
+                        ),
+                      ),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _spend,
+                        onChanged: _busy
+                            ? null
+                            : (v) => setState(() => _spend = v == true),
+                        title: const Text(
+                          'I authorize this budget and acknowledge the spending impact, including earlier charges and variable daily spending.',
+                        ),
+                      ),
+                      FilledButton(
+                        onPressed: _busy || !_confirm || !_spend
+                            ? null
+                            : _applyBudget,
+                        child: const Text('Apply Meta budget change'),
+                      ),
+                    ],
                   ],
                 ],
                 const SizedBox(height: 16),
