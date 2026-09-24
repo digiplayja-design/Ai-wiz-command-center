@@ -4,15 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import '../workforce/workforce_style.dart';
 import 'funnel_client.dart';
-import 'funnel_meta_website_consent.dart';
-import 'funnel_google_destination.dart';
-import 'funnel_meta_destination.dart';
-import 'funnel_google_delivery.dart';
 
-const conversionIntakeBoundary =
-    'These are local inquiry consent receipts. Consented click means a visitor allowed measurement and supplied a supported click identifier in the campaign URL. The identifier is unverified. This intake view does not report uploads or provider acceptance. Open Google conversion delivery to review its upload attempts and processing status. Meta delivery remains off.';
+const metaWebsiteConsentBoundary =
+    'Prepare future Meta website measurement with a separate visitor choice for the click identifier, inquiry time, browser information and page address. Prepared means local evidence only; delivery remains off. Older click-only receipts stay separate.';
 const _bad = FunnelException(
-  'Conversion intake could not be verified. Refresh it.',
+  'Meta website consent could not be verified. Refresh it.',
   503,
 );
 bool _date(dynamic v) =>
@@ -21,35 +17,68 @@ bool _date(dynamic v) =>
     DateTime.tryParse('${v}T00:00:00Z')?.toIso8601String().substring(0, 10) ==
         v;
 bool _count(dynamic v) => v is int && v >= 0 && v <= 1000000000;
-Map<String, dynamic> validateConversionIntake(
+Map<String, dynamic> validateMetaWebsiteConsent(
   Map<String, dynamic> d,
   String funnel,
   String campaign,
   int days,
 ) {
-  if (d['source'] != 'conversion_intake' ||
+  const fields = [
+    'source',
+    'funnel_id',
+    'campaign_id',
+    'name',
+    'configured',
+    'context_current',
+    'armed_at',
+    'enabled',
+    'collecting',
+    'can_enable',
+    'revision',
+    'event_name',
+    'action_source',
+    'send_ready',
+    'provider_verified',
+    'policy_version',
+    'days',
+    'from_day',
+    'through_day',
+    'timezone',
+    'includes_today',
+    'checked_at',
+    'rows',
+    'totals',
+  ];
+  if (d.length != fields.length ||
+      !fields.every(d.containsKey) ||
+      d['source'] != 'meta_website_consent' ||
       d['funnel_id'] != funnel ||
       d['campaign_id'] != campaign ||
       d['name'] is! String ||
       (d['name'] as String).isEmpty ||
       (d['name'] as String).runes.length > 100 ||
-      !['google', 'meta', 'other'].contains(d['platform']) ||
+      d['configured'] is! bool ||
+      d['context_current'] is! bool ||
+      d['can_enable'] == true && d['configured'] != true ||
       d['enabled'] is! bool ||
       d['collecting'] is! bool ||
       d['can_enable'] is! bool ||
-      d['collecting'] != (d['enabled'] && d['can_enable']) ||
-      d['enabled'] && d['revision'] == null ||
+      d['collecting'] !=
+          (d['enabled'] && d['can_enable'] && d['context_current']) ||
+      (d['enabled'] || d['context_current']) && d['revision'] == null ||
+      !d['enabled'] && d['armed_at'] != null ||
       d['revision'] != null &&
           (d['revision'] is! String ||
               !RegExp(
                 r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
               ).hasMatch(d['revision'])) ||
-      d['event_name'] != 'inquiry_submitted' ||
-      d['policy_version'] != 'measurement_v1' ||
-      ![
-        'not_implemented',
-        'separate_workflow',
-      ].contains(d['provider_delivery']) ||
+      d['event_name'] != 'Lead' ||
+      d['action_source'] != 'website' ||
+      d['send_ready'] != false ||
+      d['enabled'] &&
+          (d['armed_at'] is! String ||
+              DateTime.tryParse(d['armed_at']) == null) ||
+      d['policy_version'] != 'meta_measurement_v2' ||
       d['provider_verified'] != false ||
       ![7, 30, 90].contains(days) ||
       d['days'] != days ||
@@ -76,32 +105,38 @@ Map<String, dynamic> validateConversionIntake(
     'receipts': 0,
     'declined': 0,
     'missing_click': 0,
-    'awaiting_setup': 0,
+    'missing_browser': 0,
+    'prepared': 0,
   };
   for (var i = 0; i < days; i++) {
     final r = d['rows'][i];
     if (r is! Map ||
+        r.length != 6 ||
         r['day'] !=
             start.add(Duration(days: i)).toIso8601String().substring(0, 10) ||
         sums.keys.any((k) => !_count(r[k])) ||
         r['receipts'] !=
-            r['declined'] + r['missing_click'] + r['awaiting_setup']) {
+            r['declined'] +
+                r['missing_click'] +
+                r['missing_browser'] +
+                r['prepared']) {
       throw _bad;
     }
     for (final k in sums.keys) {
       sums[k] = sums[k]! + (r[k] as int);
     }
   }
-  if (sums.keys.any(
-    (k) => !_count(d['totals'][k]) || d['totals'][k] != sums[k],
-  )) {
+  if (d['totals'].length != sums.length ||
+      sums.keys.any(
+        (k) => !_count(d['totals'][k]) || d['totals'][k] != sums[k],
+      )) {
     throw _bad;
   }
   return d;
 }
 
-class FunnelConversionIntake extends StatefulWidget {
-  const FunnelConversionIntake({
+class FunnelMetaWebsiteConsent extends StatefulWidget {
+  const FunnelMetaWebsiteConsent({
     super.key,
     required this.client,
     required this.funnelId,
@@ -112,16 +147,17 @@ class FunnelConversionIntake extends StatefulWidget {
   final String funnelId, campaignId;
   final ValueListenable<int>? scope;
   @override
-  State<FunnelConversionIntake> createState() => _FunnelConversionIntakeState();
+  State<FunnelMetaWebsiteConsent> createState() =>
+      _FunnelMetaWebsiteConsentState();
 }
 
-class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
+class _FunnelMetaWebsiteConsentState extends State<FunnelMetaWebsiteConsent> {
   Map<String, dynamic>? _data;
   int _generation = 0, _days = 30;
-  bool _busy = false;
+  bool _busy = false, _confirmed = false;
   String? _error, _unavailable, _notice;
   String get _path =>
-      '/${widget.funnelId}/campaigns/${widget.campaignId}/measurement';
+      '/${widget.funnelId}/campaigns/${widget.campaignId}/meta-website-consent';
   bool _current(int g) => mounted && _unavailable == null && g == _generation;
   @override
   void initState() {
@@ -135,6 +171,7 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
     if (!mounted) return;
     final g = ++_generation;
     _data = null;
+    _confirmed = false;
     _busy = false;
     _error = null;
     _notice = null;
@@ -151,13 +188,14 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
     }
   }
 
-  void _deny() =>
-      _invalidate('Sign in with Enterprise access to view conversion intake.');
+  void _deny() => _invalidate(
+    'Sign in with Enterprise access to view Meta website consent.',
+  );
   void _scopeChanged() => _invalidate(
-    'Your workspace changed. Close conversion intake and open it again.',
+    'Your workspace changed. Close Meta website consent and open it again.',
   );
   @override
-  void didUpdateWidget(covariant FunnelConversionIntake old) {
+  void didUpdateWidget(covariant FunnelMetaWebsiteConsent old) {
     super.didUpdateWidget(old);
     if (old.client != widget.client) {
       old.client.removeAccessDeniedListener(_deny);
@@ -173,6 +211,7 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
         old.campaignId != widget.campaignId) {
       _generation++;
       _data = null;
+      _confirmed = false;
       _busy = false;
       _unavailable = null;
       _days = 30;
@@ -189,7 +228,7 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
   }
 
   Future<void> _request({bool? enabled}) async {
-    if (_busy || _unavailable != null) return;
+    if (_busy || _unavailable != null || enabled != null && !_confirmed) return;
     final g = ++_generation,
         client = widget.client,
         path = _path,
@@ -200,6 +239,7 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
     setState(() {
       _busy = true;
       _data = null;
+      _confirmed = false;
       _error = null;
       _notice = null;
     });
@@ -208,26 +248,31 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
         enabled != null ? 'POST' : 'GET',
         enabled != null ? '$path/settings' : '$path?days=$days',
         body: enabled != null
-            ? {'days': days, 'enabled': enabled, 'expected_revision': revision}
+            ? {
+                'days': days,
+                'enabled': enabled,
+                'expected_revision': revision,
+                'confirmed': true,
+              }
             : null,
       );
       if (!_current(g)) return;
-      final d = validateConversionIntake(result, funnel, campaign, days);
+      final d = validateMetaWebsiteConsent(result, funnel, campaign, days);
       if (enabled != null && d['enabled'] != enabled) throw _bad;
       setState(() {
         _data = d;
         _notice = enabled == null
             ? null
             : enabled
-            ? 'Consent collection enabled for future recognized-link visits.'
-            : 'Consent collection disabled. Existing receipts are retained until their inquiry is removed.';
+            ? 'Website consent enabled for future recognized-link visits.'
+            : 'Website consent disabled. Existing receipts remain until their inquiry is removed.';
       });
     } catch (e) {
       if (_current(g)) {
         setState(
           () => _error = e is FunnelException
-              ? e.message
-              : 'Conversion intake could not load. Refresh it.',
+              ? '${e.message}${enabled != null ? ' Refresh to check the saved state before trying again.' : ''}'
+              : 'Meta website consent could not load. Refresh it.',
         );
       }
     } finally {
@@ -254,7 +299,7 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
                 children: [
                   const Expanded(
                     child: Text(
-                      'Conversion intake',
+                      'Meta website consent',
                       style: TextStyle(
                         fontSize: 23,
                         fontWeight: FontWeight.bold,
@@ -263,7 +308,7 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    tooltip: 'Close conversion intake',
+                    tooltip: 'Close Meta website consent',
                     icon: const Icon(Icons.close),
                   ),
                 ],
@@ -274,7 +319,7 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _note(conversionIntakeBoundary),
+                      _note(metaWebsiteConsentBoundary),
                       const SizedBox(height: 16),
                       if (_unavailable != null) Text(_unavailable!),
                       if (_unavailable == null) ...[
@@ -305,7 +350,7 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
                             OutlinedButton.icon(
                               onPressed: _busy ? null : () => _request(),
                               icon: const Icon(Icons.refresh),
-                              label: const Text('Refresh conversion intake'),
+                              label: const Text('Refresh Meta website consent'),
                             ),
                           ],
                         ),
@@ -330,63 +375,6 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
                             child: Text(_notice!),
                           ),
                         if (d != null) ...[
-                          if (d['platform'] == 'meta') ...[
-                            OutlinedButton(
-                              onPressed: () => showDialog<void>(
-                                context: context,
-                                builder: (_) => FunnelMetaWebsiteConsent(
-                                  client: widget.client,
-                                  funnelId: widget.funnelId,
-                                  campaignId: widget.campaignId,
-                                  scope: widget.scope,
-                                ),
-                              ),
-                              child: const Text('Meta website consent'),
-                            ),
-
-                            OutlinedButton(
-                              onPressed: () => showDialog<void>(
-                                context: context,
-                                builder: (_) => FunnelMetaDestination(
-                                  client: widget.client,
-                                  funnelId: widget.funnelId,
-                                  campaignId: widget.campaignId,
-                                  scope: widget.scope,
-                                ),
-                              ),
-                              child: const Text('Meta conversion destination'),
-                            ),
-                            const SizedBox(height: 12),
-                          ],
-                          if (d['platform'] == 'google') ...[
-                            OutlinedButton(
-                              onPressed: () => showDialog<void>(
-                                context: context,
-                                builder: (_) => FunnelGoogleDestination(
-                                  client: widget.client,
-                                  funnelId: widget.funnelId,
-                                  campaignId: widget.campaignId,
-                                  scope: widget.scope,
-                                ),
-                              ),
-                              child: const Text(
-                                'Google conversion destination',
-                              ),
-                            ),
-                            OutlinedButton(
-                              onPressed: () => showDialog<void>(
-                                context: context,
-                                builder: (_) => FunnelGoogleDelivery(
-                                  client: widget.client,
-                                  funnelId: widget.funnelId,
-                                  campaignId: widget.campaignId,
-                                  scope: widget.scope,
-                                ),
-                              ),
-                              child: const Text('Google conversion delivery'),
-                            ),
-                            const SizedBox(height: 12),
-                          ],
                           Text(
                             d['name'],
                             style: const TextStyle(
@@ -400,37 +388,49 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
                           const SizedBox(height: 18),
                           Text(
                             d['collecting']
-                                ? 'Consent collection is on'
+                                ? 'Website consent collection is on'
                                 : d['enabled']
-                                ? 'Consent collection is suspended'
-                                : 'Consent collection is off',
+                                ? 'Website consent collection is suspended'
+                                : 'Website consent collection is off',
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           _note(
-                            'When enabled, visitors using this campaign’s recognized link see an optional advertising measurement choice. Declining never blocks their inquiry. Only an allowed click identifier and inquiry time are retained for future provider setup; names, emails, phone numbers and messages are excluded from measurement data.',
+                            'Visitors can allow a supported Meta click identifier, inquiry time, browser user agent and the published page address without query parameters. No name, email, phone, message or IP address is stored in this measurement receipt. Declining leaves the inquiry available.',
                           ),
                           const SizedBox(height: 12),
                           if (!d['can_enable'])
                             _note(
-                              'To collect consent, publish the page with a privacy policy, reopen the campaign if archived, choose Google or Meta, and create its recognized link under Inquiry attribution.',
+                              'Platform setup, a published page with a privacy policy, an open Meta campaign and its recognized link are required.',
                             ),
                           const SizedBox(height: 8),
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            value: _confirmed,
+                            onChanged: (v) =>
+                                setState(() => _confirmed = v == true),
+                            title: Text(
+                              d['enabled']
+                                  ? 'Stop website context collection.'
+                                  : 'Collect website context for future consenting inquiries.',
+                            ),
+                          ),
                           FilledButton(
-                            onPressed: d['enabled'] || d['can_enable']
+                            onPressed:
+                                _confirmed && (d['enabled'] || d['can_enable'])
                                 ? () => _request(enabled: !d['enabled'])
                                 : null,
                             child: Text(
                               d['enabled']
-                                  ? 'Disable consent collection'
-                                  : 'Enable consent collection',
+                                  ? 'Disable website consent'
+                                  : 'Enable website consent',
                             ),
                           ),
                           const SizedBox(height: 18),
                           _note(
-                            'New inquiries only. No historical backfill. Disabling stops future capture, including forms already open. Existing receipts and identifiers are removed when their inquiry is removed. Provider delivery and acceptance will require separate setup.',
+                            'New inquiries only. This setting takes priority over click-only intake for new visits when active. Disabling stops website-context capture, including open forms; the separate click-only intake setting is unchanged. Inquiry deletion removes its evidence. Uploads require separate setup.',
                           ),
                           const SizedBox(height: 20),
                           Wrap(
@@ -441,7 +441,9 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
                                 'receipts': 'Consent receipts',
                                 'declined': 'Measurement declined',
                                 'missing_click': 'Allowed, no supported click',
-                                'awaiting_setup': 'Awaiting conversion setup',
+                                'missing_browser':
+                                    'Allowed, missing browser context',
+                                'prepared': 'Prepared website receipt',
                               }.entries)
                                 Container(
                                   width: 210,
@@ -470,7 +472,7 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
                           ),
                           const SizedBox(height: 16),
                           _note(
-                            'The three receipt states sum to the receipt total. Inquiries captured before collection was enabled, after it was disabled, or without a measurement form context have no receipt. Counts are inquiries, not unique people, bookings or sales.',
+                            'These four states sum to the receipt total. Declined and incomplete receipts retain no click identifier, browser information or page address. Counts cover this consent version only and do not measure attributed conversions.',
                           ),
                           const SizedBox(height: 20),
                           const Text(
@@ -498,7 +500,11 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
                                   numeric: true,
                                 ),
                                 DataColumn(
-                                  label: Text('Consented click'),
+                                  label: Text('No browser'),
+                                  numeric: true,
+                                ),
+                                DataColumn(
+                                  label: Text('Prepared'),
                                   numeric: true,
                                 ),
                               ],
@@ -511,7 +517,8 @@ class _FunnelConversionIntakeState extends State<FunnelConversionIntake> {
                                         'receipts',
                                         'declined',
                                         'missing_click',
-                                        'awaiting_setup',
+                                        'missing_browser',
+                                        'prepared',
                                       ])
                                         DataCell(Text('${r[k]}')),
                                     ],
