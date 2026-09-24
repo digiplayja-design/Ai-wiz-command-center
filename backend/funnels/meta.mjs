@@ -1,4 +1,5 @@
 import express from 'express';
+import {createMetaPausedProvider} from './meta_paused_provider.mjs';
 import {readMetaLocations} from './meta_locations.mjs';
 import {MetaPageAccessError,metaPageInput,readMetaPages,boundedMetaPageJson} from './meta_pages.mjs';
 import {metaReportQuery,metaReportRange,readMetaInsights} from './meta_performance.mjs';
@@ -48,6 +49,7 @@ export function createMetaProvider(config,{fetchImpl=fetch,now=Date.now}={}) {
   };
   const fields='id,name,currency,timezone_name,account_status';
   return {
+    ...createMetaPausedProvider(config,{fetchImpl,now}),
     authorizationUrl(state){const u=new URL(`https://www.facebook.com/${config.apiVersion}/dialog/oauth`);u.search=new URLSearchParams({client_id:config.id,redirect_uri:config.callback,state,config_id:config.configId,response_type:'code',override_default_response_type:'true',auth_type:'rerequest'}).toString();return u.href;},
     async exchange(code){
       const short=await graph('oauth/access_token',{client_id:config.id,client_secret:config.secret,redirect_uri:config.callback,code});
