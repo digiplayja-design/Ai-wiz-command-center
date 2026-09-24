@@ -63,7 +63,8 @@ export function createMetaPausedProvider(config,{fetchImpl=fetch,now=Date.now}={
   async function access(token,user,page){
     const debug=await call('debug_token',{input_token:token},`${config.id}|${config.secret}`),d=debug.data;
     if(!d?.is_valid||d.type!=='USER'||String(d.app_id)!==config.id||d.user_id!==user||!Number.isSafeInteger(d.expires_at)||d.expires_at*1000<=now()+60000||(d.data_access_expires_at!==0&&(!Number.isSafeInteger(d.data_access_expires_at)||d.data_access_expires_at*1000<=now()+60000)))throw new MetaPausedAccessError();
-    if(!Array.isArray(d.scopes)||!['ads_management','pages_show_list','pages_read_engagement','pages_manage_ads'].every(x=>d.scopes.includes(x)))fail('Reconnect Meta with advertising management and Page advertising permissions after platform approval.',409);
+    if(!Array.isArray(d.scopes)||!(page?['ads_management','pages_show_list','pages_read_engagement','pages_manage_ads']:['ads_management']).every(x=>d.scopes.includes(x)))fail('Reconnect Meta with advertising management and Page advertising permissions after platform approval.',409);
+    if(!page)return {verified:true};
     let after,found=null;const cursors=new Set();
     for(let n=0;n<5;n++){
       const r=await call('me/accounts',{fields:'id,name,category,tasks',limit:100,...(after?{after}:{})},token);
@@ -96,10 +97,11 @@ export function createMetaPausedProvider(config,{fetchImpl=fetch,now=Date.now}={
     const body=params(s,resources,stage),r=await call(s.identity.account.id+'/'+edges[stage],body,token,true);
     if(!id(r.id)||Object.keys(r).some(k=>k!=='id'))uncertain();return r.id;
   }
-  async function find(token,s,known){
-    metaCreationResources(known);if(!known.image_hash)return null;
+  async function find(token,s,known,controls=false){
+    metaCreationResources(known,controls);if(!known.image_hash)return null;
     const p=metaPausedPlan(s),account=s.identity.account.id.slice(4);let campaign=null,after;const cursors=new Set();
-    const cf='id,account_id,name,objective,buying_type,special_ad_categories,status,is_adset_budget_sharing_enabled';
+    const allowed=controls?['PAUSED','ACTIVE']:['PAUSED'];
+    const cf='id,account_id,name,objective,buying_type,special_ad_categories,status,is_adset_budget_sharing_enabled'+(controls?',effective_status':'');
     if(known.campaign)campaign=await call(known.campaign,{fields:cf},token);
     else {
       for(let n=0;n<5;n++){
@@ -110,14 +112,15 @@ export function createMetaPausedProvider(config,{fetchImpl=fetch,now=Date.now}={
       }
     }
     if(!campaign)return null;
-    if(!id(campaign.id)||campaign.account_id!==account||campaign.name!==p.campaign.name||campaign.status!=='PAUSED'||campaign.objective!=='OUTCOME_TRAFFIC'||campaign.buying_type!=='AUCTION'||stable(campaign.special_ad_categories)!=='[]'||campaign.is_adset_budget_sharing_enabled!==false)uncertain();
-    const sets=await call(campaign.id+'/adsets',{fields:'id,account_id,campaign_id,name,status,daily_budget,billing_event,optimization_goal,bid_strategy,destination_type,start_time,end_time,is_dynamic_creative,targeting',limit:2},token);
-    const ads=await call(campaign.id+'/ads',{fields:'id,account_id,campaign_id,adset_id,name,status,creative{id}',limit:2},token);
+    if(!id(campaign.id)||campaign.account_id!==account||campaign.name!==p.campaign.name||!allowed.includes(campaign.status)||campaign.objective!=='OUTCOME_TRAFFIC'||campaign.buying_type!=='AUCTION'||stable(campaign.special_ad_categories)!=='[]'||campaign.is_adset_budget_sharing_enabled!==false)uncertain();
+    const sets=await call(campaign.id+'/adsets',{fields:'id,account_id,campaign_id,name,status,daily_budget,billing_event,optimization_goal,bid_strategy,destination_type,start_time,end_time,is_dynamic_creative,targeting'+(controls?',effective_status':''),limit:2},token);
+    const ads=await call(campaign.id+'/ads',{fields:'id,account_id,campaign_id,adset_id,name,status,creative{id}'+(controls?',effective_status,issues_info,ad_review_feedback,failed_delivery_checks':''),limit:2},token);
     if(!Array.isArray(sets.data)||!Array.isArray(ads.data)||sets.paging?.next||ads.paging?.next||sets.data.length>1||ads.data.length>1)uncertain();
     if(!sets.data.length||!ads.data.length)return null;
     const a=sets.data[0],ad=ads.data[0];
     for(const [k,v]of Object.entries(p.ad_set)){
       if(k==='targeting')continue;
+      if(k==='status'){if(!allowed.includes(a.status))uncertain();continue;}
       if(k==='start_time'||k==='end_time'){if(Date.parse(a[k])/1000!==v)uncertain();}
       else if(k==='daily_budget'){if(String(a[k])!==String(v))uncertain();}
       else if(a[k]!==v)uncertain();
@@ -133,13 +136,35 @@ export function createMetaPausedProvider(config,{fetchImpl=fetch,now=Date.now}={
       const normalize=x=>key==='countries'?x:key==='custom_locations'?{latitude:Number(x.latitude),longitude:Number(x.longitude),radius:Number(x.radius),distance_unit:x.distance_unit}:{key:x.key};
       if(!Array.isArray(values)||stable(values.map(normalize).sort((a,b)=>stable(a).localeCompare(stable(b))))!==stable(expected.map(normalize).sort((a,b)=>stable(a).localeCompare(stable(b)))))uncertain();
     }
-    if(!id(a.id)||a.account_id!==account||a.campaign_id!==campaign.id||!id(ad.id)||ad.account_id!==account||ad.campaign_id!==campaign.id||ad.adset_id!==a.id||ad.name!==p.ad.name||ad.status!=='PAUSED'||!id(ad.creative?.id))uncertain();
+    if(!id(a.id)||a.account_id!==account||a.campaign_id!==campaign.id||!id(ad.id)||ad.account_id!==account||ad.campaign_id!==campaign.id||ad.adset_id!==a.id||ad.name!==p.ad.name||!allowed.includes(ad.status)||!id(ad.creative?.id))uncertain();
     const cr=await call(ad.creative.id,{fields:'id,account_id,name,object_story_spec'},token),link=cr.object_story_spec?.link_data,expect=params(s,{image_hash:known.image_hash,campaign:campaign.id,ad_set:a.id},'creative').object_story_spec;
     if(Object.keys(cr.object_story_spec||{}).some(k=>!['page_id','link_data'].includes(k))||(link&&Object.keys(link).some(k=>!['link','message','name','description','image_hash','call_to_action'].includes(k)))||cr.id!==ad.creative.id||cr.account_id!==account||cr.name!==p.creative.name||cr.object_story_spec?.page_id!==s.identity.page.id||!link)uncertain();
     for(const key of ['link','message','name','description','image_hash'])if(link[key]!==expect.link_data[key])uncertain();
     if(Object.keys(link.call_to_action||{}).some(k=>!['type','value'].includes(k))||Object.keys(link.call_to_action?.value||{}).some(k=>k!=='link')||link.call_to_action?.type!==expect.link_data.call_to_action.type||link.call_to_action?.value?.link!==expect.link_data.call_to_action.value.link)uncertain();
     const found=metaCreationResources({image_hash:known.image_hash,campaign:campaign.id,ad_set:a.id,creative:cr.id,ad:ad.id},true);
-    for(const [k,v]of Object.entries(known))if(found[k]!==v)uncertain();return found;
+    for(const [k,v]of Object.entries(known))if(found[k]!==v)uncertain();
+    if(controls){
+      const effective={campaign:campaign.effective_status,ad_set:a.effective_status,ad:ad.effective_status};
+      if(!['ACTIVE','PAUSED'].includes(effective.campaign)||!['ACTIVE','PAUSED','CAMPAIGN_PAUSED','IN_PROCESS'].includes(effective.ad_set)||!['ACTIVE','PAUSED','CAMPAIGN_PAUSED','ADSET_PAUSED','PENDING_REVIEW','IN_PROCESS','PREAPPROVED'].includes(effective.ad))fail('Meta reports a delivery or review restriction. Check Ads Manager before activation.',409);
+      for(const key of ['issues_info','failed_delivery_checks'])if(ad[key]!=null&&(!Array.isArray(ad[key])||ad[key].length))fail('Meta reports an ad issue. Review it in Ads Manager.',409);
+      if(ad.ad_review_feedback!=null&&(typeof ad.ad_review_feedback!=='object'||Array.isArray(ad.ad_review_feedback)||Object.keys(ad.ad_review_feedback).length))fail('Meta returned review feedback. Resolve it in Ads Manager before activation.',409);
+      return {resources:found,statuses:{campaign:campaign.status,ad_set:a.status,ad:ad.status},effective_statuses:effective};
+    }
+    return found;
   }
-  return {verifyCreationAccess:access,validatePausedMeta:validate,createPausedMetaResource:create,findPausedMeta:find};
+  async function status(token,s,r){
+    metaCreationResources(r,true);
+    const out=await call(r.campaign,{fields:'id,account_id,name,status,effective_status'},token);
+    if(out.id!==r.campaign||out.account_id!==s.identity.account.id.slice(4)||typeof out.name!=='string'||out.name.length>1000||!['ACTIVE','PAUSED','ARCHIVED','DELETED'].includes(out.status)||typeof out.effective_status!=='string'||!/^[A-Z_]{1,40}$/.test(out.effective_status))uncertain();
+    return {resource:out.id,name:out.name,status:out.status,effective_status:out.effective_status};
+  }
+  async function control(token,s,r,action,stage,validateOnly=false){
+    metaCreationResources(r,true);
+    if(!['activate','pause'].includes(action)||!['ad','ad_set','campaign'].includes(stage)||action==='pause'&&stage!=='campaign'||!/^act_[1-9][0-9]{0,39}$/.test(s.identity?.account?.id))fail('Choose a supported Meta status command.',409);
+    const target=action==='activate'?'ACTIVE':'PAUSED';
+    const out=await call(r[stage],{status:target,...(validateOnly?{execution_options:['validate_only']}:{})},token,true);
+    if(out.success!==true||Object.keys(out).some(k=>k!=='success'))uncertain();
+    return validateOnly?{validated:true}:{confirmed:true,resource:r[stage],stage,status:target};
+  }
+  return {verifyMetaControlAccess:(token,user)=>access(token,user,null),createdMetaStatus:status,inspectCreatedMeta:(token,s,r)=>find(token,s,r,true),validateMetaControl:(token,s,r,action,stage)=>control(token,s,r,action,stage,true),applyMetaControlStage:control,verifyCreationAccess:access,validatePausedMeta:validate,createPausedMetaResource:create,findPausedMeta:find};
 }

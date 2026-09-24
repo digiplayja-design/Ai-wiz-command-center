@@ -18,6 +18,7 @@ import { registerGoogleTargeting } from './google_targeting.mjs';
 import { registerGoogleKeywords } from './google_keywords.mjs';
 import { registerMeta } from './meta.mjs';
 import { registerMetaPausedCreate } from './meta_paused_create.mjs';
+import { registerMetaControls } from './meta_controls.mjs';
 import { registerMetaCampaignLink } from './meta_campaign_link.mjs';
 import { registerGoogleCampaignLink } from './google_campaign_link.mjs';
 import { registerGoogleControls } from './google_controls.mjs';
@@ -84,6 +85,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   const base='/api/funnels';
   registerMeta(app,{base,owner,database,metaStore,metaProvider,environment,now});
   registerMetaPausedCreate(app,{base,owner,database,metaStore,metaProvider,environment,publicBase,imageStore:media,now});
+  registerMetaControls(app,{base,owner,database,metaStore,metaProvider,environment,publicBase,now});
   registerMetaCampaignLink(app,{base,owner,database,metaStore,metaProvider,environment,now});
   registerGoogleAds(app,{base,owner,limit,database,googleAdsStore,googleAdsProvider,environment,now});
   registerGoogleCampaignLink(app,{base,owner,database,googleAdsStore,googleAdsProvider,environment,now});
