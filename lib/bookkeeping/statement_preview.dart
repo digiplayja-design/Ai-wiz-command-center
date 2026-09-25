@@ -79,7 +79,8 @@ class _BookkeepingStatementPreviewState
   String _year = DateTime.now().year.toString();
   List<String> _headers = [];
   Map<String, dynamic>? _preview;
-  bool _busy = false, _split = false, _denied = false;
+  bool _busy = false, _split = false, _denied = false, _importConfirmed = false;
+  Map<String, dynamic>? _pendingImport, _imported;
   int _operation = 0;
   @override
   void initState() {
@@ -97,6 +98,8 @@ class _BookkeepingStatementPreviewState
       _operation++;
       _csv = null;
       _preview = null;
+      _pendingImport = null;
+      _imported = null;
       _headers = [];
       _error = null;
       _busy = false;
@@ -127,7 +130,7 @@ class _BookkeepingStatementPreviewState
   }
 
   Future<void> _select() async {
-    if (_busy || _denied) return;
+    if (_busy || _denied || _pendingImport != null) return;
     final op = ++_operation;
     setState(() {
       _busy = true;
@@ -165,7 +168,7 @@ class _BookkeepingStatementPreviewState
   }
 
   Future<void> _review() async {
-    if (_busy || _denied || _csv == null) return;
+    if (_busy || _denied || _csv == null || _pendingImport != null) return;
     final fields = [
       _date,
       _description,
@@ -189,6 +192,7 @@ class _BookkeepingStatementPreviewState
       _busy = true;
       _error = null;
       _preview = null;
+      _importConfirmed = false;
     });
     try {
       final result = await widget.client.request(
@@ -223,6 +227,61 @@ class _BookkeepingStatementPreviewState
     }
   }
 
+  Future<void> _import() async {
+    if (_busy || _denied || _preview == null || _imported != null) return;
+    if (_preview!['invalid_count'] != 0 ||
+        _preview!['duplicate_count'] != 0 ||
+        !_importConfirmed) {
+      setState(
+        () => _error =
+            'Fix invalid or duplicate rows and confirm your review before importing.',
+      );
+      return;
+    }
+    _pendingImport ??= {
+      'csv': _csv,
+      'cash_account': _account,
+      'year': _year,
+      'mapping': {
+        'date': _date,
+        'description': _description,
+        if (_split) ...{
+          'debit': _debit,
+          'credit': _credit,
+        } else
+          'amount': _amount,
+      },
+      'request_key': bookkeepingRequestKey(),
+      'confirmed': true,
+    };
+    final op = ++_operation;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final data = await widget.client.request(
+        'POST',
+        '/businesses/${widget.businessId}/statements/import',
+        body: _pendingImport,
+      );
+      if (mounted && !_denied && op == _operation) {
+        setState(() {
+          _imported = Map<String, dynamic>.from(data['statement'] as Map);
+          _pendingImport = null;
+        });
+      }
+    } catch (e) {
+      if (mounted && !_denied && op == _operation) {
+        setState(() => _error = '$e');
+      }
+    } finally {
+      if (mounted && !_denied && op == _operation) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
   Widget _column(String label, String? value, void Function(String?) change) =>
       Padding(
         padding: const EdgeInsets.only(top: 12),
@@ -238,7 +297,7 @@ class _BookkeepingStatementPreviewState
                 ),
               )
               .toList(),
-          onChanged: _busy
+          onChanged: _busy || _pendingImport != null || _imported != null
               ? null
               : (v) => setState(() {
                   change(v);
@@ -261,7 +320,13 @@ class _BookkeepingStatementPreviewState
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
-              onPressed: _busy || _denied ? null : _select,
+              onPressed:
+                  _busy ||
+                      _denied ||
+                      _pendingImport != null ||
+                      _imported != null
+                  ? null
+                  : _select,
               icon: const Icon(Icons.upload_file),
               label: const Text('Choose CSV'),
             ),
@@ -287,7 +352,8 @@ class _BookkeepingStatementPreviewState
                         ),
                       )
                       .toList(),
-                  onChanged: _busy
+                  onChanged:
+                      _busy || _pendingImport != null || _imported != null
                       ? null
                       : (v) => setState(() {
                           _account = v;
@@ -303,6 +369,7 @@ class _BookkeepingStatementPreviewState
                 ),
                 keyboardType: TextInputType.number,
                 maxLength: 4,
+                enabled: _pendingImport == null && _imported == null,
                 onChanged: (v) => setState(() {
                   _year = v;
                   _preview = null;
@@ -318,7 +385,7 @@ class _BookkeepingStatementPreviewState
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Separate debit and credit columns'),
                 value: _split,
-                onChanged: _busy
+                onChanged: _busy || _pendingImport != null || _imported != null
                     ? null
                     : (v) => setState(() {
                         _split = v;
@@ -361,6 +428,24 @@ class _BookkeepingStatementPreviewState
                         '${row['date']} · ${row['amount_cents']} cents · ${row['status']} · ${(row['candidates'] as List?)?.length ?? 0} candidate(s)',
                   ),
                 ),
+              if (_imported == null)
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text(
+                    'I reviewed the statement rows and selected cash account.',
+                  ),
+                  subtitle: const Text(
+                    'Import saves normalized rows only. It does not post income, expenses or matches.',
+                  ),
+                  value: _importConfirmed,
+                  onChanged: _busy || _pendingImport != null
+                      ? null
+                      : (v) => setState(() => _importConfirmed = v == true),
+                ),
+              if (_imported != null)
+                Text(
+                  'Imported ${_imported!['row_count']} rows. Open Saved statements to review matches.',
+                ),
             ],
           ],
         ),
@@ -372,9 +457,28 @@ class _BookkeepingStatementPreviewState
         child: const Text('Close'),
       ),
       FilledButton(
-        onPressed: _csv == null || _busy || _denied ? null : _review,
+        onPressed:
+            _csv == null ||
+                _busy ||
+                _denied ||
+                _pendingImport != null ||
+                _imported != null
+            ? null
+            : _review,
         child: Text(_busy ? 'Checking…' : 'Preview possible matches'),
       ),
+      if (_preview != null && _imported == null)
+        FilledButton(
+          onPressed:
+              _busy || _denied || (!_importConfirmed && _pendingImport == null)
+              ? null
+              : _import,
+          child: Text(
+            _pendingImport == null
+                ? 'Import reviewed rows'
+                : 'Retry same import',
+          ),
+        ),
     ],
   );
 }

@@ -9,6 +9,7 @@ import 'mileage_screen.dart';
 import 'ledger_screen.dart';
 import 'reports_screen.dart';
 import 'statement_preview.dart';
+import 'statement_history.dart';
 
 const _navy = Color(0xff10253f),
     _cyan = Color(0xff087e98),
@@ -190,6 +191,16 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
         client: widget.client,
         businessId: _business!['id'] as String,
         cashAccounts: bookkeepingRows(_overview!['cash_accounts']),
+      ),
+    );
+  }
+
+  Future<void> _openStatementHistory() async {
+    if (_business == null || _busy) return;
+    await _dialog<void>(
+      BookkeepingStatementHistory(
+        client: widget.client,
+        businessId: _business!['id'] as String,
       ),
     );
   }
@@ -672,6 +683,11 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
         onPressed: _busy || _overview == null ? null : _openStatementPreview,
         icon: const Icon(Icons.fact_check_outlined, size: 18),
         label: const Text('Statement CSV preview'),
+      ),
+      OutlinedButton.icon(
+        onPressed: _busy || _overview == null ? null : _openStatementHistory,
+        icon: const Icon(Icons.rule_folder_outlined, size: 18),
+        label: const Text('Saved statements'),
       ),
       OutlinedButton.icon(
         key: _exportKey,
