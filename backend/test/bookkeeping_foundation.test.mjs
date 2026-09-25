@@ -22,6 +22,7 @@ test.before(async()=>{
  for(const u of [owner,other])await db.query('insert into auth.users values($1)',[u]);
  await db.exec(await readFile(new URL('../../supabase/migrations/'+migration,import.meta.url),'utf8'));
  await db.exec(await readFile(new URL('../../supabase/migrations/20260925062141_bookkeeping_ledger.sql',import.meta.url),'utf8'));
+ await db.exec(await readFile(new URL('../../supabase/migrations/20260925152053_bookkeeping_reports.sql',import.meta.url),'utf8'));
  await db.exec('set role service_role');
  const app=express();app.use(express.json());registerBookkeeping(app,{database:{rpc:async(_,p)=>{try{return {data:await rpc(p.p_actor,p.p_action,p.p_business,p.p_data)}}catch(error){return{error}}}},requireUser:async q=>[owner,other].includes(q.headers.authorization)?{id:q.headers.authorization}:null});
  server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));base='http://127.0.0.1:'+server.address().port;

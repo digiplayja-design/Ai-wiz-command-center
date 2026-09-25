@@ -38,13 +38,14 @@ export function entry(value){
  if(typeof v.entry_date!=='string'||! /^20\d\d-\d\d-\d\d$/.test(v.entry_date))fail('Enter a valid received or paid date.');
  const date=new Date(v.entry_date+'T00:00:00.000Z');if(!Number.isFinite(date.getTime())||date.toISOString().slice(0,10)!==v.entry_date)fail('Enter a valid received or paid date.');
  if(typeof v.category!=='string'||! /^[45]\d{3}$/.test(v.category))fail('Choose a category.');
- return {kind:v.kind,entry_date:v.entry_date,amount_cents:cents(v.amount),category:v.category,counterparty:str(v.counterparty,'Customer or vendor',160),purpose:str(v.purpose,'Business purpose',500,true),receipt_reference:str(v.receipt_reference,'Receipt reference',160),request_key:id(v.request_key),confirmed:true};
+ if(v.cash_account!==undefined&&(typeof v.cash_account!=='string'||!/^1[01]\d{2}$/.test(v.cash_account)))fail('Choose a cash account.');
+ return {...(v.cash_account&&v.cash_account!=='1000'?{cash_account:v.cash_account}:{}),kind:v.kind,entry_date:v.entry_date,amount_cents:cents(v.amount),category:v.category,counterparty:str(v.counterparty,'Customer or vendor',160),purpose:str(v.purpose,'Business purpose',500,true),receipt_reference:str(v.receipt_reference,'Receipt reference',160),request_key:id(v.request_key),confirmed:true};
 }
 export function reversal(value,entryId){const v=object(value);if(v.confirmed!==true)fail('Confirm reversing this entry.');return {entry_id:id(entryId),reason:str(v.reason,'Reason for correction',500,true),request_key:id(v.request_key),confirmed:true};}
 export function csv(data){
  const cell=v=>{let s=String(v??'');if(/^[\s]*[=+\-@]/.test(s)||/^[\t\r\n]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';};
  const money=n=>{const x=BigInt(n);return `${x/100n}.${(x%100n).toString().padStart(2,'0')}`;};
- const rows=[['Entry ID','Date received or paid','Entry type','Category','Amount USD','Debit account','Credit account','Customer or vendor','Business purpose or correction reason','Receipt reference (not attachment)','Reversal of','Reversed by','Recorded at']];
- for(const e of data.entries)rows.push([e.id,e.entry_date,e.kind,e.category_name,money(e.amount_cents),e.debit_account,e.credit_account,e.counterparty,e.purpose,e.receipt_reference,e.reversal_of,e.reversed_by,e.created_at]);
+ const rows=[['Entry ID','Date received or paid','Entry type','Category','Amount USD','Debit account','Credit account','Cash account name','Customer or vendor','Business purpose or correction reason','Receipt reference (not attachment)','Reversal of','Reversed by','Recorded at']];
+ for(const e of data.entries)rows.push([e.id,e.entry_date,e.kind,e.category_name,money(e.amount_cents),e.debit_account,e.credit_account,e.cash_account_name,e.counterparty,e.purpose,e.receipt_reference,e.reversal_of,e.reversed_by,e.created_at]);
  return {filename:`korlix-activity-${data.business.id}-${data.month}.csv`,count:data.entries.length,csv:'\uFEFF'+rows.map(r=>r.map(cell).join(',')).join('\r\n')+'\r\n'};
 }

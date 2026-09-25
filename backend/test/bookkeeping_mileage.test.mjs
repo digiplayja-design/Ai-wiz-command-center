@@ -15,7 +15,7 @@ const post=async(extra={})=>(await api(path(),payload(extra),'POST',owner,201)).
 const rpc=async(action,p,actor=owner,business=b.id)=>(await db.query('select public.korlix_bookkeeping_mileage_v1($1,$2,$3,$4) r',[actor,action,business,p])).rows[0].r;
 test.before(async()=>{
  db=new PGlite();await db.exec('create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);grant usage on schema public to anon,authenticated,service_role;');
- for(const f of ['20260925015926_bookkeeping_foundation.sql','20260925055030_bookkeeping_mileage.sql','20260925062141_bookkeeping_ledger.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+f,import.meta.url),'utf8'));
+ for(const f of ['20260925015926_bookkeeping_foundation.sql','20260925055030_bookkeeping_mileage.sql','20260925062141_bookkeeping_ledger.sql','20260925152053_bookkeeping_reports.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+f,import.meta.url),'utf8'));
  const database={rpc:async(name,p)=>{try{const r=await db.query(`select public.${name}($1,$2,$3,$4) r`,[p.p_actor,p.p_action,p.p_business,p.p_data]);return {data:r.rows[0].r};}catch(error){if(process.env.BK_DEBUG)console.error(error.message,error.where);return {error};}}};
  const app=express();app.use(express.json());registerBookkeeping(app,{database,requireUser:async q=>[owner,other].includes(q.headers.authorization)?{id:q.headers.authorization}:null});server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));base='http://127.0.0.1:'+server.address().port;
 });
