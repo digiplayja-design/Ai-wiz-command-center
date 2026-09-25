@@ -296,7 +296,9 @@ class _BookkeepingStatementHistoryState
                   title: Text(
                     '${s['statement_year']} · ${s['row_count']} rows · cash account ${s['cash_account']}',
                   ),
-                  subtitle: Text('Imported ${s['created_at']}'),
+                  subtitle: Text(
+                    'Imported ${s['created_at']}${s['has_repeated_rows'] == true ? ' · repeated rows reviewed' : ''}',
+                  ),
                   onTap: _busy || _denied
                       ? null
                       : () => _load(s['id'] as String),
@@ -305,6 +307,12 @@ class _BookkeepingStatementHistoryState
               Text(
                 '${_detail!['statement']['statement_year']} · account ${_detail!['statement']['cash_account']}',
               ),
+              if ((_detail!['statement']['duplicate_review_reason'] as String?)
+                      ?.isNotEmpty ==
+                  true)
+                Text(
+                  'Repeated-row review reason: ${_detail!['statement']['duplicate_review_reason']}',
+                ),
               if (_detail!['coverage'] is Map) ...[
                 const SizedBox(height: 12),
                 Text(

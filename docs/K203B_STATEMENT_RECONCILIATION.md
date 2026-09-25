@@ -1,5 +1,7 @@
 # K203B saved statements and reviewed matches
 
+Current behavior update: K203G allows documented, owner-confirmed repeated rows within one CSV. See `K203G_REPEATED_STATEMENT_ROWS.md`. The original K203B duplicate restriction below is historical.
+
 The Bookkeeping screen supports CSV preview, confirmed import, and Saved statements. Choose the statement columns, year and business cash account, inspect the preview, then confirm the normalized rows to save them. Invalid rows and duplicates within the CSV block import. The original CSV bytes are not stored. A failed response offers **Retry same import**, preserving the exact request key and contents.
 
 Saved statements lists imports and their rows, candidate recorded cash movements and full match decision history. Select a candidate and explicitly confirm the match. To correct it, provide a reason, confirm the correction and then review a replacement. A failed decision can be retried with the same request key. Matching never posts or alters a journal entry.

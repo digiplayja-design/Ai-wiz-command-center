@@ -164,6 +164,104 @@ void main() {
     },
   );
   testWidgets(
+    'distinct repeated rows require owner review and retain explanation',
+    (t) async {
+      Map<String, dynamic>? imported;
+      final c = f.client((r) {
+        if (r.url.path.endsWith('/import')) {
+          imported = jsonDecode(r.body) as Map<String, dynamic>;
+          return f.reply({
+            'statement': {
+              'id': '33333333-3333-4333-8333-333333333333',
+              'row_count': 2,
+            },
+          }, 201);
+        }
+        return f.reply({
+          'row_count': 2,
+          'invalid_count': 0,
+          'duplicate_count': 2,
+          'entries': [
+            for (final line in [2, 3])
+              {
+                'line': line,
+                'date': '2027-02-10',
+                'description': 'Monthly service',
+                'amount_cents': '-100',
+                'status': 'duplicate_in_file',
+                'candidates': [],
+              },
+          ],
+        });
+      });
+      addTearDown(c.dispose);
+      await f.size(t, const Size(390, 844));
+      await f.mountDialog(
+        t,
+        BookkeepingStatementPreview(
+          client: c,
+          businessId: f.businessId,
+          cashAccounts: [
+            {'code': '1000', 'name': 'Cash', 'kind': 'cash'},
+          ],
+          pickCsv: () async => (
+            'repeated.csv',
+            Uint8List.fromList(
+              utf8.encode(
+                'Date,Memo,Amount\n2027-02-10,Monthly service,-1.00\n2027-02-10,Monthly service,-1.00',
+              ),
+            ),
+          ),
+        ),
+      );
+      await f.tap(t, 'Choose CSV');
+      Future<void> choose(String label, String value) async {
+        final selector = find.byWidgetPredicate(
+          (w) =>
+              w is DropdownButtonFormField<String> &&
+              w.decoration.labelText == label,
+        );
+        await t.ensureVisible(selector);
+        await t.tap(selector);
+        await t.pumpAndSettle();
+        await f.tap(t, value);
+      }
+
+      await choose('Date column (YYYY-MM-DD)', 'Date');
+      await choose('Description column', 'Memo');
+      await choose('Signed amount column', 'Amount');
+      await f.fill(t, 'Calendar year (YYYY)', '2027');
+      await f.tap(t, 'Preview possible matches');
+      expect(find.textContaining('2 duplicates'), findsOneWidget);
+      await f.tap(
+        t,
+        'I reviewed the statement rows and selected cash account.',
+      );
+      await f.tap(t, 'Import reviewed rows');
+      expect(imported, isNull);
+      expect(
+        find.textContaining('confirm they are distinct transactions'),
+        findsWidgets,
+      );
+      await f.tap(
+        t,
+        'I checked the repeated lines and confirm they are distinct transactions.',
+      );
+      await f.fill(
+        t,
+        'Reason for repeated rows',
+        'Two separate charges are present on the original statement.',
+      );
+      await f.tap(t, 'Import reviewed rows');
+      expect(
+        imported?['duplicate_review_reason'],
+        'Two separate charges are present on the original statement.',
+      );
+      expect(find.textContaining('Imported 2 rows'), findsOneWidget);
+      expect(t.takeException(), isNull);
+    },
+  );
+  testWidgets(
     'saved import requires reviewed match and retains correction history',
     (t) async {
       final decisions = <Map<String, dynamic>>[];

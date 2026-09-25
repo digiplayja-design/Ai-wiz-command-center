@@ -76,10 +76,15 @@ class _BookkeepingStatementPreviewState
       _amount,
       _debit,
       _credit;
+  String _duplicateReason = '';
   String _year = DateTime.now().year.toString();
   List<String> _headers = [];
   Map<String, dynamic>? _preview;
-  bool _busy = false, _split = false, _denied = false, _importConfirmed = false;
+  bool _busy = false,
+      _split = false,
+      _denied = false,
+      _importConfirmed = false,
+      _duplicatesConfirmed = false;
   Map<String, dynamic>? _pendingImport, _imported;
   int _operation = 0;
   @override
@@ -101,6 +106,8 @@ class _BookkeepingStatementPreviewState
       _pendingImport = null;
       _imported = null;
       _headers = [];
+      _duplicateReason = '';
+      _duplicatesConfirmed = false;
       _error = null;
       _busy = false;
     });
@@ -154,6 +161,8 @@ class _BookkeepingStatementPreviewState
           _csv = text;
           _headers = headers;
           _date = _description = _amount = _debit = _credit = null;
+          _duplicateReason = '';
+          _duplicatesConfirmed = false;
         });
       }
     } catch (e) {
@@ -193,6 +202,8 @@ class _BookkeepingStatementPreviewState
       _error = null;
       _preview = null;
       _importConfirmed = false;
+      _duplicateReason = '';
+      _duplicatesConfirmed = false;
     });
     try {
       final result = await widget.client.request(
@@ -229,12 +240,20 @@ class _BookkeepingStatementPreviewState
 
   Future<void> _import() async {
     if (_busy || _denied || _preview == null || _imported != null) return;
-    if (_preview!['invalid_count'] != 0 ||
-        _preview!['duplicate_count'] != 0 ||
-        !_importConfirmed) {
+    if (_preview!['invalid_count'] != 0 || !_importConfirmed) {
       setState(
         () => _error =
-            'Fix invalid or duplicate rows and confirm your review before importing.',
+            'Fix invalid rows and confirm your review before importing.',
+      );
+      return;
+    }
+    if (_preview!['duplicate_count'] != 0 &&
+        (!_duplicatesConfirmed ||
+            _duplicateReason.trim().length < 10 ||
+            _duplicateReason.trim().length > 500)) {
+      setState(
+        () => _error =
+            'Check each repeated line against the original bank statement, confirm they are distinct transactions, and enter a reason of 10–500 characters.',
       );
       return;
     }
@@ -253,6 +272,8 @@ class _BookkeepingStatementPreviewState
       },
       'request_key': bookkeepingRequestKey(),
       'confirmed': true,
+      if (_preview!['duplicate_count'] != 0)
+        'duplicate_review_reason': _duplicateReason.trim(),
     };
     final op = ++_operation;
     setState(() {
@@ -428,6 +449,29 @@ class _BookkeepingStatementPreviewState
                         '${row['date']} · ${row['amount_cents']} cents · ${row['status']} · ${(row['candidates'] as List?)?.length ?? 0} candidate(s)',
                   ),
                 ),
+              if (_preview!['duplicate_count'] != 0 && _imported == null) ...[
+                const Text(
+                  'Repeated rows may be separate bank transactions. Compare every flagged line with the original statement. Possible overlap with earlier imports is still blocked.',
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text(
+                    'I checked the repeated lines and confirm they are distinct transactions.',
+                  ),
+                  value: _duplicatesConfirmed,
+                  onChanged: _busy || _pendingImport != null
+                      ? null
+                      : (v) => setState(() => _duplicatesConfirmed = v == true),
+                ),
+                TextField(
+                  maxLength: 500,
+                  decoration: const InputDecoration(
+                    labelText: 'Reason for repeated rows',
+                  ),
+                  enabled: !_busy && _pendingImport == null,
+                  onChanged: (v) => _duplicateReason = v,
+                ),
+              ],
               if (_imported == null)
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
