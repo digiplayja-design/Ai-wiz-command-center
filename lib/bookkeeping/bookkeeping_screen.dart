@@ -6,6 +6,7 @@ import 'bookkeeping_forms.dart';
 import 'bookkeeping_models.dart';
 import 'bookkeeping_receipts.dart';
 import 'mileage_screen.dart';
+import 'ledger_screen.dart';
 
 const _navy = Color(0xff10253f),
     _cyan = Color(0xff087e98),
@@ -152,6 +153,17 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
     if (saved != null) _month = (saved['entry_date'] as String).substring(0, 7);
     _offset = 0;
     await _load(list: false);
+  }
+
+  Future<void> _openLedger() async {
+    if (_business == null || _busy) return;
+    await _dialog<void>(
+      BookkeepingLedger(
+        client: widget.client,
+        businessId: _business!['id'] as String,
+        businessName: _business!['name'] as String,
+      ),
+    );
   }
 
   Future<void> _openMileage() async {
@@ -426,7 +438,7 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
           ),
           const SizedBox(height: 64),
           const Text(
-            'EARLY ACCESS\nManual cash activity · USD',
+            'EARLY ACCESS\nManual bookkeeping · USD',
             style: TextStyle(
               color: Color(0xffa8c0d0),
               fontSize: 11,
@@ -611,6 +623,11 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
         onPressed: _busy || _overview == null ? null : () => _openReceipts(),
         icon: const Icon(Icons.receipt_long_outlined, size: 18),
         label: const Text('Receipt inbox'),
+      ),
+      OutlinedButton.icon(
+        onPressed: _busy || _overview == null ? null : _openLedger,
+        icon: const Icon(Icons.account_balance_outlined, size: 18),
+        label: const Text('Accounts & journals'),
       ),
       OutlinedButton.icon(
         onPressed: _busy || _overview == null ? null : _openMileage,
@@ -890,17 +907,17 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
         ),
         SizedBox(height: 8),
         Text(
-          'Live now: business profiles, manual income and expenses, private receipts, reviewed AI scanning, business mileage, correction history, and CSV exports.',
+          'Live now: business profiles, manual income and expenses, private receipts, reviewed AI scanning, business mileage, accounts, balanced journals, opening balances, correction history, and CSV exports.',
           style: TextStyle(height: 1.6),
         ),
         SizedBox(height: 6),
         Text(
-          'Coming next: expanded accounting entries, reconciliation and accountant reports.',
+          'Coming next: reconciliation and accountant reports.',
           style: TextStyle(color: _muted, height: 1.6),
         ),
         SizedBox(height: 10),
         Text(
-          'Early access · USD cash activity only. Totals reflect entries you record, not a bank balance or a complete profit and loss statement. No bank connection or tax filing yet.',
+          'Early access · Manual USD bookkeeping. Dashboard totals reflect operating cash entries; account balances also include journals and opening balances. No bank connection or tax filing yet.',
           style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
         ),
       ],

@@ -389,7 +389,7 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
                         const SizedBox(height: 16),
                       ] else ...[
                         const Text(
-                          'Record money actually received or paid for business operations. Loans, owner funding, transfers and asset purchases need other entry types, coming later.',
+                          'Record money actually received or paid for business operations. Use Accounts & journals for loans, owner funding, transfers and asset purchases. This form records activity through Recorded cash control (1000).',
                           style: TextStyle(
                             fontSize: 12,
                             color: Color(0xff506279),
