@@ -48,6 +48,23 @@ export function suggestStatementMatches(entries,report,cashAccount){
   return {...entry,candidates:candidates.slice(0,5).map(l=>({entry_id:l.entry_id,date:l.entry_date,kind:l.kind,source:l.source,amount_cents:entry.amount_cents})),status:entry.duplicate_in_file?'duplicate_in_file':candidates.length===1?'suggested':candidates.length>1?'ambiguous':'unmatched'};
  });
 }
+export function statementCoverage(rows,decisions){
+ const latest=new Map();
+ for(const decision of decisions??[])latest.set(Number(decision.row_line),decision);
+ let matched=0,total=0n,matchedTotal=0n;
+ let from=null,through=null;
+ for(const row of rows){
+  const value=BigInt(row.amount_cents);
+  total+=value;
+  if(latest.get(Number(row.line))?.action==='match'){matched++;matchedTotal+=value;}
+  if(from===null||row.date<from)from=row.date;
+  if(through===null||row.date>through)through=row.date;
+ }
+ return {row_count:rows.length,matched_count:matched,open_count:rows.length-matched,
+  statement_net_cents:String(total),matched_net_cents:String(matchedTotal),open_net_cents:String(total-matchedTotal),
+  from_date:from,through_date:through,
+  scope:'Review progress for imported rows only. These signed totals are not a cleared bank balance or proof of complete reconciliation.'};
+}
 export function previewStatement(input,report){
  if(!input||typeof input!=='object'||Array.isArray(input))fail('Choose a statement and its columns.');
  const {header,rows}=parseStatementCsv(input.csv);
@@ -100,6 +117,7 @@ export function registerStatementPreviewRoutes(app,{route,database}){
  app.get(base+'/:statement',route(async(q,r,u)=>{
   const business=id(q.params.id),data=await call(u,business,'get',{statement_id:id(q.params.statement)});
   const s=data.statement;
+  data.coverage=statementCoverage(s.rows,data.decisions);
   const report=await database.rpc('korlix_bookkeeping_reports_v1',{p_actor:u,p_business:business,p_data:{period:String(s.statement_year),include_lines:true}});
   data.statement.rows=report.error||!report.data?s.rows.map(row=>({...row,candidates:[],status:'candidates_unavailable'})):suggestStatementMatches(s.rows,report.data,s.cash_account);
   r.json(data);

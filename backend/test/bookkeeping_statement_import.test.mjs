@@ -5,6 +5,7 @@ import {randomUUID} from 'node:crypto';
 import {PGlite} from '@electric-sql/pglite';
 import express from 'express';
 import {registerBookkeeping} from '../bookkeeping/routes.mjs';
+import {statementCoverage} from '../bookkeeping/statement_preview.mjs';
 let db,server,base,owner,other,b,entryId,statementId;
 const rpc=async(name,args)=>(await db.query(`select public.${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) r`,args)).rows[0].r;
 const core=(action,data,business=b.id,actor=owner)=>rpc('korlix_bookkeeping_v1',[actor,action,business,data]);
@@ -12,6 +13,14 @@ const statement=(action,data,business=b.id,actor=owner)=>rpc('korlix_bookkeeping
 async function api(path,body,actor=owner,status=200){const r=await fetch(`${base}/api/bookkeeping/businesses/${b.id}/statements${path}`,{method:body?'POST':'GET',headers:{'content-type':'application/json',Authorization:actor},...(body?{body:JSON.stringify(body)}:{})});const d=await r.json();assert.equal(r.status,status,JSON.stringify(d));assert.equal(r.headers.get('cache-control'),'no-store');return d;}
 const file='Date,Memo,Amount\n2027-01-15,Customer payment,123.45';
 const payload=(extra={})=>({csv:file,year:'2027',cash_account:'1000',mapping:{date:'Date',description:'Memo',amount:'Amount'},request_key:randomUUID(),confirmed:true,...extra});
+test('coverage preserves signed cents and takes the latest correction for each row',()=>{
+ const rows=[{line:2,date:'2027-02-02',amount_cents:'-9007199254740993'},{line:3,date:'2027-01-31',amount_cents:'9007199254741000'}];
+ const decisions=[{row_line:2,action:'match'},{row_line:2,action:'unmatch'},{row_line:3,action:'match'}];
+ const c=statementCoverage(rows,decisions);
+ assert.deepEqual([c.row_count,c.matched_count,c.open_count],[2,1,1]);
+ assert.deepEqual([c.statement_net_cents,c.matched_net_cents,c.open_net_cents],['7','9007199254741000','-9007199254740993']);
+ assert.deepEqual([c.from_date,c.through_date],['2027-01-31','2027-02-02']);
+});
 test.before(async()=>{
  db=new PGlite();await db.exec('create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id text primary key,bucket_id text);alter table storage.objects enable row level security;grant usage on schema public,storage to anon,authenticated,service_role;');
  for(const f of ['20260925015926_bookkeeping_foundation.sql','20260925024651_bookkeeping_receipts.sql','20260925062141_bookkeeping_ledger.sql','20260925152053_bookkeeping_reports.sql','20260925163933_bookkeeping_statement_imports.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+f,import.meta.url),'utf8'));
@@ -32,6 +41,10 @@ test('confirmed import persists normalized rows, replays by key and digest witho
  const stored=(await db.query('select rows,request_data from korlix_bookkeeping_statement_imports where id=$1',[statementId])).rows[0];
  assert.equal(stored.rows[0].amount_cents,'12345');assert.equal(JSON.stringify(stored).includes('Customer payment'),true);assert.equal(JSON.stringify(stored).includes('Date,Memo,Amount'),false);
  assert.equal((await api('')).statements.length,1);assert.equal((await api('/'+statementId)).statement.rows[0].line,2);
+ const coverage=(await api('/'+statementId)).coverage;
+ assert.deepEqual([coverage.row_count,coverage.matched_count,coverage.open_count],[1,0,1]);
+ assert.deepEqual([coverage.statement_net_cents,coverage.matched_net_cents,coverage.open_net_cents],['12345','0','12345']);
+ assert.deepEqual([coverage.from_date,coverage.through_date],['2027-01-15','2027-01-15']);
 });
 test('owner confirms exact one-to-one match; correction appends history and allows reviewed replacement',async()=>{
  const body={request_key:randomUUID(),confirmed:true,entry_id:entryId};
@@ -39,9 +52,11 @@ test('owner confirms exact one-to-one match; correction appends history and allo
  assert.equal(a.entry_id,entryId);assert.equal((await api('/'+statementId+'/rows/2/match',body,owner,201)).decision.id,a.id);
  await api('/'+statementId+'/rows/2/match',{...body,request_key:randomUUID()},owner,409);
  const before=await api('/'+statementId);assert.equal(before.decisions.length,1);
+ assert.deepEqual([before.coverage.matched_count,before.coverage.open_net_cents],[1,'0']);
  const correction={request_key:randomUUID(),confirmed:true,previous_match_id:a.id,reason:'Matched wrong record'};
  const z=(await api('/'+statementId+'/rows/2/unmatch',correction,owner,201)).decision;
  assert.equal(z.action,'unmatch');assert.equal((await api('/'+statementId)).decisions.length,2);
+ assert.deepEqual([(await api('/'+statementId)).coverage.open_count,(await api('/'+statementId)).coverage.open_net_cents],[1,'12345']);
  await api('/'+statementId+'/rows/2/unmatch',{...correction,request_key:randomUUID()},owner,409);
  const rematched=(await api('/'+statementId+'/rows/2/match',{...body,request_key:randomUUID()},owner,201)).decision;
  assert.notEqual(rematched.id,a.id);assert.equal((await api('/'+statementId)).decisions.length,3);
