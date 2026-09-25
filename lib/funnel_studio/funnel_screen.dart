@@ -22,10 +22,12 @@ class FunnelScreen extends StatefulWidget {
   const FunnelScreen({
     super.key,
     required this.client,
+    this.disposeClient = false,
     this.onOpenContacts,
     this.imagePicker = pickFunnelImage,
   });
   final FunnelClient client;
+  final bool disposeClient;
   final Future<FunnelPickedImage?> Function() imagePicker;
   final Future<void> Function()? onOpenContacts;
   @override
@@ -40,6 +42,8 @@ class _FunnelScreenState extends State<FunnelScreen> {
   String? _error;
   bool _busy = false, _dirty = false, _aiReady = false, _denied = false;
   int _revision = 0;
+  int _epoch = 0, _operation = 0;
+  final _dialogs = <DialogRoute<dynamic>>{};
   final _fieldAnchors = <String, GlobalKey>{};
   final _fieldFocus = <String, FocusNode>{};
   final _previewAnchor = GlobalKey(), _rehearsalAnchor = GlobalKey();
@@ -53,33 +57,101 @@ class _FunnelScreenState extends State<FunnelScreen> {
   @override
   void initState() {
     super.initState();
-    widget.client.onAccessDenied = () {
-      if (mounted) {
-        setState(() {
-          _denied = true;
-          _funnels = [];
-          _selected = null;
-          _draft = {};
-        });
-      }
-    };
+    widget.client.addAccessDeniedListener(_deny);
     unawaited(_refresh());
+  }
+
+  bool _current(int epoch) => mounted && !_denied && epoch == _epoch;
+
+  void _clearWorkspace() {
+    _epoch++;
+    _operation++;
+    _funnels = [];
+    _selected = null;
+    _draft = {};
+    _name = '';
+    _tab = 'Page';
+    _search = '';
+    _status = 'All';
+    _dirty = false;
+    _busy = false;
+    _aiReady = false;
+    _error = null;
+    _revision++;
+    _tags.updateAll((key, value) => key == 'medium' ? 'paid' : '');
+    final staleDialogs = _dialogs.toList();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final route in staleDialogs) {
+        final navigator = route.navigator;
+        if (route.isActive && navigator != null) {
+          // Close child confirmations with the obsolete studio dialog.
+          navigator.popUntil((candidate) => candidate == route);
+          if (route.isActive) navigator.removeRoute(route);
+        }
+      }
+    });
+  }
+
+  void _deny() {
+    if (!mounted) return;
+    setState(() {
+      _clearWorkspace();
+      _denied = true;
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant FunnelScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.client != widget.client) {
+      oldWidget.client.removeAccessDeniedListener(_deny);
+      if (oldWidget.disposeClient) oldWidget.client.dispose();
+      _clearWorkspace();
+      _denied = false;
+      widget.client.addAccessDeniedListener(_deny);
+      unawaited(_refresh());
+    }
+  }
+
+  Future<T?> _dialog<T>(
+    WidgetBuilder builder, {
+    bool dismissible = true,
+  }) async {
+    if (_denied || !mounted) return null;
+    final epoch = _epoch;
+    final route = DialogRoute<T>(
+      context: context,
+      barrierDismissible: dismissible,
+      builder: builder,
+    );
+    _dialogs.add(route);
+    try {
+      final result = await Navigator.of(
+        context,
+        rootNavigator: true,
+      ).push(route);
+      return _current(epoch) ? result : null;
+    } finally {
+      _dialogs.remove(route);
+    }
   }
 
   @override
   void dispose() {
+    _epoch++;
     for (final focus in _fieldFocus.values) {
       focus.dispose();
     }
-    widget.client.onAccessDenied = null;
-    widget.client.dispose();
+    widget.client.removeAccessDeniedListener(_deny);
+    if (widget.disposeClient) widget.client.dispose();
     super.dispose();
   }
 
   void _jumpTo(String tab, GlobalKey anchor, {String? field}) {
+    final epoch = _epoch, id = _selected?['id'];
     setState(() => _tab = tab);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
+      if (!_current(epoch) || _selected?['id'] != id) return;
       final target = anchor.currentContext;
       if (target == null) return;
       await Scrollable.ensureVisible(
@@ -87,7 +159,10 @@ class _FunnelScreenState extends State<FunnelScreen> {
         alignment: 0.15,
         duration: const Duration(milliseconds: 250),
       );
-      if (mounted && _tab == tab && field != null) {
+      if (_current(epoch) &&
+          _selected?['id'] == id &&
+          _tab == tab &&
+          field != null) {
         _fieldFocus[field]?.requestFocus();
       }
     });
@@ -99,33 +174,38 @@ class _FunnelScreenState extends State<FunnelScreen> {
     field: field,
   );
 
-  Future<void> _run(Future<void> Function() task) async {
-    if (_busy) return;
+  Future<void> _run(Future<void> Function(int, FunnelClient) task) async {
+    if (_busy || _denied) return;
+    final epoch = _epoch, operation = ++_operation, client = widget.client;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      await task();
+      await task(epoch, client);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (_current(epoch) && operation == _operation) {
+        setState(() => _error = e.toString());
+      }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (_current(epoch) && operation == _operation) {
+        setState(() => _busy = false);
+      }
     }
   }
 
-  Future<void> _refresh() => _run(() async {
-    final data = await widget.client.request('GET', '');
-    if (!mounted) return;
+  Future<void> _refresh() => _run((epoch, client) async {
+    final data = await client.request('GET', '');
+    if (!_current(epoch)) return;
     setState(() {
       _funnels = (data['funnels'] as List)
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
       _aiReady = data['ai_ready'] == true;
-      _denied = false;
     });
   });
   void _take(Map<String, dynamic> f) {
+    if (_denied || !mounted) return;
     setState(() {
       _selected = f;
       _draft = copyFunnel(f['draft'] as Map);
@@ -142,9 +222,8 @@ class _FunnelScreenState extends State<FunnelScreen> {
   }
 
   Future<bool> _confirm(String title, String text, String action) async =>
-      await showDialog<bool>(
-        context: context,
-        builder: (c) => Theme(
+      await _dialog<bool>(
+        (c) => Theme(
           data: WfStyle.theme,
           child: AlertDialog(
             title: Text(title),
@@ -171,7 +250,8 @@ class _FunnelScreenState extends State<FunnelScreen> {
         'Discard edits',
       );
   Future<void> _back() async {
-    if (_busy || !await _discard() || !mounted) return;
+    final epoch = _epoch;
+    if (_busy || !await _discard() || !mounted || epoch != _epoch) return;
     if (_selected != null) {
       setState(() {
         _selected = null;
@@ -183,8 +263,8 @@ class _FunnelScreenState extends State<FunnelScreen> {
     }
   }
 
-  Future<void> _save() => _run(() async {
-    final d = await widget.client.request(
+  Future<void> _save() => _run((epoch, client) async {
+    final d = await client.request(
       'PUT',
       '/${_selected!['id']}',
       body: {
@@ -193,12 +273,16 @@ class _FunnelScreenState extends State<FunnelScreen> {
         'document': _draft,
       },
     );
-    if (mounted) {
+    if (_current(epoch)) {
       _take(Map<String, dynamic>.from(d['funnel'] as Map));
       _notice('Draft saved.');
     }
   });
   Future<void> _publish() async {
+    if (_busy || _denied || _selected == null) return;
+    final epoch = _epoch,
+        id = _selected!['id'],
+        version = _selected!['version'];
     if (_dirty) {
       _notice('Save your draft before publishing.');
       return;
@@ -208,16 +292,19 @@ class _FunnelScreenState extends State<FunnelScreen> {
           'Anyone with the link can view this page and submit a request. Check the preview, business contact email, and privacy policy. Leads will appear in CRM. Publishing does not send messages or launch paid ads.',
           'Publish page',
         ) ||
-        !mounted) {
+        !_current(epoch) ||
+        _selected?['id'] != id ||
+        _selected?['version'] != version ||
+        _dirty) {
       return;
     }
-    await _run(() async {
-      final d = await widget.client.request(
+    await _run((runEpoch, client) async {
+      final d = await client.request(
         'POST',
-        '/${_selected!['id']}/publish',
-        body: {'version': _selected!['version'], 'confirmed': true},
+        '/$id/publish',
+        body: {'version': version, 'confirmed': true},
       );
-      if (mounted) {
+      if (_current(runEpoch)) {
         _take(Map<String, dynamic>.from(d['funnel'] as Map));
         _notice('Your page is live. Copy its link to share it.');
       }
@@ -225,21 +312,29 @@ class _FunnelScreenState extends State<FunnelScreen> {
   }
 
   Future<void> _pause() async {
+    if (_busy || _denied || _selected == null) return;
+    final epoch = _epoch,
+        id = _selected!['id'],
+        version = _selected!['version'];
     if (!await _confirm(
           'Pause the public page?',
           'Visitors will no longer be able to view or submit this page. Saved leads stay in CRM.',
           'Pause page',
         ) ||
-        !mounted) {
+        !_current(epoch) ||
+        _selected?['id'] != id ||
+        _selected?['version'] != version) {
       return;
     }
-    await _run(() async {
-      final d = await widget.client.request(
+    await _run((runEpoch, client) async {
+      final d = await client.request(
         'POST',
-        '/${_selected!['id']}/pause',
-        body: {'version': _selected!['version']},
+        '/$id/pause',
+        body: {'version': version},
       );
-      if (mounted) _take(Map<String, dynamic>.from(d['funnel'] as Map));
+      if (_current(runEpoch)) {
+        _take(Map<String, dynamic>.from(d['funnel'] as Map));
+      }
     });
   }
 
@@ -248,45 +343,59 @@ class _FunnelScreenState extends State<FunnelScreen> {
   }
 
   Future<void> _copy(String text) async {
+    final epoch = _epoch;
     await Clipboard.setData(ClipboardData(text: text));
-    if (mounted) _notice('Link copied.');
+    if (_current(epoch)) _notice('Link copied.');
   }
 
   Future<void> _openLive() async {
+    final epoch = _epoch;
     try {
       if (!await launchUrl(
             Uri.parse(_selected!['url'].toString()),
             mode: LaunchMode.externalApplication,
           ) &&
-          mounted) {
+          _current(epoch)) {
         _notice('Copy the link and open it in your browser.');
       }
     } catch (_) {
-      if (mounted) _notice('Copy the link and open it in your browser.');
+      if (_current(epoch)) {
+        _notice('Copy the link and open it in your browser.');
+      }
     }
   }
 
   Future<void> _create({Map<String, dynamic>? source}) async {
     if (_busy || _denied) return;
+    final epoch = _epoch, client = widget.client;
     if (source != null && _dirty) {
       _notice('Save your edits before duplicating this draft.');
       return;
     }
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      barrierDismissible: false,
-      builder: (c) => Theme(
+    final result = await _dialog<Map<String, dynamic>>(
+      (c) => Theme(
         data: WfStyle.theme,
         child: FunnelCreateDialog(
           source: source,
           create: (payload) async {
-            final data = await widget.client.request('POST', '', body: payload);
+            if (!_current(epoch)) {
+              throw const FunnelException(
+                'Your workspace changed. Reopen Funnel Studio.',
+              );
+            }
+            final data = await client.request('POST', '', body: payload);
+            if (!_current(epoch)) {
+              throw const FunnelException(
+                'Your workspace changed. Refresh saved drafts before continuing.',
+              );
+            }
             return Map<String, dynamic>.from(data['funnel'] as Map);
           },
         ),
       ),
+      dismissible: false,
     );
-    if (result == null || !mounted || _denied) return;
+    if (result == null || !_current(epoch)) return;
     setState(() {
       _tab = 'Page';
       _error = null;
@@ -300,10 +409,11 @@ class _FunnelScreenState extends State<FunnelScreen> {
   }
 
   Future<void> _generate() async {
+    if (_busy || _denied || _selected == null) return;
+    final epoch = _epoch, id = _selected!['id'];
     final brief = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder: (c) => Theme(
+    final result = await _dialog<String>(
+      (c) => Theme(
         data: WfStyle.theme,
         child: AlertDialog(
           title: const Text('Create with NOVA'),
@@ -354,14 +464,14 @@ class _FunnelScreenState extends State<FunnelScreen> {
       ),
     );
     Future<void>.delayed(const Duration(seconds: 1), brief.dispose);
-    if (result == null || !mounted) return;
-    await _run(() async {
-      final d = await widget.client.request(
+    if (result == null || !_current(epoch) || _selected?['id'] != id) return;
+    await _run((runEpoch, client) async {
+      final d = await client.request(
         'POST',
         '/generate',
         body: {'brief': result},
       );
-      if (mounted) {
+      if (_current(runEpoch) && _selected?['id'] == id) {
         setState(() {
           _draft = generatedCopy(_draft, d['document'] as Map);
           _revision++;
@@ -372,21 +482,52 @@ class _FunnelScreenState extends State<FunnelScreen> {
   }
 
   Future<void> _queueFollowup(String leadId) async {
+    if (_busy || _denied || _selected == null) return;
+    final epoch = _epoch, id = _selected!['id'];
     if (!await _confirm(
           'Queue this inquiry?',
           'Create tasks using this funnel’s enabled workflow. Existing tasks will not be duplicated. This does not send an email or place a call.',
           'Queue follow-up',
         ) ||
-        !mounted) {
+        !_current(epoch) ||
+        _selected?['id'] != id) {
       return;
     }
-    await _run(() async {
-      await widget.client.request(
+    await _run((runEpoch, client) async {
+      await client.request(
         'POST',
-        '/${_selected!['id']}/followups/enqueue',
+        '/$id/followups/enqueue',
         body: {'lead_id': leadId},
       );
-      if (mounted) setState(() => _tab = 'Follow-ups');
+      if (_current(runEpoch)) setState(() => _tab = 'Follow-ups');
+    });
+  }
+
+  Future<void> _reloadSaved() async {
+    if (_busy || _denied || _selected == null) return;
+    final epoch = _epoch, id = _selected!['id'];
+    if (!await _discard() || !_current(epoch) || _selected?['id'] != id) return;
+    await _run((runEpoch, client) async {
+      final data = await client.request('GET', '');
+      if (!_current(runEpoch) || _selected?['id'] != id) return;
+      final rows = (data['funnels'] as List)
+          .map((f) => Map<String, dynamic>.from(f as Map))
+          .toList();
+      final matches = rows.where((f) => f['id'] == id);
+      if (matches.isEmpty) {
+        setState(() {
+          _funnels = rows;
+          _selected = null;
+          _draft = {};
+          _name = '';
+          _dirty = false;
+          _tab = 'Page';
+          _revision++;
+        });
+        _notice('This funnel is no longer available. Choose a saved funnel.');
+        return;
+      }
+      _take(matches.single);
     });
   }
 
@@ -850,17 +991,7 @@ class _FunnelScreenState extends State<FunnelScreen> {
                       _dirty ? null : () => _create(source: _selected),
                     ),
                   ),
-                  _button('Reload saved', Icons.refresh, () async {
-                    if (await _discard() && mounted) {
-                      await _run(() async {
-                        final d = await widget.client.request('GET', '');
-                        final f = (d['funnels'] as List).cast<Map>().firstWhere(
-                          (f) => f['id'] == _selected!['id'],
-                        );
-                        if (mounted) _take(Map<String, dynamic>.from(f));
-                      });
-                    }
-                  }),
+                  _button('Reload saved', Icons.refresh, _reloadSaved),
                 ],
               ),
               const SizedBox(height: 22),
@@ -1018,14 +1149,12 @@ class _FunnelScreenState extends State<FunnelScreen> {
     ),
   );
   Future<void> _chooseImage(String slot, String label) async {
-    final selectedId = _selected?['id'];
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      barrierDismissible: false,
-      builder: (c) => Theme(
+    final epoch = _epoch, selectedId = _selected?['id'], client = widget.client;
+    final result = await _dialog<Map<String, dynamic>>(
+      (c) => Theme(
         data: WfStyle.theme,
         child: FunnelImageLibrary(
-          client: widget.client,
+          client: client,
           slot: label,
           picker: widget.imagePicker,
           protectedIds: {
@@ -1034,11 +1163,9 @@ class _FunnelScreenState extends State<FunnelScreen> {
           },
         ),
       ),
+      dismissible: false,
     );
-    if (result == null ||
-        !mounted ||
-        _denied ||
-        _selected?['id'] != selectedId) {
+    if (result == null || !_current(epoch) || _selected?['id'] != selectedId) {
       return;
     }
     setState(() {
@@ -1509,7 +1636,7 @@ class _FunnelScreenState extends State<FunnelScreen> {
         ),
         const SizedBox(height: 16),
         const Text(
-          'Tracking records visitor-supplied tags. Use Ads workspace for saved campaign plans, planned budgets, and manual results. Meta account connections are in Ads workspace. Direct campaign publishing is not available yet.',
+          'Tracking records visitor-supplied tags. Ads workspace contains campaign plans, account setup, provider controls and conversion delivery. Provider actions require their own setup and explicit confirmation.',
           style: TextStyle(color: WfStyle.muted, fontSize: 12, height: 1.5),
         ),
       ],

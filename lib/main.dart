@@ -11160,7 +11160,7 @@ Make the entire output professional, well-structured using Markdown, and product
     if (_currentTier.trim().toLowerCase() != 'enterprise') return;
     await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
       FunnelScreen(client: FunnelClient(backendBaseUrl: kKorlixBackendBaseUrl,
-        headersBuilder: _authHeaders), onOpenContacts: _openContactsCrm)));
+        headersBuilder: _authHeaders), disposeClient: true, onOpenContacts: _openContactsCrm)));
   }
 
   Future<void> _openContactsCrm() async {

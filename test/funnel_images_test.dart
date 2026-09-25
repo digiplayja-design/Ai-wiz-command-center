@@ -304,10 +304,8 @@ void main() {
       await tap(t, 'Choose logo');
       expect(find.text('KORLIX logo.png'), findsNothing);
       expect(find.text('Use image'), findsNothing);
-      expect(
-        find.text('Close this window and sign in with Enterprise access.'),
-        findsOneWidget,
-      );
+      expect(find.byType(Dialog), findsNothing);
+      expect(find.text('Enterprise access required'), findsOneWidget);
     },
   );
   for (final width in [1440.0, 390.0, 320.0]) {
