@@ -1,3 +1,4 @@
+import 'funnel_meta_delivery.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -429,6 +430,18 @@ class _FunnelMetaDestinationState extends State<FunnelMetaDestination> {
                         if (_notice != null) _note(_notice!),
                         if (d != null) ...[
                           _note(d['campaign_name']),
+                          OutlinedButton(
+                            onPressed: () => showDialog<void>(
+                              context: context,
+                              builder: (_) => FunnelMetaDelivery(
+                                client: widget.client,
+                                funnelId: widget.funnelId,
+                                campaignId: widget.campaignId,
+                                scope: widget.scope,
+                              ),
+                            ),
+                            child: const Text('Meta conversion delivery'),
+                          ),
                           OutlinedButton(
                             onPressed: () => showDialog<void>(
                               context: context,
