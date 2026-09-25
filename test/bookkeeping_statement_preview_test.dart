@@ -124,6 +124,7 @@ void main() {
     (t) async {
       final decisions = <Map<String, dynamic>>[];
       final writes = <Map<String, dynamic>>[];
+      String? exportedCsv, exportedName;
       final c = f.client((r) {
         if (r.method == 'POST') {
           final body = jsonDecode(r.body) as Map<String, dynamic>;
@@ -150,6 +151,12 @@ void main() {
                 'created_at': '2027-01-20',
               },
             ],
+          });
+        }
+        if (r.url.path.endsWith('/export')) {
+          return f.reply({
+            'filename': 'korlix-statement-review-example.csv',
+            'csv': '\uFEFF"Line","Status"\r\n"2","open"\r\n',
           });
         }
         return f.reply({
@@ -205,9 +212,19 @@ void main() {
       await f.size(t, const Size(390, 844));
       await f.mountDialog(
         t,
-        BookkeepingStatementHistory(client: c, businessId: f.businessId),
+        BookkeepingStatementHistory(
+          client: c,
+          businessId: f.businessId,
+          onExport: (csv, name) async {
+            exportedCsv = csv;
+            exportedName = name;
+          },
+        ),
       );
       await f.tap(t, '2027 · 1 rows · cash account 1000');
+      await f.tap(t, 'Export review CSV');
+      expect(exportedName, 'korlix-statement-review-example.csv');
+      expect(exportedCsv, contains('"2","open"'));
       expect(find.textContaining('0 matched · 1 open'), findsOneWidget);
       await f.tap(
         t,

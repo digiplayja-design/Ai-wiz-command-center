@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'bookkeeping_client.dart';
+import 'bookkeeping_csv_save.dart';
 import 'bookkeeping_models.dart';
 
 class BookkeepingStatementHistory extends StatefulWidget {
@@ -8,9 +9,11 @@ class BookkeepingStatementHistory extends StatefulWidget {
     super.key,
     required this.client,
     required this.businessId,
+    this.onExport,
   });
   final BookkeepingClient client;
   final String businessId;
+  final Future<void> Function(String csv, String filename)? onExport;
   @override
   State<BookkeepingStatementHistory> createState() =>
       _BookkeepingStatementHistoryState();
@@ -20,7 +23,7 @@ class _BookkeepingStatementHistoryState
     extends State<BookkeepingStatementHistory> {
   List<Map<String, dynamic>> _statements = [];
   Map<String, dynamic>? _detail, _pendingBody;
-  String? _error, _pendingPath;
+  String? _error, _notice, _pendingPath;
   bool _busy = false, _denied = false;
   int _operation = 0;
   @override
@@ -40,6 +43,7 @@ class _BookkeepingStatementHistoryState
       _pendingBody = null;
       _pendingPath = null;
       _error = null;
+      _notice = null;
       _busy = false;
     });
   }
@@ -213,6 +217,47 @@ class _BookkeepingStatementHistoryState
     }
   }
 
+  Future<void> _export() async {
+    if (_busy || _denied || _detail == null) return;
+    final op = ++_operation;
+    final statementId = _detail!['statement']['id'] as String;
+    setState(() {
+      _busy = true;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      final data = await widget.client.request(
+        'GET',
+        '$_base/$statementId/export',
+      );
+      if (!mounted || _denied || op != _operation) return;
+      if (widget.onExport != null) {
+        await widget.onExport!(
+          data['csv'] as String,
+          data['filename'] as String,
+        );
+      } else {
+        await saveBookkeepingCsv(
+          data['csv'] as String,
+          data['filename'] as String,
+          const Rect.fromLTWH(0, 0, 1, 1),
+        );
+      }
+      if (mounted && !_denied && op == _operation) {
+        setState(() => _notice = 'Review CSV prepared.');
+      }
+    } catch (e) {
+      if (mounted && !_denied && op == _operation) {
+        setState(() => _error = '$e');
+      }
+    } finally {
+      if (mounted && !_denied && op == _operation) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) => AlertDialog(
     title: Text(
@@ -236,6 +281,7 @@ class _BookkeepingStatementHistoryState
                   style: const TextStyle(color: Color(0xff9c2525)),
                 ),
               ),
+            if (_notice != null) Text(_notice!),
             if (_pendingBody != null)
               TextButton(
                 onPressed: _busy || _denied ? null : _send,
@@ -321,6 +367,12 @@ class _BookkeepingStatementHistoryState
       ),
     ),
     actions: [
+      if (_detail != null)
+        TextButton.icon(
+          onPressed: _busy || _denied ? null : _export,
+          icon: const Icon(Icons.download_outlined),
+          label: const Text('Export review CSV'),
+        ),
       if (_detail != null)
         TextButton(
           onPressed: _busy ? null : () => setState(() => _detail = null),
