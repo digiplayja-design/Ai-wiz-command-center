@@ -5,6 +5,7 @@ import 'bookkeeping_csv_save.dart';
 import 'bookkeeping_forms.dart';
 import 'bookkeeping_models.dart';
 import 'bookkeeping_receipts.dart';
+import 'mileage_screen.dart';
 
 const _navy = Color(0xff10253f),
     _cyan = Color(0xff087e98),
@@ -151,6 +152,17 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
     if (saved != null) _month = (saved['entry_date'] as String).substring(0, 7);
     _offset = 0;
     await _load(list: false);
+  }
+
+  Future<void> _openMileage() async {
+    if (_business == null || _busy) return;
+    await _dialog<void>(
+      BookkeepingMileage(
+        client: widget.client,
+        businessId: _business!['id'] as String,
+        businessName: _business!['name'] as String,
+      ),
+    );
   }
 
   Future<void> _openReceipts({Map<String, dynamic>? entry}) async {
@@ -601,6 +613,11 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
         label: const Text('Receipt inbox'),
       ),
       OutlinedButton.icon(
+        onPressed: _busy || _overview == null ? null : _openMileage,
+        icon: const Icon(Icons.route_outlined, size: 18),
+        label: const Text('Mileage log'),
+      ),
+      OutlinedButton.icon(
         key: _exportKey,
         onPressed: _busy || _overview == null ? null : _export,
         icon: const Icon(Icons.download_outlined, size: 18),
@@ -873,12 +890,12 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
         ),
         SizedBox(height: 8),
         Text(
-          'Live now: business profiles, manual income and expenses, private receipts, reviewed AI scanning, correction history, and monthly CSV export.',
+          'Live now: business profiles, manual income and expenses, private receipts, reviewed AI scanning, business mileage, correction history, and CSV exports.',
           style: TextStyle(height: 1.6),
         ),
         SizedBox(height: 6),
         Text(
-          'Coming next: mileage, expanded accounting entries, reconciliation and accountant reports.',
+          'Coming next: expanded accounting entries, reconciliation and accountant reports.',
           style: TextStyle(color: _muted, height: 1.6),
         ),
         SizedBox(height: 10),
