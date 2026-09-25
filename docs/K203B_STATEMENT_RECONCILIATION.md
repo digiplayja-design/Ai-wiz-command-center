@@ -1,5 +1,7 @@
 # K203B reviewed statement imports
 
+Current behavior update: K203G permits documented, owner-confirmed repeated rows within one CSV. See `K203G_REPEATED_STATEMENT_ROWS.md`. The K203B duplicate restriction below describes the original release.
+
 K203B saves reviewed, normalized CSV statement rows and lets the business owner record explicit matches to existing cash journal movements. It does not connect to a bank, post financial entries, change balances, or certify a bank reconciliation.
 
 ## Import

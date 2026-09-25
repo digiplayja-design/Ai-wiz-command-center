@@ -72,7 +72,7 @@ export function statementReviewCsv(data){
  for(const decision of decisions)latest.set(Number(decision.row_line),decision);
  const coverage=statementCoverage(s.rows,decisions);
  const cents=v=>({exactCents:String(v)});
- const rows=[['KORLIX saved statement review'],['Statement ID',s.id],['Cash account',s.cash_account],['Calendar year',s.statement_year],['Scope',coverage.scope],['Imported dates',coverage.from_date,coverage.through_date],['Matched rows',coverage.matched_count],['Open rows',coverage.open_count],['Signed statement cents',cents(coverage.statement_net_cents)],['Matched signed cents',cents(coverage.matched_net_cents)],['Open signed cents',cents(coverage.open_net_cents)],[],['Line','Date','Description','Signed cents (text for precision)','Current status','Current entry ID']];
+ const rows=[['KORLIX saved statement review'],['Statement ID',s.id],['Cash account',s.cash_account],['Calendar year',s.statement_year],['Repeated-row review reason',s.duplicate_review_reason??''],['Scope',coverage.scope],['Imported dates',coverage.from_date,coverage.through_date],['Matched rows',coverage.matched_count],['Open rows',coverage.open_count],['Signed statement cents',cents(coverage.statement_net_cents)],['Matched signed cents',cents(coverage.matched_net_cents)],['Open signed cents',cents(coverage.open_net_cents)],[],['Line','Date','Description','Signed cents (text for precision)','Current status','Current entry ID']];
  for(const row of s.rows){const d=latest.get(Number(row.line));rows.push([row.line,row.date,row.description,cents(row.amount_cents),d?.action==='match'?'matched':'open',d?.action==='match'?d.entry_id:'']);}
  rows.push([],['Decision history (chronological)'],['Decision ID','Line','Action','Entry ID','Corrects decision ID','Reason','Recorded at']);
  for(const d of decisions)rows.push([d.id,d.row_line,d.action,d.entry_id,d.previous_match_id,d.reason,d.created_at]);
@@ -105,7 +105,7 @@ export function previewStatement(input,report){
  }
  for(const entry of entries){if(!entry.error){entry.duplicate_in_file=seen.get(entry.fingerprint)>1;delete entry.fingerprint;}}
  const suggestions=suggestStatementMatches(entries,report,input.cash_account);
- return {account:input.cash_account,year:input.year,row_count:entries.length,invalid_count:entries.filter(e=>e.error).length,duplicate_count:entries.filter(e=>e.duplicate_in_file).length,entries:suggestions,scope:'Read-only suggestions. Nothing is imported, posted, reconciled, or saved. Review your bank statement and books before making corrections.'};
+ return {account:input.cash_account,year:input.year,row_count:entries.length,invalid_count:entries.filter(e=>e.error).length,duplicate_count:entries.filter(e=>e.duplicate_in_file).length,entries:suggestions,scope:'Read-only suggestions. Repeated rows in this file need explicit owner review and a reason before import. Nothing is imported, posted, reconciled, or saved.'};
 }
 export function registerStatementPreviewRoutes(app,{route,database}){
  const base='/api/bookkeeping/businesses/:id/statements';
@@ -150,10 +150,13 @@ export function registerStatementPreviewRoutes(app,{route,database}){
   if(report.error)fail(report.error.code==='P0002'?'Business not found.':'Statement report is unavailable.',report.error.code==='P0002'?404:503);
   if(!report.data)fail('Statement report is unavailable.',503);
   const preview=previewStatement(body,report.data);
-  if(preview.invalid_count||preview.duplicate_count)fail('Fix invalid or duplicate rows before importing. Nothing was saved.');
+  if(preview.invalid_count)fail('Fix invalid statement rows before importing. Nothing was saved.');
+  const reason=typeof body.duplicate_review_reason==='string'?body.duplicate_review_reason.trim():'';
+  if(preview.duplicate_count&&(reason.length<10||reason.length>500))fail('Repeated rows require an explanation of 10–500 characters after checking the original bank statement.');
+  if(!preview.duplicate_count&&reason)fail('A repeated-row explanation is only needed for repeated rows in this CSV.');
   const rows=preview.entries.map(({line,date,description,amount_cents})=>({line,date,description,amount_cents}));
   const source_sha256=createHash('sha256').update(body.csv,'utf8').digest('hex');
-  r.status(201).json(await call(u,business,'import',{request_key:requestKey,confirmed:true,cash_account:body.cash_account,year:body.year,source_sha256,rows}));
+  r.status(201).json(await call(u,business,'import',{request_key:requestKey,confirmed:true,cash_account:body.cash_account,year:body.year,source_sha256,rows,...(reason?{duplicate_review_reason:reason}:{})}));
  }));
  app.post(base+'/:statement/rows/:line/match',route(async(q,r,u)=>{
   if(q.body?.confirmed!==true)fail('Review and confirm the match first.');

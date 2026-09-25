@@ -1,0 +1,9 @@
+# K203G reviewed repeated rows within one CSV
+
+Some real bank statements have separate transactions with the same date, signed amount and description. K203G permits these rows **within one source CSV** only after the business owner checks every flagged line against the original bank statement, confirms they are distinct, and enters a 10–500 character explanation. The normalized rows retain their original distinct line numbers. The explanation is stored immutably in the import request data, included in the audit event, returned in saved statement detail and exported in the review CSV. The raw source CSV is still not stored.
+
+The backend validates the explanation after server-side CSV normalization. The replacement `SECURITY INVOKER` trigger independently requires it for a direct privileged SQL import when duplicate row fingerprints exist. Source digest replay remains idempotent only for the identical mapping and explanation. A changed explanation with the same source is a conflict. The earlier cross-file date/amount/description overlap guard remains strict; this chapter does not allow a possibly re-imported transaction from another CSV. Existing one-active-match-per-entry protection also remains in effect.
+
+Migration: `supabase/migrations/20260925175309_bookkeeping_repeated_statement_rows.sql`. It replaces the existing statement guard and owner-scoped RPC, preserving their privileges and security-invoker behavior. Apply it before deploying the backend and frontend. The K203B guide's blanket in-file duplicate rejection is superseded by this opt-in reviewed path. Cross-file overlaps still need a separate resolution.
+
+Verify the actual migration SQL and `node --test backend/test/bookkeeping*.test.mjs`, including a direct RPC attempt without an explanation, distinct line preservation, request replay, cross-file overlap conflict and browser role denial.

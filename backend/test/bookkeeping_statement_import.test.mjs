@@ -32,7 +32,7 @@ test('review CSV neutralizes formulas, quotes and preserves exact signed cents',
 });
 test.before(async()=>{
  db=new PGlite();await db.exec('create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id text primary key,bucket_id text);alter table storage.objects enable row level security;grant usage on schema public,storage to anon,authenticated,service_role;');
- for(const f of ['20260925015926_bookkeeping_foundation.sql','20260925024651_bookkeeping_receipts.sql','20260925062141_bookkeeping_ledger.sql','20260925152053_bookkeeping_reports.sql','20260925163933_bookkeeping_statement_imports.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+f,import.meta.url),'utf8'));
+ for(const f of ['20260925015926_bookkeeping_foundation.sql','20260925024651_bookkeeping_receipts.sql','20260925062141_bookkeeping_ledger.sql','20260925152053_bookkeeping_reports.sql','20260925163933_bookkeeping_statement_imports.sql','20260925175309_bookkeeping_repeated_statement_rows.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+f,import.meta.url),'utf8'));
  owner=randomUUID();other=randomUUID();for(const u of [owner,other])await db.query('insert into auth.users values($1)',[u]);await db.exec('set role service_role');
  b=(await core('create_business',{name:'Statement fixture',legal_structure:'llc',tax_treatment:'unsure',contractor_income:false,request_key:randomUUID()},null)).business;
  entryId=(await core('post',{request_key:randomUUID(),confirmed:true,kind:'income',entry_date:'2027-01-15',purpose:'Customer payment',category:'4000',amount_cents:'12345'})).entry.id;
@@ -56,6 +56,23 @@ test('confirmed import persists normalized rows, replays by key and digest witho
  assert.deepEqual([coverage.from_date,coverage.through_date],['2027-01-15','2027-01-15']);
  const exported=await api('/'+statementId+'/export');assert.equal(exported.filename,`korlix-statement-review-${statementId}.csv`);
  assert.ok(exported.csv.includes('"Customer payment"'));
+});
+test('documented distinct repeated rows import; SQL guard and cross-file overlap remain strict',async()=>{
+ const csv='Date,Memo,Amount\n2027-01-22,Monthly service,-1.00\n2027-01-22,Monthly service,-1.00';
+ const p=payload({csv,duplicate_review_reason:'Two separate charges appear on the original bank statement.'});
+ const imported=await api('/import',p,owner,201);
+ assert.equal(imported.statement.row_count,2);
+ assert.equal(imported.statement.duplicate_review_reason,p.duplicate_review_reason);
+ assert.equal((await api('/'+imported.statement.id)).statement.duplicate_review_reason,p.duplicate_review_reason);
+ assert.equal((await api('')).statements.some(s=>s.id===imported.statement.id&&s.has_repeated_rows),true);
+ assert.ok((await api('/'+imported.statement.id+'/export')).csv.includes('Two separate charges'));
+ assert.equal((await api('/import',p,owner,201)).reused,true);
+ await api('/import',payload({csv,duplicate_review_reason:'A different explanation after the original import.'}),owner,409);
+ await api('/import',payload({csv}),owner,400);
+ await api('/import',payload({csv,duplicate_review_reason:'short'}),owner,400);
+ await api('/import',payload({csv:csv+'\n2027-01-23,Other,2.00',duplicate_review_reason:p.duplicate_review_reason}),owner,409);
+ const rows=[{line:2,date:'2027-02-11',description:'Same',amount_cents:'-100'},{line:3,date:'2027-02-11',description:'Same',amount_cents:'-100'}];
+ await assert.rejects(statement('import',{request_key:randomUUID(),confirmed:true,cash_account:'1000',year:'2027',source_sha256:'a'.repeat(64),rows}),/Repeated statement rows require/);
 });
 test('owner confirms exact one-to-one match; correction appends history and allows reviewed replacement',async()=>{
  const body={request_key:randomUUID(),confirmed:true,entry_id:entryId};
