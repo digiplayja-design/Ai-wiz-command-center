@@ -24,7 +24,7 @@ async function expireUpload(id){await db.query("update korlix_bookkeeping_receip
 async function entriesCount(){return(await db.query('select count(*)::int n from korlix_bookkeeping_entries where business_id=$1',[b.id])).rows[0].n;}
 test.before(async()=>{
  db=new PGlite();await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id text primary key,bucket_id text);alter table storage.objects enable row level security;create policy broad_legacy_storage on storage.objects for all to anon,authenticated using(true) with check(true);grant usage on schema public,storage to anon,authenticated,service_role;grant all on storage.objects to anon,authenticated;`);
- for(const f of ['20260925015926_bookkeeping_foundation.sql','20260925024651_bookkeeping_receipts.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+f,import.meta.url),'utf8'));
+ for(const f of ['20260925015926_bookkeeping_foundation.sql','20260925024651_bookkeeping_receipts.sql','20260925062141_bookkeeping_ledger.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+f,import.meta.url),'utf8'));
  bytes=await sharp({create:{width:60,height:80,channels:3,background:'#eee'}}).png().toBuffer();
  const database={rpc:async(name,p)=>{try{const args=name==='korlix_bookkeeping_v1'?[p.p_actor,p.p_action,p.p_business,p.p_data]:[p.p_actor,p.p_action,p.p_business,p.p_receipt,p.p_data];return {data:(await db.query(`select public.${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) r`,args)).rows[0].r};}catch(error){if(process.env.BK_DEBUG)console.error(error.message,error.code,error.where);return{error};}}};
  const storage={upload:async(path,buffer,mime)=>{puts++;if(uploadFail)throw Error('fixture upload failure');if(objects.has(path))assert.equal(digest(objects.get(path)),digest(buffer));objects.set(path,buffer);},download:async(path,hash,size)=>{gets++;const value=objects.get(path);if(!value)throw Error('fixture missing file');assert.equal(value.length,size);assert.equal(digest(value),hash);return value;},remove:async paths=>{removes++;if(deleteFail)throw Error('fixture deletion failure');for(const path of paths)objects.delete(path);}};
@@ -134,4 +134,12 @@ test('owner storage quota includes pending files across businesses and PDF scan 
 });
 test('review acknowledgement is required before any receipt entry is posted',async()=>{
  const r=await receipt();await api(rp('/'+r.id+'/entries'),payload({receipt_reviewed:false}),'POST',owner,400);assert.equal(await entriesCount(),0);
+});
+
+test('opening cutover rolls back rejected receipt posting and leaves evidence usable',async()=>{
+ const r=await receipt();
+ await db.query("select public.korlix_bookkeeping_ledger_v1($1,'post',$2,$3)",[owner,b.id,{request_key:randomUUID(),confirmed:true,kind:'opening',entry_date:'2027-01-15',purpose:'Prior closing balances',lines:[{account:'1000',debit_cents:'10000',credit_cents:'0'},{account:'3200',debit_cents:'0',credit_cents:'10000'}]}]);
+ await api(rp('/'+r.id+'/entries'),payload(),'POST',owner,400);assert.equal(await entriesCount(),0);
+ const links=(await db.query('select count(*)::int n from korlix_bookkeeping_receipt_links where business_id=$1',[b.id])).rows[0].n;assert.equal(links,0);
+ await api(rp('/'+r.id+'/entries'),payload({entry_date:'2027-01-16'}),'POST',owner,201);assert.equal(await entriesCount(),1);
 });
