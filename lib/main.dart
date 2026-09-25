@@ -1,3 +1,5 @@
+import 'bookkeeping/bookkeeping_client.dart';
+import 'bookkeeping/bookkeeping_screen.dart';
 import 'funnel_studio/funnel_client.dart';
 import 'funnel_studio/funnel_screen.dart';
 import 'workforce/workforce_client.dart';
@@ -6084,6 +6086,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   // Hide inactive Utility tools until full native workflows are ready.
   // Keep active Utility tools visible.
   static const List<String> _utilityTools = <String>[
+    'Bookkeeping 2027',
     'Funnel Studio',
     'Contacts CRM',
     'Workforce',
@@ -11156,6 +11159,13 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
+  Future<void> _openBookkeeping() async {
+    final client = BookkeepingClient(backendBaseUrl: kKorlixBackendBaseUrl,
+      headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision);
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
+      BookkeepingScreen(client: client, disposeClient: true)));
+  }
+
   Future<void> _openFunnelStudio() async {
     if (_currentTier.trim().toLowerCase() != 'enterprise') return;
     final client = FunnelClient(
@@ -11181,6 +11191,11 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   void _selectUtilityTool(String tool) {
+    if (tool == 'Bookkeeping 2027') {
+      unawaited(_openBookkeeping());
+      return;
+    }
+
     if (tool == 'Funnel Studio') {
       unawaited(_openFunnelStudio());
       return;
@@ -14299,6 +14314,7 @@ Make the entire output professional, well-structured using Markdown, and product
     };
 
     String statusFor(String tool) {
+      if (tool == 'Bookkeeping 2027') return 'Early access: business records, income, expenses and CSV export';
       if (tool == 'Funnel Studio') return 'Enterprise pages, lead capture and campaign links';
       if (tool == 'Workforce') return 'Enterprise attendance, work updates and employee access';
       if (tool == 'Contacts CRM') return 'Enterprise contacts, imports and Nova connections';
