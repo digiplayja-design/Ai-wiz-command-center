@@ -13,7 +13,7 @@ export function createMetaWebsiteConsent(database,publicBase,enabled){
   const {data:out,error}=await database.rpc('korlix_meta_measurement_v2',{p_actor:actor,p_action:action,p_funnel:funnel,p_data:{...data,...config}});
   if(error){const status={'42501':403,'P0002':404,'40001':409,'54000':429,'P0001':400,'23514':400}[error.code];fail(status?error.message:'Meta website consent is temporarily unavailable.',status||503);}return out;
  };
- return {configured,command,
+ return {configured,config,command,
   resolve:(f,code)=>configured?command(null,'resolve',f.id,{slug:f.slug,code}):null,
   capture(f,input,code,context,choice,headers={}){
    // Read browser metadata only for this affirmative consent version and a
