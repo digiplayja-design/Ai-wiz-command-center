@@ -1,5 +1,6 @@
+import {registerReceiptRoutes} from './receipt_routes.mjs';
 import {BookkeepingError,fail,id,profile,entry,reversal,monthQuery,csv} from './core.mjs';
-export function registerBookkeeping(app,{database,requireUser}={}){
+export function registerBookkeeping(app,{database,requireUser,receiptOptions={}}={}){
  const call=async(actor,action,business=null,data={})=>{
   const result=await database.rpc('korlix_bookkeeping_v1',{p_actor:actor,p_action:action,p_business:business,p_data:data});
   if(result.error){
@@ -20,9 +21,10 @@ export function registerBookkeeping(app,{database,requireUser}={}){
    let user;try{user=await requireUser(req);}catch{fail('Sign in to use Bookkeeping.',401,'BOOKKEEPING_AUTH_REQUIRED');}
    if(!user?.id)fail('Sign in to use Bookkeeping.',401,'BOOKKEEPING_AUTH_REQUIRED');
    if(!database)fail('Bookkeeping storage is not configured.',503,'BOOKKEEPING_UNAVAILABLE');
-   await fn(req,res,user.id);
+   await fn(req,res,user.id,user);
   }catch(e){res.status(e instanceof BookkeepingError?e.status:503).json({error:e instanceof BookkeepingError?e.message:'Bookkeeping is temporarily unavailable. Refresh before retrying a save.',code:e instanceof BookkeepingError?e.code:'BOOKKEEPING_UNAVAILABLE'});}
  };
+ registerReceiptRoutes(app,{route,database,...receiptOptions});
  const base='/api/bookkeeping/businesses';
  app.get(base,route(async(_q,r,u)=>r.json(await call(u,'list'))));
  app.post(base,route(async(q,r,u)=>r.status(201).json(await call(u,'create_business',null,profile(q.body)))));

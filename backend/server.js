@@ -2,6 +2,7 @@ import { registerFunnels } from './funnels/routes.mjs'; // K139_FUNNEL_STUDIO
 import { registerWorkforce } from './workforce/routes.mjs'; // K138_WORKFORCE
 import { registerContactsCrm } from './contacts_crm/routes.mjs'; // K137_ENTERPRISE_CONTACTS
 import { registerBookkeeping } from './bookkeeping/routes.mjs';
+import { extractReceipt } from './bookkeeping/receipt_scanner.mjs';
 // K135Z_GATE5_ESM_IMPORTS_BEGIN
 import k135zGate5Routes from "./k135z_zoom/zoom_routes.cjs";
 import k135zGate5Repository from "./k135z_zoom/b5b_repository.cjs";
@@ -13079,7 +13080,33 @@ app.post(
 // KORLIX_LIVE_DOCS_GENERATION_BUILD131_END
 
 // KORLIX_AGENT_EMAIL_DRAFT_ROUTES_BUILD133_INSTALL_START
-registerBookkeeping(app, { database: supabaseAdmin, requireUser });
+// Receipt storage has a bounded transport so incomplete-upload leases can expire safely.
+const bookkeepingStorage = supabaseUrl && supabaseServiceRoleKey ? createClient(supabaseUrl, supabaseServiceRoleKey, {
+  auth: { autoRefreshToken: false, persistSession: false },
+  global: { fetch: (url, init = {}) => fetch(url, { ...init, signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(45000)]) : AbortSignal.timeout(45000) }) },
+}) : null;
+registerBookkeeping(app, { database: supabaseAdmin, requireUser, receiptOptions: {
+  storageDatabase: bookkeepingStorage,
+  scanAccess: async (user) => {
+    if (!process.env.OPENAI_API_KEY) return { available: false, reason: 'AI scanning is not configured.', daily_limit: 0, credit_cost: 1 };
+    const profile = await getOrCreateProfile(user);
+    const usageCounter = await getOrCreateUsageCounter(user.id);
+    if (!profile || !usageCounter) throw new Error('Receipt usage storage unavailable');
+    const check = checkUsageAllowed({ profile, usageCounter, creditsNeeded: 1 });
+    return { available: hasAdvancedUploadAccess(profile.tier) && check.allowed,
+      reason: check.reason || '', daily_limit: getTierLimits(profile.tier).dailyRequestLimit, credit_cost: 1 };
+  },
+  scanReceipt: async ({ receipt, bytes }) => extractReceipt({ receipt, bytes,
+    client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY, maxRetries: 0, timeout: 90000 }),
+    createResponse: createTextResponse,
+    model: process.env.OPENAI_DOCUMENT_MODEL || process.env.OPENAI_ULTRA_MODEL || process.env.OPENAI_MODEL || 'gpt-6-astra',
+  }),
+  chargeScan: async (user) => {
+    const usageCounter = await getOrCreateUsageCounter(user.id);
+    if (!usageCounter) throw new Error('Receipt usage storage unavailable');
+    await incrementUsage({ usageCounter, liveSearchUsed: false, fileRequested: false, creditsNeeded: 1 });
+  },
+} });
 registerContactsCrm(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }); // K137_ENTERPRISE_CONTACTS
 registerWorkforce(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }); // K138_WORKFORCE
 registerFunnels(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1, autoStartScheduler: true }); // K141_FUNNEL_SCHEDULING
