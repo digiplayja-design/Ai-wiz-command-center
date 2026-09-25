@@ -1,3 +1,4 @@
+import {registerMileageRoutes} from './mileage.mjs';
 import {registerReceiptRoutes} from './receipt_routes.mjs';
 import {BookkeepingError,fail,id,profile,entry,reversal,monthQuery,csv} from './core.mjs';
 export function registerBookkeeping(app,{database,requireUser,receiptOptions={}}={}){
@@ -25,6 +26,7 @@ export function registerBookkeeping(app,{database,requireUser,receiptOptions={}}
   }catch(e){res.status(e instanceof BookkeepingError?e.status:503).json({error:e instanceof BookkeepingError?e.message:'Bookkeeping is temporarily unavailable. Refresh before retrying a save.',code:e instanceof BookkeepingError?e.code:'BOOKKEEPING_UNAVAILABLE'});}
  };
  registerReceiptRoutes(app,{route,database,...receiptOptions});
+ registerMileageRoutes(app,{route,database});
  const base='/api/bookkeeping/businesses';
  app.get(base,route(async(_q,r,u)=>r.json(await call(u,'list'))));
  app.post(base,route(async(q,r,u)=>r.status(201).json(await call(u,'create_business',null,profile(q.body)))));
