@@ -79,8 +79,16 @@ class _FunnelScreenState extends State<FunnelScreen> {
     _error = null;
     _revision++;
     _tags.updateAll((key, value) => key == 'medium' ? 'paid' : '');
+    final studioRoute = ModalRoute.of(context);
     final staleDialogs = _dialogs.toList();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Child tabs can open their own dialogs (lead details, campaign copy,
+      // credentials). Close the whole obsolete route stack above the studio.
+      final navigator = studioRoute?.navigator;
+      if (studioRoute?.isActive == true && navigator != null) {
+        navigator.popUntil((candidate) => candidate == studioRoute);
+        return;
+      }
       for (final route in staleDialogs) {
         final navigator = route.navigator;
         if (route.isActive && navigator != null) {
@@ -650,8 +658,12 @@ class _FunnelScreenState extends State<FunnelScreen> {
                 child: _denied
                     ? Center(
                         child: _title(
-                          'Enterprise access required',
-                          'Sign in with an active Enterprise account to open Funnel Studio.',
+                          widget.client.sessionChanged
+                              ? 'Session changed'
+                              : 'Enterprise access required',
+                          widget.client.sessionChanged
+                              ? 'Sign in again and reopen Funnel Studio to continue.'
+                              : 'Sign in with an active Enterprise account to open Funnel Studio.',
                         ),
                       )
                     : _selected == null

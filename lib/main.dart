@@ -11158,9 +11158,13 @@ Make the entire output professional, well-structured using Markdown, and product
 
   Future<void> _openFunnelStudio() async {
     if (_currentTier.trim().toLowerCase() != 'enterprise') return;
+    final client = FunnelClient(
+      backendBaseUrl: kKorlixBackendBaseUrl,
+      headersBuilder: _authHeaders,
+      sessionChanges: kKorlixAuthRevision,
+    );
     await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
-      FunnelScreen(client: FunnelClient(backendBaseUrl: kKorlixBackendBaseUrl,
-        headersBuilder: _authHeaders), disposeClient: true, onOpenContacts: _openContactsCrm)));
+      FunnelScreen(client: client, disposeClient: true, onOpenContacts: _openContactsCrm)));
   }
 
   Future<void> _openContactsCrm() async {

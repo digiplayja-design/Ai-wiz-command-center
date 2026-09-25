@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class FunnelException implements Exception {
@@ -17,20 +17,98 @@ class FunnelClient {
     required this.backendBaseUrl,
     required this.headersBuilder,
     http.Client? client,
+    this.sessionChanges,
   }) : _http = client ?? http.Client(),
-       _ownsClient = client == null;
+       _ownsClient = client == null {
+    if (sessionChanges != null) {
+      _sessionScope = _readSessionScope();
+      sessionChanges!.addListener(_checkSession);
+    }
+  }
   final String backendBaseUrl;
   final Map<String, String> Function() headersBuilder;
   final http.Client _http;
   final bool _ownsClient;
+  final Listenable? sessionChanges;
+  String? _sessionScope;
+  bool _sessionChanged = false, _disposed = false;
+  bool get sessionChanged => _sessionChanged;
+  static const _changed = FunnelException(
+    'Sign in again and reopen Funnel Studio to continue.',
+    401,
+  );
   void Function()? onAccessDenied;
   final Set<void Function()> _accessListeners = {};
   void addAccessDeniedListener(void Function() listener) =>
       _accessListeners.add(listener);
   void removeAccessDeniedListener(void Function() listener) =>
       _accessListeners.remove(listener);
+
+  // A UI lifetime key only, never proof of authentication or entitlement.
+  // Refresh rotates the token while retaining the issuer/user/session tuple.
+  // No token, email, metadata or signature is retained in this key.
+  String? _readSessionScope([Map<String, String>? headers]) {
+    try {
+      final values = (headers ?? headersBuilder()).entries.where(
+        (e) => e.key.toLowerCase() == 'authorization',
+      );
+      if (values.length != 1) return null;
+      final bearer = RegExp(
+        r'^Bearer\s+(\S+)$',
+        caseSensitive: false,
+      ).firstMatch(values.single.value.trim());
+      final parts = bearer?.group(1)?.split('.');
+      if (parts == null || parts.length != 3 || parts.any((p) => p.isEmpty)) {
+        return null;
+      }
+      final claims = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      if (claims is! Map) return null;
+      final scope = [claims['iss'], claims['sub'], claims['session_id']];
+      if (scope.any((v) => v is! String || v.trim().isEmpty)) return null;
+      return jsonEncode(scope);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _notifyAccessDenied() {
+    onAccessDenied?.call();
+    for (final listener in _accessListeners.toList()) {
+      listener();
+    }
+  }
+
+  void _checkSession() {
+    if (_disposed || _sessionChanged || sessionChanges == null) return;
+    if (_sessionScope == null || _readSessionScope() != _sessionScope) {
+      _sessionChanged = true;
+      _notifyAccessDenied();
+    }
+  }
+
+  void _ensureSession([Map<String, String>? requestHeaders]) {
+    if (_disposed) {
+      throw const FunnelException('Funnel Studio is closed. Open it again.');
+    }
+    _checkSession();
+    if (!_sessionChanged &&
+        sessionChanges != null &&
+        requestHeaders != null &&
+        _readSessionScope(requestHeaders) != _sessionScope) {
+      _sessionChanged = true;
+      _notifyAccessDenied();
+    }
+    if (_sessionChanged) throw _changed;
+  }
+
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    sessionChanges?.removeListener(_checkSession);
     _accessListeners.clear();
+    onAccessDenied = null;
     if (_ownsClient) _http.close();
   }
 
@@ -75,9 +153,15 @@ class FunnelClient {
 
   Future<Map<String, dynamic>> _send(http.BaseRequest req) async {
     try {
+      // Initial loads can start in a widget's initState. Deliver access loss
+      // after that synchronous build completes, and recheck the captured headers.
+      await Future<void>.value();
+      _ensureSession(req.headers);
       final response = await (() async => http.Response.fromStream(
         await _http.send(req),
       ))().timeout(const Duration(seconds: 100));
+      // A completed request must not return private data to a later session.
+      _ensureSession();
       Map<String, dynamic>? result;
       try {
         result = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
@@ -86,10 +170,7 @@ class FunnelClient {
       }
       if (response.statusCode < 200 || response.statusCode >= 300) {
         if (response.statusCode == 401 || response.statusCode == 403) {
-          onAccessDenied?.call();
-          for (final listener in _accessListeners.toList()) {
-            listener();
-          }
+          _notifyAccessDenied();
         }
         throw FunnelException(
           result?['error']?.toString() ??
@@ -104,10 +185,12 @@ class FunnelClient {
       }
       return result;
     } on TimeoutException {
+      _ensureSession();
       throw const FunnelException(
         'This is taking longer than expected. Refresh before trying again.',
       );
     } on http.ClientException {
+      _ensureSession();
       throw const FunnelException('Check your connection and try again.');
     }
   }
