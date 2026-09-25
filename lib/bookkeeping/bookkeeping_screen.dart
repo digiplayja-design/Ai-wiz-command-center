@@ -369,6 +369,10 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
                                   _header(),
                                   const SizedBox(height: 22),
                                   _toolbar(),
+                                  if (_overview != null) ...[
+                                    const SizedBox(height: 14),
+                                    _statementGuide(),
+                                  ],
                                   const SizedBox(height: 20),
                                   if (_overview != null) ...[
                                     _totals(),
@@ -697,6 +701,59 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
       ),
     ],
   );
+  Widget _statementGuide() => _panel(
+    Material(
+      color: Colors.transparent,
+      child: ExpansionTile(
+        title: const Text('Statement review guide'),
+        subtitle: const Text('From CSV import to owner review'),
+        childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+        children: [
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '1. Choose the correct business cash account and check opening balances in Accounts & journals.',
+                ),
+                SizedBox(height: 8),
+                Text(
+                  '2. Preview the bank CSV, map the columns, fix invalid or duplicate rows, then confirm the import.',
+                ),
+                SizedBox(height: 8),
+                Text(
+                  '3. Open Saved statements. Compare the original bank balances, review each suggested match, and record corrections with a reason.',
+                ),
+                SizedBox(height: 8),
+                Text(
+                  '4. Export the review CSV and compare it with the original bank statement and recorded books. A matching worksheet total does not prove complete reconciliation.',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                TextButton(
+                  onPressed: _busy ? null : _openStatementPreview,
+                  child: const Text('Start CSV preview'),
+                ),
+                TextButton(
+                  onPressed: _busy ? null : _openStatementHistory,
+                  child: const Text('Open saved reviews'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
   Widget _totals() => LayoutBuilder(
     builder: (_, c) {
       final width = c.maxWidth >= 780 ? (c.maxWidth - 28) / 3 : c.maxWidth;
@@ -967,12 +1024,12 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
         ),
         SizedBox(height: 8),
         Text(
-          'Live now: business profiles, manual income and expenses, private receipts, reviewed AI scanning, business mileage, accounts, balanced journals, opening balances, correction history, recorded financial reports, and CSV exports.',
+          'Live now: business profiles, manual income and expenses, private receipts, reviewed AI scanning, business mileage, accounts, balanced journals, opening balances, recorded reports, statement CSV imports, reviewed matches and CSV exports.',
           style: TextStyle(height: 1.6),
         ),
         SizedBox(height: 6),
         Text(
-          'Coming next: statement imports, reconciliation, and release hardening.',
+          'Next: real-statement owner acceptance, completeness checks, and release hardening. Statement review is not a completed bank reconciliation.',
           style: TextStyle(color: _muted, height: 1.6),
         ),
         SizedBox(height: 10),

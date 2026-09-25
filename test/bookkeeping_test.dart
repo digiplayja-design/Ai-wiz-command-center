@@ -231,12 +231,40 @@ void main() {
       await t.pumpAndSettle();
       expect(find.text('Add your first business'), findsOneWidget);
       expect(
-        find.textContaining('Coming next: statement imports'),
+        find.textContaining('Next: real-statement owner acceptance'),
         findsOneWidget,
       );
       expect(t.takeException(), isNull);
       await tap(t, 'Add your first business');
       expect(find.text('Add your business'), findsOneWidget);
+      expect(t.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'statement guide describes live review steps and opens saved imports',
+    (t) async {
+      final c = client(
+        (r) => reply(
+          r.url.path.endsWith('/overview')
+              ? overview()
+              : r.url.path.endsWith('/statements')
+              ? {'statements': <Object>[]}
+              : {
+                  'businesses': [business()],
+                },
+        ),
+      );
+      addTearDown(c.dispose);
+      await size(t, const Size(390, 844));
+      await t.pumpWidget(MaterialApp(home: BookkeepingScreen(client: c)));
+      await t.pumpAndSettle();
+      await tap(t, 'Statement review guide');
+      expect(
+        find.textContaining('matching worksheet total does not prove'),
+        findsOneWidget,
+      );
+      await tap(t, 'Open saved reviews');
+      expect(find.text('No saved statements yet.'), findsOneWidget);
       expect(t.takeException(), isNull);
     },
   );
