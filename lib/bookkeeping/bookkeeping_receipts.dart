@@ -16,11 +16,12 @@ class BookkeepingReceipts extends StatefulWidget {
     required this.businessName,
     required this.categories,
     this.entry,
+    this.cashAccounts = const [],
     this.picker,
   });
   final BookkeepingClient client;
   final String businessId, businessName;
-  final List<Map<String, dynamic>> categories;
+  final List<Map<String, dynamic>> categories, cashAccounts;
   final Map<String, dynamic>? entry;
   final Future<BookkeepingPickedReceipt?> Function({bool camera})? picker;
   @override
@@ -201,6 +202,7 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
         client: widget.client,
         businessId: widget.businessId,
         categories: widget.categories,
+        cashAccounts: widget.cashAccounts,
         kind: kind,
         receipt: receipt,
         suggestions: suggestions,

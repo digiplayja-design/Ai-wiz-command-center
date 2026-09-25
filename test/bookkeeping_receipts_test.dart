@@ -149,12 +149,18 @@ void main() {
           kind: 'expense',
           receipt: receipt(),
           suggestions: suggestions(),
+          cashAccounts: const [
+            {'code': '1000', 'name': 'Recorded cash control'},
+            {'code': '1001', 'name': 'Operating bank'},
+          ],
         ),
       );
       expect(
         t.widget<TextField>(f.field('Amount (USD)')).controller!.text,
         '12.34',
       );
+      await f.tap(t, 'Recorded cash control (1000)');
+      await f.tap(t, 'Operating bank (1001)');
       await f.fill(t, 'Business purpose', 'Office supplies');
       await f.tap(t, 'Review entry');
       expect(
@@ -172,6 +178,7 @@ void main() {
       expect(path, endsWith('/receipts/$rid/entries'));
       expect(body!['receipt_reviewed'], true);
       expect(body!['amount'], '12.34');
+      expect(body!['cash_account'], '1001');
       c.dispose();
     },
   );

@@ -198,10 +198,11 @@ class BookkeepingEntryDialog extends StatefulWidget {
     this.original,
     this.receipt,
     this.suggestions,
+    this.cashAccounts = const [],
   });
   final BookkeepingClient client;
   final String businessId, kind;
-  final List<Map<String, dynamic>> categories;
+  final List<Map<String, dynamic>> categories, cashAccounts;
   final Map<String, dynamic>? original, receipt, suggestions;
   @override
   State<BookkeepingEntryDialog> createState() => _BookkeepingEntryDialogState();
@@ -217,6 +218,12 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
     text: bookkeepingDate(DateTime.now()),
   );
   String? _category, _error;
+  String _cashAccount = '1000';
+  List<Map<String, dynamic>> get _cashAccounts => widget.cashAccounts.isEmpty
+      ? const [
+          {'code': '1000', 'name': 'Recorded cash control'},
+        ]
+      : widget.cashAccounts;
   bool _busy = false, _attempted = false, _receiptReviewed = false;
   Map<String, dynamic>? _review;
   bool get _reversing => widget.original != null;
@@ -276,6 +283,7 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
           'amount': _amount.text,
           'entry_date': _date.text,
           'category': _category,
+          'cash_account': _cashAccount,
           'counterparty': _party.text.trim(),
           'purpose': _purpose.text.trim(),
           'receipt_reference': _reference.text.trim(),
@@ -349,6 +357,9 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
                         ),
                       Text('Date received / paid: ${_review!['entry_date']}'),
                       Text(
+                        'Cash account: ${_cashAccounts.firstWhere((a) => a['code'] == _cashAccount)['name']} ($_cashAccount)',
+                      ),
+                      Text(
                         'Category: ${_categories.firstWhere((c) => c['code'] == _category)['name']}',
                       ),
                       if (_party.text.trim().isNotEmpty)
@@ -362,7 +373,7 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
                     Text(
                       _reversing
                           ? 'The original stays in your history. An equal offset is recorded on ${widget.original!['entry_date']}, changing that month’s totals. Record a replacement separately if needed.'
-                          : 'Save this once the amount, date and category are correct. Saved entries stay in your history; use a reversal to correct a mistake.',
+                          : 'Save this once the amount, date, cash account and category are correct. Saved entries stay in your history; use a reversal to correct a mistake.',
                     ),
                     if (_error != null)
                       Padding(
@@ -389,7 +400,7 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
                         const SizedBox(height: 16),
                       ] else ...[
                         const Text(
-                          'Record money actually received or paid for business operations. Use Accounts & journals for loans, owner funding, transfers and asset purchases. This form records activity through Recorded cash control (1000).',
+                          'Record money actually received or paid for business operations. Use Accounts & journals for loans, owner funding, transfers and asset purchases. Choose the cash account that received or paid the money. Add named accounts in Accounts & journals.',
                           style: TextStyle(
                             fontSize: 12,
                             color: Color(0xff506279),
@@ -426,6 +437,30 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
                             hintText: 'YYYY-MM-DD',
                           ),
                           validator: validateBookkeepingDate,
+                        ),
+                        const SizedBox(height: 18),
+                        DropdownButtonFormField<String>(
+                          initialValue: _cashAccount,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Cash account',
+                          ),
+                          items: _cashAccounts
+                              .map(
+                                (a) => DropdownMenuItem(
+                                  value: a['code'] as String,
+                                  child: Text(
+                                    '${a['name']} (${a['code']})',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (v) {
+                            if (v != null) _cashAccount = v;
+                          },
+                          validator: (v) =>
+                              v == null ? 'Choose a cash account.' : null,
                         ),
                         const SizedBox(height: 18),
                         DropdownButtonFormField<String>(

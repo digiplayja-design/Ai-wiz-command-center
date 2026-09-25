@@ -542,7 +542,7 @@ class _BookkeepingLedgerState extends State<BookkeepingLedger> {
                           ],
                           const SizedBox(height: 18),
                           const Text(
-                            'Manual USD records · Operating income and expenses currently use Recorded cash control (1000). Named cash accounts support transfers and journals. Interest, fees and other operating costs use the main expense form. Bank reconciliation, depreciation and full accountant reports are still in development.',
+                            'Manual USD records · Choose named cash accounts in the income and expense forms. Named accounts also support transfers and journals. Interest, fees and other operating costs use the main expense form. Open Reports on the dashboard for recorded financial statements and ledger exports. Bank reconciliation and depreciation are not performed.',
                             style: TextStyle(
                               fontSize: 12,
                               color: Color(0xff566a7f),
