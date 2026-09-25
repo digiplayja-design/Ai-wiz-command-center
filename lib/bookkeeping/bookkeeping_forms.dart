@@ -196,11 +196,13 @@ class BookkeepingEntryDialog extends StatefulWidget {
     required this.categories,
     required this.kind,
     this.original,
+    this.receipt,
+    this.suggestions,
   });
   final BookkeepingClient client;
   final String businessId, kind;
   final List<Map<String, dynamic>> categories;
-  final Map<String, dynamic>? original;
+  final Map<String, dynamic>? original, receipt, suggestions;
   @override
   State<BookkeepingEntryDialog> createState() => _BookkeepingEntryDialogState();
 }
@@ -215,7 +217,7 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
     text: bookkeepingDate(DateTime.now()),
   );
   String? _category, _error;
-  bool _busy = false, _attempted = false;
+  bool _busy = false, _attempted = false, _receiptReviewed = false;
   Map<String, dynamic>? _review;
   bool get _reversing => widget.original != null;
   List<Map<String, dynamic>> get _categories =>
@@ -226,6 +228,23 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
     _category = _categories.isEmpty
         ? null
         : _categories.first['code'] as String;
+    final data = widget.suggestions;
+    if (data != null) {
+      if (data['currency'] == 'USD' &&
+          validateBookkeepingAmount(data['total'] as String?) == null) {
+        _amount.text = data['total'] as String;
+      }
+      _party.text = data['vendor'] as String? ?? '';
+      if (validateBookkeepingDate(data['document_date'] as String?) == null) {
+        _date.text = data['document_date'] as String;
+      }
+    }
+    if (widget.receipt != null) {
+      _reference.text = (widget.receipt!['filename'] as String).substring(
+        0,
+        (widget.receipt!['filename'] as String).length.clamp(0, 160),
+      );
+    }
   }
 
   @override
@@ -238,11 +257,18 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
 
   void _prepare() {
     if (!_form.currentState!.validate()) return;
+    if (widget.receipt != null && !_receiptReviewed) {
+      setState(
+        () => _error = 'Check the receipt details before reviewing this entry.',
+      );
+      return;
+    }
     setState(() {
       _error = null;
       _review = {
         'request_key': bookkeepingRequestKey(),
         'confirmed': true,
+        if (widget.receipt != null) 'receipt_reviewed': true,
         if (_reversing)
           'reason': _purpose.text.trim()
         else ...{
@@ -268,7 +294,9 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
     try {
       await widget.client.request(
         'POST',
-        '/businesses/${widget.businessId}/entries${_reversing ? '/${widget.original!['id']}/reverse' : ''}',
+        widget.receipt != null
+            ? '/businesses/${widget.businessId}/receipts/${widget.receipt!['id']}/entries'
+            : '/businesses/${widget.businessId}/entries${_reversing ? '/${widget.original!['id']}/reverse' : ''}',
         body: _review,
       );
       if (mounted) {
@@ -315,6 +343,10 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
                     ),
                     const SizedBox(height: 12),
                     if (!_reversing) ...[
+                      if (widget.receipt != null)
+                        Text(
+                          'Attached original: ${widget.receipt!['filename']}',
+                        ),
                       Text('Date received / paid: ${_review!['entry_date']}'),
                       Text(
                         'Category: ${_categories.firstWhere((c) => c['code'] == _category)['name']}',
@@ -363,6 +395,17 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
                             color: Color(0xff506279),
                           ),
                         ),
+                        if (widget.receipt != null) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            'Receipt: ${widget.receipt!['filename']}',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          const Text(
+                            'Verify the currency and actual payment date. Unpaid invoices do not belong in cash activity. Attaching an original preserves it with your entry history.',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ],
                         const SizedBox(height: 18),
                         TextFormField(
                           controller: _amount,
@@ -437,7 +480,7 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
                           decoration: const InputDecoration(
                             labelText: 'Receipt / invoice reference (optional)',
                             helperText:
-                                'A reference only. File uploads are coming next.',
+                                'Attach original files from the receipt inbox.',
                             helperMaxLines: 2,
                           ),
                           maxLength: 160,
@@ -449,7 +492,24 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
                             color: Color(0xff506279),
                           ),
                         ),
+                        if (widget.receipt != null)
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text(
+                              'I checked the receipt, amount, currency and date paid / received.',
+                            ),
+                            value: _receiptReviewed,
+                            onChanged: (v) => setState(() {
+                              _receiptReviewed = v!;
+                              _error = null;
+                            }),
+                          ),
                       ],
+                      if (_error != null)
+                        Text(
+                          _error!,
+                          style: const TextStyle(color: Color(0xff9c2525)),
+                        ),
                     ],
                   ),
                 ),

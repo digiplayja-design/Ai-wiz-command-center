@@ -231,7 +231,7 @@ void main() {
       await t.pumpAndSettle();
       expect(find.text('Add your first business'), findsOneWidget);
       expect(
-        find.textContaining('Coming next: receipt uploads'),
+        find.textContaining('Coming next: mileage'),
         findsOneWidget,
       );
       expect(t.takeException(), isNull);

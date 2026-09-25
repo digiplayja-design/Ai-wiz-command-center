@@ -131,39 +131,83 @@ class BookkeepingClient {
     return _send(req);
   }
 
+  Future<Map<String, dynamic>> uploadReceipt(
+    String business,
+    String requestKey,
+    String name,
+    Uint8List bytes,
+  ) async {
+    if (bytes.isEmpty || bytes.length > 8 * 1024 * 1024) {
+      throw const BookkeepingException('Choose a receipt file up to 8 MB.');
+    }
+    final req =
+        http.MultipartRequest(
+            'POST',
+            Uri.parse(
+              '${backendBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/bookkeeping/businesses/$business/receipts',
+            ),
+          )
+          ..headers.addAll({
+            ...headersBuilder(),
+            'Accept': 'application/json',
+            'X-Receipt-Request-Key': requestKey,
+          })
+          ..files.add(
+            http.MultipartFile.fromBytes('receipt', bytes, filename: name),
+          );
+    return _send(req);
+  }
+
+  Future<Uint8List> receiptBytes(
+    String business,
+    String receipt, {
+    bool preview = false,
+  }) async {
+    final req = http.Request(
+      'GET',
+      Uri.parse(
+        '${backendBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/bookkeeping/businesses/$business/receipts/$receipt/${preview ? 'preview' : 'file'}',
+      ),
+    )..headers.addAll({...headersBuilder(), 'Accept': 'application/octet-stream'});
+    return (await _response(req)).bodyBytes;
+  }
+
   Future<Map<String, dynamic>> _send(http.BaseRequest req) async {
+    final response = await _response(req);
     try {
-      // Initial loads can start in a widget's initState. Deliver access loss
-      // after that synchronous build completes, and recheck the captured headers.
+      return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+    } catch (_) {
+      throw const BookkeepingException(
+        'Bookkeeping returned an unreadable response. Please try again.',
+      );
+    }
+  }
+
+  Future<http.Response> _response(http.BaseRequest req) async {
+    try {
       await Future<void>.value();
       _ensureSession(req.headers);
       final response = await (() async => http.Response.fromStream(
         await _http.send(req),
       ))().timeout(const Duration(seconds: 100));
-      // A completed request must not return private data to a later session.
       _ensureSession();
-      Map<String, dynamic>? result;
-      try {
-        result = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
-      } catch (_) {
-        /* Handle invalid upstream responses below. */
-      }
       if (response.statusCode < 200 || response.statusCode >= 300) {
         if (response.statusCode == 401 || response.statusCode == 403) {
           _notifyAccessDenied();
         }
+        String? error;
+        try {
+          error = (jsonDecode(response.body) as Map)['error']?.toString();
+        } catch (_) {
+          /* Use generic message. */
+        }
         throw BookkeepingException(
-          result?['error']?.toString() ??
-              'Bookkeeping could not complete this request. Please try again.',
+          error ??
+              'Bookkeeping could not complete this request. Refresh before retrying.',
           response.statusCode,
         );
       }
-      if (result == null) {
-        throw const BookkeepingException(
-          'Bookkeeping returned an unreadable response. Please try again.',
-        );
-      }
-      return result;
+      return response;
     } on TimeoutException {
       _ensureSession();
       throw const BookkeepingException(

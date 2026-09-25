@@ -4,6 +4,7 @@ import 'bookkeeping_client.dart';
 import 'bookkeeping_csv_save.dart';
 import 'bookkeeping_forms.dart';
 import 'bookkeeping_models.dart';
+import 'bookkeeping_receipts.dart';
 
 const _navy = Color(0xff10253f),
     _cyan = Color(0xff087e98),
@@ -58,8 +59,12 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
       _busy = false;
       _error = null;
     });
+    final ownRoute = ModalRoute.of(context);
     final obsolete = _dialogs.toList();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (ownRoute != null && ownRoute.isActive && obsolete.isNotEmpty) {
+        ownRoute.navigator?.popUntil((route) => route == ownRoute);
+      }
       for (final r in obsolete) {
         if (r.isActive) r.navigator?.removeRoute(r);
       }
@@ -140,6 +145,24 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
         categories: bookkeepingRows(_overview!['categories']),
         kind: kind,
         original: original,
+      ),
+    );
+    if (!_current(op)) return;
+    if (saved != null) _month = (saved['entry_date'] as String).substring(0, 7);
+    _offset = 0;
+    await _load(list: false);
+  }
+
+  Future<void> _openReceipts({Map<String, dynamic>? entry}) async {
+    if (_business == null || _overview == null) return;
+    final op = _operation;
+    final saved = await _dialog<Map<String, dynamic>>(
+      BookkeepingReceipts(
+        client: widget.client,
+        businessId: _business!['id'] as String,
+        businessName: _business!['name'] as String,
+        categories: bookkeepingRows(_overview!['categories']),
+        entry: entry,
       ),
     );
     if (!_current(op)) return;
@@ -573,6 +596,11 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
         label: const Text('Record expense'),
       ),
       OutlinedButton.icon(
+        onPressed: _busy || _overview == null ? null : () => _openReceipts(),
+        icon: const Icon(Icons.receipt_long_outlined, size: 18),
+        label: const Text('Receipt inbox'),
+      ),
+      OutlinedButton.icon(
         key: _exportKey,
         onPressed: _busy || _overview == null ? null : _export,
         icon: const Icon(Icons.download_outlined, size: 18),
@@ -806,6 +834,12 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
                 style: const TextStyle(color: _muted, fontSize: 12),
               ),
             ),
+          if (!reversal)
+            TextButton.icon(
+              onPressed: _busy ? null : () => _openReceipts(entry: e),
+              icon: const Icon(Icons.attach_file, size: 16),
+              label: const Text('Entry receipts'),
+            ),
           if (!reversed && !reversal)
             TextButton.icon(
               onPressed: _busy
@@ -839,12 +873,12 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
         ),
         SizedBox(height: 8),
         Text(
-          'Live now: business profiles, manual income and expenses, correction history, and monthly CSV export.',
+          'Live now: business profiles, manual income and expenses, private receipts, reviewed AI scanning, correction history, and monthly CSV export.',
           style: TextStyle(height: 1.6),
         ),
         SizedBox(height: 6),
         Text(
-          'Coming next: receipt uploads and scanning. Mileage, reconciliation and accountant reports follow.',
+          'Coming next: mileage, expanded accounting entries, reconciliation and accountant reports.',
           style: TextStyle(color: _muted, height: 1.6),
         ),
         SizedBox(height: 10),
