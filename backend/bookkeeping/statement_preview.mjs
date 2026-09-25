@@ -65,6 +65,20 @@ export function statementCoverage(rows,decisions){
   from_date:from,through_date:through,
   scope:'Review progress for imported rows only. These signed totals are not a cleared bank balance or proof of complete reconciliation.'};
 }
+export function statementReviewCsv(data){
+ const s=data.statement,decisions=data.decisions??[];
+ if(!s||!Array.isArray(s.rows)||!Array.isArray(decisions)||s.rows.length>500||decisions.length>5000)fail('Statement history is too large to export. Contact support.',422);
+ const latest=new Map();
+ for(const decision of decisions)latest.set(Number(decision.row_line),decision);
+ const coverage=statementCoverage(s.rows,decisions);
+ const cents=v=>({exactCents:String(v)});
+ const rows=[['KORLIX saved statement review'],['Statement ID',s.id],['Cash account',s.cash_account],['Calendar year',s.statement_year],['Scope',coverage.scope],['Imported dates',coverage.from_date,coverage.through_date],['Matched rows',coverage.matched_count],['Open rows',coverage.open_count],['Signed statement cents',cents(coverage.statement_net_cents)],['Matched signed cents',cents(coverage.matched_net_cents)],['Open signed cents',cents(coverage.open_net_cents)],[],['Line','Date','Description','Signed cents (text for precision)','Current status','Current entry ID']];
+ for(const row of s.rows){const d=latest.get(Number(row.line));rows.push([row.line,row.date,row.description,cents(row.amount_cents),d?.action==='match'?'matched':'open',d?.action==='match'?d.entry_id:'']);}
+ rows.push([],['Decision history (chronological)'],['Decision ID','Line','Action','Entry ID','Corrects decision ID','Reason','Recorded at']);
+ for(const d of decisions)rows.push([d.id,d.row_line,d.action,d.entry_id,d.previous_match_id,d.reason,d.created_at]);
+ const cell=v=>{let value;if(v&&typeof v==='object'&&/^-?\d+$/.test(v.exactCents)){value="'"+v.exactCents;}else{value=String(v??'');if(/^\s*[=+\-@]/.test(value)||/^[\t\r\n]/.test(value))value="'"+value;}return '"'+value.replaceAll('"','""')+'"';};
+ return {filename:`korlix-statement-review-${s.id}.csv`,csv:'\uFEFF'+rows.map(r=>r.map(cell).join(',')).join('\r\n')+'\r\n',scope:coverage.scope};
+}
 export function previewStatement(input,report){
  if(!input||typeof input!=='object'||Array.isArray(input))fail('Choose a statement and its columns.');
  const {header,rows}=parseStatementCsv(input.csv);
@@ -114,6 +128,10 @@ export function registerStatementPreviewRoutes(app,{route,database}){
   r.json(previewStatement(body,result.data));
  }));
  app.get(base,route(async(q,r,u)=>r.json(await call(u,id(q.params.id),'list'))));
+ app.get(base+'/:statement/export',route(async(q,r,u)=>{
+  const data=await call(u,id(q.params.id),'get',{statement_id:id(q.params.statement)});
+  r.json(statementReviewCsv(data));
+ }));
  app.get(base+'/:statement',route(async(q,r,u)=>{
   const business=id(q.params.id),data=await call(u,business,'get',{statement_id:id(q.params.statement)});
   const s=data.statement;

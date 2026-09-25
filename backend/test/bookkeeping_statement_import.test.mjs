@@ -5,7 +5,7 @@ import {randomUUID} from 'node:crypto';
 import {PGlite} from '@electric-sql/pglite';
 import express from 'express';
 import {registerBookkeeping} from '../bookkeeping/routes.mjs';
-import {statementCoverage} from '../bookkeeping/statement_preview.mjs';
+import {statementCoverage,statementReviewCsv} from '../bookkeeping/statement_preview.mjs';
 let db,server,base,owner,other,b,entryId,statementId;
 const rpc=async(name,args)=>(await db.query(`select public.${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) r`,args)).rows[0].r;
 const core=(action,data,business=b.id,actor=owner)=>rpc('korlix_bookkeeping_v1',[actor,action,business,data]);
@@ -20,6 +20,15 @@ test('coverage preserves signed cents and takes the latest correction for each r
  assert.deepEqual([c.row_count,c.matched_count,c.open_count],[2,1,1]);
  assert.deepEqual([c.statement_net_cents,c.matched_net_cents,c.open_net_cents],['7','9007199254741000','-9007199254740993']);
  assert.deepEqual([c.from_date,c.through_date],['2027-01-31','2027-02-02']);
+});
+test('review CSV neutralizes formulas, quotes and preserves exact signed cents',()=>{
+ const id=randomUUID();
+ const exported=statementReviewCsv({statement:{id,cash_account:'1000',statement_year:2027,rows:[{line:2,date:'2027-01-15',description:'=HYPERLINK("x", "click")\nSecond line',amount_cents:'-9007199254740993'}]},decisions:[]});
+ assert.equal(exported.filename,`korlix-statement-review-${id}.csv`);
+ assert.ok(exported.csv.startsWith('\uFEFF'));
+ assert.ok(exported.csv.includes('"\'=HYPERLINK(""x"", ""click"")\nSecond line"'));
+ assert.ok(exported.csv.includes('"\'-9007199254740993"'));
+ assert.ok(exported.csv.includes('"open"'));
 });
 test.before(async()=>{
  db=new PGlite();await db.exec('create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id text primary key,bucket_id text);alter table storage.objects enable row level security;grant usage on schema public,storage to anon,authenticated,service_role;');
@@ -45,6 +54,8 @@ test('confirmed import persists normalized rows, replays by key and digest witho
  assert.deepEqual([coverage.row_count,coverage.matched_count,coverage.open_count],[1,0,1]);
  assert.deepEqual([coverage.statement_net_cents,coverage.matched_net_cents,coverage.open_net_cents],['12345','0','12345']);
  assert.deepEqual([coverage.from_date,coverage.through_date],['2027-01-15','2027-01-15']);
+ const exported=await api('/'+statementId+'/export');assert.equal(exported.filename,`korlix-statement-review-${statementId}.csv`);
+ assert.ok(exported.csv.includes('"Customer payment"'));
 });
 test('owner confirms exact one-to-one match; correction appends history and allows reviewed replacement',async()=>{
  const body={request_key:randomUUID(),confirmed:true,entry_id:entryId};
@@ -68,6 +79,7 @@ test('cross-owner, fake cash candidate, malformed import and browser roles fail 
  await api('/import',payload({csv:'Date,Memo,Amount\n2027-01-15,X,1\n2027-01-15,X,1'}),owner,400);
  await api('/'+statementId+'/rows/2/match',{request_key:randomUUID(),confirmed:true,entry_id:randomUUID()},owner,409);
  await api('/'+statementId,undefined,other,404);await api('/'+statementId,undefined,'',401);
+ await api('/'+statementId+'/export',undefined,other,404);await api('/'+statementId+'/export',undefined,'',401);
  assert.equal((await api('')).statements.length,baseline);
  await assert.rejects(db.query("insert into korlix_bookkeeping_statement_decisions(business_id,statement_id,row_line,action,entry_id,request_key,request_data,created_by) values($1,$2,2,'match',$3,$4,'{}',$5)",[b.id,statementId,randomUUID(),randomUUID(),owner]),/recorded cash movement/);
  await assert.rejects(db.query('delete from korlix_bookkeeping_statement_imports where id=$1',[statementId]),/permission denied/);
