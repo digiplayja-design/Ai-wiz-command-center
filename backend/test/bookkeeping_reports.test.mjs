@@ -106,3 +106,14 @@ test('ledger export rejects over-limit data rather than returning a partial file
   await db.query(`insert into korlix_bookkeeping_entries(business_id,entry_date,kind,amount_cents,debit_account,credit_account,purpose,request_key,request_data,created_by) select $1,'2027-01-01','income',1,'1000','4000','Volume fixture',gen_random_uuid(),'{}',$2 from generate_series(1,25001)`,[b.id,owner]);await db.exec('set role service_role');await report('2027-01','ledger',owner,b.id,422);assert.equal((await report()).cash_entry_count,25001);
  }finally{await db.exec('reset role;set role service_role');}
 });
+test('statement preview uses the real owner-scoped report and exact named cash account',async()=>{
+ const named=(await account()).account;
+ const posted=(await cash({cash_account:named.code,amount_cents:'12345'})).entry;
+ const path=`${base}/api/bookkeeping/businesses/${b.id}/statements/preview`;
+ const body=JSON.stringify({csv:'Date,Memo,Amount\n2027-01-15,Service,123.45',mapping:{date:'Date',description:'Memo',amount:'Amount'},cash_account:named.code,year:'2027'});
+ let r=await fetch(path,{method:'POST',headers:{'content-type':'application/json',Authorization:owner},body});
+ assert.equal(r.status,200);let preview=await r.json();assert.equal(preview.entries[0].status,'suggested');assert.equal(preview.entries[0].candidates[0].entry_id,posted.id);
+ assert.equal((await db.query('select count(*)::int n from korlix_bookkeeping_entries where business_id=$1',[b.id])).rows[0].n,1);
+ r=await fetch(path,{method:'POST',headers:{'content-type':'application/json',Authorization:other},body});assert.equal(r.status,404);
+ r=await fetch(path,{method:'POST',headers:{'content-type':'application/json'},body});assert.equal(r.status,401);
+});
