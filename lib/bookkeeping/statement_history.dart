@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'bookkeeping_client.dart';
 import 'bookkeeping_csv_save.dart';
 import 'bookkeeping_models.dart';
+import 'statement_balance_worksheet.dart';
 
 class BookkeepingStatementHistory extends StatefulWidget {
   const BookkeepingStatementHistory({
@@ -317,6 +318,11 @@ class _BookkeepingStatementHistoryState
                   'Signed statement total ${_detail!['coverage']['statement_net_cents']} cents · matched ${_detail!['coverage']['matched_net_cents']} cents · open ${_detail!['coverage']['open_net_cents']} cents',
                 ),
                 Text('${_detail!['coverage']['scope']}'),
+                StatementBalanceWorksheet(
+                  key: ValueKey(_detail!['statement']['id']),
+                  statementNetCents:
+                      _detail!['coverage']['statement_net_cents'] as String,
+                ),
               ],
               for (final row in bookkeepingRows(_detail!['statement']['rows']))
                 Builder(

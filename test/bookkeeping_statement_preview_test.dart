@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ai_wiz_command_center/bookkeeping/statement_preview.dart';
 import 'package:ai_wiz_command_center/bookkeeping/statement_history.dart';
+import 'package:ai_wiz_command_center/bookkeeping/statement_balance_worksheet.dart';
 import 'bookkeeping_test.dart' as f;
 
 void main() {
@@ -18,6 +19,49 @@ void main() {
       throwsFormatException,
     );
   });
+  test(
+    'bank balances parse exact signed cents and reject rounded or unsafe input',
+    () {
+      expect(
+        parseStatementBalanceCents('-9000000000.01'),
+        BigInt.parse('-900000000001'),
+      );
+      expect(parseStatementBalanceCents('0.9'), BigInt.from(90));
+      for (final value in ['1.234', '1e3', '1,000.00', '10000000000.00', '']) {
+        expect(() => parseStatementBalanceCents(value), throwsFormatException);
+      }
+    },
+  );
+  testWidgets(
+    'bank worksheet shows a discrepancy and clears stale results on edit',
+    (t) async {
+      await f.size(t, const Size(390, 844));
+      await f.mountDialog(
+        t,
+        const AlertDialog(
+          content: SingleChildScrollView(
+            child: StatementBalanceWorksheet(statementNetCents: '-125'),
+          ),
+        ),
+      );
+      await f.fill(t, 'Bank opening balance (USD)', '100.00');
+      await f.fill(t, 'Bank closing balance (USD)', '98.00');
+      await f.tap(t, 'Compare bank balances');
+      expect(
+        find.textContaining('Expected closing from imported rows: \$98.75'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Bank closing less expected: -\$0.75'),
+        findsOneWidget,
+      );
+      await f.fill(t, 'Bank closing balance (USD)', '98.75');
+      expect(find.textContaining('Bank closing less expected:'), findsNothing);
+      await f.tap(t, 'Compare bank balances');
+      expect(find.textContaining('balance arithmetic agrees'), findsOneWidget);
+      expect(t.takeException(), isNull);
+    },
+  );
   testWidgets(
     'owner maps columns, confirms import and sends exact reviewed CSV',
     (t) async {
@@ -222,6 +266,7 @@ void main() {
         ),
       );
       await f.tap(t, '2027 · 1 rows · cash account 1000');
+      expect(find.text('Bank balance worksheet'), findsOneWidget);
       await f.tap(t, 'Export review CSV');
       expect(exportedName, 'korlix-statement-review-example.csv');
       expect(exportedCsv, contains('"2","open"'));
