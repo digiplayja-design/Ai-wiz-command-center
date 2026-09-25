@@ -258,6 +258,20 @@ class _BookkeepingStatementHistoryState
               Text(
                 '${_detail!['statement']['statement_year']} · account ${_detail!['statement']['cash_account']}',
               ),
+              if (_detail!['coverage'] is Map) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Review progress: ${_detail!['coverage']['matched_count']} matched · ${_detail!['coverage']['open_count']} open of ${_detail!['coverage']['row_count']} rows',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  'Imported dates ${_detail!['coverage']['from_date']} to ${_detail!['coverage']['through_date']}',
+                ),
+                Text(
+                  'Signed statement total ${_detail!['coverage']['statement_net_cents']} cents · matched ${_detail!['coverage']['matched_net_cents']} cents · open ${_detail!['coverage']['open_net_cents']} cents',
+                ),
+                Text('${_detail!['coverage']['scope']}'),
+              ],
               for (final row in bookkeepingRows(_detail!['statement']['rows']))
                 Builder(
                   builder: (context) {

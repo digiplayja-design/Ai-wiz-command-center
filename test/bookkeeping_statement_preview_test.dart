@@ -153,6 +153,29 @@ void main() {
           });
         }
         return f.reply({
+          'coverage': {
+            'row_count': 1,
+            'matched_count':
+                decisions.isNotEmpty && decisions.last['action'] == 'match'
+                ? 1
+                : 0,
+            'open_count':
+                decisions.isNotEmpty && decisions.last['action'] == 'match'
+                ? 0
+                : 1,
+            'statement_net_cents': '12345',
+            'matched_net_cents':
+                decisions.isNotEmpty && decisions.last['action'] == 'match'
+                ? '12345'
+                : '0',
+            'open_net_cents':
+                decisions.isNotEmpty && decisions.last['action'] == 'match'
+                ? '0'
+                : '12345',
+            'from_date': '2027-01-15',
+            'through_date': '2027-01-15',
+            'scope': 'Review progress only; not a cleared bank balance.',
+          },
           'statement': {
             'id': '33333333-3333-4333-8333-333333333333',
             'statement_year': 2027,
@@ -185,6 +208,7 @@ void main() {
         BookkeepingStatementHistory(client: c, businessId: f.businessId),
       );
       await f.tap(t, '2027 · 1 rows · cash account 1000');
+      expect(find.textContaining('0 matched · 1 open'), findsOneWidget);
       await f.tap(
         t,
         'Review match: 2027-01-15 · income · 22222222-2222-4222-8222-222222222222',
@@ -192,6 +216,7 @@ void main() {
       expect(writes, isEmpty);
       await f.tap(t, 'Confirm decision');
       expect(writes.first['entry_id'], '22222222-2222-4222-8222-222222222222');
+      expect(find.textContaining('1 matched · 0 open'), findsOneWidget);
       await f.tap(t, 'Correct match');
       await f.fill(t, 'Reason for correction', 'Wrong match');
       await f.tap(t, 'Review correction');
@@ -199,6 +224,7 @@ void main() {
       expect(writes.last['reason'], 'Wrong match');
       expect(writes.last['previous_match_id'], decisions.first['id']);
       expect(find.textContaining('Unmatched after correction'), findsOneWidget);
+      expect(find.textContaining('0 matched · 1 open'), findsOneWidget);
       expect(t.takeException(), isNull);
     },
   );
