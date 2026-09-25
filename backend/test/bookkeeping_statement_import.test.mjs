@@ -1,0 +1,60 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {randomUUID} from 'node:crypto';
+import {PGlite} from '@electric-sql/pglite';
+import express from 'express';
+import {registerBookkeeping} from '../bookkeeping/routes.mjs';
+let db,server,base,owner,other,b,entryId,statementId;
+const rpc=async(name,args)=>(await db.query(`select public.${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) r`,args)).rows[0].r;
+const core=(action,data,business=b.id,actor=owner)=>rpc('korlix_bookkeeping_v1',[actor,action,business,data]);
+const statement=(action,data,business=b.id,actor=owner)=>rpc('korlix_bookkeeping_statements_v1',[actor,action,business,data]);
+async function api(path,body,actor=owner,status=200){const r=await fetch(`${base}/api/bookkeeping/businesses/${b.id}/statements${path}`,{method:body?'POST':'GET',headers:{'content-type':'application/json',Authorization:actor},...(body?{body:JSON.stringify(body)}:{})});const d=await r.json();assert.equal(r.status,status,JSON.stringify(d));assert.equal(r.headers.get('cache-control'),'no-store');return d;}
+const file='Date,Memo,Amount\n2027-01-15,Customer payment,123.45';
+const payload=(extra={})=>({csv:file,year:'2027',cash_account:'1000',mapping:{date:'Date',description:'Memo',amount:'Amount'},request_key:randomUUID(),confirmed:true,...extra});
+test.before(async()=>{
+ db=new PGlite();await db.exec('create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id text primary key,bucket_id text);alter table storage.objects enable row level security;grant usage on schema public,storage to anon,authenticated,service_role;');
+ for(const f of ['20260925015926_bookkeeping_foundation.sql','20260925024651_bookkeeping_receipts.sql','20260925062141_bookkeeping_ledger.sql','20260925152053_bookkeeping_reports.sql','20260925163933_bookkeeping_statement_imports.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+f,import.meta.url),'utf8'));
+ owner=randomUUID();other=randomUUID();for(const u of [owner,other])await db.query('insert into auth.users values($1)',[u]);await db.exec('set role service_role');
+ b=(await core('create_business',{name:'Statement fixture',legal_structure:'llc',tax_treatment:'unsure',contractor_income:false,request_key:randomUUID()},null)).business;
+ entryId=(await core('post',{request_key:randomUUID(),confirmed:true,kind:'income',entry_date:'2027-01-15',purpose:'Customer payment',category:'4000',amount_cents:'12345'})).entry.id;
+ const database={rpc:async(name,p)=>{try{const args=name==='korlix_bookkeeping_reports_v1'?[p.p_actor,p.p_business,p.p_data]:[p.p_actor,p.p_action,p.p_business,p.p_data];return{data:await rpc(name,args)};}catch(error){return{error}}}};
+ const app=express();app.use(express.json({limit:'300kb'}));registerBookkeeping(app,{database,requireUser:async q=>[owner,other].includes(q.headers.authorization)?{id:q.headers.authorization}:null});server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}`;
+});
+test.after(async()=>{server?.closeAllConnections();if(server)await new Promise(r=>server.close(r));await db?.close();});
+test('confirmed import persists normalized rows, replays by key and digest without raw CSV',async()=>{
+ const p=payload(),created=await api('/import',p,owner,201);statementId=created.statement.id;
+ assert.equal(created.statement.row_count,1);assert.equal(created.reused,false);
+ assert.equal((await api('/import',p,owner,201)).statement.id,statementId);
+ assert.equal((await api('/import',payload(),owner,201)).statement.id,statementId);
+ await api('/import',payload({csv:file+'\n2027-01-16,Another payment,1.00'}),owner,409);
+ await api('/import',{...p,csv:p.csv.replace('123.45','120.45')},owner,409);
+ const stored=(await db.query('select rows,request_data from korlix_bookkeeping_statement_imports where id=$1',[statementId])).rows[0];
+ assert.equal(stored.rows[0].amount_cents,'12345');assert.equal(JSON.stringify(stored).includes('Customer payment'),true);assert.equal(JSON.stringify(stored).includes('Date,Memo,Amount'),false);
+ assert.equal((await api('')).statements.length,1);assert.equal((await api('/'+statementId)).statement.rows[0].line,2);
+});
+test('owner confirms exact one-to-one match; correction appends history and allows reviewed replacement',async()=>{
+ const body={request_key:randomUUID(),confirmed:true,entry_id:entryId};
+ const a=(await api('/'+statementId+'/rows/2/match',body,owner,201)).decision;
+ assert.equal(a.entry_id,entryId);assert.equal((await api('/'+statementId+'/rows/2/match',body,owner,201)).decision.id,a.id);
+ await api('/'+statementId+'/rows/2/match',{...body,request_key:randomUUID()},owner,409);
+ const before=await api('/'+statementId);assert.equal(before.decisions.length,1);
+ const correction={request_key:randomUUID(),confirmed:true,previous_match_id:a.id,reason:'Matched wrong record'};
+ const z=(await api('/'+statementId+'/rows/2/unmatch',correction,owner,201)).decision;
+ assert.equal(z.action,'unmatch');assert.equal((await api('/'+statementId)).decisions.length,2);
+ await api('/'+statementId+'/rows/2/unmatch',{...correction,request_key:randomUUID()},owner,409);
+ const rematched=(await api('/'+statementId+'/rows/2/match',{...body,request_key:randomUUID()},owner,201)).decision;
+ assert.notEqual(rematched.id,a.id);assert.equal((await api('/'+statementId)).decisions.length,3);
+});
+test('cross-owner, fake cash candidate, malformed import and browser roles fail without writes',async()=>{
+ const baseline=(await api('')).statements.length;
+ await api('/import',payload({csv:'Date,Memo,Amount\n2027-01-15,Wrong,not-money'}),owner,400);
+ await api('/import',payload({cash_account:'1019'}),owner,400);
+ await api('/import',payload({csv:'Date,Memo,Amount\n2027-01-15,X,1\n2027-01-15,X,1'}),owner,400);
+ await api('/'+statementId+'/rows/2/match',{request_key:randomUUID(),confirmed:true,entry_id:randomUUID()},owner,409);
+ await api('/'+statementId,undefined,other,404);await api('/'+statementId,undefined,'',401);
+ assert.equal((await api('')).statements.length,baseline);
+ await assert.rejects(db.query("insert into korlix_bookkeeping_statement_decisions(business_id,statement_id,row_line,action,entry_id,request_key,request_data,created_by) values($1,$2,2,'match',$3,$4,'{}',$5)",[b.id,statementId,randomUUID(),randomUUID(),owner]),/recorded cash movement/);
+ await assert.rejects(db.query('delete from korlix_bookkeeping_statement_imports where id=$1',[statementId]),/permission denied/);
+ await db.exec('reset role');try{for(const role of ['anon','authenticated']){await db.exec('set role '+role);await assert.rejects(db.query('select * from korlix_bookkeeping_statement_imports'),/permission denied/);await assert.rejects(statement('list',{},b.id,owner),/permission denied/);await db.exec('reset role');}}finally{await db.exec('set role service_role');}
+});

@@ -1,4 +1,5 @@
 import {fail,id} from './core.mjs';
+import {createHash} from 'node:crypto';
 
 // A read-only preview. Statement bytes and candidate decisions are never stored.
 export function parseStatementCsv(csv) {
@@ -34,6 +35,19 @@ function isoDate(s){
  const d=new Date(s+'T00:00:00Z');if(!Number.isFinite(d.getTime())||d.toISOString().slice(0,10)!==s)fail('Statement has an invalid date.');
  return s;
 }
+export function suggestStatementMatches(entries,report,cashAccount){
+ const reversed=new Set((report.lines??[]).filter(l=>l.reversal_of).map(l=>l.reversal_of));
+ const ledger=(report.lines??[]).filter(l=>l.account_code===cashAccount&&l.kind!=='reversal'&&!reversed.has(l.entry_id));
+ return entries.map(entry=>{
+  if(entry.error)return entry;
+  const time=Date.parse(entry.date+'T00:00:00Z');
+  const candidates=ledger.filter(l=>{
+   const v=BigInt(l.debit_cents)-BigInt(l.credit_cents);
+   return v===BigInt(entry.amount_cents)&&Math.abs(Date.parse(l.entry_date+'T00:00:00Z')-time)<=3*86400000;
+  });
+  return {...entry,candidates:candidates.slice(0,5).map(l=>({entry_id:l.entry_id,date:l.entry_date,kind:l.kind,source:l.source,amount_cents:entry.amount_cents})),status:entry.duplicate_in_file?'duplicate_in_file':candidates.length===1?'suggested':candidates.length>1?'ambiguous':'unmatched'};
+ });
+}
 export function previewStatement(input,report){
  if(!input||typeof input!=='object'||Array.isArray(input))fail('Choose a statement and its columns.');
  const {header,rows}=parseStatementCsv(input.csv);
@@ -58,22 +72,21 @@ export function previewStatement(input,report){
   seen.set(fingerprint,(seen.get(fingerprint)??0)+1);
   entries.push({line:i+2,date,description,amount_cents:String(delta),fingerprint});
  }
- const ledger=(report.lines??[]).filter(l=>l.account_code===input.cash_account);
- for(const entry of entries){
-  if(entry.error)continue;
-  entry.duplicate_in_file=seen.get(entry.fingerprint)>1;
-  const time=Date.parse(entry.date+'T00:00:00Z');
-  const candidates=ledger.filter(l=>{
-   const v=BigInt(l.debit_cents)-BigInt(l.credit_cents);
-   return v===BigInt(entry.amount_cents)&&Math.abs(Date.parse(l.entry_date+'T00:00:00Z')-time)<=3*86400000;
-  });
-  entry.candidates=candidates.slice(0,5).map(l=>({entry_id:l.entry_id,date:l.entry_date,kind:l.kind,source:l.source,amount_cents:entry.amount_cents}));
-  entry.status=entry.duplicate_in_file?'duplicate_in_file':candidates.length===1?'suggested':candidates.length>1?'ambiguous':'unmatched';
-  delete entry.fingerprint;
- }
- return {account:input.cash_account,year:input.year,row_count:entries.length,invalid_count:entries.filter(e=>e.error).length,duplicate_count:entries.filter(e=>e.duplicate_in_file).length,entries,scope:'Read-only suggestions. Nothing is imported, posted, reconciled, or saved. Review your bank statement and books before making corrections.'};
+ for(const entry of entries){if(!entry.error){entry.duplicate_in_file=seen.get(entry.fingerprint)>1;delete entry.fingerprint;}}
+ const suggestions=suggestStatementMatches(entries,report,input.cash_account);
+ return {account:input.cash_account,year:input.year,row_count:entries.length,invalid_count:entries.filter(e=>e.error).length,duplicate_count:entries.filter(e=>e.duplicate_in_file).length,entries:suggestions,scope:'Read-only suggestions. Nothing is imported, posted, reconciled, or saved. Review your bank statement and books before making corrections.'};
 }
 export function registerStatementPreviewRoutes(app,{route,database}){
+ const base='/api/bookkeeping/businesses/:id/statements';
+ const call=async(u,b,action,data={})=>{
+  const result=await database.rpc('korlix_bookkeeping_statements_v1',{p_actor:u,p_action:action,p_business:b,p_data:data});
+  if(result.error){
+   const e=result.error,status={P0002:404,'40001':409,P0001:400,'23514':400}[e.code]??503;
+   fail(['P0002','40001','P0001'].includes(e.code)?e.message:'Statement operation failed. Refresh before retrying.',status,'BOOKKEEPING_STATEMENT_ERROR');
+  }
+  if(!result.data)fail('Statement operation is unavailable.',503);
+  return result.data;
+ };
  app.post('/api/bookkeeping/businesses/:id/statements/preview',route(async(q,r,u)=>{
   const business=id(q.params.id),body=q.body;
   if(!body||typeof body.csv!=='string'||Buffer.byteLength(body.csv,'utf8')>256*1024)fail('Choose a CSV statement up to 256 KB.');
@@ -82,5 +95,38 @@ export function registerStatementPreviewRoutes(app,{route,database}){
   if(result.error){const e=result.error;fail(e.code==='P0002'?'Business not found.':'Statement preview is unavailable. Try again.',e.code==='P0002'?404:503);}
   if(!result.data)fail('Statement preview is unavailable.',503);
   r.json(previewStatement(body,result.data));
+ }));
+ app.get(base,route(async(q,r,u)=>r.json(await call(u,id(q.params.id),'list'))));
+ app.get(base+'/:statement',route(async(q,r,u)=>{
+  const business=id(q.params.id),data=await call(u,business,'get',{statement_id:id(q.params.statement)});
+  const s=data.statement;
+  const report=await database.rpc('korlix_bookkeeping_reports_v1',{p_actor:u,p_business:business,p_data:{period:String(s.statement_year),include_lines:true}});
+  data.statement.rows=report.error||!report.data?s.rows.map(row=>({...row,candidates:[],status:'candidates_unavailable'})):suggestStatementMatches(s.rows,report.data,s.cash_account);
+  r.json(data);
+ }));
+ app.post(base+'/import',route(async(q,r,u)=>{
+  const business=id(q.params.id),body=q.body;
+  if(body?.confirmed!==true)fail('Review and confirm the statement rows first.');
+  const requestKey=id(body.request_key);
+  if(typeof body.csv!=='string'||Buffer.byteLength(body.csv,'utf8')>256*1024)fail('Choose a CSV statement up to 256 KB.');
+  if(typeof body.year!=='string'||!/^20\d\d$/.test(body.year))fail('Choose a calendar year.');
+  const report=await database.rpc('korlix_bookkeeping_reports_v1',{p_actor:u,p_business:business,p_data:{period:body.year,include_lines:false}});
+  if(report.error)fail(report.error.code==='P0002'?'Business not found.':'Statement report is unavailable.',report.error.code==='P0002'?404:503);
+  if(!report.data)fail('Statement report is unavailable.',503);
+  const preview=previewStatement(body,report.data);
+  if(preview.invalid_count||preview.duplicate_count)fail('Fix invalid or duplicate rows before importing. Nothing was saved.');
+  const rows=preview.entries.map(({line,date,description,amount_cents})=>({line,date,description,amount_cents}));
+  const source_sha256=createHash('sha256').update(body.csv,'utf8').digest('hex');
+  r.status(201).json(await call(u,business,'import',{request_key:requestKey,confirmed:true,cash_account:body.cash_account,year:body.year,source_sha256,rows}));
+ }));
+ app.post(base+'/:statement/rows/:line/match',route(async(q,r,u)=>{
+  if(q.body?.confirmed!==true)fail('Review and confirm the match first.');
+  const line=Number(q.params.line);if(!Number.isInteger(line)||line<2||line>501)fail('Choose a statement row.');
+  r.status(201).json(await call(u,id(q.params.id),'match',{statement_id:id(q.params.statement),row_line:line,entry_id:id(q.body.entry_id),request_key:id(q.body.request_key),confirmed:true}));
+ }));
+ app.post(base+'/:statement/rows/:line/unmatch',route(async(q,r,u)=>{
+  if(q.body?.confirmed!==true||typeof q.body.reason!=='string'||!q.body.reason.trim()||q.body.reason.length>500)fail('Enter a reason and confirm the correction.');
+  const line=Number(q.params.line);if(!Number.isInteger(line)||line<2||line>501)fail('Choose a statement row.');
+  r.status(201).json(await call(u,id(q.params.id),'unmatch',{statement_id:id(q.params.statement),row_line:line,previous_match_id:id(q.body.previous_match_id),reason:q.body.reason.trim(),request_key:id(q.body.request_key),confirmed:true}));
  }));
 }
