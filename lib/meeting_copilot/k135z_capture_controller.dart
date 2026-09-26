@@ -437,6 +437,19 @@ class K135zCaptureController extends ChangeNotifier {
     if (!_dead && usable) notifyListeners();
   }
   Map<String, dynamic>? _returnBinding;
+  Map<String, dynamic>? _restoringReturnBinding;
+  // Losing the short capture lease while backgrounded is different from a
+  // changed meeting, Stop/Pause, or revoked permission. Preserve voice opt-in
+  // only for the exact previously started session while it is revalidated.
+  bool get canRecoverOnReturn {
+    final saved = _returnBinding ?? _restoringReturnBinding;
+    return saved != null && usable && _consent && _row != null &&
+        _same(saved['context'], _row!['snapshot']['context']) &&
+        saved['revision'] == _row!['snapshot']['revision'] &&
+        saved['authorityRevision'] == _row!['authorityRevision'] &&
+        saved['bindingRevision'] == _row!['bindingRevision'] &&
+        _state == 'listening' && _row!['pending'] == false && _row!['uncertain'] == false;
+  }
   // A hidden tab retains the user's listening choice and renews while the browser runs.
   void leavePage() {
     if (_returnBinding != null || !usable || !_consent || !_renew || _row == null) return;
@@ -449,22 +462,27 @@ class K135zCaptureController extends ChangeNotifier {
     final saved = _returnBinding;
     _returnBinding = null;
     if (saved == null || !usable || !_consent) return false;
-    // Let an existing renewal finish; never overlap start/pause commands.
-    for (var n = 0; _busy && usable && n < 600; n++) {
-      await Future<void>.delayed(const Duration(milliseconds:50));
+    _restoringReturnBinding = saved;
+    try {
+      // Let an existing renewal finish; never overlap start/pause commands.
+      for (var n = 0; _busy && usable && n < 600; n++) {
+        await Future<void>.delayed(const Duration(milliseconds:50));
+      }
+      if (!usable || _busy || !_consent) return false;
+      await refresh();
+      if (!usable || !_confirmed || !_consent || _row == null ||
+          !_same(saved['context'], _row!['snapshot']['context']) ||
+          saved['revision'] != _row!['snapshot']['revision'] ||
+          saved['authorityRevision'] != _row!['authorityRevision'] ||
+          saved['bindingRevision'] != _row!['bindingRevision'] ||
+          _state != 'listening' || _row!['pending'] != false || _row!['uncertain'] != false) return false;
+      // Resume only this already-started session after browser suspension. A changed
+      // meeting, Stop, Pause or revoked permission requires a new explicit Start.
+      if (statusLabel != 'Listening') await start();
+      return statusLabel == 'Listening';
+    } finally {
+      if (identical(_restoringReturnBinding, saved)) _restoringReturnBinding = null;
     }
-    if (!usable || _busy || !_consent) return false;
-    await refresh();
-    if (!usable || !_confirmed || !_consent || _row == null ||
-        !_same(saved['context'], _row!['snapshot']['context']) ||
-        saved['revision'] != _row!['snapshot']['revision'] ||
-        saved['authorityRevision'] != _row!['authorityRevision'] ||
-        saved['bindingRevision'] != _row!['bindingRevision'] ||
-        _state != 'listening' || _row!['pending'] != false || _row!['uncertain'] != false) return false;
-    // Resume only this already-started session after browser suspension. A changed
-    // meeting, Stop, Pause or revoked permission requires a new explicit Start.
-    if (statusLabel != 'Listening') await start();
-    return statusLabel == 'Listening';
   }
   void suspend({bool clearConsent = false}) {
     if (_dead) return;

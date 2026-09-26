@@ -188,11 +188,12 @@ class K135zSpokenReplies extends ChangeNotifier {
     }());
   }
 
-  // Keep the opt-in and unlocked AudioContext across a window switch. Do not
-  // queue questions heard while away or replay an interrupted answer on return.
-  void leavePage() {
+  // A hidden page may continue an explicitly enabled conversation while the
+  // browser allows audio and timers. Actual suspension still drops stale turns.
+  void leavePage({bool keepVoiceActive = false}) {
     if (_dead) return;
     if (memory.active) memory.cancel();
+    if (keepVoiceActive && enabled && !suspended && player.ready) return;
     if (suspended) {
       // A second switch while automatic audio activation is in flight cancels
       // that activation, but keeps the original session opt-in for the next return.
@@ -203,7 +204,8 @@ class K135zSpokenReplies extends ChangeNotifier {
       return;
     }
     if (!enabled) { if (busy) stop(); return; }
-    final binding = capture.responseBinding;
+    final binding = capture.responseBinding ??
+        (capture.canRecoverOnReturn && _binding != null ? jsonDecode(_binding!) as Map : null);
     if (binding == null) { stop('Listening needs to reconnect before voice can resume.'); return; }
     _returnContext = Map<String, dynamic>.from(binding['context']);
     suspended = true;
@@ -274,6 +276,10 @@ class K135zSpokenReplies extends ChangeNotifier {
       return;
     }
     if (_binding != null && _binding != _currentBinding) {
+      if (enabled && capture.canRecoverOnReturn) {
+        leavePage();
+        return;
+      }
       stop(
         'Spoken replies stopped because listening or meeting permission changed.',
       );

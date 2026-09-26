@@ -78,8 +78,9 @@ class _KorlixMeetingCopilotRouteState extends State<KorlixMeetingCopilotRoute> w
         if (!binding.connected) unawaited(binding.initialize());
       }
     } else if (!(kIsWeb && state == AppLifecycleState.inactive)) {
-      // Keep the existing listening choice while switching tabs/apps.
-      _binding?.leavePage();
+      // Switching tabs/apps alone must not mute an enabled conversation.
+      // Browser-imposed audio suspension uses the existing return/resume flow.
+      _binding?.leavePage(keepVoiceActive: kIsWeb && state == AppLifecycleState.hidden);
     }
   }
 

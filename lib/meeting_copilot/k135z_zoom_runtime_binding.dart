@@ -204,10 +204,10 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
   }
 
   int _pageEpoch = 0;
-  void leavePage() {
+  void leavePage({bool keepVoiceActive = false}) {
     _pageEpoch++;
-    response.spoken.leavePage();
     capture.leavePage();
+    response.spoken.leavePage(keepVoiceActive: keepVoiceActive);
   }
   Future<void>? _returning;
   Future<void> returnToPage() => _returning ??= _restorePage().whenComplete(() { _returning = null; });

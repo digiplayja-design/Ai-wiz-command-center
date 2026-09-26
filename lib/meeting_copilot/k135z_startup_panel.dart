@@ -124,8 +124,9 @@ class K135zStartupPanel extends StatelessWidget {
                   onPressed: available ? b.disconnect : null, child: const Text('Disconnect Zoom')),
             ])],
           ),
-          const Text('Nova checks and reconnects this listening session when you return. '
-            'Stop listening ends the session.',
+          const Text('Keep this tab open. Nova stays active while your browser allows it '
+            'and reconnects when you return. On phones and tablets, keep KORLIX visible '
+            'for reliable replies. Stop listening ends the session.',
             style: TextStyle(color: muted, fontSize: 12)),
         ],
       )),
