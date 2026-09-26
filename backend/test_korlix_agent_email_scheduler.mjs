@@ -336,6 +336,109 @@ test("scheduler stop clears its timer and prevents later execution", async () =>
   assert.equal(runs, 0);
 });
 
+test("a timer one millisecond early skips the duplicate slot and keeps scheduling", async () => {
+  const timers = timerHarness();
+  const events = [];
+  let clock = new Date("2026-09-26T14:29:30.000Z");
+  const scheduler = createKorlixAgentEmailAutopilotScheduler({
+    environment: environment({ KORLIX_AGENT_EMAIL_AUTOPILOT_SCHEDULER_INTERVAL_MINUTES: "1" }),
+    runAutopilot: async ({ body }) => { events.push(body.eventId); return {}; },
+    now: () => new Date(clock), ...timers, logger: loggerHarness(),
+  });
+  scheduler.start();
+  clock = new Date("2026-09-26T14:30:00.000Z");
+  await timers.scheduled[0].callback();
+  clock = new Date("2026-09-26T14:30:59.999Z");
+  await timers.scheduled[1].callback();
+  assert.equal(events.length, 1);
+  assert.equal(scheduler.status().skippedCount, 1);
+  assert.equal(scheduler.status().nextRunAt, "2026-09-26T14:31:00.000Z");
+  assert.equal(timers.scheduled.length, 3);
+  assert.equal(timers.scheduled[2].delay, 1);
+  clock = new Date("2026-09-26T14:31:00.000Z");
+  await timers.scheduled[2].callback();
+  clock = new Date("2026-09-26T14:32:00.000Z");
+  await timers.scheduled[3].callback();
+  assert.equal(events.length, 3);
+  assert.equal(new Set(events).size, 3);
+  assert.equal(scheduler.status().nextRunAt, "2026-09-26T14:33:00.000Z");
+  scheduler.stop();
+});
+
+test("manual and duplicate checks retain one pending timer that Stop can clear", async () => {
+  const timers = timerHarness();
+  let runs = 0;
+  const scheduler = createKorlixAgentEmailAutopilotScheduler({
+    environment: environment(),
+    runAutopilot: async () => { runs++; return {}; },
+    now: () => new Date("2026-08-21T12:15:10.000Z"),
+    ...timers, logger: loggerHarness(),
+  });
+  scheduler.start();
+  const original = timers.scheduled[0];
+  await scheduler.runDue();
+  await scheduler.runDue();
+  assert.equal(runs, 1);
+  assert.equal(timers.scheduled.length, 1);
+  assert.equal(scheduler.status().nextRunAt, "2026-08-21T12:30:00.000Z");
+  scheduler.stop();
+  assert.deepEqual(timers.cleared, [original]);
+  await original.callback();
+  assert.equal(runs, 1);
+  assert.equal(timers.scheduled.length, 1);
+});
+
+test("a timer consumed during an in-flight run is restored once that run completes", async () => {
+  const timers = timerHarness();
+  let clock = new Date("2026-08-21T12:14:59.000Z");
+  let release;
+  let runs = 0;
+  const pending = new Promise(resolve => { release = resolve; });
+  const scheduler = createKorlixAgentEmailAutopilotScheduler({
+    environment: environment(),
+    runAutopilot: async () => { runs++; await pending; return {}; },
+    now: () => new Date(clock), ...timers, logger: loggerHarness(),
+  });
+  scheduler.start();
+  const first = scheduler.runDue();
+  clock = new Date("2026-08-21T12:15:00.000Z");
+  await timers.scheduled[0].callback();
+  assert.equal(runs, 1);
+  assert.equal(scheduler.status().inFlight, true);
+  assert.equal(timers.scheduled.length, 1);
+  release();
+  await first;
+  assert.equal(timers.scheduled.length, 2);
+  assert.equal(scheduler.status().nextRunAt, "2026-08-21T12:30:00.000Z");
+  clock = new Date("2026-08-21T12:30:00.000Z");
+  await timers.scheduled[1].callback();
+  assert.equal(runs, 2);
+  scheduler.stop();
+});
+
+test("Stop during an in-flight run prevents its completion from rearming", async () => {
+  const timers = timerHarness();
+  let release;
+  let runs = 0;
+  const pending = new Promise(resolve => { release = resolve; });
+  const scheduler = createKorlixAgentEmailAutopilotScheduler({
+    environment: environment(),
+    runAutopilot: async () => { runs++; await pending; return {}; },
+    now: () => new Date(NOW), ...timers, logger: loggerHarness(),
+  });
+  scheduler.start();
+  const first = scheduler.runDue();
+  scheduler.stop();
+  release();
+  await first;
+  assert.equal(timers.scheduled.length, 1);
+  assert.deepEqual(timers.cleared, [timers.scheduled[0]]);
+  assert.equal(scheduler.status().running, false);
+  assert.equal(scheduler.status().nextRunAt, null);
+  await scheduler.runDue();
+  assert.equal(runs, 1);
+});
+
 test("delivery and both server entry points wire the scheduler without immediate send", async () => {
   const delivery = fs.readFileSync(
     new URL("./korlix_agent_email_delivery.mjs", import.meta.url),
@@ -370,6 +473,6 @@ for (const entry of tests) {
   console.log(`PASS ${passed}: ${entry.name}`);
 }
 
-assert.equal(passed, 12);
+assert.equal(passed, 16);
 console.log(`KORLIX_AGENT_EMAIL_SCHEDULER_TEST_COUNT=${passed}`);
 console.log("KORLIX_AGENT_EMAIL_SCHEDULER_TEST_PASS=true");

@@ -283,7 +283,8 @@ export function createKorlixAgentEmailAutopilotScheduler({
   });
 
   const scheduleNext = () => {
-    if (stopped || !configuration.configured) return;
+    // Manual checks and their completions must not orphan a pending timer.
+    if (stopped || !configuration.configured || timer !== null) return;
 
     const current = dateValue(now);
     const interval = configuration.intervalMilliseconds;
@@ -327,6 +328,9 @@ export function createKorlixAgentEmailAutopilotScheduler({
         triggerKey: configuration.triggerKey,
         slotStart,
       });
+      // A timeout can fire just before the wall-clock slot changes. It has
+      // already consumed the timer, so skipping a duplicate must rearm it.
+      scheduleNext();
       return publicStatus();
     }
 
