@@ -22,7 +22,7 @@ class K135zSpokenPanel extends StatelessWidget {
               : const Color(0xFF1A5872),
         ),
       ),
-      child: Column(
+      child: Material(color: Colors.transparent, child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
@@ -34,19 +34,14 @@ class K135zSpokenPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          const Text('To save a fact, say “Nova, remember this” followed by the fact. Review and confirm it with your Brain Vault password.',
-            style: TextStyle(color: Color(0xFF9CB8CA))),
-          const SizedBox(height: 8),
           const Text(
             'Say “Nova, what have we decided?” She replies aloud after your question.',
             style: TextStyle(color: Colors.white, fontSize: 17),
           ),
           const SizedBox(height: 8),
           const Text(
-            'Enable spoken replies to let Nova answer anyone who addresses her, without reviewing each reply. '
-            'She uses your selected agent’s saved memory and training with advanced reasoning. '
-            'Replies are brief for speed; say “think deeply” when you want extra reasoning. '
-            'Answers are AI-generated; meeting events come from recent captions only.',
+            'One Start Nova tap turns on listening and voice. Ask a short question, '
+            'or say “think deeply” when you want more reasoning.',
             style: TextStyle(color: Color(0xFF9CB8CA)),
           ),
           const SizedBox(height: 8),
@@ -56,6 +51,15 @@ class K135zSpokenPanel extends StatelessWidget {
             style: TextStyle(color: Color(0xFF9CB8CA)),
           ),
           const SizedBox(height: 14),
+          SwitchListTile.adaptive(
+            key: const Key('nova-small-talk'),
+            contentPadding: EdgeInsets.zero,
+            value: spoken.smallTalk,
+            onChanged: spoken.setSmallTalk,
+            title: const Text('Small talk while thinking', style: TextStyle(color: Colors.white)),
+            subtitle: const Text('Brief acknowledgments; your answer always comes first.',
+              style: TextStyle(color: Color(0xFF9CB8CA))),
+          ),
           Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -105,8 +109,18 @@ class K135zSpokenPanel extends StatelessWidget {
             ),
           if (spoken.memory.visible)
             K135zRememberPanel(key:ValueKey(spoken.memory.requestId), memory:spoken.memory),
+          const ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: Text('Memory and voice details', style: TextStyle(color: Color(0xFF9CB8CA))),
+            children: [Text(
+              'Nova uses your selected agent’s saved memory and training. Replies are AI-generated; '
+              'meeting events come from recent captions only. To save a fact, say “Nova, remember this,” '
+              'then review and confirm it with your Brain Vault password. '
+              'Stop Nova silences this page. Use Stop Share in Zoom to end the broadcast.',
+              style: TextStyle(color: Color(0xFF9CB8CA)))],
+          ),
         ],
-      ),
+      )),
     ),
   );
 }

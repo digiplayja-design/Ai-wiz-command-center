@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'k135z_capture_controller.dart';
 import 'k135z_response_player.dart';
 import 'k135z_spoken_replies.dart';
+import 'k135z_spoken_player.dart';
 
 // Reviewed updates stay explicit; spoken replies require their own session opt-in.
 class K135zMeetingResponse extends ChangeNotifier {
@@ -13,10 +14,12 @@ class K135zMeetingResponse extends ChangeNotifier {
     required this.capture,
     required this.cancelRequest,
     K135zResponsePlayer? player,
+    K135zSpokenPlayer? spokenPlayer,
     int Function()? milliseconds,
   }) : player = player ?? createResponsePlayer() {
     _now = milliseconds ?? (() => _clock.elapsedMilliseconds);
-    spoken = K135zSpokenReplies(capture: capture, cancelRequest: cancelRequest, beforeEnable: () => stop());
+    spoken = K135zSpokenReplies(capture: capture, cancelRequest: cancelRequest,
+      player:spokenPlayer, beforeEnable: () => stop());
     spoken.addListener(notifyListeners);
     capture.addListener(_check);
   }

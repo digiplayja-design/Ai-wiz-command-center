@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'korlix_zoom_connection_client.dart';
 import 'k135z_capture_controller.dart';
 import 'k135z_meeting_response.dart';
+import 'k135z_spoken_player.dart';
 import 'korlix_zoom_connection_controller.dart';
 
 // Account discovery is read-only. Only the explicit Start listening action starts capture.
@@ -58,6 +59,7 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
   K135zZoomRuntimeBinding({
     required this.launch,
     KorlixZoomJsonTransport? transport,
+    K135zSpokenPlayer? spokenPlayer,
     Future<bool> Function(Uri)? openUrl,
     DateTime Function()? now,
     this.timeout = const Duration(seconds: 15),
@@ -75,7 +77,9 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
     capture = K135zCaptureController(agentId:launch.agentId, baseUri:launch.backendBaseUri,
       headers:launch.headersBuilder, isCurrent:() => usable,
       transport:transport ?? _send, cancelRequests:_cancelCaptureRequests);
-    response = K135zMeetingResponse(capture:capture, cancelRequest:_cancelResponseRequests);
+    response = K135zMeetingResponse(capture:capture, cancelRequest:_cancelResponseRequests,
+      spokenPlayer:spokenPlayer);
+    response.addListener(_changed);
     capture.addListener(_changed);
     _controller.addListener(_changed);
     _watch = Timer.periodic(const Duration(seconds: 1), (_) => checkContext());
@@ -137,6 +141,22 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
     if (!canStartListening) return;
     final uuid = listeningMeeting!.uuid!;
     await capture.listenTo(uuid);
+  }
+  bool get canStartNova => connected && !busy && !capture.busy && capture.usable &&
+      response.spoken.player.supported && !response.spoken.busy && listeningMeeting != null &&
+      (!response.spoken.enabled || capture.meetingUuid != listeningMeeting!.uuid);
+  Future<void> startNova() async {
+    if (!canStartNova) return;
+    final uuid = listeningMeeting!.uuid!;
+    await response.spoken.startWithListening(() async {
+      if (capture.statusLabel != 'Listening' || capture.meetingUuid != uuid) {
+        await capture.listenTo(uuid);
+      }
+    });
+  }
+  Future<void> stopListening() async {
+    response.stop();
+    await capture.stop();
   }
   bool get canOpenAuthorization => usable && !busy && _authorizationUri != null &&
       _preparedAt != null && _now().difference(_preparedAt!).inSeconds >= 0 &&
@@ -285,10 +305,10 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
     if (!usable || uri.origin != launch.backendBaseUri.origin ||
         !((<String>{'GET', 'DELETE'}.contains(method) && body == null) ||
           (method == 'POST' && body is Map<String, dynamic> &&
-           <String>{'bind','status','consent','command','transcript','audio-level','response','response-voice','spoken-reply'}.any((p) => uri.path == '/api/k135z/zoom/workspace/$p')))) {
+           <String>{'bind','status','consent','command','transcript','audio-level','response','response-voice','spoken-reply','waiting-voice'}.any((p) => uri.path == '/api/k135z/zoom/workspace/$p')))) {
       throw StateError('Zoom request binding is unavailable.');
     }
-    final isResponse = uri.path.endsWith('/response') || uri.path.endsWith('/response-voice') || uri.path.endsWith('/spoken-reply');
+    final isResponse = uri.path.endsWith('/response') || uri.path.endsWith('/response-voice') || uri.path.endsWith('/spoken-reply') || uri.path.endsWith('/waiting-voice');
     final isStartConsent = uri.path.endsWith('/consent') &&
         body is Map<String, dynamic> && body['action'] == 'consent';
     final client = http.Client();
@@ -331,6 +351,7 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
     for (final client in _requests.toList()) { client.close(); }
     _requests.clear();
     capture.removeListener(_changed);
+    response.removeListener(_changed);
     response.dispose();
     capture.dispose();
     _controller.removeListener(_changed);

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import 'k135z_capture_controller.dart';
 import 'k135z_spoken_player.dart';
+import 'k135z_waiting_voice.dart';
 import 'k135z_remember_memory.dart';
 import '../live_convo/k136s_learning_panel.dart';
 
@@ -14,10 +15,12 @@ class K135zSpokenReplies extends ChangeNotifier {
     required this.cancelRequest,
     required this.beforeEnable,
     K135zSpokenPlayer? player,
+    Future<List<K135zWaitingClip>> Function()? loadWaitingVoice,
     K136sLearningApiBase? learningApi,
     int Function()? milliseconds,
     bool watch = true,
   }) : player = player ?? createSpokenPlayer() {
+    _loadWaitingVoice = loadWaitingVoice ?? (() => loadK135zWaitingVoice(capture));
     _now = milliseconds ?? (() => _clock.elapsedMilliseconds);
     memory = K135zRememberMemory(agentId:capture.agentId,
       currentBinding:() => enabled && !suspended ? _currentBinding : null,
@@ -30,6 +33,12 @@ class K135zSpokenReplies extends ChangeNotifier {
   final K135zCaptureController capture;
   final VoidCallback cancelRequest, beforeEnable;
   final K135zSpokenPlayer player;
+  late final Future<List<K135zWaitingClip>> Function() _loadWaitingVoice;
+  List<K135zWaitingClip> _waitingClips = const [];
+  int? _replyBeganAt;
+  int? _preparingWaitingEpoch;
+  int _waitingStage = 0, _waitingEpoch = 0;
+  bool smallTalk = true, waitingSpeaking = false, starting = false;
   late final K135zRememberMemory memory;
   void _memoryChanged() {
     if (_dead) return;
@@ -68,19 +77,38 @@ class K135zSpokenReplies extends ChangeNotifier {
       _binding != null &&
       _binding == _currentBinding;
 
-  Future<void> enable() async {
-    if (!canEnable) return;
+  Future<void> enable() => _enable();
+  Future<void> startWithListening(Future<void> Function() startListening) =>
+      _enable(startListening: startListening);
+
+  Future<void> _enable({Future<void> Function()? startListening}) async {
+    if (startListening == null ? !canEnable :
+        _dead || busy || !player.supported || !capture.usable) return;
     beforeEnable();
-    _binding = _currentBinding;
+    _binding = startListening == null ? _currentBinding : null;
+    String? activationBinding = _binding;
     final epoch = ++_epoch;
     busy = true;
+    starting = true;
     answer = null;
     memoryStatus = null;
-    message = 'Enabling Nova’s voice…';
+    message = startListening == null ? 'Enabling Nova’s voice…' : 'Starting Nova…';
     notifyListeners();
     try {
       final activated = player.enable(); // Preserve the direct user gesture.
-      await activated;
+      // Begin audio activation and listening together from the same explicit tap.
+      final listening = () async {
+        if (startListening == null) return;
+        await startListening();
+        if (_dead || epoch != _epoch) return;
+        activationBinding = _currentBinding;
+        _binding = activationBinding;
+      }();
+      await Future.wait<void>([activated, listening]);
+      if (_dead || epoch != _epoch) return;
+      if (!capture.usable || activationBinding == null || activationBinding != _currentBinding) {
+        throw StateError('Listening unavailable');
+      }
       if (!_current(epoch)) return;
       await capture.prepareSpokenTranscript();
       if (!_current(epoch)) return;
@@ -96,17 +124,68 @@ class K135zSpokenReplies extends ChangeNotifier {
       if (_watch) _timer = Timer.periodic(const Duration(milliseconds: 250), (_) => unawaited(tick()));
       capture.fastTranscript = true;
       message = 'Spoken replies on. Say “Nova” and your question.';
+      if (smallTalk) unawaited(_prepareWaitingVoice(epoch));
     } catch (_) {
-      if (_current(epoch))
+      if (!_dead && epoch == _epoch)
         stop(
-          'Could not enable voice. Check listening, then tap Enable spoken replies again.',
+          'Nova’s voice could not start. Check listening, then tap Start Nova or Enable spoken replies again.',
         );
     } finally {
       if (!_dead && epoch == _epoch) {
         busy = false;
+        starting = false;
         notifyListeners();
       }
     }
+  }
+
+  Future<void> _prepareWaitingVoice(int epoch) async {
+    if (_preparingWaitingEpoch == epoch) return;
+    _preparingWaitingEpoch = epoch;
+    try {
+      final clips = await _loadWaitingVoice();
+      if (_current(epoch) && enabled) _waitingClips = clips;
+    } catch (_) { /* Optional preparation never interrupts the actual answer. */ }
+    finally { if (_preparingWaitingEpoch == epoch) _preparingWaitingEpoch = null; }
+  }
+
+  void setSmallTalk(bool value) {
+    if (_dead || value == smallTalk) return;
+    smallTalk = value;
+    if (!value) _interruptWaiting();
+    if (value && enabled && !suspended && _waitingClips.isEmpty) unawaited(_prepareWaitingVoice(_epoch));
+    notifyListeners();
+  }
+
+  void _interruptWaiting() {
+    _waitingEpoch++;
+    if (waitingSpeaking) player.interrupt();
+    waitingSpeaking = false;
+  }
+
+  void _maybeSpeakWaiting() {
+    if (!enabled || suspended || !busy || playing || !smallTalk ||
+        waitingSpeaking || _replyBeganAt == null || _waitingClips.length != 2 ||
+        _waitingStage >= 2) return;
+    final elapsed = _now() - _replyBeganAt!;
+    if (elapsed < (_waitingStage == 0 ? 1000 : 9000)) return;
+    // If preparation was slow, skip the initial acknowledgment instead of
+    // delivering two pieces of chatter back to back.
+    if (_waitingStage == 0 && elapsed >= 6000) { _waitingStage = 1; return; }
+    final clip = _waitingClips[_waitingStage++];
+    final epoch = _epoch, waitingEpoch = ++_waitingEpoch;
+    waitingSpeaking = true;
+    message = clip.text;
+    notifyListeners();
+    unawaited(() async {
+      if (!_current(epoch) || waitingEpoch != _waitingEpoch) return;
+      try { await player.play(clip.audio); } catch (_) { /* The answer still has priority. */ }
+      if (_current(epoch) && waitingEpoch == _waitingEpoch) {
+        waitingSpeaking = false;
+        message = 'Nova is preparing your answer…';
+        notifyListeners();
+      }
+    }());
   }
 
   // Keep the opt-in and unlocked AudioContext across a window switch. Do not
@@ -128,8 +207,11 @@ class K135zSpokenReplies extends ChangeNotifier {
     if (binding == null) { stop('Listening needs to reconnect before voice can resume.'); return; }
     _returnContext = Map<String, dynamic>.from(binding['context']);
     suspended = true;
+    capture.fastTranscript = false;
     needsAudioTap = false;
     _epoch++;
+    _replyBeganAt = null;
+    _interruptWaiting();
     busy = false; playing = false;
     _question.clear();
     player.interrupt();
@@ -167,7 +249,9 @@ class K135zSpokenReplies extends ChangeNotifier {
       _seen = capture.transcriptLines.isEmpty ? 0 : capture.transcriptLines.last.sequence;
       _question.clear(); _quietUntil = 0;
       suspended = false; needsAudioTap = false; _returnContext = null;
+      capture.fastTranscript = true;
       message = 'Nova is ready again. Say “Nova” and your next question.';
+      if (smallTalk && _waitingClips.isEmpty) unawaited(_prepareWaitingVoice(epoch));
     } catch (_) {
       if (_current(epoch)) {
         needsAudioTap = true;
@@ -238,6 +322,7 @@ class K135zSpokenReplies extends ChangeNotifier {
 
   Future<void> tick() async {
     _scan();
+    _maybeSpeakWaiting();
     if (enabled && !suspended && !busy && !playing && !memory.active && _quietUntil > 0 && _now() >= _quietUntil) {
       _quietUntil = 0;
       message = 'Ready for your next question. Start with “Nova”.';
@@ -245,14 +330,20 @@ class K135zSpokenReplies extends ChangeNotifier {
     }
     if (!enabled || suspended || busy || playing || memory.active || _question.isEmpty) return;
     final bareWake = _question.length == 1 && _question.first.text.trim().replaceFirst(_wake, '').trim().isEmpty;
-    if (_now() - _changedAt < (bareWake ? 2800 : 1600) && _now() - _beganAt < 12000) return;
+    final completeQuestion = RegExp(r'[?？]\s*$').hasMatch(_question.last.text);
+    final pause = bareWake ? 2800 : completeQuestion ? 700 : 1600;
+    if (_now() - _changedAt < pause && _now() - _beganAt < 12000) return;
     final first = _question.first.sequence, last = _question.last.sequence;
     _question.clear();
     final epoch = _epoch,
         context = capture.responseBinding!['context'],
         window = _window;
     busy = true;
-    message = 'Nova is thinking with your agent’s memory and training…';
+    answer = null;
+    memoryStatus = null;
+    _replyBeganAt = _now();
+    _waitingStage = 0;
+    message = 'Nova is preparing your answer…';
     notifyListeners();
     try {
       final headers = Map<String, String>.from(capture.headers());
@@ -279,6 +370,8 @@ class K135zSpokenReplies extends ChangeNotifier {
           )
           .timeout(const Duration(seconds: 125));
       if (!_current(epoch) || !enabled) return;
+      _replyBeganAt = null;
+      _interruptWaiting(); // Stop chatter before validating/playing the answer.
       if (utf8.encode(response.body).length > 512 * 1024)
         throw StateError('Reply too large');
       final decoded = jsonDecode(response.body);
@@ -362,6 +455,8 @@ class K135zSpokenReplies extends ChangeNotifier {
       if (!_dead && epoch == _epoch) {
         busy = false;
         playing = false;
+        _replyBeganAt = null;
+        _interruptWaiting();
         _quietUntil = _now() + 4000;
         _scan();
         notifyListeners();
@@ -374,6 +469,10 @@ class K135zSpokenReplies extends ChangeNotifier {
     _timer?.cancel(); _timer = null;
     final wasActive = enabled || busy || playing;
     _epoch++;
+    _replyBeganAt = null;
+    _interruptWaiting();
+    _waitingClips = const [];
+    starting = false;
     enabled = false;
     memory.cancel();
     suspended = false; needsAudioTap = false; _returnContext = null;

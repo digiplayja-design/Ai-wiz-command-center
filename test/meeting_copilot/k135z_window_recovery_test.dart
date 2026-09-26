@@ -91,9 +91,9 @@ void main() {
     expect(f.spoken.suspended, true); expect(f.spoken.busy, false);
     f.player.holdResume = null; await f.spoken.returnToPage(); expect(f.spoken.suspended, false);
   });
-  test('completed spoken questions dispatch after 1.6 seconds, while a bare wake waits', () async {
+  test('completed spoken questions dispatch after 700ms', () async {
     final f = SpokenFixture(); addTearDown(f.dispose); await f.spoken.enable();
-    f.capture.say('Nova, what did we decide?'); f.now = 1599; await f.spoken.tick(); expect(f.calls, isEmpty);
-    f.now = 1600; await f.spoken.tick(); expect(f.calls.length, 1);
+    f.capture.say('Nova, what did we decide?'); f.now = 699; await f.spoken.tick(); expect(f.calls, isEmpty);
+    f.now = 700; await f.spoken.tick(); expect(f.calls.length, 1);
   });
 }

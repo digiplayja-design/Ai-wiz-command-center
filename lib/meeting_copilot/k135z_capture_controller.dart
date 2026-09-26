@@ -10,7 +10,9 @@ class K135zCaptureController extends ChangeNotifier {
     required this.headers, required this.isCurrent, required this.transport,
     required this.cancelRequests, int Function()? milliseconds, bool watch = true}) {
     _clock = milliseconds ?? (() => _stopwatch.elapsedMilliseconds);
-    if (watch) _timer = Timer.periodic(const Duration(seconds: 1), (_) => unawaited(tick()));
+    if (watch) _timer = Timer.periodic(const Duration(milliseconds: 250), (timer) {
+      if (fastTranscript || timer.tick % 4 == 0) unawaited(tick());
+    });
   }
   final String agentId;
   final Uri baseUri;
@@ -430,7 +432,7 @@ class K135zCaptureController extends ChangeNotifier {
     if (_renew && _consent && _clock() - _renewed >= 10000) {
       await _run((e) async { await _permission('renew', e); });
     } else if (_clock() - _polled >= 5000) { await refresh(); }
-    else if (_clock() - _previewPolled >= (fastTranscript ? 750 : 5000)) { await refreshTranscript(automatic:true); }
+    else if (_clock() - _previewPolled >= (fastTranscript ? 500 : 5000)) { await refreshTranscript(automatic:true); }
     if (canCheckAudio && _clock() - _audioPolled >= 1000) await refreshAudio(automatic:true);
     if (!_dead && usable) notifyListeners();
   }

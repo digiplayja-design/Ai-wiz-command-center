@@ -689,7 +689,7 @@ class _NovaControlPanel extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              capture != null ? 'NOVA VOICE — enable Spoken replies above, then say “Nova” and your question.' : state.novaMuted
+              capture != null ? 'NOVA VOICE — tap Start Nova above, then say “Nova” and your question.' : state.novaMuted
                   ? 'NOVA IS MUTED — she may speak only after a host invite.'
                   : 'NOVA IS SPEAKING — host-controlled audio is active.',
               textAlign: TextAlign.center,

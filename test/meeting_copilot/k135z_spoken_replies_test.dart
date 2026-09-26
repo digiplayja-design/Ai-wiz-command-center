@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../lib/meeting_copilot/k135z_capture_controller.dart';
 import '../../lib/meeting_copilot/k135z_spoken_replies.dart';
 import '../../lib/meeting_copilot/k135z_spoken_player.dart';
+import '../../lib/meeting_copilot/k135z_waiting_voice.dart';
 import '../../lib/meeting_copilot/k135z_spoken_panel.dart';
 import '../../lib/meeting_copilot/korlix_zoom_connection_client.dart';
 import '../../lib/live_convo/k136s_learning_panel.dart';
@@ -38,7 +39,7 @@ class SpokenPlayer implements K135zSpokenPlayer {
 class SpokenFixture {
   int now = 0, cancels = 0;
   final calls = <Map>[];
-  final player = SpokenPlayer();
+  final SpokenPlayer player;
   Completer<void>? hold;
   bool bad = false;
   String? errorCode;
@@ -46,7 +47,8 @@ class SpokenFixture {
   Map<String, dynamic>? memoryRequest;
   late final SpokenCapture capture;
   late final K135zSpokenReplies spoken;
-  SpokenFixture({K136sLearningApiBase? learningApi}) {
+  SpokenFixture({K136sLearningApiBase? learningApi, SpokenPlayer? player,
+    Future<List<K135zWaitingClip>> Function()? waitingVoice}) : player = player ?? SpokenPlayer() {
     capture = SpokenCapture(({required String method, required Uri uri, required Map<String,String> headers, Object? body}) async {
       expect(uri.path, endsWith('/spoken-reply'));
       expect(headers['x-korlix-agent-id'], 'agent');
@@ -64,7 +66,8 @@ class SpokenFixture {
       }}));
     });
     spoken = K135zSpokenReplies(capture: capture, cancelRequest: () { cancels++; },
-      beforeEnable: () {}, player: player, learningApi:learningApi, milliseconds: () => now, watch: false);
+      beforeEnable: () {}, player: this.player, learningApi:learningApi,
+      loadWaitingVoice:waitingVoice ?? (() async => const []), milliseconds: () => now, watch: false);
   }
   Future<void> ask([String text = 'Nova, what did we decide?']) async {
     capture.say(text); now += 3000; await spoken.tick();
@@ -105,7 +108,7 @@ void main() {
   test('gathers caption fragments from the same speaker and waits for a pause', () async {
     final f = SpokenFixture(); addTearDown(f.dispose); await f.spoken.enable();
     f.capture.say('Hey Nova,'); f.now = 2000; await f.spoken.tick(); expect(f.calls, isEmpty);
-    f.capture.say('what did we decide?'); f.now = 3500; await f.spoken.tick(); expect(f.calls, isEmpty);
+    f.capture.say('what did we decide?'); f.now = 2600; await f.spoken.tick(); expect(f.calls, isEmpty);
     f.now = 5000; await f.spoken.tick(); expect(f.calls.single['endSequence'], 2);
   });
   test('incidental mentions do not trigger a reply', () async {
