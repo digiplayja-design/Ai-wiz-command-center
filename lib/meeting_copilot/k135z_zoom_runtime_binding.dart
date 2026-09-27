@@ -130,6 +130,8 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
       if (meeting.uuid == preferred) return meeting;
     }
     if (_chosenMeetingUuid != null) return null;
+    final live = choices.where((m) => m.isLive && m.isHost).toList();
+    if (live.length == 1) return live.single;
     return choices.length == 1 ? choices.single : null;
   }
   void chooseListeningMeeting(String uuid) {
@@ -230,6 +232,18 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
 
   Future<void> initialize() async {
     await refresh();
+    if (!usable || busy) return;
+    // The discovery endpoint renews an expired Zoom access token using its
+    // existing refresh grant. Do not strand a connected account behind the
+    // expired-token Start guard before that renewal can run.
+    final status = _controller.status;
+    if (_controller.phase != KorlixZoomConnectionPhase.error &&
+        status?.connected == true && status?.requiresReauthorization == false &&
+        status?.accessTokenExpired == true) {
+      await _controller.loadUpcomingMeetings();
+      if (usable && _controller.phase != KorlixZoomConnectionPhase.error) await refresh();
+      return;
+    }
     if (connected && !busy) await loadMeetings();
   }
 

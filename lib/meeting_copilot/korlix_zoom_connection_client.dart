@@ -119,6 +119,7 @@ class KorlixZoomMeetingSummary {
     this.timezone,
     this.type,
     this.isAllDay = false,
+    this.isLive = false,
   });
 
   factory KorlixZoomMeetingSummary.fromJson(Map<String, dynamic> json) {
@@ -145,6 +146,7 @@ class KorlixZoomMeetingSummary {
       type: _nullableInt(json['type']),
       isHost: (json['isHost'] ?? json['is_host']) == true,
       isAllDay: (json['isAllDay'] ?? json['is_all_day']) == true,
+      isLive: json['isLive'] == true,
     );
   }
 
@@ -157,6 +159,7 @@ class KorlixZoomMeetingSummary {
   final int? type;
   final bool isHost;
   final bool isAllDay;
+  final bool isLive;
 }
 
 class KorlixZoomConnectionClient {
@@ -340,6 +343,9 @@ class KorlixZoomConnectionClient {
       }
     }
     headers['accept'] = 'application/json';
+    // Connection and meeting state must be checked with the server after Zoom
+    // starts a meeting or returns from authorization.
+    headers['cache-control'] = 'no-cache, no-store';
     if (body != null) headers['content-type'] = 'application/json';
     final boundQuery = <String, String>{...queryParameters, 'agent_id': selected};
 

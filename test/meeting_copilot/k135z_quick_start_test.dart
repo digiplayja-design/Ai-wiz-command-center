@@ -39,6 +39,29 @@ K135zZoomRuntimeBinding binding(CaptureFixture f, SpokenPlayer player) => K135zZ
   transport:f.c.transport, spokenPlayer:player);
 
 void main() {
+  test('one live hosted meeting is selected ahead of other calendar meetings', () async {
+    final f=CaptureFixture(), b=binding(f,SpokenPlayer());
+    addTearDown(b.dispose);addTearDown(f.c.dispose);
+    f.meetings.add({'id':'456','uuid':'current-live','topic':'Live now','isHost':true,'isLive':true});
+    await b.initialize();expect(b.listeningMeeting!.uuid,'current-live');expect(b.canStartNova,true);
+    expect(f.calls,isEmpty); // discovery never starts capture by itself
+    await b.startListening();expect(b.capture.meetingUuid,'current-live');
+    expect(b.capture.statusLabel,'Listening');
+  });
+  testWidgets('an empty meeting list has a visible Refresh action that restores Start', (tester) async {
+    final f=CaptureFixture(), b=binding(f,SpokenPlayer());
+    addTearDown(b.dispose);addTearDown(f.c.dispose);f.meetings=[];
+    await b.initialize();
+    await tester.pumpWidget(MaterialApp(home:Scaffold(body:SingleChildScrollView(
+      child:AnimatedBuilder(animation:b,builder:(_,__)=>K135zStartupPanel(binding:b))))));
+    expect(b.canStartListening,false);expect(find.text('Refresh meetings'),findsOneWidget);
+    f.meetings=[{'id':'123','uuid':'current-live','topic':'Live now','isHost':true,'isLive':true}];
+    await tester.tap(find.byKey(const Key('nova-refresh-meetings')));await tester.pumpAndSettle();
+    expect(b.canStartListening,true);expect(find.text('Meeting: Live now'),findsOneWidget);
+    expect(f.calls,isEmpty);expect(tester.takeException(),isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    b.dispose();f.c.dispose();
+  });
   test('Start Nova unlocks audio immediately, then starts listening and voice in one action', () async {
     final f=CaptureFixture(), player=SpokenPlayer()..holdEnable=Completer<void>();
     final b=binding(f,player);addTearDown(b.dispose);addTearDown(f.c.dispose);

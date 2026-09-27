@@ -31,6 +31,7 @@ void main() {
           required Map<String, String> headers, Object? body}) async {
         requests.add(uri);
         expect(headers['authorization'], 'Bearer offline-user-one');
+        expect(headers['cache-control'], 'no-cache, no-store');
         expect(uri.queryParameters['agent_id'], 'custom_agent_7');
         if (reply != null) return reply(uri);
         if (uri.path.endsWith('/status')) return status(true);
@@ -129,5 +130,31 @@ void main() {
       headersBuilder: () => {}, isCurrent: () => true), throwsStateError);
     expect(() => K135zZoomLaunch(agentId: ' ', backendBaseUri: launch.backendBaseUri,
       headersBuilder: () => headers, isCurrent: () => true), throwsStateError);
+  });
+  test('Refresh recovers an expired renewable Zoom token before enabling Start', () async {
+    var expired = true;
+    final b = binding(reply: (uri) {
+      if (uri.path.endsWith('/status')) return KorlixZoomTransportResponse(statusCode:200,
+        body:jsonEncode({'status':{'connected':true,'requiresReauthorization':false,'accessTokenExpired':expired}}));
+      expect(uri.path.endsWith('/upcoming'), true); expired = false;
+      return const KorlixZoomTransportResponse(statusCode:200,
+        body:'{"meetings":[{"id":"123","uuid":"live-instance","topic":"Live meeting","isHost":true,"isLive":true}]}');
+    });
+    await b.initialize();
+    expect(requests.map((u) => u.path.split('/').last), ['status','upcoming','status']);
+    expect(b.connected, true); expect(b.canStartListening, true);
+    expect(b.listeningMeeting!.uuid, 'live-instance');
+  });
+  test('failed renewal or missing refresh grant never enables listening', () async {
+    for (final reauthorize in [false,true]) {
+      requests.clear();
+      final b = binding(reply: (uri) => uri.path.endsWith('/status')
+        ? KorlixZoomTransportResponse(statusCode:200,body:jsonEncode({'status':{
+          'connected':true,'requiresReauthorization':reauthorize,'accessTokenExpired':true}}))
+        : const KorlixZoomTransportResponse(statusCode:403,
+          body:'{"error":{"code":"ZOOM_REAUTHORIZATION_REQUIRED","message":"Reconnect Zoom."}}'));
+      await b.initialize(); expect(b.connected, false); expect(b.canStartListening, false);
+      expect(requests.length, reauthorize ? 1 : 2);
+    }
   });
 }

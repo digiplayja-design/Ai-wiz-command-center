@@ -26,7 +26,9 @@ class K135zStartupPanel extends StatelessWidget {
             fontSize: 22, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Text(b == null ? 'Open Meeting Copilot from your selected agent in Agent Hub.'
-            : b.connected ? meeting == null ? 'Choose your meeting below.'
+            : b.connected ? meeting == null ? b.meetings.isEmpty
+              ? 'No meeting found yet. Start your meeting in Zoom, then tap Refresh meetings.'
+              : 'Choose your meeting below.'
               : 'Meeting: ${meeting.topic}' : b.message,
             key: const Key('g6c-connection-message'), style: const TextStyle(color: muted)),
           if (b != null && b.connected && b.meetings.length > 1) ...[
@@ -37,7 +39,7 @@ class K135zStartupPanel extends StatelessWidget {
                   selected: item.uuid != null && item.uuid == meeting?.uuid,
                   onPressed: available && item.uuid != null
                     ? () => b.chooseListeningMeeting(item.uuid!) : null,
-                  child: Text(item.topic)),
+                  child: Text(item.isLive ? 'Live · ${item.topic}' : item.topic)),
             ]),
           ],
           const SizedBox(height: 12),
@@ -63,6 +65,12 @@ class K135zStartupPanel extends StatelessWidget {
                 : b?.canStartListening == true ? b!.startListening : null,
               child: Text(voiceSupported ? novaOn && (voice?.userPaused == true || voice?.needsAudioTap == true) ? 'Resume Nova'
                 : novaOn ? 'Nova is on' : 'Start Nova' : 'Start listening')),
+            K135zFeedbackButton.outlined(
+              buttonKey: const Key('nova-refresh-meetings'),
+              pendingLabel: 'Finding meetings…',
+              icon: const Icon(Icons.refresh),
+              onPressed: available ? b.initialize : null,
+              child: const Text('Refresh meetings')),
             K135zFeedbackButton.outlined(
               buttonKey: const Key('stop-listening-button'),
               pendingLabel: 'Stopping listening…',

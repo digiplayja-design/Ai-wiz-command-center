@@ -136,7 +136,7 @@ void gate6cRouteTests() {
       })));
     await tester.pumpAndSettle();
     expect(requests, 2);
-    expect(find.text('Choose your meeting below.'), findsOneWidget);
+    expect(find.text('No meeting found yet. Start your meeting in Zoom, then tap Refresh meetings.'), findsOneWidget);
     final screen = tester.widget<KorlixMeetingCopilotScreen>(find.byType(KorlixMeetingCopilotScreen));
     expect(screen.controller.canStartListening, isFalse);
     expect(screen.controller.state.novaMuted, isTrue);
