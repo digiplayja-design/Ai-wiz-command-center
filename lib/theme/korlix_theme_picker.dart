@@ -359,10 +359,12 @@ class KorlixThemeShortcuts extends StatelessWidget {
     required this.selectedId,
     required this.onSelect,
     required this.onPreview,
+    this.onSkins,
   });
   final String selectedId;
   final ValueChanged<String> onSelect;
   final VoidCallback onPreview;
+  final VoidCallback? onSkins;
   @override
   Widget build(BuildContext context) {
     final active = korlixSkinPaletteFor(selectedId);
@@ -379,65 +381,79 @@ class KorlixThemeShortcuts extends StatelessWidget {
           children: [
             Wrap(
               alignment: WrapAlignment.center,
-              children: korlixThemeIds.map((id) {
-                final skin = korlixSkinPaletteFor(id);
-                final selected = skin.id == active.id;
-                return Tooltip(
-                  message: skin.label,
-                  child: Semantics(
-                    button: true,
-                    selected: selected,
-                    label: 'Apply ${skin.label} theme',
-                    child: InkWell(
-                      onTap: () => onSelect(id),
-                      customBorder: const CircleBorder(),
-                      child: SizedBox(
-                        width: 48,
-                        height: 48,
-                        child: Center(
-                          child: Container(
-                            width: 34,
-                            height: 34,
-                            padding: const EdgeInsets.all(3),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: selected
-                                    ? active.text
-                                    : active.border.withValues(alpha: .45),
-                                width: selected ? 2 : 1,
+              children:
+                  [
+                    'pure_white',
+                    'pure_black',
+                    'korlix_blue',
+                    'pink_white',
+                    'matrix_green',
+                    'ultra_gold',
+                  ].map((id) {
+                    final skin = korlixSkinPaletteFor(id);
+                    final selected = skin.id == active.id;
+                    return Tooltip(
+                      message: skin.label,
+                      child: Semantics(
+                        button: true,
+                        selected: selected,
+                        label: 'Apply ${skin.label} theme',
+                        child: InkWell(
+                          onTap: () => onSelect(id),
+                          customBorder: const CircleBorder(),
+                          child: SizedBox(
+                            width: 48,
+                            height: 48,
+                            child: Center(
+                              child: Container(
+                                width: 34,
+                                height: 34,
+                                padding: const EdgeInsets.all(3),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: selected
+                                        ? active.text
+                                        : active.border.withValues(alpha: .45),
+                                    width: selected ? 2 : 1,
+                                  ),
+                                ),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: skin.primary,
+                                  ),
+                                  child: selected
+                                      ? Icon(
+                                          Icons.check,
+                                          size: 18,
+                                          color: skin.textOnAccent,
+                                        )
+                                      : null,
+                                ),
                               ),
-                            ),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: skin.primary,
-                              ),
-                              child: selected
-                                  ? Icon(
-                                      Icons.check,
-                                      size: 18,
-                                      color: skin.textOnAccent,
-                                    )
-                                  : null,
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                );
-              }).toList(),
+                    );
+                  }).toList(),
             ),
             TextButton.icon(
               onPressed: onPreview,
               icon: const Icon(Icons.palette_outlined, size: 17),
               label: Text(
-                '${active.label} · Preview themes',
+                '${active.label} · 12 color themes',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: active.text, fontSize: 12),
               ),
             ),
+            if (onSkins != null)
+              TextButton.icon(
+                onPressed: onSkins,
+                icon: const Icon(Icons.layers_outlined, size: 18),
+                label: const Text('Screen skins & templates'),
+              ),
           ],
         ),
       ),

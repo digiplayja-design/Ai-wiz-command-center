@@ -1,6 +1,9 @@
 import 'chat/chat_workspace.dart';
 import 'theme/korlix_theme.dart';
 import 'theme/korlix_theme_picker.dart';
+import 'theme/korlix_screen_skin.dart';
+import 'theme/korlix_appearance_preferences.dart';
+import 'theme/korlix_appearance_picker.dart';
 export 'theme/korlix_theme.dart';
 import 'chat/chat_request.dart';
 import 'bookkeeping/bookkeeping_client.dart';
@@ -3775,30 +3778,34 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     return korlixThemeLabelFor(theme);
   }
 
-  Future<void> _setTheme({required String theme}) async {
-    final selected = korlixNormalizeSkinId(theme);
-    kKorlixThemeNotifier.value = selected;
+  Future<void> _setTheme({required String theme, String? screenSkin}) async {
+    final previous = kKorlixThemeNotifier.value;
+    final choice = KorlixAppearanceChoice(theme, screenSkin ?? kKorlixScreenSkinNotifier.value);
+    final saving = kKorlixAppearancePreferences.apply(choice);
     if (mounted) {
       setState(() {});
       final messenger = ScaffoldMessenger.of(context);
       messenger.hideCurrentSnackBar();
-      messenger.showSnackBar(korlixThemeAppliedSnackBar(selected));
+      messenger.showSnackBar(SnackBar(content: Text('${korlixThemeLabelFor(choice.themeId)} · ${korlixScreenSkinLabel(choice.skinId)} applied')));
     }
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (kKorlixThemeNotifier.value == selected) await prefs.setString('korlix_ui_theme', selected);
-    } catch (_) { /* Theme selection still applies when local storage is unavailable. */ }
-    if (kKorlixThemeNotifier.value != selected) return;
+    final saved = await saving;
+    if (!saved && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Look applied for this session. Device storage could not save it.')));
+    }
+    // New looks are stored on this device. Retain the existing remote sync only
+    // for IDs accepted by the current backend, without changing account policy.
+    const remoteThemes = {'korlix_blue', 'matrix_green', 'ultra_gold', 'dark_crimson'};
+    if (previous == choice.themeId || !remoteThemes.contains(choice.themeId) || kKorlixThemeNotifier.value != choice.themeId) return;
     try {
       await http.post(_assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/theme/set'),
-        headers: KorlixDeviceStore.headers(), body: jsonEncode({'theme': selected}))
+        headers: KorlixDeviceStore.headers(), body: jsonEncode({'theme': choice.themeId}))
         .timeout(const Duration(seconds: 10));
-    } catch (_) { /* The selected local theme remains usable while offline. */ }
+    } catch (_) { /* The saved local appearance remains usable while offline. */ }
   }
 
   Future<void> _openThemePanel({required String currentTheme, String? currentTier}) async {
-    final selected = await showKorlixThemePicker(context, currentId: kKorlixThemeNotifier.value);
-    if (selected != null && mounted) await _setTheme(theme: selected);
+    final selected = await showKorlixAppearancePicker(context);
+    if (selected != null && mounted) await _setTheme(theme: selected.themeId, screenSkin: selected.skinId);
   }
 
   Future<void> _openPanel() async {
@@ -4003,7 +4010,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                                 .toString(),
                       ),
                       icon: const Icon(Icons.palette_outlined),
-                      label: const Text('Color Theme'),
+                      label: const Text('Themes & Screen Skins'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: tier == 'ultra' || tier == 'enterprise'
                             ? const Color(0xFFFFD166)
@@ -5818,14 +5825,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     unawaited(_resumePendingGenerationJobs());
   }
 
-  Future<void> _loadSavedKorlixTheme() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedTheme = prefs.getString('korlix_ui_theme');
-
-    if (savedTheme != null && savedTheme.trim().isNotEmpty) {
-      kKorlixThemeNotifier.value = korlixNormalizeSkinId(savedTheme.trim());
-    }
-  }
+  Future<void> _loadSavedKorlixTheme() => kKorlixAppearancePreferences.restore();
 
   @override
   void dispose() {
@@ -10279,15 +10279,9 @@ Make the entire output professional, well-structured using Markdown, and product
     final t = _t;
 
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: korlixThemeBackgroundFor(kKorlixThemeNotifier.value),
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
+      body: ValueListenableBuilder<String>(valueListenable: kKorlixScreenSkinNotifier,
+        builder: (context, screenSkin, _) => KorlixScreenBackdrop(
+        palette: korlixSkinPaletteFor(kKorlixThemeNotifier.value), skinId: screenSkin,
         child: SafeArea(
           child: Center(
             child: ConstrainedBox(
@@ -10307,14 +10301,14 @@ Make the entire output professional, well-structured using Markdown, and product
                       _buildResults(),
                       const SizedBox(height: 18),
                     ],
-                    _buildCommandPanel(),
+                    KorlixSkinFrame(palette: korlixSkinPaletteFor(kKorlixThemeNotifier.value), skinId: screenSkin, child: _buildCommandPanel()),
                   ],
                 ),
               ),
             ),
           ),
         ),
-      ),
+      )),
     );
   }
 
@@ -14436,7 +14430,7 @@ Make the entire output professional, well-structured using Markdown, and product
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: selected
-                      ? skin.primary.withOpacity(skin.isLight ? 0.24 : 0.20)
+                      ? skin.isPureWhite ? Colors.white : skin.primary.withOpacity(skin.isLight ? 0.24 : 0.20)
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(20),
                   border: selected
@@ -16404,6 +16398,10 @@ Make the entire output professional, well-structured using Markdown, and product
     EdgeInsetsGeometry padding = EdgeInsets.zero,
   }) {
     final radius = borderRadius ?? BorderRadius.circular(999);
+    if (skin.isPureWhite) {
+      return Container(padding: padding, decoration: BoxDecoration(color: Colors.white,
+        borderRadius: radius, border: Border.all(color: border.withValues(alpha: disabled ? .4 : .7), width: borderWidth)), child: child);
+    }
     final disabledFillAlpha = skin.isLight ? 0.92 : 0.58;
     final safeFill = fill.withValues(alpha: disabled ? disabledFillAlpha : 1.0);
     final topFace =
@@ -16703,7 +16701,7 @@ Make the entire output professional, well-structured using Markdown, and product
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.32),
+                color: Colors.black.withOpacity(skin.isLight ? .06 : .32),
                 blurRadius: 14,
                 offset: const Offset(0, 8),
               ),
@@ -18383,36 +18381,41 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
-  Future<void> _applyThemeShortcut({required String theme}) async {
-    final selected = korlixNormalizeSkinId(theme);
-    kKorlixThemeNotifier.value = selected;
+  Future<void> _applyThemeShortcut({required String theme, String? screenSkin}) async {
+    final previous = kKorlixThemeNotifier.value;
+    final choice = KorlixAppearanceChoice(theme, screenSkin ?? kKorlixScreenSkinNotifier.value);
+    final saving = kKorlixAppearancePreferences.apply(choice);
     if (mounted) {
       setState(() {});
       final messenger = ScaffoldMessenger.of(context);
       messenger.hideCurrentSnackBar();
-      messenger.showSnackBar(korlixThemeAppliedSnackBar(selected));
+      messenger.showSnackBar(SnackBar(content: Text('${korlixThemeLabelFor(choice.themeId)} · ${korlixScreenSkinLabel(choice.skinId)} applied')));
     }
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (kKorlixThemeNotifier.value == selected) await prefs.setString('korlix_ui_theme', selected);
-    } catch (_) { /* Theme selection still applies when local storage is unavailable. */ }
-    if (kKorlixThemeNotifier.value != selected) return;
+    final saved = await saving;
+    if (!saved && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Look applied for this session. Device storage could not save it.')));
+    }
+    // New looks are stored on this device. Retain the existing remote sync only
+    // for IDs accepted by the current backend, without changing account policy.
+    const remoteThemes = {'korlix_blue', 'matrix_green', 'ultra_gold', 'dark_crimson'};
+    if (previous == choice.themeId || !remoteThemes.contains(choice.themeId) || kKorlixThemeNotifier.value != choice.themeId) return;
     try {
       await http.post(_assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/theme/set'),
-        headers: KorlixDeviceStore.headers(), body: jsonEncode({'theme': selected}))
+        headers: KorlixDeviceStore.headers(), body: jsonEncode({'theme': choice.themeId}))
         .timeout(const Duration(seconds: 10));
-    } catch (_) { /* The selected local theme remains usable while offline. */ }
+    } catch (_) { /* The saved local appearance remains usable while offline. */ }
   }
 
   Widget _buildThemeShortcutCircles() {
+    Future<void> openAppearance(int tab) async {
+      final selected = await showKorlixAppearancePicker(context, initialTab: tab);
+      if (selected != null && mounted) await _applyThemeShortcut(theme: selected.themeId, screenSkin: selected.skinId);
+    }
     return ValueListenableBuilder<String>(valueListenable: kKorlixThemeNotifier,
       builder: (context, theme, _) => Padding(padding: const EdgeInsets.fromLTRB(22, 10, 22, 2),
         child: KorlixThemeShortcuts(selectedId: theme,
           onSelect: (id) => unawaited(_applyThemeShortcut(theme: id)),
-          onPreview: () async {
-            final selected = await showKorlixThemePicker(context, currentId: kKorlixThemeNotifier.value);
-            if (selected != null && mounted) await _applyThemeShortcut(theme: selected);
-          })));
+          onPreview: () => openAppearance(0), onSkins: () => openAppearance(1))));
   }
 
   List<String> _googlePlayAiReportReasons() {
@@ -19655,6 +19658,13 @@ class _KorlixCleanAnswerReadyBoxPainter extends CustomPainter {
     final rect = Offset.zero & size;
     final outer = _panelPath(size, 2.5);
     final middle = _panelPath(size, 13.5);
+    if (skin.isPureWhite) {
+      canvas.drawPath(outer, Paint()..color = Colors.white);
+      _strokeSolid(canvas, outer, skin.border, 1.2, .7);
+      _strokeSolid(canvas, middle, skin.border, .8, .3);
+      return;
+    }
+
 
     canvas.drawPath(
       outer.shift(const Offset(0, 7)),

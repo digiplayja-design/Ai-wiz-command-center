@@ -236,7 +236,7 @@ void main() {
       await tester.tap(find.byTooltip('Rose Quartz'));
       await tester.pump();
       expect(selected, 'pink_white');
-      await tester.tap(find.text('KORLIX Midnight · Preview themes'));
+      await tester.tap(find.text('KORLIX Midnight · 12 color themes'));
       expect(previews, 1);
       final targets = tester
           .widgetList<SizedBox>(find.byType(SizedBox))

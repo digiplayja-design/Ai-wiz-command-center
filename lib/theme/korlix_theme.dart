@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 
 const korlixThemeIds = [
+  'pure_white',
+  'pure_black',
+  'lavender_mist',
+  'ocean_blue',
+  'sunset_copper',
+  'mint_cloud',
   'korlix_blue',
   'matrix_green',
   'ultra_gold',
@@ -10,6 +16,12 @@ const korlixThemeIds = [
 ];
 
 String korlixThemeDescription(String id) => switch (korlixNormalizeSkinId(id)) {
+  'pure_white' => 'True white backgrounds and panels. Crisp black text.',
+  'pure_black' => 'Deep black with bright silver accents.',
+  'lavender_mist' => 'Airy lavender with deep violet details.',
+  'ocean_blue' => 'Deep ocean with fresh sky-blue highlights.',
+  'sunset_copper' => 'Espresso surfaces and warm copper light.',
+  'mint_cloud' => 'Soft mint with rich evergreen accents.',
   'matrix_green' => 'Deep forest, fresh mint and soft violet.',
   'ultra_gold' => 'Warm charcoal with understated gold.',
   'pink_white' => 'Soft rose surfaces with rich berry accents.',
@@ -227,6 +239,8 @@ class KorlixSkinPalette {
   final Color danger;
   final Color premium;
 
+  bool get isPureWhite => id == 'pure_white';
+
   const KorlixSkinPalette({
     required this.id,
     required this.label,
@@ -256,6 +270,8 @@ class KorlixSkinPalette {
 
 String korlixNormalizeSkinId(String theme) {
   final id = theme.trim().toLowerCase();
+
+  if (korlixThemeIds.contains(id)) return id;
 
   switch (id) {
     case 'blue':
@@ -301,6 +317,162 @@ String korlixNormalizeSkinId(String theme) {
 
 KorlixSkinPalette korlixSkinPaletteFor(String theme) {
   switch (korlixNormalizeSkinId(theme)) {
+    case 'pure_white':
+      return const KorlixSkinPalette(
+        id: 'pure_white',
+        label: 'Pure White',
+        isLight: true,
+        backgroundTop: Color(0xFFFFFFFF),
+        backgroundMid: Color(0xFFFFFFFF),
+        backgroundBottom: Color(0xFFFFFFFF),
+        panel: Color(0xFFFFFFFF),
+        panelSoft: Color(0xFFFFFFFF),
+        panelDeep: Color(0xFFFFFFFF),
+        inputFill: Color(0xFFFFFFFF),
+        buttonFill: Color(0xFFFFFFFF),
+        primary: Color(0xFF17202B),
+        secondary: Color(0xFF374151),
+        tertiary: Color(0xFF344357),
+        border: Color(0xFF78828F),
+        glow: Color(0xFF17202B),
+        text: Color(0xFF111827),
+        mutedText: Color(0xFF46505E),
+        hintText: Color(0xFF536070),
+        textOnAccent: Color(0xFFFFFFFF),
+        success: Color(0xFF236745),
+        danger: Color(0xFFAA2537),
+        premium: Color(0xFF76552B),
+      );
+    case 'pure_black':
+      return const KorlixSkinPalette(
+        id: 'pure_black',
+        label: 'Pure Black',
+        isLight: false,
+        backgroundTop: Color(0xFF000000),
+        backgroundMid: Color(0xFF000000),
+        backgroundBottom: Color(0xFF000000),
+        panel: Color(0xFF080808),
+        panelSoft: Color(0xFF171717),
+        panelDeep: Color(0xFF000000),
+        inputFill: Color(0xFF080808),
+        buttonFill: Color(0xFF151515),
+        primary: Color(0xFFE8EDF3),
+        secondary: Color(0xFFC6CDDA),
+        tertiary: Color(0xFFA8C5E5),
+        border: Color(0xFF818894),
+        glow: Color(0xFFC6CDDA),
+        text: Color(0xFFFFFFFF),
+        mutedText: Color(0xFFC9CDD4),
+        hintText: Color(0xFFB6BEC9),
+        textOnAccent: Color(0xFF101820),
+        success: Color(0xFFA7E6BC),
+        danger: Color(0xFFFFADB1),
+        premium: Color(0xFFE9D6A2),
+      );
+    case 'lavender_mist':
+      return const KorlixSkinPalette(
+        id: 'lavender_mist',
+        label: 'Lavender Mist',
+        isLight: true,
+        backgroundTop: Color(0xFFFBFAFF),
+        backgroundMid: Color(0xFFF6F2FD),
+        backgroundBottom: Color(0xFFF0EAF8),
+        panel: Color(0xFFFFFFFF),
+        panelSoft: Color(0xFFF5EFFA),
+        panelDeep: Color(0xFFECE4F4),
+        inputFill: Color(0xFFFFFFFF),
+        buttonFill: Color(0xFFF7F3FA),
+        primary: Color(0xFF624096),
+        secondary: Color(0xFF6B477D),
+        tertiary: Color(0xFF4C547E),
+        border: Color(0xFF8F7AA8),
+        glow: Color(0xFF8D68BA),
+        text: Color(0xFF2D233A),
+        mutedText: Color(0xFF5D486F),
+        hintText: Color(0xFF655274),
+        textOnAccent: Color(0xFFFFFFFF),
+        success: Color(0xFF236745),
+        danger: Color(0xFFA32540),
+        premium: Color(0xFF76552B),
+      );
+    case 'ocean_blue':
+      return const KorlixSkinPalette(
+        id: 'ocean_blue',
+        label: 'Ocean Blue',
+        isLight: false,
+        backgroundTop: Color(0xFF04111E),
+        backgroundMid: Color(0xFF082033),
+        backgroundBottom: Color(0xFF0D263A),
+        panel: Color(0xFF102B40),
+        panelSoft: Color(0xFF193B53),
+        panelDeep: Color(0xFF061C2D),
+        inputFill: Color(0xFF0A2032),
+        buttonFill: Color(0xFF17374B),
+        primary: Color(0xFF83D5FF),
+        secondary: Color(0xFFA3DBD2),
+        tertiary: Color(0xFFC0C8FF),
+        border: Color(0xFF7495AE),
+        glow: Color(0xFF83D5FF),
+        text: Color(0xFFF0F8FF),
+        mutedText: Color(0xFFC3D6E7),
+        hintText: Color(0xFFB6CDD9),
+        textOnAccent: Color(0xFF062238),
+        success: Color(0xFF9ADFC4),
+        danger: Color(0xFFFFACB2),
+        premium: Color(0xFFEBD393),
+      );
+    case 'sunset_copper':
+      return const KorlixSkinPalette(
+        id: 'sunset_copper',
+        label: 'Sunset Copper',
+        isLight: false,
+        backgroundTop: Color(0xFF170F0D),
+        backgroundMid: Color(0xFF241813),
+        backgroundBottom: Color(0xFF2B1E18),
+        panel: Color(0xFF2E211B),
+        panelSoft: Color(0xFF3C2D24),
+        panelDeep: Color(0xFF1C120D),
+        inputFill: Color(0xFF241811),
+        buttonFill: Color(0xFF36261D),
+        primary: Color(0xFFF1B78E),
+        secondary: Color(0xFFE1C4A3),
+        tertiary: Color(0xFFEBAFAA),
+        border: Color(0xFFA78A73),
+        glow: Color(0xFFEAB28C),
+        text: Color(0xFFFBF3EC),
+        mutedText: Color(0xFFDCC9BA),
+        hintText: Color(0xFFD1BBAA),
+        textOnAccent: Color(0xFF321A0C),
+        success: Color(0xFFB0DABC),
+        danger: Color(0xFFFFADB0),
+        premium: Color(0xFFE9CD9B),
+      );
+    case 'mint_cloud':
+      return const KorlixSkinPalette(
+        id: 'mint_cloud',
+        label: 'Mint Cloud',
+        isLight: true,
+        backgroundTop: Color(0xFFFAFEFC),
+        backgroundMid: Color(0xFFF0F8F3),
+        backgroundBottom: Color(0xFFE6F2EB),
+        panel: Color(0xFFFFFFFF),
+        panelSoft: Color(0xFFEFF8F2),
+        panelDeep: Color(0xFFE2EFE7),
+        inputFill: Color(0xFFFFFFFF),
+        buttonFill: Color(0xFFF0F7F3),
+        primary: Color(0xFF1E6049),
+        secondary: Color(0xFF3C5B68),
+        tertiary: Color(0xFF426044),
+        border: Color(0xFF6E9580),
+        glow: Color(0xFF61A188),
+        text: Color(0xFF183429),
+        mutedText: Color(0xFF425E50),
+        hintText: Color(0xFF4D6658),
+        textOnAccent: Color(0xFFFFFFFF),
+        success: Color(0xFF236745),
+        danger: Color(0xFFA32540),
+        premium: Color(0xFF76552B),
+      );
     case 'matrix_green':
       return const KorlixSkinPalette(
         id: 'matrix_green',

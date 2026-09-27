@@ -1,5 +1,8 @@
 # KORLIX theme polish
 
+This documents the original six-palette release. The subsequent appearance studio
+adds Pure White, six screen skins, and 12 total palettes; see [SCREEN_SKINS.md](SCREEN_SKINS.md).
+
 The six existing theme IDs now use coordinated palettes with calmer backgrounds,
 clearer text, and readable solid primary actions. Stored theme IDs and earlier
 aliases remain compatible.
