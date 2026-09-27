@@ -8,6 +8,8 @@ export 'theme/korlix_theme.dart';
 import 'chat/chat_request.dart';
 import 'bookkeeping/bookkeeping_client.dart';
 import 'bookkeeping/bookkeeping_screen.dart';
+import 'virtual_closet/closet_client.dart';
+import 'virtual_closet/closet_screen.dart';
 import 'funnel_studio/funnel_client.dart';
 import 'funnel_studio/funnel_screen.dart';
 import 'workforce/workforce_client.dart';
@@ -5569,6 +5571,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   // Hide inactive Utility tools until full native workflows are ready.
   // Keep active Utility tools visible.
   static const List<String> _utilityTools = <String>[
+    'Virtual Closet',
     'Bookkeeping 2027',
     'Funnel Studio',
     'Contacts CRM',
@@ -9905,6 +9908,10 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   void _useQuickAction(QuickAction action) {
+    if (action.label == 'Virtual Closet') {
+      unawaited(_openVirtualCloset());
+      return;
+    }
     // KORLIX_IMAGE_TO_VIDEO_CREATE_VIDEO_V1_GATE
     // Build 106: route the visible Create Video action into Image to Video V1.
     if (_isCreateVideoQuickAction(action)) {
@@ -10676,6 +10683,17 @@ Make the entire output professional, well-structured using Markdown, and product
       BookkeepingScreen(client: client, disposeClient: true)));
   }
 
+  Future<void> _openVirtualCloset() async {
+    final client = ClosetClient(backendBaseUrl:kKorlixBackendBaseUrl,
+      headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>VirtualClosetScreen(
+      client:client,
+      ensureConsent:()=>ensureKorlixThirdPartyAiConsent(context:context,
+        featureName:'Virtual Closet',providers:const {KorlixThirdPartyAiProvider.openAi},
+        dataCategories:const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.imagesAndPhotos}),
+    )));
+  }
+
   Future<void> _openFunnelStudio() async {
     if (_currentTier.trim().toLowerCase() != 'enterprise') return;
     final client = FunnelClient(
@@ -10701,6 +10719,10 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   void _selectUtilityTool(String tool) {
+    if (tool == 'Virtual Closet') {
+      unawaited(_openVirtualCloset());
+      return;
+    }
     if (tool == 'Bookkeeping 2027') {
       unawaited(_openBookkeeping());
       return;
@@ -13824,6 +13846,7 @@ Make the entire output professional, well-structured using Markdown, and product
     };
 
     String statusFor(String tool) {
+      if (tool == 'Virtual Closet') return 'Your private wardrobe, AI try-on, saved looks and Nova styling';
       if (tool == 'Bookkeeping 2027') return 'Early access: business records, income, expenses and CSV export';
       if (tool == 'Funnel Studio') return 'Enterprise pages, lead capture and campaign links';
       if (tool == 'Workforce') return 'Enterprise attendance, work updates and employee access';
@@ -16904,7 +16927,7 @@ Make the entire output professional, well-structured using Markdown, and product
                   // KORLIX_CREDIT_PUBLIC_ENTRY_HIDDEN_BUILD131_BEGIN
                   // Preserve the credit QuickActions in source while excluding
                   // them from the public home-screen action list.
-                  children: t.quickActions
+                  children: [const QuickAction(label:'Virtual Closet',prompt:''), ...t.quickActions]
                       .where((action) => !_isCreditReportActionSafeUi(action))
                       .map(_buildSafeUiQuickActionChip)
                       .toList(),
