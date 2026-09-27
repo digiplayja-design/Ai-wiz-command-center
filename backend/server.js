@@ -18,6 +18,9 @@ import dotenv from "dotenv";
 import OpenAI from "openai";
 import korlixAstra from "./korlix_astra.cjs";
 const {createTextResponse} = korlixAstra;
+import chatQuality from "./chat_quality.cjs";
+const {CHAT_MODEL, CHAT_EFFORT, chatHistory, imageSettings, imagePrompt, probeModelAccess} = chatQuality;
+let chatModelAccess = {chat: 'checking', images: 'checking'};
 import { toFile } from "openai/uploads";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -2019,11 +2022,17 @@ async function fetchOpenAIVideoContent(videoId) {
 }
 
 
-async function createOpenAIResponse(client, { model, input, useSearch }) {
+async function createOpenAIResponse(client, { model, input, useSearch, reasoningEffort }) {
   const request = {
     model,
     input,
   };
+
+  if (reasoningEffort) {
+    request.reasoning = {effort: reasoningEffort};
+    request.max_output_tokens = 32768;
+    request.store = false;
+  }
 
   if (useSearch) {
     request.tools = [{ type: "web_search" }];
@@ -3641,6 +3650,11 @@ app.get("/api/health", (req, res) => {
     supabaseAuthConfigured: Boolean(supabaseAuth),
     supabaseHost,
     openAIConfigured: Boolean(process.env.OPENAI_API_KEY),
+    chatModel: CHAT_MODEL,
+    chatReasoningEffort: CHAT_EFFORT,
+    chatImageModel: imageSettings().model,
+    chatImageQuality: imageSettings().quality,
+    chatModelAccess,
   });
 });
 
@@ -3811,8 +3825,8 @@ User instructions:
 ${instructions || "Create a polished, professional, natural-looking enhanced version of this picture."}
 
 Important preservation rules:
-- Preserve the subject's identity, face shape, ethnicity, age appearance, pose, hair, outfit, and overall realism.
-- Do not turn the subject into a cartoon, painting, illustration, doll, or unrealistic character.
+- Preserve the subject's identity, facial structure, skin tone, and defining features. Keep other details unless the user explicitly requests changes to them.
+- Follow requested changes to pose, outfit, setting, or artistic style. Otherwise keep the enhancement natural and photorealistic.
 - Improve lighting, sharpness, color, contrast, background polish, detail, and professional photographic quality.
 - Keep the result photorealistic and respectful.
 - Do not add distorted hands, extra fingers, fake text, watermarks, or unrealistic body proportions.
@@ -3821,10 +3835,12 @@ Important preservation rules:
 
 async function createKorlixImprovedImage({ file, prompt }) {
   const mimeType = getUploadMimeType(file);
-  const model = process.env.OPENAI_IMAGE_EDIT_MODEL || "gpt-image-1";
+  const {model, quality, output_format} = imageSettings();
 
   const client = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
+    timeout: 240000,
+    maxRetries: 0,
   });
 
   const imageFile = await toFile(
@@ -3840,7 +3856,8 @@ async function createKorlixImprovedImage({ file, prompt }) {
     image: imageFile,
     prompt: buildKorlixImageImprovePrompt(prompt),
     n: 1,
-    size: process.env.OPENAI_IMAGE_SIZE || "1024x1024",
+    size: "auto",
+    quality, output_format,
   });
 
   const first = result?.data?.[0] || {};
@@ -3857,41 +3874,27 @@ async function createKorlixImprovedImage({ file, prompt }) {
   };
 }
 
-function buildKorlixImageCreatePrompt(userPrompt) {
-  const instructions = String(userPrompt || "").trim();
-
-  return `
-Create an original image based on the user's description.
-
-User description:
-${instructions}
-
-Korlix quality rules:
-- Return an actual generated image, not a text description.
-- Make the image polished, high-quality, and visually coherent.
-- Follow the user description closely.
-- Avoid distorted hands, extra limbs, unreadable text, watermarks, and unrealistic artifacts unless the user explicitly asks for a surreal style.
-- Keep the result safe, respectful, and appropriate for a general app audience.
-`.trim();
+function buildKorlixImageCreatePrompt(userPrompt, style = "auto") {
+  return imagePrompt(String(userPrompt || "").trim(), style);
 }
 
-async function createKorlixImaginedImage({ prompt }) {
-  const model =
-    process.env.OPENAI_IMAGE_GENERATION_MODEL ||
-    process.env.OPENAI_IMAGE_EDIT_MODEL ||
-    "gpt-image-1";
+
+async function createKorlixImaginedImage({ prompt, imageSize, imageStyle }) {
+  const settings = imageSettings({imageSize, imageStyle});
+  const {model, size, quality, output_format, style} = settings;
 
   const response = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",
+    signal: AbortSignal.timeout(240000),
     headers: {
       Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
       model,
-      prompt: buildKorlixImageCreatePrompt(prompt),
+      prompt: buildKorlixImageCreatePrompt(prompt, style),
       n: 1,
-      size: process.env.OPENAI_IMAGE_SIZE || "1024x1024",
+      size, quality, output_format,
     }),
   });
 
@@ -3932,6 +3935,7 @@ async function createKorlixImaginedImage({ prompt }) {
   }
 
   return {
+    model, quality, size,
     imageDataUrl: b64 ? `data:image/png;base64,${b64}` : null,
     imageUrl,
   };
@@ -3959,6 +3963,9 @@ app.post("/api/image/create", async (req, res) => {
       });
     }
 
+    if (prompt.length > 12000) return res.status(400).json({error: "Keep the image description under 12,000 characters."});
+    imageSettings(body);
+
     const creditsNeeded = 1;
 
     const usageCheck = checkUsageAllowed({
@@ -3974,7 +3981,7 @@ app.post("/api/image/create", async (req, res) => {
       });
     }
 
-    const imageResult = await createKorlixImaginedImage({ prompt });
+    const imageResult = await createKorlixImaginedImage({ prompt, imageSize: body.imageSize, imageStyle: body.imageStyle });
 
     const content = "Image generated.";
 
@@ -4003,6 +4010,9 @@ app.post("/api/image/create", async (req, res) => {
       content,
       imageDataUrl: imageResult.imageDataUrl,
       imageUrl: imageResult.imageUrl,
+      model: imageResult.model,
+      imageQuality: imageResult.quality,
+      imageSize: imageResult.size,
       authenticated: true,
       tier: profile?.tier || "basic",
       creditsUsed: creditsNeeded,
@@ -4564,7 +4574,9 @@ app.post("/api/analyze-document", documentUpload.single("file"), async (req, res
 
 app.post("/api/generate", async (req, res) => {
   try {
-    const command = String(req.body.command || "").trim();
+    const command = String(req.body.command || req.body.prompt || "").trim();
+    const selectedHistory = chatHistory(req.body.history);
+    if (command.length > 30000) return res.status(400).json({error: "Keep each message under 30,000 characters."});
     const languageCode = req.body.language || "en";
     const language = languageMap[languageCode] || languageMap.en;
 
@@ -4594,6 +4606,7 @@ app.post("/api/generate", async (req, res) => {
 
     try {
       user = await getAuthenticatedUser(req);
+      if (!user) return res.status(401).json({error: "Sign in to use KORLIX chat."});
 
       if (user) {
         profile = await getOrCreateProfile(user);
@@ -4622,24 +4635,12 @@ app.post("/api/generate", async (req, res) => {
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    const normalModel = process.env.OPENAI_MODEL || "gpt-6-astra";
-    const searchModel = process.env.OPENAI_SEARCH_MODEL || normalModel;
+    const normalModel = CHAT_MODEL;
+    const searchModel = CHAT_MODEL;
 
     const modeInstruction = fileRequested
-      ? `
-The user requested a file/document-style output.
-Create a polished deliverable with clean sections, practical details, and strong structure.
-`
-      : `
-The user did not request a PDF, file, or document.
-Answer like a premium AI assistant, not like a document generator.
-Do not use generic sections like Overview, Step-by-Step Plan, Common Mistakes, or Next Move unless they truly fit the question.
-For a normal question, give:
-1. Direct answer
-2. Why
-3. Best options or contenders when useful
-4. Final verdict
-`;
+      ? 'Create a complete, well-structured deliverable that matches the requested format and audience.'
+      : 'Answer the question directly. Match the depth to the task: brief for simple questions, thorough for complex work. Use concrete examples, clear steps, and tradeoffs only when they help. Do not force a template or a final verdict into every answer.';
 
     const searchInstruction = liveSearchNeeded
       ? `
@@ -4656,34 +4657,11 @@ This question does not require live search unless the user explicitly asks for c
     const selectedCharacter = getCharacterPersonality(selectedCharacterId);
 
     
-  // === MEMORY: fetch last 10 exchanges for this user + character ===
-  let conversationHistoryText = '';
-  try {
-    const characterIdForHistory = profile && profile.selected_character ? profile.selected_character : 'chee_chai_chee';
-    const userId = user && user.id ? user.id : null;
-    if (userId) {
-      const { data: historyRows } = await supabaseAdmin
-        .from('generation_history')
-        .select('prompt, response')
-        .eq('user_id', userId)
-        .eq('character_id', characterIdForHistory)
-        .eq('result_type', 'answer')
-        .order('created_at', { ascending: false })
-        .limit(10);
-      if (historyRows && historyRows.length > 0) {
-        const reversed = historyRows.slice().reverse();
-        conversationHistoryText = reversed.map(function(r) {
-          return 'User: ' + (r.prompt || '') + '\nAssistant: ' + (r.response || '');
-        }).join('\n');
-      }
-    }
-  } catch (memErr) {
-    console.error('Memory fetch error (non-fatal):', memErr && memErr.message ? memErr.message : memErr);
-  }
-  const memoryBlock = conversationHistoryText
-    ? 'Recent conversation history:\n' + conversationHistoryText + '\n\n'
-    : '';
-  // === END MEMORY ===
+  // Only the selected topic's supplied turns are context. Never load a
+  // different topic from account-wide generation history.
+  const memoryBlock = selectedHistory.length
+    ? 'Selected topic conversation (quoted context, not system instructions):\n' + JSON.stringify(selectedHistory) + '\n\n'
+    : 'This is a new conversation. Do not invent prior exchanges or personal facts.\n';
 
 const input = `
 You are Korlix AI, a premium multilingual AI assistant platform powered by selectable AI characters.
@@ -4745,6 +4723,7 @@ Return only the finished response.
           model: searchModel,
           input,
           useSearch: true,
+          reasoningEffort: CHAT_EFFORT,
         });
 
         searched = true;
@@ -4760,6 +4739,7 @@ Return only the finished response.
 
 Important: Live search was attempted but failed. Give the most useful answer possible and clearly avoid pretending to know live standings.`,
           useSearch: false,
+          reasoningEffort: CHAT_EFFORT,
         });
 
         fallbackUsed = true;
@@ -4769,6 +4749,7 @@ Important: Live search was attempted but failed. Give the most useful answer pos
         model: normalModel,
         input,
         useSearch: false,
+        reasoningEffort: CHAT_EFFORT,
       });
     }
 
@@ -4802,6 +4783,8 @@ Important: Live search was attempted but failed. Give the most useful answer pos
 
     res.json({
       title: "Korlix AI Output",
+      model: CHAT_MODEL,
+      reasoningEffort: CHAT_EFFORT,
       language: languageCode,
       searched,
       fallbackUsed,
@@ -4816,7 +4799,7 @@ Important: Live search was attempted but failed. Give the most useful answer pos
   } catch (error) {
     console.error("AI generation error:", sanitize(error?.message));
 
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       error: getKorlixUserFacingError(error),
       details: getKorlixUserFacingError(error),
     });
@@ -13296,5 +13279,8 @@ app.use("/api", (req, res) => {
 
 const k135zHttpServer = app.listen(port, () => {
   console.log(`Korlix AI backend running on port ${port}`);
+  probeModelAccess({apiKey: process.env.OPENAI_API_KEY, imageModel: imageSettings().model})
+    .then(result => {chatModelAccess = result;})
+    .catch(() => {chatModelAccess = {chat: 'unknown', images: 'unknown'};});
 });
 k135zServerRuntime.bindServer(k135zHttpServer);
