@@ -1,3 +1,5 @@
+import 'study_studio/study_client.dart';
+import 'study_studio/study_screen.dart';
 import 'app_studio/app_studio_client.dart';
 import 'app_studio/app_studio_screen.dart';
 import 'music_studio/music_client.dart';
@@ -5584,6 +5586,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   // Hide inactive Utility tools until full native workflows are ready.
   // Keep active Utility tools visible.
   static const List<String> _utilityTools = <String>[
+    'Study Studio',
     'App Studio',
     'Music Studio',
     'Tax Prep',
@@ -9974,6 +9977,11 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       return;
     }
 
+    if (const {'Study / learn', 'Estudiar', 'Étudier'}.contains(action.label)) {
+      unawaited(_openStudyStudio());
+      return;
+    }
+
     if (_isCreateAppQuickAction(action)) {
       _showAppCreationDialog();
       return;
@@ -10068,6 +10076,16 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         TextPosition(offset: _controller.text.length),
       );
     });
+  }
+
+  Future<void> _openStudyStudio() async {
+    final client=StudyClient(backendBaseUrl:kKorlixBackendBaseUrl,
+      headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>StudyScreen(
+      client:client,ensureConsent:(context)=>KorlixThirdPartyAiConsent.ensure(context:context,
+        featureName:'Study Studio',providers:{KorlixThirdPartyAiProvider.openAi},
+        dataCategories:{KorlixThirdPartyAiDataCategory.typedTextAndPrompts}),
+    )));
   }
 
   Future<void> _showAppCreationDialog() async {
@@ -10575,6 +10593,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   void _selectUtilityTool(String tool) {
+    if (tool == 'Study Studio') { unawaited(_openStudyStudio()); return; }
     if (tool == 'App Studio') { unawaited(_showAppCreationDialog()); return; }
     if (tool == 'Music Studio') { unawaited(_showMusicStudio()); return; }
     if (tool == 'Tax Prep') { unawaited(_openTaxPrep()); return; }
@@ -12737,6 +12756,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     };
 
     String statusFor(String tool) {
+      if (tool == 'Study Studio') return 'Learn with lessons, flashcards and practice quizzes';
       if (tool == 'App Studio') return 'Build, preview and export your own app';
       if (tool == 'Music Studio') return 'Create songs, save drafts and play your music library';
       if (tool == 'Tax Prep') return 'Personal tax organizer, linked Bookkeeping records and preparer packets';
