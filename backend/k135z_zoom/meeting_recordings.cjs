@@ -8,11 +8,24 @@ const fail = (status,code) => { throw new K135zZoomError(status,'K135Z_RECORDING
 const key = p => C.canonical(identity(p));
 const activeStates = ['recording','saving'];
 function validateRecordingRequest(body) {
-  C.oneOf(body.action,['list','start','stop','play','download','delete']);
+  C.oneOf(body.action,['list','start','stop','play','download','delete','voice-start','voice-chunk']);
   C.object(body,body.action==='list'?['action']:body.action==='start'
-    ? ['action','id','context','consent'] : ['action','id']);
+    ? ['action','id','context','consent'] : body.action==='voice-start'
+    ? ['action','id','context','playbackId'] : body.action==='voice-chunk'
+    ? ['action','id','context','playbackId','sequence','pcm'] : ['action','id']);
   if (body.action!=='list') C.requireValue(typeof body.id==='string' && /^[a-f0-9]{32}$/.test(body.id));
   if (body.action==='start') { C.context(body.context); C.requireValue(body.consent===true); }
+  if (body.action.startsWith('voice-')) {
+    C.context(body.context);
+    C.requireValue(typeof body.playbackId==='string'&&/^[a-f0-9]{32}$/.test(body.playbackId));
+    if(body.action==='voice-chunk') {
+      C.uint(body.sequence);C.requireValue(body.sequence>0&&body.sequence<=180);
+      C.requireValue(typeof body.pcm==='string'&&body.pcm.length<=21336&&
+        /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(body.pcm));
+      const pcm=Buffer.from(body.pcm,'base64');
+      C.requireValue(pcm.length>0&&pcm.length<=16000&&pcm.length%2===0&&pcm.toString('base64')===body.pcm);
+    }
+  }
 }
 function summary(row) {
   return {id:row.id,status:row.status,createdAt:row.created_at,
@@ -37,13 +50,13 @@ function createMeetingRecordings({store,encoderFactory=createRecordingEncoder,
     e.active=false; e.stopped=true;
     clearTimeout(e.timer); clearInterval(e.heartbeat);
     if (e.row) e.row={...e.row,status:'saving',end_reason:reason,
-      duration_ms:Math.floor(e.inputBytes/32)};
+      duration_ms:Math.floor(Math.max(e.inputBytes,e.voiceEnd)/32)};
     // Finalization belongs to the recording, not to the lifetime of an HTTP
     // Stop request. A lost response must not restart or discard the recording.
     e.finishing=(async()=>{
       try {
         await e.heartbeatTask;
-        if (!e.encoder || !e.inputBytes) fail(409,'NO_AUDIO');
+        if (!e.encoder || (!e.inputBytes&&!e.voiceEnd)) fail(409,'NO_AUDIO');
         await persist(e,{status:'saving',end_reason:reason,duration_ms:e.row.duration_ms});
         const bytes=await e.encoder.finish(); e.encoder=null;
         await store.upload(objectPath(e.principal,e.id),bytes);
@@ -53,7 +66,7 @@ function createMeetingRecordings({store,encoderFactory=createRecordingEncoder,
         try { await e.encoder?.abort(); } catch {}
         e.encoder=null;
         if (e.row) {
-          e.row={...e.row,status:'failed',end_reason:e.inputBytes?'save_failed':'no_audio'};
+          e.row={...e.row,status:'failed',end_reason:e.inputBytes||e.voiceEnd?'save_failed':'no_audio'};
           try { await persist(e,{status:'failed',end_reason:e.row.end_reason,
             duration_ms:e.row.duration_ms}); } catch {}
         }
@@ -67,7 +80,7 @@ function createMeetingRecordings({store,encoderFactory=createRecordingEncoder,
     const rows=await store.list(principal), e=entries.get(key(principal));
     const out=[];
     for (let row of rows) {
-      if (e?.id===row.id && e.row) row={...e.row,duration_ms:Math.floor(e.inputBytes/32)};
+      if (e?.id===row.id && e.row) row={...e.row,duration_ms:Math.floor(Math.max(e.inputBytes,e.voiceEnd)/32)};
       else if (activeStates.includes(row.status) && now()-Date.parse(row.updated_at)>90000) {
         // Compare-and-set prevents declaring another instance's fresh heartbeat
         // failed during rolling deploys. Interrupted files are never called ready.
@@ -88,7 +101,8 @@ function createMeetingRecordings({store,encoderFactory=createRecordingEncoder,
     }
     if (entries.size>=maxConcurrent) fail(429,'BUSY');
     const e={principal:identity(principal),id:body.id,context:C.clone(body.context),
-      row:null,encoder:null,active:false,stopped:false,inputBytes:0,heartbeatBusy:false};
+      row:null,encoder:null,active:false,stopped:false,inputBytes:0,heartbeatBusy:false,
+      voices:new Map(),voiceBytes:0,voiceEnd:0};
     e.startDone=new Promise(resolve=>{e.started=resolve;});
     entries.set(k,e);
     try {
@@ -115,7 +129,7 @@ function createMeetingRecordings({store,encoderFactory=createRecordingEncoder,
         e.heartbeatBusy=true;
         e.heartbeatTask=(async()=>{
           try {
-            const row=await persist(e,{status:'recording',duration_ms:Math.floor(e.inputBytes/32)});
+            const row=await persist(e,{status:'recording',duration_ms:Math.floor(Math.max(e.inputBytes,e.voiceEnd)/32)});
             if(e.active)e.row=row;
           } catch { queueMicrotask(()=>void stopEntry(e,'storage_interrupted')); }
           finally { e.heartbeatBusy=false; }
@@ -140,6 +154,31 @@ function createMeetingRecordings({store,encoderFactory=createRecordingEncoder,
       if (body.action==='list') return {recordings:await list(principal)};
       if (body.action==='start') return {recording:await start(principal,body,verify,check)};
       const e=entries.get(key(principal));
+      if(body.action.startsWith('voice-')) {
+        if(!e?.active||e.id!==body.id||!C.sameContext(e.context,body.context))fail(409,'VOICE_SESSION_CHANGED');
+        await verify();check();
+        if(!e.active||entries.get(key(principal))!==e)fail(409,'VOICE_SESSION_CHANGED');
+        let voice=e.voices.get(body.playbackId);
+        if(body.action==='voice-start') {
+          if(!voice) {
+            if(e.voices.size>=512)fail(429,'VOICE_LIMIT');
+            voice={offset:e.inputBytes,bytes:0,sequence:0,startedAt:now()};e.voices.set(body.playbackId,voice);
+          }
+          return {accepted:true};
+        }
+        if(!voice)fail(409,'VOICE_SESSION_CHANGED');
+        // Serialized browser packets may retry an acknowledged sequence, but
+        // may never fill a gap or append the same samples twice.
+        if(body.sequence<=voice.sequence)return {accepted:true};
+        if(body.sequence!==voice.sequence+1)fail(409,'VOICE_SEQUENCE');
+        const pcm=Buffer.from(body.pcm,'base64'),offset=voice.offset+voice.bytes;
+        if(voice.bytes+pcm.length>45*32000||e.voiceBytes+pcm.length>maxDurationMs*32||
+            offset+pcm.length>maxDurationMs*32||voice.bytes+pcm.length>(Math.max(0,now()-voice.startedAt)+2000)*32)fail(429,'VOICE_LIMIT');
+        if(e.encoder.writeVoice?.(pcm,offset)!==true)fail(503,'VOICE_UNAVAILABLE');
+        voice.sequence=body.sequence;voice.bytes+=pcm.length;e.voiceBytes+=pcm.length;
+        e.voiceEnd=Math.max(e.voiceEnd,offset+pcm.length);
+        return {accepted:true};
+      }
       let row=e?.id===body.id ? e.row : await store.get(principal,body.id); check();
       if (!row) fail(404,'NOT_FOUND');
       if (body.action==='stop') {

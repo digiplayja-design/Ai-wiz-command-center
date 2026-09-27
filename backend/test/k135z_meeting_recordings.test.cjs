@@ -36,7 +36,8 @@ function fixture(options={}) {
   };
   const manager=createMeetingRecordings({store,now:()=>clock,...options,
     encoderFactory:async args=>{
-      const e={bytes:0,aborted:false,write(b){this.bytes+=b.length;return true;},
+      const e={bytes:0,voice:[],aborted:false,write(b){this.bytes+=b.length;return true;},
+        writeVoice(b,offset){this.voice.push({bytes:Buffer.from(b),offset});return true;},
         async finish(){return Buffer.from([73,68,51,...Array(100).fill(0)]);},async abort(){this.aborted=true;},args};
       encoders.push(e);if(encoderGate)await encoderGate;return e;
     }});
@@ -86,6 +87,49 @@ test('wrong meeting audio never enters a recording',async t=>{
   f.manager.accept({...ctx,meetingUuid:'other'},Buffer.alloc(640));
   f.manager.accept({...ctx,agentId:'other'},Buffer.alloc(640));
   assert.equal(f.encoders[0].bytes,0);
+});
+test('Nova voice requires a consented active recording and the exact owner and meeting',async t=>{
+  const f=fixture();t.after(f.close);const recordingId=id(),playbackId=id();
+  const begin={action:'voice-start',id:recordingId,context:ctx,playbackId};
+  await assert.rejects(f.run(begin),{code:'K135Z_RECORDING_VOICE_SESSION_CHANGED'});
+  await f.start(recordingId);f.manager.accept(ctx,Buffer.alloc(32000));
+  for(const body of [{...begin,context:{...ctx,meetingUuid:'other'}},{...begin,id:id()}])
+    await assert.rejects(f.run(body),{code:'K135Z_RECORDING_VOICE_SESSION_CHANGED'});
+  await assert.rejects(f.run(begin,{...p,agentId:'other'}),{code:'K135Z_RECORDING_VOICE_SESSION_CHANGED'});
+  f.allowed=false;await assert.rejects(f.run(begin));f.allowed=true;
+  await f.run(begin);
+  const packet={...begin,action:'voice-chunk',sequence:1,pcm:Buffer.alloc(16000,1).toString('base64')};
+  await f.run(packet);await f.run(packet);
+  assert.equal(f.encoders[0].voice.length,1);assert.equal(f.encoders[0].voice[0].offset,32000);
+  await assert.rejects(f.run({...packet,sequence:3}),{code:'K135Z_RECORDING_VOICE_SEQUENCE'});
+  f.allowed=false;await assert.rejects(f.run({...packet,sequence:2}));f.allowed=true;
+  await f.run({action:'stop',id:recordingId});await tick();
+  await assert.rejects(f.run({...packet,sequence:2}),{code:'K135Z_RECORDING_VOICE_SESSION_CHANGED'});
+  assert.equal((await f.run({action:'list'})).recordings[0].durationMs,1500);
+});
+test('Nova packets reject oversized, malformed, odd and unbounded input',()=>{
+  const packet={action:'voice-chunk',id:id(),context:ctx,playbackId:id(),sequence:1,pcm:Buffer.alloc(16000).toString('base64')};
+  validateRecordingRequest(packet);
+  for(const patch of [{pcm:''},{pcm:'not base64'},{pcm:'AA=='},{pcm:Buffer.alloc(16002).toString('base64')},
+    {sequence:0},{sequence:181},{sequence:1.5},{playbackId:'../file'},{url:'https://outside.test'}])
+    assert.throws(()=>validateRecordingRequest({...packet,...patch}));
+});
+test('Nova timeline is server anchored and bounded by recording duration',async t=>{
+  const f=fixture({maxDurationMs:1000});t.after(f.close);const {recording}=await f.start();
+  const begin={action:'voice-start',id:recording.id,context:ctx,playbackId:id()};await f.run(begin);
+  const packet={...begin,action:'voice-chunk',pcm:Buffer.alloc(16000).toString('base64')};
+  await f.run({...packet,sequence:1});await f.run({...packet,sequence:2});
+  await assert.rejects(f.run({...packet,sequence:3}),{code:'K135Z_RECORDING_VOICE_LIMIT'});
+  assert.equal(f.encoders[0].voice.length,2);
+});
+test('Stop while Nova authorization is pending cannot append late voice',async t=>{
+  const f=fixture();t.after(f.close);const {recording}=await f.start();
+  const begin={action:'voice-start',id:recording.id,context:ctx,playbackId:id()};await f.run(begin);
+  let release;const gate=new Promise(r=>release=r);
+  const pending=f.manager.run({principal:p,body:{...begin,action:'voice-chunk',sequence:1,pcm:Buffer.alloc(3200).toString('base64')},verify:()=>gate});
+  f.manager.accept(ctx,Buffer.alloc(640));await f.run({action:'stop',id:recording.id});release();
+  await assert.rejects(pending,{code:'K135Z_RECORDING_VOICE_SESSION_CHANGED'});
+  assert.equal(f.encoders[0].voice.length,0);
 });
 test('revocation during encoder setup never arms late recording',async t=>{
   const f=fixture();t.after(f.close);let release;f.encoderGate=new Promise(r=>release=r);
@@ -190,6 +234,13 @@ test('recording HTTP route gates authentication, entitlement, ownership, consent
   authCalls=0;const started=await run();assert.equal(started.statusCode,200);assert.equal(authCalls,3);
   assert.equal(started.body.recording.status,'recording');
   assert.equal(JSON.stringify(started.body).includes('object_path'),false);
+  const voice={action:'voice-start',id:request.id,context:ctx,playbackId:id()};
+  assert.equal((await run(voice)).statusCode,200);
+  const packet={...voice,action:'voice-chunk',sequence:1,pcm:Buffer.alloc(640).toString('base64')};
+  for(const key of ['viewerAuthorized','hostAuthorized','listeningAuthorized']){
+    lease.authority[key]=false;assert.equal((await run(packet)).statusCode,403);lease.authority[key]=true;
+  }
+  assert.equal((await run(packet)).statusCode,200);
   f.manager.accept(ctx,Buffer.alloc(640));await run({action:'stop',id:request.id});await tick();
   active=false;lease.validForMs=0;
   assert.equal((await run({action:'list'})).body.recordings[0].status,'ready');
@@ -207,6 +258,39 @@ test('real encoder produces decodable 16 kHz mono MP3 without media persistence 
     const {stdout}=await promisify(execFile)('ffprobe',['-v','error','-show_entries','stream=codec_name,sample_rate,channels','-of','json',join(dir,'audio.mp3')]);
     const stream=JSON.parse(stdout).streams[0];assert.equal(stream.codec_name,'mp3');assert.equal(stream.sample_rate,'16000');assert.equal(stream.channels,1);
   } finally {await rm(dir,{recursive:true,force:true});}
+});
+test('real MP3 mix preserves human audio and adds only the played Nova interval',async()=>{
+  const encoder=await createRecordingEncoder();
+  function tone(hz,count){const b=Buffer.alloc(count*2);for(let i=0;i<count;i++)b.writeInt16LE(Math.round(Math.sin(2*Math.PI*hz*i/16000)*5000),i*2);return b;}
+  assert.equal(encoder.write(tone(440,32000)),true);
+  assert.equal(encoder.writeVoice(tone(880,8000),32000),true);
+  assert.equal(encoder.writeVoice(Buffer.alloc(16002),0),false);
+  assert.equal(encoder.writeVoice(Buffer.alloc(2),115200000),false);
+  const mp3=await encoder.finish();
+  const dir=await mkdtemp(join(tmpdir(),'nova-mix-test-'));
+  try {
+    const file=join(dir,'audio.mp3');await writeFile(file,mp3);
+    const {stdout:pcm}=await promisify(execFile)('ffmpeg',['-v','error','-i',file,'-f','s16le','-ar','16000','-ac','1','pipe:1'],{encoding:'buffer'});
+    const energy=(hz,from,to)=>{let a=0,b=0,n=0;for(let i=Math.floor(from*16000);i<Math.floor(to*16000);i++,n++){
+      const s=pcm.readInt16LE(i*2);a+=s*Math.cos(2*Math.PI*hz*i/16000);b+=s*Math.sin(2*Math.PI*hz*i/16000);}
+      return Math.sqrt(a*a+b*b)*2/n;};
+    assert(energy(440,.25,.75)>3000);assert(energy(880,.25,.75)<100);
+    assert(energy(440,1.2,1.4)>3000);assert(energy(880,1.2,1.4)>3000);
+    assert(energy(880,1.75,1.95)<100);
+  } finally {await rm(dir,{recursive:true,force:true});}
+});
+test('quiet Zoom input still saves a bounded 45-second played voice tail',async()=>{
+  const encoder=await createRecordingEncoder();
+  const voice=Buffer.alloc(16000);
+  for(let i=0;i<8000;i++)voice.writeInt16LE(Math.round(Math.sin(2*Math.PI*880*i/16000)*3000),i*2);
+  for(let offset=0;offset<45*32000;offset+=voice.length)assert.equal(encoder.writeVoice(voice,offset),true);
+  const mp3=await encoder.finish();assert(mp3.length>300000&&mp3.length<400000);
+  const dir=await mkdtemp(join(tmpdir(),'nova-tail-test-'));
+  try {
+    const file=join(dir,'audio.mp3');await writeFile(file,mp3);
+    const {stdout}=await promisify(execFile)('ffprobe',['-v','error','-show_entries','format=duration','-of','json',file]);
+    const duration=Number(JSON.parse(stdout).format.duration);assert(duration>=45&&duration<45.2);
+  }finally {await rm(dir,{recursive:true,force:true});}
 });
 test('storage adapter scopes every lookup and mutation to tenant, user and agent',async()=>{
   const {createRecordingStore,BUCKET}=require('../k135z_zoom/recording_store.cjs');
