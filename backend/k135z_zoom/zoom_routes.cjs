@@ -1,5 +1,7 @@
 "use strict";
 const {createMeetingResponses, validateResponseRequest, assertResponseAuthority} = require('./meeting_response.cjs');
+const {createMeetingRecordings,validateRecordingRequest} = require('./meeting_recordings.cjs');
+const {createRecordingStore} = require('./recording_store.cjs');
 
 const crypto = require("node:crypto");
 const { identity, eventPlan } = require("./b5b_contract.cjs");
@@ -570,14 +572,19 @@ function createK135zZoomDependencies(
   const workspaceStore=options.workspaceCommandAdapter ? null : options.workspaceCommandStore || (options.workspaceCommandClient
     ? new K135zSupabaseWorkspaceStore({client:options.workspaceCommandClient}) : null);
   let workspaceTransport=options.workspaceCommandTransport || null;
+  const workspaceRecordings=options.workspaceRecordings ||
+    (options.workspaceHttpEnabled && options.workspaceCommandClient?.storage
+      ? createMeetingRecordings({store:createRecordingStore(options.workspaceCommandClient)}) : null);
   if(!options.workspaceCommandAdapter && !workspaceTransport && options.rtmsSdk) {
     const resolveGrant=createK135zRtmsGrantResolver({store:workspaceStore,repository,
       clientId:env.KORLIX_ZOOM_CLIENT_ID,clientSecret:env.KORLIX_ZOOM_CLIENT_SECRET});
     workspaceTransport=createK135zRtmsCommandTransport({sdk:options.rtmsSdk,resolveGrant,
-      onTranscript:options.onRtmsTranscript,audioLevels:options.audioLevels===true});
+      onTranscript:options.onRtmsTranscript,audioLevels:options.audioLevels===true,
+      ...(workspaceRecordings?{onAudio:workspaceRecordings.accept,onStreamClosed:workspaceRecordings.streamClosed}:{})});
   }
   return {
     workspaceStore,
+    workspaceRecordings,
     workspaceResponses:createMeetingResponses({env,fetchImpl:options.fetchImpl||globalThis.fetch,
       loadAgentRuntime:options.workspaceAgentRuntime}),
     workspaceStartRtms:options.rtmsStartEnabled===true && workspaceStore
@@ -941,6 +948,7 @@ function createK135zZoomHandlers(
           if(kind==='command')C.control(body,'request');
           else if(kind==='bind'){C.object(body,['meetingUuid','expectedBindingRevision']);C.text(body.meetingUuid);C.uint(body.expectedBindingRevision);}
           else if(kind==='status')C.object(body,[]);
+          else if(kind==='recordings')validateRecordingRequest(body);
           else if(kind==='response'||kind==='response-voice'||kind==='spoken-reply'||kind==='waiting-voice')validateResponseRequest(kind,body);
           else if(kind==='transcript'||kind==='audio-level'){C.object(body,['context']);C.context(body.context);}
           else {
@@ -960,6 +968,15 @@ function createK135zZoomHandlers(
           const principal=await authorize(req);check();
           const store=deps.workspaceStore;
           if(!store)throw new K135zZoomError(503,'K135Z_WORKSPACE_UNAVAILABLE');
+          if(kind==='recordings') {
+            if(!deps.workspaceRecordings)throw new K135zZoomError(503,'K135Z_RECORDING_UNAVAILABLE');
+            return deps.workspaceRecordings.run({principal,body,check,verify:async()=>{
+              check();const verified=await authorize(req);check();
+              const lease=await store.readCaptureLease({principal:verified,context:body.context,signal:abort.signal});check();
+              assertResponseAuthority(verified,body.context,lease,
+                deps.workspaceTransport?.captureActive?.({principal:verified,context:body.context})===true);
+            }});
+          }
           if(kind==='response'||kind==='response-voice'||kind==='spoken-reply'||kind==='waiting-voice') {
             const verify=async()=>{
               check();const verified=await authorize(req);check();
@@ -1026,6 +1043,7 @@ function createK135zZoomHandlers(
     workspaceConsent:workspaceHandler('consent'),workspaceCommand:workspaceHandler('command'),
     workspaceTranscript:workspaceHandler('transcript'),
     workspaceAudioLevel:workspaceHandler('audio-level'),
+    workspaceRecordings:workspaceHandler('recordings'),
     workspaceSpokenReply:workspaceHandler('spoken-reply'),
     workspaceWaitingVoice:workspaceHandler('waiting-voice'),
     workspaceResponse:workspaceHandler('response'),workspaceResponseVoice:workspaceHandler('response-voice'),
@@ -1117,6 +1135,8 @@ function registerK135zZoomRoutes(
     }
     if(typeof dependencies.workspaceTransport?.audioLevel==='function')
       app.post(`${K135Z_ZOOM_ROUTE_PREFIX}/workspace/audio-level`,handlers.workspaceAudioLevel);
+    if(dependencies.workspaceRecordings)
+      app.post(`${K135Z_ZOOM_ROUTE_PREFIX}/workspace/recordings`,handlers.workspaceRecordings);
   }
 
   return {
@@ -1199,6 +1219,7 @@ async function createK135zServerRuntime({env=process.env,database,fetchImpl=glob
   if(![undefined,'','false','true'].includes(oauthFlag))fail('K135Z_OAUTH_FLAG_INVALID');
   const oauthEnabled=oauthFlag==='true';
   let dependencies=null,closed=false,released=true,bound=false,oauthCipher=null,returnOrigins=[];
+  let recordingDrain=Promise.resolve();
   const options={};
   if(oauthEnabled) {
     if(typeof database?.rpc!=='function'||typeof database?.from!=='function')fail('K135Z_OAUTH_DATABASE_REQUIRED');
@@ -1264,6 +1285,8 @@ async function createK135zServerRuntime({env=process.env,database,fetchImpl=glob
     closed=true;inbox.close();
     try {if(dependencies?.workspaceTransport)released=dependencies.workspaceTransport.close()===true;}
     catch {released=false;}
+    if(dependencies?.workspaceRecordings)
+      recordingDrain=dependencies.workspaceRecordings.close().catch(()=>{released=false;});
     return released;
   }
   return Object.freeze({enabled,oauthEnabled,options:Object.freeze(options),inbox,close,
@@ -1298,8 +1321,12 @@ async function createK135zServerRuntime({env=process.env,database,fetchImpl=glob
       const stop=()=>{
         if(stopping)return;stopping=true;
         const ok=close();
-        timer=setTimeout(()=>{try{server.closeAllConnections?.();}catch{}finish(1);},shutdownMs);
-        try {server.close(error=>finish(!error&&ok?0:1));}catch {finish(1);}
+        timer=setTimeout(()=>{try{server.closeAllConnections?.();}catch{}finish(1);},
+          dependencies.workspaceRecordings?Math.max(shutdownMs,30000):shutdownMs);
+        try {server.close(error=>{
+          if(dependencies.workspaceRecordings)void recordingDrain.then(()=>finish(!error&&ok&&released?0:1));
+          else finish(!error&&ok?0:1);
+        });}catch {finish(1);}
       };
       lifecycle.once('SIGTERM',stop);lifecycle.once('SIGINT',stop);
       server.once('close',()=>{close();if(!stopping)cleanup();});

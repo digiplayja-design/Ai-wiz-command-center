@@ -1372,6 +1372,16 @@ test('Gate6O signal shutdown releases capture before HTTP and removes listeners'
   assert.deepEqual(events,[['capture'],['http'],['exit',0]]);assert.equal(life.listenerCount('SIGTERM'),0);
   assert.equal(life.listenerCount('SIGINT'),0);assert.equal(f.runtime.inbox.status().closed,true);
 });
+test('recording finalization completes before a graceful service exit',async()=>{
+  const f=await runtime6o(),exits=[];let release;
+  const drain=new Promise(r=>release=r);
+  f.deps.workspaceRecordings={close:()=>drain};
+  const life=Object.assign(new EventEmitter(),{exit:n=>exits.push(n)});
+  const server=Object.assign(new EventEmitter(),{close(fn){this.emit('close');fn();}});
+  f.runtime.bindServer(server,{lifecycle:life});life.emit('SIGTERM');
+  assert.deepEqual(exits,[]);release();await new Promise(r=>setImmediate(r));
+  assert.deepEqual(exits,[0]);assert.equal(life.listenerCount('SIGTERM'),0);
+});
 test('Gate6O hanging HTTP shutdown is bounded and does not report success',async()=>{
   const f=await runtime6o(),events=[],life=Object.assign(new EventEmitter(),{exit:n=>events.push(n)});
   const server=Object.assign(new EventEmitter(),{close(){},closeAllConnections(){events.push('forced');}});

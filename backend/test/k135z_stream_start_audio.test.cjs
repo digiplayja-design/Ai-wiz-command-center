@@ -140,8 +140,9 @@ test('SDK meter receives configured PCM only while connected and authorized',asy
   permitted=false;sdk.clients[0].emit();assert.equal(levels.length,1);assert.equal(stream.status().phase,'closed');stream.close();
 });
 test('transport withholds levels until committed and blocks other contexts and Stop',async()=>{
-  const sdk=fakeSdk();
+  const sdk=fakeSdk(),audio=[],closed=[];
   const t=createK135zRtmsCommandTransport({sdk,onTranscript:()=>true,audioLevels:true,
+    onAudio:(context,buffer)=>audio.push({context,bytes:buffer.length}),onStreamClosed:c=>closed.push(c),
     resolveGrant:async({context})=>({context:{...context,streamId:'stream'},bindingRevision:1,authorityRevision:1,
       viewerAuthorized:true,hostAuthorized:true,listeningAuthorized:true,validForMs:5000,
       serverUrls:'wss://media.zoom.us',signature:'a'.repeat(64)})});
@@ -153,11 +154,24 @@ test('transport withholds levels until committed and blocks other contexts and S
     assert.equal(reply.outcome.kind,'acknowledged');sdk.clients[0].emit();
     const bound=reply.outcome.snapshot.context;
     assert.equal(t.audioLevel({principal:p,context:bound}).received,false);
+    assert.equal(audio.length,0);
     assert.equal(t.settle({principal:p,request,reply}),true);sdk.clients[0].emit();
+    assert.deepEqual(audio,[{context:bound,bytes:640}]);
     assert.equal(t.audioLevel({principal:p,context:bound}).level,90);
     assert.equal(t.audioLevel({principal:p,context:{...bound,sessionId:'other'}}).received,false);
     t.close();assert.equal(t.audioLevel({principal:p,context:bound}).received,false);
+    sdk.clients[0].emit();assert.equal(audio.length,1);assert.deepEqual(closed,[bound]);
   } finally {t.close();}
+});
+test('recording callback failure does not end the feed and revocation blocks raw audio',async()=>{
+  const sdk=fakeSdk();let permitted=true,calls=0;
+  const stream=createK135zRtmsStream({sdk,context:{...ctx,streamId:'stream'},serverUrls:'wss://media.zoom.us',
+    signature:'a'.repeat(64),authorize:()=>permitted,onTranscript:()=>true,
+    onAudio:()=>{calls++;throw Error('recording unavailable');}});
+  try {
+    await stream.connect();sdk.clients[0].emit();assert.equal(stream.status().phase,'connected');
+    permitted=false;sdk.clients[0].emit();assert.equal(calls,1);assert.equal(stream.status().phase,'closed');
+  }finally{stream.close();}
 });
 test('HTTP consent calls Start before granting and never grants if Start fails',async()=>{
   const f=fixture({patchError:2310});
