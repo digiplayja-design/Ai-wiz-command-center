@@ -14,6 +14,8 @@ import 'contract_radar/radar_client.dart';
 import 'contract_radar/radar_screen.dart';
 import 'fieldproof/fieldproof_client.dart';
 import 'fieldproof/fieldproof_screen.dart';
+import 'babyblend/babyblend_client.dart';
+import 'babyblend/babyblend_screen.dart';
 import 'ai_visibility/visibility_client.dart';
 import 'ai_visibility/visibility_screen.dart';
 import 'funnel_studio/funnel_client.dart';
@@ -5577,6 +5579,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   // Hide inactive Utility tools until full native workflows are ready.
   // Keep active Utility tools visible.
   static const List<String> _utilityTools = <String>[
+    'BabyBlend',
     'FieldProof',
     'AI Visibility',
     'Contract Radar',
@@ -9917,6 +9920,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   void _useQuickAction(QuickAction action) {
+    if (action.label == 'BabyBlend') { unawaited(_openBabyBlend()); return; }
     if (action.label == 'FieldProof') { unawaited(_openFieldProof()); return; }
     if (action.label == 'AI Visibility') {
       unawaited(_openAiVisibility());
@@ -10723,6 +10727,17 @@ Make the entire output professional, well-structured using Markdown, and product
     )));
   }
 
+  Future<void> _openBabyBlend() async {
+    final client=BabyBlendClient(backendBaseUrl:kKorlixBackendBaseUrl,
+      headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>BabyBlendScreen(
+      client:client,
+      ensureConsent:()=>ensureKorlixThirdPartyAiConsent(context:context,
+        featureName:'BabyBlend portrait creation',providers:const {KorlixThirdPartyAiProvider.openAi},
+        dataCategories:const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.imagesAndPhotos}),
+    )));
+  }
+
   Future<void> _openFieldProof() async {
     final client=FieldProofClient(backendBaseUrl:kKorlixBackendBaseUrl,
       headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
@@ -10770,6 +10785,7 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   void _selectUtilityTool(String tool) {
+    if (tool == 'BabyBlend') { unawaited(_openBabyBlend()); return; }
     if (tool == 'FieldProof') { unawaited(_openFieldProof()); return; }
     if (tool == 'AI Visibility') {
       unawaited(_openAiVisibility());
@@ -13906,6 +13922,7 @@ Make the entire output professional, well-structured using Markdown, and product
     };
 
     String statusFor(String tool) {
+      if (tool == 'BabyBlend') return 'Imagine a fictional child portrait from two adult photos with KORLIX';
       if (tool == 'FieldProof') return 'Job photos, evidence checklists and customer handoffs with KORLIX';
       if (tool == 'AI Visibility') return 'See sampled AI answers, improve your website content and track progress';
       if (tool == 'Virtual Closet') return 'Your private wardrobe, AI try-on, saved looks and KORLIX styling';
@@ -16990,7 +17007,7 @@ Make the entire output professional, well-structured using Markdown, and product
                   // KORLIX_CREDIT_PUBLIC_ENTRY_HIDDEN_BUILD131_BEGIN
                   // Preserve the credit QuickActions in source while excluding
                   // them from the public home-screen action list.
-                  children: [const QuickAction(label:'FieldProof',prompt:''), const QuickAction(label:'AI Visibility',prompt:''), const QuickAction(label:'Contract Radar',prompt:''), const QuickAction(label:'Virtual Closet',prompt:''), ...t.quickActions]
+                  children: [const QuickAction(label:'BabyBlend',prompt:''), const QuickAction(label:'FieldProof',prompt:''), const QuickAction(label:'AI Visibility',prompt:''), const QuickAction(label:'Contract Radar',prompt:''), const QuickAction(label:'Virtual Closet',prompt:''), ...t.quickActions]
                       .where((action) => !_isCreditReportActionSafeUi(action))
                       .map(_buildSafeUiQuickActionChip)
                       .toList(),
