@@ -1,3 +1,5 @@
+import { registerStudyStudio } from './study_studio/routes.mjs';
+import { generateLesson } from './study_studio/model.mjs';
 import { registerAppStudio } from './app_studio/routes.mjs';
 import { generateSpec } from './app_studio/model.mjs';
 import { registerMusicStudio } from './music/routes.mjs';
@@ -3671,6 +3673,7 @@ app.get("/api/health", (req, res) => {
     chatImageQuality: imageSettings().quality,
     chatModelAccess,
     pictureStudio: {analysisModel: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, ...pictureModelSettings()},
+    studyStudio: {version:1,savedProgress:true,flashcards:true,practiceQuiz:true},
     appStudio: {version:1,interactivePreview:true,savedProjects:true,versionHistory:true,webExport:true},
     musicStudio: {version:2,savedLibrary:true,savedDrafts:true,provider:'musicapi.ai',providerConfigured:Boolean(process.env.MUSICAPI_KEY||process.env.MUSICAPI_API_KEY||process.env.MUSICAPI_AI_KEY)},
     taxPrep: {version:1,country:'US',bookkeepingLinked:true,filingEnabled:false,automaticTaxCalculation:false},
@@ -5290,6 +5293,15 @@ registerAppStudio(app,{database:supabaseAdmin,requireUser,
   const limits=getTierLimits(profile.tier||'basic');
   return {...checkUsageAllowed({profile,usageCounter,creditsNeeded:1}),status:429,usageId:usageCounter.id,creditLimit:limits.dailyCreditLimit,requestLimit:limits.dailyRequestLimit};
  },generate:data=>generateSpec({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
+});
+registerStudyStudio(app,{database:supabaseAdmin,requireUser,
+ aiAccess:async user=>{
+  if(!process.env.OPENAI_API_KEY)return {allowed:false,status:503,reason:'KORLIX study generation is temporarily unavailable.'};
+  const profile=await getOrCreateProfile(user),usageCounter=await getOrCreateUsageCounter(user.id);
+  if(!profile||!usageCounter)throw new Error('Study Studio usage unavailable');
+  const limits=getTierLimits(profile.tier||'basic');
+  return {...checkUsageAllowed({profile,usageCounter,creditsNeeded:1}),status:429,usageId:usageCounter.id,creditLimit:limits.dailyCreditLimit,requestLimit:limits.dailyRequestLimit};
+ },generate:data=>generateLesson({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
 });
 
 
