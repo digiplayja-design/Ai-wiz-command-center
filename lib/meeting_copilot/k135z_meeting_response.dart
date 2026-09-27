@@ -247,13 +247,23 @@ class K135zMeetingResponse extends ChangeNotifier {
     }
   }
 
+  void pause() {
+    if (_dead) return;
+    spoken.pause();
+    _stopReviewed('Nova is silent. Tap Resume Nova to continue the conversation.');
+  }
+
   void stop([
     String feedback =
         'Nova stopped. Use Stop Share in Zoom to end the screen broadcast.',
   ]) {
     if (_dead) return;
-    _epoch++;
     spoken.stop();
+    _stopReviewed(feedback);
+  }
+
+  void _stopReviewed(String feedback) {
+    _epoch++;
     cancelRequest();
     player.stop();
     _audio = null;

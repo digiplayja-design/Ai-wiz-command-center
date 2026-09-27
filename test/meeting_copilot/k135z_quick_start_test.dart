@@ -203,8 +203,13 @@ void main() {
       await tester.tap(find.text('Start Nova'));await tester.pumpAndSettle();
       expect(b.response.spoken.enabled,true);expect(find.text('Nova is on'),findsOneWidget);
       await tester.tap(find.text('Silence Nova'));await tester.pumpAndSettle();
-      expect(b.response.spoken.enabled,false);expect(b.capture.statusLabel,'Listening');
-      expect(find.text('Start Nova').hitTestable(),findsOneWidget);expect(tester.takeException(),isNull);
+      expect(b.response.spoken.enabled,true);expect(b.response.spoken.userPaused,true);
+      expect(b.capture.statusLabel,'Listening');
+      expect(find.text('Resume Nova').hitTestable(),findsOneWidget);
+      final starts=f.calls.where((x)=>x=='start').length;
+      await tester.tap(find.text('Resume Nova'));await tester.pumpAndSettle();
+      expect(b.response.spoken.userPaused,false);expect(find.text('Nova is on'),findsOneWidget);
+      expect(f.calls.where((x)=>x=='start').length,starts);expect(tester.takeException(),isNull);
       await tester.pumpWidget(const SizedBox());b.dispose();f.c.dispose();
     });
   }

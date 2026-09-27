@@ -438,6 +438,7 @@ class K135zCaptureController extends ChangeNotifier {
   }
   Map<String, dynamic>? _returnBinding;
   Map<String, dynamic>? _restoringReturnBinding;
+  bool get restoringOnReturn => _restoringReturnBinding != null;
   // Losing the short capture lease while backgrounded is different from a
   // changed meeting, Stop/Pause, or revoked permission. Preserve voice opt-in
   // only for the exact previously started session while it is revalidated.

@@ -5,9 +5,9 @@ import 'k135z_remember_panel.dart';
 import 'k135z_feedback_button.dart';
 
 class K135zSpokenPanel extends StatelessWidget {
-  const K135zSpokenPanel({super.key, required this.spoken, this.onStop});
+  const K135zSpokenPanel({super.key, required this.spoken, this.onPause});
   final K135zSpokenReplies spoken;
-  final VoidCallback? onStop;
+  final VoidCallback? onPause;
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: spoken,
@@ -47,7 +47,7 @@ class K135zSpokenPanel extends StatelessWidget {
           const SizedBox(height: 8),
           const Text(
             'For others to hear Nova, start Zoom screen broadcast with device audio. '
-            'The meeting can see this screen. Voice resumes when you return to this page; your browser may require a Resume voice tap.',
+            'The meeting can see this screen. Silence Nova pauses replies until you tap Resume Nova. Your browser may also require a resume tap after switching apps.',
             style: TextStyle(color: Color(0xFF9CB8CA)),
           ),
           const SizedBox(height: 14),
@@ -66,22 +66,22 @@ class K135zSpokenPanel extends StatelessWidget {
             children: [
               K135zFeedbackButton.filled(
                 buttonKey: const Key('nova-enable-spoken'),
-                onPressed: spoken.needsAudioTap && !spoken.busy
+                onPressed: spoken.canResume
                     ? () => spoken.returnToPage(userGesture:true)
                     : spoken.canEnable ? spoken.enable : null,
-                selected: spoken.enabled,
+                selected: spoken.enabled && !spoken.suspended,
                 activeColor: const Color(0xFF63E6A1),
                 pendingLabel: 'Enabling…',
                 child: Text(
-                  spoken.needsAudioTap ? 'Resume voice' : spoken.enabled
+                  spoken.userPaused || spoken.needsAudioTap ? 'Resume Nova' : spoken.enabled
                       ? 'Spoken replies on'
                       : 'Enable spoken replies',
                 ),
               ),
               K135zFeedbackButton.outlined(
                 buttonKey: const Key('nova-stop-spoken'),
-                onPressed: onStop ?? () => spoken.stop(),
-                child: const Text('Stop Nova'),
+                onPressed: spoken.userPaused ? null : onPause ?? spoken.pause,
+                child: Text(spoken.userPaused ? 'Nova paused' : 'Silence Nova'),
               ),
             ],
           ),
@@ -116,7 +116,7 @@ class K135zSpokenPanel extends StatelessWidget {
               'Nova uses your selected agent’s saved memory and training. Replies are AI-generated; '
               'meeting events come from recent captions only. To save a fact, say “Nova, remember this,” '
               'then review and confirm it with your Brain Vault password. '
-              'Stop Nova silences this page. Use Stop Share in Zoom to end the broadcast.',
+              'Silence Nova pauses replies while listening stays connected. Stop listening ends the session. Use Stop Share in Zoom to end the broadcast.',
               style: TextStyle(color: Color(0xFF9CB8CA)))],
           ),
         ],

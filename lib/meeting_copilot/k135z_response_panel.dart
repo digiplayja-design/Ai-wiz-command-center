@@ -11,7 +11,7 @@ class K135zResponsePanel extends StatelessWidget {
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: response,
     builder: (context, _) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      K135zSpokenPanel(spoken: response.spoken, onStop: () => response.stop()),
+      K135zSpokenPanel(spoken: response.spoken, onPause: response.pause),
       const SizedBox(height: 12),
       ExpansionTile(title: const Text('Reviewed meeting updates', style: TextStyle(color: Colors.white)),
       children: [Container(

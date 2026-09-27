@@ -129,7 +129,7 @@ void main() {
     expect(f.calls.where((call) => call == 'start').length, 1);
   });
 
-  test('Silence Nova while hidden cannot be undone by a pending reply or return', () async {
+  test('Stop Nova while hidden cannot be undone by a pending reply or return', () async {
     final f = SpokenFixture();
     addTearDown(f.dispose);
     await f.spoken.enable();

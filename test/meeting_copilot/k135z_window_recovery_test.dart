@@ -67,7 +67,7 @@ void main() {
     f.spoken.leavePage(); f.player.resumeAllowed = false; await f.spoken.returnToPage();
     expect(f.spoken.enabled, true); expect(f.spoken.needsAudioTap, true);
     await tester.pumpWidget(MaterialApp(home:Scaffold(body:K135zSpokenPanel(spoken:f.spoken))));
-    await tester.tap(find.text('Resume voice')); await tester.pumpAndSettle();
+    await tester.tap(find.text('Resume Nova')); await tester.pumpAndSettle();
     expect(f.spoken.suspended, false); expect(f.player.enables, 2); expect(f.calls, isEmpty);
   });
   test('provider failures leave voice enabled for the next question', () async {

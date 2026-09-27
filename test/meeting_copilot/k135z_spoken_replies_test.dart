@@ -153,14 +153,18 @@ void main() {
     final f = SpokenFixture(); addTearDown(f.dispose); await f.spoken.enable(); f.bad = true;
     await f.ask(); expect(f.player.plays, 0); expect(f.spoken.enabled, false);
   });
-  testWidgets('one enable tap starts mode; Stop is available during a reply', (tester) async {
+  testWidgets('Silence pauses a pending reply and offers Resume Nova', (tester) async {
     final f = SpokenFixture(); addTearDown(f.dispose);
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(child: K135zSpokenPanel(spoken: f.spoken)))));
     await tester.tap(find.byKey(const Key('nova-enable-spoken'))); await tester.pumpAndSettle();
     expect(f.spoken.enabled, true); expect(find.text('Spoken replies on'), findsOneWidget);
     f.hold = Completer<void>(); final pending = f.ask(); await tester.pump();
     await tester.tap(find.byKey(const Key('nova-stop-spoken'))); await tester.pump();
-    f.hold!.complete(); await pending; expect(f.player.plays, 0); expect(f.spoken.enabled, false);
+    f.hold!.complete(); await pending; expect(f.player.plays, 0); expect(f.spoken.enabled, true);
+    expect(f.spoken.userPaused, true);
+    expect(find.text('Resume Nova'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('nova-enable-spoken'))); await tester.pumpAndSettle();
+    expect(f.spoken.userPaused, false); expect(f.player.enables, 1);
     await tester.pumpAndSettle(); await tester.pumpWidget(const SizedBox());
   });
 }

@@ -52,16 +52,16 @@ class K135zStartupPanel extends StatelessWidget {
           Wrap(spacing: 10, runSpacing: 10, children: [
             K135zFeedbackButton.filled(
               buttonKey: Key(voiceSupported ? 'start-nova-button' : 'start-listening-button'),
-              selected: voiceSupported ? novaOn : listening && c?.meetingUuid == meeting?.uuid,
+              selected: voiceSupported ? novaOn && voice?.suspended != true : listening && c?.meetingUuid == meeting?.uuid,
               activeColor: const Color(0xFF63E6A1),
-              pendingLabel: voiceSupported ? 'Starting Nova…' : 'Starting listening…',
+              pendingLabel: voiceSupported ? voice?.canResume == true ? 'Resuming Nova…' : 'Starting Nova…' : 'Starting listening…',
               icon: const Icon(Icons.headset_mic_outlined),
               onPressed: voiceSupported
-                ? voice?.needsAudioTap == true && voice?.busy == false
+                ? novaOn && voice?.canResume == true
                   ? () => voice!.returnToPage(userGesture:true)
                   : b?.canStartNova == true ? b!.startNova : null
                 : b?.canStartListening == true ? b!.startListening : null,
-              child: Text(voiceSupported ? voice?.needsAudioTap == true ? 'Resume Nova'
+              child: Text(voiceSupported ? novaOn && (voice?.userPaused == true || voice?.needsAudioTap == true) ? 'Resume Nova'
                 : novaOn ? 'Nova is on' : 'Start Nova' : 'Start listening')),
             K135zFeedbackButton.outlined(
               buttonKey: const Key('stop-listening-button'),
@@ -72,9 +72,9 @@ class K135zStartupPanel extends StatelessWidget {
             if (voiceSupported)
               K135zFeedbackButton.outlined(
                 buttonKey: const Key('startup-stop-nova'),
-                onPressed: () => b!.response.stop(),
+                onPressed: voice?.userPaused == true ? null : () => b!.response.pause(),
                 icon: const Icon(Icons.volume_off_outlined),
-                child: const Text('Silence Nova')),
+                child: Text(voice?.userPaused == true ? 'Nova paused' : 'Silence Nova')),
           ]),
           const SizedBox(height: 10),
           Semantics(liveRegion: true, child: Text(

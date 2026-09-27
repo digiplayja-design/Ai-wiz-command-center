@@ -54,7 +54,7 @@ class K135zSpokenReplies extends ChangeNotifier {
   bool _dead = false, enabled = false, busy = false, playing = false;
   String? _binding, _window, answer;
   String? memoryStatus;
-  bool suspended = false, needsAudioTap = false;
+  bool suspended = false, needsAudioTap = false, userPaused = false;
   Map<String, dynamic>? _returnContext;
   final _question = <K135zTranscriptPreviewLine>[];
   static final _wake = RegExp(
@@ -76,6 +76,20 @@ class K135zSpokenReplies extends ChangeNotifier {
       epoch == _epoch &&
       _binding != null &&
       _binding == _currentBinding;
+
+  bool get canResume => enabled && suspended && !busy &&
+      (userPaused || needsAudioTap) && capture.responseBinding != null;
+
+  // Silence only the voice turn. Keep capture, consent, and the audio context.
+  void pause() {
+    if (_dead) return;
+    if (!enabled) { stop(); return; }
+    leavePage();
+    if (!enabled) return;
+    userPaused = true;
+    message = 'Nova is paused. Listening stays connected. Tap Resume Nova when ready.';
+    notifyListeners();
+  }
 
   Future<void> enable() => _enable();
   Future<void> startWithListening(Future<void> Function() startListening) =>
@@ -199,7 +213,9 @@ class K135zSpokenReplies extends ChangeNotifier {
       // that activation, but keeps the original session opt-in for the next return.
       _epoch++; busy = false; needsAudioTap = false;
       player.interrupt();
-      message = 'Voice will resume when you return.';
+      message = userPaused
+          ? 'Nova is paused. Tap Resume Nova when ready.'
+          : 'Voice will resume when you return.';
       notifyListeners();
       return;
     }
@@ -230,18 +246,22 @@ class K135zSpokenReplies extends ChangeNotifier {
       return;
     }
     _binding = jsonEncode(binding);
+    // A browser return must never undo an explicit Silence Nova action.
+    if (userPaused && !userGesture) return;
     final epoch = _epoch;
     busy = true;
     message = 'Resuming Nova’s voice…';
     notifyListeners();
     try {
       // On a fallback tap, create/unlock audio directly in the gesture stack.
-      final activated = userGesture ? player.enable().then((_) => player.ready) : player.resume();
+      final activated = userGesture
+          ? player.ready ? Future.value(true) : player.enable().then((_) => player.ready)
+          : player.resume();
       final ready = await activated;
       if (!_current(epoch)) return;
       if (!ready) {
         needsAudioTap = true;
-        message = 'Listening is connected. Tap Resume voice to let this browser play audio again.';
+        message = 'Listening is connected. Tap Resume Nova to let this browser play audio again.';
         return;
       }
       await capture.prepareSpokenTranscript();
@@ -250,14 +270,14 @@ class K135zSpokenReplies extends ChangeNotifier {
       if (_window == null) throw StateError('Captions unavailable');
       _seen = capture.transcriptLines.isEmpty ? 0 : capture.transcriptLines.last.sequence;
       _question.clear(); _quietUntil = 0;
-      suspended = false; needsAudioTap = false; _returnContext = null;
+      suspended = false; needsAudioTap = false; userPaused = false; _returnContext = null;
       capture.fastTranscript = true;
       message = 'Nova is ready again. Say “Nova” and your next question.';
       if (smallTalk && _waitingClips.isEmpty) unawaited(_prepareWaitingVoice(epoch));
     } catch (_) {
       if (_current(epoch)) {
         needsAudioTap = true;
-        message = 'Tap Resume voice to try again. Listening does not need to be restarted.';
+        message = 'Tap Resume Nova to try again. Listening does not need to be restarted.';
       }
     } finally {
       if (!_dead && epoch == _epoch) {
@@ -273,6 +293,8 @@ class K135zSpokenReplies extends ChangeNotifier {
     memory.checkContext();
     if (suspended) {
       if (!capture.isCurrent()) stop();
+      if (userPaused && !capture.busy && !capture.restoringOnReturn && !capture.canRecoverOnReturn &&
+          _binding != _currentBinding) stop();
       return;
     }
     if (_binding != null && _binding != _currentBinding) {
@@ -289,7 +311,7 @@ class K135zSpokenReplies extends ChangeNotifier {
     if (!player.ready) {
       leavePage();
       needsAudioTap = true;
-      message = 'Listening is connected. Tap Resume voice to restore browser audio.';
+      message = 'Listening is connected. Tap Resume Nova to restore browser audio.';
       notifyListeners();
       return;
     }
@@ -481,7 +503,7 @@ class K135zSpokenReplies extends ChangeNotifier {
     starting = false;
     enabled = false;
     memory.cancel();
-    suspended = false; needsAudioTap = false; _returnContext = null;
+    suspended = false; needsAudioTap = false; userPaused = false; _returnContext = null;
     busy = false;
     playing = false;
     capture.fastTranscript = false;
