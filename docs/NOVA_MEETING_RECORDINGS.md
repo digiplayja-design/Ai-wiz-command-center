@@ -29,7 +29,7 @@ FFmpeg runs without a shell, with fixed codec arguments, bounded input/output an
 
 ## Release and rollback
 
-Apply `supabase/migrations/20260927022321_k135z_meeting_recordings.sql` before deploying the backend. The backend Docker image installs FFmpeg and verifies synthetic PCM-to-MP3 encoding during its build. Deploy the frontend only after the backend is healthy and the recording route rejects unauthenticated access. Existing services have auto-deploy disabled and require explicit deployments.
+Apply `supabase/migrations/20260927024536_k135z_meeting_recordings.sql` before deploying the backend. The backend Docker image installs FFmpeg and verifies synthetic PCM-to-MP3 encoding during its build. Deploy the frontend only after the backend is healthy and the recording route rejects unauthenticated access. Existing services have auto-deploy disabled and require explicit deployments.
 
 Rollback the frontend controls before rolling back backend code. Leave the private table and bucket intact so saved recordings are preserved for a forward fix. Do not drop the bucket or table as a routine rollback. Stop active recordings before a planned rollback where possible.
 
