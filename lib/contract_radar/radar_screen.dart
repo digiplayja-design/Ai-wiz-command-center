@@ -10,11 +10,16 @@ const _navy = Color(0xFF082C41),
     _line = Color(0xFFDCE7EC);
 const _profileLabels = {
   'businessName': 'Business name',
-  'services': 'What services or products do you offer?',
-  'location': 'Where can you work?',
+  'services': 'Services or products',
+  'location': 'Service area',
   'capacity': 'Team, capacity and experience',
   'certifications': 'Credentials you currently hold',
   'naics': 'NAICS codes, if known',
+};
+const _requiredProfileErrors = {
+  'businessName': 'Enter your business name.',
+  'services': 'Describe the services or products you offer.',
+  'location': 'Enter where you can work, such as a city or country.',
 };
 const _stages = {
   'saved': 'Saved',
@@ -52,6 +57,11 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
   final _editors = {
     for (final k in _profileLabels.keys) k: TextEditingController(),
   };
+  final _profileAnchors = {for (final k in _profileLabels.keys) k: GlobalKey()};
+  final _profileFocus = {for (final k in _profileLabels.keys) k: FocusNode()};
+  bool _profileAttempted = false, _savingProfile = false;
+  String? _profileSaveError;
+  final _profileSaveFeedbackAnchor = GlobalKey();
   final _focus = TextEditingController(), _filter = TextEditingController();
   final _scroll = ScrollController();
   Map<String, dynamic>? _profile, _job, _search;
@@ -87,6 +97,9 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
     for (final c in _editors.values) {
       c.dispose();
     }
+    for (final node in _profileFocus.values) {
+      node.dispose();
+    }
     _focus.dispose();
     _filter.dispose();
     _scroll.dispose();
@@ -117,6 +130,8 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
       _signature = null;
       _editorDraft = null;
       _editorDraftFor = null;
+      _profileSaveError = null;
+      _profileAttempted = false;
       for (final c in _editors.values) {
         c.clear();
       }
@@ -236,19 +251,81 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
   }
 
   Future<void> _saveProfile() async {
+    if (_working || _locked) return;
     final p = {for (final e in _editors.entries) e.key: e.value.text.trim()};
-    if (['businessName', 'services', 'location'].any((k) => p[k]!.isEmpty)) {
-      setState(
-        () => _error = 'Add your business name, services and service area.',
-      );
+    final missing = _requiredProfileErrors.keys
+        .where((k) => p[k]!.isEmpty)
+        .firstOrNull;
+    if (missing != null) {
+      setState(() {
+        _profileAttempted = true;
+        _error = null;
+        _profileSaveError = 'Complete the required fields marked above.';
+      });
+      _profileFeedback('Please complete the highlighted field.');
+      _profileFocus[missing]!.requestFocus();
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || _locked) return;
+      final field = _profileAnchors[missing]?.currentContext;
+      if (field != null && field.mounted) {
+        await Scrollable.ensureVisible(
+          field,
+          alignment: 0.15,
+          duration: const Duration(milliseconds: 250),
+        );
+      }
       return;
     }
-    await _act(() async {
-      await widget.client.saveProfile(p);
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _busy = true;
+      _savingProfile = true;
+      _error = null;
+      _notice = null;
+      _profileSaveError = null;
+    });
+    try {
+      final saved = await widget.client.saveProfile(p);
       if (!mounted || _locked) return;
-      setState(() => _profileDirty = false);
-    }, success: 'Business profile saved. Your radar is ready.');
-    if (mounted && !_locked && _error == null) _go(0);
+      setState(() {
+        _profile = saved;
+        _loadedProfile = true;
+        _profileDirty = false;
+        _profileAttempted = false;
+        _notice = 'Business profile saved. Your radar is ready.';
+      });
+      _go(0);
+      _profileFeedback('Business profile saved. Your radar is ready.');
+    } catch (e) {
+      if (!mounted || _locked) return;
+      setState(() => _profileSaveError = e.toString());
+      _profileFeedback(e.toString());
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || _locked) return;
+      final feedback = _profileSaveFeedbackAnchor.currentContext;
+      if (feedback != null && feedback.mounted) {
+        await Scrollable.ensureVisible(
+          feedback,
+          alignment: 0.2,
+          duration: const Duration(milliseconds: 250),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _savingProfile = false;
+        });
+      }
+    }
+  }
+
+  void _profileFeedback(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(message), duration: const Duration(seconds: 6)),
+      );
   }
 
   Future<void> _start(String kind, {String? opportunityId}) async {
@@ -352,6 +429,8 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
         if (mounted && !_locked) {
           _loadedProfile = false;
           _profileDirty = false;
+          _profileAttempted = false;
+          _profileSaveError = null;
         }
       }, success: 'Your Contract Radar records have been removed.');
     }
@@ -733,14 +812,16 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
             _heading(
               'Your business profile',
               subtitle:
-                  'Tell Nova what you can deliver. You can refine this anytime.',
+                  'Complete the three required fields (*). Everything else is optional.',
             ),
             ..._editors.entries.map(
               (e) => Padding(
+                key: _profileAnchors[e.key],
                 padding: const EdgeInsets.only(bottom: 14),
                 child: TextField(
                   key: Key('radar-profile-${e.key}'),
                   controller: e.value,
+                  focusNode: _profileFocus[e.key],
                   enabled: !_working,
                   onChanged: (_) => setState(() => _profileDirty = true),
                   maxLength: switch (e.key) {
@@ -756,10 +837,15 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
                       ? 5
                       : 2,
                   decoration: InputDecoration(
-                    labelText: _profileLabels[e.key],
+                    labelText:
+                        '${_profileLabels[e.key]}${_requiredProfileErrors.containsKey(e.key) ? ' *' : ' (optional)'}',
+                    errorText: _profileAttempted && e.value.text.trim().isEmpty
+                        ? _requiredProfileErrors[e.key]
+                        : null,
+                    errorMaxLines: 3,
                     alignLabelWithHint: true,
                     hintText: switch (e.key) {
-                      'location' => 'Ohio, New York, or nationwide',
+                      'location' => 'City, state, country, or nationwide',
                       'services' => 'Describe the work you want to win',
                       'certifications' =>
                         'Only list credentials you actually hold',
@@ -774,12 +860,31 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
               style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
             ),
             const SizedBox(height: 16),
+            if (_profileSaveError != null) ...[
+              Container(
+                key: _profileSaveFeedbackAnchor,
+                child: Text(
+                  _profileSaveError!,
+                  key: const Key('radar-profile-save-error'),
+                  style: const TextStyle(color: Color(0xFFB3261E), height: 1.4),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             FilledButton.icon(
               key: const Key('radar-save-profile'),
               onPressed: _working ? null : _saveProfile,
-              icon: const Icon(Icons.check),
+              icon: _savingProfile
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.check),
               label: Text(
-                _profileDirty
+                _savingProfile
+                    ? 'Saving profile…'
+                    : _profileDirty
                     ? 'Save profile changes'
                     : 'Save business profile',
               ),

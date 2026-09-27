@@ -58,19 +58,28 @@ class FakeRadar extends RadarClient {
   List<Map<String, dynamic>> saved = [], jobs = [];
   List<Map<String, dynamic>> starts = [];
   int saves = 0, removes = 0, polls = 0, clears = 0;
+  int profileSaves = 0, loads = 0;
+  bool failProfile = false;
+  Completer<void>? profileGate;
   bool failStart = false, failSave = false;
   @override
-  Future<Map<String, dynamic>> load() async => {
-    'profile': profileRow,
-    'opportunities': saved,
-    'jobs': jobs,
-  };
+  Future<Map<String, dynamic>> load() async {
+    loads++;
+    return {'profile': profileRow, 'opportunities': saved, 'jobs': jobs};
+  }
+
   @override
-  Future<void> saveProfile(Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>> saveProfile(Map<String, dynamic> data) async {
+    profileSaves++;
+    if (profileGate != null) await profileGate!.future;
+    if (failProfile) {
+      throw const RadarException('Connection interrupted. Please retry.');
+    }
     profileRow = {
       'data': Map<String, dynamic>.from(data),
       'updatedAt': '2026-09-27',
     };
+    return profileRow!;
   }
 
   @override
@@ -138,18 +147,19 @@ Future<void> show(
   WidgetTester t,
   FakeRadar c, {
   double width = 1500,
+  double height = 1100,
   double scale = 1,
   Future<bool> Function()? consent,
   Future<bool> Function(Uri)? open,
   Future<void> Function(String)? copy,
 }) async {
-  t.view.physicalSize = Size(width, 1100);
+  t.view.physicalSize = Size(width, height);
   t.view.devicePixelRatio = 1;
   await t.pumpWidget(
     MaterialApp(
       home: MediaQuery(
         data: MediaQueryData(
-          size: Size(width, 1100),
+          size: Size(width, height),
           textScaler: TextScaler.linear(scale),
         ),
         child: ContractRadarScreen(
@@ -172,6 +182,135 @@ Future<void> tap(WidgetTester t, Finder f) async {
 }
 
 void main() {
+  test('profile PUT requires a confirmed saved profile response', () async {
+    bool confirmed = true;
+    final c = RadarClient(
+      backendBaseUrl: 'https://example.test',
+      headersBuilder: () => {'Authorization': 'Bearer test'},
+      client: MockClient((r) async {
+        expect(r.method, 'PUT');
+        expect(r.url.path, '/api/contract-radar/profile');
+        expect(r.headers['Authorization'], 'Bearer test');
+        expect(jsonDecode(r.body), profile);
+        return http.Response(
+          jsonEncode(
+            confirmed
+                ? {
+                    'profile': {'data': profile, 'updatedAt': '2026-09-27'},
+                  }
+                : {},
+          ),
+          200,
+        );
+      }),
+    );
+    expect((await c.saveProfile(profile))['data'], profile);
+    confirmed = false;
+    await expectLater(c.saveProfile(profile), throwsA(isA<RadarException>()));
+    c.dispose();
+  });
+  testWidgets(
+    'phone save reveals and focuses missing fields, then confirms required-only profile',
+    (t) async {
+      final c = FakeRadar()..profileRow = null;
+      await show(t, c, width: 390, height: 780, scale: 1.25);
+      await t.enterText(
+        find.byKey(const Key('radar-profile-businessName')),
+        'My business',
+      );
+      await tap(t, find.byKey(const Key('radar-save-profile')));
+      expect(c.profileSaves, 0);
+      expect(
+        find.text('Describe the services or products you offer.').hitTestable(),
+        findsOneWidget,
+      );
+      expect(
+        t
+            .widget<TextField>(find.byKey(const Key('radar-profile-services')))
+            .focusNode!
+            .hasFocus,
+        isTrue,
+      );
+      await t.enterText(
+        find.byKey(const Key('radar-profile-services')),
+        'Office cleaning',
+      );
+      await tap(t, find.byKey(const Key('radar-save-profile')));
+      expect(c.profileSaves, 0);
+      expect(
+        find
+            .text('Enter where you can work, such as a city or country.')
+            .hitTestable(),
+        findsOneWidget,
+      );
+      await t.enterText(
+        find.byKey(const Key('radar-profile-location')),
+        'Jamaica',
+      );
+      await tap(t, find.byKey(const Key('radar-save-profile')));
+      expect(c.profileSaves, 1);
+      expect(c.profileRow!['data']['location'], 'Jamaica');
+      expect(c.profileRow!['data']['certifications'], '');
+      expect(
+        c.loads,
+        1,
+        reason: 'A confirmed save does not depend on a second read',
+      );
+      expect(find.byKey(const Key('radar-discover')), findsOneWidget);
+      expect(find.textContaining('Business profile saved.'), findsWidgets);
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'failed phone save keeps entries with visible retry feedback and prevents duplicate saves',
+    (t) async {
+      final c = FakeRadar()
+        ..profileRow = null
+        ..failProfile = true;
+      await show(t, c, width: 390, height: 780);
+      for (final e in {
+        'businessName': 'My business',
+        'services': 'Cleaning',
+        'location': 'Ohio',
+      }.entries) {
+        await t.enterText(find.byKey(Key('radar-profile-${e.key}')), e.value);
+      }
+      await tap(t, find.byKey(const Key('radar-save-profile')));
+      expect(
+        find.byKey(const Key('radar-profile-save-error')).hitTestable(),
+        findsOneWidget,
+      );
+      expect(
+        t
+            .widget<TextField>(
+              find.byKey(const Key('radar-profile-businessName')),
+            )
+            .controller!
+            .text,
+        'My business',
+      );
+      expect(c.profileRow, isNull);
+      c.failProfile = false;
+      c.profileGate = Completer<void>();
+      await t.ensureVisible(find.byKey(const Key('radar-save-profile')));
+      await t.tap(find.byKey(const Key('radar-save-profile')));
+      await t.pump();
+      expect(find.text('Saving profile…'), findsOneWidget);
+      expect(
+        t
+            .widget<FilledButton>(find.byKey(const Key('radar-save-profile')))
+            .onPressed,
+        isNull,
+      );
+      expect(c.profileSaves, 2);
+      c.profileGate!.complete();
+      await t.pumpAndSettle();
+      expect(find.byKey(const Key('radar-discover')), findsOneWidget);
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+    },
+  );
   test(
     'client keeps authentication, endpoint and error handling scoped to Radar',
     () async {

@@ -152,8 +152,14 @@ class RadarClient {
   }
 
   Future<Map<String, dynamic>> load() => _request('GET', '');
-  Future<void> saveProfile(Map<String, dynamic> data) async {
-    await _request('PUT', '/profile', data);
+  Future<Map<String, dynamic>> saveProfile(Map<String, dynamic> data) async {
+    final profile = (await _request('PUT', '/profile', data))['profile'];
+    if (profile is! Map || profile['data'] is! Map) {
+      throw const RadarException(
+        'The save could not be confirmed. Your entries are still here; try saving again.',
+      );
+    }
+    return Map<String, dynamic>.from(profile);
   }
 
   Future<Map<String, dynamic>> saveOpportunity(
