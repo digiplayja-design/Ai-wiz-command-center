@@ -1,3 +1,5 @@
+import 'app_studio/app_studio_client.dart';
+import 'app_studio/app_studio_screen.dart';
 import 'music_studio/music_client.dart';
 import 'music_studio/music_studio_screen.dart';
 import 'chat/chat_workspace.dart';
@@ -5582,6 +5584,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   // Hide inactive Utility tools until full native workflows are ready.
   // Keep active Utility tools visible.
   static const List<String> _utilityTools = <String>[
+    'App Studio',
     'Music Studio',
     'Tax Prep',
     'BabyBlend',
@@ -10068,240 +10071,13 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   Future<void> _showAppCreationDialog() async {
-    int currentStep = 0;
-    final List<String> questions = [
-      "What is your app idea or name?",
-      "Who is the target audience for this app?",
-      "What are the 3-5 main features?",
-      "Which platforms? (iOS, Android, Web, All)",
-      "Any design preferences? (colors, style, theme)",
-    ];
-    final List<TextEditingController> controllers = List.generate(
-      questions.length,
-      (index) => TextEditingController(),
-    );
-
-    await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            return AlertDialog(
-              backgroundColor: const Color(0xFF0A1526),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(
-                  color: const Color(0xFF2EC7DF).withOpacity(0.3),
-                ),
-              ),
-              title: const Text(
-                'Create an App',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                ),
-              ),
-              content: SizedBox(
-                width: 400,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Step ${currentStep + 1} of ${questions.length}',
-                      style: const TextStyle(
-                        color: Color(0xFF69D9E8),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      questions[currentStep],
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: controllers[currentStep],
-                      style: const TextStyle(color: Colors.white),
-                      autofocus: true,
-                      maxLines: currentStep == 2 ? 3 : 1,
-                      decoration: InputDecoration(
-                        hintText: 'Type your answer here...',
-                        hintStyle: TextStyle(
-                          color: Colors.white.withOpacity(0.3),
-                        ),
-                        filled: true,
-                        fillColor: Colors.black.withOpacity(0.3),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide.none,
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(
-                            color: Color(0xFF2EC7DF),
-                          ),
-                        ),
-                      ),
-                      onSubmitted: (_) {
-                        if (controllers[currentStep].text.trim().isNotEmpty) {
-                          if (currentStep < questions.length - 1) {
-                            setStateDialog(() {
-                              currentStep++;
-                            });
-                          } else {
-                            Navigator.of(context).pop(true);
-                          }
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(false);
-                  },
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(color: Colors.white60),
-                  ),
-                ),
-                if (currentStep > 0)
-                  TextButton(
-                    onPressed: () {
-                      setStateDialog(() {
-                        currentStep--;
-                      });
-                    },
-                    child: const Text(
-                      'Back',
-                      style: TextStyle(color: Color(0xFF2EC7DF)),
-                    ),
-                  ),
-                ElevatedButton(
-                  onPressed: () {
-                    if (controllers[currentStep].text.trim().isEmpty) return;
-
-                    if (currentStep < questions.length - 1) {
-                      setStateDialog(() {
-                        currentStep++;
-                      });
-                    } else {
-                      Navigator.of(context).pop(true);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFB7FF00),
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: Text(
-                    currentStep == questions.length - 1
-                        ? 'Generate App Spec'
-                        : 'Next',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    ).then((completed) {
-      if (completed == true) {
-        // Compile the answers into a prompt
-        final appIdea = controllers[0].text.trim();
-        final audience = controllers[1].text.trim();
-        final features = controllers[2].text.trim();
-        final platforms = controllers[3].text.trim();
-        final design = controllers[4].text.trim();
-
-        // Choose tech stack based on platform
-        final platformLower = platforms.toLowerCase();
-        final String techStack;
-        final String codeInstructions;
-        if (platformLower.contains('ios') &&
-            !platformLower.contains('android') &&
-            !platformLower.contains('web')) {
-          techStack = 'Swift + SwiftUI (iOS native)';
-          codeInstructions =
-              'Write the starter code in Swift/SwiftUI including: ContentView.swift, main app entry point, navigation structure, and at least 3 core screen files with full UI code.';
-        } else if (platformLower.contains('android') &&
-            !platformLower.contains('ios') &&
-            !platformLower.contains('web')) {
-          techStack = 'Kotlin + Jetpack Compose (Android native)';
-          codeInstructions =
-              'Write the starter code in Kotlin/Jetpack Compose including: MainActivity.kt, navigation setup, and at least 3 core screen composables with full UI code.';
-        } else if (platformLower.contains('web') &&
-            !platformLower.contains('ios') &&
-            !platformLower.contains('android')) {
-          techStack = 'React + TypeScript + TailwindCSS (Web)';
-          codeInstructions =
-              'Write the starter code including: App.tsx, index.tsx, tailwind config, and at least 3 core page/component files with full JSX/TSX code.';
-        } else {
-          techStack = 'Flutter + Dart (Cross-platform: iOS, Android, Web)';
-          codeInstructions =
-              'Write the starter code in Flutter/Dart including: main.dart, pubspec.yaml dependencies, and at least 3 core screen files with full Widget code.';
-        }
-
-        final prompt =
-            '''You are an expert App Architect, Senior Product Manager, and Senior Software Engineer.
-
-Your task has TWO parts. Complete BOTH in full.
-
----
-
-## PART 1 — App Specification & Development Plan
-
-App details:
-**App Idea/Name:** $appIdea
-**Target Audience:** $audience
-**Core Features:** $features
-**Target Platforms:** $platforms
-**Design Preferences:** $design
-**Tech Stack:** $techStack
-
-Include:
-1. Executive Summary & Value Proposition
-2. User Personas & Core Use Cases
-3. Detailed Feature Breakdown (MVP vs V2)
-4. Screen-by-Screen UI/UX Flow
-5. Estimated Development Timeline & Milestones
-6. Monetization Strategy (if applicable)
-
----
-
-## PART 2 — Starter Code (Ready to Run)
-
-$codeInstructions
-
-For each file:
-- Show the full filename as a header (e.g., `### main.dart`)
-- Provide complete, working, copy-paste-ready code in a code block
-- Include comments explaining key sections
-- The code must implement the core features listed above
-- Use the design preferences for colors/style
-
-Do NOT truncate or summarize the code. Write every file completely.
-
-Make the entire output professional, well-structured using Markdown, and production-ready.''';
-
-        setState(() {
-          _createAppMode = true;
-          _controller.text = prompt;
-        });
-
-        // Auto-submit the generated prompt
-        _generate();
-      }
-    });
+    final client=AppStudioClient(backendBaseUrl:kKorlixBackendBaseUrl,
+      headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>AppStudioScreen(
+      client:client,ensureConsent:(context)=>KorlixThirdPartyAiConsent.ensure(context:context,
+        featureName:'App Studio',providers:{KorlixThirdPartyAiProvider.openAi},
+        dataCategories:{KorlixThirdPartyAiDataCategory.typedTextAndPrompts}),
+    )));
   }
 
   @override
@@ -10799,6 +10575,7 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   void _selectUtilityTool(String tool) {
+    if (tool == 'App Studio') { unawaited(_showAppCreationDialog()); return; }
     if (tool == 'Music Studio') { unawaited(_showMusicStudio()); return; }
     if (tool == 'Tax Prep') { unawaited(_openTaxPrep()); return; }
     if (tool == 'BabyBlend') { unawaited(_openBabyBlend()); return; }
@@ -12960,6 +12737,7 @@ Make the entire output professional, well-structured using Markdown, and product
     };
 
     String statusFor(String tool) {
+      if (tool == 'App Studio') return 'Build, preview and export your own app';
       if (tool == 'Music Studio') return 'Create songs, save drafts and play your music library';
       if (tool == 'Tax Prep') return 'Personal tax organizer, linked Bookkeeping records and preparer packets';
       if (tool == 'BabyBlend') return 'Imagine a fictional child portrait from two adult photos with KORLIX';
