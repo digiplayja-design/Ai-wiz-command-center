@@ -1,3 +1,5 @@
+import 'chat/chat_workspace.dart';
+import 'chat/chat_request.dart';
 import 'bookkeeping/bookkeeping_client.dart';
 import 'bookkeeping/bookkeeping_screen.dart';
 import 'funnel_studio/funnel_client.dart';
@@ -6064,6 +6066,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   bool _improvePictureMode = false;
   String? _portraitStudioPromptOverride;
   bool _imaginePictureMode = false;
+  String _chatImageSize = '1024x1024';
+  String _chatImageStyle = 'auto';
+  String _pendingChatPrompt = '';
+  String _pendingChatStatus = 'Thinking through your request…';
+  String? _pendingChatTopicId;
   bool _fixCreditReportMode = false;
   bool _creditDebtValidationRoundsVisible = false;
   int? _creditDebtValidationRound;
@@ -7323,8 +7330,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
 
     if (safeTopicId != null &&
         safeTopicId.isNotEmpty &&
-        safeTopicId != _activeChatTopicId &&
-        _chatTopicsById.containsKey(safeTopicId)) {
+        safeTopicId != _activeChatTopicId) {
+      if (!_chatTopicsById.containsKey(safeTopicId)) return;
       final topic = _chatTopicsById[safeTopicId]!;
       final messages = List<ChatMessage>.from(topic.messages)..add(message);
 
@@ -7507,75 +7514,68 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   }
 
   Future<void> _generateImaginedPicture() async {
+    if (_loading) return;
     await _stopAiCharacterTalkingForQuery();
-
-    final prompt = korlixApplyProductionQualityDirective(
-      _controller.text.trim(),
-    );
-
+    final prompt = _controller.text.trim();
     if (prompt.isEmpty) {
-      setState(() {
-        _error = 'Describe the picture you want Korlix AI to create.';
-      });
+      setState(() => _error = 'Describe the picture you want Korlix AI to create.');
       return;
     }
-
+    _ensureActiveChatTopicForPrompt(prompt);
+    final topicId = _activeChatTopicId;
+    final language = _selectedLanguage;
+    final size = _chatImageSize;
+    final style = _chatImageStyle;
     setState(() {
       _loading = true;
       _error = null;
-      _featuredAnswerDismissed = true;
-      _imaginePictureMode = false;
+      _featuredAnswerDismissed = false;
+      _pendingChatPrompt = prompt;
+      _pendingChatTopicId = topicId;
+      _pendingChatStatus = 'Creating your picture with extra detail. This may take a few minutes…';
     });
-
     try {
-      final response = await http
-          .post(
-            _assertValidKorlixBackendUri(
-              '$kKorlixBackendBaseUrl/api/image/create',
-            ),
-            headers: _authHeaders(),
-            body: jsonEncode({'prompt': prompt, 'language': _selectedLanguage}),
-          )
-          .timeout(const Duration(seconds: 180));
-
+      final response = await http.post(
+        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/image/create'),
+        headers: _authHeaders(),
+        body: jsonEncode({'prompt': prompt, 'language': language,
+          'imageSize': size, 'imageStyle': style}),
+      ).timeout(const Duration(seconds: 260));
       final data = _decodeKorlixJsonMap(response);
-
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw Exception(data['details'] ?? data['error'] ?? response.body);
       }
-
       final imageDataUrl = data['imageDataUrl']?.toString();
       final imageUrl = data['imageUrl']?.toString();
-
       if ((imageDataUrl == null || imageDataUrl.isEmpty) &&
-          (imageUrl == null || imageUrl.isEmpty)) {
-        throw Exception('No image was returned.');
-      }
-
-      final imaginedItem = GeneratedItem(
-        command: 'Imagine a picture: $prompt',
-        title: data['title']?.toString() ?? 'Imagined picture',
+          (imageUrl == null || imageUrl.isEmpty)) throw Exception('No image was returned.');
+      if (!mounted) return;
+      final item = GeneratedItem(command: prompt,
+        title: data['title']?.toString() ?? 'Your picture',
         content: data['content']?.toString() ?? 'Image generated.',
-        language: _selectedLanguage,
-        allowPdf: false,
-        imageDataUrl: imageDataUrl,
-        imageUrl: imageUrl,
-      );
-
+        language: language, allowPdf: false, imageDataUrl: imageDataUrl, imageUrl: imageUrl);
+      final message = ChatMessage(userText: prompt, aiText: item.content,
+        language: language, isImage: true, imageDataUrl: imageDataUrl,
+        imageUrl: imageUrl, generatedItem: item, createdAt: DateTime.now());
       setState(() {
         _loading = false;
-        _controller.clear();
-        _results.insert(0, imaginedItem);
-      });
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _showResult(imaginedItem);
+        _pendingChatPrompt = '';
+        if (_controller.text.trim() == prompt) _controller.clear();
+        if (topicId == _activeChatTopicId) {
+          _results.insert(0, item);
+          _addChatMessage(message);
+        } else if (_chatTopicsById.containsKey(topicId)) {
+          final topic = _chatTopicsById[topicId]!;
+          _chatTopicsById[topicId!] = topic.copyWith(
+            messages: [...topic.messages, message], updatedAt: DateTime.now());
+          unawaited(_persistLocalChatTopics());
         }
       });
     } catch (error) {
+      if (!mounted) return;
       setState(() {
         _loading = false;
+        _pendingChatPrompt = '';
         _error = '${_t.createError}\n\n${korlixFriendlyErrorMessage(error)}';
       });
     }
@@ -8326,6 +8326,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   }
 
   Future<void> _generate() async {
+    if (_loading) return;
     // KORLIX_AI_CONSENT_GATE_BUILD131_V1_MAIN_GENERATE_BEGIN
     final korlixThirdPartyAiConsentGranted =
         await ensureKorlixThirdPartyAiConsent(
@@ -8344,7 +8345,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
           },
         );
 
-    if (!korlixThirdPartyAiConsentGranted) {
+    if (!korlixThirdPartyAiConsentGranted || _loading) {
       return;
     }
     // KORLIX_AI_CONSENT_GATE_BUILD131_V1_MAIN_GENERATE_END
@@ -8368,7 +8369,19 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       return;
     }
 
-    if (_imaginePictureMode) {
+    if (_imaginePictureMode && _activeUploadFiles.isNotEmpty) {
+      if (_activeUploadFiles.length == 1 &&
+          _mimeTypeForPickedFile(_activeUploadFiles.first).startsWith('image/')) {
+        await _generateImprovedPicture();
+      } else {
+        setState(() => _error = 'Use one reference picture for an image edit, or remove attachments to create a new picture.');
+      }
+      return;
+    }
+
+    if (_imaginePictureMode || (_activeUploadFiles.isEmpty &&
+        !_createVideoMode && !_fixCreditReportMode &&
+        korlixWantsNewImage(_controller.text))) {
       await _generateImaginedPicture();
       return;
     }
@@ -8428,13 +8441,21 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
 
     final allowPdf = _shouldAllowPdf(command);
     final localJobId = _makePendingGenerationJobId('text');
+    _ensureActiveChatTopicForPrompt(command);
     final topicId = _activeChatTopicId;
+    final selectedHistory = korlixChatHistory(_strictActiveTopicMessages().expand((m) => [
+      {'role': 'user', 'content': _korlixVisibleUserText(m.userText)},
+      {'role': 'assistant', 'content': m.aiText},
+    ]));
 
     setState(() {
       _featuredAnswerDismissed = false;
       _answerMinimized = false;
       _loading = true;
       _error = null;
+      _pendingChatPrompt = _korlixVisibleUserText(command);
+      _pendingChatTopicId = topicId;
+      _pendingChatStatus = 'Thinking deeply and preparing your answer…';
     });
 
     _speakConsiderItDone();
@@ -8444,7 +8465,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         localJobId: localJobId,
         kind: 'text',
         endpoint: '/api/generate',
-        payload: {'command': command, 'language': _selectedLanguage},
+        payload: {'command': command, 'language': _selectedLanguage,
+          'history': selectedHistory, 'topicId': topicId},
         prompt: command,
         language: _selectedLanguage,
         topicId: topicId,
@@ -8456,8 +8478,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         if (mounted) {
           setState(() {
             _loading = false;
+        _pendingChatPrompt = '';
             _error = null;
-            _controller.clear();
+            if (_controller.text.trim() == _korlixVisibleUserText(command)) _controller.clear();
           });
 
           _showBackgroundProcessingSnack(
@@ -8482,7 +8505,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
 
       setState(() {
         _loading = false;
-        _controller.clear();
+        _pendingChatPrompt = '';
+        if (_controller.text.trim() == _korlixVisibleUserText(command)) _controller.clear();
         _applyCompletedTextGeneration(
           command: command,
           content: content,
@@ -8496,6 +8520,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         if (mounted) {
           setState(() {
             _loading = false;
+        _pendingChatPrompt = '';
             _error = null;
           });
         }
@@ -8505,6 +8530,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
 
       setState(() {
         _loading = false;
+        _pendingChatPrompt = '';
         _error = '${_t.createError}\n\n${korlixFriendlyErrorMessage(error)}';
       });
     }
@@ -9511,14 +9537,14 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         bytes,
         width: double.infinity,
         height: height,
-        fit: BoxFit.cover,
+        fit: BoxFit.contain,
       );
     } else if (imageUrl != null && imageUrl.isNotEmpty) {
       imageChild = Image.network(
         imageUrl,
         width: double.infinity,
         height: height,
-        fit: BoxFit.cover,
+        fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) {
           return Container(
             height: height,
@@ -17001,136 +17027,55 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
+  void _setChatMode(bool imageMode, {String? starter}) {
+    if (_loading) return;
+    setState(() {
+      _imaginePictureMode = imageMode;
+      _createVideoMode = false;
+      _improvePictureMode = false;
+      _fixCreditReportMode = false;
+      _createAppMode = false;
+      _error = null;
+      if (starter != null) {
+        _controller.text = starter;
+        _controller.selection = TextSelection.collapsed(offset: starter.length);
+      }
+    });
+  }
+
   Widget _buildAnswerReadyConversationView(
-    GeneratedItem item, {
-    required bool compact,
-  }) {
+    GeneratedItem? item, {required bool compact}) {
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
-    final userAccent = skin.primary;
-    final aiAccent = skin.secondary;
-
-    final entries = <MapEntry<int, ChatMessage>>[];
-
+    final turns = <KorlixChatTurn>[];
+    void addTurn(String id, String question, String answer, GeneratedItem? result,
+        {VoidCallback? deleteQuestion, VoidCallback? deleteAnswer}) {
+      final hasImage = result?.hasImageResult == true;
+      turns.add(KorlixChatTurn(id: id,
+        question: _korlixVisibleUserText(question), answer: _cleanDisplayText(answer),
+        image: hasImage ? _buildGeneratedImagePreview(result!, height: compact ? 260 : 360) : null,
+        onOpenImage: hasImage ? () => _showResult(result!) : null,
+        onSaveImage: hasImage ? () => _saveGeneratedImage(result!) : null,
+        onDeleteQuestion: deleteQuestion, onDeleteAnswer: deleteAnswer));
+    }
     for (var index = 0; index < _chatMessages.length; index++) {
       final message = _chatMessages[index];
-
-      if (_answerChatMessageHasVisibleTurn(message)) {
-        entries.add(MapEntry(index, message));
-      }
+      if (!_answerChatMessageHasVisibleTurn(message)) continue;
+      final messageIndex = index;
+      addTurn('chat-$index', message.userText, message.aiText, message.generatedItem,
+        deleteQuestion: () => _confirmDeleteAnswerBoxTurn(messageIndex: messageIndex, deleteUser: true),
+        deleteAnswer: () => _confirmDeleteAnswerBoxTurn(messageIndex: messageIndex, deleteUser: false));
     }
-
-    final recentEntries = entries.length > 4
-        ? entries.sublist(entries.length - 4)
-        : entries;
-
-    // Keep the conversation timeline natural: older turns above, newest turn
-    // below. The scroll view starts at the bottom so the newest dialog is
-    // visible first and the user scrolls up for older messages.
-    final latestAnswerTurnKey = recentEntries.isNotEmpty
-        ? 'chat-${recentEntries.last.key}'
-        : 'loose-${item.command.hashCode}-${item.content.hashCode}';
-
-    Widget userBubble({required int? messageIndex, required String text}) {
-      final visibleText = _korlixVisibleUserText(text);
-
-      return _buildAnswerTurnBubble(
-        isUser: true,
-        icon: Icons.person_rounded,
-        label: 'You',
-        accent: userAccent,
-        deleteTooltip: 'Delete your question',
-        onDelete: messageIndex == null
-            ? () => _confirmDeleteLooseAnswerResultTurn(deleteUser: true)
-            : () => _confirmDeleteAnswerBoxTurn(
-                messageIndex: messageIndex,
-                deleteUser: true,
-              ),
-        child: _buildAnswerText(visibleText, compact: compact),
-      );
+    if (turns.isEmpty && item != null) {
+      addTurn('result', item.command, item.content, item,
+        deleteQuestion: () => _confirmDeleteLooseAnswerResultTurn(deleteUser: true),
+        deleteAnswer: () => _confirmDeleteLooseAnswerResultTurn(deleteUser: false));
     }
-
-    Widget aiBubble({
-      required int? messageIndex,
-      required String text,
-      GeneratedItem? generatedItem,
-    }) {
-      final hasImage = generatedItem?.hasImageResult == true;
-
-      return _buildAnswerTurnBubble(
-        isUser: false,
-        icon: Icons.auto_awesome_rounded,
-        label: 'Korlix AI',
-        accent: aiAccent,
-        deleteTooltip: 'Delete this answer',
-        onDelete: messageIndex == null
-            ? () => _confirmDeleteLooseAnswerResultTurn(deleteUser: false)
-            : () => _confirmDeleteAnswerBoxTurn(
-                messageIndex: messageIndex,
-                deleteUser: false,
-              ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (hasImage) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: _buildGeneratedImagePreview(
-                  generatedItem!,
-                  height: compact ? 175 : 230,
-                ),
-              ),
-              if (text.trim().isNotEmpty) SizedBox(height: 10),
-            ],
-            if (text.trim().isNotEmpty)
-              _buildAnswerText(_cleanDisplayText(text), compact: compact),
-          ],
-        ),
-      );
-    }
-
-    return Scrollbar(
-      thumbVisibility: false,
-      child: SingleChildScrollView(
-        key: ValueKey('answer-ready-bottom-$latestAnswerTurnKey'),
-        reverse: true,
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.only(right: 2),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (recentEntries.isEmpty) ...[
-              if (item.content.trim().isNotEmpty || item.hasImageResult)
-                aiBubble(
-                  messageIndex: null,
-                  text: item.content,
-                  generatedItem: item.hasImageResult ? item : null,
-                ),
-              if (_korlixVisibleUserText(item.command).isNotEmpty)
-                userBubble(
-                  messageIndex: null,
-                  text: _korlixVisibleUserText(item.command),
-                ),
-            ] else ...[
-              for (final entry in recentEntries) ...[
-                if (entry.value.aiText.trim().isNotEmpty ||
-                    entry.value.generatedItem?.hasImageResult == true)
-                  aiBubble(
-                    messageIndex: entry.key,
-                    text: entry.value.aiText,
-                    generatedItem: entry.value.generatedItem,
-                  ),
-                if (_korlixVisibleUserText(entry.value.userText).isNotEmpty)
-                  userBubble(
-                    messageIndex: entry.key,
-                    text: _korlixVisibleUserText(entry.value.userText),
-                  ),
-              ],
-            ],
-          ],
-        ),
-      ),
-    );
+    final busy = _loading && (_pendingChatTopicId == null || _pendingChatTopicId == _activeChatTopicId);
+    return KorlixChatTimeline(key: ValueKey('chat-topic-$_activeChatTopicId'),
+      turns: turns, foreground: _korlixReadableForeground(skin),
+      accent: skin.primary, surface: skin.panelDeep, busy: busy,
+      pendingQuestion: busy ? _pendingChatPrompt : '', status: _pendingChatStatus,
+      onStarter: (prompt, imageMode) => _setChatMode(imageMode, starter: prompt));
   }
 
   // KORLIX_LIVE_CONVO_PHASE2B_OPEN_BEGIN
@@ -17201,10 +17146,12 @@ Make the entire output professional, well-structured using Markdown, and product
         ? 'Escribe aquí...'
         : _selectedLanguage == 'fr'
         ? 'Écrivez ici...'
-        : 'Type your message...';
+        : _imaginePictureMode
+        ? 'Describe the picture you want…'
+        : 'Ask anything, or describe what you want to create…';
 
     final GeneratedItem? activeResult =
-        (!_loading && _results.isNotEmpty && !_featuredAnswerDismissed)
+        (_results.isNotEmpty && !_featuredAnswerDismissed)
         ? _results.first
         : null;
 
@@ -17230,38 +17177,14 @@ Make the entire output professional, well-structured using Markdown, and product
       );
     }
 
-    Widget answerReadyBody() {
-      final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
-      if (_loading && activeResult == null) {
-        return Center(
-          child: SizedBox(
-            width: 30,
-            height: 30,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.4,
-              color: skin.primary,
-            ),
-          ),
-        );
-      }
-
-      if (activeResult == null) {
-        return const SizedBox.expand();
-      }
-
-      return _buildAnswerReadyConversationView(
-        activeResult,
-        compact: MediaQuery.sizeOf(context).width < 430,
-      );
-    }
+    Widget answerReadyBody() => _buildAnswerReadyConversationView(
+      activeResult, compact: MediaQuery.sizeOf(context).width < 430);
 
     Widget answerReadyPanel() {
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: activeResult == null ? null : () => _showResult(activeResult),
-        onLongPress: activeResult == null
-            ? null
-            : () => _copyFeaturedResult(activeResult),
+        onTap: null,
+        onLongPress: null,
         child: Container(
           padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
@@ -17348,16 +17271,14 @@ Make the entire output professional, well-structured using Markdown, and product
                     fontSize: 16,
                     height: 1.28,
                     color: inputTextColor,
-                    fontWeight: FontWeight.w700,
-                    fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.w400,
                   ),
                   decoration: InputDecoration(
                     hintText: hintText,
                     hintStyle: TextStyle(
                       color: inputHintColor.withOpacity(0.96),
                       fontSize: 15.5,
-                      fontStyle: FontStyle.italic,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                     border: InputBorder.none,
                     isDense: true,
@@ -17490,6 +17411,12 @@ Make the entire output professional, well-structured using Markdown, and product
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                KorlixChatModeBar(imageMode: _imaginePictureMode, busy: _loading,
+                  size: _chatImageSize, style: _chatImageStyle,
+                  onModeChanged: _setChatMode,
+                  onSizeChanged: (value) => setState(() => _chatImageSize = value),
+                  onStyleChanged: (value) => setState(() => _chatImageStyle = value)),
+                const SizedBox(height: 12),
                 singleInputBoard(),
 
                 SizedBox(height: 12),
@@ -17559,11 +17486,6 @@ Make the entire output professional, well-structured using Markdown, and product
                 if (_activeUploadFiles.isNotEmpty) ...[
                   SizedBox(height: 12),
                   _buildSelectedUploadFilesPanel(),
-                ],
-
-                if (_loading) ...[
-                  SizedBox(height: 14),
-                  MatrixThinkingPanel(message: t.matrixMessage),
                 ],
 
                 SizedBox(height: 14),
@@ -20354,8 +20276,8 @@ class _KorlixCleanAnswerReadyBox extends StatelessWidget {
         korlixSkinPaletteFor(kKorlixThemeNotifier.value),
       ),
       child: Container(
-        height: 318,
-        padding: const EdgeInsets.fromLTRB(34, 30, 34, 30),
+        height: MediaQuery.sizeOf(context).width < 430 ? 410 : 500,
+        padding: const EdgeInsets.fromLTRB(18, 24, 18, 20),
         child: child,
       ),
     );
