@@ -3668,6 +3668,7 @@ app.get("/api/health", (req, res) => {
     chatImageQuality: imageSettings().quality,
     chatModelAccess,
     pictureStudio: {analysisModel: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, ...pictureModelSettings()},
+    taxPrep: {version:1,country:'US',bookkeepingLinked:true,filingEnabled:false,automaticTaxCalculation:false},
     babyBlend: {version: 1, privateStorage: true, analysisModel: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, creditCost: 1, ...pictureModelSettings()},
     virtualCloset: {version: 1, privateStorage: true, analysisModel: CHAT_MODEL, ...pictureModelSettings()},
     contractRadar: {version: 1, model: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, discovery: 'official_source_web_search', automaticSubmission: false},
