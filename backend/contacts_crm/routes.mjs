@@ -173,7 +173,7 @@ export function registerContactsCrm(
     base + "/:id/email-link",
     route(async (req, res, u) => {
       if (req.body?.confirmed !== true)
-        fail("Confirm adding this contact to Nova Email.");
+        fail("Confirm adding this contact to KORLIX Email.");
       const c = await persistence.get(u, validId(req.params.id));
       if (
         c.do_not_contact ||
@@ -181,11 +181,11 @@ export function registerContactsCrm(
         !c.email
       )
         fail(
-          "Record email permission on this contact before linking it to Nova.",
+          "Record email permission on this contact before linking it to KORLIX.",
           409,
           "CONTACT_EMAIL_PERMISSION_REQUIRED",
         );
-      if (!email) fail("Nova Email is not configured.", 503);
+      if (!email) fail("KORLIX Email is not configured.", 503);
       const result = await email.saveRecipient({
         userId: u,
         agentId: req.body.agentId,
@@ -203,7 +203,7 @@ export function registerContactsCrm(
         ...result,
         sent: false,
         message:
-          "Contact linked to Nova Email. Choose a rule or draft in Email Center.",
+          "Contact linked to KORLIX Email. Choose a rule or draft in Email Center.",
       });
     }),
   );

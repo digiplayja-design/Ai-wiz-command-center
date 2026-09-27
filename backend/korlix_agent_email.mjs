@@ -163,7 +163,7 @@ export function korlixAgentEmailSettingsInput(body, environment = process.env) {
   const source = objectValue(body);
   requireConfirmation(
     source,
-    "Confirm Nova's Agent Email settings before saving them.",
+    "Confirm KORLIX's Agent Email settings before saving them.",
     "agent_email_settings_confirmation_required",
   );
 
@@ -211,7 +211,7 @@ export function korlixAgentEmailRecipientInput(body) {
   const source = objectValue(body);
   requireConfirmation(
     source,
-    "Confirm this recipient before Nova may save the address.",
+    "Confirm this recipient before KORLIX may save the address.",
     "agent_email_recipient_confirmation_required",
   );
 

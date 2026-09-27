@@ -1,5 +1,5 @@
 // Durable tasks live in Postgres. This timer only wakes the single-flight runner;
-// database versions and NOVA's claim/idempotency protect overlapping instances.
+// database versions and KORLIX's claim/idempotency protect overlapping instances.
 export function createFunnelScheduler({run,logger=console,setTimeoutImpl=setTimeout,clearTimeoutImpl=clearTimeout,intervalMs=60000}={}) {
   let timer=null,stopped=true,running=false;
   async function tick() {

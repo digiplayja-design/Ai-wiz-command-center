@@ -10,7 +10,7 @@ export function sequenceActions({state,capabilities,binding}) {
   const command=(u,a,f,p)=>state.sequence(u,a,f,p);
   async function ready(u) {
     const cap=await capabilities(u);
-    if(!cap.scheduling_ready) fail(cap.scheduling_reason||cap.email_reason||'Connect NOVA Email Autopilot first.',409);
+    if(!cap.scheduling_ready) fail(cap.scheduling_reason||cap.email_reason||'Connect KORLIX Email Autopilot first.',409);
   }
   function steps(body,resume=false) {
     if(!Array.isArray(body.steps)||body.steps.length<(resume?1:2)||body.steps.length>5) fail('Choose two to five sequence steps.');

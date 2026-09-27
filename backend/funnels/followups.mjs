@@ -53,21 +53,21 @@ export function createFunnelFollowups({database,store,emailStore,drafts,delivery
     const normalized=korlixAgentEmailDraftInput({recipientId:draft.recipientId,subject:task.subject,textBody:task.body,idempotencyKey:'funnel-followup:'+task.id});
     if(draft.subject!==normalized.subject||draft.textBody!==normalized.textBody||draft.toEmail?.toLowerCase()!==task.to_email.toLowerCase()
       ||draft.messageKind!=='transactional'||draft.htmlBody||draft.idempotencyKey!==normalized.idempotencyKey) {
-      fail('The NOVA email changed. Review it in NOVA Email Center before sending.',409);
+      fail('The KORLIX email changed. Review it in KORLIX Email Center before sending.',409);
     }
   };
   const schedulerEnabled=!['false','0','off','disabled'].includes(String(environment.KORLIX_FUNNEL_SCHEDULER_ENABLED??'true').toLowerCase());
   async function capabilities(u) {
-    if(!bound(u)) return {email_ready:false,email_reason:'Connect this owner’s approved NOVA profile and Email Center to send follow-ups.',outbound_calling_enabled:false};
+    if(!bound(u)) return {email_ready:false,email_reason:'Connect this owner’s approved KORLIX profile and Email Center to send follow-ups.',outbound_calling_enabled:false};
     try {
       const s=await mail.getDeliveryStatus(identity(u));
-      return {scheduling_ready:schedulerEnabled&&s.canSend===true&&s.canAutopilot===true,scheduling_reason:!schedulerEnabled?'Scheduled follow-ups are paused on this server.':'Enable NOVA Email Autopilot to schedule approved replies. Existing sending limits and quiet hours apply.',email_ready:s.canSend===true,email_reason:s.canSend?null:'Enable sending in NOVA Email Center. Its existing permissions, daily limits, and quiet hours apply.',daily_usage:s.dailyUsage,outbound_calling_enabled:false};
-    }catch{return {email_ready:false,email_reason:'NOVA Email Center is unavailable. Check the agent and email settings.',outbound_calling_enabled:false};}
+      return {scheduling_ready:schedulerEnabled&&s.canSend===true&&s.canAutopilot===true,scheduling_reason:!schedulerEnabled?'Scheduled follow-ups are paused on this server.':'Enable KORLIX Email Autopilot to schedule approved replies. Existing sending limits and quiet hours apply.',email_ready:s.canSend===true,email_reason:s.canSend?null:'Enable sending in KORLIX Email Center. Its existing permissions, daily limits, and quiet hours apply.',daily_usage:s.dailyUsage,outbound_calling_enabled:false};
+    }catch{return {email_ready:false,email_reason:'KORLIX Email Center is unavailable. Check the agent and email settings.',outbound_calling_enabled:false};}
   }
   async function send(u,f,body,{scheduled=false}={}) {
     const taskId=uuid(body.task_id), v=version(body.version);
     if(body.confirmed!==true) fail('Review the recipient and exact email before sending.');
-    // Validate Enterprise ownership before looking up NOVA or mutating any recipient.
+    // Validate Enterprise ownership before looking up KORLIX or mutating any recipient.
     await cmd(u,'get',f,{task_id:taskId});
     const cap=await capabilities(u);if(!cap.email_ready) fail(cap.email_reason,409);
     if(scheduled&&!cap.scheduling_ready) fail(cap.scheduling_reason,409);
@@ -76,14 +76,14 @@ export function createFunnelFollowups({database,store,emailStore,drafts,delivery
       const current=await cmd(u,'get',f,{task_id:task.id});
       const contact=current.contact;
       let recipient=await mailStore.findRecipientByEmail(u,binding.agentId,task.to_email);
-      if(recipient && (!recipient.active||!['transactional_only','marketing_opt_in'].includes(recipient.consent_status))) fail('This NOVA recipient is inactive or has opted out. Review Email Center.',409);
+      if(recipient && (!recipient.active||!['transactional_only','marketing_opt_in'].includes(recipient.consent_status))) fail('This KORLIX recipient is inactive or has opted out. Review Email Center.',409);
       if(!recipient) recipient=(await draftService.saveRecipient({...identity(u),body:{confirmed:true,email:task.to_email,displayName:contact.name,
         approvalSource:'user_confirmed',consentScope:'transactional',consentAt:contact.consent_at,sourceReference:'crm:'+contact.id}})).recipient;
       const {draft}=await draftService.createDraft({...identity(u),body:{recipientId:recipient.id,subject:task.subject,textBody:task.body,marketing:false,idempotencyKey:'funnel-followup:'+task.id}});
       await cmd(u,'attach',f,{task_id:task.id,message_id:draft.id,agent_id:binding.agentId});
       exact(draft,task);
-      if(draft.status==='sent' && draft.providerMessageId) return {task:publicTask(await cmd(u,'finish',f,{task_id:task.id,state:'sent',note:'Accepted by the email provider. Delivery events are available in NOVA Email Center.'})),sent:true,replayed:true};
-      // Approve the exact reviewed message using NOVA's existing approval service.
+      if(draft.status==='sent' && draft.providerMessageId) return {task:publicTask(await cmd(u,'finish',f,{task_id:task.id,state:'sent',note:'Accepted by the email provider. Delivery events are available in KORLIX Email Center.'})),sent:true,replayed:true};
+      // Approve the exact reviewed message using KORLIX's existing approval service.
       const confirmationNonce=task.approval_nonce;
       const approved=await draftService.approveDraft({...identity(u),messageId:draft.id,body:{confirmed:true,confirmationNonce}});
       exact(approved.draft,task);
@@ -102,10 +102,10 @@ export function createFunnelFollowups({database,store,emailStore,drafts,delivery
     const {task}=await cmd(u,'get',f,{task_id:uuid(taskId)});
     if(!['needs_review','processing'].includes(task.state)) return {task:publicTask(task)};
     if(task.state==='processing') fail('A send is still in progress. Wait a few minutes, then refresh.',409);
-    if(!bound(u)||task.agent_id&&task.agent_id!==binding.agentId) fail('Open the original NOVA Email Center to check this email.',409);
+    if(!bound(u)||task.agent_id&&task.agent_id!==binding.agentId) fail('Open the original KORLIX Email Center to check this email.',409);
     const raw=await mailStore.findMessageByIdempotency(u,binding.agentId,'funnel-followup:'+task.id);
-    let next='needs_review', note='Review this message in NOVA Email Center. No second email has been sent.';
-    if(raw?.status==='sent'&&raw.provider_message_id) {next='sent';note='Accepted by the email provider. Check NOVA Email Center for delivery events.';}
+    let next='needs_review', note='Review this message in KORLIX Email Center. No second email has been sent.';
+    if(raw?.status==='sent'&&raw.provider_message_id) {next='sent';note='Accepted by the email provider. Check KORLIX Email Center for delivery events.';}
     // Only return an untouched draft to review. A provider attempt, failure, edit,
     // or ambiguous result must be handled in the existing Email Center.
     else if(!raw || (['draft','approved'].includes(raw.status)&&!raw.provider_message_id&&!raw.sent_at&&!raw.last_attempt_at&&!raw.attempt_count)) {
@@ -148,7 +148,7 @@ export function createFunnelFollowups({database,store,emailStore,drafts,delivery
           // Before a claim, return to review. After a claim, send() records uncertainty.
           // Version checks make this harmless when another worker already owns the task.
           await cmd(binding.ownerUid,'cancel_schedule',task.funnel_id,{task_id:task.id,version:task.version,
-            note:'Scheduled sending was held. Check NOVA Email permissions and review this reply again.'}).catch(()=>{});
+            note:'Scheduled sending was held. Check KORLIX Email permissions and review this reply again.'}).catch(()=>{});
         }
       }
       return {checked:tasks.length,sent};

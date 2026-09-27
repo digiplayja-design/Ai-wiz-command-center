@@ -5,6 +5,8 @@ import { registerBookkeeping } from './bookkeeping/routes.mjs';
 import { registerVirtualCloset } from './virtual_closet/routes.mjs';
 import { createTryOn, suggestOutfit } from './virtual_closet/ai.mjs';
 import { registerContractRadar } from './contract_radar/routes.mjs';
+import { registerAiVisibility } from './ai_visibility/routes.mjs';
+import { scanVisibility, CREDIT_COST as VISIBILITY_CREDIT_COST } from './ai_visibility/ai.mjs';
 import { discoverContracts, reviewContract } from './contract_radar/ai.mjs';
 import { extractReceipt } from './bookkeeping/receipt_scanner.mjs';
 // K135Z_GATE5_ESM_IMPORTS_BEGIN
@@ -3664,6 +3666,7 @@ app.get("/api/health", (req, res) => {
     pictureStudio: {analysisModel: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, ...pictureModelSettings()},
     virtualCloset: {version: 1, privateStorage: true, analysisModel: CHAT_MODEL, ...pictureModelSettings()},
     contractRadar: {version: 1, model: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, discovery: 'official_source_web_search', automaticSubmission: false},
+    aiVisibility: {version: 1, model: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, method: 'openai_web_samples_v1', sampleCount: 3, creditCost: VISIBILITY_CREDIT_COST},
   });
 });
 
@@ -13031,9 +13034,21 @@ const bookkeepingStorage = supabaseUrl && supabaseServiceRoleKey ? createClient(
   auth: { autoRefreshToken: false, persistSession: false },
   global: { fetch: (url, init = {}) => fetch(url, { ...init, signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(45000)]) : AbortSignal.timeout(45000) }) },
 }) : null;
+registerAiVisibility(app, {database: supabaseAdmin, requireUser,
+  aiAccess: async user => {
+    if (!process.env.OPENAI_API_KEY) return {allowed:false,status:503,reason:'KORLIX AI Visibility is temporarily unavailable.'};
+    const profile = await getOrCreateProfile(user);
+    if (!hasAdvancedUploadAccess(profile?.tier)) return {allowed:false,status:403,reason:'AI Visibility scans require Ultra Premium or Enterprise.'};
+    const usageCounter = await getOrCreateUsageCounter(user.id);
+    if (!profile || !usageCounter) throw new Error('Visibility usage unavailable');
+    const check = checkUsageAllowed({profile,usageCounter,creditsNeeded:VISIBILITY_CREDIT_COST});
+    return {...check,status:429,usageId:usageCounter.id};
+  },
+  scan: data => scanVisibility({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
+});
 registerContractRadar(app, {database: supabaseAdmin, requireUser,
   aiAccess: async user => {
-    if (!process.env.OPENAI_API_KEY) return {allowed:false,status:503,reason:'Nova Contract Radar is temporarily unavailable.'};
+    if (!process.env.OPENAI_API_KEY) return {allowed:false,status:503,reason:'KORLIX Contract Radar is temporarily unavailable.'};
     const profile = await getOrCreateProfile(user);
     if (!hasAdvancedUploadAccess(profile?.tier)) return {allowed:false,status:403,reason:'AI Contract Radar requires Ultra Premium or Enterprise.'};
     const usageCounter = await getOrCreateUsageCounter(user.id);
@@ -13046,9 +13061,9 @@ registerContractRadar(app, {database: supabaseAdmin, requireUser,
 });
 registerVirtualCloset(app, { database: supabaseAdmin, storageDatabase: bookkeepingStorage, requireUser,
   aiAccess: async user => {
-    if (!process.env.OPENAI_API_KEY) return {allowed:false,status:503,reason:'Nova styling is temporarily unavailable.'};
+    if (!process.env.OPENAI_API_KEY) return {allowed:false,status:503,reason:'KORLIX styling is temporarily unavailable.'};
     const profile = await getOrCreateProfile(user);
-    if (!hasAdvancedUploadAccess(profile?.tier)) return {allowed:false,status:403,reason:'AI try-on and Nova styling require Ultra Premium or Enterprise.'};
+    if (!hasAdvancedUploadAccess(profile?.tier)) return {allowed:false,status:403,reason:'AI try-on and KORLIX styling require Ultra Premium or Enterprise.'};
     const usageCounter = await getOrCreateUsageCounter(user.id);
     if (!profile || !usageCounter) throw new Error('Closet usage unavailable');
     const check = checkUsageAllowed({profile,usageCounter,creditsNeeded:1});

@@ -75,7 +75,7 @@ test('Tier downgrade and pause both stop public capture immediately',async()=>{
   await db.query("update user_profiles set tier='enterprise' where id=$1",[owner]);
   f=await rpc(owner,'pause',f.id,{version:f.version});await assert.rejects(rpc(null,'public',null,{slug:f.slug}),/not available/);f=await publish(f);
 });
-test('NOVA draft endpoint checks current tier before invoking AI and enforces durable daily budget',async()=>{
+test('KORLIX draft endpoint checks current tier before invoking AI and enforces durable daily budget',async()=>{
   assert.equal((await http('/api/funnels/generate',{method:'POST',...auth(basic,{brief:'A business'})})).status,403);
   assert.equal(generationCalls,0);
   for(let i=0;i<10;i++)assert.equal((await rpc(owner,'budget')).remaining,9-i);

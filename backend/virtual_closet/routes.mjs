@@ -60,7 +60,7 @@ export function registerVirtualCloset(app,{database,storageDatabase=database,req
    await call(user.id,'job_finish',job.id,{result});
   }catch(e){
    logger.warn('Virtual Closet job failed',{kind:job.kind,errorType:e.name||'Error'});
-   try{await call(user.id,'job_fail',job.id,{error:e instanceof ClosetError?e.message:'Nova could not finish this session. No generation credit was charged. Try again shortly.'});}catch{logger.warn('Virtual Closet job status could not be saved');}
+   try{await call(user.id,'job_fail',job.id,{error:e instanceof ClosetError?e.message:'KORLIX could not finish this session. No generation credit was charged. Try again shortly.'});}catch{logger.warn('Virtual Closet job status could not be saved');}
   }finally{active.delete(job.id);}
  };
  app.get(base,route(async(_q,r,user)=>{const data=await call(user.id,'list');r.json({assets:await publicAssets(data.assets),jobs:data.jobs.map(publicJob),limits:{photos:5,garments:100,looks:50},creditCost:1});}));
@@ -92,17 +92,17 @@ export function registerVirtualCloset(app,{database,storageDatabase=database,req
  }));
  app.post(base+'/jobs',route(async(q,r,user)=>{
   const id=uuid(q.body?.request_key),kind=q.body?.kind;
-  if(!['tryon','style'].includes(kind))fail('Choose try-on or Nova styling.');
+  if(!['tryon','style'].includes(kind))fail('Choose try-on or KORLIX styling.');
   if(q.body?.consent!==true)fail('Please confirm you want to share these photos with the AI provider.');
   const prompt=q.body.prompt===''?'':text(q.body.prompt,1500,'Styling request');
-  if(kind==='style'&&!prompt)fail('Tell Nova what occasion you are dressing for.');
+  if(kind==='style'&&!prompt)fail('Tell KORLIX what occasion you are dressing for.');
   const photo=kind==='tryon'?uuid(q.body.photo_id):null;
   const ids=kind==='tryon'?q.body.garment_ids:[];
   if(!Array.isArray(ids)||ids.length>4||(kind==='tryon'&&!ids.length))fail('Choose one to four wardrobe items.');
   ids.forEach(uuid);
   // Completed/running requests can be recovered even after their credit was used.
   try{const prior=await call(user.id,'job_get',id);return r.json({job:publicJob(prior)});}catch(e){if(e.status!==404)throw e;}
-  if(active.size+starting.size>=3)fail('Nova is finishing other styling sessions. Please try again shortly.',429);
+  if(active.size+starting.size>=3)fail('KORLIX is finishing other styling sessions. Please try again shortly.',429);
   starting.add(id);
   try {
   const access=await aiAccess(user);

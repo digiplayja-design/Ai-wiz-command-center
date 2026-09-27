@@ -77,7 +77,7 @@ test('interrupted jobs fail visibly without an automatic retry or charge',async(
  const p=await upload({kind:'photo'}),g=await upload();const j=await rpc('job_begin',randomUUID(),{kind:'tryon',photo_id:p.id,garment_ids:[g.id],prompt:'',usage_id:usage});
  await db.query("update korlix_closet_jobs set created_at=now()-interval '13 minutes' where id=$1",[j.id]);const r=await api('/jobs/'+j.id);assert.equal(r.job.state,'failed');assert.match(r.job.error,/interrupted/);assert.equal(providerCalls,0);assert.equal(await credits(),0);
 });
-test('Nova suggestions use owned wardrobe records and charge only once',async()=>{
+test('KORLIX suggestions use owned wardrobe records and charge only once',async()=>{
  const a=await upload();const j=(await api('/jobs',{request_key:randomUUID(),kind:'style',prompt:'Business lunch',consent:true},'POST',owner,202)).job;
  const done=await finished(j.id);assert.equal(done.job.result.garmentIds[0],a.id);assert.equal(await credits(),1);
 });

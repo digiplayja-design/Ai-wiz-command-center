@@ -396,7 +396,7 @@ function recipientAllowed(row, marketing) {
     status === "suppressed"
   ) {
     fail(
-      "Nova cannot email an unsubscribed or suppressed recipient.",
+      "KORLIX cannot email an unsubscribed or suppressed recipient.",
       "agent_email_recipient_blocked",
       409,
     );
@@ -454,7 +454,7 @@ function zonedParts(date, timeZone) {
     };
   } catch (error) {
     fail(
-      "Nova's Agent Email timezone is invalid.",
+      "KORLIX's Agent Email timezone is invalid.",
       "agent_email_timezone_invalid",
       500,
       error,
@@ -691,7 +691,7 @@ function providerIdempotencyKey(messageId) {
   return `korlix-agent-email/${uuid(
     messageId,
     "agent_email_message_id_invalid",
-    "Choose a valid Nova email record.",
+    "Choose a valid KORLIX email record.",
   )}`;
 }
 
@@ -724,7 +724,7 @@ export function createKorlixAgentEmailResendProvider({
       const from = envText(environment, "KORLIX_AGENT_EMAIL_FROM", 500);
       if (!apiKey || !from) {
         fail(
-          "Resend and Nova's approved From address must be configured before sending.",
+          "Resend and KORLIX's approved From address must be configured before sending.",
           "agent_email_provider_not_configured",
           503,
         );
@@ -1027,7 +1027,7 @@ export function createKorlixAgentEmailDeliveryService({
 
     if (!binding.configured) {
       fail(
-        "Nova's approved KORLIX Agent Hub binding is not configured.",
+        "KORLIX's approved KORLIX Agent Hub binding is not configured.",
         "agent_email_nova_binding_not_configured",
         503,
       );
@@ -1038,7 +1038,7 @@ export function createKorlixAgentEmailDeliveryService({
       agentId: safeAgentId,
     })) {
       fail(
-        "Agent Email is available only for the existing approved Nova profile.",
+        "Agent Email is available only for the existing approved KORLIX profile.",
         "agent_email_existing_nova_required",
         403,
       );
@@ -1052,7 +1052,7 @@ export function createKorlixAgentEmailDeliveryService({
         agentId: safeAgentId,
       });
     } catch (error) {
-      throw databaseError(error, "load Nova's Agent Hub profile");
+      throw databaseError(error, "load KORLIX's Agent Hub profile");
     }
 
     const profileId = profile
@@ -1070,14 +1070,14 @@ export function createKorlixAgentEmailDeliveryService({
       profile.active === false
     ) {
       fail(
-        "Agent Email requires the active custom Nova Agent Hub profile.",
+        "Agent Email requires the active custom KORLIX Agent Hub profile.",
         "agent_email_custom_active_nova_required",
         403,
       );
     }
     if (!toolIds.includes(KORLIX_AGENT_EMAIL_TOOL_ID)) {
       fail(
-        "Nova is not authorized to use the Agent Email tool.",
+        "KORLIX is not authorized to use the Agent Email tool.",
         "agent_email_tool_not_authorized",
         403,
       );
@@ -1096,7 +1096,7 @@ export function createKorlixAgentEmailDeliveryService({
     const row = await store.getSettings(identity.userId, identity.agentId);
     if (!row) {
       fail(
-        "Save Nova's Agent Email settings before sending.",
+        "Save KORLIX's Agent Email settings before sending.",
         "agent_email_settings_required",
         409,
       );
@@ -1121,21 +1121,21 @@ export function createKorlixAgentEmailDeliveryService({
 
     if (!sendRuntimeEnabled || !status.canSend) {
       fail(
-        "Nova's Agent Email send runtime is disabled or paused.",
+        "KORLIX's Agent Email send runtime is disabled or paused.",
         "agent_email_send_runtime_disabled",
         409,
       );
     }
     if (autopilot && (!autopilotRuntimeEnabled || !status.canAutopilot)) {
       fail(
-        "Nova's Agent Email Autopilot runtime is disabled or paused.",
+        "KORLIX's Agent Email Autopilot runtime is disabled or paused.",
         "agent_email_autopilot_runtime_disabled",
         409,
       );
     }
     if (!envText(environment, "KORLIX_AGENT_EMAIL_FROM", 500)) {
       fail(
-        "Nova's approved server-controlled From address is not configured.",
+        "KORLIX's approved server-controlled From address is not configured.",
         "agent_email_from_not_configured",
         503,
       );
@@ -1153,7 +1153,7 @@ export function createKorlixAgentEmailDeliveryService({
     const safeMessageId = uuid(
       messageId,
       "agent_email_message_id_invalid",
-      "Choose a valid Nova email record.",
+      "Choose a valid KORLIX email record.",
     );
     const row = await store.getMessage(
       identity.userId,
@@ -1162,7 +1162,7 @@ export function createKorlixAgentEmailDeliveryService({
     );
     if (!row) {
       fail(
-        "The selected Nova email record was not found.",
+        "The selected KORLIX email record was not found.",
         "agent_email_message_not_found",
         404,
       );
@@ -1203,7 +1203,7 @@ export function createKorlixAgentEmailDeliveryService({
     const globalCap = boundedInteger(settingsRow.daily_send_cap, 5, 1, 500);
     if (total >= globalCap) {
       fail(
-        "Nova's daily Agent Email send cap has been reached.",
+        "KORLIX's daily Agent Email send cap has been reached.",
         "agent_email_daily_send_cap_reached",
         429,
       );
@@ -1295,7 +1295,7 @@ export function createKorlixAgentEmailDeliveryService({
 
     if (objectValue(settingsRow?.metadata).marketingEnabled !== true) {
       fail(
-        "Enable marketing email in Nova's confirmed settings before sending.",
+        "Enable marketing email in KORLIX's confirmed settings before sending.",
         "agent_email_marketing_disabled",
         409,
       );
@@ -1303,7 +1303,7 @@ export function createKorlixAgentEmailDeliveryService({
 
     if (!line(message.physical_address_snapshot, 500)) {
       fail(
-        "Marketing email requires Nova's confirmed physical business address.",
+        "Marketing email requires KORLIX's confirmed physical business address.",
         "agent_email_marketing_address_required",
         409,
       );
@@ -1323,7 +1323,7 @@ export function createKorlixAgentEmailDeliveryService({
 
     if (!withinSendWindow(new Date(now()), settingsRow, allowedDays)) {
       fail(
-        "Nova's Agent Email send window is currently closed.",
+        "KORLIX's Agent Email send window is currently closed.",
         "agent_email_send_window_closed",
         409,
       );
@@ -1425,7 +1425,7 @@ export function createKorlixAgentEmailDeliveryService({
 
     if (!allowedStatuses.includes(currentStatus)) {
       fail(
-        "This Nova email record is not authorized for sending.",
+        "This KORLIX email record is not authorized for sending.",
         "agent_email_message_not_sendable",
         409,
       );
@@ -1436,7 +1436,7 @@ export function createKorlixAgentEmailDeliveryService({
       authorizationType
     ) {
       fail(
-        "The Nova email authorization type does not match this send path.",
+        "The KORLIX email authorization type does not match this send path.",
         "agent_email_authorization_type_mismatch",
         409,
       );
@@ -1444,7 +1444,7 @@ export function createKorlixAgentEmailDeliveryService({
 
     if (!message.authorized_at || !message.authorized_by) {
       fail(
-        "The Nova email record does not contain a complete authorization.",
+        "The KORLIX email record does not contain a complete authorization.",
         "agent_email_authorization_incomplete",
         409,
       );
@@ -1469,7 +1469,7 @@ export function createKorlixAgentEmailDeliveryService({
       Date.parse(message.scheduled_at) > currentDate.getTime()
     ) {
       fail(
-        "This Nova email is scheduled for a later time.",
+        "This KORLIX email is scheduled for a later time.",
         "agent_email_scheduled_for_later",
         409,
       );
@@ -1847,14 +1847,14 @@ export function createKorlixAgentEmailDeliveryService({
     }
     if (marketing && objectValue(settingsRow.metadata).marketingEnabled !== true) {
       fail(
-        "Enable marketing email in Nova's settings before approving a marketing rule.",
+        "Enable marketing email in KORLIX's settings before approving a marketing rule.",
         "agent_email_marketing_disabled",
         409,
       );
     }
     if (marketing && !line(settingsRow.physical_address, 500)) {
       fail(
-        "Marketing rules require a physical business address in Nova's settings.",
+        "Marketing rules require a physical business address in KORLIX's settings.",
         "agent_email_marketing_address_required",
         409,
       );
@@ -1989,7 +1989,7 @@ export function createKorlixAgentEmailDeliveryService({
 
       if (!withinSendWindow(new Date(nextRunAt), settingsRow, null)) {
         fail(
-          "The requested scheduled send time is outside Nova's confirmed sending window.",
+          "The requested scheduled send time is outside KORLIX's confirmed sending window.",
           "agent_email_schedule_outside_send_window",
           409,
         );
@@ -2069,7 +2069,7 @@ export function createKorlixAgentEmailDeliveryService({
     const binding = korlixAgentEmailNovaBinding(environment);
     if (!binding.configured) {
       fail(
-        "Nova's approved KORLIX Agent Hub binding is not configured.",
+        "KORLIX's approved KORLIX Agent Hub binding is not configured.",
         "agent_email_nova_binding_not_configured",
         503,
       );
@@ -2530,7 +2530,7 @@ export function createKorlixAgentEmailDeliveryService({
       const source = objectValue(body);
       requireConfirmation(
         source,
-        "Confirm sending this exact approved Nova email.",
+        "Confirm sending this exact approved KORLIX email.",
         "agent_email_send_confirmation_required",
       );
       const nonce = line(
@@ -2553,7 +2553,7 @@ export function createKorlixAgentEmailDeliveryService({
       }
       if (!SENDABLE_STATUSES.has(line(message.status, 40).toLowerCase())) {
         fail(
-          "Only an approved or safely retryable Nova email can be sent.",
+          "Only an approved or safely retryable KORLIX email can be sent.",
           "agent_email_message_not_sendable",
           409,
         );
@@ -2603,7 +2603,7 @@ export function createKorlixAgentEmailDeliveryService({
       const settingsRow = await store.getSettings(identity.userId, identity.agentId);
       if (!settingsRow) {
         fail(
-          "Save Nova's Agent Email settings before creating a rule.",
+          "Save KORLIX's Agent Email settings before creating a rule.",
           "agent_email_settings_required",
           409,
         );
@@ -2637,7 +2637,7 @@ export function createKorlixAgentEmailDeliveryService({
       const settingsRow = await store.getSettings(identity.userId, identity.agentId);
       if (!settingsRow) {
         fail(
-          "Save Nova's Agent Email settings before updating a rule.",
+          "Save KORLIX's Agent Email settings before updating a rule.",
           "agent_email_settings_required",
           409,
         );
@@ -2897,7 +2897,7 @@ export function createKorlixAgentEmailDeliveryService({
       const binding = korlixAgentEmailNovaBinding(environment);
       if (!binding.configured) {
         fail(
-          "Nova's approved KORLIX Agent Hub binding is not configured.",
+          "KORLIX's approved KORLIX Agent Hub binding is not configured.",
           "agent_email_nova_binding_not_configured",
           503,
         );
@@ -3239,7 +3239,7 @@ export function installKorlixAgentEmailDeliveryRoutes(
   app.get(
     routes.deliveryStatus,
     route(
-      "Could not load Nova's Agent Email delivery status.",
+      "Could not load KORLIX's Agent Email delivery status.",
       async ({ res, userId, agentId }) =>
         res.json({
           ok: true,
@@ -3251,7 +3251,7 @@ export function installKorlixAgentEmailDeliveryRoutes(
   app.post(
     routes.sendDraft,
     route(
-      "Could not send Nova's approved email.",
+      "Could not send KORLIX's approved email.",
       async ({ req, res, userId, agentId }) =>
         res.json({
           ok: true,
@@ -3268,7 +3268,7 @@ export function installKorlixAgentEmailDeliveryRoutes(
   app.get(
     routes.events,
     route(
-      "Could not load Nova's Agent Email events.",
+      "Could not load KORLIX's Agent Email events.",
       async ({ req, res, userId, agentId }) =>
         res.json({
           ok: true,
@@ -3284,7 +3284,7 @@ export function installKorlixAgentEmailDeliveryRoutes(
   app.get(
     routes.rules,
     route(
-      "Could not load Nova's Agent Email rules.",
+      "Could not load KORLIX's Agent Email rules.",
       async ({ req, res, userId, agentId }) =>
         res.json({
           ok: true,
@@ -3300,7 +3300,7 @@ export function installKorlixAgentEmailDeliveryRoutes(
   app.post(
     routes.rules,
     route(
-      "Could not create Nova's Agent Email rule.",
+      "Could not create KORLIX's Agent Email rule.",
       async ({ req, res, userId, agentId }) =>
         res.status(201).json({
           ok: true,
@@ -3316,7 +3316,7 @@ export function installKorlixAgentEmailDeliveryRoutes(
   app.patch(
     routes.rule,
     route(
-      "Could not update Nova's Agent Email rule.",
+      "Could not update KORLIX's Agent Email rule.",
       async ({ req, res, userId, agentId }) =>
         res.json({
           ok: true,
@@ -3333,7 +3333,7 @@ export function installKorlixAgentEmailDeliveryRoutes(
   app.delete(
     routes.rule,
     route(
-      "Could not delete Nova's Agent Email rule.",
+      "Could not delete KORLIX's Agent Email rule.",
       async ({ req, res, userId, agentId }) =>
         res.json({
           ok: true,
@@ -3390,7 +3390,7 @@ export function installKorlixAgentEmailDeliveryRoutes(
       return responseError(
         res,
         error,
-        "Could not run Nova's Agent Email Autopilot trigger.",
+        "Could not run KORLIX's Agent Email Autopilot trigger.",
       );
     }
   });
@@ -3414,7 +3414,7 @@ export function installKorlixAgentEmailDeliveryRoutes(
       return responseError(
         res,
         error,
-        "Could not run Nova's scheduled Agent Email rules.",
+        "Could not run KORLIX's scheduled Agent Email rules.",
       );
     }
   });

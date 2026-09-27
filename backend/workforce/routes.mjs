@@ -408,7 +408,7 @@ export function registerWorkforce(
         );
       if (!email || !data.email_agent_id)
         fail(
-          "Connect this owner’s NOVA Email Center first.",
+          "Connect this owner’s KORLIX Email Center first.",
           409,
           "WORKFORCE_EMAIL_UNAVAILABLE",
         );
@@ -435,7 +435,7 @@ export function registerWorkforce(
         fail("Review the report and destination before preparing an email.");
       if (!email || !data.email_agent_id)
         fail(
-          "Connect this owner’s NOVA Email Center first.",
+          "Connect this owner’s KORLIX Email Center first.",
           409,
           "WORKFORCE_EMAIL_UNAVAILABLE",
         );

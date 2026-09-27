@@ -254,7 +254,7 @@ function test(name, callback) {
 test("route catalog and installer expose Draft Only operations without a send endpoint", async () => {
   const registered = [];
   const app = {};
-  for (const method of ["get", "post", "put", "patch"]) {
+  for (const method of ["get", "post", "put", "patch", "delete"]) {
     app[method] = (path) => registered.push(`${method.toUpperCase()} ${path}`);
   }
 
@@ -267,7 +267,7 @@ test("route catalog and installer expose Draft Only operations without a send en
     logger: { error() {} },
   });
 
-  assert.equal(registered.length, 11);
+  assert.equal(registered.length, 12);
   assert.equal(installed.providerSendPathImplemented, false);
   assert.equal(installed.emailSendIncluded, false);
   assert.equal(installed.autopilotExecutionIncluded, false);

@@ -195,13 +195,13 @@ function databaseError(error, operation) {
 
     return new KorlixAgentEmailError(
       rateLimited
-        ? "Nova's Agent Email daily send limit has been reached."
+        ? "KORLIX's Agent Email daily send limit has been reached."
         : notFound
           ? "The selected Agent Email record was not found."
           : serverFault
             ? "The controlled Agent Email send clock or timezone could not be verified."
             : forbidden
-              ? "The current authorization no longer matches this exact Nova email."
+              ? "The current authorization no longer matches this exact KORLIX email."
               : reconciliation
                 ? "This earlier send attempt must be reconciled before another provider request."
                 : requiresEdit
@@ -411,7 +411,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
           .eq("user_id", userId)
           .eq("agent_id", agentId)
           .maybeSingle(),
-        "load Nova's Agent Email settings",
+        "load KORLIX's Agent Email settings",
       );
     },
 
@@ -424,7 +424,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
           })
           .select("*")
           .single(),
-        "save Nova's Agent Email settings",
+        "save KORLIX's Agent Email settings",
       );
     },
 
@@ -438,7 +438,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
             .eq("agent_id", agentId)
             .order("updated_at", { ascending: false })
             .limit(limit),
-          "list Nova's approved email recipients",
+          "list KORLIX's approved email recipients",
         )) ?? []
       );
     },
@@ -504,7 +504,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
             .eq("agent_id", agentId)
             .order("created_at", { ascending: false })
             .limit(limit),
-          "list Nova's email drafts",
+          "list KORLIX's email drafts",
         )) ?? []
       );
     },
@@ -518,7 +518,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
           .eq("agent_id", agentId)
           .eq("id", messageId)
           .maybeSingle(),
-        "load Nova's email draft",
+        "load KORLIX's email draft",
       );
     },
 
@@ -531,7 +531,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
           .eq("agent_id", agentId)
           .eq("idempotency_key", idempotencyKey)
           .maybeSingle(),
-        "replay Nova's idempotent email draft",
+        "replay KORLIX's idempotent email draft",
       );
     },
 
@@ -564,7 +564,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
             row.idempotency_key,
           );
         }
-        throw databaseError(error, "save Nova's email draft");
+        throw databaseError(error, "save KORLIX's email draft");
       }
 
       if (result?.error) {
@@ -576,7 +576,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
           );
           if (existing) return existing;
         }
-        throw databaseError(result.error, "save Nova's email draft");
+        throw databaseError(result.error, "save KORLIX's email draft");
       }
 
       return result?.data ?? null;
@@ -592,7 +592,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
           .eq("id", messageId)
           .select("*")
           .single(),
-        "update Nova's email draft",
+        "update KORLIX's email draft",
       );
     },
 
@@ -609,7 +609,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
           .is("sent_at", null)
           .select("*")
           .maybeSingle(),
-        "cancel Nova's unsent email draft",
+        "cancel KORLIX's unsent email draft",
       );
     },
 
@@ -628,7 +628,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
           p_claimed_at: claimedAt,
           p_confirmation_nonce_hash: confirmationNonceHash,
         }),
-        "claim Nova's email for a controlled send",
+        "claim KORLIX's email for a controlled send",
       );
 
       return Array.isArray(data) ? data[0] ?? null : data;
@@ -652,7 +652,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
           .eq("last_attempt_at", claimedAt)
           .select("*")
           .maybeSingle(),
-        "restore Nova's email after a pre-provider safety abort",
+        "restore KORLIX's email after a pre-provider safety abort",
       );
     },
 
@@ -668,11 +668,11 @@ export function createKorlixAgentEmailSupabaseStore(client) {
           .eq("status", "sent")
           .gte("sent_at", since);
       } catch (error) {
-        throw databaseError(error, "count Nova's daily email sends");
+        throw databaseError(error, "count KORLIX's daily email sends");
       }
 
       if (result?.error) {
-        throw databaseError(result.error, "count Nova's daily email sends");
+        throw databaseError(result.error, "count KORLIX's daily email sends");
       }
 
       return Math.max(0, Number(result?.count) || 0);
@@ -693,14 +693,14 @@ export function createKorlixAgentEmailSupabaseStore(client) {
       } catch (error) {
         throw databaseError(
           error,
-          "count Nova's in-flight daily email sends",
+          "count KORLIX's in-flight daily email sends",
         );
       }
 
       if (result?.error) {
         throw databaseError(
           result.error,
-          "count Nova's in-flight daily email sends",
+          "count KORLIX's in-flight daily email sends",
         );
       }
 
@@ -748,7 +748,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
             .is("deleted_at", null)
             .order("updated_at", { ascending: false })
             .limit(limit),
-          "list Nova's Agent Email rules",
+          "list KORLIX's Agent Email rules",
         )) ?? []
       );
     },
@@ -763,7 +763,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
           .eq("id", ruleId)
           .is("deleted_at", null)
           .maybeSingle(),
-        "load Nova's Agent Email rule",
+        "load KORLIX's Agent Email rule",
       );
     },
 
@@ -781,7 +781,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
             .eq("trigger_key", triggerKey)
             .is("deleted_at", null)
             .order("created_at", { ascending: true }),
-          "load Nova's preapproved Autopilot rules",
+          "load KORLIX's preapproved Autopilot rules",
         )) ?? []
       );
     },
@@ -806,7 +806,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
             .lte("next_run_at", dueAt)
             .order("next_run_at", { ascending: true })
             .limit(limit),
-          "load Nova's due scheduled Agent Email rules",
+          "load KORLIX's due scheduled Agent Email rules",
         )) ?? []
       );
     },
@@ -818,7 +818,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
           .insert(row)
           .select("*")
           .single(),
-        "save Nova's Agent Email rule",
+        "save KORLIX's Agent Email rule",
       );
     },
 
@@ -833,7 +833,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
           .is("deleted_at", null)
           .select("*")
           .single(),
-        "update Nova's Agent Email rule",
+        "update KORLIX's Agent Email rule",
       );
     },
 
@@ -848,7 +848,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
           .is("deleted_at", null)
           .select("*")
           .maybeSingle(),
-        "delete Nova's Agent Email rule",
+        "delete KORLIX's Agent Email rule",
       );
     },
 
@@ -862,7 +862,7 @@ export function createKorlixAgentEmailSupabaseStore(client) {
             .eq("agent_id", agentId)
             .order("event_at", { ascending: false })
             .limit(limit),
-          "list Nova's Agent Email audit events",
+          "list KORLIX's Agent Email audit events",
         )) ?? []
       );
     },
@@ -958,7 +958,7 @@ function recipientAllowed(row, marketing) {
     status === "suppressed"
   ) {
     fail(
-      "Nova cannot prepare email for an unsubscribed or suppressed recipient.",
+      "KORLIX cannot prepare email for an unsubscribed or suppressed recipient.",
       "agent_email_recipient_blocked",
       409,
     );
@@ -1008,7 +1008,7 @@ export function createKorlixAgentEmailDraftService({
 
     if (!binding.configured) {
       fail(
-        "Nova's approved KORLIX Agent Hub binding is not configured.",
+        "KORLIX's approved KORLIX Agent Hub binding is not configured.",
         "agent_email_nova_binding_not_configured",
         503,
       );
@@ -1022,7 +1022,7 @@ export function createKorlixAgentEmailDraftService({
       })
     ) {
       fail(
-        "Agent Email is available only for the existing approved Nova profile.",
+        "Agent Email is available only for the existing approved KORLIX profile.",
         "agent_email_existing_nova_required",
         403,
       );
@@ -1037,12 +1037,12 @@ export function createKorlixAgentEmailDraftService({
         agentId: safeAgentId,
       });
     } catch (error) {
-      throw databaseError(error, "load Nova's Agent Hub profile");
+      throw databaseError(error, "load KORLIX's Agent Hub profile");
     }
 
     if (!profile) {
       fail(
-        "The approved Nova Agent Hub profile was not found.",
+        "The approved KORLIX Agent Hub profile was not found.",
         "agent_email_nova_profile_not_found",
         404,
       );
@@ -1061,7 +1061,7 @@ export function createKorlixAgentEmailDraftService({
       profile.active === false
     ) {
       fail(
-        "Agent Email requires the active custom Nova Agent Hub profile.",
+        "Agent Email requires the active custom KORLIX Agent Hub profile.",
         "agent_email_custom_active_nova_required",
         403,
       );
@@ -1069,7 +1069,7 @@ export function createKorlixAgentEmailDraftService({
 
     if (!toolIds.includes(KORLIX_AGENT_EMAIL_TOOL_ID)) {
       fail(
-        "Nova is not authorized to use the Agent Email tool.",
+        "KORLIX is not authorized to use the Agent Email tool.",
         "agent_email_tool_not_authorized",
         403,
       );
@@ -1089,7 +1089,7 @@ export function createKorlixAgentEmailDraftService({
 
     if (!row) {
       fail(
-        "Save Nova's Agent Email settings before creating a draft.",
+        "Save KORLIX's Agent Email settings before creating a draft.",
         "agent_email_settings_required",
         409,
       );
@@ -1105,7 +1105,7 @@ export function createKorlixAgentEmailDraftService({
 
     if (!status.canDraft) {
       fail(
-        "Nova's Agent Email feature must be enabled before creating a draft.",
+        "KORLIX's Agent Email feature must be enabled before creating a draft.",
         "agent_email_drafting_disabled",
         409,
       );
@@ -1134,7 +1134,7 @@ export function createKorlixAgentEmailDraftService({
     const safeMessageId = uuid(
       messageId,
       "agent_email_message_id_invalid",
-      "Choose a valid Nova email draft.",
+      "Choose a valid KORLIX email draft.",
     );
 
     const row = await store.getMessage(
@@ -1145,7 +1145,7 @@ export function createKorlixAgentEmailDraftService({
 
     if (!row) {
       fail(
-        "The selected Nova email draft was not found.",
+        "The selected KORLIX email draft was not found.",
         "agent_email_draft_not_found",
         404,
       );
@@ -1308,7 +1308,7 @@ export function createKorlixAgentEmailDraftService({
 
       if (!settings) {
         fail(
-          "Save Nova's Agent Email settings before adding recipients.",
+          "Save KORLIX's Agent Email settings before adding recipients.",
           "agent_email_settings_required",
           409,
         );
@@ -1613,7 +1613,7 @@ export function createKorlixAgentEmailDraftService({
 
       if (!EDITABLE_MESSAGE_STATUSES.has(status)) {
         fail(
-          "This Nova email record can no longer be edited.",
+          "This KORLIX email record can no longer be edited.",
           "agent_email_draft_not_editable",
           409,
         );
@@ -1742,7 +1742,7 @@ export function createKorlixAgentEmailDraftService({
 
       requireConfirmation(
         source,
-        "Confirm that this unsent Nova email draft should be deleted.",
+        "Confirm that this unsent KORLIX email draft should be deleted.",
         "agent_email_draft_delete_confirmation_required",
       );
 
@@ -1957,7 +1957,7 @@ export function createKorlixAgentEmailDraftService({
 
         if (source.reapprove !== true) {
           fail(
-            "This Nova email draft is already approved with a different confirmation nonce. Reapprove this exact draft before sending it.",
+            "This KORLIX email draft is already approved with a different confirmation nonce. Reapprove this exact draft before sending it.",
             "agent_email_draft_reapproval_required",
             409,
           );
@@ -2026,7 +2026,7 @@ export function createKorlixAgentEmailDraftService({
 
       if (status !== "draft" && status !== "pending_approval") {
         fail(
-          "Only a reviewable Nova email draft can be approved.",
+          "Only a reviewable KORLIX email draft can be approved.",
           "agent_email_draft_not_approvable",
           409,
         );
@@ -2179,7 +2179,7 @@ export function installKorlixAgentEmailDraftRoutes(
   app.get(
     routes.status,
     route(
-      "Could not load Nova's Agent Email status.",
+      "Could not load KORLIX's Agent Email status.",
       async ({ res, userId, agentId }) =>
         res.json({
           ok: true,
@@ -2191,7 +2191,7 @@ export function installKorlixAgentEmailDraftRoutes(
   app.get(
     routes.settings,
     route(
-      "Could not load Nova's Agent Email settings.",
+      "Could not load KORLIX's Agent Email settings.",
       async ({ res, userId, agentId }) =>
         res.json({
           ok: true,
@@ -2203,7 +2203,7 @@ export function installKorlixAgentEmailDraftRoutes(
   app.put(
     routes.settings,
     route(
-      "Could not save Nova's Agent Email settings.",
+      "Could not save KORLIX's Agent Email settings.",
       async ({ req, res, userId, agentId }) =>
         res.json({
           ok: true,
@@ -2219,7 +2219,7 @@ export function installKorlixAgentEmailDraftRoutes(
   app.get(
     routes.recipients,
     route(
-      "Could not load Nova's approved email recipients.",
+      "Could not load KORLIX's approved email recipients.",
       async ({ req, res, userId, agentId }) =>
         res.json({
           ok: true,
@@ -2235,7 +2235,7 @@ export function installKorlixAgentEmailDraftRoutes(
   app.post(
     routes.recipients,
     route(
-      "Could not save Nova's approved email recipient.",
+      "Could not save KORLIX's approved email recipient.",
       async ({ req, res, userId, agentId }) => {
         const result = await service.saveRecipient({
           userId,
@@ -2254,7 +2254,7 @@ export function installKorlixAgentEmailDraftRoutes(
   app.patch(
     routes.recipient,
     route(
-      "Could not update Nova's approved email recipient.",
+      "Could not update KORLIX's approved email recipient.",
       async ({ req, res, userId, agentId }) =>
         res.json({
           ok: true,
@@ -2271,7 +2271,7 @@ export function installKorlixAgentEmailDraftRoutes(
   app.get(
     routes.drafts,
     route(
-      "Could not load Nova's email drafts.",
+      "Could not load KORLIX's email drafts.",
       async ({ req, res, userId, agentId }) =>
         res.json({
           ok: true,
@@ -2287,7 +2287,7 @@ export function installKorlixAgentEmailDraftRoutes(
   app.post(
     routes.drafts,
     route(
-      "Could not create Nova's email draft.",
+      "Could not create KORLIX's email draft.",
       async ({ req, res, userId, agentId }) => {
         const result = await service.createDraft({
           userId,
@@ -2306,7 +2306,7 @@ export function installKorlixAgentEmailDraftRoutes(
   app.get(
     routes.draft,
     route(
-      "Could not load Nova's email draft.",
+      "Could not load KORLIX's email draft.",
       async ({ req, res, userId, agentId }) =>
         res.json({
           ok: true,
@@ -2322,7 +2322,7 @@ export function installKorlixAgentEmailDraftRoutes(
   app.patch(
     routes.draft,
     route(
-      "Could not update Nova's email draft.",
+      "Could not update KORLIX's email draft.",
       async ({ req, res, userId, agentId }) =>
         res.json({
           ok: true,
@@ -2339,7 +2339,7 @@ export function installKorlixAgentEmailDraftRoutes(
   app.delete(
     routes.deleteDraft,
     route(
-      "Could not delete Nova's email draft.",
+      "Could not delete KORLIX's email draft.",
       async ({ req, res, userId, agentId }) =>
         res.json({
           ok: true,
@@ -2356,7 +2356,7 @@ export function installKorlixAgentEmailDraftRoutes(
   app.post(
     routes.approveDraft,
     route(
-      "Could not approve Nova's email draft.",
+      "Could not approve KORLIX's email draft.",
       async ({ req, res, userId, agentId }) =>
         res.json({
           ok: true,

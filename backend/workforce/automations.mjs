@@ -6,7 +6,7 @@ import { korlixAgentEmailNovaBinding } from '../korlix_agent_email.mjs';
 
 export const automationTemplates = Object.freeze({
   subject: 'Workforce · {{topic}}',
-  text: '{{report}}\n\nSent by NOVA for your approved Workforce automation. Open KORLIX Workforce to review the records.',
+  text: '{{report}}\n\nSent by KORLIX for your approved Workforce automation. Open KORLIX Workforce to review the records.',
 });
 export function automationInput(body = {}) {
   if (!['missed_update', 'missed_shift', 'daily_summary'].includes(body.kind)) fail('Choose an automation type.');
@@ -113,11 +113,11 @@ export function createWorkforceAutomations({ database, persistence, loadAgentPro
   };
   let running = false, stopped = false, lastTick = null;
   async function capabilities(user) {
-    if (!bound(user)) return { email_ready: false, reason: 'Connect this owner’s NOVA Email Center to use automatic emails.', outbound_calling_enabled: false };
+    if (!bound(user)) return { email_ready: false, reason: 'Connect this owner’s KORLIX Email Center to use automatic emails.', outbound_calling_enabled: false };
     try {
       const s = await mail.getDeliveryStatus(identity(user));
-      return { email_ready: s.canAutopilot === true, reason: s.canAutopilot ? null : 'Enable approved Autopilot in NOVA Email Center. Existing sending limits and quiet hours apply.', daily_usage: s.dailyUsage, outbound_calling_enabled: false };
-    } catch { return { email_ready: false, reason: 'NOVA Email Center is not ready. Check its settings and approved recipients.', outbound_calling_enabled: false }; }
+      return { email_ready: s.canAutopilot === true, reason: s.canAutopilot ? null : 'Enable approved Autopilot in KORLIX Email Center. Existing sending limits and quiet hours apply.', daily_usage: s.dailyUsage, outbound_calling_enabled: false };
+    } catch { return { email_ready: false, reason: 'KORLIX Email Center is not ready. Check its settings and approved recipients.', outbound_calling_enabled: false }; }
   }
   async function setEnabled(user, org, body) {
     const r = await ruleAt(user, org, id(body.rule_id));
@@ -134,7 +134,7 @@ export function createWorkforceAutomations({ database, persistence, loadAgentPro
       const cap = await capabilities(user);
       if (!cap.email_ready) fail(cap.reason, 409, 'WORKFORCE_EMAIL_UNAVAILABLE');
       const candidates = (await mail.listRules({ ...identity(user), limit: 200 })).rules.filter(x => x.triggerKey === trigger(r));
-      if (candidates.length > 1) fail('Duplicate email rules found. Review this trigger in NOVA Email Center before enabling.', 409, 'WORKFORCE_EMAIL_DUPLICATE');
+      if (candidates.length > 1) fail('Duplicate email rules found. Review this trigger in KORLIX Email Center before enabling.', 409, 'WORKFORCE_EMAIL_DUPLICATE');
       const body = { name: `Workforce · ${r.name}`, triggerKey: trigger(r), recipientIds: [r.recipient_id],
         subjectTemplate: automationTemplates.subject, textTemplate: automationTemplates.text, htmlTemplate: '', marketing: false,
         sendMode: 'autopilot', enabled: true, maxSendsPerDay: r.daily_limit, allowedDays: [0,1,2,3,4,5,6], scheduleType: 'event',

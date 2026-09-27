@@ -109,7 +109,7 @@ test('Delay, optimistic versions, pause, disabled email channel and current cont
   await db.query("update user_profiles set tier='basic' where id=$1",[owner]);await assert.rejects(cmd(owner,'claim',f.id,{task_id:t.id,version:t.version,confirmed:true}),/Enterprise/);
   await db.query("update user_profiles set tier='enterprise' where id=$1",[owner]);
 });
-test('One owner-reviewed email uses NOVA and repeat clicks cannot create duplicate sends',async()=>{
+test('One owner-reviewed email uses KORLIX and repeat clicks cannot create duplicate sends',async()=>{
   const f=await create(),l=await lead(f),t=await task(f,l);const s=service();s.setF(f.id);
   await assert.rejects(s.svc.send(owner,f.id,{task_id:t.id,version:t.version}),/Review/);assert.equal(s.sends(),0);
   const results=await Promise.allSettled([1,2].map(()=>s.svc.send(owner,f.id,{task_id:t.id,version:t.version,confirmed:true})));
@@ -188,7 +188,7 @@ test('Schedules require exact approval, valid timing, Autopilot and ownership; e
   assert.deepEqual(await s.svc.runScheduled(),{checked:0,sent:0});
   await s.svc.cancelSchedule(owner,f.id,{task_id:t.id,version:r.task.version});
 });
-test('Durable schedules send through NOVA after a simulated process restart and overlapping runners send once',async()=>{
+test('Durable schedules send through KORLIX after a simulated process restart and overlapping runners send once',async()=>{
   const f=await create(),l=await lead(f);const {t}=await scheduled(f,l);await ready(t.id);
   const restarted=service();restarted.setF(f.id);
   const results=await Promise.all([restarted.svc.runScheduled(),restarted.svc.runScheduled()]);
@@ -208,7 +208,7 @@ test('Cancel, workflow pause and page pause require fresh approval before anothe
     assert.equal((await s.svc.runScheduled()).sent,0);assert.equal(s.sends(),0);
   }
 });
-test('Due-time downgrade, contact suppression, stale schedules and paused NOVA return to review without outreach',async()=>{
+test('Due-time downgrade, contact suppression, stale schedules and paused KORLIX return to review without outreach',async()=>{
   for(const change of ['downgrade','consent','address','archive','expired','autopilot']) {
     const f=await create(),l=await lead(f),{t}=await scheduled(f,l);await ready(t.id);
     if(change==='downgrade')await db.query("update user_profiles set tier='basic' where id=$1",[owner]);

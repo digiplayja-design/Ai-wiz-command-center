@@ -12,7 +12,7 @@ export function registerContractRadar(app,{database,requireUser,aiAccess,discove
  const run=async(user,j)=>{active.add(j.id);try{
   const result=j.kind==='discover'?await discover({...j.input}):await review({...j.input});
   await call(user.id,'job_finish',j.id,{result});
- }catch(e){logger.warn('Contract Radar job failed',{kind:j.kind,errorType:e.name||'Error'});try{await call(user.id,'job_fail',j.id,{error:e instanceof RadarError?e.message:'Nova could not finish this request. No credit was charged. Please retry.'});}catch{logger.warn('Contract Radar job status could not be saved');}}finally{active.delete(j.id);}};
+ }catch(e){logger.warn('Contract Radar job failed',{kind:j.kind,errorType:e.name||'Error'});try{await call(user.id,'job_fail',j.id,{error:e instanceof RadarError?e.message:'KORLIX could not finish this request. No credit was charged. Please retry.'});}catch{logger.warn('Contract Radar job status could not be saved');}}finally{active.delete(j.id);}};
  app.get(base,route(async(_q,r,u)=>{const d=await call(u.id,'list');r.json({profile:d.profile?{data:d.profile.data,updatedAt:d.profile.updated_at}:null,opportunities:d.opportunities.map(publicOpportunity),jobs:d.jobs.map(publicJob),coverage:'Official-source web search: SAM.gov and NYC City Record. Corporate and other RFPs can be pasted for review.',creditCost:1});}));
  app.put(base+'/profile',route(async(q,r,u)=>{const p=await call(u.id,'profile_save',null,profileData(q.body));r.json({profile:{data:p.data,updatedAt:p.updated_at}});}));
  app.post(base+'/opportunities',route(async(q,r,u)=>{
@@ -34,11 +34,11 @@ export function registerContractRadar(app,{database,requireUser,aiAccess,discove
  app.delete(base,route(async(q,r,u)=>{if(q.body?.confirmed!==true)fail('Confirm before clearing your radar.');await call(u.id,'clear');r.json({deleted:true});}));
  app.post(base+'/jobs',route(async(q,r,u)=>{
   const id=uuid(q.body?.request_key),kind=q.body?.kind;if(!['discover','review'].includes(kind))fail('Choose discovery or bid review.');
-  if(q.body?.consent!==true)fail('Confirm AI data sharing before asking Nova.');
+  if(q.body?.consent!==true)fail('Confirm AI data sharing before asking KORLIX.');
   const query=text(q.body.query,800,'Search focus',true),opportunity_id=kind==='review'?uuid(q.body.opportunity_id):null;
   const signature=createHash('sha256').update(JSON.stringify({kind,query,opportunity_id})).digest('hex');
   try{const prior=await call(u.id,'job_get',id);if(prior.signature!==signature)fail('Use a new request for changed inputs.',409);return r.json({job:publicJob(prior)});}catch(e){if(e.status!==404)throw e;}
-  if(active.size+starting.size>=3)fail('Nova is finishing other radar requests. Try again shortly.',429);
+  if(active.size+starting.size>=3)fail('KORLIX is finishing other radar requests. Try again shortly.',429);
   // Reserve per-request dispatch across access checks; database enforces one job per actor.
   if(starting.has(id))fail('This request is starting. Refresh to follow it.',409);
   starting.add(id);try{

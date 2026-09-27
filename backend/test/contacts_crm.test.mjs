@@ -89,7 +89,7 @@ test("Excel workbook imports first worksheet and treats formulas as text", async
   const w = new ExcelJS.Workbook(),
     s = w.addWorksheet("Contacts");
   s.addRow(["Name", "Email", "Status"]);
-  s.addRow(["Nova User", "user@example.com", "family"]);
+  s.addRow(["KORLIX User", "user@example.com", "family"]);
   const p = await previewImport({
     source: "spreadsheet",
     filename: "contacts.xlsx",

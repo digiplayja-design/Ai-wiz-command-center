@@ -41,7 +41,7 @@ function dateValue(value, code = "agent_email_schedule_clock_invalid") {
 
   if (!Number.isFinite(date.getTime())) {
     fail(
-      "Nova could not verify the scheduled email clock.",
+      "KORLIX could not verify the scheduled email clock.",
       code,
       500,
     );
@@ -219,7 +219,7 @@ export function korlixAgentEmailScheduleZonedParts(
     });
   } catch (error) {
     fail(
-      "Nova could not evaluate the scheduled email timezone.",
+      "KORLIX could not evaluate the scheduled email timezone.",
       "agent_email_schedule_timezone_invalid",
       400,
       error,
@@ -335,7 +335,7 @@ export function korlixAgentEmailNextWeeklyRunAt({
   }
 
   fail(
-    "Nova could not calculate the next weekly email occurrence.",
+    "KORLIX could not calculate the next weekly email occurrence.",
     "agent_email_schedule_next_run_unavailable",
     500,
   );
