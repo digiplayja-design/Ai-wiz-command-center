@@ -10,6 +10,7 @@ import 'ledger_screen.dart';
 import 'reports_screen.dart';
 import 'statement_preview.dart';
 import 'statement_history.dart';
+import '../tax_prep/tax_prep_screen.dart';
 
 const _navy = Color(0xff10253f),
     _cyan = Color(0xff087e98),
@@ -170,6 +171,20 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
       ),
     );
     if (_current(op)) await _load(list: false);
+  }
+
+  Future<void> _openTaxPrep() async {
+    if (_business == null || _busy) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TaxPrepScreen(
+          client: widget.client,
+          initialBusinessId: _business!['id'] as String,
+          initialYear: int.tryParse(_month.substring(0, 4)),
+        ),
+      ),
+    );
+    if (mounted && !_denied) await _load(list: false);
   }
 
   Future<void> _openReports() async {
@@ -677,6 +692,11 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
         onPressed: _busy || _overview == null ? null : _openMileage,
         icon: const Icon(Icons.route_outlined, size: 18),
         label: const Text('Mileage log'),
+      ),
+      OutlinedButton.icon(
+        onPressed: _busy || _overview == null ? null : _openTaxPrep,
+        icon: const Icon(Icons.fact_check_outlined, size: 18),
+        label: const Text('Tax preparation'),
       ),
       OutlinedButton.icon(
         onPressed: _busy || _overview == null ? null : _openReports,

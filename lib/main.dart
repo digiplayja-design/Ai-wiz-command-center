@@ -16,6 +16,7 @@ import 'fieldproof/fieldproof_client.dart';
 import 'fieldproof/fieldproof_screen.dart';
 import 'babyblend/babyblend_client.dart';
 import 'babyblend/babyblend_screen.dart';
+import 'tax_prep/tax_prep_screen.dart';
 import 'ai_visibility/visibility_client.dart';
 import 'ai_visibility/visibility_screen.dart';
 import 'funnel_studio/funnel_client.dart';
@@ -5579,6 +5580,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   // Hide inactive Utility tools until full native workflows are ready.
   // Keep active Utility tools visible.
   static const List<String> _utilityTools = <String>[
+    'Tax Prep',
     'BabyBlend',
     'FieldProof',
     'AI Visibility',
@@ -9920,6 +9922,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   void _useQuickAction(QuickAction action) {
+    if (action.label == 'Tax Prep') { unawaited(_openTaxPrep()); return; }
     if (action.label == 'BabyBlend') { unawaited(_openBabyBlend()); return; }
     if (action.label == 'FieldProof') { unawaited(_openFieldProof()); return; }
     if (action.label == 'AI Visibility') {
@@ -10727,6 +10730,14 @@ Make the entire output professional, well-structured using Markdown, and product
     )));
   }
 
+  Future<void> _openTaxPrep() async {
+    final client=BookkeepingClient(backendBaseUrl:kKorlixBackendBaseUrl,
+      headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>TaxPrepScreen(
+      client:client,disposeClient:true,openBookkeeping:_openBookkeeping,
+    )));
+  }
+
   Future<void> _openBabyBlend() async {
     final client=BabyBlendClient(backendBaseUrl:kKorlixBackendBaseUrl,
       headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
@@ -10785,6 +10796,7 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   void _selectUtilityTool(String tool) {
+    if (tool == 'Tax Prep') { unawaited(_openTaxPrep()); return; }
     if (tool == 'BabyBlend') { unawaited(_openBabyBlend()); return; }
     if (tool == 'FieldProof') { unawaited(_openFieldProof()); return; }
     if (tool == 'AI Visibility') {
@@ -13922,6 +13934,7 @@ Make the entire output professional, well-structured using Markdown, and product
     };
 
     String statusFor(String tool) {
+      if (tool == 'Tax Prep') return 'Personal tax organizer, linked Bookkeeping records and preparer packets';
       if (tool == 'BabyBlend') return 'Imagine a fictional child portrait from two adult photos with KORLIX';
       if (tool == 'FieldProof') return 'Job photos, evidence checklists and customer handoffs with KORLIX';
       if (tool == 'AI Visibility') return 'See sampled AI answers, improve your website content and track progress';
@@ -17007,7 +17020,7 @@ Make the entire output professional, well-structured using Markdown, and product
                   // KORLIX_CREDIT_PUBLIC_ENTRY_HIDDEN_BUILD131_BEGIN
                   // Preserve the credit QuickActions in source while excluding
                   // them from the public home-screen action list.
-                  children: [const QuickAction(label:'BabyBlend',prompt:''), const QuickAction(label:'FieldProof',prompt:''), const QuickAction(label:'AI Visibility',prompt:''), const QuickAction(label:'Contract Radar',prompt:''), const QuickAction(label:'Virtual Closet',prompt:''), ...t.quickActions]
+                  children: [const QuickAction(label:'Tax Prep',prompt:''), const QuickAction(label:'BabyBlend',prompt:''), const QuickAction(label:'FieldProof',prompt:''), const QuickAction(label:'AI Visibility',prompt:''), const QuickAction(label:'Contract Radar',prompt:''), const QuickAction(label:'Virtual Closet',prompt:''), ...t.quickActions]
                       .where((action) => !_isCreditReportActionSafeUi(action))
                       .map(_buildSafeUiQuickActionChip)
                       .toList(),
