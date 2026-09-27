@@ -7,6 +7,7 @@ import 'k135z_capture_controller.dart';
 import 'k135z_response_player.dart';
 import 'k135z_spoken_replies.dart';
 import 'k135z_spoken_player.dart';
+import 'k135z_played_pcm.dart';
 
 // Reviewed updates stay explicit; spoken replies require their own session opt-in.
 class K135zMeetingResponse extends ChangeNotifier {
@@ -15,11 +16,12 @@ class K135zMeetingResponse extends ChangeNotifier {
     required this.cancelRequest,
     K135zResponsePlayer? player,
     K135zSpokenPlayer? spokenPlayer,
+    K135zPcmSinkFactory? recordingSink,
     int Function()? milliseconds,
-  }) : player = player ?? createResponsePlayer() {
+  }) : player = player ?? createResponsePlayer(recordingSink: recordingSink) {
     _now = milliseconds ?? (() => _clock.elapsedMilliseconds);
     spoken = K135zSpokenReplies(capture: capture, cancelRequest: cancelRequest,
-      player:spokenPlayer, beforeEnable: () => stop());
+      player:spokenPlayer, recordingSink: recordingSink, beforeEnable: () => stop());
     spoken.addListener(notifyListeners);
     capture.addListener(_check);
   }

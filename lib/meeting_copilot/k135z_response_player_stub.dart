@@ -1,8 +1,9 @@
 import 'dart:typed_data';
 
 import 'k135z_response_player.dart';
+import 'k135z_played_pcm.dart';
 
-K135zResponsePlayer createPlayer() => _Unsupported();
+K135zResponsePlayer createPlayer({K135zPcmSinkFactory? recordingSink}) => _Unsupported();
 
 class _Unsupported implements K135zResponsePlayer {
   @override

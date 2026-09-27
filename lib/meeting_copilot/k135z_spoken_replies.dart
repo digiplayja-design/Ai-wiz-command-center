@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import 'k135z_capture_controller.dart';
 import 'k135z_spoken_player.dart';
+import 'k135z_played_pcm.dart';
 import 'k135z_waiting_voice.dart';
 import 'k135z_remember_memory.dart';
 import '../live_convo/k136s_learning_panel.dart';
@@ -15,11 +16,12 @@ class K135zSpokenReplies extends ChangeNotifier {
     required this.cancelRequest,
     required this.beforeEnable,
     K135zSpokenPlayer? player,
+    K135zPcmSinkFactory? recordingSink,
     Future<List<K135zWaitingClip>> Function()? loadWaitingVoice,
     K136sLearningApiBase? learningApi,
     int Function()? milliseconds,
     bool watch = true,
-  }) : player = player ?? createSpokenPlayer() {
+  }) : player = player ?? createSpokenPlayer(recordingSink: recordingSink) {
     _loadWaitingVoice = loadWaitingVoice ?? (() => loadK135zWaitingVoice(capture));
     _now = milliseconds ?? (() => _clock.elapsedMilliseconds);
     memory = K135zRememberMemory(agentId:capture.agentId,

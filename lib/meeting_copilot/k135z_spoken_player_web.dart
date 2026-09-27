@@ -5,10 +5,13 @@ import 'dart:typed_data';
 import 'dart:web_audio' as web;
 
 import 'k135z_spoken_player.dart';
+import 'k135z_played_pcm.dart';
 
-K135zSpokenPlayer createPlayer() => _SpokenPlayer();
+K135zSpokenPlayer createPlayer({K135zPcmSinkFactory? recordingSink}) => _SpokenPlayer(recordingSink);
 
 class _SpokenPlayer implements K135zSpokenPlayer {
+  _SpokenPlayer(this.recordingSink);
+  final K135zPcmSinkFactory? recordingSink;
   web.AudioContext? _context;
   int _epoch = 0;
   void Function()? _cancel;
@@ -72,11 +75,15 @@ class _SpokenPlayer implements K135zSpokenPlayer {
     final source = context.createBufferSource()..buffer = buffer;
     final done = Completer<void>();
     Timer? timer;
+    Timer? recordingTimer;
+    K135zPlayedPcm? recording;
     StreamSubscription<html.Event>? ended;
     bool finished = false;
     void finish([Object? failure]) {
       if (finished) return;
       finished = true;
+      recordingTimer?.cancel();
+      recording?.finish();
       timer?.cancel();
       ended?.cancel();
       try {
@@ -100,6 +107,16 @@ class _SpokenPlayer implements K135zSpokenPlayer {
     source.connectNode(context.destination!);
     try {
       source.start(0);
+      if (recordingSink != null) {
+        final started = context.currentTime!;
+        recording = K135zPlayedPcm(
+          channels: List.generate(buffer.numberOfChannels!,
+            (i) => Float32List.fromList(buffer.getChannelData(i))),
+          sampleRate: buffer.sampleRate!,
+          playedSeconds: () => (context.currentTime! - started).toDouble(),
+          sinkFactory: recordingSink!);
+        recordingTimer = Timer.periodic(const Duration(milliseconds: 500), (_) => recording?.flush());
+      }
     } catch (_) {
       finish(StateError('Playback unavailable'));
     }

@@ -78,9 +78,9 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
     capture = K135zCaptureController(agentId:launch.agentId, baseUri:launch.backendBaseUri,
       headers:launch.headersBuilder, isCurrent:() => usable,
       transport:transport ?? _send, cancelRequests:_cancelCaptureRequests);
-    response = K135zMeetingResponse(capture:capture, cancelRequest:_cancelResponseRequests,
-      spokenPlayer:spokenPlayer);
     recordings = K135zRecordingsController(capture:capture);
+    response = K135zMeetingResponse(capture:capture, cancelRequest:_cancelResponseRequests,
+      spokenPlayer:spokenPlayer, recordingSink:recordings.beginPlayback);
     response.addListener(_changed);
     capture.addListener(_changed);
     _controller.addListener(_changed);
@@ -161,6 +161,7 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
   }
   Future<void> stopListening() async {
     response.stop();
+    await recordings.flushVoice();
     await capture.stop();
   }
   bool get canOpenAuthorization => usable && !busy && _authorizationUri != null &&

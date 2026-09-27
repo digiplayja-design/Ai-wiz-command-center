@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'k135z_capture_controller.dart';
+import 'k135z_played_pcm.dart';
 
 class K135zRecording {
   K135zRecording(Map raw)
@@ -59,6 +60,9 @@ class K135zRecordingsController extends ChangeNotifier {
       loaded = false;
   int _epoch = 0;
   String? _consentContext, playbackId;
+  bool includeNova = true, _voiceClosing = false;
+  String? voiceWarning;
+  final Set<_PlaybackUpload> _uploads = {};
   Uri? playbackUrl, downloadUrl;
   List<K135zRecording> recordings = const [];
   String message =
@@ -71,6 +75,45 @@ class K135zRecordingsController extends ChangeNotifier {
       consent &&
       capture.responseBinding != null;
   bool get available => !_dead && capture.isCurrent();
+
+  void setIncludeNova(bool value) {
+    if (!available || busy || hasActive) return;
+    includeNova = value;
+    notifyListeners();
+  }
+
+  K135zPcmSink? beginPlayback(void Function() flush) {
+    if (!available || busy || !includeNova || _voiceClosing) return null;
+    final context = capture.responseBinding?['context'];
+    if (context == null) return null;
+    final matches = recordings.where((r) => r.status == 'recording' &&
+      r.meetingUuid == context['meetingUuid']).toList();
+    if (matches.length != 1) return null;
+    final upload = _PlaybackUpload(this, matches.single.id,
+      Map<String, dynamic>.from(context), flush);
+    _uploads.add(upload);
+    upload.begin();
+    return upload;
+  }
+
+  Future<void> flushVoice() async {
+    _voiceClosing = true;
+    final uploads = _uploads.toList();
+    for (final upload in uploads) {
+      upload.flush();
+      upload.close();
+    }
+    try {
+      await Future.wait(uploads.map((u) => u.done)).timeout(const Duration(seconds: 5));
+    } catch (_) { _voiceFailed(); }
+  }
+
+  void _voiceFailed() {
+    if (!available) return;
+    _voiceClosing = true;
+    voiceWarning = 'Some of Nova’s voice could not be added. Check the saved recording.';
+    notifyListeners();
+  }
 
   void setConsent(bool value) {
     if (!available || busy) return;
@@ -97,6 +140,9 @@ class K135zRecordingsController extends ChangeNotifier {
   void invalidate() {
     if (_dead) return;
     _epoch++;
+    for (final upload in _uploads.toList()) { upload.cancel(); }
+    _uploads.clear();
+    voiceWarning = null;
     busy = false;
     consent = false;
     loaded = false;
@@ -229,6 +275,8 @@ class K135zRecordingsController extends ChangeNotifier {
       if (r.id != id || r.meetingUuid != context['meetingUuid'])
         throw const FormatException();
       _replace(r);
+      _voiceClosing = false;
+      voiceWarning = null;
       consent = false;
       _consentContext = null;
       message =
@@ -237,6 +285,8 @@ class K135zRecordingsController extends ChangeNotifier {
   }
 
   Future<void> stop(K135zRecording r) => _run((epoch) async {
+    await flushVoice();
+    if (!_current(epoch)) return;
     final data = await _request({'action': 'stop', 'id': r.id});
     if (!_current(epoch)) return;
     final next = K135zRecording(data['recording'] as Map);
@@ -298,9 +348,65 @@ class K135zRecordingsController extends ChangeNotifier {
     _timer?.cancel();
     capture.removeListener(_captureChanged);
     _dead = true;
+    for (final upload in _uploads.toList()) { upload.cancel(); }
+    _uploads.clear();
     _epoch++;
     playbackUrl = null;
     downloadUrl = null;
     super.dispose();
   }
+}
+
+// Voice packets are independent of the UI's busy state. They never delay Nova
+// playback, never retry after losing authority, and cannot start a recording.
+class _PlaybackUpload implements K135zPcmSink {
+  _PlaybackUpload(this.owner, this.recordingId, this.context, this.flush);
+  final K135zRecordingsController owner;
+  final String recordingId;
+  final Map<String, dynamic> context;
+  final void Function() flush;
+  final String id = List.generate(16,
+    (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+  Future<void> done = Future.value();
+  bool _closed = false, _cancelled = false;
+  int _queued = 0, _sequence = 0;
+  bool get _current => !_cancelled && owner.available &&
+    jsonEncode(owner.capture.responseBinding?['context']) == jsonEncode(context) &&
+    owner.recordings.any((r) => r.id == recordingId && r.status == 'recording');
+  @override
+  bool get active => !_closed && _current;
+  void begin() => _enqueue({'action': 'voice-start'});
+  void _enqueue(Map<String, dynamic> body) {
+    if (!_current) return;
+    if (_queued >= 8) { _cancelled = true; owner._voiceFailed(); return; }
+    _queued++;
+    done = done.then((_) async {
+      if (!_current) return;
+      final data = await owner._request({
+        ...body, 'id': recordingId, 'playbackId': id, 'context': context,
+      });
+      if (data['accepted'] != true) throw const FormatException();
+    }).catchError((Object _) {
+      if (_current) owner._voiceFailed();
+      _cancelled = true;
+    }).whenComplete(() {
+      _queued--;
+      if (_closed && _queued == 0) owner._uploads.remove(this);
+    });
+  }
+  @override
+  void write(Uint8List pcm) {
+    if (!active || pcm.isEmpty) return;
+    if (pcm.length > 16000 || pcm.length.isOdd || ++_sequence > 180) {
+      _cancelled = true; owner._voiceFailed(); return;
+    }
+    _enqueue({'action': 'voice-chunk', 'sequence': _sequence,
+      'pcm': base64Encode(pcm)});
+  }
+  @override
+  void close() {
+    _closed = true;
+    if (_queued == 0) owner._uploads.remove(this);
+  }
+  void cancel() { _cancelled = true; close(); }
 }

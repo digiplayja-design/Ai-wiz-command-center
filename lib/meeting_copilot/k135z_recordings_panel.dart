@@ -51,6 +51,17 @@ class K135zRecordingsPanel extends StatelessWidget {
                   style: TextStyle(color: muted),
                 ),
                 CheckboxListTile(
+                  key: const Key('nova-recording-include-voice'),
+                  contentPadding: EdgeInsets.zero,
+                  value: c.includeNova,
+                  onChanged: c.available && !c.busy && !c.hasActive
+                    ? (value) => c.setIncludeNova(value == true) : null,
+                  title: const Text('Include Nova’s voice from this browser',
+                    style: TextStyle(color: Colors.white)),
+                  subtitle: const Text('Turn off if Zoom already includes Nova’s device audio.',
+                    style: TextStyle(color: muted)),
+                ),
+                CheckboxListTile(
                   key: const Key('nova-recording-consent'),
                   contentPadding: EdgeInsets.zero,
                   value: c.consent,
@@ -103,6 +114,8 @@ class K135zRecordingsPanel extends StatelessWidget {
                     padding: EdgeInsets.symmetric(vertical: 8),
                     child: LinearProgressIndicator(),
                   ),
+                if (c.voiceWarning != null)
+                  Text(c.voiceWarning!, style: const TextStyle(color: Color(0xFFFFAD72))),
                 for (final r in c.recordings)
                   Padding(
                     padding: const EdgeInsets.only(top: 12),

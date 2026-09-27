@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'k135z_played_pcm.dart';
 
 import 'k135z_response_player_stub.dart'
     if (dart.library.html) 'k135z_response_player_web.dart'
@@ -10,4 +11,5 @@ abstract interface class K135zResponsePlayer {
   void stop();
 }
 
-K135zResponsePlayer createResponsePlayer() => platform.createPlayer();
+K135zResponsePlayer createResponsePlayer({K135zPcmSinkFactory? recordingSink}) =>
+    platform.createPlayer(recordingSink: recordingSink);

@@ -1,8 +1,9 @@
 import 'dart:typed_data';
 
 import 'k135z_spoken_player.dart';
+import 'k135z_played_pcm.dart';
 
-K135zSpokenPlayer createPlayer() => _Unsupported();
+K135zSpokenPlayer createPlayer({K135zPcmSinkFactory? recordingSink}) => _Unsupported();
 
 class _Unsupported implements K135zSpokenPlayer {
   bool get supported => false;

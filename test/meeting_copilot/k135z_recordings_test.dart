@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../../lib/meeting_copilot/k135z_capture_controller.dart';
@@ -80,6 +81,7 @@ class Fixture {
             'downloadUrl': '$media&download=audio.mp3',
           },
           'delete' => {'deleted': true},
+          'voice-start' || 'voice-chunk' => {'accepted': true},
           _ => throw StateError('unexpected action'),
         };
       }
@@ -97,6 +99,49 @@ class Fixture {
 }
 
 void main() {
+  test('Nova samples require an existing recording and respect inclusion choice', () async {
+    final f = Fixture();addTearDown(f.dispose);
+    expect(f.c.beginPlayback(() {}), isNull);
+    f.c.setIncludeNova(false);f.c.setConsent(true);await f.c.start();
+    expect(f.c.beginPlayback(() {}), isNull);
+    expect(f.calls.map((c) => c['action']), ['start']);
+  });
+  test('played Nova packets are serialized and drained before Stop and save', () async {
+    final f = Fixture();addTearDown(f.dispose);
+    f.c.setConsent(true);await f.c.start();
+    late final dynamic sink;
+    sink = f.c.beginPlayback(() => sink.write(Uint8List(3200)))!;
+    sink.write(Uint8List(16000));
+    await f.c.stop(f.c.recordings.single);
+    expect(f.calls.map((c) => c['action']), ['start','voice-start','voice-chunk','voice-chunk','stop']);
+    final chunks = f.calls.where((c) => c['action'] == 'voice-chunk').toList();
+    expect(chunks.map((c) => c['sequence']), [1,2]);
+    expect(chunks.every((c) => c['context']['meetingUuid'] == 'meeting'), true);
+    expect(base64Decode(chunks.last['pcm']).length, 3200);
+    expect(f.c.voiceWarning, isNull);
+  });
+  test('sign-out discards queued voice and cannot start another upload', () async {
+    final f = Fixture();addTearDown(f.dispose);
+    f.c.setConsent(true);await f.c.start();
+    final sink = f.c.beginPlayback(() {})!;
+    sink.write(Uint8List(3200));f.current = false;f.capture.changed();
+    await Future<void>.delayed(Duration.zero);
+    expect(f.calls.map((c) => c['action']), ['start']);
+    expect(f.c.beginPlayback(() {}), isNull);
+  });
+  test('failed voice uploads warn once and leave Zoom recording stoppable', () async {
+    final f = Fixture();addTearDown(f.dispose);
+    f.c.setConsent(true);await f.c.start();
+    f.override = (b) async {
+      if (b['action'] == 'voice-start') throw StateError('offline');
+      return {'recording': row(id:b['id'], status:'saving')};
+    };
+    final sink = f.c.beginPlayback(() {})!;sink.write(Uint8List(3200));
+    await Future<void>.delayed(Duration.zero);
+    expect(f.c.voiceWarning, isNotNull);expect(f.c.beginPlayback(() {}), isNull);
+    await f.c.stop(f.c.recordings.single);
+    expect(f.calls.last['action'], 'stop');expect(f.c.voiceWarning, isNotNull);
+  });
   test(
     'listening and opening controls never start recording without separate consent',
     () async {

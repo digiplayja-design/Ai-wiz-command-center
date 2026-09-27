@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'k135z_played_pcm.dart';
 
 import 'k135z_spoken_player_stub.dart'
     if (dart.library.html) 'k135z_spoken_player_web.dart'
@@ -14,4 +15,5 @@ abstract interface class K135zSpokenPlayer {
   void stop();
 }
 
-K135zSpokenPlayer createSpokenPlayer() => platform.createPlayer();
+K135zSpokenPlayer createSpokenPlayer({K135zPcmSinkFactory? recordingSink}) =>
+    platform.createPlayer(recordingSink: recordingSink);
