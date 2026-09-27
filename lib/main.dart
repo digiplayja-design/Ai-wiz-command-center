@@ -1,4 +1,7 @@
 import 'chat/chat_workspace.dart';
+import 'theme/korlix_theme.dart';
+import 'theme/korlix_theme_picker.dart';
+export 'theme/korlix_theme.dart';
 import 'chat/chat_request.dart';
 import 'bookkeeping/bookkeeping_client.dart';
 import 'bookkeeping/bookkeeping_screen.dart';
@@ -292,7 +295,7 @@ class CheeChaiCheeApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return KorlixThemeScope(builder: (context, theme) => MaterialApp(
       navigatorObservers: <NavigatorObserver>[
         kKorlixMeetingCopilotAuthObserver,
       ],
@@ -311,23 +314,9 @@ class CheeChaiCheeApp extends StatelessWidget {
       },
       title: 'Korlix AI',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: korlixThemeIsLight(kKorlixThemeNotifier.value)
-            ? Brightness.light
-            : Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: korlixThemeAccentFor(kKorlixThemeNotifier.value),
-          brightness: korlixThemeIsLight(kKorlixThemeNotifier.value)
-              ? Brightness.light
-              : Brightness.dark,
-        ),
-        scaffoldBackgroundColor: korlixSkinPaletteFor(
-          kKorlixThemeNotifier.value,
-        ).backgroundMid,
-      ),
+      theme: theme,
       home: const AuthGate(),
-    );
+    ));
   }
 }
 
@@ -3787,163 +3776,29 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
   }
 
   Future<void> _setTheme({required String theme}) async {
-    kKorlixThemeNotifier.value = korlixNormalizeSkinId(theme);
-
+    final selected = korlixNormalizeSkinId(theme);
+    kKorlixThemeNotifier.value = selected;
     if (mounted) {
-      setState(() {}); // rebuild current screen for global skin
+      setState(() {});
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(korlixThemeAppliedSnackBar(selected));
     }
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('korlix_ui_theme', korlixNormalizeSkinId(theme));
-
     try {
-      await http.post(
-        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/theme/set'),
-        headers: KorlixDeviceStore.headers(),
-        body: jsonEncode({'theme': korlixNormalizeSkinId(theme)}),
-      );
-    } catch (_) {
-      // Local persistence is enough for the frontend theme switcher.
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      korlixThemeAppliedSnackBar(korlixNormalizeSkinId(theme)),
-    );
+      final prefs = await SharedPreferences.getInstance();
+      if (kKorlixThemeNotifier.value == selected) await prefs.setString('korlix_ui_theme', selected);
+    } catch (_) { /* Theme selection still applies when local storage is unavailable. */ }
+    if (kKorlixThemeNotifier.value != selected) return;
+    try {
+      await http.post(_assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/theme/set'),
+        headers: KorlixDeviceStore.headers(), body: jsonEncode({'theme': selected}))
+        .timeout(const Duration(seconds: 10));
+    } catch (_) { /* The selected local theme remains usable while offline. */ }
   }
 
-  Future<void> _openThemePanel({
-    required String currentTheme,
-    String? currentTier,
-  }) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: korlixSkinPaletteFor(
-        kKorlixThemeNotifier.value,
-      ).panelDeep,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-      ),
-      builder: (context) {
-        final activeSkin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
-
-        final skinIds = <String>[
-          'korlix_blue',
-          'matrix_green',
-          'ultra_gold',
-          'pink_white',
-          'dark_crimson',
-          'white_gray',
-        ];
-
-        Widget themeTile(String theme) {
-          final tileSkin = korlixSkinPaletteFor(theme);
-          final selected =
-              korlixNormalizeSkinId(kKorlixThemeNotifier.value) == tileSkin.id;
-
-          return ListTile(
-            leading: Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    tileSkin.primary,
-                    tileSkin.secondary,
-                    tileSkin.panel,
-                  ],
-                ),
-                border: Border.all(
-                  color: selected
-                      ? activeSkin.text
-                      : tileSkin.border.withOpacity(0.40),
-                  width: selected ? 2.2 : 1.1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: tileSkin.glow.withOpacity(selected ? 0.42 : 0.16),
-                    blurRadius: selected ? 18 : 10,
-                    spreadRadius: selected ? 1.2 : 0,
-                  ),
-                ],
-              ),
-            ),
-            title: Text(
-              tileSkin.label,
-              style: TextStyle(
-                color: activeSkin.text,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            subtitle: Text(
-              selected ? 'Active skin' : 'Tap to apply',
-              style: TextStyle(
-                color: activeSkin.mutedText.withOpacity(0.82),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            trailing: selected
-                ? Icon(Icons.check_circle_rounded, color: tileSkin.primary)
-                : Icon(
-                    Icons.chevron_right_rounded,
-                    color: activeSkin.mutedText,
-                  ),
-            onTap: () async {
-              Navigator.of(context).pop();
-              await _setTheme(theme: tileSkin.id);
-            },
-          );
-        }
-
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 48,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: activeSkin.mutedText.withOpacity(0.45),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Color Theme',
-                  style: TextStyle(
-                    color: activeSkin.text,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Choose one of the six full frontend skins.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: activeSkin.mutedText,
-                    fontSize: 13.5,
-                    height: 1.35,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ...skinIds.map(themeTile),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+  Future<void> _openThemePanel({required String currentTheme, String? currentTier}) async {
+    final selected = await showKorlixThemePicker(context, currentId: kKorlixThemeNotifier.value);
+    if (selected != null && mounted) await _setTheme(theme: selected);
   }
 
   Future<void> _openPanel() async {
@@ -4489,394 +4344,6 @@ Duration: [specify desired length, e.g., 8–12 seconds].
 
 Aspect ratio: 16:9 cinematic widescreen.
 """;
-
-class KorlixSkinPalette {
-  final String id;
-  final String label;
-  final bool isLight;
-
-  final Color backgroundTop;
-  final Color backgroundMid;
-  final Color backgroundBottom;
-
-  final Color panel;
-  final Color panelSoft;
-  final Color panelDeep;
-  final Color inputFill;
-  final Color buttonFill;
-
-  final Color primary;
-  final Color secondary;
-  final Color tertiary;
-  final Color border;
-  final Color glow;
-
-  final Color text;
-  final Color mutedText;
-  final Color hintText;
-  final Color textOnAccent;
-
-  final Color success;
-  final Color danger;
-  final Color premium;
-
-  const KorlixSkinPalette({
-    required this.id,
-    required this.label,
-    required this.isLight,
-    required this.backgroundTop,
-    required this.backgroundMid,
-    required this.backgroundBottom,
-    required this.panel,
-    required this.panelSoft,
-    required this.panelDeep,
-    required this.inputFill,
-    required this.buttonFill,
-    required this.primary,
-    required this.secondary,
-    required this.tertiary,
-    required this.border,
-    required this.glow,
-    required this.text,
-    required this.mutedText,
-    required this.hintText,
-    required this.textOnAccent,
-    required this.success,
-    required this.danger,
-    required this.premium,
-  });
-}
-
-String korlixNormalizeSkinId(String theme) {
-  final id = theme.trim().toLowerCase();
-
-  switch (id) {
-    case 'blue':
-    case 'korlix':
-    case 'korlix_blue_neon':
-    case 'korlix_blue':
-      return 'korlix_blue';
-
-    case 'green':
-    case 'matrix':
-    case 'purple_green':
-    case 'cyber_purple':
-    case 'matrix_green':
-      return 'matrix_green';
-
-    case 'gold':
-    case 'black_gold':
-    case 'gold_black':
-    case 'ultra_gold':
-      return 'ultra_gold';
-
-    case 'pink':
-    case 'pink_luxe':
-    case 'pink_white':
-      return 'pink_white';
-
-    case 'crimson':
-    case 'red_ice':
-    case 'dark_crimson':
-      return 'dark_crimson';
-
-    case 'white':
-    case 'gray':
-    case 'silver':
-    case 'black_white':
-    case 'white_gray':
-      return 'white_gray';
-
-    default:
-      return 'korlix_blue';
-  }
-}
-
-KorlixSkinPalette korlixSkinPaletteFor(String theme) {
-  switch (korlixNormalizeSkinId(theme)) {
-    case 'matrix_green':
-      return const KorlixSkinPalette(
-        id: 'matrix_green',
-        label: 'Matrix Green',
-        isLight: false,
-        backgroundTop: Color(0xFF06010B),
-        backgroundMid: Color(0xFF170022),
-        backgroundBottom: Color(0xFF08030F),
-        panel: Color(0xFF13051E),
-        panelSoft: Color(0xFF1E0930),
-        panelDeep: Color(0xFF08030F),
-        inputFill: Color(0xFF190820),
-        buttonFill: Color(0xFF110817),
-        primary: Color(0xFF7CFF6B),
-        secondary: Color(0xFFB794F4),
-        tertiary: Color(0xFF1CE66D),
-        border: Color(0xFF7CFF6B),
-        glow: Color(0xFF7CFF6B),
-        text: Color(0xFFF3FBFF),
-        mutedText: Color(0xFFC8F7C4),
-        hintText: Color(0xFFD7C9EA),
-        textOnAccent: Color(0xFF061008),
-        success: Color(0xFFB7FF00),
-        danger: Color(0xFFFF4D6D),
-        premium: Color(0xFFB7FF00),
-      );
-
-    case 'ultra_gold':
-      return const KorlixSkinPalette(
-        id: 'ultra_gold',
-        label: 'Black / Gold Ultra',
-        isLight: false,
-        backgroundTop: Color(0xFF050503),
-        backgroundMid: Color(0xFF111009),
-        backgroundBottom: Color(0xFF050504),
-        panel: Color(0xFF0C0B07),
-        panelSoft: Color(0xFF19130A),
-        panelDeep: Color(0xFF030302),
-        inputFill: Color(0xFF11100B),
-        buttonFill: Color(0xFF0D0C08),
-        primary: Color(0xFFFFD166),
-        secondary: Color(0xFFFFB000),
-        tertiary: Color(0xFFFFE8A3),
-        border: Color(0xFFFFD166),
-        glow: Color(0xFFFFB000),
-        text: Color(0xFFFFF1C2),
-        mutedText: Color(0xFFD8B963),
-        hintText: Color(0xFFE7C46F),
-        textOnAccent: Color(0xFF080704),
-        success: Color(0xFFFFD166),
-        danger: Color(0xFFFF5C5C),
-        premium: Color(0xFFFFD166),
-      );
-
-    case 'pink_white':
-      return const KorlixSkinPalette(
-        id: 'pink_white',
-        label: 'Pink / White Luxe',
-        isLight: true,
-        backgroundTop: Color(0xFFFFF8FC),
-        backgroundMid: Color(0xFFFFEEF6),
-        backgroundBottom: Color(0xFFFFFBFD),
-        panel: Color(0xFFFFFFFF),
-        panelSoft: Color(0xFFFFF3F9),
-        panelDeep: Color(0xFFFFE7F2),
-        inputFill: Color(0xFFFFFFFF),
-        buttonFill: Color(0xFFFFFBFD),
-        primary: Color(0xFFFF7AB8),
-        secondary: Color(0xFFE83E8C),
-        tertiary: Color(0xFFFFB7D8),
-        border: Color(0xFFFF7AB8),
-        glow: Color(0xFFFF7AB8),
-        text: Color(0xFF63122F),
-        mutedText: Color(0xFF8B4964),
-        hintText: Color(0xFF8D6C7A),
-        textOnAccent: Color(0xFFFFFFFF),
-        success: Color(0xFFE83E8C),
-        danger: Color(0xFFD92D20),
-        premium: Color(0xFFE83E8C),
-      );
-
-    case 'dark_crimson':
-      return const KorlixSkinPalette(
-        id: 'dark_crimson',
-        label: 'Crimson / Ice',
-        isLight: false,
-        backgroundTop: Color(0xFF120205),
-        backgroundMid: Color(0xFF27050D),
-        backgroundBottom: Color(0xFF050308),
-        panel: Color(0xFF1B060C),
-        panelSoft: Color(0xFF2A0811),
-        panelDeep: Color(0xFF090306),
-        inputFill: Color(0xFF12090E),
-        buttonFill: Color(0xFF0C070B),
-        primary: Color(0xFFB7F3FF),
-        secondary: Color(0xFFFF5C7A),
-        tertiary: Color(0xFFFFFFFF),
-        border: Color(0xFFB7F3FF),
-        glow: Color(0xFFFF5C7A),
-        text: Color(0xFFF3FBFF),
-        mutedText: Color(0xFFFFB3C1),
-        hintText: Color(0xFFDCEEFF),
-        textOnAccent: Color(0xFF120205),
-        success: Color(0xFFB7F3FF),
-        danger: Color(0xFFFF5C7A),
-        premium: Color(0xFFFF5C7A),
-      );
-
-    case 'white_gray':
-      return const KorlixSkinPalette(
-        id: 'white_gray',
-        label: 'White / Gray Cyber',
-        isLight: true,
-        backgroundTop: Color(0xFFF8FBFD),
-        backgroundMid: Color(0xFFEFF4F7),
-        backgroundBottom: Color(0xFFFFFFFF),
-        panel: Color(0xFFF9FCFE),
-        panelSoft: Color(0xFFFFFFFF),
-        panelDeep: Color(0xFFE6EEF3),
-        inputFill: Color(0xFFFFFFFF),
-        buttonFill: Color(0xFFF5F8FA),
-        primary: Color(0xFF69D9E8),
-        secondary: Color(0xFF8B95A1),
-        tertiary: Color(0xFFB8DDE6),
-        border: Color(0xFF9FDCE7),
-        glow: Color(0xFFBDEFFF),
-        text: Color(0xFF10202C),
-        mutedText: Color(0xFF60707B),
-        hintText: Color(0xFF6F7C86),
-        textOnAccent: Color(0xFF071B27),
-        success: Color(0xFF69D9E8),
-        danger: Color(0xFFE5484D),
-        premium: Color(0xFF69D9E8),
-      );
-
-    case 'korlix_blue':
-    default:
-      return const KorlixSkinPalette(
-        id: 'korlix_blue',
-        label: 'Korlix Blue Neon',
-        isLight: false,
-        backgroundTop: Color(0xFF040612),
-        backgroundMid: Color(0xFF10173A),
-        backgroundBottom: Color(0xFF250032),
-        panel: Color(0xFF071B27),
-        panelSoft: Color(0xFF0C2844),
-        panelDeep: Color(0xFF07111F),
-        inputFill: Color(0xFF08101F),
-        buttonFill: Color(0xFF07111D),
-        primary: Color(0xFF69D9E8),
-        secondary: Color(0xFFFF4AF3),
-        tertiary: Color(0xFF2D8CFF),
-        border: Color(0xFF2EC7DF),
-        glow: Color(0xFF6DF7FF),
-        text: Color(0xFFE4EBEE),
-        mutedText: Color(0xFFA9C6CF),
-        hintText: Color(0xFFD3D9EA),
-        textOnAccent: Color(0xFF061008),
-        success: Color(0xFFB7FF00),
-        danger: Color(0xFFFF5C7A),
-        premium: Color(0xFFFFD166),
-      );
-  }
-}
-
-String korlixThemeLabelFor(String theme) {
-  return korlixSkinPaletteFor(theme).label;
-}
-
-bool korlixThemeIsLight(String theme) {
-  return korlixSkinPaletteFor(theme).isLight;
-}
-
-Color korlixThemeAccentFor(String theme) {
-  return korlixSkinPaletteFor(theme).primary;
-}
-
-Color korlixThemePanelFor(String theme) {
-  return korlixSkinPaletteFor(theme).panel;
-}
-
-Color korlixThemeSecondaryFor(String theme) {
-  return korlixSkinPaletteFor(theme).secondary;
-}
-
-Color korlixThemeBorderFor(String theme) {
-  return korlixSkinPaletteFor(theme).border;
-}
-
-Color korlixThemeTextFor(String theme) {
-  return korlixSkinPaletteFor(theme).text;
-}
-
-Color korlixThemeMutedTextFor(String theme) {
-  return korlixSkinPaletteFor(theme).mutedText;
-}
-
-List<Color> korlixThemeBackgroundFor(String theme) {
-  final skin = korlixSkinPaletteFor(theme);
-
-  return <Color>[skin.backgroundTop, skin.backgroundMid, skin.backgroundBottom];
-}
-
-SnackBar korlixThemeAppliedSnackBar(String theme) {
-  final normalizedTheme = korlixNormalizeSkinId(theme);
-  final skin = korlixSkinPaletteFor(normalizedTheme);
-
-  return SnackBar(
-    behavior: SnackBarBehavior.floating,
-    duration: const Duration(milliseconds: 1600),
-    elevation: 0,
-    backgroundColor: Colors.transparent,
-    margin: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-    padding: EdgeInsets.zero,
-    content: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: skin.panelDeep.withValues(alpha: skin.isLight ? 0.94 : 0.96),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: skin.border.withValues(alpha: skin.isLight ? 0.54 : 0.62),
-          width: 1.05,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: skin.glow.withValues(alpha: skin.isLight ? 0.14 : 0.24),
-            blurRadius: 18,
-            spreadRadius: 0.5,
-            offset: const Offset(0, 6),
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: skin.isLight ? 0.10 : 0.34),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [skin.primary, skin.secondary, skin.panelDeep],
-              ),
-              border: Border.all(
-                color: skin.text.withValues(alpha: skin.isLight ? 0.42 : 0.34),
-              ),
-            ),
-            child: Icon(
-              Icons.palette_rounded,
-              color: skin.textOnAccent,
-              size: 16,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Theme applied: ${korlixThemeLabelFor(normalizedTheme)}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: skin.text,
-                fontSize: 13.2,
-                height: 1.2,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.1,
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-final ValueNotifier<String> kKorlixThemeNotifier = ValueNotifier<String>(
-  'korlix_blue',
-);
 
 final ValueNotifier<String> kKorlixSelectedCharacterNotifier =
     ValueNotifier<String>('jj');
@@ -14878,7 +14345,7 @@ Make the entire output professional, well-structured using Markdown, and product
             border: Border.all(color: skin.primary.withOpacity(0.52)),
             boxShadow: [
               BoxShadow(
-                color: skin.glow.withOpacity(skin.isLight ? 0.12 : 0.28),
+                color: skin.glow.withOpacity(skin.isLight ? 0.04 : 0.10),
                 blurRadius: 26,
               ),
             ],
@@ -16909,54 +16376,19 @@ Make the entire output professional, well-structured using Markdown, and product
     );
   }
 
-  Color _korlixReadableForeground(
-    KorlixSkinPalette skin, {
-    bool muted = false,
-    bool hint = false,
-  }) {
-    if (skin.isLight) {
-      if (hint) {
-        return const Color(0xFF2F3F4E);
-      }
-
-      if (muted) {
-        return const Color(0xFF243444);
-      }
-
-      return const Color(0xFF07111F);
-    }
-
-    if (hint) {
-      return const Color(0xFFE3F8FF);
-    }
-
-    if (muted) {
-      return const Color(0xFFD7F1F8);
-    }
-
-    return const Color(0xFFF7FCFF);
+  Color _korlixReadableForeground(KorlixSkinPalette skin, {bool muted = false, bool hint = false}) {
+    return hint ? skin.hintText : muted ? skin.mutedText : skin.text;
   }
 
   Color _korlixReadableToolForeground(KorlixSkinPalette skin) {
-    return skin.isLight ? const Color(0xFF07111F) : const Color(0xFFF7FCFF);
+    return skin.text;
   }
 
-  Color _korlixDefinitionBorder(
-    KorlixSkinPalette skin, {
-    bool secondary = false,
-  }) {
-    if (skin.isLight) {
-      return secondary ? const Color(0xFF334155) : const Color(0xFF07111F);
-    }
+  Color _korlixDefinitionBorder(KorlixSkinPalette skin, {bool secondary = false}) =>
+    secondary ? skin.border : skin.primary;
 
-    return (secondary ? skin.secondary : skin.primary).withValues(alpha: 0.96);
-  }
-
-  Color _korlixDefinitionShadow(KorlixSkinPalette skin) {
-    return skin.isLight
-        ? const Color(0xFF07111F).withValues(alpha: 0.18)
-        : Colors.black.withValues(alpha: 0.52);
-  }
+  Color _korlixDefinitionShadow(KorlixSkinPalette skin) =>
+    Colors.black.withValues(alpha: skin.isLight ? .07 : .22);
 
   // KORLIX_3D_BEVEL_HELPERS_BEGIN
   Widget _korlixBeveledButtonSurface({
@@ -17216,13 +16648,13 @@ Make the entire output professional, well-structured using Markdown, and product
               color: _korlixDefinitionBorder(
                 skin,
               ).withValues(alpha: skin.isLight ? 0.72 : 0.96),
-              width: 2.8,
+              width: 1.2,
             ),
             boxShadow: [
               BoxShadow(
                 color: _korlixDefinitionShadow(skin),
-                blurRadius: 22,
-                spreadRadius: 1,
+                blurRadius: 16,
+                spreadRadius: 0,
                 offset: const Offset(0, 10),
               ),
             ],
@@ -17251,7 +16683,7 @@ Make the entire output professional, well-structured using Markdown, and product
               color: _korlixDefinitionBorder(
                 skin,
               ).withValues(alpha: skin.isLight ? 0.74 : 0.96),
-              width: 2.4,
+              width: 1.3,
             ),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -17325,55 +16757,9 @@ Make the entire output professional, well-structured using Markdown, and product
                     height: 48,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: canSubmit
-                          ? const Color(0xFF69D9E8).withValues(alpha: 0.16)
-                          : Colors.white.withValues(alpha: 0.06),
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: canSubmit
-                            ? [
-                                Color.lerp(
-                                  skin.primary,
-                                  Colors.white,
-                                  skin.isLight ? 0.36 : 0.20,
-                                )!,
-                                const Color(0xFF69D9E8).withValues(alpha: 0.23),
-                                Color.lerp(
-                                  skin.primary,
-                                  Colors.black,
-                                  skin.isLight ? 0.08 : 0.34,
-                                )!,
-                              ]
-                            : [
-                                Colors.white.withValues(alpha: 0.14),
-                                skin.panel.withValues(alpha: 0.42),
-                                Colors.black.withValues(alpha: 0.22),
-                              ],
-                      ),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: canSubmit
-                            ? skin.primary.withValues(alpha: 0.82)
-                            : inputHintColor.withValues(alpha: 0.32),
-                        width: 1.65,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.white.withValues(
-                            alpha: skin.isLight ? 0.58 : 0.08,
-                          ),
-                          blurRadius: 1.4,
-                          offset: const Offset(-1, -1),
-                        ),
-                        BoxShadow(
-                          color: Colors.black.withValues(
-                            alpha: skin.isLight ? 0.20 : 0.46,
-                          ),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+                      color: canSubmit ? skin.primary : skin.panelSoft,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: canSubmit ? skin.primary : skin.border.withValues(alpha: .5)),
                     ),
                     child: _loading
                         ? SizedBox(
@@ -17388,7 +16774,7 @@ Make the entire output professional, well-structured using Markdown, and product
                             Icons.send_rounded,
                             size: 25,
                             color: canSubmit
-                                ? const Color(0xFF69D9E8)
+                                ? skin.textOnAccent
                                 : inputHintColor.withOpacity(0.64),
                           ),
                   ),
@@ -17420,11 +16806,11 @@ Make the entire output professional, well-structured using Markdown, and product
                   skin,
                   secondary: true,
                 ).withValues(alpha: skin.isLight ? 0.74 : 0.94),
-                width: 2.6,
+                width: 1.2,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.34),
+                  color: Colors.black.withOpacity(skin.isLight ? .06 : .20),
                   blurRadius: 18,
                   offset: const Offset(0, 10),
                 ),
@@ -18998,149 +18384,35 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   Future<void> _applyThemeShortcut({required String theme}) async {
-    final normalizedTheme = korlixNormalizeSkinId(theme);
-
-    kKorlixThemeNotifier.value = normalizedTheme;
-
+    final selected = korlixNormalizeSkinId(theme);
+    kKorlixThemeNotifier.value = selected;
     if (mounted) {
       setState(() {});
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(korlixThemeAppliedSnackBar(selected));
     }
-
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('korlix_ui_theme', normalizedTheme);
-    } catch (_) {
-      // Local theme switching should still work even if persistence fails.
-    }
-
+      if (kKorlixThemeNotifier.value == selected) await prefs.setString('korlix_ui_theme', selected);
+    } catch (_) { /* Theme selection still applies when local storage is unavailable. */ }
+    if (kKorlixThemeNotifier.value != selected) return;
     try {
-      await http
-          .post(
-            _assertValidKorlixBackendUri(
-              '$kKorlixBackendBaseUrl/api/theme/set',
-            ),
-            headers: KorlixDeviceStore.headers(),
-            body: jsonEncode({'theme': normalizedTheme}),
-          )
-          .timeout(const Duration(seconds: 10));
-    } catch (_) {
-      // Backend theme sync should not block the visible shortcut switch.
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(korlixThemeAppliedSnackBar(normalizedTheme));
+      await http.post(_assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/theme/set'),
+        headers: KorlixDeviceStore.headers(), body: jsonEncode({'theme': selected}))
+        .timeout(const Duration(seconds: 10));
+    } catch (_) { /* The selected local theme remains usable while offline. */ }
   }
 
   Widget _buildThemeShortcutCircles() {
-    const skinIds = <String>[
-      'korlix_blue',
-      'matrix_green',
-      'ultra_gold',
-      'pink_white',
-      'dark_crimson',
-      'white_gray',
-    ];
-
-    return ValueListenableBuilder<String>(
-      valueListenable: kKorlixThemeNotifier,
-      builder: (context, theme, _) {
-        final activeId = korlixNormalizeSkinId(theme);
-
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(22, 10, 22, 2),
-          child: Align(
-            alignment: Alignment.center,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-              decoration: BoxDecoration(
-                color: korlixSkinPaletteFor(activeId).panel.withValues(
-                  alpha: korlixSkinPaletteFor(activeId).isLight ? 0.64 : 0.38,
-                ),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: korlixSkinPaletteFor(activeId).border.withValues(
-                    alpha: korlixSkinPaletteFor(activeId).isLight ? 0.32 : 0.24,
-                  ),
-                ),
-              ),
-              child: Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 10,
-                runSpacing: 8,
-                children: skinIds.map((skinId) {
-                  final skin = korlixSkinPaletteFor(skinId);
-                  final selected = skin.id == activeId;
-
-                  return Tooltip(
-                    message: skin.label,
-                    child: Semantics(
-                      button: true,
-                      label: 'Apply ${skin.label} theme',
-                      selected: selected,
-                      child: InkWell(
-                        onTap: () => _applyThemeShortcut(theme: skin.id),
-                        customBorder: const CircleBorder(),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          width: selected ? 38 : 32,
-                          height: selected ? 38 : 32,
-                          padding: EdgeInsets.all(selected ? 3.0 : 2.3),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: selected
-                                  ? skin.text
-                                  : skin.border.withValues(alpha: 0.62),
-                              width: selected ? 2.0 : 1.05,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: skin.glow.withValues(
-                                  alpha: selected ? 0.36 : 0.16,
-                                ),
-                                blurRadius: selected ? 14 : 8,
-                                spreadRadius: selected ? 1 : 0,
-                              ),
-                            ],
-                          ),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  skin.primary,
-                                  skin.secondary,
-                                  skin.panelDeep,
-                                ],
-                                stops: const [0.0, 0.62, 1.0],
-                              ),
-                            ),
-                            child: selected
-                                ? Icon(
-                                    Icons.check_rounded,
-                                    color: skin.textOnAccent,
-                                    size: 16,
-                                  )
-                                : const SizedBox.shrink(),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ),
-        );
-      },
-    );
+    return ValueListenableBuilder<String>(valueListenable: kKorlixThemeNotifier,
+      builder: (context, theme, _) => Padding(padding: const EdgeInsets.fromLTRB(22, 10, 22, 2),
+        child: KorlixThemeShortcuts(selectedId: theme,
+          onSelect: (id) => unawaited(_applyThemeShortcut(theme: id)),
+          onPreview: () async {
+            final selected = await showKorlixThemePicker(context, currentId: kKorlixThemeNotifier.value);
+            if (selected != null && mounted) await _applyThemeShortcut(theme: selected);
+          })));
   }
 
   List<String> _googlePlayAiReportReasons() {

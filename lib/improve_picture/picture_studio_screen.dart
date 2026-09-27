@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart' as ip;
 
 import '../korlix_image_saver.dart';
+import '../theme/korlix_theme.dart';
 import 'picture_studio_client.dart';
 
 typedef PictureEditCallback =
@@ -36,7 +37,8 @@ class PictureStudioScreen extends StatefulWidget {
 }
 
 class _PictureStudioScreenState extends State<PictureStudioScreen> {
-  static const accent = Color(0xFF63D9F6);
+  KorlixSkinPalette get _skin => korlixSkinOf(context);
+  Color get accent => _skin.primary;
   static const presets = <String, (String, IconData, String)>{
     'enhance': (
       'Natural polish',
@@ -256,10 +258,10 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
   }
 
   Widget _card(Widget child) => Material(
-    color: const Color(0xFF101E30),
+    color: _skin.panel,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(22),
-      side: const BorderSide(color: Colors.white12),
+      side: BorderSide(color: _skin.border.withValues(alpha: .35)),
     ),
     child: Padding(padding: const EdgeInsets.all(20), child: child),
   );
@@ -288,7 +290,7 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
                 ),
               ),
               if (_result != null)
-                const Icon(Icons.check_circle_outline, color: accent),
+                Icon(Icons.check_circle_outline, color: accent),
             ],
           ),
           if (_result != null)
@@ -317,7 +319,12 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  CustomPaint(painter: _TransparencyPainter()),
+                  CustomPaint(
+                    painter: _TransparencyPainter(
+                      _skin.panelDeep,
+                      _skin.panelSoft,
+                    ),
+                  ),
                   if (bytes != null)
                     InteractiveViewer(
                       key: ValueKey(bytes),
@@ -339,7 +346,7 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.add_photo_alternate_outlined,
                             size: 54,
                             color: accent,
@@ -350,9 +357,9 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
                             style: TextStyle(fontSize: 17),
                           ),
                           const SizedBox(height: 8),
-                          const Text(
+                          Text(
                             'JPG, PNG or WEBP · Up to 15 MB',
-                            style: TextStyle(color: Colors.white60),
+                            style: TextStyle(color: _skin.mutedText),
                           ),
                           const SizedBox(height: 20),
                           FilledButton.icon(
@@ -372,7 +379,7 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
             bytes == null
                 ? 'Your original stays available while you experiment.'
                 : 'Pinch or scroll to zoom. Drag to inspect details.',
-            style: const TextStyle(color: Colors.white60, fontSize: 12),
+            style: TextStyle(color: _skin.mutedText, fontSize: 12),
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -416,13 +423,13 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
               const SizedBox(height: 6),
               Text(
                 _result!.summary,
-                style: const TextStyle(color: Colors.white70, height: 1.45),
+                style: TextStyle(color: _skin.mutedText, height: 1.45),
               ),
               const SizedBox(height: 10),
             ],
             Text(
               '${_result!.quality == 'max' ? 'Maximum' : _result!.quality} quality · PNG · ${_result!.size}',
-              style: const TextStyle(color: accent, fontSize: 12),
+              style: TextStyle(color: accent, fontSize: 12),
             ),
             const SizedBox(height: 14),
             Wrap(
@@ -442,9 +449,9 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
               ],
             ),
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'Save your favorite before leaving. Edits stay in this open workspace.',
-              style: TextStyle(color: Colors.white60, fontSize: 12),
+              style: TextStyle(color: _skin.mutedText, fontSize: 12),
             ),
           ],
         ],
@@ -476,7 +483,7 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
         const SizedBox(height: 12),
         Text(
           presets[_preset]!.$3,
-          style: const TextStyle(color: Colors.white70, height: 1.4),
+          style: TextStyle(color: _skin.mutedText, height: 1.4),
         ),
         const SizedBox(height: 20),
         TextField(
@@ -572,10 +579,7 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
             padding: const EdgeInsets.only(bottom: 14),
             child: Semantics(
               liveRegion: true,
-              child: Text(
-                _error!,
-                style: const TextStyle(color: Color(0xFFFFAFAD)),
-              ),
+              child: Text(_error!, style: TextStyle(color: _skin.danger)),
             ),
           ),
         if (_busy)
@@ -592,7 +596,7 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
                   const SizedBox(height: 6),
                   Text(
                     'Maximum quality can take several minutes. Keep this screen open. ${_elapsed}s elapsed.',
-                    style: const TextStyle(color: Colors.white60, fontSize: 12),
+                    style: TextStyle(color: _skin.mutedText, fontSize: 12),
                   ),
                 ],
               ),
@@ -608,7 +612,7 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
           label: Text(_busy ? 'Creating your edit…' : 'Improve my picture'),
         ),
         const SizedBox(height: 10),
-        const Text(
+        Text(
           'Astra · Extra-high reasoning\nSunburst · Maximum image quality',
           textAlign: TextAlign.center,
           style: TextStyle(color: accent, height: 1.5, fontSize: 12),
@@ -625,13 +629,7 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ThemeData.dark(useMaterial3: true).copyWith(
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: accent,
-        brightness: Brightness.dark,
-      ),
-      scaffoldBackgroundColor: const Color(0xFF08111E),
-    );
+    final theme = korlixBuildTheme(_skin.id);
     return Theme(
       data: theme,
       child: PopScope(
@@ -639,7 +637,7 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
         child: Scaffold(
           appBar: AppBar(
             title: const Text('Improve My Picture'),
-            backgroundColor: const Color(0xFF08111E),
+            backgroundColor: _skin.backgroundMid,
             automaticallyImplyLeading: !_busy,
           ),
           body: SafeArea(
@@ -660,9 +658,9 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      const Text(
+                      Text(
                         'Choose a treatment, tell us what matters, and compare the result.',
-                        style: TextStyle(color: Colors.white70, height: 1.5),
+                        style: TextStyle(color: _skin.mutedText, height: 1.5),
                       ),
                       const SizedBox(height: 24),
                       LayoutBuilder(
@@ -697,20 +695,21 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
 }
 
 class _TransparencyPainter extends CustomPainter {
+  const _TransparencyPainter(this.first, this.second);
+  final Color first, second;
   @override
   void paint(Canvas canvas, Size size) {
     const side = 16.0;
     final paint = Paint();
     for (var y = 0; y < size.height / side; y++) {
       for (var x = 0; x < size.width / side; x++) {
-        paint.color = (x + y).isEven
-            ? const Color(0xFF1B293A)
-            : const Color(0xFF233247);
+        paint.color = (x + y).isEven ? first : second;
         canvas.drawRect(Rect.fromLTWH(x * side, y * side, side, side), paint);
       }
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _TransparencyPainter oldDelegate) =>
+      first != oldDelegate.first || second != oldDelegate.second;
 }
