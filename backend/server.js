@@ -20,6 +20,8 @@ import korlixAstra from "./korlix_astra.cjs";
 const {createTextResponse} = korlixAstra;
 import chatQuality from "./chat_quality.cjs";
 const {CHAT_MODEL, CHAT_EFFORT, chatHistory, imageSettings, imagePrompt, probeModelAccess} = chatQuality;
+import pictureStudio from "./picture_studio.cjs";
+const {pictureOptions, pictureModelSettings, improvePicture} = pictureStudio;
 let chatModelAccess = {chat: 'checking', images: 'checking'};
 import { toFile } from "openai/uploads";
 import { createClient } from "@supabase/supabase-js";
@@ -3655,6 +3657,7 @@ app.get("/api/health", (req, res) => {
     chatImageModel: imageSettings().model,
     chatImageQuality: imageSettings().quality,
     chatModelAccess,
+    pictureStudio: {analysisModel: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, ...pictureModelSettings()},
   });
 });
 
@@ -3815,63 +3818,9 @@ app.post("/api/account/delete-request", async (req, res) => {
 });
 
 
-function buildKorlixImageImprovePrompt(userPrompt) {
-  const instructions = String(userPrompt || "").trim();
-
-  return `
-Improve the uploaded image and return an actual enhanced image.
-
-User instructions:
-${instructions || "Create a polished, professional, natural-looking enhanced version of this picture."}
-
-Important preservation rules:
-- Preserve the subject's identity, facial structure, skin tone, and defining features. Keep other details unless the user explicitly requests changes to them.
-- Follow requested changes to pose, outfit, setting, or artistic style. Otherwise keep the enhancement natural and photorealistic.
-- Improve lighting, sharpness, color, contrast, background polish, detail, and professional photographic quality.
-- Keep the result photorealistic and respectful.
-- Do not add distorted hands, extra fingers, fake text, watermarks, or unrealistic body proportions.
-`.trim();
-}
-
-async function createKorlixImprovedImage({ file, prompt }) {
-  const mimeType = getUploadMimeType(file);
-  const {model, quality, output_format} = imageSettings();
-
-  const client = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    timeout: 240000,
-    maxRetries: 0,
-  });
-
-  const imageFile = await toFile(
-    file.buffer,
-    file.originalname || "korlix-upload.png",
-    {
-      type: mimeType || "image/png",
-    }
-  );
-
-  const result = await client.images.edit({
-    model,
-    image: imageFile,
-    prompt: buildKorlixImageImprovePrompt(prompt),
-    n: 1,
-    size: "auto",
-    quality, output_format,
-  });
-
-  const first = result?.data?.[0] || {};
-  const b64 = first.b64_json || null;
-  const imageUrl = first.url || null;
-
-  if (!b64 && !imageUrl) {
-    throw new Error("OpenAI did not return an enhanced image.");
-  }
-
-  return {
-    imageDataUrl: b64 ? `data:image/png;base64,${b64}` : null,
-    imageUrl,
-  };
+async function createKorlixImprovedImage({ file, prompt, options }) {
+  const client = new OpenAI({apiKey: process.env.OPENAI_API_KEY, maxRetries: 0});
+  return improvePicture({client, toFile, file, options: options || pictureOptions({prompt})});
 }
 
 function buildKorlixImageCreatePrompt(userPrompt, style = "auto") {
@@ -4040,7 +3989,8 @@ app.post("/api/image/improve", documentUpload.single("image"), async (req, res) 
 
     const file = req.file;
     const body = req.body || {};
-    const prompt = String(body.prompt || "").trim();
+    const options = pictureOptions(body);
+    const prompt = options.prompt;
     const languageCode = body.language || "en";
 
     if (!file) {
@@ -4085,7 +4035,7 @@ app.post("/api/image/improve", documentUpload.single("image"), async (req, res) 
 
     const imageResult = await createKorlixImprovedImage({
       file,
-      prompt,
+      prompt, options,
     });
 
     const content = "Enhanced image generated.";
@@ -4116,6 +4066,13 @@ app.post("/api/image/improve", documentUpload.single("image"), async (req, res) 
       content,
       imageDataUrl: imageResult.imageDataUrl,
       imageUrl: imageResult.imageUrl,
+      model: imageResult.model,
+      imageQuality: imageResult.imageQuality,
+      imageSize: imageResult.imageSize,
+      analysisModel: imageResult.analysisModel,
+      reasoningEffort: imageResult.reasoningEffort,
+      editSummary: imageResult.editSummary,
+      background: imageResult.background,
       authenticated: true,
       tier,
       creditsUsed: creditsNeeded,

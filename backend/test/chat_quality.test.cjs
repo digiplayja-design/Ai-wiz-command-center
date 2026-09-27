@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const quality = require('../chat_quality.cjs');
+const studio = require('../picture_studio.cjs');
 const {createTextResponse} = require('../korlix_astra.cjs');
 const source = fs.readFileSync(require.resolve('../server.js'), 'utf8');
 
@@ -14,13 +15,13 @@ function fixture(options = {}) {
       this.responses = {create: async body => {
         calls.push(body);
         if (options.providerFailure || (options.searchFailure && body.tools)) throw Error('Provider unavailable');
-        return {status: options.incomplete ? 'incomplete' : 'completed', output_text: 'A useful answer.'};
+        return {status: options.incomplete ? 'incomplete' : 'completed', output_text: body.text?.format ? JSON.stringify({editPrompt:'Improve the visible light naturally.',summary:'Natural lighting.'}) : 'A useful answer.'};
       }};
-      this.images = {edit: async body => {calls.push(body);return {data:[{b64_json:'cGljdHVyZQ=='}]};}};
+      this.images = {edit: async body => {calls.push(body);return {data:[{b64_json:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mP8/x8AAwMCAO+a2ioAAAAASUVORK5CYII='}]};}};
     }
   }
   const user = options.anonymous ? null : {id:'signed-in-user'};
-  const scope = {...quality, createTextResponse, OpenAI, Buffer, AbortSignal,
+  const scope = {...quality, ...studio, createTextResponse, OpenAI, Buffer, AbortSignal,
     process: {env: {OPENAI_API_KEY:'offline', OPENAI_MODEL:'old-model', OPENAI_SEARCH_MODEL:'old-search'}},
     languageMap: {en:{name:'English',instruction:'Use English.'}},
     shouldUseLiveSearch: command => command.includes('today'), wantsFile: () => false,
@@ -46,7 +47,7 @@ function fixture(options = {}) {
   };
   vm.createContext(scope);
   for (const name of ['createOpenAIResponse','buildKorlixImageCreatePrompt',
-    'createKorlixImaginedImage','buildKorlixImageImprovePrompt','createKorlixImprovedImage']) {
+    'createKorlixImaginedImage','createKorlixImprovedImage']) {
     const match = new RegExp('(?:async )?function '+name+'\\b').exec(source);
     vm.runInContext(source.slice(match.index, source.indexOf('\n}\n',match.index)+2),scope);
   }
@@ -121,10 +122,16 @@ test('image rollback uses only dedicated server configuration and preserves comp
   assert.equal(quality.imageSettings({}, {KORLIX_CHAT_IMAGE_MODEL:'gpt-image-2'}).quality,'high');
   assert.throws(()=>quality.imageSettings({}, {KORLIX_CHAT_IMAGE_MODEL:'arbitrary-model'}));
 });
-test('actual image edit request uses high fidelity generation model without a forced square crop',async()=>{
-  const f=fixture();await f.scope.createKorlixImprovedImage({file:{buffer:Buffer.from('image'),originalname:'photo.png'},prompt:'Improve lighting'});
-  assert.equal(f.calls[0].model,quality.IMAGE_MODEL);assert.equal(f.calls[0].quality,'xhigh');
-  assert.equal(f.calls[0].size,'auto');assert.equal(f.calls[0].output_format,'png');
+test('legacy image helper now runs Astra planning and maximum-quality edits',async()=>{
+  const sharp=require('sharp');
+  const buffer=await sharp({create:{width:8,height:8,channels:3,background:'#5588aa'}}).png().toBuffer();
+  const f=fixture();
+  // Use a valid provider PNG so output validation is exercised.
+  f.scope.OpenAI=class {constructor(){this.responses={create:async body=>{f.calls.push(body);return {status:'completed',output_text:JSON.stringify({editPrompt:'Improve light.',summary:'Polish light.'})};}};this.images={edit:async body=>{f.calls.push(body);return {data:[{b64_json:buffer.toString('base64')}]};}};}};
+  await f.scope.createKorlixImprovedImage({file:{buffer,originalname:'photo.png'},prompt:'Improve lighting'});
+  assert.equal(f.calls[0].model,quality.CHAT_MODEL);assert.equal(f.calls[0].reasoning.effort,'xhigh');
+  assert.equal(f.calls[1].model,quality.IMAGE_MODEL);assert.equal(f.calls[1].quality,'max');
+  assert.equal(f.calls[1].size,'auto');assert.equal(f.calls[1].output_format,'png');
 });
 
 test('startup model visibility check is read-only, bounded, and distinguishes access from generation',async()=>{
