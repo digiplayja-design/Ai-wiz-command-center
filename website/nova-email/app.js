@@ -693,7 +693,7 @@ function findList(
 function emailBase() {
   if (!APP.agentId) {
     throw new Error(
-      "Nova Agent ID is not configured.",
+      "KORLIX Agent ID is not configured.",
     );
   }
 
@@ -853,7 +853,7 @@ function setConnectedState(
     label ||
     (
       connected
-        ? "Nova Email connected"
+        ? "KORLIX Email connected"
         : "Connect session"
     );
 }
@@ -951,10 +951,10 @@ function setTopStatus({
 
   els.pauseSystemButton.textContent =
     !agentEmailEnabled
-      ? "▶ Enable Nova"
+      ? "▶ Enable KORLIX"
       : paused
-        ? "▶ Resume Nova"
-        : "Ⅱ Pause Nova";
+        ? "▶ Resume KORLIX"
+        : "Ⅱ Pause KORLIX";
 
   els.stopAutopilotButton.disabled =
     !autopilot;
@@ -1972,7 +1972,7 @@ async function refreshDashboard({
 
   setConnectedState(
     true,
-    `Nova · ${APP.agentId}`,
+    `KORLIX · ${APP.agentId}`,
   );
 
   const base = emailBase();
@@ -2098,7 +2098,7 @@ async function refreshDashboard({
     );
   } else if (!silent) {
     toast(
-      "Nova Email production data refreshed.",
+      "KORLIX Email production data refreshed.",
       "success",
     );
   }
@@ -2230,10 +2230,10 @@ async function setPaused(
 
   const phrase =
     enableAction
-      ? "ENABLE NOVA EMAIL"
+      ? "ENABLE KORLIX EMAIL"
       : paused
-        ? "PAUSE NOVA"
-        : "RESUME NOVA";
+        ? "PAUSE KORLIX"
+        : "RESUME KORLIX";
 
   const confirmation = prompt(
     `Type ${phrase} to continue.`,
@@ -2295,16 +2295,16 @@ async function setPaused(
       )
     ) {
       throw new Error(
-        "Nova's settings were saved, but production still does not permit drafting. Press Refresh and review the status cards.",
+        "KORLIX's settings were saved, but production still does not permit drafting. Press Refresh and review the status cards.",
       );
     }
 
     toast(
       enableAction
-        ? "Nova Agent Email is enabled in Approval Required mode."
+        ? "KORLIX Agent Email is enabled in Approval Required mode."
         : paused
-          ? "Nova Agent Email is paused."
-          : "Nova Agent Email is resumed.",
+          ? "KORLIX Agent Email is paused."
+          : "KORLIX Agent Email is resumed.",
       "success",
     );
 
@@ -2419,7 +2419,7 @@ async function setAutopilot(enabled) {
         )
       ) {
         blockers.push(
-          "Nova Agent Email authorization",
+          "KORLIX Agent Email authorization",
         );
       }
 
@@ -2430,7 +2430,7 @@ async function setAutopilot(enabled) {
         )
       ) {
         blockers.push(
-          "Nova's saved Agent Email setting",
+          "KORLIX's saved Agent Email setting",
         );
       }
 
@@ -2441,7 +2441,7 @@ async function setAutopilot(enabled) {
         )
       ) {
         blockers.push(
-          "Nova's saved pause setting",
+          "KORLIX's saved pause setting",
         );
       }
 
@@ -2454,8 +2454,8 @@ async function setAutopilot(enabled) {
 
     toast(
       enabled
-        ? "Nova Autopilot is enabled."
-        : "Nova Autopilot is stopped and Approval Required mode is active.",
+        ? "KORLIX Autopilot is enabled."
+        : "KORLIX Autopilot is stopped and Approval Required mode is active.",
       "success",
     );
 
@@ -2861,7 +2861,7 @@ async function approveAndSendDraft() {
     );
 
     toast(
-      "Nova sent the approved production email.",
+      "KORLIX sent the approved production email.",
       "success",
     );
 
@@ -2911,7 +2911,7 @@ async function connectSession() {
   if (!APP.agentId) {
     setMessage(
       els.connectionMessage,
-      "Searching your KORLIX Agent Hub for Nova…",
+      "Searching your KORLIX Agent Hub for KORLIX…",
     );
 
     APP.agentId =
@@ -2921,7 +2921,7 @@ async function connectSession() {
   if (!APP.agentId) {
     setMessage(
       els.connectionMessage,
-      "Nova was not discovered automatically. Enter Nova’s Agent Hub ID in the field above.",
+      "KORLIX was not discovered automatically. Enter KORLIX’s Agent Hub ID in the field above.",
       "error",
     );
 
@@ -3335,7 +3335,7 @@ const KORLIX_NOVA_EMAIL_FIX_VERSION_V2 = "2026-08-25-auth-logo-v2";
 APP.refreshToken = null;
 APP.userEmail = null;
 APP.deviceId = null;
-APP.deviceLabel = "Nova Email Web Control Center";
+APP.deviceLabel = "KORLIX Email Web Control Center";
 
 function korlixParseStoredValueV2(raw) {
   if (raw === null || raw === undefined) {
@@ -3794,7 +3794,7 @@ function korlixResetEmailSessionV3() {
 
   setMessage(
     els.connectionMessage,
-    "Nova Email’s private session cache was reset. Your main KORLIX login was not deleted. Return to the signed-in KORLIX tab, then press Connect Session once.",
+    "KORLIX Email’s private session cache was reset. Your main KORLIX login was not deleted. Return to the signed-in KORLIX tab, then press Connect Session once.",
     "success",
   );
 
@@ -4203,7 +4203,7 @@ async function korlixRefreshSessionUnlockedV3(
           )
         ) {
           throw new Error(
-            "The saved Nova Email refresh token was already used. Its stale private copy has been cleared. Return to KORLIX Login, sign in once, then come back and press Connect Session once.",
+            "The saved KORLIX Email refresh token was already used. Its stale private copy has been cleared. Return to KORLIX Login, sign in once, then come back and press Connect Session once.",
           );
         }
       } else if (
@@ -4615,7 +4615,7 @@ refreshDashboard = async function refreshDashboardV2(
   if (!APP.token || !APP.agentId) {
     setMessage(
       els.connectionMessage,
-      "A valid signed-in KORLIX session and Nova Agent ID are required.",
+      "A valid signed-in KORLIX session and KORLIX Agent ID are required.",
       "error",
     );
     showModal("connectionModal");
@@ -4623,7 +4623,7 @@ refreshDashboard = async function refreshDashboardV2(
   }
 
   els.refreshButton.disabled = true;
-  setConnectedState(true, "Connecting to Nova…");
+  setConnectedState(true, "Connecting to KORLIX…");
 
   const base = emailBase();
 
@@ -4696,12 +4696,12 @@ refreshDashboard = async function refreshDashboardV2(
 
   setConnectedState(
     true,
-    `Nova · ${APP.agentId}`,
+    `KORLIX · ${APP.agentId}`,
   );
 
   setMessage(
     els.connectionMessage,
-    "Nova Agent Email connected. Production data loaded successfully.",
+    "KORLIX Agent Email connected. Production data loaded successfully.",
     "success",
   );
 
@@ -4722,7 +4722,7 @@ refreshDashboard = async function refreshDashboardV2(
     );
   } else if (!silent) {
     toast(
-      "Nova Email production data refreshed.",
+      "KORLIX Email production data refreshed.",
       "success",
     );
   }
@@ -4766,7 +4766,7 @@ connectSession = async function connectSessionV2() {
 
     setMessage(
       els.connectionMessage,
-      "Session verified. Locating your exact active Nova Agent Hub profile…",
+      "Session verified. Locating your exact active KORLIX Agent Hub profile…",
     );
 
     const enteredAgentId = els.agentIdInput.value.trim();
@@ -4784,7 +4784,7 @@ connectSession = async function connectSessionV2() {
 
     if (!APP.agentId) {
       throw new Error(
-        "Nova was not found in this KORLIX account. Confirm that Nova is an active custom Agent Hub agent with the Agent Email tool authorized.",
+        "KORLIX was not found in this KORLIX account. Confirm that KORLIX is an active custom Agent Hub agent with the Agent Email tool authorized.",
       );
     }
 
@@ -4797,7 +4797,7 @@ connectSession = async function connectSessionV2() {
 
     setMessage(
       els.connectionMessage,
-      `Nova profile ${APP.agentId} found. Loading production Agent Email data…`,
+      `KORLIX profile ${APP.agentId} found. Loading production Agent Email data…`,
     );
 
     let statusPayload;
@@ -4838,7 +4838,7 @@ connectSession = async function connectSessionV2() {
 
     if (!connected) {
       throw new Error(
-        "The Nova status request did not complete successfully.",
+        "The KORLIX status request did not complete successfully.",
       );
     }
   } catch (error) {
@@ -4879,7 +4879,7 @@ boot = async function bootV2() {
   if (bundle.accessToken || bundle.refreshToken) {
     setMessage(
       els.connectionMessage,
-      "Session found. Verifying and loading Nova Agent Email…",
+      "Session found. Verifying and loading KORLIX Agent Email…",
     );
     showModal("connectionModal");
 
@@ -4900,7 +4900,7 @@ boot = async function bootV2() {
 
       if (!APP.agentId) {
         throw new Error(
-          "Nova was not discovered automatically. Enter Nova’s Agent Hub ID and press Connect Session.",
+          "KORLIX was not discovered automatically. Enter KORLIX’s Agent Hub ID and press Connect Session.",
         );
       }
 
@@ -5018,7 +5018,7 @@ function korlixEnsureAuthorizeButtonV3() {
   button.type = "button";
   button.className =
     "button button-warning nova-tool-authorization-button";
-  button.textContent = "Authorize Nova for Agent Email";
+  button.textContent = "Authorize KORLIX for Agent Email";
   button.hidden = true;
 
   const actions =
@@ -5059,7 +5059,7 @@ function korlixSetAuthorizeButtonV3(error) {
   if (required) {
     button.disabled = false;
     button.textContent =
-      "Authorize Nova for Agent Email";
+      "Authorize KORLIX for Agent Email";
   }
 }
 
@@ -5089,7 +5089,7 @@ async function korlixAuthorizeNovaEmailToolV3() {
   ) {
     setMessage(
       els.connectionMessage,
-      "Connect and verify the KORLIX session before authorizing Nova.",
+      "Connect and verify the KORLIX session before authorizing KORLIX.",
       "error",
     );
 
@@ -5097,10 +5097,10 @@ async function korlixAuthorizeNovaEmailToolV3() {
   }
 
   const phrase =
-    "AUTHORIZE NOVA EMAIL";
+    "AUTHORIZE KORLIX EMAIL";
 
   const confirmation = prompt(
-    "This will add the Agent Email tool to the exact active Nova profile. " +
+    "This will add the Agent Email tool to the exact active KORLIX profile. " +
     `Type ${phrase} to continue.`,
   );
 
@@ -5116,11 +5116,11 @@ async function korlixAuthorizeNovaEmailToolV3() {
 
   button.disabled = true;
   button.textContent =
-    "Authorizing Nova…";
+    "Authorizing KORLIX…";
 
   setMessage(
     els.connectionMessage,
-    "Loading the exact active Nova profile and preserving its current tools, training, memory, mission, and identity…",
+    "Loading the exact active KORLIX profile and preserving its current tools, training, memory, mission, and identity…",
   );
 
   try {
@@ -5173,7 +5173,7 @@ async function korlixAuthorizeNovaEmailToolV3() {
 
     if (!isCustom || !active) {
       throw new Error(
-        "Agent Email can be authorized only for the active custom Nova profile.",
+        "Agent Email can be authorized only for the active custom KORLIX profile.",
       );
     }
 
@@ -5205,7 +5205,7 @@ async function korlixAuthorizeNovaEmailToolV3() {
               source:
                 "nova_email_web_tool_authorization",
               changeSummary:
-                "User authorized the active Nova profile to use Agent Email from the production web control center.",
+                "User authorized the active KORLIX profile to use Agent Email from the production web control center.",
             }),
           },
         );
@@ -5221,13 +5221,13 @@ async function korlixAuthorizeNovaEmailToolV3() {
       !verifiedToolIds.includes("agent_email")
     ) {
       throw new Error(
-        "Nova’s profile update completed without the Agent Email tool. No email was sent.",
+        "KORLIX’s profile update completed without the Agent Email tool. No email was sent.",
       );
     }
 
     setMessage(
       els.connectionMessage,
-      "Nova is now authorized for Agent Email. Reloading the production control center…",
+      "KORLIX is now authorized for Agent Email. Reloading the production control center…",
       "success",
     );
 
@@ -5249,12 +5249,12 @@ async function korlixAuthorizeNovaEmailToolV3() {
 
     if (!connected) {
       throw new Error(
-        "Nova was authorized, but the production dashboard did not finish loading. Press Connect Session once more.",
+        "KORLIX was authorized, but the production dashboard did not finish loading. Press Connect Session once more.",
       );
     }
 
     toast(
-      "Nova Agent Email authorization is active.",
+      "KORLIX Agent Email authorization is active.",
       "success",
     );
   } catch (error) {
@@ -5273,7 +5273,7 @@ async function korlixAuthorizeNovaEmailToolV3() {
   } finally {
     button.disabled = false;
     button.textContent =
-      "Authorize Nova for Agent Email";
+      "Authorize KORLIX for Agent Email";
   }
 }
 
@@ -5772,7 +5772,7 @@ async function korlixApproveSelectedDraftV1({
         "success",
       );
       toast(
-        "Nova sent the approved production email.",
+        "KORLIX sent the approved production email.",
         "success",
       );
       return;
@@ -5886,7 +5886,7 @@ async function korlixSendApprovedDraftV1() {
       "success",
     );
     toast(
-      "Nova sent the approved production email.",
+      "KORLIX sent the approved production email.",
       "success",
     );
   } catch (error) {
@@ -6342,9 +6342,9 @@ fullSettingsPayload =
             "fromName",
             "from_name",
           ],
-          "NOVA",
+          "KORLIX",
         ),
-        "NOVA",
+        "KORLIX",
       ),
 
       marketingEnabled: asBoolean(

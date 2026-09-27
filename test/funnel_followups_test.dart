@@ -262,7 +262,7 @@ void main() {
         await t.ensureVisible(find.text('Schedule reply'));
         await t.tap(find.text('Schedule reply'));
         await t.pumpAndSettle();
-        expect(find.text('Schedule with NOVA'), findsOneWidget);
+        expect(find.text('Schedule with KORLIX'), findsOneWidget);
         final approve = find.widgetWithText(FilledButton, 'Approve & schedule');
         expect(t.widget<FilledButton>(approve).onPressed, isNull);
         expect(calls.where((r) => r.method == 'POST'), isEmpty);
@@ -299,7 +299,7 @@ void main() {
       },
     );
   }
-  testWidgets('NOVA Autopilot permission is required to schedule', (t) async {
+  testWidgets('KORLIX Autopilot permission is required to schedule', (t) async {
     final data = fixture(), calls = <http.Request>[];
     data['scheduling_ready'] = false;
     await render(t, data, calls);
@@ -331,7 +331,7 @@ void main() {
         await t.ensureVisible(find.text('Build sequence'));
         await t.tap(find.text('Build sequence'));
         await t.pumpAndSettle();
-        expect(find.text('Build a NOVA sequence'), findsOneWidget);
+        expect(find.text('Build a KORLIX sequence'), findsOneWidget);
         expect(calls.where((r) => r.method == 'POST'), isEmpty);
         await t.tap(find.widgetWithText(FilledButton, 'Review sequence'));
         await t.pumpAndSettle();

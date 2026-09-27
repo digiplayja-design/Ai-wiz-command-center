@@ -297,7 +297,7 @@ void main() {
     );
   });
   testWidgets(
-    'Profile opens on mobile, with reachable editing and Nova permissions',
+    'Profile opens on mobile, with reachable editing and KORLIX permissions',
     (tester) async {
       viewport(tester, 390, height: 844);
       await tester.pumpWidget(
@@ -473,7 +473,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Email').last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Use Nova Email contacts'));
+      await tester.tap(find.text('Use KORLIX Email contacts'));
       await tester.pumpAndSettle();
       expect(find.text('2 ready'), findsOneWidget);
       expect(find.text('1 duplicates'), findsOneWidget);

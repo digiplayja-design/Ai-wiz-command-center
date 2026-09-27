@@ -168,7 +168,7 @@ void main() {
         ),
       );
       await t.pump();
-      expect(find.text('NOVA Funnel Studio'), findsOneWidget);
+      expect(find.text('KORLIX Funnel Studio'), findsOneWidget);
       expect(t.takeException(), isNull);
       await t.ensureVisible(find.text('Open studio'));
       await t.tap(find.text('Open studio'));

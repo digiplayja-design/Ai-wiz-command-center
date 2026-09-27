@@ -292,7 +292,7 @@ class _ContactEditorState extends State<ContactEditor> {
             SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Prepare Nova to reach out with context. Saving permissions does not send an email or place a call.',
+                'Prepare KORLIX to reach out with context. Saving permissions does not send an email or place a call.',
                 style: TextStyle(
                   fontSize: 12,
                   height: 1.7,
@@ -340,7 +340,7 @@ class _ContactEditorState extends State<ContactEditor> {
           ),
         ),
         subtitle: const Text(
-          'Block Nova outreach for this contact.',
+          'Block KORLIX outreach for this contact.',
           style: TextStyle(fontSize: 12, color: CrmStyle.muted),
         ),
         value: _blocked,
@@ -449,7 +449,7 @@ class _ContactEditorState extends State<ContactEditor> {
                                 ? null
                                 : () => setState(() => _section = i),
                             child: Text(
-                              ['Details', 'Relationship', 'Nova'][i],
+                              ['Details', 'Relationship', 'KORLIX'][i],
                               style: TextStyle(fontSize: small ? 11 : 13),
                             ),
                           ),

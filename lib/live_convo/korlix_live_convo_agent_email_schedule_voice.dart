@@ -616,7 +616,7 @@ class KorlixLiveConvoAgentEmailScheduleVoiceBridge {
         ? recipient.email
         : recipient.displayName;
     return _svText(
-      'Nova ${scheduleType == 'weekly' ? 'Weekly' : 'One-time'} email to $label',
+      'KORLIX ${scheduleType == 'weekly' ? 'Weekly' : 'One-time'} email to $label',
       max: 200,
     );
   }
@@ -714,7 +714,7 @@ class KorlixLiveConvoAgentEmailScheduleVoiceClient {
       return payload;
     } on TimeoutException {
       throw const KorlixLiveConvoAgentEmailVoiceException(
-        'The scheduled email request timed out. Review the Nova Email Control '
+        'The scheduled email request timed out. Review the KORLIX Email Control '
         'Center before retrying.',
         code: 'agent_email_schedule_voice_timeout',
         statusCode: 504,
@@ -902,14 +902,14 @@ class KorlixLiveConvoAgentEmailScheduleVoiceClient {
       if (sent) {
         throw const KorlixLiveConvoAgentEmailVoiceException(
           'The server returned an unsafe immediate-send result. Review the '
-          'Nova Email Control Center immediately.',
+          'KORLIX Email Control Center immediately.',
           code: 'agent_email_schedule_voice_no_immediate_send_boundary_failed',
         );
       }
       if (!pending.matchesRule(rule)) {
         throw const KorlixLiveConvoAgentEmailVoiceException(
           'The saved rule response did not match the exact spoken schedule. '
-          'Review the Nova Email Control Center before retrying.',
+          'Review the KORLIX Email Control Center before retrying.',
           code: 'agent_email_schedule_voice_created_rule_mismatch',
         );
       }
@@ -918,7 +918,7 @@ class KorlixLiveConvoAgentEmailScheduleVoiceClient {
       if (ruleId.isEmpty || nextRunAt.isEmpty) {
         throw const KorlixLiveConvoAgentEmailVoiceException(
           'KORLIX could not verify the saved schedule ID and next run time. '
-          'Review the Nova Email Control Center before retrying.',
+          'Review the KORLIX Email Control Center before retrying.',
           code: 'agent_email_schedule_voice_created_rule_unverified',
         );
       }
@@ -959,7 +959,7 @@ class KorlixLiveConvoAgentEmailScheduleVoiceClient {
         'code': error.code,
         'message': unknown
             ? 'KORLIX could not confirm the final schedule-creation result. '
-                  'Review the Nova Email Control Center before retrying.'
+                  'Review the KORLIX Email Control Center before retrying.'
             : error.message,
         'statusCode': error.statusCode,
         'ruleCreated': false,
@@ -974,7 +974,7 @@ class KorlixLiveConvoAgentEmailScheduleVoiceClient {
         'code': 'agent_email_schedule_voice_create_unexpected_error',
         'message': started
             ? 'KORLIX could not confirm the final schedule-creation result. '
-                  'Review the Nova Email Control Center before retrying.'
+                  'Review the KORLIX Email Control Center before retrying.'
             : 'KORLIX could not create the schedule. Nothing was sent.',
         'ruleCreated': false,
         'scheduled': false,

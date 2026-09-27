@@ -677,7 +677,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
       final r = await widget.client.request('GET', '/$_org/email-recipients');
       final people = wfRows(r['recipients']);
       if (people.isEmpty) {
-        _toast('Add an approved recipient in NOVA Email Center first.');
+        _toast('Add an approved recipient in KORLIX Email Center first.');
         return;
       }
       final brief = await widget.client.request(
@@ -688,8 +688,8 @@ class _WorkforceScreenState extends State<WorkforceScreen>
       if (!mounted) return;
       final req = wfId();
       await _form(
-        'Prepare NOVA email',
-        'Review the report below. This creates a draft in NOVA Email Center; it does not send it.\n\n${brief['text']}',
+        'Prepare KORLIX email',
+        'Review the report below. This creates a draft in KORLIX Email Center; it does not send it.\n\n${brief['text']}',
         [
           WfField(
             'recipient_id',
@@ -713,7 +713,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
             '/$_org/email-draft',
             body: {...p, ...?_query, 'request_id': req},
           );
-          _toast('Draft created in NOVA Email Center.');
+          _toast('Draft created in KORLIX Email Center.');
         },
         button: 'Create email draft',
       );
@@ -1744,7 +1744,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
             SizedBox(width: 10),
             Expanded(
               child: Text(
-                'NOVA team brief',
+                'KORLIX team brief',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
               ),
             ),
@@ -1763,7 +1763,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
         ],
         const SizedBox(height: 16),
         const Text(
-          'Email drafts open in NOVA Email Center for review. Automated outbound calls are not enabled in this release.',
+          'Email drafts open in KORLIX Email Center for review. Automated outbound calls are not enabled in this release.',
           style: TextStyle(color: WfStyle.muted, height: 1.5, fontSize: 11),
         ),
       ],

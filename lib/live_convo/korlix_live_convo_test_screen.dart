@@ -1069,7 +1069,7 @@ class _KorlixLiveConvoTestScreenState extends State<KorlixLiveConvoTestScreen> {
         ? 'The exact approved email was sent successfully.'
         : unknown
         ? 'KORLIX could not confirm the final delivery result. Review the '
-              'Nova Email Control Center before retrying.'
+              'KORLIX Email Control Center before retrying.'
         : 'The email was not sent.';
 
     if (success) {

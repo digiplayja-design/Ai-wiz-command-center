@@ -408,7 +408,7 @@ void main() {
       final reopened = FakeRadar()..jobs = c.jobs;
       await show(t, reopened, width: 390);
       expect(
-        find.textContaining('Nova is searching official notices'),
+        find.textContaining('KORLIX is searching official notices'),
         findsOneWidget,
       );
       reopened.jobs = [jobData('completed')];

@@ -331,7 +331,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
   Future<void> _start(String kind, {String? opportunityId}) async {
     if (_working || _locked) return;
     if (_profile == null || _profileDirty) {
-      setState(() => _error = 'Save your business profile before asking Nova.');
+      setState(() => _error = 'Save your business profile before asking KORLIX.');
       _go(2);
       return;
     }
@@ -492,7 +492,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
         }
       },
       success: current == null
-          ? 'RFP saved. Ask Nova for a bid-readiness review.'
+          ? 'RFP saved. Ask KORLIX for a bid-readiness review.'
           : 'Changes saved. Review again if you changed the RFP text.',
     );
     if (mounted && !_locked && _error == null) _go(1);
@@ -705,7 +705,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
             _heading(
               'Find your next opportunity',
               subtitle: _profile == null
-                  ? 'Start with a short business profile so Nova knows what to look for.'
+                  ? 'Start with a short business profile so KORLIX knows what to look for.'
                   : 'Searching for ${_s(_map(_profile?['data'])['businessName'])} · ${_s(_map(_profile?['data'])['location'])}',
             ),
             if (_profile == null)
@@ -794,7 +794,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
               ),
               SizedBox(height: 8),
               Text(
-                'Nova surfaces relevant notices, explains why they may fit, and helps you prepare. Your saved pipeline begins with your first opportunity.',
+                'KORLIX surfaces relevant notices, explains why they may fit, and helps you prepare. Your saved pipeline begins with your first opportunity.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: _muted, height: 1.5),
               ),
@@ -856,7 +856,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
               ),
             ),
             const Text(
-              'Credentials are self-reported. Nova cannot certify eligibility. Search uses your services, service area, NAICS codes and search focus; bid reviews also use the rest of this profile and your RFP text.',
+              'Credentials are self-reported. KORLIX cannot certify eligibility. Search uses your services, service area, NAICS codes and search focus; bid reviews also use the rest of this profile and your RFP text.',
               style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
             ),
             const SizedBox(height: 16),
@@ -1076,7 +1076,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
                         : () => _start('review', opportunityId: _s(o['id'])),
                     icon: const Icon(Icons.auto_awesome),
                     label: Text(
-                      r.isEmpty ? 'Review with Nova' : 'Review again',
+                      r.isEmpty ? 'Review with KORLIX' : 'Review again',
                     ),
                   ),
                 ],
@@ -1084,7 +1084,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
               const SizedBox(height: 12),
               Text(
                 _s(d['noticeText']).isEmpty
-                    ? 'Add the full RFP text for a detailed requirements review. Without it, Nova can only assess the search summary.'
+                    ? 'Add the full RFP text for a detailed requirements review. Without it, KORLIX can only assess the search summary.'
                     : 'Full notice text provided by you. Confirm it includes current amendments.',
                 style: const TextStyle(
                   color: _muted,
@@ -1119,7 +1119,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _heading(
-                  'Nova’s bid-readiness review',
+                  'KORLIX’s bid-readiness review',
                   subtitle:
                       'Guidance based on your supplied information. Check the original requirements before committing.',
                 ),
@@ -1144,7 +1144,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
                   'Profile snapshot: ${_s(r['profileUpdatedAt'])}',
                   style: const TextStyle(fontSize: 11, color: _muted),
                 ),
-                _bullets('Why Nova reached this view', r['reasons']),
+                _bullets('Why KORLIX reached this view', r['reasons']),
                 if (_rows(r['requirements']).isNotEmpty) ...[
                   const SizedBox(height: 20),
                   const Text(
@@ -1480,8 +1480,8 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
                                                 _running
                                                     ? (_job?['kind'] ==
                                                               'discover'
-                                                          ? 'Nova is searching official notices… You can return later; your request is saved.'
-                                                          : 'Nova is preparing your bid review and draft… You can return later; your request is saved.')
+                                                          ? 'KORLIX is searching official notices… You can return later; your request is saved.'
+                                                          : 'KORLIX is preparing your bid review and draft… You can return later; your request is saved.')
                                                     : 'Saving your changes…',
                                               ),
                                             ),
@@ -1656,7 +1656,7 @@ class _OpportunityEditorState extends State<_OpportunityEditor> {
               ],
               const SizedBox(height: 8),
               const Text(
-                'Pasting a link does not import its contents. Only the text you provide is reviewed. AI sharing is requested when you ask Nova.',
+                'Pasting a link does not import its contents. Only the text you provide is reviewed. AI sharing is requested when you ask KORLIX.',
                 style: TextStyle(color: _muted, fontSize: 12, height: 1.4),
               ),
             ],

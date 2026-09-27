@@ -542,7 +542,7 @@
   ) {
     if (!requireGlobals()) {
       window.alert(
-        "Nova Email is not connected yet. Press Refresh and try again.",
+        "KORLIX Email is not connected yet. Press Refresh and try again.",
       );
 
       return;

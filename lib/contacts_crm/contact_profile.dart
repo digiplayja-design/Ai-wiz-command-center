@@ -212,7 +212,7 @@ class ContactProfile extends StatelessWidget {
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
-                    'Nova workspace',
+                    'KORLIX workspace',
                     style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                   ),
                 ),
@@ -229,10 +229,10 @@ class ContactProfile extends StatelessWidget {
             const SizedBox(height: 12),
             _action(
               Icons.mark_email_read_outlined,
-              emailReady ? 'Open Nova Email' : 'Set email permission',
+              emailReady ? 'Open KORLIX Email' : 'Set email permission',
               emailReady
                   ? 'Create a draft or use an autonomous rule.'
-                  : 'Choose how Nova may email this contact.',
+                  : 'Choose how KORLIX may email this contact.',
               busy || blocked
                   ? null
                   : emailReady
@@ -255,7 +255,7 @@ class ContactProfile extends StatelessWidget {
               const Padding(
                 padding: EdgeInsets.only(top: 10),
                 child: Text(
-                  'Nova outreach is blocked for this contact.',
+                  'KORLIX outreach is blocked for this contact.',
                   style: TextStyle(color: CrmStyle.danger, fontSize: 11),
                 ),
               ),

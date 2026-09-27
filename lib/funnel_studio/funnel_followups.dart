@@ -155,7 +155,7 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Email response'),
                       subtitle: const Text(
-                        'Editable message, sent through NOVA after approval.',
+                        'Editable message, sent through KORLIX after approval.',
                       ),
                       value: s['email_enabled'] == true,
                       onChanged: (v) =>
@@ -360,7 +360,7 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
           builder: (c) => StatefulBuilder(
             builder: (c, set) => AlertDialog(
               title: Text(
-                schedule ? 'Schedule with NOVA' : 'Review & send with NOVA',
+                schedule ? 'Schedule with KORLIX' : 'Review & send with KORLIX',
               ),
               content: SizedBox(
                 width: 620,
@@ -450,7 +450,7 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'NOVA checks about once a minute, even when this page is closed. Quiet hours and sending limits still apply. Cancel before sending starts.',
+                          'KORLIX checks about once a minute, even when this page is closed. Quiet hours and sending limits still apply. Cancel before sending starts.',
                           style: TextStyle(color: WfStyle.muted, height: 1.5),
                         ),
                         if (selected.isBefore(
@@ -469,13 +469,13 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
                         onChanged: (v) => set(() => acknowledged = v == true),
                         title: Text(
                           schedule
-                              ? 'I reviewed this recipient, message, and time. I authorize NOVA to send this one reply automatically.'
+                              ? 'I reviewed this recipient, message, and time. I authorize KORLIX to send this one reply automatically.'
                               : 'I reviewed this recipient and message and approve this response to their inquiry.',
                         ),
                         subtitle: Text(
                           schedule
                               ? 'Submitted contact details are unverified. Changes to contact permission, page or workflow can stop this schedule.'
-                              : 'This links an eligible contact to NOVA Email if needed and sends one email. Submitted contact details are unverified.',
+                              : 'This links an eligible contact to KORLIX Email if needed and sends one email. Submitted contact details are unverified.',
                         ),
                       ),
                     ],
@@ -807,7 +807,7 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
               ),
               const SizedBox(height: 10),
               const Text(
-                'NOVA organizes each next step. You decide when a message leaves your business.',
+                'KORLIX organizes each next step. You decide when a message leaves your business.',
                 style: TextStyle(color: WfStyle.muted, height: 1.6),
               ),
               const SizedBox(height: 20),
@@ -855,15 +855,15 @@ class _FunnelFollowupsState extends State<FunnelFollowups> {
               const SizedBox(height: 14),
               Text(
                 _data?['email_ready'] == true
-                    ? 'NOVA Email connected · existing sending limits and quiet hours apply.'
-                    : '${_data?['email_reason'] ?? 'Checking NOVA Email…'}',
+                    ? 'KORLIX Email connected · existing sending limits and quiet hours apply.'
+                    : '${_data?['email_reason'] ?? 'Checking KORLIX Email…'}',
                 style: const TextStyle(color: WfStyle.muted, height: 1.5),
               ),
               const SizedBox(height: 6),
               Text(
                 _data?['scheduling_ready'] == true
                     ? 'Scheduled replies and sequences ready · approve messages once and continue with this page closed.'
-                    : '${_data?['scheduling_reason'] ?? 'Connect approved NOVA Email Autopilot to schedule replies.'}',
+                    : '${_data?['scheduling_reason'] ?? 'Connect approved KORLIX Email Autopilot to schedule replies.'}',
                 style: const TextStyle(color: WfStyle.muted, height: 1.5),
               ),
               const SizedBox(height: 6),

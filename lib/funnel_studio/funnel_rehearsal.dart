@@ -373,7 +373,7 @@ class _FunnelRehearsalState extends State<FunnelRehearsal> {
                     ),
                     const SizedBox(height: 10),
                     const Text(
-                      'Sending still requires recipient permission, NOVA readiness and your approval.',
+                      'Sending still requires recipient permission, KORLIX readiness and your approval.',
                       style: TextStyle(
                         color: WfStyle.muted,
                         fontSize: 12,

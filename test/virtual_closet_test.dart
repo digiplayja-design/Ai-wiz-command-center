@@ -240,7 +240,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Upload your photo'), findsOneWidget);
       expect(tester.takeException(), isNull);
-      await tester.tap(find.text('Nova').last);
+      await tester.tap(find.text('KORLIX').last);
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('closet-style-prompt')), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -435,7 +435,7 @@ void main() {
         ..jobs = c.jobs;
       await show(tester, reopened);
       expect(
-        find.text('Nova is creating your outfit preview…'),
+        find.text('KORLIX is creating your outfit preview…'),
         findsOneWidget,
       );
       reopened.assets.add(asset('look', 'look'));

@@ -192,7 +192,7 @@ void main() {
     );
     await app(t, old);
     await tap(t, 'Open studio');
-    await tap(t, 'Ask NOVA');
+    await tap(t, 'Ask KORLIX');
     await t.enterText(
       find.widgetWithText(TextField, 'Your brief'),
       'Draft a local offer',

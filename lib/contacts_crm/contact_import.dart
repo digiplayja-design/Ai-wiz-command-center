@@ -220,7 +220,7 @@ class _ContactImportState extends State<ContactImport> {
               ? 'Choose contacts from this device, or upload a vCard (.vcf) export.'
               : 'Export your phone contacts as a vCard (.vcf), then choose that file here. Direct phone selection isn’t supported by this browser.',
         'email' =>
-          'Use a Google or Outlook contacts export, or bring in recipients saved in Nova Email. Inbox syncing is not connected.',
+          'Use a Google or Outlook contacts export, or bring in recipients saved in KORLIX Email. Inbox syncing is not connected.',
         'facebook' =>
           'Choose friends.json from your Facebook information export, or a contacts CSV. Names are imported; emails and phone numbers are included only if present in the file.',
         _ =>
@@ -290,7 +290,7 @@ class _ContactImportState extends State<ContactImport> {
                       ),
                     ),
               icon: const Icon(Icons.auto_awesome_outlined, size: 17),
-              label: const Text('Use Nova Email contacts'),
+              label: const Text('Use KORLIX Email contacts'),
             ),
           if (_source == 'spreadsheet')
             TextButton.icon(

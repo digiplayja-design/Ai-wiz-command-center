@@ -239,7 +239,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
           const Icon(Icons.auto_awesome, color: WfStyle.cyan, size: 18),
           const SizedBox(width: 8),
           const Text(
-            'NOVA AUTOMATIONS',
+            'KORLIX AUTOMATIONS',
             style: TextStyle(
               color: WfStyle.cyan,
               fontSize: 11,
@@ -266,7 +266,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
       ),
       const SizedBox(height: 8),
       _text(
-        'Thoughtful reminders and a clear morning summary. Set the rules once; NOVA follows up while you focus on your team.',
+        'Thoughtful reminders and a clear morning summary. Set the rules once; KORLIX follows up while you focus on your team.',
         size: 15,
       ),
       const SizedBox(height: 22),
@@ -309,7 +309,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
         ),
         const SizedBox(height: 8),
         _text(
-          '*Latest 100 activity records. Accepted means the email provider accepted it; delivery is tracked in NOVA Email Center.',
+          '*Latest 100 activity records. Accepted means the email provider accepted it; delivery is tracked in KORLIX Email Center.',
           size: 11,
         ),
         const SizedBox(height: 24),
@@ -336,7 +336,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
               const SizedBox(height: 12),
               _text(
                 _data!['reason']?.toString() ??
-                    'Your NOVA Email Center recipient permissions, quiet hours, and daily sending limits apply to every email.',
+                    'Your KORLIX Email Center recipient permissions, quiet hours, and daily sending limits apply to every email.',
               ),
               const SizedBox(height: 8),
               _text(
@@ -482,7 +482,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
                   ),
                   if (r['last_error'] != null)
                     _text(
-                      'NOVA could not check this automation. Refresh or review its settings.',
+                      'KORLIX could not check this automation. Refresh or review its settings.',
                       color: WfStyle.gold,
                     ),
                   const SizedBox(height: 14),
@@ -537,7 +537,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
             .isEmpty)
           _card(
             _text(
-              'No activity here yet. NOVA checks enabled automations approximately every minute.',
+              'No activity here yet. KORLIX checks enabled automations approximately every minute.',
             ),
           ),
         for (final j in _jobs.where(
@@ -571,7 +571,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
                   _text(_time(j['created_at']), size: 11),
                   if (j['status'] == 'blocked')
                     _text(
-                      'Review the rule and delivery details in NOVA Email Center. A new send has not been assumed safe.',
+                      'Review the rule and delivery details in KORLIX Email Center. A new send has not been assumed safe.',
                       color: WfStyle.gold,
                     ),
                   ExpansionTile(
@@ -618,7 +618,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
           ),
         const SizedBox(height: 16),
         _text(
-          'Pause stops queued work. An email already handed to the provider cannot be recalled. Automations follow workspace time (${widget.timezone}); NOVA Email Center may defer emails outside its sending window.',
+          'Pause stops queued work. An email already handed to the provider cannot be recalled. Automations follow workspace time (${widget.timezone}); KORLIX Email Center may defer emails outside its sending window.',
           size: 11,
         ),
       ],
@@ -719,7 +719,7 @@ class _EnableDialogState extends State<_EnableDialog> {
               ),
               const SizedBox(height: 12),
               SelectableText(
-                '${_preview(widget.rule, widget.member)}${email ? '\n\nSent by NOVA for your approved Workforce automation. Open KORLIX Workforce to review the records.' : ''}',
+                '${_preview(widget.rule, widget.member)}${email ? '\n\nSent by KORLIX for your approved Workforce automation. Open KORLIX Workforce to review the records.' : ''}',
                 style: const TextStyle(fontSize: 13, height: 1.6),
               ),
               const SizedBox(height: 18),
@@ -921,7 +921,7 @@ class _AutomationFormState extends State<_AutomationForm> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Add or approve recipients in NOVA Email Center. Choose an employer for a team-wide summary, or the employee for their own reminder.',
+                    'Add or approve recipients in KORLIX Email Center. Choose an employer for a team-wide summary, or the employee for their own reminder.',
                     style: TextStyle(color: WfStyle.muted, fontSize: 12),
                   ),
                   _gap(),

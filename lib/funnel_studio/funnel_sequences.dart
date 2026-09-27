@@ -196,7 +196,7 @@ class _SequenceComposerState extends State<_SequenceComposer> {
           ? 'Review every sequence step'
           : _resume
           ? 'Review & resume sequence'
-          : 'Build a NOVA sequence',
+          : 'Build a KORLIX sequence',
     ),
     content: SizedBox(
       width: 720,
@@ -547,7 +547,7 @@ class _FunnelSequenceTimelineState extends State<FunnelSequenceTimeline> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Mark replied is manual. Check incoming replies in NOVA Email Center; this sequence does not automatically detect replies.',
+                  'Mark replied is manual. Check incoming replies in KORLIX Email Center; this sequence does not automatically detect replies.',
                   style: TextStyle(color: WfStyle.muted, height: 1.5),
                 ),
                 const SizedBox(height: 16),
@@ -584,7 +584,7 @@ class _FunnelSequenceTimelineState extends State<FunnelSequenceTimeline> {
                   const Padding(
                     padding: EdgeInsets.only(top: 12),
                     child: Text(
-                      'Check the existing delivery in NOVA Email Center before restarting any remaining messages.',
+                      'Check the existing delivery in KORLIX Email Center before restarting any remaining messages.',
                       style: TextStyle(color: WfStyle.gold),
                     ),
                   ),

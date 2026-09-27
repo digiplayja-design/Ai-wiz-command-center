@@ -842,7 +842,7 @@
     if (!rules.length) {
       list.innerHTML =
         '<div class="empty-state">' +
-        "No one-time or weekly schedules are saved for this Nova profile." +
+        "No one-time or weekly schedules are saved for this KORLIX profile." +
         "</div>";
 
       return;
@@ -911,7 +911,7 @@
                         rule?.subjectTemplate,
                         rule?.subject_template,
                         rule?.name,
-                        "Scheduled Nova Email",
+                        "Scheduled KORLIX Email",
                       ),
                     )}
                   </strong>

@@ -12,6 +12,8 @@ import 'virtual_closet/closet_client.dart';
 import 'virtual_closet/closet_screen.dart';
 import 'contract_radar/radar_client.dart';
 import 'contract_radar/radar_screen.dart';
+import 'ai_visibility/visibility_client.dart';
+import 'ai_visibility/visibility_screen.dart';
 import 'funnel_studio/funnel_client.dart';
 import 'funnel_studio/funnel_screen.dart';
 import 'workforce/workforce_client.dart';
@@ -5573,6 +5575,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   // Hide inactive Utility tools until full native workflows are ready.
   // Keep active Utility tools visible.
   static const List<String> _utilityTools = <String>[
+    'AI Visibility',
     'Contract Radar',
     'Virtual Closet',
     'Bookkeeping 2027',
@@ -9911,6 +9914,10 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   void _useQuickAction(QuickAction action) {
+    if (action.label == 'AI Visibility') {
+      unawaited(_openAiVisibility());
+      return;
+    }
     if (action.label == 'Contract Radar') {
       unawaited(_openContractRadar());
       return;
@@ -10712,6 +10719,17 @@ Make the entire output professional, well-structured using Markdown, and product
     )));
   }
 
+  Future<void> _openAiVisibility() async {
+    final client = VisibilityClient(backendBaseUrl:kKorlixBackendBaseUrl,
+      headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>AiVisibilityScreen(
+      client:client,
+      ensureConsent:()=>ensureKorlixThirdPartyAiConsent(context:context,
+        featureName:'AI Visibility',providers:const {KorlixThirdPartyAiProvider.openAi},
+        dataCategories:const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts}),
+    )));
+  }
+
   Future<void> _openFunnelStudio() async {
     if (_currentTier.trim().toLowerCase() != 'enterprise') return;
     final client = FunnelClient(
@@ -10737,6 +10755,10 @@ Make the entire output professional, well-structured using Markdown, and product
   }
 
   void _selectUtilityTool(String tool) {
+    if (tool == 'AI Visibility') {
+      unawaited(_openAiVisibility());
+      return;
+    }
     if (tool == 'Contract Radar') {
       unawaited(_openContractRadar());
       return;
@@ -13868,12 +13890,13 @@ Make the entire output professional, well-structured using Markdown, and product
     };
 
     String statusFor(String tool) {
-      if (tool == 'Virtual Closet') return 'Your private wardrobe, AI try-on, saved looks and Nova styling';
-      if (tool == 'Contract Radar') return 'Find source-linked contracts, save opportunities and prepare bids with Nova';
+      if (tool == 'AI Visibility') return 'See sampled AI answers, improve your website content and track progress';
+      if (tool == 'Virtual Closet') return 'Your private wardrobe, AI try-on, saved looks and KORLIX styling';
+      if (tool == 'Contract Radar') return 'Find source-linked contracts, save opportunities and prepare bids with KORLIX';
       if (tool == 'Bookkeeping 2027') return 'Early access: business records, income, expenses and CSV export';
       if (tool == 'Funnel Studio') return 'Enterprise pages, lead capture and campaign links';
       if (tool == 'Workforce') return 'Enterprise attendance, work updates and employee access';
-      if (tool == 'Contacts CRM') return 'Enterprise contacts, imports and Nova connections';
+      if (tool == 'Contacts CRM') return 'Enterprise contacts, imports and KORLIX connections';
       if (tool == 'Voice-scribe') {
         return 'Transcribe speech into saved voice boxes';
       }
@@ -16950,7 +16973,7 @@ Make the entire output professional, well-structured using Markdown, and product
                   // KORLIX_CREDIT_PUBLIC_ENTRY_HIDDEN_BUILD131_BEGIN
                   // Preserve the credit QuickActions in source while excluding
                   // them from the public home-screen action list.
-                  children: [const QuickAction(label:'Contract Radar',prompt:''), const QuickAction(label:'Virtual Closet',prompt:''), ...t.quickActions]
+                  children: [const QuickAction(label:'AI Visibility',prompt:''), const QuickAction(label:'Contract Radar',prompt:''), const QuickAction(label:'Virtual Closet',prompt:''), ...t.quickActions]
                       .where((action) => !_isCreditReportActionSafeUi(action))
                       .map(_buildSafeUiQuickActionChip)
                       .toList(),

@@ -424,7 +424,7 @@ class _FunnelScreenState extends State<FunnelScreen> {
       (c) => Theme(
         data: WfStyle.theme,
         child: AlertDialog(
-          title: const Text('Create with NOVA'),
+          title: const Text('Create with KORLIX'),
           content: SizedBox(
             width: 540,
             child: SingleChildScrollView(
@@ -433,7 +433,7 @@ class _FunnelScreenState extends State<FunnelScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Describe your business, audience, offer, and the action you want visitors to take. NOVA will replace the page copy with a draft for you to review.',
+                    'Describe your business, audience, offer, and the action you want visitors to take. KORLIX will replace the page copy with a draft for you to review.',
                   ),
                   const SizedBox(height: 18),
                   TextField(
@@ -614,7 +614,7 @@ class _FunnelScreenState extends State<FunnelScreen> {
               const SizedBox(width: 12),
               const Expanded(
                 child: Text(
-                  'NOVA Funnel Studio',
+                  'KORLIX Funnel Studio',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                 ),
               ),
@@ -1047,13 +1047,13 @@ class _FunnelScreenState extends State<FunnelScreen> {
                       children: [
                         Text(
                           _aiReady
-                              ? 'Describe your offer. NOVA will help shape your draft.'
-                              : 'Start with a template. NOVA generation is not configured yet.',
+                              ? 'Describe your offer. KORLIX will help shape your draft.'
+                              : 'Start with a template. KORLIX generation is not configured yet.',
                           style: const TextStyle(height: 1.5),
                         ),
                         const SizedBox(height: 14),
                         _button(
-                          'Ask NOVA',
+                          'Ask KORLIX',
                           Icons.auto_awesome,
                           _aiReady ? _generate : null,
                         ),
@@ -1069,14 +1069,14 @@ class _FunnelScreenState extends State<FunnelScreen> {
                         Expanded(
                           child: Text(
                             _aiReady
-                                ? 'Describe your offer. NOVA will help you shape the first draft.'
-                                : 'Start with a template and make it yours. NOVA generation is not configured yet.',
+                                ? 'Describe your offer. KORLIX will help you shape the first draft.'
+                                : 'Start with a template and make it yours. KORLIX generation is not configured yet.',
                             style: const TextStyle(height: 1.5),
                           ),
                         ),
                         const SizedBox(width: 12),
                         _button(
-                          'Ask NOVA',
+                          'Ask KORLIX',
                           Icons.auto_awesome,
                           _aiReady ? _generate : null,
                         ),

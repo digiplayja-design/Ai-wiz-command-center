@@ -74,7 +74,7 @@ class _VirtualClosetScreenState extends State<VirtualClosetScreen> {
       _outfit.length == _selected.length;
   String get _tryOnStatus {
     if (_job?.running ?? false) {
-      return 'Nova is working on your current request.';
+      return 'KORLIX is working on your current request.';
     }
     if (_busy) return 'Finishing your current action…';
     if (!_photoReady && _outfit.isEmpty) {
@@ -406,7 +406,7 @@ class _VirtualClosetScreenState extends State<VirtualClosetScreen> {
     if (kind == 'style' &&
         (_occasion.text.trim().isEmpty || !_garments.any((a) => a.ready))) {
       setState(
-        () => _error = 'Add a wardrobe item and tell Nova the occasion first.',
+        () => _error = 'Add a wardrobe item and tell KORLIX the occasion first.',
       );
       return;
     }
@@ -952,7 +952,7 @@ class _VirtualClosetScreenState extends State<VirtualClosetScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _title(
-          'Nova · Your stylist',
+          'KORLIX · Your stylist',
           Icons.auto_awesome,
           subtitle: 'A fresh look from what you already own',
         ),
@@ -1002,12 +1002,12 @@ class _VirtualClosetScreenState extends State<VirtualClosetScreen> {
             key: const Key('closet-ask-nova'),
             onPressed: _working ? null : () => _start('style'),
             icon: const Icon(Icons.auto_awesome),
-            label: const Text('Ask Nova'),
+            label: const Text('Ask KORLIX'),
           ),
         ),
         const SizedBox(height: 10),
         const Text(
-          '1 credit per successful suggestion. Nova selects up to four items you can try on together.',
+          '1 credit per successful suggestion. KORLIX selects up to four items you can try on together.',
           style: TextStyle(fontSize: 12, color: _muted),
         ),
         if (_selected.isNotEmpty) ...[
@@ -1251,7 +1251,7 @@ class _VirtualClosetScreenState extends State<VirtualClosetScreen> {
                         ),
                         NavigationDestination(
                           icon: Icon(Icons.auto_awesome),
-                          label: 'Nova',
+                          label: 'KORLIX',
                         ),
                         NavigationDestination(
                           icon: Icon(Icons.favorite_border),
@@ -1298,7 +1298,7 @@ class _VirtualClosetScreenState extends State<VirtualClosetScreen> {
                                   ...[
                                     (Icons.checkroom, 'My Closet', 0),
                                     (Icons.person_outline, 'Try On', 1),
-                                    (Icons.auto_awesome, 'Nova Stylist', 2),
+                                    (Icons.auto_awesome, 'KORLIX Stylist', 2),
                                     (Icons.favorite_border, 'Saved Looks', 3),
                                   ].map(
                                     (v) => Padding(
@@ -1436,8 +1436,8 @@ class _VirtualClosetScreenState extends State<VirtualClosetScreen> {
                                             Text(
                                               _job?.running == true
                                                   ? (_job!.kind == 'tryon'
-                                                        ? 'Nova is creating your outfit preview…'
-                                                        : 'Nova is styling your wardrobe…')
+                                                        ? 'KORLIX is creating your outfit preview…'
+                                                        : 'KORLIX is styling your wardrobe…')
                                                   : 'Saving your changes…',
                                               style: const TextStyle(
                                                 fontWeight: FontWeight.w600,
@@ -1476,7 +1476,7 @@ class _VirtualClosetScreenState extends State<VirtualClosetScreen> {
                                     _stylist(),
                                   const SizedBox(height: 24),
                                   const Text(
-                                    'Only upload photos you have permission to use. Your closet is private. Nova styling shares wardrobe photos and item details with the AI provider; try-on shares your chosen photo and clothing.',
+                                    'Only upload photos you have permission to use. Your closet is private. KORLIX styling shares wardrobe photos and item details with the AI provider; try-on shares your chosen photo and clothing.',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: _muted,

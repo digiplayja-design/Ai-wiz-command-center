@@ -212,13 +212,13 @@ class _ContactsScreenState extends State<ContactsScreen> {
     final id = _emailAgent;
     if (id == null) {
       _notify(
-        'Nova Email must be configured for your Enterprise account first.',
+        'KORLIX Email must be configured for your Enterprise account first.',
       );
       return;
     }
     if (!await _confirm(
-      'Link ${c['name']} to Nova Email?',
-      'This adds the contact to Nova’s recipients. Choose a draft or autonomous rule in Email Center. No email is sent by this action.',
+      'Link ${c['name']} to KORLIX Email?',
+      'This adds the contact to KORLIX’s recipients. Choose a draft or autonomous rule in Email Center. No email is sent by this action.',
     )) {
       return;
     }
@@ -284,7 +284,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   Future<void> _archive(Map<String, dynamic> c) => _action(() async {
     if (!await _confirm(
       'Archive ${c['name']}?',
-      'The contact is removed from your active list and linked Nova Email activity is suppressed.',
+      'The contact is removed from your active list and linked KORLIX Email activity is suppressed.',
     )) {
       return;
     }
@@ -1705,7 +1705,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                 ),
                                 SizedBox(height: 9),
                                 Text(
-                                  'Select a person to see their details and prepare your next move with Nova.',
+                                  'Select a person to see their details and prepare your next move with KORLIX.',
                                   style: TextStyle(
                                     color: CrmStyle.muted,
                                     fontSize: 12,

@@ -1,7 +1,7 @@
 {
-  "name": "KORLIX AI \u2014 Nova Autonomous Email Control Center",
-  "short_name": "Nova Email",
-  "description": "KORLIX AI Nova Autonomous Email Control Center \u2014 authenticated production dashboard.",
+  "name": "KORLIX AI \u2014 KORLIX Autonomous Email Control Center",
+  "short_name": "KORLIX Email",
+  "description": "KORLIX AI Autonomous Email Control Center \u2014 authenticated production dashboard.",
   "start_url": "/nova-email/",
   "display": "standalone",
   "background_color": "#010712",

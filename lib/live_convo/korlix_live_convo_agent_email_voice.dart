@@ -1220,7 +1220,7 @@ class KorlixLiveConvoAgentEmailVoiceClient {
       if (!sent) {
         throw const KorlixLiveConvoAgentEmailVoiceException(
           'KORLIX did not confirm that the approved email was sent. Review '
-          'the Nova Email Control Center before trying again.',
+          'the KORLIX Email Control Center before trying again.',
           code: 'agent_email_voice_send_not_confirmed',
         );
       }
@@ -1272,7 +1272,7 @@ class KorlixLiveConvoAgentEmailVoiceClient {
         'code': error.code,
         'message': ambiguous
             ? ('KORLIX could not confirm the final delivery result. Review '
-                  'the Nova Email Control Center before retrying.')
+                  'the KORLIX Email Control Center before retrying.')
             : error.message,
         'statusCode': error.statusCode,
         'approved': approvalCompleted,
@@ -1286,7 +1286,7 @@ class KorlixLiveConvoAgentEmailVoiceClient {
         'code': 'agent_email_voice_send_unexpected_error',
         'message': sendRequestStarted
             ? ('KORLIX could not confirm the final delivery result. Review '
-                  'the Nova Email Control Center before retrying.')
+                  'the KORLIX Email Control Center before retrying.')
             : ('KORLIX could not approve the prepared email: '
                   '${_text(error, maximum: 500)} Nothing was sent.'),
         'approved': approvalCompleted,

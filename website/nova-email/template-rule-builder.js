@@ -108,7 +108,7 @@
       "function"
     ) {
       throw new Error(
-        "Nova Email is not connected. Return to Command Center and reconnect your KORLIX session.",
+        "KORLIX Email is not connected. Return to Command Center and reconnect your KORLIX session.",
       );
     }
 
@@ -124,7 +124,7 @@
       "function"
     ) {
       throw new Error(
-        "The authenticated Nova Email request client is unavailable. Refresh the page and reconnect.",
+        "The authenticated KORLIX Email request client is unavailable. Refresh the page and reconnect.",
       );
     }
 
@@ -265,11 +265,11 @@
 
   function workspaceMarkup() {
     return `
-      <section id="${WORKSPACE_ID}" class="korlix-template-rule-workspace-v1" hidden aria-label="Nova Email templates and rules">
+      <section id="${WORKSPACE_ID}" class="korlix-template-rule-workspace-v1" hidden aria-label="KORLIX Email templates and rules">
         <div class="k133-builder-shell">
           <header class="k133-builder-header">
             <div>
-              <p class="k133-builder-eyebrow">KORLIX NOVA EMAIL</p>
+              <p class="k133-builder-eyebrow">KORLIX KORLIX EMAIL</p>
               <h1>Templates &amp; Autopilot Rules</h1>
               <p>Create reusable transactional templates, test them as unsent drafts, and bind them to approved recipients through server-enforced rules.</p>
             </div>
@@ -295,7 +295,7 @@
             <div class="k133-builder-toolbar">
               <div>
                 <h2>Reusable Templates</h2>
-                <p>Templates are stored in this signed-in browser and become server-controlled when attached to a Nova rule or test draft.</p>
+                <p>Templates are stored in this signed-in browser and become server-controlled when attached to a KORLIX rule or test draft.</p>
               </div>
               <button type="button" class="button" data-k133-new-template>+ Create New Template</button>
             </div>
@@ -368,7 +368,7 @@
 
               <div class="k133-editor-heading">
                 <div>
-                  <p class="k133-builder-eyebrow">NOVA EMAIL RULE</p>
+                  <p class="k133-builder-eyebrow">KORLIX EMAIL RULE</p>
                   <h3 data-k133-rule-form-title>Create New Rule</h3>
                 </div>
                 <button type="button" class="button secondary" data-k133-cancel-rule>Cancel</button>
@@ -429,7 +429,7 @@
 
               <div class="k133-rule-warning">
                 Draft Only creates no automatic send. Approved Autopilot requires you to type
-                <strong>PREAPPROVE NOVA RULE</strong>. Saving a rule never fires its trigger.
+                <strong>PREAPPROVE KORLIX RULE</strong>. Saving a rule never fires its trigger.
               </div>
 
               <div class="k133-editor-actions">
@@ -1366,7 +1366,7 @@
     } catch (error) {
       notify(
         clean(error?.message) ||
-          "The Nova Email builder action failed.",
+          "The KORLIX Email builder action failed.",
         "error",
       );
 
@@ -1781,7 +1781,7 @@
           "autopilot"
         ) {
           const phrase =
-            "PREAPPROVE NOVA RULE";
+            "PREAPPROVE KORLIX RULE";
 
           const confirmation =
             window.prompt(
@@ -1839,7 +1839,7 @@
           !clean(saved.id)
         ) {
           throw new Error(
-            "The server did not return the saved Nova Email rule.",
+            "The server did not return the saved KORLIX Email rule.",
           );
         }
 
@@ -1889,7 +1889,7 @@
 
     if (!rule) {
       throw new Error(
-        "The selected Nova Email rule was not found.",
+        "The selected KORLIX Email rule was not found.",
       );
     }
 
@@ -1941,7 +1941,7 @@
           !clean(saved.id)
         ) {
           throw new Error(
-            "The server did not return the deactivated Nova Email rule.",
+            "The server did not return the deactivated KORLIX Email rule.",
           );
         }
 
@@ -2145,7 +2145,7 @@
 
     if (!source) {
       throw new Error(
-        "The selected Nova Email rule was not found.",
+        "The selected KORLIX Email rule was not found.",
       );
     }
 
@@ -2613,7 +2613,7 @@
 
               if (!rule) {
                 throw new Error(
-                  "The selected Nova Email rule was not found.",
+                  "The selected KORLIX Email rule was not found.",
                 );
               }
 

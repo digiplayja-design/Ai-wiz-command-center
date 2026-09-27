@@ -1,9 +1,9 @@
 # KORLIX Virtual Closet — first release
 
 Open **Virtual Closet** from the home quick actions or Utility tools. The responsive
-white/navy workspace contains My Closet, Try On, Nova Stylist, and Saved Looks.
+white/navy workspace contains My Closet, Try On, KORLIX Stylist, and Saved Looks.
 Upload your photo, add individually photographed wardrobe items, select up to four,
-and choose Try it on. Nova can suggest an outfit from the saved wardrobe when given
+and choose Try it on. KORLIX can suggest an outfit from the saved wardrobe when given
 an occasion, dress code or preference. Clothing names/categories are editable at
 upload; this release does not automatically recognize garment categories.
 
@@ -24,14 +24,14 @@ existing server-side access and credit checks.
   wardrobe. Input is a still JPG/PNG/WEBP up to 15 MiB and 45 megapixels. Images are
   orientation-corrected, resized within 2048 pixels, and saved as JPEG without EXIF;
   thumbnails are bounded to 480×640. Uploading is not AI generation.
-- Existing Ultra Premium/Enterprise and daily usage checks gate try-on and Nova
+- Existing Ultra Premium/Enterprise and daily usage checks gate try-on and KORLIX
   styling. The UI discloses one existing generation credit per successful request.
   No billing plan or Stripe configuration changes are introduced.
 - Try-on uses the real person photo plus 1–4 garment references. Astra xhigh plans
   the edit, and the existing Sunburst maximum-quality image model renders a portrait
   PNG. A decoded, valid PNG is required. Instructions preserve the face, hairline,
   skin tone, body shape and garment details; likeness and actual fit are not guaranteed.
-- Nova styling is typed text in this release. It uses item names/categories and up
+- KORLIX styling is typed text in this release. It uses item names/categories and up
   to 16 wardrobe thumbnails, returns only existing item IDs, and selects those items
   for try-on. This is not retailer search, affiliate checkout or sizing prediction.
 - Results save automatically to Saved Looks. They can be reopened, compared with
@@ -50,7 +50,7 @@ storage paths are never accepted. Signed URLs expire after ten minutes; the open
 refreshes them every eight minutes and offers manual refresh. Responses are no-store.
 
 AI consent is checked before starting a job. Try-on sends the chosen person photo
-and clothing; Nova styling sends wardrobe photos and item details. Astra requests
+and clothing; KORLIX styling sends wardrobe photos and item details. Astra requests
 use `store:false`. Successful output and wardrobe images persist in the account
 until removed. Removal deletes both stored image and thumbnail before releasing the
 metadata/quota; failures remain visible and retryable. Existing account deletion is
@@ -83,7 +83,7 @@ images, upload/deletion recovery, quotas, replay, parallel requests, recovery,
 atomic usage, reference-image construction and model-response validation.
 Flutter checks cover desktop/phone/enlarged text, first use, consent denial,
 duplicate prevention, reopened jobs, upload retry, PNG download and account changes.
-Adjacent picture/chat/theme/Nova regression suites and a web release build are run.
+Adjacent picture/chat/theme/KORLIX regression suites and a web release build are run.
 These fixtures do not establish real-user try-on image quality.
 
 Apply the migration to the existing KORLIX Supabase project, deploy the tested
@@ -94,7 +94,7 @@ commits while retaining additive tables/private media; do not drop customer data
 
 Acceptance: upload your own full-length photo and one clear garment photo, generate
 a try-on, inspect face/clothing accuracy, reopen Saved Looks, download the PNG,
-and ask Nova for an occasion-based outfit. Verify this on the user's actual device.
+and ask KORLIX for an occasion-based outfit. Verify this on the user's actual device.
 
 References:
 - https://supabase.com/docs/guides/storage/security/access-control

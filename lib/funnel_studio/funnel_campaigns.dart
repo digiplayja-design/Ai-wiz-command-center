@@ -594,7 +594,7 @@ class _FunnelCampaignsState extends State<FunnelCampaigns> {
               ),
               campaignSpace(8),
               campaignCaption(
-                'Shape your campaign with NOVA. Plan the budget, prepare the copy, and connect each inquiry to its source.',
+                'Shape your campaign with KORLIX. Plan the budget, prepare the copy, and connect each inquiry to its source.',
               ),
               campaignSpace(),
               Wrap(
@@ -1015,7 +1015,7 @@ class _CampaignEditorState extends State<CampaignEditor> {
   Future<void> _generate() => _run(() async {
     if (_brief.text.trim().isEmpty) {
       throw const FunnelException(
-        'Describe the offer and facts NOVA should use.',
+        'Describe the offer and facts KORLIX should use.',
       );
     }
     final r = await widget.client.request(
@@ -1179,9 +1179,9 @@ class _CampaignEditorState extends State<CampaignEditor> {
                   campaignSpace(),
                   ExpansionTile(
                     tilePadding: EdgeInsets.zero,
-                    title: const Text('Draft with NOVA'),
+                    title: const Text('Draft with KORLIX'),
                     subtitle: const Text(
-                      'Uses the shared 10 daily NOVA draft attempts',
+                      'Uses the shared 10 daily KORLIX draft attempts',
                     ),
                     children: [
                       _field(
