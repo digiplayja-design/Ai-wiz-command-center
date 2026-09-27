@@ -678,6 +678,7 @@ function createK135zZoomHandlers(
         req,
         res,
       ) => {
+        res.setHeader?.('Cache-Control','private, no-store, max-age=0');
         const principal =
           await authorize(req);
 
@@ -786,6 +787,7 @@ function createK135zZoomHandlers(
         req,
         res,
       ) => {
+        res.setHeader?.('Cache-Control','private, no-store, max-age=0');
         const principal =
           await authorize(req);
 
@@ -838,6 +840,7 @@ function createK135zZoomHandlers(
         req,
         res,
       ) => {
+        res.setHeader?.('Cache-Control','private, no-store, max-age=0');
         const principal =
           await authorize(req);
 
@@ -1411,8 +1414,9 @@ function createK135zOAuthHttpTransport({enabled=false,fetchImpl=globalThis.fetch
       return token(await request('https://zoom.us/oauth/token',form(clientId,clientSecret,
         {grant_type:'refresh_token',refresh_token:refreshToken})));
     },
-    async listUpcomingMeetings({accessToken,userId='me',apiUrl='https://api.zoom.us'}) {
+    async listUpcomingMeetings({accessToken,userId='me',apiUrl='https://api.zoom.us',includeLive=false}) {
       active();if(userId!=='me'||apiUrl!=='https://api.zoom.us')fail('ZOOM_HTTP_TARGET_REJECTED',400);
+      if(typeof includeLive!=='boolean')fail('ZOOM_HTTP_INPUT_INVALID',400);
       const deadline=Date.now()+timeoutMs;
       const read=async url=>{
         const page=await request(url,bearer(accessToken),deadline-Date.now());
@@ -1427,6 +1431,29 @@ function createK135zOAuthHttpTransport({enabled=false,fetchImpl=globalThis.fetch
       // A numeric meeting ID must never substitute for an instance UUID.
       const meetingId=value=>((typeof value==='number'&&Number.isSafeInteger(value))||typeof value==='string')&&
         /^[1-9]\d{0,14}$/.test(String(value))?String(value):null;
+      // The calendar-style upcoming endpoint can omit an ongoing meeting. Query
+      // the authenticated host's live meetings even when that list is empty.
+      // Keep the current instance UUID: a recurring meeting ID is not a UUID.
+      const live=new Map();
+      if(includeLive) {
+        const seenTokens=new Set();let next='';
+        for(let page=0;page<3;page++) {
+          const url=new URL('https://api.zoom.us/v2/users/me/meetings');
+          url.searchParams.set('type','live');url.searchParams.set('page_size','100');
+          if(next)url.searchParams.set('next_page_token',next);
+          const result=await read(url.href);
+          for(const meeting of result.meetings) {
+            const id=meetingId(meeting?.id);
+            if(!id||!text(meeting.uuid,180))fail('ZOOM_MEETINGS_RESPONSE_INVALID');
+            if(live.has(id)&&live.get(id).uuid!==meeting.uuid)fail('ZOOM_MEETING_UUID_AMBIGUOUS');
+            live.set(id,{...meeting,is_host:true,is_live:true});
+          }
+          next=result.next_page_token||'';if(!next)break;
+          if(seenTokens.has(next)||page===2)fail('ZOOM_MEETINGS_LOOKUP_LIMIT');
+          seenTokens.add(next);
+        }
+        value.meetings=[...live.values(),...value.meetings.filter(m=>!live.has(meetingId(m?.id)))];
+      }
       const needsUuid=meeting=>meeting?.is_host===true&&!text(meeting.uuid,180);
       const needed=new Set();
       for(const meeting of value.meetings)if(needsUuid(meeting)){

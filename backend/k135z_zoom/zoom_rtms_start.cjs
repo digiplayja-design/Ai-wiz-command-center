@@ -90,7 +90,7 @@ function createZoomRtmsStarter({store, repository, oauthService, transport, clie
           !original.scope.split(/\s+/).includes('meeting:read:meeting_transcript'))
         fail('ZOOM_RTMS_MEDIA_SCOPE_REQUIRED', 403);
       const auth = await oauthService.getAuthorizedAccess(p); check(signal);
-      const meetings = await transport.listUpcomingMeetings({accessToken:auth.accessToken, apiUrl:auth.apiUrl, userId:'me'});
+      const meetings = await transport.listUpcomingMeetings({accessToken:auth.accessToken, apiUrl:auth.apiUrl, userId:'me',includeLive:true});
       check(signal);
       const matches = meetings.meetings.filter(m => m.uuid === r.context.meetingUuid && m.is_host === true);
       if (matches.length !== 1 || !/^[1-9]\d{0,14}$/.test(String(matches[0].id))) fail('ZOOM_RTMS_RESELECT_MEETING');

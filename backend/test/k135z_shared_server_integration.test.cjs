@@ -1628,7 +1628,7 @@ async function runtime6s(o={}) {
     return {data,error:null};
   };
   const env=env6s(o.env),replies=[token6r(),{id:'zoom-user',account_id:'zoom-account'},
-    {meetings:[{id:123,uuid:'fixture-meeting',topic:'Controlled test',join_url:'private-link'}]}, {status:'success'}];
+    {meetings:[{id:123,uuid:'fixture-meeting',topic:'Controlled test',join_url:'private-link'}]}, {meetings:[]}, {status:'success'}];
   const runtime=await Z.createK135zServerRuntime({env,database:f.database,
     loadSdk(){throw Error('OAuth must not load the capture SDK');},
     fetchImpl:async(url,options)=>{providerCalls.push({url,...options});return json6r(replies.shift());}});
@@ -1730,7 +1730,7 @@ test('Gate6S registered handlers connect discover and revoke through encrypted d
   const upcoming=await f.run('upcoming');assert.equal(upcoming.statusCode,200);
   assert.equal(upcoming.body.meetings[0].id,'123');assert(!JSON.stringify(upcoming.body).includes('private-link'));
   const disconnected=await f.run('disconnect');assert.equal(disconnected.statusCode,200);assert.equal(f.memory.connections.size,0);
-  assert.equal(f.providerCalls.length,4);assert(f.storageCalls.includes('connection_save'));
+  assert.equal(f.providerCalls.length,5);assert(f.storageCalls.includes('connection_save'));
 });
 test('Gate6S enabled OAuth retains authentication Enterprise and agent restrictions',async t=>{
   for(const o of [{noUser:true},{tier:'basic'},{noAgent:true},{inactive:true}]) {
@@ -1816,7 +1816,7 @@ test('Regional OAuth connection survives encrypted storage refresh and meeting d
   const f=http6r([{...token6r(),api_url:'https://api-us.zoom.us'},
     {id:'zoom-user',account_id:'zoom-account'},
     {...token6r(),api_url:'https://api-eu.zoom.us',access_token:'rotated-access',refresh_token:'rotated-refresh'},
-    {meetings:[{id:123,topic:'Regional fixture'}]}]);
+    {meetings:[{id:123,topic:'Regional fixture'}]},{meetings:[]}]);
   const repository=new R.MemoryZoomRepository();
   const vault=new V.ZoomTokenVault({repository,cipher:new V.EnvelopeCipher(Buffer.alloc(32,7)),clock});
   const {ZoomOAuthService}=require('../k135z_zoom/zoom_oauth_service.cjs');
@@ -1830,16 +1830,17 @@ test('Regional OAuth connection survives encrypted storage refresh and meeting d
   now+=3600000;
   const {ZoomMeetingDiscovery}=require('../k135z_zoom/zoom_meeting_discovery.cjs');
   await new ZoomMeetingDiscovery({oauthService:service,transport:f.transport}).listUpcoming(P);
-  assert.equal(f.calls.length,4);assert.equal(f.calls[3].headers.authorization,'Bearer rotated-access');
+  assert.equal(f.calls.length,5);assert.equal(f.calls[3].headers.authorization,'Bearer rotated-access');
   const rotated=await vault.getTokenBundle(P);
   assert.equal(rotated.tokens.apiUrl,'https://api.zoom.us');assert.equal(rotated.tokens.refreshToken,'rotated-refresh');
   await assert.rejects(service.completeAuthorization(callback),{code:'ZOOM_OAUTH_STATE_REPLAYED'});
-  assert.equal(f.calls.length,4);
+  assert.equal(f.calls.length,5);
 });
 
 test('Hosted discovery supplies the omitted UUID without exposing meeting credentials',async()=>{
   const f=http6r([{meetings:[{id:123,topic:'Scheduled fixture',is_host:true,
     join_url:'private-join',passcode:'private-passcode'}]},
+    {meetings:[]},
     {meetings:[{id:123,uuid:'fixture-instance',start_url:'private-start',topic:'Do not copy'}]}]);
   const {ZoomMeetingDiscovery}=require('../k135z_zoom/zoom_meeting_discovery.cjs');
   const discovery=new ZoomMeetingDiscovery({transport:f.transport,oauthService:{
@@ -1850,6 +1851,7 @@ test('Hosted discovery supplies the omitted UUID without exposing meeting creden
   assert.equal(result.meetings[0].topic,'Scheduled fixture');assert.equal(result.meetings[0].isHost,true);
   assert(!JSON.stringify(result).includes('private-'));assert.equal(result.nextPageToken,null);
   assert.deepEqual(f.calls.map(c=>c.url),['https://api.zoom.us/v2/users/me/upcoming_meetings',
+    'https://api.zoom.us/v2/users/me/meetings?type=live&page_size=100',
     'https://api.zoom.us/v2/users/me/meetings?page_size=100']);
   assert(f.calls.every(c=>c.method==='GET'&&c.headers.authorization==='Bearer fixture-access'&&c.redirect==='error'));
 });
@@ -1906,4 +1908,57 @@ test('Hosted discovery reports missing permission without hiding it as an empty 
   const f=http6r([{meetings:[{id:123,is_host:true}]},()=>json6r({message:'private-detail'},401)]);
   await assert.rejects(f.transport.listUpcomingMeetings({accessToken:'fixture'}),{code:'ZOOM_UPSTREAM_REQUEST_FAILED'});
   assert.equal(f.calls.length,2);
+});
+
+test('live discovery finds an ongoing hosted instance when the calendar list is empty',async()=>{
+  const f=http6r([{meetings:[]},{meetings:[{id:123,uuid:'live-instance',topic:'Live fixture',
+    join_url:'private-link',start_url:'private-start',password:'private-password'}]}]);
+  const {ZoomMeetingDiscovery}=require('../k135z_zoom/zoom_meeting_discovery.cjs');
+  const result=await new ZoomMeetingDiscovery({transport:f.transport,oauthService:{
+    getAuthorizedAccess:async()=>({accessToken:'fixture',apiUrl:'https://api.zoom.us'})}}).listUpcoming(P);
+  assert.equal(result.count,1);assert.equal(result.meetings[0].uuid,'live-instance');
+  assert.equal(result.meetings[0].isLive,true);assert.equal(result.meetings[0].isHost,true);
+  assert(!JSON.stringify(result).includes('private-'));
+  assert.deepEqual(f.calls.map(c=>c.url),['https://api.zoom.us/v2/users/me/upcoming_meetings',
+    'https://api.zoom.us/v2/users/me/meetings?type=live&page_size=100']);
+});
+test('live discovery replaces a recurring calendar instance with its current UUID',async()=>{
+  const f=http6r([{meetings:[{id:123,uuid:'old-instance',is_host:true},{id:456,uuid:'future-instance',is_host:true}]},
+    {meetings:[{id:'123',uuid:'current-instance',topic:'Now'}]}]);
+  const result=await f.transport.listUpcomingMeetings({accessToken:'fixture',includeLive:true});
+  assert.deepEqual(result.meetings.map(m=>m.uuid),['current-instance','future-instance']);
+  assert.equal(result.meetings[0].is_host,true);assert.equal(result.meetings[0].is_live,true);
+  assert.equal(f.calls.length,2);
+});
+test('live discovery bounds pages and rejects conflicting UUIDs without partial results',async()=>{
+  for(const pages of [
+    [{meetings:[{id:123,uuid:'one'}],next_page_token:'next'},{meetings:[{id:123,uuid:'two'}]}],
+    [{meetings:[],next_page_token:'repeat'},{meetings:[],next_page_token:'repeat'}],
+    [{meetings:[{id:123}]}],
+  ]) {
+    const f=http6r([{meetings:[]},...pages]);
+    await assert.rejects(f.transport.listUpcomingMeetings({accessToken:'fixture',includeLive:true}));
+    assert(f.calls.every(c=>new URL(c.url).origin==='https://api.zoom.us'));
+  }
+});
+test('a denied live lookup is surfaced rather than reported as no meetings',async()=>{
+  const f=http6r([{meetings:[]},()=>json6r({message:'private provider body'},403)]);
+  await assert.rejects(f.transport.listUpcomingMeetings({accessToken:'fixture',includeLive:true}),
+    e=>e.code==='ZOOM_UPSTREAM_REQUEST_FAILED'&&!String(e).includes('private'));
+});
+test('discovery and status are private no-store responses; a fresh request cannot become 304',async t=>{
+  const express=require('express'),app=express();
+  const h=Z.createK135zZoomHandlers({authenticateRequest:async()=>P,resolveEnterprise:async()=>true,
+    authorizeAgent:async()=>true,oauthService:{getStatus:async()=>({connected:true})},
+    meetingDiscovery:{listUpcoming:async()=>({meetings:[],count:0,nextPageToken:null})}});
+  app.get('/status',h.status);app.get('/meetings',h.upcoming);
+  const server=await new Promise(resolve=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s));});
+  t.after(()=>new Promise(resolve=>server.close(resolve)));
+  for(const path of ['/status','/meetings']) {
+    const url='http://127.0.0.1:'+server.address().port+path;
+    const first=await fetch(url);await first.text();
+    assert.equal(first.status,200);assert.equal(first.headers.get('cache-control'),'private, no-store, max-age=0');
+    const fresh=await fetch(url,{headers:{'if-none-match':first.headers.get('etag'),'cache-control':'no-cache, no-store'}});
+    assert.equal(fresh.status,200);assert((await fresh.text()).length>0);
+  }
 });

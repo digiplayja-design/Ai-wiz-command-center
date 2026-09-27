@@ -83,6 +83,8 @@ function normalizeMeeting(raw) {
     isHost:
       Boolean(raw.is_host),
 
+    isLive: raw.is_live === true,
+
     isAllDay:
       Boolean(raw.is_all_day),
 
@@ -136,6 +138,7 @@ class ZoomMeetingDiscovery {
           apiUrl:
             authorization.apiUrl,
           userId: "me",
+          includeLive: true,
         });
 
     const rawMeetings =

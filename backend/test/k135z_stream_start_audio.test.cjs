@@ -18,7 +18,8 @@ function fixture(options = {}) {
   f.store = {async readCaptureLease(){return structuredClone(f.row);},async changeConsent(){f.calls.push('consent');return f.row;}};
   f.repository = {async getConnection(){return {...f.connection};},async getCaptureSource(query){
     assert.equal(query.key,JSON.stringify([p.tenantId,p.userId,p.agentId]));return f.source;}};
-  f.transport = {async listUpcomingMeetings(){f.calls.push('list');return {meetings:[{id:123,uuid:ctx.meetingUuid,is_host:true}]};}};
+  f.transport = {async listUpcomingMeetings(options){assert.equal(options.includeLive,true);
+    f.calls.push('list');return {meetings:[{id:123,uuid:ctx.meetingUuid,is_host:true}]};}};
   f.oauthService = {async getAuthorizedAccess(){return {accessToken:'private-token',apiUrl:'https://api.zoom.us'};}};
   f.fetchImpl = async (url,input) => {
     f.calls.push(input.method);assert.equal(input.redirect,'error');
