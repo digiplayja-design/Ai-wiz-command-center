@@ -2,6 +2,8 @@ import { registerFunnels } from './funnels/routes.mjs'; // K139_FUNNEL_STUDIO
 import { registerWorkforce } from './workforce/routes.mjs'; // K138_WORKFORCE
 import { registerContactsCrm } from './contacts_crm/routes.mjs'; // K137_ENTERPRISE_CONTACTS
 import { registerBookkeeping } from './bookkeeping/routes.mjs';
+import { registerBabyBlend } from './babyblend/routes.mjs';
+import { createPortrait as createBabyBlendPortrait } from './babyblend/ai.mjs';
 import { registerVirtualCloset } from './virtual_closet/routes.mjs';
 import { createTryOn, suggestOutfit } from './virtual_closet/ai.mjs';
 import { registerContractRadar } from './contract_radar/routes.mjs';
@@ -3666,6 +3668,7 @@ app.get("/api/health", (req, res) => {
     chatImageQuality: imageSettings().quality,
     chatModelAccess,
     pictureStudio: {analysisModel: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, ...pictureModelSettings()},
+    babyBlend: {version: 1, privateStorage: true, analysisModel: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, creditCost: 1, ...pictureModelSettings()},
     virtualCloset: {version: 1, privateStorage: true, analysisModel: CHAT_MODEL, ...pictureModelSettings()},
     contractRadar: {version: 1, model: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, discovery: 'official_source_web_search', automaticSubmission: false},
     fieldProof: {version:1,model:CHAT_MODEL,reasoningEffort:CHAT_EFFORT,creditCost:FIELDPROOF_CREDIT_COST,maxPhotos:8,originalEvidence:true},
@@ -13073,6 +13076,18 @@ registerContractRadar(app, {database: supabaseAdmin, requireUser,
   },
   discover: data => discoverContracts({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
   review: data => reviewContract({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
+});
+registerBabyBlend(app, { database: supabaseAdmin, storageDatabase: bookkeepingStorage, requireUser,
+  aiAccess: async user => {
+    if (!process.env.OPENAI_API_KEY) return {allowed:false,status:503,reason:'BabyBlend creation is temporarily unavailable.'};
+    const profile = await getOrCreateProfile(user);
+    if (!hasAdvancedUploadAccess(profile?.tier)) return {allowed:false,status:403,reason:'BabyBlend creation requires Ultra Premium or Enterprise.'};
+    const usageCounter = await getOrCreateUsageCounter(user.id);
+    if (!profile || !usageCounter) throw new Error('BabyBlend usage unavailable');
+    const check = checkUsageAllowed({profile,usageCounter,creditsNeeded:1});
+    return {...check,status:429,usageId:usageCounter.id};
+  },
+  generate: data => createBabyBlendPortrait({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0}),toFile}),
 });
 registerVirtualCloset(app, { database: supabaseAdmin, storageDatabase: bookkeepingStorage, requireUser,
   aiAccess: async user => {
