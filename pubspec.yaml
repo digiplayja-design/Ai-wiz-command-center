@@ -76,6 +76,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/fieldproof/
 
     - assets/meeting_copilot/korlix_logo.jpeg
 
