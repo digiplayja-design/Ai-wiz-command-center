@@ -1,4 +1,5 @@
 import 'k135z_startup_panel.dart';
+import 'k135z_recordings_panel.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 
@@ -141,7 +142,14 @@ class _KorlixMeetingCopilotRouteState extends State<KorlixMeetingCopilotRoute> w
     return Semantics(label: KorlixMeetingCopilotRoute.accessibilityLabel,
       child: KeyedSubtree(key: KorlixMeetingCopilotRoute.screenKey,
         child: KorlixMeetingCopilotScreen(
-            startupPanel: K135zStartupPanel(binding: _binding),
+            startupPanel: Column(children: [
+              K135zStartupPanel(binding: _binding),
+              if (_binding != null) ...[
+                const SizedBox(height: 18),
+                K135zRecordingsPanel(controller: _binding!.recordings,
+                  beforePlayback: _binding!.response.pause),
+              ],
+            ]),
             controller: _controller,
             capture: _binding?.capture,
             meetingResponse: _binding?.response,

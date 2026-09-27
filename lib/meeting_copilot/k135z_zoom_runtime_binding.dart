@@ -10,6 +10,7 @@ import 'korlix_zoom_connection_client.dart';
 import 'k135z_capture_controller.dart';
 import 'k135z_meeting_response.dart';
 import 'k135z_spoken_player.dart';
+import 'k135z_recordings_controller.dart';
 import 'korlix_zoom_connection_controller.dart';
 
 // Account discovery is read-only. Only the explicit Start listening action starts capture.
@@ -79,6 +80,7 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
       transport:transport ?? _send, cancelRequests:_cancelCaptureRequests);
     response = K135zMeetingResponse(capture:capture, cancelRequest:_cancelResponseRequests,
       spokenPlayer:spokenPlayer);
+    recordings = K135zRecordingsController(capture:capture);
     response.addListener(_changed);
     capture.addListener(_changed);
     _controller.addListener(_changed);
@@ -94,6 +96,7 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
   late final KorlixZoomConnectionController _controller;
   late final K135zCaptureController capture;
   late final K135zMeetingResponse response;
+  late final K135zRecordingsController recordings;
   final Set<http.Client> _responseRequests = <http.Client>{};
   void _cancelResponseRequests() {
     for (final client in _responseRequests.toList()) { client.close(); }
@@ -195,6 +198,7 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
   void invalidate() {
     if (_disposed || _invalid) return;
     _invalid = true;
+    recordings.invalidate();
     capture.suspend(clearConsent:true);
     _authorizationUri = null;
     _watch?.cancel();
@@ -305,7 +309,7 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
     if (!usable || uri.origin != launch.backendBaseUri.origin ||
         !((<String>{'GET', 'DELETE'}.contains(method) && body == null) ||
           (method == 'POST' && body is Map<String, dynamic> &&
-           <String>{'bind','status','consent','command','transcript','audio-level','response','response-voice','spoken-reply','waiting-voice'}.any((p) => uri.path == '/api/k135z/zoom/workspace/$p')))) {
+           <String>{'bind','status','consent','command','transcript','audio-level','response','response-voice','spoken-reply','waiting-voice','recordings'}.any((p) => uri.path == '/api/k135z/zoom/workspace/$p')))) {
       throw StateError('Zoom request binding is unavailable.');
     }
     final isResponse = uri.path.endsWith('/response') || uri.path.endsWith('/response-voice') || uri.path.endsWith('/spoken-reply') || uri.path.endsWith('/waiting-voice');
@@ -353,6 +357,7 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
     capture.removeListener(_changed);
     response.removeListener(_changed);
     response.dispose();
+    recordings.dispose();
     capture.dispose();
     _controller.removeListener(_changed);
     _controller.dispose();
