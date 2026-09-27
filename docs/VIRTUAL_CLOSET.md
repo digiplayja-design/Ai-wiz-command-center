@@ -30,7 +30,7 @@ upload; this release does not automatically recognize garment categories.
 
 ## Privacy and reliability
 
-Migration `20260927145553_virtual_closet.sql` adds two RLS-enabled tables, a private
+Migration `20260927152252_virtual_closet.sql` adds two RLS-enabled tables, a private
 `korlix-virtual-closet` bucket and a server-only, security-invoker RPC. Anonymous and
 authenticated client roles have no table or RPC privileges. A restrictive Storage
 policy prevents broader legacy policies from exposing this bucket. Every API action
