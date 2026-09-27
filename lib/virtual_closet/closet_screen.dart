@@ -59,6 +59,35 @@ class _VirtualClosetScreenState extends State<VirtualClosetScreen> {
   Future<void> Function()? _retryUpload;
   String? _pendingKey, _pendingSignature;
   bool get _working => _busy || (_job?.running ?? false);
+  bool get _photoReady =>
+      _asset(_photoId)?.kind == 'photo' && (_asset(_photoId)?.ready ?? false);
+  List<ClosetAsset> get _outfit => _assets
+      .where((a) => a.kind == 'garment' && a.ready && _selected.contains(a.id))
+      .toList();
+  bool get _canTryOn =>
+      !_locked &&
+      !_loading &&
+      !_working &&
+      _photoReady &&
+      _outfit.isNotEmpty &&
+      _outfit.length <= 4 &&
+      _outfit.length == _selected.length;
+  String get _tryOnStatus {
+    if (_job?.running ?? false) {
+      return 'Nova is working on your current request.';
+    }
+    if (_busy) return 'Finishing your current action…';
+    if (!_photoReady && _outfit.isEmpty) {
+      return 'Add your photo and choose at least one clothing item.';
+    }
+    if (!_photoReady) return 'Add a photo of yourself to continue.';
+    if (_outfit.isEmpty) {
+      return 'Choose at least one clothing item from My wardrobe.';
+    }
+    if (!_canTryOn) return 'Refresh your closet to check the selected items.';
+    return 'Ready to try on';
+  }
+
   List<ClosetAsset> get _garments =>
       _assets.where((a) => a.kind == 'garment').toList();
   List<ClosetAsset> get _photos =>
@@ -126,7 +155,7 @@ class _VirtualClosetScreenState extends State<VirtualClosetScreen> {
         _selected.removeWhere(
           (id) => !_assets.any((a) => a.id == id && a.ready),
         );
-        if (_asset(_photoId) == null) _photoId = _photos.firstOrNull?.id;
+        if (!_photoReady) _photoId = _photos.firstOrNull?.id;
         if (!quiet) _error = null;
         final running = snapshot.jobs.where((j) => j.running).firstOrNull;
         if (running != null) {
@@ -284,10 +313,22 @@ class _VirtualClosetScreenState extends State<VirtualClosetScreen> {
             if (kind == 'photo') {
               _photoId = a.id;
               _lookId = null;
+              _lookSourceId = null;
+              _before = false;
               _tab = 1;
+            } else if (a.ready) {
+              if (_selected.length < 4) _selected.add(a.id);
+              _lookId = null;
+              _before = false;
+              _filter = 'all';
+              _search.clear();
             }
             _retryUpload = null;
-            _notice = '${a.name} saved to your private closet.';
+            _notice = kind == 'garment' && a.ready
+                ? _selected.contains(a.id)
+                      ? '${a.name} saved and selected for try-on.'
+                      : '${a.name} saved. Four items are already selected; unselect one to include it.'
+                : '${a.name} saved to your private closet.';
           });
         } catch (e) {
           if (mounted && !_locked) {
@@ -355,7 +396,7 @@ class _VirtualClosetScreenState extends State<VirtualClosetScreen> {
 
   Future<void> _start(String kind) async {
     if (_working || _locked) return;
-    if (kind == 'tryon' && (_photoId == null || _selected.isEmpty)) {
+    if (kind == 'tryon' && !_canTryOn) {
       setState(
         () =>
             _error = 'Upload your photo and select one to four wardrobe items.',
@@ -823,13 +864,64 @@ class _VirtualClosetScreenState extends State<VirtualClosetScreen> {
           ],
         ),
         const SizedBox(height: 12),
+        Semantics(
+          liveRegion: true,
+          child: Row(
+            key: const Key('closet-try-on-status'),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                _canTryOn ? Icons.check_circle : Icons.info_outline,
+                size: 20,
+                color: _canTryOn ? _cyan : _muted,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _tryOnStatus,
+                  style: TextStyle(
+                    color: _canTryOn ? _cyan : _muted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_outfit.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: _outfit
+                .map(
+                  (a) => InputChip(
+                    label: Text(a.name),
+                    avatar: const Icon(Icons.checkroom, size: 16),
+                    deleteButtonTooltipMessage: 'Unselect ${a.name} for try-on',
+                    onDeleted: _working
+                        ? null
+                        : () => setState(() {
+                            _selected.remove(a.id);
+                            _lookId = null;
+                            _before = false;
+                          }),
+                  ),
+                )
+                .toList(),
+          ),
+        ] else if (MediaQuery.sizeOf(context).width < 1100)
+          TextButton.icon(
+            onPressed: _working ? null : () => setState(() => _tab = 0),
+            icon: const Icon(Icons.checkroom),
+            label: const Text('Choose clothes'),
+          ),
+        const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
             key: const Key('closet-try-on'),
-            onPressed: _working || _photoId == null || _selected.isEmpty
-                ? null
-                : () => _start('tryon'),
+            onPressed: _canTryOn ? () => _start('tryon') : null,
             icon: const Icon(Icons.checkroom),
             label: Text(
               'Try it on${_selected.isNotEmpty ? ' · ${_selected.length} items' : ''}',

@@ -7,6 +7,17 @@ and choose Try it on. Nova can suggest an outfit from the saved wardrobe when gi
 an occasion, dress code or preference. Clothing names/categories are editable at
 upload; this release does not automatically recognize garment categories.
 
+Try-on selection correction (27 September 2026): saving a new clothing item now
+selects it for try-on when fewer than four items are selected. A fifth upload stays
+saved without replacing the chosen outfit and explains the four-item limit. Adding
+a person photo preserves the clothing selection. The preview shows selected item
+names and a clear readiness message beside the action, with a mobile shortcut back
+to the wardrobe. A ready photo and one to four ready clothing items enable the
+button; missing inputs or ongoing work have an explicit explanation. Selection is
+local to the open workspace, so previously uploaded items can be selected by
+tapping their wardrobe tiles after reopening. AI still requires consent and the
+existing server-side access and credit checks.
+
 ## Working scope
 
 - Signed-in users can upload, browse, filter, remove and reopen their private

@@ -40,6 +40,8 @@ class FakeCloset extends ClosetClient {
   List<Map<String, dynamic>> assets = [];
   List<Map<String, dynamic>> jobs = [];
   int uploads = 0, starts = 0, removes = 0, polls = 0;
+  String? startedPhotoId;
+  List<String> startedGarmentIds = [];
   bool failUpload = false;
   String? error;
   Completer<ClosetJob>? holdStart;
@@ -73,6 +75,8 @@ class FakeCloset extends ClosetClient {
     List<String> garmentIds = const [],
   }) async {
     starts++;
+    startedPhotoId = photoId;
+    startedGarmentIds = List.of(garmentIds);
     if (holdStart != null) return holdStart!.future;
     jobs = [jobData('running', kind: kind)];
     return ClosetJob.fromJson(jobs.first);
@@ -243,6 +247,91 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     }
   });
+  testWidgets('adding clothes and a photo in either order enables try-on', (
+    tester,
+  ) async {
+    for (final width in [390.0, 1500.0]) {
+      for (final photoFirst in [false, true]) {
+        final c = FakeCloset();
+        await show(
+          tester,
+          c,
+          width: width,
+          picker: () async =>
+              PlatformFile(name: 'Outfit.jpg', size: 3, bytes: Uint8List(3)),
+        );
+        Future<void> tab(String label) async {
+          if (width < 1100) {
+            await tester.tap(find.text(label).last);
+            await tester.pumpAndSettle();
+          }
+        }
+
+        for (final kind
+            in photoFirst ? ['photo', 'garment'] : ['garment', 'photo']) {
+          await tab(kind == 'photo' ? 'Try on' : 'Closet');
+          final button = find.byKey(
+            Key(kind == 'photo' ? 'closet-upload-photo' : 'closet-add-clothes'),
+          );
+          await tester.ensureVisible(button);
+          await tester.tap(button);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+          if (kind == 'garment') {
+            await tester.tap(find.text('Save item'));
+          }
+          await tester.pumpAndSettle();
+        }
+        await tab('Try on');
+        final button = find.byKey(const Key('closet-try-on'));
+        expect(
+          tester.widget<FilledButton>(button).onPressed,
+          isNotNull,
+          reason: 'width=$width photoFirst=$photoFirst',
+        );
+        expect(find.text('Ready to try on'), findsOneWidget);
+        await tester.ensureVisible(button);
+        await tester.tap(button);
+        await tester.pump();
+        await tester.pump();
+        expect(c.starts, 1);
+        expect(
+          c.startedPhotoId,
+          c.assets.singleWhere((a) => a['kind'] == 'photo')['id'],
+        );
+        expect(c.startedGarmentIds, [
+          c.assets.singleWhere((a) => a['kind'] == 'garment')['id'],
+        ]);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      }
+    }
+  });
+  testWidgets('uploading a photo preserves clothes already selected by tap', (
+    tester,
+  ) async {
+    final c = FakeCloset()..assets = [asset('garment', 'garment')];
+    await show(
+      tester,
+      c,
+      picker: () async =>
+          PlatformFile(name: 'Photo.jpg', size: 3, bytes: Uint8List(3)),
+    );
+    await tester.tap(find.text('Ivory blazer').first);
+    await tester.pump();
+    await tester.ensureVisible(find.byKey(const Key('closet-upload-photo')));
+    await tester.tap(find.byKey(const Key('closet-upload-photo')));
+    await tester.pumpAndSettle();
+    final button = find.byKey(const Key('closet-try-on'));
+    expect(tester.widget<FilledButton>(button).onPressed, isNotNull);
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pump();
+    await tester.pump();
+    expect(c.startedGarmentIds, ['garment']);
+    expect(c.starts, 1);
+    await tester.pumpWidget(const SizedBox());
+  });
   testWidgets('declining AI consent never starts generation', (tester) async {
     final c = FakeCloset()
       ..assets = [asset('photo', 'photo'), asset('garment', 'garment')];
@@ -255,6 +344,72 @@ void main() {
     expect(c.starts, 0);
     await tester.pumpWidget(const SizedBox());
   });
+  testWidgets(
+    'a fifth upload preserves the selected outfit and explains the limit',
+    (tester) async {
+      final c = FakeCloset()
+        ..assets = [
+          asset('photo', 'photo'),
+          for (var i = 0; i < 4; i++)
+            asset('item-$i', 'garment', name: 'Wardrobe item $i'),
+        ];
+      await show(
+        tester,
+        c,
+        width: 390,
+        scale: 1.6,
+        picker: () async =>
+            PlatformFile(name: 'Fifth item.jpg', size: 3, bytes: Uint8List(3)),
+      );
+      for (var i = 0; i < 4; i++) {
+        await tester.ensureVisible(find.text('Wardrobe item $i'));
+        await tester.tap(find.text('Wardrobe item $i'));
+        await tester.pump();
+      }
+      await tester.ensureVisible(find.byKey(const Key('closet-add-clothes')));
+      await tester.tap(find.byKey(const Key('closet-add-clothes')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Save item'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'Fifth item saved. Four items are already selected; unselect one to include it.',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Try on').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Ready to try on'), findsOneWidget);
+      expect(find.text('Try it on · 4 items'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      for (var i = 0; i < 4; i++) {
+        final chipDelete = find.byTooltip(
+          'Unselect Wardrobe item $i for try-on',
+        );
+        await tester.ensureVisible(chipDelete);
+        await tester.tap(chipDelete);
+        await tester.pumpAndSettle();
+      }
+      expect(
+        find.text('Choose at least one clothing item from My wardrobe.'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('closet-try-on')))
+            .onPressed,
+        isNull,
+      );
+      await tester.ensureVisible(find.text('Choose clothes'));
+      await tester.tap(find.text('Choose clothes'));
+      await tester.pumpAndSettle();
+      expect(find.text('My wardrobe'), findsOneWidget);
+      expect(c.starts, 0);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
   testWidgets(
     'generation cannot be duplicated and reopening resumes a pending job',
     (tester) async {
