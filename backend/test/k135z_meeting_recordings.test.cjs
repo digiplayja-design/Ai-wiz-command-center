@@ -243,7 +243,7 @@ test('migration denies metadata and media even with a broad legacy storage polic
       grant usage on schema public,storage to anon,authenticated,service_role;
       grant all on storage.objects to anon,authenticated;
       create policy legacy on storage.objects for all to anon,authenticated using(true) with check(true);`);
-    await db.exec(await readFile(join(__dirname,'../../supabase/migrations/20260927022321_k135z_meeting_recordings.sql'),'utf8'));
+    await db.exec(await readFile(join(__dirname,'../../supabase/migrations/20260927024536_k135z_meeting_recordings.sql'),'utf8'));
     await db.exec("insert into storage.objects values('private','korlix-meeting-recordings'),('other','other-bucket')");
     for(const role of ['anon','authenticated']) {
       await db.exec('set role '+role);
