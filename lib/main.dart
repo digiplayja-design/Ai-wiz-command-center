@@ -40,6 +40,8 @@ import 'korlix_ai_quality_policy.dart';
 import 'korlix_cyber_widgets.dart';
 
 import 'improve_picture/screens/portrait_studio_home.dart';
+import 'improve_picture/picture_studio_client.dart';
+import 'improve_picture/picture_studio_screen.dart';
 import 'image_to_video/image_to_video_screen.dart';
 
 import 'live_convo/korlix_live_convo_test_screen.dart';
@@ -7582,6 +7584,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   }
 
   Future<void> _generateImprovedPicture() async {
+    if (_loading) return;
     // KORLIX_AI_CONSENT_GATE_BUILD131_V1_IMPROVE_PICTURE_BEGIN
     final korlixThirdPartyAiConsentGranted =
         await ensureKorlixThirdPartyAiConsent(
@@ -7596,7 +7599,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
           },
         );
 
-    if (!korlixThirdPartyAiConsentGranted) {
+    if (!korlixThirdPartyAiConsentGranted || !mounted || _loading) {
       return;
     }
     // KORLIX_AI_CONSENT_GATE_BUILD131_V1_IMPROVE_PICTURE_END
@@ -7614,9 +7617,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     }
 
     final file = files.isEmpty ? null : files.first;
-    final command = korlixApplyProductionQualityDirective(
-      _controller.text.trim(),
-    );
+    final command = _controller.text.trim();
 
     if (file == null) {
       setState(() {
@@ -7649,6 +7650,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         ? 'Improve this picture and return an enhanced professional version.'
         : command;
 
+    final language = _selectedLanguage;
     _portraitStudioPromptOverride = null;
 
     setState(() {
@@ -7673,7 +7675,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       request.headers.addAll(headers);
 
       request.fields['prompt'] = prompt;
-      request.fields['language'] = _selectedLanguage;
+      request.fields['language'] = language;
 
       request.files.add(
         http.MultipartFile.fromBytes(
@@ -7685,10 +7687,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       );
 
       final streamedResponse = await request.send().timeout(
-        const Duration(seconds: 360),
+        const Duration(seconds: 430),
       );
 
-      final response = await http.Response.fromStream(streamedResponse);
+      final response = await http.Response.fromStream(streamedResponse).timeout(const Duration(seconds: 430));
+      if (!mounted) return;
       final data = _decodeKorlixJsonMap(response);
 
       if (response.statusCode == 403 && data['upgradeRequired'] == true) {
@@ -7726,7 +7729,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         command: 'Improved image: ${file.name}\nInstructions: $prompt',
         title: 'Improved picture: ${file.name}',
         content: content,
-        language: _selectedLanguage,
+        language: language,
         allowPdf: false,
         imageDataUrl: imageDataUrl,
         imageUrl: imageUrl,
@@ -7734,7 +7737,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
 
       setState(() {
         _loading = false;
-        _controller.clear();
+        if (_controller.text.trim() == command) _controller.clear();
         _pickedUploadFile = null;
         _pickedUploadFiles.clear();
         _results.insert(0, improvedItem);
@@ -7746,6 +7749,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         }
       });
     } catch (error) {
+      if (!mounted) return;
       setState(() {
         _loading = false;
         _error = '${_t.createError}\n\n${korlixFriendlyErrorMessage(error)}';
@@ -10344,6 +10348,25 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   Future<void> _openImprovePictureStudio() async {
+    if (_loading) return;
+    final client = PictureStudioClient(backendBaseUrl: kKorlixBackendBaseUrl,
+      headersBuilder: korlixAuthenticatedBackendHeaders);
+    try {
+      await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => PictureStudioScreen(
+        initialFile: _activeUploadFiles.length == 1 ? _activeUploadFiles.first : null,
+        initialPrompt: _controller.text.trim(), language: _selectedLanguage,
+        onImprove: client.improve,
+        ensureConsent: () => ensureKorlixThirdPartyAiConsent(
+          context: context, featureName: 'Improve My Picture',
+          providers: const {KorlixThirdPartyAiProvider.openAi},
+          dataCategories: const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
+            KorlixThirdPartyAiDataCategory.imagesAndPhotos}),
+        onOpenTemplates: () => unawaited(_openPortraitTemplateGallery()),
+      )));
+    } finally {client.dispose();}
+  }
+
+  Future<void> _openPortraitTemplateGallery() async {
     if (_loading) {
       return;
     }
