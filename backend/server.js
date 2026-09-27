@@ -5,6 +5,8 @@ import { registerBookkeeping } from './bookkeeping/routes.mjs';
 import { registerVirtualCloset } from './virtual_closet/routes.mjs';
 import { createTryOn, suggestOutfit } from './virtual_closet/ai.mjs';
 import { registerContractRadar } from './contract_radar/routes.mjs';
+import { registerFieldProof } from './fieldproof/routes.mjs';
+import { reviewEvidence, CREDIT_COST as FIELDPROOF_CREDIT_COST } from './fieldproof/model.mjs';
 import { registerAiVisibility } from './ai_visibility/routes.mjs';
 import { scanVisibility, CREDIT_COST as VISIBILITY_CREDIT_COST } from './ai_visibility/ai.mjs';
 import { discoverContracts, reviewContract } from './contract_radar/ai.mjs';
@@ -3666,6 +3668,7 @@ app.get("/api/health", (req, res) => {
     pictureStudio: {analysisModel: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, ...pictureModelSettings()},
     virtualCloset: {version: 1, privateStorage: true, analysisModel: CHAT_MODEL, ...pictureModelSettings()},
     contractRadar: {version: 1, model: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, discovery: 'official_source_web_search', automaticSubmission: false},
+    fieldProof: {version:1,model:CHAT_MODEL,reasoningEffort:CHAT_EFFORT,creditCost:FIELDPROOF_CREDIT_COST,maxPhotos:8,originalEvidence:true},
     aiVisibility: {version: 1, model: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, method: 'openai_web_samples_v1', sampleCount: 3, creditCost: VISIBILITY_CREDIT_COST},
   });
 });
@@ -13034,6 +13037,18 @@ const bookkeepingStorage = supabaseUrl && supabaseServiceRoleKey ? createClient(
   auth: { autoRefreshToken: false, persistSession: false },
   global: { fetch: (url, init = {}) => fetch(url, { ...init, signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(45000)]) : AbortSignal.timeout(45000) }) },
 }) : null;
+registerFieldProof(app, {database: supabaseAdmin, storageDatabase: bookkeepingStorage, requireUser,
+  aiAccess: async user => {
+    if (!process.env.OPENAI_API_KEY) return {allowed:false,status:503,reason:'KORLIX photo review is temporarily unavailable.'};
+    const profile = await getOrCreateProfile(user);
+    if (!hasAdvancedUploadAccess(profile?.tier)) return {allowed:false,status:403,reason:'KORLIX photo review requires Ultra Premium or Enterprise.'};
+    const usageCounter = await getOrCreateUsageCounter(user.id);
+    if (!profile || !usageCounter) throw new Error('FieldProof usage unavailable');
+    const check = checkUsageAllowed({profile,usageCounter,creditsNeeded:FIELDPROOF_CREDIT_COST});
+    return {...check,status:429,usageId:usageCounter.id};
+  },
+  review: data => reviewEvidence({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
+});
 registerAiVisibility(app, {database: supabaseAdmin, requireUser,
   aiAccess: async user => {
     if (!process.env.OPENAI_API_KEY) return {allowed:false,status:503,reason:'KORLIX AI Visibility is temporarily unavailable.'};
