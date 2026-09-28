@@ -1,3 +1,5 @@
+import 'camera_ask/camera_ask_client.dart';
+import 'camera_ask/camera_ask_screen.dart';
 import 'inventory/inventory_client.dart';
 import 'inventory/inventory_screen.dart';
 import 'cyber_defender/defender_client.dart';
@@ -6293,79 +6295,39 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     }
   }
 
-  // KORLIX_BUILD120_CAMERA_ASK_BEGIN
+  // KORLIX_CAMERA_ASK_STUDIO
+  bool _cameraAskOpening = false;
   Future<void> _capturePhotoAndAskShortcut() async {
-    if (_loading) {
-      return;
-    }
-
-    // Browsers do not expose the same native camera workflow.
-    // On web, use the existing upload picker.
-    if (kIsWeb) {
-      await _handleUploadPressed();
-      return;
-    }
-
+    if (_loading || _cameraAskOpening) return;
+    setState(() => _cameraAskOpening = true);
+    CameraAskClient? client;
     try {
-      final pickedImage = await ip.ImagePicker().pickImage(
-        source: ip.ImageSource.camera,
-        requestFullMetadata: false,
-        imageQuality: 95,
-        maxWidth: 2048,
-        maxHeight: 2048,
-      );
-
-      if (pickedImage == null) {
-        return;
+      client = CameraAskClient(baseUrl: kKorlixBackendBaseUrl,
+        headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision);
+      client.guard();
+      if (_voiceListening) {
+        await _speechToText.stop();
+        if (mounted) setState(() => _voiceListening = false);
       }
-
-      final bytes = await pickedImage.readAsBytes();
-
-      if (!mounted) {
-        return;
-      }
-
-      final fileName = pickedImage.name.trim().isNotEmpty
-          ? pickedImage.name.trim()
-          : 'korlix-camera-${DateTime.now().millisecondsSinceEpoch}.jpg';
-
-      final platformFile = fp.PlatformFile(
-        name: fileName,
-        size: bytes.length,
-        bytes: bytes,
-        path: pickedImage.path,
-      );
-
-      setState(() {
-        _error = null;
-        _pickedUploadFile = platformFile;
-        _pickedUploadFiles
-          ..clear()
-          ..add(platformFile);
-
-        if (_controller.text.trim().isEmpty) {
-          _controller.text =
-              'Analyze this picture and give me a clear, useful answer with important details and next steps.';
-          _controller.selection = TextSelection.collapsed(
-            offset: _controller.text.length,
-          );
-        }
-      });
-
-      // Submit through the existing Korlix image/document answer pipeline.
-      await _generateWithUpload();
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _error =
-            'Could not capture or submit the picture. ${korlixFriendlyErrorMessage(error)}';
-      });
+      await _stopAiCharacterTalkingForQuery();
+      if (!mounted) return;
+      client.guard();
+      await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => CameraAskScreen(
+        client: client!, initialQuestion: _controller.text.trim(), language: _selectedLanguage,
+        ensureConsent: (context) => ensureKorlixThirdPartyAiConsent(
+          context: context, featureName: 'Camera Ask',
+          providers: {KorlixThirdPartyAiProvider.openAi},
+          dataCategories: {KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
+            KorlixThirdPartyAiDataCategory.imagesAndPhotos}),
+      )));
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Camera Ask could not open. Please try again.');
+    } finally {
+      client?.dispose();
+      if (mounted) setState(() => _cameraAskOpening = false);
     }
   }
-  // KORLIX_BUILD120_CAMERA_ASK_END
+
 
   Future<void> _handleUploadPressed() async {
     if (Theme.of(context).platform == TargetPlatform.iOS) {
@@ -15824,13 +15786,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                       onPressed: _loading ? null : _handleUploadPressed,
                     ),
                     // KORLIX_BUILD120_CAMERA_ASK_BUTTON
-                    toolButton(
-                      icon: Icons.photo_camera_rounded,
-                      label: 'Camera Ask',
-                      locked: !_hasDocumentUploadAccess,
-                      success: false,
-                      active: false,
-                      onPressed: _loading ? null : _capturePhotoAndAskShortcut,
+                    CameraAskLaunchButton(
+                      onPressed: _loading || _cameraAskOpening ? null : _capturePhotoAndAskShortcut,
                     ),
                     toolButton(
                       icon: Icons.mic_rounded,
