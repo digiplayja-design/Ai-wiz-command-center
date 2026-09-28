@@ -1,3 +1,5 @@
+import 'inventory/inventory_client.dart';
+import 'inventory/inventory_screen.dart';
 import 'cyber_defender/defender_client.dart';
 import 'cyber_defender/defender_screen.dart';
 import 'study_studio/study_client.dart';
@@ -5588,6 +5590,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   // Hide inactive Utility tools until full native workflows are ready.
   // Keep active Utility tools visible.
   static const List<String> _utilityTools = <String>[
+    'Inventory Studio',
     'Cybersecurity Defender',
     'Study Studio',
     'App Studio',
@@ -10081,6 +10084,18 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     });
   }
 
+  Future<void> _openInventoryStudio() async {
+    final client=InventoryClient(backendBaseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
+    Future<bool> consent(BuildContext context)=>KorlixThirdPartyAiConsent.ensure(context:context,featureName:'Inventory Studio and K-Nova',providers:{KorlixThirdPartyAiProvider.openAi},dataCategories:{KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.imagesAndPhotos,KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts});
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>InventoryScreen(client:client,ensureConsent:consent,openVoice:(search,results)async{
+      await Navigator.of(context).push<void>(MaterialPageRoute<void>(builder:(_)=>KorlixLiveConvoTestScreen(
+        sessionChanges:kKorlixAuthRevision,backendBaseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,
+        characterId:normalizeKorlixCharacterId(kKorlixSelectedCharacterNotifier.value),language:_t.label,
+        inventorySearch:search,inventoryResultsBuilder:results,
+      )));
+    })));
+  }
+
   Future<void> _openCyberDefender() async {
     final client=DefenderClient(backendBaseUrl:kKorlixBackendBaseUrl,
       headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
@@ -10606,6 +10621,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   void _selectUtilityTool(String tool) {
+    if (tool == 'Inventory Studio') { unawaited(_openInventoryStudio()); return; }
     if (tool == 'Cybersecurity Defender') { unawaited(_openCyberDefender()); return; }
     if (tool == 'Study Studio') { unawaited(_openStudyStudio()); return; }
     if (tool == 'App Studio') { unawaited(_showAppCreationDialog()); return; }
@@ -12770,6 +12786,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     };
 
     String statusFor(String tool) {
+      if (tool == 'Inventory Studio') return 'Find, scan and manage stock across every location with K-Nova';
       if (tool == 'Cybersecurity Defender') return 'Check suspicious messages, strengthen habits and get incident help';
       if (tool == 'Study Studio') return 'Learn with lessons, flashcards and practice quizzes';
       if (tool == 'App Studio') return 'Build, preview and export your own app';

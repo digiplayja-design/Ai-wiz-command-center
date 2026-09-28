@@ -1,6 +1,6 @@
 part of 'korlix_live_convo_character_stage.dart';
 
-// NOVA Live Voice: presentation only. Voice, approvals and tools remain owned
+// K-Nova Live Voice: presentation only. Voice, approvals and tools remain owned
 // by the session controller. The halo indicates state, never microphone volume.
 extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
   bool get _dark => Theme.of(context).brightness == Brightness.dark;
@@ -19,8 +19,8 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
       _dark ? const Color(0xFFFFA8B1) : const Color(0xFFAB2941);
   String get _voiceDisplayName =>
       widget.activeAgentName.trim().isEmpty ||
-          _activeAgentName == 'My Assistant'
-      ? 'NOVA'
+          _activeAgentName == 'My Assistant' || _activeAgentName.toLowerCase() == 'nova' || widget.inventoryResults != null
+      ? 'K-Nova'
       : _activeAgentName;
 
   Widget _panel(
@@ -76,7 +76,7 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'NOVA',
+                'K-Nova',
                 style: TextStyle(
                   color: _ink,
                   fontSize: 20,
@@ -474,7 +474,7 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
             ),
           ),
           subtitle: Text(
-            'Voice, agent, files & documents',
+            widget.inventoryResults != null ? 'Voice & accent' : 'Voice, agent, files & documents',
             style: TextStyle(color: _secondary, fontSize: 12),
           ),
           children: [
@@ -485,6 +485,7 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
                   '${widget.selectedVoicePresentation} · ${widget.selectedAccentName}',
               action: widget.onOpenVoiceSelector,
             ),
+            if (widget.inventoryResults == null) ...[
             _settingsTile(
               icon: _activeAgentIcon,
               title: _activeAgentName,
@@ -520,6 +521,7 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
                   ? null
                   : widget.onCreateDocument,
             ),
+            ],
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
@@ -721,6 +723,7 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
                           24,
                         ),
                         children: [
+                          if (widget.inventoryResults != null) ...[widget.inventoryResults!(_closeInventoryView), const SizedBox(height: 16)],
                           if (constraints.maxWidth >= 850)
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,

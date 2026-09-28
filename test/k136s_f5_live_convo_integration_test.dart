@@ -242,8 +242,9 @@ class _ReadinessChannel extends _ReadinessObservedFake implements rtc.RTCDataCha
       'transcript': text, 'item_id': id,
     })));
   }
+  final List<Map<String,dynamic>> sent = [];
   @override
-  Future<void> send(rtc.RTCDataChannelMessage message) async {}
+  Future<void> send(rtc.RTCDataChannelMessage message) async { sent.add(Map<String,dynamic>.from(jsonDecode(message.text))); }
   @override
   Future<void> close() async {
     closes++;
@@ -393,11 +394,11 @@ Future<void> _finishAction(WidgetTester tester, Future<void> action) async {
   expect(done, isTrue, reason: 'Actual screen lifecycle did not complete within fixture time.');
   await result;
 }
-Widget _readinessApp(_ReadinessIo io) => MaterialApp(home: Scaffold(body:
+Widget _readinessApp(_ReadinessIo io, {Future<Map<String,dynamic>> Function(Map<String,dynamic>)? inventorySearch}) => MaterialApp(home: Scaffold(body:
     KorlixLiveConvoTestScreen(key: const Key('readiness-screen'),
       sessionChanges: io.authChanges, backendBaseUrl: 'https://k136s.invalid', headersBuilder: () => {'Authorization': io.principal},
-      characterId: io.character, language: 'en', k136sIo: io)));
-Future<void> _withScreen(WidgetTester tester, Future<void> Function(_ReadinessIo io) body) async {
+      characterId: io.character, language: 'en', k136sIo: io, inventorySearch:inventorySearch,inventoryResultsBuilder:inventorySearch==null?null:(r,close)=>Text('Inventory results: ${r['total']??0}'))));
+Future<void> _withScreen(WidgetTester tester, Future<void> Function(_ReadinessIo io) body, {Future<Map<String,dynamic>> Function(Map<String,dynamic>)? inventorySearch}) async {
   SharedPreferences.setMockInitialValues(<String, Object>{});
   tester.view.physicalSize = const Size(1400, 1800);
   tester.view.devicePixelRatio = 1;
@@ -405,7 +406,7 @@ Future<void> _withScreen(WidgetTester tester, Future<void> Function(_ReadinessIo
   addTearDown(tester.view.resetDevicePixelRatio);
   final io = _ReadinessIo();
   await http.runWithClient(() async {
-    await tester.pumpWidget(_readinessApp(io));
+    await tester.pumpWidget(_readinessApp(io,inventorySearch:inventorySearch));
     await _pumpSteps(tester, 2);
     try {
       await body(io);
@@ -630,6 +631,33 @@ void _readinessScreenTests() {
 
 
 void _novaReliabilityTests() {
+  testWidgets('K-Nova inventory tool calls the authorized search and displays results once', (tester) async {
+    final searches=<Map<String,dynamic>>[];
+    await _withScreen(tester,(io)async{
+      await _finishAction(tester,_screenAction(tester));
+      expect(io.requests.single.url.queryParameters['inventory'],'1');
+      final channel=io.peers.single.channel;
+      final config=channel.sent.where((x)=>x['type']=='session.update').last;
+      expect((config['session']['tools'] as List).single['name'],'search_inventory');
+      final event={'type':'response.done','response':{'status':'completed','output':[{'type':'function_call','status':'completed','name':'search_inventory','call_id':'inventory-call-1','arguments':'{"q":"dri","scope":"nationwide","country":"US"}'}]}};
+      channel.onMessage!(rtc.RTCDataChannelMessage(jsonEncode(event)));await _pumpSteps(tester,3);
+      expect(searches,hasLength(1));expect(searches.single['q'],'dri');expect(find.text('Inventory results: 2'),findsOneWidget);
+      channel.onMessage!(rtc.RTCDataChannelMessage(jsonEncode(event)));await _pumpSteps(tester,2);expect(searches,hasLength(1));
+      expect(channel.sent.where((x)=>x['type']=='conversation.item.create'&&x['item']['type']=='function_call_output'),hasLength(1));
+    },inventorySearch:(args)async{searches.add(args);return {'total':2,'scope':'nationwide','country':'US','items':[]};});
+  });
+  testWidgets('K-Nova drops delayed inventory results after the account changes', (tester) async {
+    final gate=Completer<Map<String,dynamic>>();
+    await _withScreen(tester,(io)async{
+      await _finishAction(tester,_screenAction(tester));final channel=io.peers.single.channel;
+      channel.onMessage!(rtc.RTCDataChannelMessage(jsonEncode({'type':'response.done','response':{'status':'completed','output':[{'type':'function_call','status':'completed','name':'search_inventory','call_id':'delayed','arguments':'{"q":"dri"}'}]}})));
+      await _pumpSteps(tester,2);io.principal='Bearer different';io.authChanges.value++;
+      gate.complete({'total':99,'items':[]});await _pumpSteps(tester,3);
+      expect(channel.sent.where((x)=>x['type']=='conversation.item.create'&&x['item']['type']=='function_call_output'),isEmpty);
+      expect(find.textContaining('sign-in changed'),findsOneWidget);expect(find.text('Inventory results: 99'),findsNothing);
+    },inventorySearch:(_)=>gate.future);
+  });
+
   testWidgets('NOVA fatal peer failure silences immediately, releases devices and keeps the chat', (tester) async {
     await _withScreen(tester, (io) async {
       await _finishAction(tester, _screenAction(tester));

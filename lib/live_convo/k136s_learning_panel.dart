@@ -520,7 +520,7 @@ class K136sLearningController extends ChangeNotifier {
   }
   Future<void> endCapture() async {
     if(_disposed||busy||_state!=K136sLearningState.capturing) return;
-    if(capturedText.isEmpty) {_fail('Nothing captured yet — say what Nova should learn.',code:'EMPTY_CAPTURE');return;}
+    if(capturedText.isEmpty) {_fail('Nothing captured yet — say what K-Nova should learn.',code:'EMPTY_CAPTURE');return;}
     await _runPreview();
   }
   Future<void> _runPreview() async {
@@ -751,13 +751,13 @@ class _K136sLearningPanelState extends State<K136sLearningPanel> {
     if(c.lastCode == 'WRITE_OUTCOME_UNKNOWN') return 'Save result not confirmed';
     switch (c.state) {
       case K136sLearningState.triggered:
-        return 'Nova learning — muting mic…';
+        return 'K-Nova learning — muting mic…';
       case K136sLearningState.authRequired:
         return 'BRAIN VAULT — type your password';
       case K136sLearningState.authenticated:
         return 'Unlocked';
       case K136sLearningState.capturing:
-        return 'Listening — say what Nova should learn';
+        return 'Listening — say what K-Nova should learn';
       case K136sLearningState.classifying:
         return 'Reviewing…';
       case K136sLearningState.previewReady:
@@ -767,7 +767,7 @@ class _K136sLearningPanelState extends State<K136sLearningPanel> {
       case K136sLearningState.committing:
         return 'Saving…';
       case K136sLearningState.verified:
-        return 'Nova learned this';
+        return 'K-Nova learned this';
       case K136sLearningState.rejected:
         return 'Not verified';
       case K136sLearningState.expired:
@@ -909,8 +909,8 @@ class _K136sLearningPanelState extends State<K136sLearningPanel> {
             const SizedBox(height: 8),
             Row(children: <Widget>[
               if (!c.contextRefreshed)
-                FilledButton(key: const Key('k136s_refresh'), onPressed: c.busy ? null : c.refreshNovaContext, child: const Text('Refresh Nova now')),
-              if (c.contextRefreshed) const Text('Nova\'s context refreshed'),
+                FilledButton(key: const Key('k136s_refresh'), onPressed: c.busy ? null : c.refreshNovaContext, child: const Text('Refresh K-Nova now')),
+              if (c.contextRefreshed) const Text('K-Nova\'s context refreshed'),
               const Spacer(),
               TextButton(key: const Key('k136s_close'), onPressed: c.reset, child: const Text('Close')),
             ]),

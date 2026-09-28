@@ -448,7 +448,7 @@ class KorlixLiveConvoAgentEmailVoiceBridge {
     'description':
         'Prepare one transactional Agent Email request for an existing '
         'approved recipient. Use this tool when the user asks to draft an '
-        'email or asks Nova to email or send a message now. This tool always '
+        'email or asks K-Nova to email or send a message now. This tool always '
         'creates an unsent draft first. Set sendRequested to true only when '
         'the user explicitly asks to email, send, or deliver the message; '
         'the application will then read back the exact recipient, subject, '
@@ -482,7 +482,7 @@ class KorlixLiveConvoAgentEmailVoiceBridge {
         'sendRequested': <String, dynamic>{
           'type': 'boolean',
           'description':
-              'True only when the user explicitly asked Nova to send or '
+              'True only when the user explicitly asked K-Nova to send or '
               'email the message after a separate spoken confirmation. '
               'False when the user asked only to draft or save it.',
         },
@@ -734,7 +734,7 @@ class KorlixLiveConvoAgentEmailVoiceClient {
 
     if (clean.isEmpty) {
       throw const KorlixLiveConvoAgentEmailVoiceException(
-        'Select the authorized Nova agent '
+        'Select the authorized K-Nova agent '
         'first. Nothing was sent.',
         code: 'agent_email_voice_agent_required',
       );
@@ -1112,7 +1112,7 @@ class KorlixLiveConvoAgentEmailVoiceClient {
     try {
       if (pending.isExpired(now)) {
         throw const KorlixLiveConvoAgentEmailVoiceException(
-          'That spoken email confirmation expired. Ask Nova to prepare the '
+          'That spoken email confirmation expired. Ask K-Nova to prepare the '
           'email again. Nothing was sent.',
           code: 'agent_email_voice_confirmation_expired',
         );
@@ -1147,7 +1147,7 @@ class KorlixLiveConvoAgentEmailVoiceClient {
 
       if (!pending.matchesDraft(current)) {
         throw const KorlixLiveConvoAgentEmailVoiceException(
-          'The prepared email changed after Nova read it back. The stale '
+          'The prepared email changed after K-Nova read it back. The stale '
           'confirmation was rejected. Review the updated draft and confirm '
           'again. Nothing was sent.',
           code: 'agent_email_voice_confirmation_stale',

@@ -30,7 +30,7 @@ void main() {
         'Voice ${dark ? 'dark' : 'white'} theme at $width with large text and pinned controls',
         (tester) async {
           await mount(tester, dark: dark, width: width, scale: 1.25);
-          expect(find.text('NOVA'), findsOneWidget);
+          expect(find.text('K-Nova'), findsOneWidget);
           expect(find.text('Start LIVE CONVO').hitTestable(), findsOneWidget);
           expect(
             tester.getBottomRight(find.text('Start LIVE CONVO')).dy,
@@ -75,8 +75,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Voice: Marin'));
       await tester.tap(find.text('Voice: Marin'));
-      await tester.ensureVisible(find.text('NOVA').last);
-      await tester.tap(find.text('NOVA').last);
+      await tester.ensureVisible(find.text('K-Nova').last);
+      await tester.tap(find.text('K-Nova').last);
       expect(actions, containsAll(['voice', 'agent']));
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
@@ -102,7 +102,7 @@ void main() {
         tester,
         connected: true,
         muted: true,
-        status: 'NOVA is speaking…',
+        status: 'K-Nova is speaking…',
         agent: 'Custom Coach',
       );
       expect(find.text('Custom Coach is speaking'), findsOneWidget);
@@ -160,7 +160,7 @@ void main() {
         width: spec.$2,
         connected: spec.$3,
         entries: spec.$3,
-        status: spec.$3 ? 'NOVA is speaking…' : 'Ready',
+        status: spec.$3 ? 'K-Nova is speaking…' : 'Ready',
       );
       final boundary = tester.renderObject<RenderRepaintBoundary>(
         find.byKey(const Key('voice-capture')),
@@ -191,7 +191,7 @@ Future<void> mount(
   bool muted = false,
   bool entries = false,
   String status = 'Ready',
-  String agent = 'NOVA',
+  String agent = 'K-Nova',
   List<String>? actions,
 }) async {
   tester.view.physicalSize = Size(width, 844);
@@ -236,7 +236,7 @@ Widget fixture({
   bool muted = false,
   bool entries = false,
   String status = 'Ready',
-  String agent = 'NOVA',
+  String agent = 'K-Nova',
   List<String>? actions,
   Future<bool> Function()? requestClose,
 }) => KorlixLiveConvoCharacterStage(

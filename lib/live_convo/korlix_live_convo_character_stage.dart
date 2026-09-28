@@ -38,6 +38,7 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
     required this.connected,
     required this.muted,
     this.microphoneActive,
+    this.inventoryResults,
     this.paused = false,
     required this.error,
     required this.userTranscript,
@@ -89,6 +90,7 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
     this.onRetryLiveDocsReport,
   });
 
+  final Widget Function(Future<bool> Function())? inventoryResults;
   final String characterId;
   final String language;
   final String status;
@@ -449,6 +451,13 @@ class _KorlixLiveConvoCharacterStageState
 
     return '${minutes.toString().padLeft(2, '0')}:'
         '${seconds.toString().padLeft(2, '0')}';
+  }
+
+  Future<bool> _closeInventoryView() async {
+    await _closeStage();
+    if (!_allowClose) return false;
+    await WidgetsBinding.instance.endOfFrame;
+    return true;
   }
 
   Future<void> _closeStage() async {
