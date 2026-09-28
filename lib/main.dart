@@ -1,3 +1,5 @@
+import 'social/social_client.dart';
+import 'social/social_screen.dart';
 import 'camera_ask/camera_ask_client.dart';
 import 'camera_ask/camera_ask_screen.dart';
 import 'inventory/inventory_client.dart';
@@ -9310,6 +9312,11 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     });
   }
 
+  Future<void> _openKorlixSocial() async {
+    final client = SocialClient(baseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>SocialScreen(client:client)));
+  }
+
   Future<void> _openInventoryStudio() async {
     final client=InventoryClient(backendBaseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
     Future<bool> consent(BuildContext context)=>KorlixThirdPartyAiConsent.ensure(context:context,featureName:'Inventory Studio and K-Nova',providers:{KorlixThirdPartyAiProvider.openAi},dataCategories:{KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.imagesAndPhotos,KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts});
@@ -14418,6 +14425,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                   title: 'For personal use', description: 'Create, learn, organize, and explore your everyday life.',
                   icon: Icons.person_outline_rounded,
                   children: [
+                    tile('KORLIX Social', Icons.people_outline_rounded, _loading ? null : _openKorlixSocial, subtitle: 'People, messages & forums'),
                     for (final tool in ['Tax Prep', 'BabyBlend', 'Virtual Closet', 'Cybersecurity Defender']) toolTile(tool),
                     for (final action in quickActions.where((a) => !businessAction(a))) _buildSafeUiQuickActionChip(action, tile: true),
                     tile('Music Studio', Icons.library_music_rounded, _loading ? null : _showMusicStudio),
