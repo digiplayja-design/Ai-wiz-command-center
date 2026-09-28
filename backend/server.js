@@ -1,3 +1,4 @@
+import { resumeTextPolicy } from './resume_studio/policy.mjs';
 import { registerSocial } from './social/routes.mjs';
 import { registerAgentStudio } from './agent_studio/routes.mjs';
 import { generateStep, WorkflowError } from './agent_studio/model.mjs';
@@ -4582,8 +4583,9 @@ app.post("/api/generate", async (req, res) => {
       });
     }
 
-    const liveSearchNeeded = shouldUseLiveSearch(command);
-    const fileRequested = wantsFile(command);
+    const resumePolicy = resumeTextPolicy(req.body);
+    const liveSearchNeeded = resumePolicy?.liveSearchNeeded ?? shouldUseLiveSearch(command);
+    const fileRequested = resumePolicy?.fileRequested ?? wantsFile(command);
     const creditsNeeded = calculateCredits({
       liveSearchNeeded,
       fileRequested,
