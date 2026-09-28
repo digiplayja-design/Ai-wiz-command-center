@@ -682,7 +682,7 @@ class _ReportDialogState extends State<_ReportDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            widget.kind == 'message'
+            (widget.kind == 'message' || widget.kind == 'group_message')
                 ? 'This message and your reason will be shared with KORLIX moderators for review.'
                 : 'This content and your reason will be shared with KORLIX moderators for review.',
           ),

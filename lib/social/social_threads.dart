@@ -15,10 +15,14 @@ class SocialChatScreen extends StatefulWidget {
     required this.me,
     required this.peer,
     this.onCall,
+    this.groupChat = false,
+    this.onGroupDetails,
   });
   final SocialClient client;
   final SocialMap me, peer;
   final Future<void> Function(bool video)? onCall;
+  final bool groupChat;
+  final Future<bool> Function()? onGroupDetails;
   @override
   State<SocialChatScreen> createState() => _SocialChatScreenState();
 }
@@ -40,6 +44,10 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       _unavailable = false;
   String? _error, _sendKey, _sendBody;
   int _generation = 0, _readThrough = 0;
+  String _action(String name) => widget.groupChat ? 'group_$name' : name;
+  SocialMap get _destination => {
+    widget.groupChat ? 'group' : 'peer': _peer['id'],
+  };
   @override
   void initState() {
     super.initState();
@@ -114,7 +122,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     _readThrough = seq;
     unawaited(
       widget.client
-          .post('read', {'peer': _peer['id'], 'through': seq})
+          .post(_action('read'), {..._destination, 'through': seq})
           .catchError((_) {
             _readThrough = 0;
             return <String, dynamic>{};
@@ -136,8 +144,8 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     final g = ++_generation, atBottom = _atBottom;
     setState(() => _loading = true);
     try {
-      final r = await widget.client.get('messages', {
-        'peer': _peer['id'],
+      final r = await widget.client.get(_action('messages'), {
+        ..._destination,
         if (older && _messages.isNotEmpty) 'before': _messages.first['seq'],
       });
       if (!mounted || g != _generation || !widget.client.available) return;
@@ -150,6 +158,26 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       setState(() {
         _messages = merged.values.toList()
           ..sort((a, b) => (a['seq'] as num).compareTo(b['seq'] as num));
+        if (widget.groupChat && r['hidden_senders'] is List) {
+          final hidden = Set<String>.from(r['hidden_senders']);
+          _messages = [
+            for (final m in _messages)
+              if (hidden.contains(m['sender']))
+                {
+                  ...m,
+                  'sender': null,
+                  'author': {'name': 'Unavailable member'},
+                  'body': '',
+                  'deleted': true,
+                  'reply': null,
+                }
+              else if (hidden.contains(socialMap(m['reply'])['sender']))
+                {...m, 'reply': null}
+              else
+                m,
+          ];
+          if (hidden.contains(_replyTo?['sender'])) _replyTo = null;
+        }
         final removed = <String>{
           for (final m in page) ...[
             if (m['deleted'] == true) '${m['id']}',
@@ -211,9 +239,9 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     }
     setState(() => _sending = true);
     try {
-      await widget.client.post('send', {
+      await widget.client.post(_action('send'), {
         'id': _sendKey,
-        'peer': _peer['id'],
+        ..._destination,
         'body': body,
         'reply_to': ?replyId,
       });
@@ -232,8 +260,11 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     }
   }
 
-  String _author(SocialMap m) =>
-      m['sender'] == widget.me['id'] ? 'You' : '${_peer['name']}';
+  String _author(SocialMap m) => m['sender'] == widget.me['id']
+      ? 'You'
+      : widget.groupChat
+      ? '${socialMap(m['author'])['name'] ?? 'Member'}'
+      : '${_peer['name']}';
 
   void _chooseReply(SocialMap m) {
     if (_sending ||
@@ -250,8 +281,8 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     if (_openingOriginal || _unavailable || !widget.client.available) return;
     _openingOriginal = true;
     try {
-      final result = await widget.client.get('message', {
-        'peer': _peer['id'],
+      final result = await widget.client.get(_action('message'), {
+        ..._destination,
         'id': id,
       });
       if (!mounted || !widget.client.available || _unavailable) return;
@@ -377,7 +408,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       final sent = await socialReport(
         context,
         widget.client,
-        'message',
+        widget.groupChat ? 'group_message' : 'message',
         m['id'],
       );
       if (mounted && sent) {
@@ -388,13 +419,18 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     if (!await socialConfirm(
       context,
       'Remove this message?',
-      'Its text will be removed for both members.',
+      widget.groupChat
+          ? 'Its text will be removed for everyone in the group.'
+          : 'Its text will be removed for both members.',
       action: 'Remove',
     )) {
       return;
     }
     try {
-      await widget.client.post('delete_message', {'id': m['id']});
+      await widget.client.post(_action('delete_message'), {
+        'id': m['id'],
+        if (widget.groupChat) ..._destination,
+      });
       if (mounted) {
         setState(() {
           if (_replyTo?['id'] == m['id']) _replyTo = null;
@@ -480,7 +516,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                 children: [
                   Flexible(
                     child: Text(
-                      mine ? 'You' : _peer['name'],
+                      _author(m),
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -559,7 +595,10 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     appBar: AppBar(
       title: Row(
         children: [
-          SocialAvatar(member: _peer, size: 36),
+          if (widget.groupChat)
+            const Icon(Icons.groups_rounded, size: 36)
+          else
+            SocialAvatar(member: _peer, size: 36),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -575,7 +614,9 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                   ),
                 ),
                 Text(
-                  _peer['online'] == true
+                  widget.groupChat
+                      ? '${_peer['member_count'] ?? 1} members · Group chat'
+                      : _peer['online'] == true
                       ? 'Online in Social'
                       : 'Private conversation',
                   style: const TextStyle(fontSize: 11),
@@ -610,15 +651,32 @@ class _SocialChatScreenState extends State<SocialChatScreen>
               ),
             ],
           ),
-        PopupMenuButton<String>(
-          tooltip: 'Conversation options',
-          onSelected: _connectionAction,
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'remove', child: Text('Remove connection')),
-            PopupMenuItem(value: 'report', child: Text('Report member')),
-            PopupMenuItem(value: 'block', child: Text('Block member')),
-          ],
-        ),
+        if (widget.groupChat)
+          IconButton(
+            tooltip: 'Group details',
+            icon: const Icon(Icons.group_outlined),
+            onPressed: _unavailable
+                ? null
+                : () async {
+                    final left = await widget.onGroupDetails?.call() ?? false;
+                    if (!mounted || !context.mounted) return;
+                    if (left) {
+                      Navigator.pop(context);
+                    } else {
+                      await _load();
+                    }
+                  },
+          )
+        else
+          PopupMenuButton<String>(
+            tooltip: 'Conversation options',
+            onSelected: _connectionAction,
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'remove', child: Text('Remove connection')),
+              PopupMenuItem(value: 'report', child: Text('Report member')),
+              PopupMenuItem(value: 'block', child: Text('Block member')),
+            ],
+          ),
       ],
     ),
     body: SafeArea(
@@ -658,12 +716,14 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                   controller: _scroll,
                   padding: const EdgeInsets.all(16),
                   children: [
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 20),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 20),
                       child: Text(
-                        'Connected by choice. Your messages are shared only with this connection. Reported messages may be reviewed by KORLIX moderators.',
+                        widget.groupChat
+                            ? 'Only accepted members can chat. You see messages sent after you join. Reported messages may be reviewed by KORLIX moderators.'
+                            : 'Connected by choice. Your messages are shared only with this connection. Reported messages may be reviewed by KORLIX moderators.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12, height: 1.5),
+                        style: const TextStyle(fontSize: 12, height: 1.5),
                       ),
                     ),
                     if (widget.onCall != null && !_unavailable)
@@ -710,9 +770,12 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                     if (_messages.isEmpty && !_loading && !_unavailable)
                       SocialEmpty(
                         icon: Icons.waving_hand_outlined,
-                        title: 'Say hello to ${_peer['name']}.',
-                        body:
-                            'You’re connected. Start with something you have in common.',
+                        title: widget.groupChat
+                            ? 'Welcome to ${_peer['name']}.'
+                            : 'Say hello to ${_peer['name']}.',
+                        body: widget.groupChat
+                            ? 'Start the conversation. Invited members can join after accepting in Groups.'
+                            : 'You’re connected. Start with something you have in common.',
                       ),
                     for (final m in _messages) _bubble(m),
                     if (_loading && _messages.isEmpty)

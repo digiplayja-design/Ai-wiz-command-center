@@ -8,6 +8,7 @@ import 'social_forms.dart';
 import 'social_threads.dart';
 import 'social_call_screen.dart';
 import 'social_call_controller.dart';
+import 'social_groups.dart';
 
 class SocialScreen extends StatefulWidget {
   const SocialScreen({super.key, required this.client});
@@ -202,7 +203,9 @@ class _SocialScreenState extends State<SocialScreen>
             ? 'members'
             : _tab == 1
             ? 'connections'
-            : 'topics',
+            : _tab == 2
+            ? 'topics'
+            : 'groups',
         {
           'offset': offset,
           'q': _search.text.trim(),
@@ -373,6 +376,41 @@ class _SocialScreenState extends State<SocialScreen>
     if (mounted && !_denied) await _load();
   }
 
+  Future<void> _createGroup() async {
+    final group = await Navigator.push<SocialMap>(
+      context,
+      MaterialPageRoute(builder: (_) => SocialGroupInvite(client: client)),
+    );
+    if (!mounted || _denied || group == null) return;
+    await _openGroup(group);
+  }
+
+  Future<void> _openGroup(SocialMap group) async {
+    if (_profile == null || _denied) return;
+    await socialOpenGroup(context, client, _profile!, group);
+    if (mounted && !_denied) await _load();
+  }
+
+  Future<void> _groupInvitation(SocialMap group, bool accept) async {
+    if (_mutating || _denied) return;
+    setState(() => _mutating = true);
+    try {
+      final r = await client.post(accept ? 'group_accept' : 'group_decline', {
+        'group': group['id'],
+      });
+      if (!mounted || _denied) return;
+      if (accept) {
+        await _openGroup(socialMap(r['group']));
+      } else {
+        await _load();
+      }
+    } catch (e) {
+      if (mounted && !_denied) socialNotice(context, e);
+    } finally {
+      if (mounted) setState(() => _mutating = false);
+    }
+  }
+
   Widget _heading(String title, {Widget? trailing}) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 18),
     child: Row(
@@ -392,11 +430,13 @@ class _SocialScreenState extends State<SocialScreen>
       'Find your people.',
       'Keep the conversation going.',
       'A place for every perspective.',
+      'Your people. One conversation.',
     ][_tab];
     final subtitle = [
       'Discover KORLIX members. Follow, connect and make a little room for something new.',
       'Approve a follow request to talk privately. Your connections, on your terms.',
       'Start a topic, share an idea and join conversations around the things you care about.',
+      'Bring friends, family or your team together. Create a group and invite several connections at once.',
     ][_tab];
     return SocialPanel(
       child: LayoutBuilder(
@@ -458,6 +498,7 @@ class _SocialScreenState extends State<SocialScreen>
         'Search names or handles',
         'Search your connections',
         'Search topics and discussions',
+        'Search your groups',
       ][_tab],
       suffixIcon: IconButton(
         tooltip: 'Clear search',
@@ -910,6 +951,11 @@ class _SocialScreenState extends State<SocialScreen>
                 selectedIcon: Icon(Icons.forum_rounded),
                 label: 'Forums',
               ),
+              NavigationDestination(
+                icon: Icon(Icons.groups_outlined),
+                selectedIcon: Icon(Icons.groups_rounded),
+                label: 'Groups',
+              ),
             ],
           ),
     body: SafeArea(
@@ -1088,6 +1134,30 @@ class _SocialScreenState extends State<SocialScreen>
                             : null,
                       ),
                     _grid([for (final p in _items) _memberCard(p)]),
+                  ] else if (_tab == 3) ...[
+                    KorlixActionButton(
+                      label: 'Create a group',
+                      icon: Icons.group_add_rounded,
+                      onPressed: _createGroup,
+                    ),
+                    _heading('Your groups & invitations'),
+                    if (_items.isEmpty && !_loading && _error == null)
+                      const SocialEmpty(
+                        icon: Icons.groups_outlined,
+                        title: 'Make space for your circle.',
+                        body:
+                            'Create a group or accept an invitation here to start chatting together.',
+                      ),
+                    _grid([
+                      for (final g in _items)
+                        SocialGroupCard(
+                          group: g,
+                          busy: _mutating,
+                          onOpen: () => _openGroup(g),
+                          onAccept: () => _groupInvitation(g, true),
+                          onDecline: () => _groupInvitation(g, false),
+                        ),
+                    ]),
                   ] else
                     _forums(),
                 ],
