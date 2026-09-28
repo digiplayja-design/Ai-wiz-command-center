@@ -3,10 +3,11 @@
 import { registerSocialPhotos, socialPhotos } from './media.mjs';
 import { socialCallConfig } from './calls.mjs';
 export function registerSocial(app, { database, requireUser, logger = console, env = process.env } = {}) {
-  const actions = new Set(['bootstrap', 'members', 'connections', 'messages', 'topics', 'topic', 'blocks', 'reports',
+  const actions = new Set(['bootstrap', 'members', 'connections', 'messages', 'message', 'topics', 'topic', 'blocks', 'reports',
     'save_profile', 'presence', 'request', 'accept', 'decline', 'remove', 'block', 'unblock', 'send', 'read',
     'delete_message', 'create_topic', 'edit_topic', 'delete_topic', 'reply', 'edit_reply', 'delete_reply', 'report', 'moderate']);
-  const reads = new Set(['bootstrap', 'members', 'connections', 'messages', 'topics', 'topic', 'blocks', 'reports']);
+  const chatActions = new Set(['messages', 'message', 'send']);
+  const reads = new Set(['bootstrap', 'members', 'connections', 'messages', 'message', 'topics', 'topic', 'blocks', 'reports']);
   const callActions = new Set(['call_config', 'call_inbox', 'call_start', 'call_accept', 'call_end', 'call_poll', 'call_signal']);
   for (const action of callActions) actions.add(action);
   for (const action of ['call_config', 'call_inbox', 'call_poll']) reads.add(action);
@@ -34,7 +35,7 @@ export function registerSocial(app, { database, requireUser, logger = console, e
       }
       if (['call_start', 'call_accept'].includes(action) && env.SOCIAL_CALLS_ENABLED === 'false') return res.status(503).json({ error: 'Calling is temporarily unavailable. You can still send a message.' });
       // p_actor is derived exclusively from a Supabase-verified identity.
-      const result = await database.rpc(callActions.has(action) ? 'korlix_social_calls_v1' : 'korlix_social_v1', { p_actor: user.id, p_action: action, p_data: data });
+      const result = await database.rpc(callActions.has(action) ? 'korlix_social_calls_v1' : chatActions.has(action) ? 'korlix_social_chat_v1' : 'korlix_social_v1', { p_actor: user.id, p_action: action, p_data: data });
       if (result.error) {
         const code = result.error.code;
         const status = { P0001: 400, P0002: 404, '42501': 403, '23505': 409, '23514': 400, '22P02': 400, '22003': 400, '54000': 429 }[code];

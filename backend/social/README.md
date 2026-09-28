@@ -51,3 +51,9 @@ Direct calling uses Google's public STUN endpoints. No new provider subscription
 ### Release checks
 
 Apply `20260928205903_korlix_social_profiles_calls.sql` before the backend, then deploy the Flutter web release. Local PGlite tests cover real SQL/HTTP authorization, uploads/metadata removal, existing permissive storage-policy interaction, Unicode, role-restricted/idempotent signaling, decline, busy calls, stale calls and revocation. Flutter tests cover responsive profiles, emoji composition, call consent, mocked two-party offer/answer/ICE exchange, late device permission, account switches and teardown. Device I/O is mocked in that suite: a real two-account, two-device microphone/camera check on mobile data and Wi-Fi is still required to assess end-to-end media and browser-specific permissions/autoplay. No real users were called or messaged by the test suite.
+
+## Replies to specific chat messages
+
+Apply `20260928225119_korlix_social_message_replies.sql` before deploying the reply-aware backend and frontend. `send` accepts optional `reply_to`; `messages` includes a bounded original-message preview; `GET message` opens one original message within the same accepted conversation. All three use the service-only, security-invoker `korlix_social_chat_v1` RPC. Existing plain-message clients remain compatible.
+
+The server checks both participants, current connection/block state, and the original message’s conversation. Reply previews resolve from the original row rather than preserving a text snapshot, so removing an original hides its text in subsequent responses. Retries must keep the same body and reply target to reuse the same message ID. Local tests cover cross-conversation rejection, blocked access, removal, Unicode, paging, idempotence, and browser-role privileges.
