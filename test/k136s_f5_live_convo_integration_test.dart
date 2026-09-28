@@ -46,6 +46,7 @@ class Flow {
 }
 void main() {
   _readinessScreenTests();
+  _novaReliabilityTests();
   test('F5 production screen compiles and binds agent, context, guard, and receipt-based refresh',() {
     expect(KorlixLiveConvoTestScreen,isNotNull);
     final s=File('lib/live_convo/korlix_live_convo_test_screen.dart').readAsStringSync();
@@ -213,11 +214,12 @@ class _ReadinessTrack extends _ReadinessObservedFake implements rtc.MediaStreamT
 
 class _ReadinessStream extends _ReadinessObservedFake implements rtc.MediaStream {
   final audio = _ReadinessTrack();
+  final extraTracks = <_ReadinessTrack>[];
   int disposals = 0;
   @override
-  List<rtc.MediaStreamTrack> getAudioTracks() => [audio];
+  List<rtc.MediaStreamTrack> getAudioTracks() => [audio, ...extraTracks];
   @override
-  List<rtc.MediaStreamTrack> getTracks() => [audio];
+  List<rtc.MediaStreamTrack> getTracks() => [audio, ...extraTracks];
   @override
   Future<void> dispose() async { disposals++; }
 }
@@ -255,6 +257,7 @@ class _ReadinessSender extends _ReadinessObservedFake implements rtc.RTCRtpSende
 class _ReadinessPeer extends _ReadinessObservedFake implements rtc.RTCPeerConnection {
   final channel = _ReadinessChannel();
   Completer<void>? answerGate;
+  bool autoOpenChannel = true;
   int closes = 0, disposals = 0, answers = 0;
   @override
   dynamic Function(rtc.RTCPeerConnectionState)? onConnectionState;
@@ -284,7 +287,7 @@ class _ReadinessPeer extends _ReadinessObservedFake implements rtc.RTCPeerConnec
   Future<void> setRemoteDescription(rtc.RTCSessionDescription description) async {
     answers++;
     connected();
-    channel.open();
+    if (autoOpenChannel) channel.open();
     if (answerGate != null) await answerGate!.future;
   }
   @override
@@ -313,6 +316,8 @@ class _ReadinessIo extends K136sLiveConvoIo {
   Completer<http.Response>? responseGate;
   final requests = <http.Request>[];
   bool rejectSession = false;
+  bool autoOpenChannel = true;
+  final authChanges = ValueNotifier<int>(0);
   String principal = 'Bearer fixture';
   String character = 'yuna';
   @override
@@ -334,7 +339,7 @@ class _ReadinessIo extends K136sLiveConvoIo {
     final pending = peerGate;
     peerGate = null;
     if (pending != null) return pending.future;
-    final peer = _ReadinessPeer()..answerGate = answerGate;
+    final peer = _ReadinessPeer()..answerGate = answerGate..autoOpenChannel = autoOpenChannel;
     answerGate = null;
     peers.add(peer);
     return Future<rtc.RTCPeerConnection>.value(peer);
@@ -390,7 +395,7 @@ Future<void> _finishAction(WidgetTester tester, Future<void> action) async {
 }
 Widget _readinessApp(_ReadinessIo io) => MaterialApp(home: Scaffold(body:
     KorlixLiveConvoTestScreen(key: const Key('readiness-screen'),
-      backendBaseUrl: 'https://k136s.invalid', headersBuilder: () => {'Authorization': io.principal},
+      sessionChanges: io.authChanges, backendBaseUrl: 'https://k136s.invalid', headersBuilder: () => {'Authorization': io.principal},
       characterId: io.character, language: 'en', k136sIo: io)));
 Future<void> _withScreen(WidgetTester tester, Future<void> Function(_ReadinessIo io) body) async {
   SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -619,6 +624,165 @@ void _readinessScreenTests() {
       expect(obsoleteStream.audio.stops, 1);
       expect(obsoleteStream.disposals, 1);
       expect(find.byType(KorlixLiveConvoTestScreen), findsNothing);
+    });
+  });
+}
+
+
+void _novaReliabilityTests() {
+  testWidgets('NOVA fatal peer failure silences immediately, releases devices and keeps the chat', (tester) async {
+    await _withScreen(tester, (io) async {
+      await _finishAction(tester, _screenAction(tester));
+      final peer = io.peers.single;
+      peer.channel.transcript('Keep this idea for the next session', 'idea');
+      await _pumpSteps(tester, 2);
+      peer.onConnectionState!(rtc.RTCPeerConnectionState.RTCPeerConnectionStateFailed);
+      expect(io.streams.single.audio.enabled, isFalse);
+      await _pumpSteps(tester, 3);
+      expect(io.streams.single.audio.stops, 1);
+      expect(peer.closes, 1);
+      expect(_stage(tester).connected, isFalse);
+      expect(_stage(tester).transcriptEntries.single.text, contains('Keep this idea'));
+      await _finishAction(tester, _screenAction(tester));
+      expect(io.peers.length, 2);
+      expect(_stage(tester).transcriptEntries.single.text, contains('Keep this idea'));
+    });
+  });
+  testWidgets('NOVA short disconnect can recover; prolonged disconnect closes microphone', (tester) async {
+    await _withScreen(tester, (io) async {
+      await _finishAction(tester, _screenAction(tester));
+      final peer = io.peers.single;
+      peer.disconnected();
+      await tester.pump(const Duration(seconds: 2));
+      peer.connected();
+      await tester.pump(const Duration(seconds: 8));
+      expect(peer.closes, 0);
+      expect(_stage(tester).connected, isTrue);
+      peer.disconnected();
+      await tester.pump(const Duration(seconds: 9));
+      await _pumpSteps(tester, 3);
+      expect(peer.closes, 1);
+      expect(io.streams.single.audio.stops, 1);
+      expect(_stage(tester).connecting, isFalse);
+    });
+  });
+  testWidgets('NOVA closed data channel cannot leave a listening microphone', (tester) async {
+    await _withScreen(tester, (io) async {
+      await _finishAction(tester, _screenAction(tester));
+      final peer = io.peers.single;
+      peer.channel.state = rtc.RTCDataChannelState.RTCDataChannelClosed;
+      peer.channel.onDataChannelState!(peer.channel.state);
+      expect(io.streams.single.audio.enabled, isFalse);
+      await _pumpSteps(tester, 3);
+      expect(_stage(tester).connected, isFalse);
+      expect(peer.closes, 1);
+    });
+  });
+  testWidgets('NOVA waits for data channel readiness before reporting connected', (tester) async {
+    await _withScreen(tester, (io) async {
+      io.autoOpenChannel = false;
+      final start = _screenAction(tester);
+      await _pumpSteps(tester, 4);
+      expect(_stage(tester).connected, isFalse);
+      expect(_stage(tester).connecting, isTrue);
+      io.peers.single.channel.open();
+      await _finishAction(tester, start);
+      expect(_stage(tester).connected, isTrue);
+    });
+  });
+  testWidgets('NOVA cancels a pending channel without reviving it on a late open', (tester) async {
+    await _withScreen(tester, (io) async {
+      io.autoOpenChannel = false;
+      final start = _screenAction(tester);
+      await _pumpSteps(tester, 4);
+      await _finishAction(tester, _screenAction(tester, pause: true));
+      await _finishAction(tester, start);
+      io.peers.single.channel.open();
+      await _pumpSteps(tester, 2);
+      expect(_stage(tester).paused, isTrue);
+      expect(_stage(tester).connected, isFalse);
+      expect(io.streams.single.audio.enabled, isFalse);
+    });
+  });
+  testWidgets('NOVA stalled data channel times out and frees the microphone', (tester) async {
+    await _withScreen(tester, (io) async {
+      io.autoOpenChannel = false;
+      final start = _screenAction(tester);
+      await _pumpSteps(tester, 4);
+      await tester.pump(const Duration(seconds: 21));
+      await _finishAction(tester, start);
+      expect(_stage(tester).connected, isFalse);
+      expect(io.streams.single.audio.stops, 1);
+      expect(io.peers.single.closes, 1);
+    });
+  });
+  testWidgets('NOVA speaking follows audio playback, not response generation completion', (tester) async {
+    await _withScreen(tester, (io) async {
+      await _finishAction(tester, _screenAction(tester));
+      void event(String type, [Map<String, dynamic> rest = const {}]) =>
+        io.peers.single.channel.onMessage!(rtc.RTCDataChannelMessage(jsonEncode({'type':type, ...rest})));
+      event('response.created'); await tester.pump();
+      expect(_stage(tester).status, 'Thinking…');
+      event('output_audio_buffer.started'); await tester.pump();
+      expect(_stage(tester).status, contains('speaking'));
+      event('response.output_audio_transcript.done', {'transcript':'Hello there'});
+      event('response.done', {'response':{'status':'completed'}}); await tester.pump();
+      expect(_stage(tester).status, contains('speaking'));
+      event('output_audio_buffer.started', {'response_id':'new'});
+      event('output_audio_buffer.stopped', {'response_id':'old'}); await tester.pump();
+      expect(_stage(tester).status, contains('speaking'));
+      event('output_audio_buffer.stopped', {'response_id':'new'}); await tester.pump();
+      expect(_stage(tester).status, 'Listening…');
+      event('output_audio_buffer.started'); event('input_audio_buffer.speech_started'); await tester.pump();
+      expect(_stage(tester).status, 'Listening…');
+    });
+  });
+  testWidgets('NOVA mute toggles microphone without stopping the session', (tester) async {
+    await _withScreen(tester, (io) async {
+      await _finishAction(tester, _screenAction(tester));
+      final extra = _ReadinessTrack();
+      io.streams.single.extraTracks.add(extra);
+      await _stage(tester).onToggleMute!(); await tester.pump();
+      expect(extra.enabled, isFalse);
+      expect(io.streams.single.audio.enabled, isFalse);
+      expect(_stage(tester).connected, isTrue);
+      expect(io.peers.single.closes, 0);
+      await _stage(tester).onToggleMute!(); await tester.pump();
+      expect(io.streams.single.audio.enabled, isTrue);
+      expect(_stage(tester).connected, isTrue);
+    });
+  });
+  testWidgets('NOVA sign-out notification clears transcript and closes devices without a rebuild', (tester) async {
+    await _withScreen(tester, (io) async {
+      await _finishAction(tester, _screenAction(tester));
+      io.peers.single.channel.transcript('Private test conversation', 'private');
+      await tester.pump();
+      io.principal = '';
+      io.authChanges.value++;
+      expect(io.streams.single.audio.enabled, isFalse);
+      await _pumpSteps(tester, 3);
+      expect(find.byType(KorlixLiveConvoCharacterStage), findsNothing);
+      expect(find.text('Private test conversation'), findsNothing);
+      expect(find.text('Your sign-in changed. Your microphone is off.'), findsOneWidget);
+      expect(io.peers.single.closes, 1);
+    });
+  });
+  testWidgets('NOVA token refresh keeps the same sign-in connected', (tester) async {
+    await _withScreen(tester, (io) async {
+      String token(int expiry) => 'Bearer h.${base64Url.encode(utf8.encode(jsonEncode({
+        'iss':'fixture','sub':'user','session_id':'session','exp':expiry}))).replaceAll('=', '')}.s';
+      // Recreate the screen with a JWT-scoped session, as a real authenticated route does.
+      await tester.pumpWidget(const SizedBox()); await _pumpSteps(tester, 2);
+      io.principal = token(100);
+      await tester.pumpWidget(_readinessApp(io)); await _pumpSteps(tester, 2);
+      await _finishAction(tester, _screenAction(tester));
+      io.principal = token(200); io.authChanges.value++;
+      await _pumpSteps(tester, 2);
+      expect(_stage(tester).connected, isTrue);
+      expect(io.peers.last.closes, 0);
+      io.principal = 'Bearer other'; io.authChanges.value++;
+      await _pumpSteps(tester, 2);
+      expect(io.peers.last.closes, 1);
     });
   });
 }

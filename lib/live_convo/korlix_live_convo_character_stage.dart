@@ -13,6 +13,8 @@ import 'korlix_live_convo_file_submission.dart';
 import 'package:ai_wiz_command_center/live_docs/korlix_live_docs_generation.dart';
 
 import 'korlix_live_convo_transcript_export.dart';
+part 'korlix_live_voice_workspace.dart';
+
 // KORLIX_LIVE_CONVO_CHARACTER_STAGE_V1_BEGIN
 
 enum _KorlixLiveVisualPhase {
@@ -35,6 +37,7 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
     required this.connecting,
     required this.connected,
     required this.muted,
+    this.microphoneActive,
     this.paused = false,
     required this.error,
     required this.userTranscript,
@@ -93,6 +96,7 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
   final bool connecting;
   final bool connected;
   final bool muted;
+  final bool? microphoneActive;
 
   // KORLIX_LIVE_CONVO_HARD_LOCKED_PAUSE_STAGE_BUILD131_V1
   final bool paused;
@@ -169,6 +173,8 @@ class _KorlixLiveConvoCharacterStageState
   int _elapsedSeconds = 0;
 
   bool _showTranscript = true;
+  bool _allowClose = false;
+  bool _closing = false;
   bool _showDiagnostics = false;
 
   // KORLIX_LIVE_CONVO_KEYBOARD_UI_V1
@@ -181,15 +187,36 @@ class _KorlixLiveConvoCharacterStageState
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
-    )..repeat();
+    );
 
     unawaited(_loadCharacterFrame());
     _syncTimer(previousConnected: false);
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncMotion();
+  }
+
+  void _syncMotion() {
+    final animate =
+        !MediaQuery.disableAnimationsOf(context) &&
+        !MediaQuery.accessibleNavigationOf(context) &&
+        (widget.connected || widget.connecting) &&
+        !widget.paused;
+    if (animate && !_pulseController.isAnimating) {
+      _pulseController.repeat();
+    } else if (!animate) {
+      _pulseController.stop();
+      _pulseController.value = 0;
+    }
+  }
+
+  @override
   void didUpdateWidget(covariant KorlixLiveConvoCharacterStage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _syncMotion();
 
     if (oldWidget.characterId != widget.characterId) {
       unawaited(_loadCharacterFrame());
@@ -202,10 +229,6 @@ class _KorlixLiveConvoCharacterStageState
 
   _KorlixStageCharacter get _character {
     return _korlixStageCharacterFor(widget.characterId);
-  }
-
-  Color get _activeAgentAccent {
-    return korlixLiveConvoAgentAccent(widget.activeAgentAccentHex);
   }
 
   IconData get _activeAgentIcon {
@@ -324,7 +347,7 @@ class _KorlixLiveConvoCharacterStageState
       return _KorlixLiveVisualPhase.disconnected;
     }
 
-    if (widget.paused || widget.muted) {
+    if (widget.paused) {
       return _KorlixLiveVisualPhase.muted;
     }
 
@@ -344,6 +367,10 @@ class _KorlixLiveConvoCharacterStageState
       return _KorlixLiveVisualPhase.speaking;
     }
 
+    if (widget.muted) {
+      return _KorlixLiveVisualPhase.muted;
+    }
+
     if (status.contains('thinking')) {
       return _KorlixLiveVisualPhase.thinking;
     }
@@ -357,59 +384,31 @@ class _KorlixLiveConvoCharacterStageState
     return _KorlixLiveVisualPhase.idle;
   }
 
-  Color _phaseColor(_KorlixLiveVisualPhase phase) {
-    switch (phase) {
-      case _KorlixLiveVisualPhase.connecting:
-      case _KorlixLiveVisualPhase.thinking:
-        return const Color(0xFFB794F4);
-
-      case _KorlixLiveVisualPhase.listening:
-        return const Color(0xFF69D9E8);
-
-      case _KorlixLiveVisualPhase.speaking:
-        return const Color(0xFFFFD166);
-
-      case _KorlixLiveVisualPhase.interrupted:
-        return const Color(0xFFFF5E73);
-
-      case _KorlixLiveVisualPhase.muted:
-        return const Color(0xFF6C8B96);
-
-      case _KorlixLiveVisualPhase.disconnected:
-        return const Color(0xFF8B98A3);
-
-      case _KorlixLiveVisualPhase.idle:
-        return const Color(0xFF69D9E8);
-    }
-  }
-
   String _phaseTitle(_KorlixLiveVisualPhase phase) {
     switch (phase) {
       case _KorlixLiveVisualPhase.connecting:
-        return 'Connecting to ${_character.name}…';
+        return 'Connecting to $_voiceDisplayName…';
 
       case _KorlixLiveVisualPhase.listening:
-        return '${_character.name} is listening';
+        return '$_voiceDisplayName is listening';
 
       case _KorlixLiveVisualPhase.thinking:
-        return '${_character.name} is thinking';
+        return '$_voiceDisplayName is thinking';
 
       case _KorlixLiveVisualPhase.speaking:
-        return '${_character.name} is speaking';
+        return '$_voiceDisplayName is speaking';
 
       case _KorlixLiveVisualPhase.interrupted:
         return 'Interrupted — listening again';
 
       case _KorlixLiveVisualPhase.muted:
-        return widget.paused
-            ? 'LIVE CONVO paused and locked'
-            : 'Microphone muted';
+        return widget.paused ? 'Conversation paused' : 'Microphone muted';
 
       case _KorlixLiveVisualPhase.disconnected:
         return 'LIVE CONVO disconnected';
 
       case _KorlixLiveVisualPhase.idle:
-        return 'Ready for LIVE CONVO';
+        return 'A little space to think out loud.';
     }
   }
 
@@ -432,12 +431,12 @@ class _KorlixLiveConvoCharacterStageState
 
       case _KorlixLiveVisualPhase.muted:
         return widget.paused
-            ? 'The provider voice session is closed. Tap Resume to '
-                  'continue with the current temporary chat context.'
+            ? 'Your microphone is off and the voice session is closed. '
+                  'Resume whenever you are ready.'
             : 'Unmute when you are ready to continue.';
 
       case _KorlixLiveVisualPhase.disconnected:
-        return 'Check your connection, then reconnect.';
+        return 'Your chat stays here. Check your connection, then try again.';
 
       case _KorlixLiveVisualPhase.idle:
         return 'Tap Start and begin a natural conversation.';
@@ -453,6 +452,8 @@ class _KorlixLiveConvoCharacterStageState
   }
 
   Future<void> _closeStage() async {
+    if (_closing) return;
+    _closing = true;
     final requestClose = widget.onRequestClose;
     final end = widget.onEnd;
     final hasCurrentChat =
@@ -466,6 +467,7 @@ class _KorlixLiveConvoCharacterStageState
         final shouldClose = await requestClose();
 
         if (!shouldClose) {
+          _closing = false;
           return;
         }
       } else if (end != null) {
@@ -477,7 +479,10 @@ class _KorlixLiveConvoCharacterStageState
       return;
     }
 
-    Navigator.of(context).pop();
+    setState(() => _allowClose = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).pop();
+    });
   }
 
   Widget _characterPortrait() {
@@ -519,13 +524,10 @@ class _KorlixLiveConvoCharacterStageState
               size: 82,
               color: Colors.white.withValues(alpha: 0.78),
             )
-          : const SizedBox(
-              width: 38,
-              height: 38,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                color: Color(0xFF69D9E8),
-              ),
+          : const Icon(
+              Icons.graphic_eq_rounded,
+              size: 54,
+              color: Color(0xFF87E4D2),
             ),
     );
   }
@@ -535,9 +537,7 @@ class _KorlixLiveConvoCharacterStageState
 
     if (sendText == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Connect LIVE CONVO before typing a message.'),
-        ),
+        SnackBar(content: Text('Connect LIVE CONVO before typing a message.')),
       );
       return;
     }
@@ -550,8 +550,8 @@ class _KorlixLiveConvoCharacterStageState
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: const Color(0xFF06131C),
-      shape: const RoundedRectangleBorder(
+      backgroundColor: _surface,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
       ),
       builder: (sheetContext) {
@@ -577,7 +577,7 @@ class _KorlixLiveConvoCharacterStageState
                   Navigator.of(sheetContext).pop();
                 }
               } catch (error) {
-                if (!sheetContext.mounted) {
+                if (!mounted || !sheetContext.mounted) {
                   return;
                 }
 
@@ -601,209 +601,106 @@ class _KorlixLiveConvoCharacterStageState
 
             final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
 
-            return Padding(
-              padding: EdgeInsets.fromLTRB(18, 18, 18, 18 + bottomInset),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.keyboard_rounded,
-                        color: Color(0xFFB794F4),
-                      ),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Text(
-                          'Type to Korlix',
-                          style: TextStyle(
-                            color: Color(0xFFE4EBEE),
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
+            return SingleChildScrollView(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(18, 18, 18, 18 + bottomInset),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.keyboard_rounded, color: _accent),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Type to $_voiceDisplayName',
+                            style: TextStyle(
+                              color: _ink,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
-                      ),
-                      IconButton(
-                        tooltip: 'Close keyboard message',
-                        onPressed: sending
-                            ? null
-                            : () => Navigator.of(sheetContext).pop(),
-                        icon: const Icon(Icons.close_rounded),
-                        color: const Color(0xFFA9C6CF),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Your typed message will join the same '
-                    'LIVE CONVO and Korlix will answer aloud.',
-                    style: TextStyle(color: Color(0xFFA9C6CF), height: 1.35),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: _typedMessageController,
-                    autofocus: true,
-                    enabled: !sending,
-                    minLines: 1,
-                    maxLines: 5,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) {
-                      unawaited(submitTypedMessage());
-                    },
-                    style: const TextStyle(
-                      color: Color(0xFFE4EBEE),
-                      fontSize: 15,
+                        IconButton(
+                          tooltip: 'Close keyboard message',
+                          onPressed: sending
+                              ? null
+                              : () => Navigator.of(sheetContext).pop(),
+                          icon: Icon(Icons.close_rounded),
+                          color: _secondary,
+                        ),
+                      ],
                     ),
-                    decoration: InputDecoration(
-                      hintText: 'Type your message to Korlix…',
-                      hintStyle: const TextStyle(color: Color(0xFF78909B)),
-                      filled: true,
-                      fillColor: const Color(0xFF020A10),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(17),
-                        borderSide: const BorderSide(color: Color(0xFF345467)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(17),
-                        borderSide: const BorderSide(color: Color(0xFF345467)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(17),
-                        borderSide: const BorderSide(
-                          color: Color(0xFFB794F4),
-                          width: 1.7,
+                    SizedBox(height: 8),
+                    Text(
+                      'Your typed message will join the same '
+                      'conversation and $_voiceDisplayName will answer aloud.',
+                      style: TextStyle(color: _secondary, height: 1.35),
+                    ),
+                    SizedBox(height: 14),
+                    TextField(
+                      controller: _typedMessageController,
+                      autofocus: true,
+                      enabled: !sending,
+                      minLines: 1,
+                      maxLines: 5,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) {
+                        unawaited(submitTypedMessage());
+                      },
+                      style: TextStyle(color: _ink, fontSize: 15),
+                      decoration: InputDecoration(
+                        hintText: 'Type your message…',
+                        hintStyle: TextStyle(color: _secondary),
+                        filled: true,
+                        fillColor: _canvas,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(17),
+                          borderSide: BorderSide(color: _border),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(17),
+                          borderSide: BorderSide(color: _border),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(17),
+                          borderSide: BorderSide(color: _accent, width: 1.7),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  FilledButton.icon(
-                    onPressed: sending
-                        ? null
-                        : () => unawaited(submitTypedMessage()),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFFB794F4),
-                      foregroundColor: const Color(0xFF081019),
-                      minimumSize: const Size.fromHeight(54),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(17),
+                    SizedBox(height: 14),
+                    FilledButton.icon(
+                      onPressed: sending
+                          ? null
+                          : () => unawaited(submitTypedMessage()),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _accent,
+                        foregroundColor: _onAccent,
+                        minimumSize: Size.fromHeight(54),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(17),
+                        ),
+                      ),
+                      icon: sending
+                          ? SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(Icons.send_rounded),
+                      label: Text(
+                        sending ? 'Sending…' : 'Send message',
+                        style: TextStyle(fontWeight: FontWeight.w900),
                       ),
                     ),
-                    icon: sending
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send_rounded),
-                    label: Text(
-                      sending ? 'Sending…' : 'Send to Korlix',
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             );
           },
         );
       },
-    );
-  }
-
-  Widget _circleAction({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback? onPressed,
-    bool filled = false,
-  }) {
-    final button = filled
-        ? FilledButton(
-            onPressed: onPressed,
-            style: FilledButton.styleFrom(
-              backgroundColor: color,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(66, 58),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
-            ),
-            child: Icon(icon, size: 27),
-          )
-        : OutlinedButton(
-            onPressed: onPressed,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: color,
-              minimumSize: const Size(66, 58),
-              side: BorderSide(color: color.withValues(alpha: 0.65)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
-            ),
-            child: Icon(icon, size: 27),
-          );
-
-    return Semantics(
-      button: true,
-      label: label,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          button,
-          const SizedBox(height: 7),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _transcriptCard({
-    required String label,
-    required Color accent,
-    required String text,
-    required String emptyText,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: const Color(0xFF071722),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: accent.withValues(alpha: 0.38)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: accent,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.9,
-            ),
-          ),
-          const SizedBox(height: 8),
-          SelectableText(
-            text.trim().isEmpty ? emptyText : text.trim(),
-            style: TextStyle(
-              color: text.trim().isEmpty
-                  ? const Color(0xFF78909B)
-                  : const Color(0xFFE4EBEE),
-              height: 1.42,
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -820,148 +717,6 @@ class _KorlixLiveConvoCharacterStageState
         DateTime.now().subtract(Duration(seconds: _elapsedSeconds));
   }
 
-  Widget _fullConversationHistory() {
-    final entries = widget.transcriptEntries;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: const Color(0xFF071722),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF31566A)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.forum_rounded,
-                color: Color(0xFF69D9E8),
-                size: 19,
-              ),
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text(
-                  'FULL CONVERSATION',
-                  style: TextStyle(
-                    color: Color(0xFF69D9E8),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.9,
-                  ),
-                ),
-              ),
-              Text(
-                '${entries.length} '
-                '${entries.length == 1 ? 'turn' : 'turns'}',
-                style: const TextStyle(
-                  color: Color(0xFF78909B),
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (entries.isEmpty)
-            const Text(
-              'The complete conversation will appear '
-              'here as you speak, type, use the camera, '
-              'and receive Korlix replies.',
-              style: TextStyle(color: Color(0xFF78909B), height: 1.4),
-            )
-          else
-            for (final entry in entries) ...[
-              Builder(
-                builder: (context) {
-                  final isUser =
-                      entry.role == KorlixLiveConvoTranscriptRole.user;
-
-                  final accent = isUser
-                      ? const Color(0xFF69D9E8)
-                      : const Color(0xFFFFD166);
-
-                  final label = isUser ? 'YOU' : _character.name.toUpperCase();
-
-                  final source = korlixLiveConvoSourceLabel(entry.source);
-
-                  return Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(13),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF020A10),
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: accent.withValues(alpha: 0.28)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              label,
-                              style: TextStyle(
-                                color: accent,
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.7,
-                              ),
-                            ),
-                            if (isUser && source.isNotEmpty) ...[
-                              const SizedBox(width: 7),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 7,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: accent.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Text(
-                                  source,
-                                  style: TextStyle(
-                                    color: accent,
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                            ],
-                            const Spacer(),
-                            Text(
-                              _transcriptClock(entry.timestamp),
-                              style: const TextStyle(
-                                color: Color(0xFF78909B),
-                                fontSize: 10.5,
-                                fontFeatures: [FontFeature.tabularFigures()],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 7),
-                        SelectableText(
-                          entry.text.trim(),
-                          style: const TextStyle(
-                            color: Color(0xFFE4EBEE),
-                            fontSize: 14,
-                            height: 1.42,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 10),
-            ],
-        ],
-      ),
-    );
-  }
-
   Future<void> _copyAllConversation() async {
     if (widget.transcriptEntries.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -975,7 +730,7 @@ class _KorlixLiveConvoCharacterStageState
 
     try {
       await copyKorlixLiveConvoTranscript(
-        characterName: _character.name,
+        characterName: _voiceDisplayName,
         startedAt: _effectiveSessionStartedAt,
         durationSeconds: _elapsedSeconds,
         entries: widget.transcriptEntries,
@@ -1016,7 +771,7 @@ class _KorlixLiveConvoCharacterStageState
     try {
       await shareKorlixLiveConvoTranscript(
         context: context,
-        characterName: _character.name,
+        characterName: _voiceDisplayName,
         startedAt: _effectiveSessionStartedAt,
         durationSeconds: _elapsedSeconds,
         entries: widget.transcriptEntries,
@@ -1035,793 +790,10 @@ class _KorlixLiveConvoCharacterStageState
     }
   }
 
-  Widget _transcriptExportActions() {
-    final hasEntries = widget.transcriptEntries.isNotEmpty;
-
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: hasEntries
-                ? () => unawaited(_copyAllConversation())
-                : null,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF69D9E8),
-              side: const BorderSide(color: Color(0xFF31566A)),
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-            icon: const Icon(Icons.copy_all_rounded),
-            label: const Text(
-              'Copy All',
-              style: TextStyle(fontWeight: FontWeight.w900),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: FilledButton.icon(
-            onPressed: hasEntries
-                ? () => unawaited(_shareFullConversation())
-                : null,
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFB794F4),
-              foregroundColor: const Color(0xFF081019),
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-            icon: const Icon(Icons.ios_share_rounded),
-            label: const Text(
-              'Save / Share',
-              style: TextStyle(fontWeight: FontWeight.w900),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _agentStatusPill({
-    required String text,
-    required Color color,
-    required IconData icon,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: color.withValues(alpha: 0.12),
-        border: Border.all(color: color.withValues(alpha: 0.54)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 5),
-          Text(
-            text,
-            style: TextStyle(
-              color: color,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.35,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActiveAgentCard() {
-    final accent = _activeAgentAccent;
-
-    final enabled = widget.onOpenAgentHub != null;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: enabled
-            ? () {
-                unawaited(widget.onOpenAgentHub!());
-              }
-            : null,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            color: accent.withValues(alpha: 0.10),
-            border: Border.all(
-              color: accent.withValues(alpha: enabled ? 0.72 : 0.36),
-              width: enabled ? 1.4 : 1,
-            ),
-            boxShadow: [
-              BoxShadow(color: accent.withValues(alpha: 0.08), blurRadius: 20),
-            ],
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(15),
-                  color: accent.withValues(alpha: 0.16),
-                  border: Border.all(color: accent.withValues(alpha: 0.72)),
-                ),
-                child: Icon(_activeAgentIcon, color: accent),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _activeAgentName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFFF0F7F8),
-                              fontSize: 16,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'ACTIVE AGENT',
-                          style: TextStyle(
-                            color: accent,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.65,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _activeAgentDescription,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFFA9C6CF),
-                        height: 1.35,
-                        fontSize: 12.5,
-                      ),
-                    ),
-                    const SizedBox(height: 9),
-                    Wrap(
-                      spacing: 7,
-                      runSpacing: 7,
-                      children: [
-                        _agentStatusPill(
-                          text:
-                              'TRAINABLE · '
-                              'V$_activeAgentVersion',
-                          color: accent,
-                          icon: Icons.school_rounded,
-                        ),
-                        _agentStatusPill(
-                          text: widget.activeAgentMemoryEnabled
-                              ? 'LONG-TERM MEMORY'
-                              : 'MEMORY OFF',
-                          color: widget.activeAgentMemoryEnabled
-                              ? const Color(0xFF62D6A7)
-                              : const Color(0xFF8299A2),
-                          icon: widget.activeAgentMemoryEnabled
-                              ? Icons.psychology_alt_rounded
-                              : Icons.memory_outlined,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Icon(
-                enabled
-                    ? Icons.chevron_right_rounded
-                    : Icons.lock_outline_rounded,
-                color: enabled ? accent : const Color(0xFF718A96),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVoiceSelectorCard() {
-    const accent = Color(0xFF62D6A7);
-    final enabled = widget.onOpenVoiceSelector != null;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: enabled
-            ? () {
-                unawaited(widget.onOpenVoiceSelector!());
-              }
-            : null,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          width: double.infinity,
-          padding: const EdgeInsets.all(13),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            color: accent.withValues(alpha: 0.08),
-            border: Border.all(
-              color: accent.withValues(alpha: enabled ? 0.68 : 0.34),
-              width: enabled ? 1.3 : 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(Icons.voice_chat_rounded, color: accent),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Voice: ${widget.selectedVoiceName}',
-                      style: const TextStyle(
-                        color: Color(0xFFF1F6F8),
-                        fontWeight: FontWeight.w900,
-                        fontSize: 14.5,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '${widget.selectedVoicePresentation} • '
-                      '${widget.selectedAccentName}',
-                      style: const TextStyle(
-                        color: Color(0xFFA9C6CF),
-                        height: 1.3,
-                        fontSize: 12.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: accent.withValues(alpha: enabled ? 0.95 : 0.38),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  void _updateStage(VoidCallback action) => setState(action);
 
   @override
-  Widget build(BuildContext context) {
-    final phase = _phase;
-    final phaseColor = _phaseColor(phase);
-
-    final canStart =
-        !widget.connecting &&
-        !widget.connected &&
-        !widget.paused &&
-        widget.onStart != null;
-
-    final canEnd = widget.onEnd != null;
-
-    return Scaffold(
-      backgroundColor: const Color(0xFF01060A),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: const Alignment(0, -0.28),
-                    radius: 1.05,
-                    colors: [
-                      phaseColor.withValues(alpha: 0.15),
-                      const Color(0xFF04111A),
-                      const Color(0xFF01060A),
-                    ],
-                    stops: const [0, 0.52, 1],
-                  ),
-                ),
-              ),
-            ),
-            ListView(
-              padding: const EdgeInsets.fromLTRB(18, 10, 18, 34),
-              children: [
-                Row(
-                  children: [
-                    IconButton(
-                      tooltip: 'Close LIVE CONVO',
-                      onPressed: _closeStage,
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                      color: const Color(0xFFE4EBEE),
-                    ),
-                    const SizedBox(width: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 7,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF071722),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: phaseColor.withValues(alpha: 0.5),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          AnimatedBuilder(
-                            animation: _pulseController,
-                            builder: (context, child) {
-                              final alpha =
-                                  0.45 +
-                                  (math.sin(
-                                            _pulseController.value *
-                                                math.pi *
-                                                2,
-                                          ) +
-                                          1) *
-                                      0.22;
-
-                              return Container(
-                                width: 9,
-                                height: 9,
-                                decoration: BoxDecoration(
-                                  color: phaseColor.withValues(alpha: alpha),
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: phaseColor.withValues(alpha: 0.65),
-                                      blurRadius: 10,
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'LIVE CONVO',
-                            style: TextStyle(
-                              color: Color(0xFFE4EBEE),
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.8,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      _elapsedText,
-                      style: const TextStyle(
-                        color: Color(0xFFA9C6CF),
-                        fontWeight: FontWeight.w800,
-                        fontFeatures: [FontFeature.tabularFigures()],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 22),
-                Text(
-                  _character.eyebrow,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: phaseColor.withValues(alpha: 0.88),
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.25,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  _character.name,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Color(0xFFF2F6F8),
-                    fontSize: 30,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Center(
-                  child: AnimatedBuilder(
-                    animation: _pulseController,
-                    builder: (context, child) {
-                      return SizedBox(
-                        width: 318,
-                        height: 318,
-                        child: CustomPaint(
-                          painter: _KorlixLiveRingPainter(
-                            progress: _pulseController.value,
-                            color: phaseColor,
-                            phase: phase,
-                          ),
-                          child: Center(
-                            child: AnimatedScale(
-                              scale:
-                                  0.985 +
-                                  0.018 *
-                                      math.sin(
-                                        _pulseController.value * math.pi * 2,
-                                      ),
-                              duration: const Duration(milliseconds: 160),
-                              child: Container(
-                                width: 222,
-                                height: 222,
-                                padding: const EdgeInsets.all(5),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: const Color(0xFF06131C),
-                                  border: Border.all(
-                                    color: phaseColor.withValues(alpha: 0.76),
-                                    width: 2,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: phaseColor.withValues(alpha: 0.25),
-                                      blurRadius: 32,
-                                      spreadRadius: 4,
-                                    ),
-                                  ],
-                                ),
-                                child: _characterPortrait(),
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _phaseTitle(phase),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: phaseColor,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  _phaseSubtitle(phase),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Color(0xFFA9C6CF),
-                    height: 1.35,
-                    fontSize: 13.5,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _buildActiveAgentCard(),
-                const SizedBox(height: 10),
-                _buildVoiceSelectorCard(),
-                const SizedBox(height: 18),
-                if (widget.error != null &&
-                    widget.error!.trim().isNotEmpty) ...[
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF35121A),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: const Color(0xFFFF5E73).withValues(alpha: 0.6),
-                      ),
-                    ),
-                    child: Text(
-                      widget.error!,
-                      style: const TextStyle(
-                        color: Color(0xFFFFA7B1),
-                        height: 1.4,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                if (!widget.connected && !widget.connecting && !widget.paused)
-                  FilledButton.icon(
-                    onPressed: canStart
-                        ? () => unawaited(widget.onStart!())
-                        : null,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: phaseColor,
-                      foregroundColor: const Color(0xFF031017),
-                      minimumSize: const Size.fromHeight(58),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                    ),
-                    icon: Icon(
-                      phase == _KorlixLiveVisualPhase.disconnected
-                          ? Icons.refresh_rounded
-                          : Icons.graphic_eq_rounded,
-                    ),
-                    label: Text(
-                      phase == _KorlixLiveVisualPhase.disconnected
-                          ? 'Reconnect LIVE CONVO'
-                          : 'Start LIVE CONVO',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 16,
-                      ),
-                    ),
-                  )
-                else
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 18,
-                    runSpacing: 16,
-                    children: [
-                      _circleAction(
-                        icon: widget.paused
-                            ? Icons.play_arrow_rounded
-                            : Icons.pause_rounded,
-                        label: widget.paused ? 'Resume' : 'Lock Pause',
-                        color: widget.paused
-                            ? const Color(0xFF62D6A7)
-                            : const Color(0xFFFFD166),
-                        filled: widget.paused,
-                        onPressed: widget.onTogglePause == null
-                            ? null
-                            : () => unawaited(widget.onTogglePause!()),
-                      ),
-                      _circleAction(
-                        icon: widget.muted
-                            ? Icons.mic_off_rounded
-                            : Icons.mic_rounded,
-                        label: widget.muted ? 'Unmute' : 'Mute',
-                        color: const Color(0xFF69D9E8),
-                        onPressed: widget.paused || widget.onToggleMute == null
-                            ? null
-                            : () => unawaited(widget.onToggleMute!()),
-                      ),
-                      _circleAction(
-                        icon: _showTranscript
-                            ? Icons.notes_rounded
-                            : Icons.notes_outlined,
-                        label: 'Transcript',
-                        color: const Color(0xFFB794F4),
-                        onPressed: () {
-                          setState(() {
-                            _showTranscript = !_showTranscript;
-                          });
-                        },
-                      ),
-                      // KORLIX_LIVE_CONVO_AGENT_HUB_ACTION_BUILD131
-                      _circleAction(
-                        icon: Icons.hub_rounded,
-                        label: 'Agents',
-                        color: _activeAgentAccent,
-                        onPressed: widget.onOpenAgentHub == null
-                            ? null
-                            : () {
-                                unawaited(widget.onOpenAgentHub!());
-                              },
-                      ),
-                      // KORLIX_LIVE_CONVO_CAMERA_UI_V1
-                      _circleAction(
-                        icon: Icons.photo_camera_rounded,
-                        label: 'Camera',
-                        color: const Color(0xFFFFD166),
-                        onPressed:
-                            widget.onSendImage == null ||
-                                phase == _KorlixLiveVisualPhase.speaking ||
-                                phase == _KorlixLiveVisualPhase.thinking
-                            ? null
-                            : () => unawaited(
-                                showKorlixLiveConvoCameraSheet(
-                                  context: context,
-                                  currentlyMuted: widget.muted,
-                                  onToggleMute: widget.onToggleMute,
-                                  onSendImage: widget.onSendImage!,
-                                ),
-                              ),
-                      ),
-                      _circleAction(
-                        icon: Icons.keyboard_rounded,
-                        label: 'Keyboard',
-                        color: const Color(0xFFB794F4),
-                        onPressed: widget.onSendText == null
-                            ? null
-                            : () => unawaited(_openKeyboardComposer()),
-                      ),
-                      // KORLIX_LIVE_CONVO_UPLOAD_ACTION_V1
-                      _circleAction(
-                        icon: Icons.attach_file_rounded,
-                        label: widget.liveDocsAttachments.isEmpty
-                            ? 'Upload'
-                            : 'Files ${widget.liveDocsAttachments.length}',
-                        color: const Color(0xFF69D9E8),
-                        onPressed:
-                            widget.liveDocsFileSubmissionState.isSubmitting ||
-                                widget.onPickLiveDocsAttachments == null
-                            ? null
-                            : () => unawaited(
-                                widget.onPickLiveDocsAttachments!(),
-                              ),
-                      ),
-                      // KORLIX_LIVE_DOCS_ACTION_V1
-                      _circleAction(
-                        icon: widget.liveDocsGenerationResult != null
-                            ? Icons.verified_rounded
-                            : Icons.description_rounded,
-                        label: widget.liveDocsGenerationState.isBusy
-                            ? (widget.liveDocsGenerationState ==
-                                      KorlixLiveDocsGenerationState.revising
-                                  ? 'Revising'
-                                  : 'Generating')
-                            : widget.liveDocsGenerationResult != null
-                            ? 'Report Ready'
-                            : widget.liveDocsCaptureActive
-                            ? (widget.liveDocsCapturedTurnCount == 0
-                                  ? 'Doc Brief'
-                                  : 'Turns ${widget.liveDocsCapturedTurnCount}')
-                            : (widget.liveDocsBriefReady
-                                  ? 'Generate Doc'
-                                  : 'Create Doc'),
-                        color: const Color(0xFF62D6A7),
-                        onPressed:
-                            widget.liveDocsGenerationState.isBusy ||
-                                widget.onCreateDocument == null
-                            ? null
-                            : () => unawaited(widget.onCreateDocument!()),
-                      ),
-                      _circleAction(
-                        icon: Icons.stop_rounded,
-                        label: 'Stop',
-                        color: const Color(0xFFFF5E73),
-                        filled: true,
-                        onPressed: canEnd
-                            ? () => unawaited(widget.onEnd!())
-                            : null,
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: 20),
-                if (widget.liveDocsAttachments.isNotEmpty) ...[
-                  KorlixLiveConvoAttachmentTray(
-                    attachments: widget.liveDocsAttachments,
-                    submissionState: widget.liveDocsFileSubmissionState,
-                    submissionError: widget.liveDocsFileSubmissionError,
-                    onAddFiles: widget.onPickLiveDocsAttachments,
-                    onRemoveFile: widget.onRemoveLiveDocsAttachment,
-                    onClearFiles: widget.onClearLiveDocsAttachments,
-                    onSubmitFiles: widget.onSubmitLiveDocsAttachments,
-                  ),
-                  const SizedBox(height: 14),
-                ],
-                if (widget.liveDocsGenerationState !=
-                        KorlixLiveDocsGenerationState.idle ||
-                    widget.liveDocsGenerationResult != null) ...[
-                  KorlixLiveDocsReportCard(
-                    state: widget.liveDocsGenerationState,
-                    result: widget.liveDocsGenerationResult,
-                    error: widget.liveDocsGenerationError,
-                    onShareArtifact: widget.onShareLiveDocsArtifact,
-                    onRevise: widget.onReviseLiveDocsReport,
-                    onRetry: widget.onRetryLiveDocsReport,
-                  ),
-                  const SizedBox(height: 14),
-                ],
-                AnimatedCrossFade(
-                  duration: const Duration(milliseconds: 240),
-                  crossFadeState: _showTranscript
-                      ? CrossFadeState.showFirst
-                      : CrossFadeState.showSecond,
-                  firstChild: Column(
-                    children: [
-                      _transcriptCard(
-                        label: 'YOU SAID',
-                        accent: const Color(0xFF69D9E8),
-                        text: widget.userTranscript,
-                        emptyText: 'Your live transcript will appear here.',
-                      ),
-                      const SizedBox(height: 12),
-                      _transcriptCard(
-                        label: '${_character.name.toUpperCase()} SAID',
-                        accent: const Color(0xFFFFD166),
-                        text: widget.assistantTranscript,
-                        emptyText:
-                            '${_character.name}’s live transcript will appear here.',
-                      ),
-                    ],
-                  ),
-                  secondChild: const SizedBox.shrink(),
-                ),
-                // KORLIX_LIVE_CONVO_FULL_TRANSCRIPT_UI_V1
-                if (_showTranscript) ...[
-                  const SizedBox(height: 12),
-                  _fullConversationHistory(),
-                  const SizedBox(height: 12),
-                  _transcriptExportActions(),
-                ],
-                const SizedBox(height: 12),
-                TextButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _showDiagnostics = !_showDiagnostics;
-                    });
-                  },
-                  icon: Icon(
-                    _showDiagnostics
-                        ? Icons.expand_less_rounded
-                        : Icons.expand_more_rounded,
-                  ),
-                  label: Text(
-                    _showDiagnostics ? 'Hide diagnostics' : 'Show diagnostics',
-                  ),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF78909B),
-                  ),
-                ),
-                if (_showDiagnostics)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF06111A),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF234454)),
-                    ),
-                    child: SelectableText(
-                      widget.eventLog.isEmpty
-                          ? 'No realtime events yet.'
-                          : widget.eventLog.take(35).join('\n'),
-                      style: const TextStyle(
-                        color: Color(0xFF8BA7B0),
-                        fontSize: 11,
-                        height: 1.4,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                  ),
-                if (widget.rendererReady)
-                  Opacity(
-                    opacity: 0.01,
-                    child: SizedBox(
-                      width: 1,
-                      height: 1,
-                      child: rtc.RTCVideoView(widget.remoteRenderer),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => _buildVoiceWorkspace();
 
   @override
   void dispose() {
@@ -1830,113 +802,6 @@ class _KorlixLiveConvoCharacterStageState
     _pulseController.dispose();
     unawaited(_characterController?.dispose());
     super.dispose();
-  }
-}
-
-class _KorlixLiveRingPainter extends CustomPainter {
-  const _KorlixLiveRingPainter({
-    required this.progress,
-    required this.color,
-    required this.phase,
-  });
-
-  final double progress;
-  final Color color;
-  final _KorlixLiveVisualPhase phase;
-
-  bool get _showVoiceBars {
-    return phase == _KorlixLiveVisualPhase.listening ||
-        phase == _KorlixLiveVisualPhase.speaking ||
-        phase == _KorlixLiveVisualPhase.thinking ||
-        phase == _KorlixLiveVisualPhase.connecting;
-  }
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final baseRadius = size.shortestSide * 0.415;
-
-    final basePaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..color = color.withValues(alpha: 0.16);
-
-    canvas.drawCircle(center, baseRadius, basePaint);
-    canvas.drawCircle(
-      center,
-      baseRadius + 12,
-      basePaint..color = color.withValues(alpha: 0.08),
-    );
-
-    const segmentCount = 44;
-
-    for (var i = 0; i < segmentCount; i++) {
-      final angle = -math.pi / 2 + i * (math.pi * 2 / segmentCount);
-
-      final wave = (math.sin(progress * math.pi * 2 + i * 0.57) + 1) / 2;
-
-      final activeStrength = _showVoiceBars ? 0.24 + wave * 0.72 : 0.23;
-
-      final segmentPaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeWidth = phase == _KorlixLiveVisualPhase.speaking ? 4.8 : 3.4
-        ..color = color.withValues(alpha: activeStrength);
-
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: baseRadius),
-        angle,
-        math.pi * 2 / segmentCount * 0.56,
-        false,
-        segmentPaint,
-      );
-
-      if (_showVoiceBars) {
-        final barLength =
-            5 + wave * (phase == _KorlixLiveVisualPhase.speaking ? 20 : 13);
-
-        final start = Offset(
-          center.dx + math.cos(angle) * (baseRadius + 15),
-          center.dy + math.sin(angle) * (baseRadius + 15),
-        );
-
-        final end = Offset(
-          center.dx + math.cos(angle) * (baseRadius + 15 + barLength),
-          center.dy + math.sin(angle) * (baseRadius + 15 + barLength),
-        );
-
-        canvas.drawLine(
-          start,
-          end,
-          Paint()
-            ..strokeCap = StrokeCap.round
-            ..strokeWidth = 2.3
-            ..color = color.withValues(alpha: 0.18 + wave * 0.7),
-        );
-      }
-    }
-
-    final orbitAngle = progress * math.pi * 2 - math.pi / 2;
-
-    final orbitPoint = Offset(
-      center.dx + math.cos(orbitAngle) * (baseRadius + 28),
-      center.dy + math.sin(orbitAngle) * (baseRadius + 28),
-    );
-
-    canvas.drawCircle(
-      orbitPoint,
-      4.5,
-      Paint()
-        ..color = color
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _KorlixLiveRingPainter oldDelegate) {
-    return oldDelegate.progress != progress ||
-        oldDelegate.color != color ||
-        oldDelegate.phase != phase;
   }
 }
 

@@ -15511,6 +15511,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (context) => KorlixLiveConvoTestScreen(
+          sessionChanges: kKorlixAuthRevision,
           backendBaseUrl: kKorlixBackendBaseUrl,
           headersBuilder: _authHeaders,
           characterId: normalizeKorlixCharacterId(
