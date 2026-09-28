@@ -7,7 +7,10 @@ export function registerSocial(app, { database, requireUser, logger = console, e
     'save_profile', 'presence', 'request', 'accept', 'decline', 'remove', 'block', 'unblock', 'send', 'read',
     'delete_message', 'create_topic', 'edit_topic', 'delete_topic', 'reply', 'edit_reply', 'delete_reply', 'report', 'moderate']);
   const chatActions = new Set(['messages', 'message', 'send']);
+  const groupActions = new Set(['groups','group_create','group_details','group_invite','group_accept','group_decline','group_rename','group_remove','group_leave','group_messages','group_message','group_send','group_read','group_delete_message']);
+  for (const action of groupActions) actions.add(action);
   const reads = new Set(['bootstrap', 'members', 'connections', 'messages', 'message', 'topics', 'topic', 'blocks', 'reports']);
+  for (const action of ['groups','group_details','group_messages','group_message']) reads.add(action);
   const callActions = new Set(['call_config', 'call_inbox', 'call_start', 'call_accept', 'call_end', 'call_poll', 'call_signal']);
   for (const action of callActions) actions.add(action);
   for (const action of ['call_config', 'call_inbox', 'call_poll']) reads.add(action);
@@ -35,7 +38,9 @@ export function registerSocial(app, { database, requireUser, logger = console, e
       }
       if (['call_start', 'call_accept'].includes(action) && env.SOCIAL_CALLS_ENABLED === 'false') return res.status(503).json({ error: 'Calling is temporarily unavailable. You can still send a message.' });
       // p_actor is derived exclusively from a Supabase-verified identity.
-      const result = await database.rpc(callActions.has(action) ? 'korlix_social_calls_v1' : chatActions.has(action) ? 'korlix_social_chat_v1' : 'korlix_social_v1', { p_actor: user.id, p_action: action, p_data: data });
+      const groupReport = action === 'report' && data.kind === 'group_message';
+      const groupAction = groupActions.has(action) || groupReport || action === 'moderate';
+      const result = await database.rpc(groupAction ? 'korlix_social_groups_v1' : callActions.has(action) ? 'korlix_social_calls_v1' : chatActions.has(action) ? 'korlix_social_chat_v1' : 'korlix_social_v1', { p_actor: user.id, p_action: groupReport ? 'group_report' : action, p_data: data });
       if (result.error) {
         const code = result.error.code;
         const status = { P0001: 400, P0002: 404, '42501': 403, '23505': 409, '23514': 400, '22P02': 400, '22003': 400, '54000': 429 }[code];

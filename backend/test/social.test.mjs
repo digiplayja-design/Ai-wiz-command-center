@@ -9,7 +9,7 @@ import sharp from 'sharp';
 import { socialCallConfig } from '../social/calls.mjs';
 let db,server,base,a,b,c;
 const users=[randomUUID(),randomUUID(),randomUUID()];
-const call=async(actor,action,data={})=>(await db.query(`select ${action.startsWith('call_')?'korlix_social_calls_v1':['send','messages','message'].includes(action)?'korlix_social_chat_v1':'korlix_social_v1'}($1,$2,$3::jsonb) result`,[actor,action,JSON.stringify(data)])).rows[0].result;
+const call=async(actor,action,data={})=>(await db.query(`select ${(action==='groups'||action.startsWith('group_'))?'korlix_social_groups_v1':action.startsWith('call_')?'korlix_social_calls_v1':['send','messages','message'].includes(action)?'korlix_social_chat_v1':'korlix_social_v1'}($1,$2,$3::jsonb) result`,[actor,action,JSON.stringify(data)])).rows[0].result;
 const profile=(handle,extra={})=>({handle,name:handle,bio:'A community member',color:'cyan',discoverable:true,show_online:true,accepted_rules:true,...extra});
 const stored=new Map();
 const rpc={storage:{from:()=>({
@@ -31,6 +31,8 @@ before(async()=>{
  await db.exec(await readFile(new URL(extension,folder),'utf8'));
  const replies=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_message_replies.sql'));
  await db.exec(await readFile(new URL(replies,folder),'utf8'));
+ const groups=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_groups.sql'));
+ await db.exec(await readFile(new URL(groups,folder),'utf8'));
  const app=express();app.use(express.json({limit:'250kb'}));registerSocial(app,{database:rpc,requireUser:async q=>{if(!users.includes(q.headers.authorization))throw Error();return {id:q.headers.authorization,email_confirmed_at:'2026-01-01'};},logger:{warn(){}}});
  server=app.listen(0);await new Promise(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}/api/social/`;
 });
@@ -195,4 +197,133 @@ test('reply RPCs stay invoker-only and unavailable to browser roles',async()=>{
  }
  await connect();await db.exec('set role service_role');
  try{const original=await send();await call(users[1],'send',{id:randomUUID(),peer:a.id,body:'Service works',reply_to:original.id});assert.equal((await call(users[0],'messages',{peer:b.id})).items.length,2);}finally{await db.exec('reset role');}
+});
+
+const connectAll=async()=>{await connect();await call(users[0],'request',{peer:c.id});await call(users[2],'accept',{peer:a.id});};
+const createGroup=async(members=[b.id,c.id],id=randomUUID())=>api('group_create',{group:id,name:'Our circle',members});
+const groupSend=async(group,actor=users[0],body='Hello group 👋🏽',extra={})=>api('group_send',{group,id:randomUUID(),body,...extra},actor);
+test('groups invite several connections atomically, require consent, and exclude earlier messages',async()=>{
+ await connectAll();const {group}=await createGroup();assert.equal(group.member_count,1);assert.equal(group.invited_count,2);
+ const invitation=(await api('groups',{},users[1],'GET')).items[0];assert.equal(invitation.state,'invited');assert(!JSON.stringify(invitation).includes(users[0]));
+ const before=await groupSend(group.id);
+ await api('group_details',{group:group.id},users[1],'GET',403);
+ await api('group_messages',{group:group.id},users[1],'GET',403);
+ await api('group_send',{group:group.id,id:randomUUID(),body:'not accepted'},users[1],'POST',403);
+ await api('group_accept',{group:group.id},users[1]);
+ assert.equal((await api('group_messages',{group:group.id},users[1],'GET')).items.length,0);
+ await api('group_message',{group:group.id,id:before.id},users[1],'GET',404);
+ await groupSend(group.id,users[1],'I joined');
+ assert.equal((await api('group_messages',{group:group.id},users[0],'GET')).items.length,2);
+ await api('group_decline',{group:group.id},users[2]);assert.equal((await api('groups',{},users[2],'GET')).items.length,0);
+});
+test('group creation and invitation retries are idempotent and invalid batches roll back',async()=>{
+ await connect();const id=randomUUID();await api('group_create',{group:id,name:'Invalid batch',members:[b.id,c.id]},users[0],'POST',400);
+ assert.equal((await api('groups',{},users[0],'GET')).items.length,0);
+ await call(users[0],'request',{peer:c.id});await call(users[2],'accept',{peer:a.id});await createGroup([b.id,c.id,b.id],id);await createGroup([c.id,b.id],id);
+ assert.equal((await api('groups',{},users[0],'GET')).items.length,1);
+ assert.equal((await api('groups',{},users[1],'GET')).items.length,1);
+ await api('group_create',{group:id,name:'Changed',members:[b.id,c.id]},users[0],'POST',409);
+ await api('group_create',{group:id,name:'Our circle',members:[b.id,c.id]},users[1],'POST',409);
+ await api('group_invite',{group:id,members:[b.id,c.id]});assert.equal((await api('group_details',{group:id},users[0],'GET')).members.length,3);
+});
+test('only owners manage groups; leaving or removal immediately closes reads and writes',async()=>{
+ await connectAll();const {group}=await createGroup();await api('group_accept',{group:group.id},users[1]);
+ await api('group_rename',{group:group.id,name:'Hijack'},users[1],'POST',403);
+ await api('group_invite',{group:group.id,members:[c.id]},users[1],'POST',403);
+ await api('group_remove',{group:group.id,member:a.id},users[1],'POST',403);
+ await api('group_rename',{group:group.id,name:'Friday team'});
+ assert.equal((await api('groups',{},users[1],'GET')).items[0].name,'Friday team');
+ const m=await groupSend(group.id);
+ await api('group_remove',{group:group.id,member:b.id});
+ await api('group_messages',{group:group.id},users[1],'GET',403);
+ await api('group_message',{group:group.id,id:m.id},users[1],'GET',403);
+ await api('group_send',{group:group.id,id:randomUUID(),body:'removed'},users[1],'POST',403);
+ await api('group_accept',{group:group.id},users[1],'POST',403);
+ await api('group_accept',{group:group.id},users[2]);
+ await api('group_leave',{group:group.id},users[2]);
+ await api('group_details',{group:group.id},users[2],'GET',403);
+});
+test('ownership transfers to a joined member or the last owner closes the group',async()=>{
+ await connectAll();const {group}=await createGroup();await api('group_accept',{group:group.id},users[1]);
+ await api('group_leave',{group:group.id});
+ assert.equal((await api('group_details',{group:group.id},users[1],'GET')).group.owner,b.id);
+ await api('group_leave',{group:group.id},users[1]);
+ assert.equal((await api('groups',{},users[2],'GET')).items.length,0);
+ await api('group_accept',{group:group.id},users[2],'POST',403);
+});
+test('group replies cannot cross rooms, membership history, or duplicate request identity',async()=>{
+ await connectAll();const first=(await createGroup()).group,second=(await createGroup()).group;
+ await api('group_accept',{group:first.id},users[1]);
+ const original=await groupSend(first.id);const id=randomUUID();
+ await groupSend(first.id,users[1],'A specific reply',{id,reply_to:original.id});
+ await groupSend(first.id,users[1],'A specific reply',{id,reply_to:original.id});
+ const page=(await api('group_messages',{group:first.id},users[0],'GET')).items;
+ assert.equal(page.length,2);assert.equal(page[1].reply.body,'Hello group 👋🏽');assert.equal(page[1].author.name,'bruno');
+ await api('group_send',{group:first.id,id,body:'Changed',reply_to:original.id},users[1],'POST',409);
+ await api('group_send',{group:second.id,id:randomUUID(),body:'Cross room',reply_to:original.id},users[0],'POST',400);
+ await api('group_message',{group:second.id,id:original.id},users[0],'GET',404);
+ await api('group_accept',{group:first.id},users[2]);
+ await api('group_send',{group:first.id,id:randomUUID(),body:'Before joining',reply_to:original.id},users[2],'POST',400);
+ await groupSend(first.id,users[0],'Refers to older message',{reply_to:original.id});
+ const late=(await api('group_messages',{group:first.id},users[2],'GET')).items[0];assert.equal(late.reply,null);assert.equal(late.reply_to,null);
+ await api('group_delete_message',{group:first.id,id:original.id});
+ assert.equal((await api('group_message',{group:first.id,id},users[1],'GET')).message.reply.body,'');
+});
+test('group blocks hide sender text and quotes; blocked invitations cannot be accepted',async()=>{
+ await connectAll();const {group}=await createGroup();await api('group_accept',{group:group.id},users[1]);await api('group_accept',{group:group.id},users[2]);
+ const m=await groupSend(group.id,users[1],'Hidden after blocking');
+ await groupSend(group.id,users[0],'A quote',{reply_to:m.id});
+ await call(users[2],'block',{peer:b.id});
+ const page=await api('group_messages',{group:group.id},users[2],'GET');assert(!JSON.stringify(page).includes('Hidden after blocking'));
+ assert.equal(page.items[0].deleted,true);assert.equal(page.items[1].reply,null);
+ const other=(await createGroup([b.id])).group;await call(users[1],'block',{peer:a.id});
+ await api('group_accept',{group:other.id},users[1],'POST',403);
+ assert(!(await api('groups',{},users[1],'GET')).items.some(g=>g.id===other.id));
+});
+test('group unread cursors, paging and fresh-join history boundaries remain consistent',async()=>{
+ await connectAll();const {group}=await createGroup();await api('group_accept',{group:group.id},users[1]);
+ for(let i=0;i<55;i++)await groupSend(group.id,users[0],`Message ${i}`);
+ assert.equal((await api('groups',{},users[1],'GET')).items[0].unread,55);
+ const recent=(await api('group_messages',{group:group.id},users[1],'GET')).items;
+ const older=(await api('group_messages',{group:group.id,before:recent[0].seq},users[1],'GET')).items;
+ assert.equal(new Set([...recent,...older].map(m=>m.id)).size,55);
+ await api('group_read',{group:group.id,through:recent.at(-1).seq},users[1]);
+ await groupSend(group.id);assert.equal((await api('groups',{},users[1],'GET')).items[0].unread,1);
+ await api('group_leave',{group:group.id},users[1]);
+ await api('group_invite',{group:group.id,members:[b.id]},users[0],'POST',400);
+ await db.query("update korlix_social_group_members set invited_at=now()-interval '2 hours' where group_id=$1 and member=$2",[group.id,b.id]);
+ await api('group_invite',{group:group.id,members:[b.id]});await api('group_accept',{group:group.id},users[1]);
+ assert.equal((await api('group_messages',{group:group.id},users[1],'GET')).items.length,0);
+});
+test('group reports share only an authorized snapshot and moderators can remove reported content',async()=>{
+ await connectAll();const {group}=await createGroup([b.id]);await api('group_accept',{group:group.id},users[1]);const m=await groupSend(group.id);
+ const id=randomUUID();await api('report',{id,kind:'group_message',target:m.id,reason:'Please review'},users[2],'POST',403);
+ await api('report',{id,kind:'group_message',target:m.id,reason:'Please review'},users[1]);
+ await api('moderate',{id,decision:'remove'},users[1],'POST',403);
+ await db.query('insert into korlix_social_moderators values($1)',[users[2]]);
+ const reports=await api('reports',{},users[2],'GET');assert.equal(reports.items[0].kind,'group_message');assert.equal(reports.items[0].snapshot.body,'Hello group 👋🏽');
+ await api('moderate',{id,decision:'remove'},users[2]);
+ assert.equal((await api('group_message',{group:group.id,id:m.id},users[1],'GET')).message.deleted,true);
+});
+test('group tables and RPCs stay service-only with RLS, bounded batches and authenticated routes',async()=>{
+ for(const table of ['groups','group_members','group_messages']) {
+  const r=await db.query("select has_table_privilege('authenticated',$1,'select') access,(select relrowsecurity from pg_class where oid=$1::regclass) rls",[`korlix_social_${table}`]);assert.deepEqual(r.rows[0],{access:false,rls:true});
+ }
+ for(const f of ['korlix_social_groups_v1(uuid,text,jsonb)','korlix_social_group_card(korlix_social_groups,uuid)','korlix_social_group_message_card(korlix_social_group_messages,uuid,bigint)']) {
+  const r=await db.query("select has_function_privilege('anon',$1,'execute') anon,has_function_privilege('authenticated',$1,'execute') authenticated,(select prosecdef from pg_proc where oid=$1::regprocedure) definer",[f]);assert.deepEqual(r.rows[0],{anon:false,authenticated:false,definer:false});
+ }
+ await api('groups',{},'','GET',401);await connectAll();
+ await api('group_create',{group:randomUUID(),name:'Too many',members:Array.from({length:50},()=>randomUUID())},users[0],'POST',400);
+ await db.exec('set role service_role');try{const {group}=await call(users[0],'group_create',{group:randomUUID(),name:'Works',members:[b.id,c.id]});assert.equal(group.invited_count,2);}finally{await db.exec('reset role');}
+});
+test('group capacity includes pending invitations and cannot be exceeded by later batches',async()=>{
+ await connectAll();const targets=[b.id,c.id];
+ for(let i=0;i<48;i++){
+  const user=randomUUID();await db.query('insert into auth.users values($1)',[user]);
+  const member=(await call(user,'save_profile',profile(`capacity_${i}`))).profile;
+  await db.query("insert into korlix_social_connections(requester,recipient,state)values($1,$2,'accepted')",[a.id,member.id]);targets.push(member.id);
+ }
+ const {group}=await createGroup(targets.slice(0,49));assert.equal(group.invited_count,49);
+ await api('group_invite',{group:group.id,members:[targets[49]]},users[0],'POST',400);
+ assert.equal((await api('group_details',{group:group.id},users[0],'GET')).members.length,50);
 });
