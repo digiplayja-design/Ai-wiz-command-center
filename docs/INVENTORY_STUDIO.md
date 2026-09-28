@@ -29,7 +29,7 @@ Current limits are 10,000 active products, 500 locations/contacts per kind, 200 
 
 ## Release and rollback
 
-1. Apply `supabase/migrations/20260928114821_inventory_studio.sql` to the existing project. This adds inventory tables/RPC and a private JPEG storage bucket; it does not alter other feature tables.
+1. Apply `supabase/migrations/20260928123401_inventory_studio.sql` to the existing project. This adds inventory tables/RPC and a private JPEG storage bucket; it does not alter other feature tables.
 2. Publish the backend release branch and verify `/api/health` advertises inventory version 1; unauthenticated inventory routes must return 401.
 3. Publish the frontend release branch. Open Utilities → Inventory Studio.
 4. A rollback can redeploy the preceding frontend/backend commits. Leave the new inventory schema and user records in place; do not delete customer data as a rollback step.
@@ -39,3 +39,5 @@ Current limits are 10,000 active products, 500 locations/contacts per kind, 200 
 Backend tests use real PostgreSQL semantics through PGlite and the real Express routes, with fake authentication/provider I/O. They cover authorization, row grants, RLS, geographic quantities, search paging, idempotency, serials, transfers, counts, orders, expiry, CSV injection/import, image validation, recognition leases/credits and consent. Flutter tests cover responsive layouts (320, 390 and desktop), large text, forms, shared text/voice search, retry preservation, stale-account responses and actual Live Voice screen tool dispatch with fake devices. The existing Cybersecurity Defender and Live Voice lifecycle tests are included in regression checks.
 
 The production Flutter web build must succeed. Production release checks verify deployment commit IDs, health, route authentication and database permissions. Live microphone quality, recognition accuracy on a user's physical label and a signed-in user workflow still depend on the real device, network and image quality; test fixtures do not substitute for those observations.
+
+The migration filename matches the version recorded by the production migration service (20260928123401). The SQL is identical to the tested migration originally created with the Supabase CLI. Do not reapply it to the production project.
