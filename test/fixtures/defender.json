@@ -1,0 +1,175 @@
+{
+  "habits": [
+    {
+      "id": "mfa",
+      "title": "Add a second layer to sign-in",
+      "detail": "Enable passkeys or multifactor authentication on email, banking and important accounts. Prefer phishing-resistant options when available.",
+      "business": false
+    },
+    {
+      "id": "passwords",
+      "title": "Use unique passwords",
+      "detail": "Use a trusted password manager. Replace passwords reused across accounts.",
+      "business": false
+    },
+    {
+      "id": "updates",
+      "title": "Keep software up to date",
+      "detail": "Turn on automatic updates for your phone, computer, browser and trusted security software.",
+      "business": false
+    },
+    {
+      "id": "backups",
+      "title": "Make recovery possible",
+      "detail": "Keep a separate backup of important files and check that you can restore one.",
+      "business": false
+    },
+    {
+      "id": "verify",
+      "title": "Verify unexpected requests",
+      "detail": "Use a known phone number or an app you already trust before sharing information or changing payments.",
+      "business": false
+    },
+    {
+      "id": "recovery",
+      "title": "Check account recovery options",
+      "detail": "Keep recovery details current and store backup sign-in codes somewhere secure. Do not paste them here.",
+      "business": false
+    },
+    {
+      "id": "sessions",
+      "title": "Review signed-in devices",
+      "detail": "Check important accounts for unfamiliar sessions and security alerts using their official settings.",
+      "business": false
+    },
+    {
+      "id": "devices",
+      "title": "Check device security",
+      "detail": "Use the security settings and trusted protection software supplied or recommended by your device provider.",
+      "business": false
+    },
+    {
+      "id": "admins",
+      "title": "Separate administrator access",
+      "detail": "Give staff only the access they need. Use a separate administrator account for privileged work.",
+      "business": true
+    },
+    {
+      "id": "staff",
+      "title": "Give staff a reporting path",
+      "detail": "Make it easy to report suspicious messages and regularly practice spotting unusual requests.",
+      "business": true
+    },
+    {
+      "id": "payments",
+      "title": "Verify payment changes by callback",
+      "detail": "Confirm new bank details or payment instructions with a known contact using a previously trusted number.",
+      "business": true
+    },
+    {
+      "id": "plan",
+      "title": "Write a recovery plan",
+      "detail": "List your IT, bank and key provider contacts, recovery responsibilities and backup restoration steps.",
+      "business": true
+    }
+  ],
+  "incidents": [
+    {
+      "id": "clicked",
+      "title": "I clicked a suspicious link",
+      "description": "Take the next step based on what happened.",
+      "source": "phishing",
+      "steps": 4
+    },
+    {
+      "id": "credentials",
+      "title": "I shared a password or code",
+      "description": "Recover access and review active sessions.",
+      "source": "recovery",
+      "steps": 5
+    },
+    {
+      "id": "money",
+      "title": "I sent money or payment details",
+      "description": "Contact the payment provider promptly.",
+      "source": "recovery",
+      "steps": 4
+    },
+    {
+      "id": "device",
+      "title": "My device shows a warning",
+      "description": "Handle pop-ups, remote access or possible ransomware.",
+      "source": "ransomware",
+      "steps": 4
+    }
+  ],
+  "sources": [
+    {
+      "id": "phishing",
+      "title": "FTC · Recognize phishing",
+      "url": "https://consumer.ftc.gov/articles/how-recognize-avoid-phishing-scams"
+    },
+    {
+      "id": "recovery",
+      "title": "FTC · If you were scammed",
+      "url": "https://consumer.ftc.gov/articles/what-do-if-you-were-scammed"
+    },
+    {
+      "id": "business",
+      "title": "CISA · Secure your business",
+      "url": "https://www.cisa.gov/audiences/small-and-medium-businesses/secure-your-business"
+    },
+    {
+      "id": "ransomware",
+      "title": "CISA · Ransomware response",
+      "url": "https://www.cisa.gov/stopransomware/ransomware-guide"
+    }
+  ],
+  "reviewedOn": "2026-09-28",
+  "result": {
+    "title": "Email check",
+    "concern": "high",
+    "summary": "Pause and verify this request through a trusted channel.",
+    "findings": [
+      {
+        "id": "userinfo",
+        "title": "Misleading text before the destination",
+        "detail": "A link includes an @ section. Text before @ is not the destination website.",
+        "severity": "high"
+      },
+      {
+        "id": "credentials",
+        "title": "A request for sign-in secrets",
+        "detail": "The text appears to request a password, recovery phrase or sign-in code. Verify independently and do not share these secrets.",
+        "severity": "high"
+      },
+      {
+        "id": "urgency",
+        "title": "Pressure to act quickly",
+        "detail": "Urgency can discourage checking a request. Take time to contact the sender through a trusted channel.",
+        "severity": "review"
+      }
+    ],
+    "domains": [
+      "evil[.]test"
+    ],
+    "actions": [
+      {
+        "id": "pause",
+        "title": "Pause before responding",
+        "detail": "Do not use the message’s links, attachments or contact details until you verify the request independently."
+      },
+      {
+        "id": "verify",
+        "title": "Use a trusted channel",
+        "detail": "Open the official app you already use or contact the organization using a number you already know is genuine."
+      },
+      {
+        "id": "report",
+        "title": "Keep and report the message",
+        "detail": "If it appears suspicious, use your email provider’s phishing report option or your organization’s IT reporting process. Keep evidence if money or access was lost."
+      }
+    ],
+    "source": "phishing"
+  }
+}
