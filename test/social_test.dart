@@ -166,9 +166,9 @@ Future<void> mount(
           disableAnimations: true,
           textScaler: TextScaler.linear(scale),
         ),
-        child: child!,
+        child: RepaintBoundary(key: fixtures.captureKey, child: child!),
       ),
-      home: RepaintBoundary(key: fixtures.captureKey, child: child),
+      home: child,
     ),
   );
   await t.pumpAndSettle();
@@ -280,7 +280,15 @@ void main() {
           .toList();
       expect(switches[1].value, false);
       expect(s.calls.where((c) => c['action'] == 'save_profile'), isEmpty);
-      await fixtures.tap(t, find.byType(CheckboxListTile));
+      FocusManager.instance.primaryFocus?.unfocus();
+      await t.pumpAndSettle();
+      await Scrollable.ensureVisible(
+        t.element(find.byType(CheckboxListTile)),
+        alignment: .5,
+      );
+      await t.pumpAndSettle();
+      await t.tap(find.byType(CheckboxListTile));
+      await t.pumpAndSettle();
       await fixtures.tap(t, find.text('Create my Social profile').last);
       final saved = s.calls.singleWhere((c) => c['action'] == 'save_profile');
       expect(saved['accepted_rules'], true);

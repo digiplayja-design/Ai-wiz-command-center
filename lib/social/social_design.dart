@@ -116,13 +116,18 @@ class SocialAvatar extends StatelessWidget {
                 ],
               ),
               alignment: Alignment.center,
-              child: Text(
-                name.isEmpty ? '?' : name.characters.first.toUpperCase(),
-                style: TextStyle(
-                  color: const Color(0xFF112233),
-                  fontWeight: FontWeight.w900,
-                  fontSize: size * .38,
-                ),
+              child: ClipOval(
+                child:
+                    member['avatar_url'] is String &&
+                        (member['avatar_url'] as String).isNotEmpty
+                    ? Image.network(
+                        member['avatar_url'],
+                        width: size,
+                        height: size,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => _initial(name),
+                      )
+                    : _initial(name),
               ),
             ),
             if (showStatus && member['online'] == true)
@@ -147,6 +152,15 @@ class SocialAvatar extends StatelessWidget {
       ),
     );
   }
+
+  Widget _initial(String name) => Text(
+    name.isEmpty ? '?' : name.characters.first.toUpperCase(),
+    style: TextStyle(
+      color: const Color(0xFF112233),
+      fontWeight: FontWeight.w900,
+      fontSize: size * .38,
+    ),
+  );
 }
 
 class SocialEmpty extends StatelessWidget {

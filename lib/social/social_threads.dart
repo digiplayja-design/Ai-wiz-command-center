@@ -5,6 +5,7 @@ import '../theme/korlix_action_button.dart';
 import 'social_client.dart';
 import 'social_design.dart';
 import 'social_forms.dart';
+import 'social_emoji.dart';
 
 class SocialChatScreen extends StatefulWidget {
   const SocialChatScreen({
@@ -12,9 +13,11 @@ class SocialChatScreen extends StatefulWidget {
     required this.client,
     required this.me,
     required this.peer,
+    this.onCall,
   });
   final SocialClient client;
   final SocialMap me, peer;
+  final Future<void> Function(bool video)? onCall;
   @override
   State<SocialChatScreen> createState() => _SocialChatScreenState();
 }
@@ -361,6 +364,30 @@ class _SocialChatScreenState extends State<SocialChatScreen>
         ],
       ),
       actions: [
+        if (widget.onCall != null && !_unavailable)
+          PopupMenuButton<bool>(
+            tooltip: 'Start a call',
+            icon: const Icon(Icons.call_outlined),
+            onSelected: (video) => widget.onCall!(video),
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: false,
+                child: ListTile(
+                  leading: Icon(Icons.call_outlined),
+                  title: Text('Audio call'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: true,
+                child: ListTile(
+                  leading: Icon(Icons.videocam_outlined),
+                  title: Text('Video call'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
+          ),
         PopupMenuButton<String>(
           tooltip: 'Conversation options',
           onSelected: _connectionAction,
@@ -417,6 +444,42 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                         style: TextStyle(fontSize: 12, height: 1.5),
                       ),
                     ),
+                    if (widget.onCall != null && !_unavailable)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 20),
+                        child: SocialPanel(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            children: [
+                              Wrap(
+                                alignment: WrapAlignment.center,
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: [
+                                  KorlixActionButton(
+                                    label: 'Audio call',
+                                    icon: Icons.call_outlined,
+                                    size: KorlixButtonSize.compact,
+                                    onPressed: () => widget.onCall!(false),
+                                  ),
+                                  KorlixActionButton(
+                                    label: 'Video call',
+                                    icon: Icons.videocam_outlined,
+                                    size: KorlixButtonSize.compact,
+                                    onPressed: () => widget.onCall!(true),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Both people need Social open to connect.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     if (_more)
                       TextButton(
                         onPressed: _loading ? null : () => _load(older: true),
@@ -441,6 +504,18 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
+                      IconButton(
+                        tooltip: 'Add emoji',
+                        onPressed: _sending
+                            ? null
+                            : () async {
+                                await socialChooseEmoji(context, _text);
+                                if (!widget.client.available || _unavailable) {
+                                  _text.clear();
+                                }
+                              },
+                        icon: const Icon(Icons.emoji_emotions_outlined),
+                      ),
                       Expanded(
                         child: TextField(
                           controller: _text,

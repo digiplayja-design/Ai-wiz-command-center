@@ -6,6 +6,7 @@ import 'social_client.dart';
 import 'social_design.dart';
 import 'social_forms.dart';
 import 'social_threads.dart';
+import 'social_call_screen.dart';
 
 class SocialScreen extends StatefulWidget {
   const SocialScreen({super.key, required this.client});
@@ -32,6 +33,8 @@ class _SocialScreenState extends State<SocialScreen>
       _denied = false;
   int _tab = 0, _offset = 0, _generation = 0;
   Timer? _poll, _heartbeat, _debounce;
+  Timer? _calls;
+  bool _checkingCalls = false, _callOpen = false;
   SocialClient get client => widget.client;
   @override
   void initState() {
@@ -39,6 +42,10 @@ class _SocialScreenState extends State<SocialScreen>
     WidgetsBinding.instance.addObserver(this);
     client.addListener(_access);
     unawaited(_initialize());
+    _calls = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) => unawaited(_incomingCall()),
+    );
     _poll = Timer.periodic(const Duration(seconds: 15), (_) {
       if (_foreground &&
           _profile != null &&
@@ -88,12 +95,70 @@ class _SocialScreenState extends State<SocialScreen>
     _poll?.cancel();
     _heartbeat?.cancel();
     _debounce?.cancel();
+    _calls?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     client.removeListener(_access);
     client.dispose();
     _search.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  Future<void> _incomingCall() async {
+    if (_checkingCalls ||
+        _callOpen ||
+        !_foreground ||
+        _profile == null ||
+        !client.available) {
+      return;
+    }
+    _checkingCalls = true;
+    try {
+      final r = await client.get('call_inbox', {'device': client.callDevice});
+      if (!mounted ||
+          _callOpen ||
+          !_foreground ||
+          !client.available ||
+          r['call'] == null) {
+        return;
+      }
+      final incoming = socialMap(r['call']);
+      unawaited(
+        _openCall(
+          socialMap(incoming['peer']),
+          incoming['mode'] == 'video',
+          incoming: incoming,
+        ),
+      );
+    } catch (_) {
+      /* Existing Social stays usable during a temporary call outage. */
+    } finally {
+      _checkingCalls = false;
+    }
+  }
+
+  Future<void> _openCall(
+    SocialMap peer,
+    bool video, {
+    SocialMap? incoming,
+  }) async {
+    if (_callOpen || !client.available || !mounted) return;
+    _callOpen = true;
+    try {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SocialCallScreen(
+            client: client,
+            peer: peer,
+            video: video,
+            incoming: incoming,
+          ),
+        ),
+      );
+    } finally {
+      _callOpen = false;
+    }
   }
 
   Future<void> _initialize() async {
@@ -248,7 +313,12 @@ class _SocialScreenState extends State<SocialScreen>
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => SocialChatScreen(client: client, me: me, peer: p),
+        builder: (_) => SocialChatScreen(
+          client: client,
+          me: me,
+          peer: p,
+          onCall: (video) => _openCall(p, video),
+        ),
       ),
     );
     if (mounted && !_denied) await _load();
@@ -455,6 +525,32 @@ class _SocialScreenState extends State<SocialScreen>
                   fontSize: 11,
                   color: korlixSkinOf(context).success,
                 ),
+              ),
+            ),
+          if ('${p['profession'] ?? ''}'.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.work_outline_rounded,
+                    size: 15,
+                    color: korlixSkinOf(context).primary,
+                  ),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      p['profession'],
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           const SizedBox(height: 12),

@@ -35,6 +35,7 @@ class SocialClient extends ChangeNotifier {
   final Listenable? sessionChanges;
   final http.Client _http;
   final bool _owns;
+  final String callDevice = socialId();
   late final String _scope;
   bool _closed = false, _denied = false;
   bool get available => !_closed && !_denied;
@@ -85,6 +86,33 @@ class SocialClient extends ChangeNotifier {
             'Accept': 'application/json',
           });
     if (method == 'POST') request.body = jsonEncode(data);
+    return _send(request);
+  }
+
+  Future<SocialMap> uploadPhoto(Uint8List bytes) async {
+    _guard();
+    if (bytes.isEmpty || bytes.length > 8 * 1024 * 1024) {
+      throw const SocialException('Choose a photo smaller than 8 MB.');
+    }
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse(
+        '${baseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/social/profile_photo',
+      ),
+    );
+    request.headers.addEntries(
+      headersBuilder().entries.where(
+        (entry) => entry.key.toLowerCase() != 'content-type',
+      ),
+    );
+    request.headers['Accept'] = 'application/json';
+    request.files.add(
+      http.MultipartFile.fromBytes('photo', bytes, filename: 'profile-photo'),
+    );
+    return _send(request);
+  }
+
+  Future<SocialMap> _send(http.BaseRequest request) async {
     try {
       final response = await _http
           .send(request)
@@ -97,7 +125,7 @@ class SocialClient extends ChangeNotifier {
       }
       SocialMap result;
       try {
-        result = socialMap(jsonDecode(response.body));
+        result = socialMap(jsonDecode(utf8.decode(response.bodyBytes)));
       } catch (_) {
         throw const SocialException(
           'The response could not be read. Refresh and try again.',

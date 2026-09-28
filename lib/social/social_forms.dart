@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:file_picker/file_picker.dart';
 import '../theme/korlix_action_button.dart';
 import 'social_client.dart';
 import 'social_design.dart';
 
 class SocialProfileForm extends StatefulWidget {
-  const SocialProfileForm({super.key, required this.client, this.profile});
+  const SocialProfileForm({
+    super.key,
+    required this.client,
+    this.profile,
+    this.photoPicker,
+  });
   final SocialClient client;
   final SocialMap? profile;
+  final Future<Uint8List?> Function()? photoPicker;
   @override
   State<SocialProfileForm> createState() => _SocialProfileFormState();
 }
@@ -15,6 +23,11 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
   late final _name = TextEditingController(text: widget.profile?['name']);
   late final _handle = TextEditingController(text: widget.profile?['handle']);
   late final _bio = TextEditingController(text: widget.profile?['bio']);
+  late final _profession = TextEditingController(
+    text: widget.profile?['profession'],
+  );
+  Uint8List? _photo;
+  bool _removePhoto = false, _picking = false;
   late bool _discoverable = widget.profile?['discoverable'] != false,
       _online = widget.profile?['show_online'] == true,
       _rules = widget.profile != null;
@@ -33,6 +46,9 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
       _name.clear();
       _handle.clear();
       _bio.clear();
+      _profession.clear();
+      _photo = null;
+      _removePhoto = true;
       setState(
         () => _error = 'Your session changed. Close Social and sign in again.',
       );
@@ -45,6 +61,7 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
     _name.dispose();
     _handle.dispose();
     _bio.dispose();
+    _profession.dispose();
     super.dispose();
   }
 
@@ -59,20 +76,64 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
       _error = null;
     });
     try {
-      final r = await widget.client.post('save_profile', {
+      var r = await widget.client.post('save_profile', {
         'name': _name.text.trim(),
         'handle': _handle.text.trim().toLowerCase(),
         'bio': _bio.text.trim(),
+        'profession': _profession.text.trim(),
         'color': _color,
         'discoverable': _discoverable,
         'show_online': _online,
         'accepted_rules': _rules,
       });
+      if (!mounted || !widget.client.available) return;
+      if (_photo != null || _removePhoto) {
+        try {
+          r = _photo != null
+              ? await widget.client.uploadPhoto(_photo!)
+              : await widget.client.post('profile_photo', {'remove': true});
+        } catch (e) {
+          if (mounted) {
+            setState(
+              () =>
+                  _error = 'Your profile details were saved. Photo update: $e',
+            );
+          }
+          return;
+        }
+      }
       if (mounted) Navigator.pop(context, socialMap(r['profile']));
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _choosePhoto() async {
+    setState(() => _picking = true);
+    try {
+      final bytes = widget.photoPicker != null
+          ? await widget.photoPicker!()
+          : (await FilePicker.platform.pickFiles(
+              type: FileType.custom,
+              allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+              allowMultiple: false,
+              withData: true,
+            ))?.files.single.bytes;
+      if (!mounted || !widget.client.available || bytes == null) return;
+      if (bytes.length > 8 * 1024 * 1024 || bytes.isEmpty) {
+        throw const SocialException('Choose a photo smaller than 8 MB.');
+      }
+      setState(() {
+        _photo = bytes;
+        _removePhoto = false;
+        _error = null;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Photo could not be selected. $e');
+    } finally {
+      if (mounted) setState(() => _picking = false);
     }
   }
 
@@ -96,10 +157,82 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
                 SocialPanel(
                   child: Column(
                     children: [
-                      SocialAvatar(
-                        member: {'name': _name.text, 'color': _color},
-                        size: 80,
-                        showStatus: false,
+                      Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: socialColor(_color).withValues(alpha: .6),
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: socialColor(_color).withValues(alpha: .2),
+                              blurRadius: 28,
+                            ),
+                          ],
+                        ),
+                        child: _photo != null
+                            ? ClipOval(
+                                child: Image.memory(
+                                  _photo!,
+                                  width: 96,
+                                  height: 96,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => const SizedBox(
+                                    width: 96,
+                                    height: 96,
+                                    child: Icon(Icons.broken_image_outlined),
+                                  ),
+                                ),
+                              )
+                            : SocialAvatar(
+                                member: {
+                                  'name': _name.text,
+                                  'color': _color,
+                                  if (!_removePhoto)
+                                    'avatar_url': widget.profile?['avatar_url'],
+                                },
+                                size: 96,
+                                showStatus: false,
+                              ),
+                      ),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          KorlixActionButton(
+                            label: _picking
+                                ? 'Opening photos…'
+                                : 'Choose photo',
+                            icon: Icons.add_a_photo_outlined,
+                            size: KorlixButtonSize.compact,
+                            onPressed: _saving || _picking
+                                ? null
+                                : _choosePhoto,
+                          ),
+                          if (_photo != null ||
+                              (!_removePhoto &&
+                                  widget.profile?['avatar_url'] != null))
+                            TextButton.icon(
+                              onPressed: _saving
+                                  ? null
+                                  : () => setState(() {
+                                      _photo = null;
+                                      _removePhoto = true;
+                                    }),
+                              icon: const Icon(Icons.delete_outline_rounded),
+                              label: const Text('Remove'),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'JPG, PNG or WebP · up to 8 MB\nYour photo is cropped to a square when saved.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12, height: 1.5),
                       ),
                       const SizedBox(height: 16),
                       Text(
@@ -146,6 +279,21 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
                       ).hasMatch((v ?? '').trim().toLowerCase())
                       ? null
                       : 'Use 3–24 letters, numbers or underscores',
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _profession,
+                  enabled: !_saving,
+                  maxLength: 100,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Profession (optional)',
+                    hintText: 'e.g. Designer, Nurse, Entrepreneur',
+                    prefixIcon: Icon(Icons.work_outline_rounded),
+                    helperText:
+                        'Shown on your profile and helps people find you.',
+                    helperMaxLines: 2,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -231,7 +379,7 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Your name, handle, bio and forum posts are visible to other Social members. Hiding from People does not hide your posts or existing connections. Accepted follows allow both members to message. You can remove or block a connection at any time.',
+                  'Your name, photo, profession, handle, bio and forum posts are visible to other Social members. Hiding from People does not hide your posts or existing connections. Accepted follows allow both members to message and call. You can remove or block a connection at any time.',
                   style: TextStyle(fontSize: 13, height: 1.6),
                 ),
                 const SizedBox(height: 20),
@@ -268,7 +416,10 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
                   icon: Icons.check_rounded,
                   busy: _saving,
                   expand: true,
-                  onPressed: _saving || !_rules ? null : _save,
+                  onPressed:
+                      _saving || _picking || !_rules || !widget.client.available
+                      ? null
+                      : _save,
                 ),
                 const SizedBox(height: 24),
               ],
