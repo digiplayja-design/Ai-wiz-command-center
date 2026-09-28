@@ -1,3 +1,5 @@
+import { registerAgentStudio } from './agent_studio/routes.mjs';
+import { generateStep, WorkflowError } from './agent_studio/model.mjs';
 import { registerInventory } from './inventory/routes.mjs';
 import { recognize as recognizeInventory } from './inventory/model.mjs';
 import { registerCyberDefender } from './cyber_defender/routes.mjs';
@@ -7947,7 +7949,7 @@ app.get(
           userId: user.id,
           agentId: req.params.agentId,
           includeInactive: false,
-          maximumItems: 250,
+          maximumItems: 500,
         });
 
       return res.json({
@@ -12583,6 +12585,24 @@ const bookkeepingStorage = supabaseUrl && supabaseServiceRoleKey ? createClient(
   auth: { autoRefreshToken: false, persistSession: false },
   global: { fetch: (url, init = {}) => fetch(url, { ...init, signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(45000)]) : AbortSignal.timeout(45000) }) },
 }) : null;
+registerAgentStudio(app, {database:supabaseAdmin,requireUser,
+ loadContext:async(user,agentId,useMemory)=>{
+  const profile=await korlixAgentLoadProfileV1({client:supabaseAdmin,userId:user.id,agentId});
+  if(!profile || profile.active===false)throw new WorkflowError('This agent is no longer available. Create a new workflow with an available agent.',404);
+  const memories=useMemory && profile.memoryEnabled===true
+   ? (await korlixAgentListMemoriesV1({client:supabaseAdmin,userId:user.id,agentId,includeInactive:false,maximumItems:100})).filter(m=>m.sensitive!==true) : [];
+  const runtime=korlixAgentRuntimeView({profile,memories,characterName:'K-Nova',language:'English',
+   modelProof:korlixLiveConvoAgentModelProofV1(),persistenceConfigured:true,memoryOptions:{maximumItems:16,maximumCharacters:8000}});
+  return {instructions:runtime.instructions,version:profile.version};
+ },
+ aiAccess:async user=>{
+  if(!process.env.OPENAI_API_KEY)return {allowed:false,status:503,reason:'Agent generation is temporarily unavailable.'};
+  const profile=await getOrCreateProfile(user),usageCounter=await getOrCreateUsageCounter(user.id);
+  if(!profile||!usageCounter)throw new Error('Agent workflow usage unavailable');
+  const limits=getTierLimits(profile.tier||'basic');
+  return {...checkUsageAllowed({profile,usageCounter,creditsNeeded:1}),status:429,usageId:usageCounter.id,creditLimit:limits.dailyCreditLimit,requestLimit:limits.dailyRequestLimit};
+ },generate:data=>generateStep({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})})
+});
 registerInventory(app,{database:supabaseAdmin,storageDatabase:bookkeepingStorage,requireUser,
  aiAccess:async user=>{
   if(!process.env.OPENAI_API_KEY)return {allowed:false,status:503,reason:'KORLIX picture recognition is temporarily unavailable.'};
