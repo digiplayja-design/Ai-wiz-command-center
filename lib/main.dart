@@ -1,3 +1,5 @@
+import 'resume_studio/resume_client.dart';
+import 'resume_studio/resume_screen.dart';
 import 'social/social_client.dart';
 import 'social/social_screen.dart';
 import 'camera_ask/camera_ask_client.dart';
@@ -4650,51 +4652,7 @@ class AppLanguages {
         QuickAction(
           label: 'Write my Resume',
           prompt:
-              r'''You are an expert professional resume writer and modern resume designer with 15+ years of experience creating resumes for executives, professionals, and career changers. Your resumes are known for being both **highly effective (ATS-friendly + achievement-driven)** and **aesthetically excellent** — clean, modern, visually balanced, and premium-looking.
-
-Before you write or design anything, you must first gather the necessary information by asking me questions.
-
-Ask me all the questions below in a clean, organized bullet-point format. Do **not** generate the resume until I have answered your questions.
-
-### Questions you must ask me:
-
-**Personal & Contact Information**
-- What is your full name as you want it to appear on the resume?
-- What is your phone number, professional email address, city and state (or country), and LinkedIn URL or personal website/portfolio (if any)?
-
-**Target Role**
-- What specific job title or role are you targeting? What industry or company type are you applying to? (If you have a job description, please paste it.)
-
-**Professional Experience**
-- Please list your work experience in reverse chronological order. For each position, provide: Job title, Company name, Location, Employment dates (Month/Year – Month/Year), and 4–6 strong bullet points describing your responsibilities and achievements (ideally with numbers, percentages, or results).
-
-**Education**
-- What is your educational background? Please include degree(s), major/field of study, school/university name, graduation year, and any honors, GPA (if above 3.5), or relevant coursework.
-
-**Skills, Tools & Certifications**
-- What are your strongest technical/hard skills and tools/software you’re proficient in?
-- What soft skills or leadership qualities do you want to highlight?
-- Do you have any certifications, licenses, or professional development worth including?
-
-**Additional Sections**
-- Do you have any notable projects, volunteer work, publications, awards, speaking engagements, or leadership roles outside of work that should be included?
-- Are there any employment gaps, career transitions, or specific situations you want me to handle strategically?
-
-**Design & Formatting Preferences**
-- Do you prefer a **1-page** or **2-page** resume?
-- What design style do you like? (Examples: Modern minimalist, Clean corporate, Slightly creative, Premium executive, Tech-focused, etc.)
-- Any preferred color scheme or accent color? (I usually recommend elegant, professional palettes like deep navy + charcoal, teal accents, or sophisticated gray + black.)
-- Any sections you specifically want or don’t want on the resume?
-
-**Final Instructions**
-- Once I answer all your questions, create a **visually stunning, modern, and aesthetically pleasing resume**.
-- Use excellent visual hierarchy, generous but balanced white space, professional typography, and a clean layout that looks premium (not generic or outdated).
-- Make every bullet point achievement-oriented and results-driven.
-- Ensure the resume is ATS-friendly while still looking beautiful.
-- Present the final resume in well-formatted Markdown that I can easily copy into a design tool or convert to PDF.
-- Offer 2–3 different layout/style variations if appropriate.
-
-Start by asking me the questions now.''',
+              'Open Resume Studio to build, tailor, and export a resume.',
         ),
         QuickAction(
           label: 'Email enhancer',
@@ -4831,6 +4789,7 @@ Analyze the attached credit reports thoroughly and produce a complete, high-impa
       considerDone: 'Considéralo hecho.',
       quickActions: [
         QuickAction(label: 'Preguntar', prompt: 'Responde esto claramente: '),
+        QuickAction(label: 'Crear mi currículum', prompt: 'Open Resume Studio.'),
         QuickAction(
           label: 'Crear plan',
           prompt: 'Crea un plan paso a paso para ',
@@ -4899,51 +4858,7 @@ Analyze the attached credit reports thoroughly and produce a complete, high-impa
         QuickAction(
           label: 'Rédiger mon CV',
           prompt:
-              r'''You are an expert professional resume writer and modern resume designer with 15+ years of experience creating resumes for executives, professionals, and career changers. Your resumes are known for being both **highly effective (ATS-friendly + achievement-driven)** and **aesthetically excellent** — clean, modern, visually balanced, and premium-looking.
-
-Before you write or design anything, you must first gather the necessary information by asking me questions.
-
-Ask me all the questions below in a clean, organized bullet-point format. Do **not** generate the resume until I have answered your questions.
-
-### Questions you must ask me:
-
-**Personal & Contact Information**
-- What is your full name as you want it to appear on the resume?
-- What is your phone number, professional email address, city and state (or country), and LinkedIn URL or personal website/portfolio (if any)?
-
-**Target Role**
-- What specific job title or role are you targeting? What industry or company type are you applying to? (If you have a job description, please paste it.)
-
-**Professional Experience**
-- Please list your work experience in reverse chronological order. For each position, provide: Job title, Company name, Location, Employment dates (Month/Year – Month/Year), and 4–6 strong bullet points describing your responsibilities and achievements (ideally with numbers, percentages, or results).
-
-**Education**
-- What is your educational background? Please include degree(s), major/field of study, school/university name, graduation year, and any honors, GPA (if above 3.5), or relevant coursework.
-
-**Skills, Tools & Certifications**
-- What are your strongest technical/hard skills and tools/software you’re proficient in?
-- What soft skills or leadership qualities do you want to highlight?
-- Do you have any certifications, licenses, or professional development worth including?
-
-**Additional Sections**
-- Do you have any notable projects, volunteer work, publications, awards, speaking engagements, or leadership roles outside of work that should be included?
-- Are there any employment gaps, career transitions, or specific situations you want me to handle strategically?
-
-**Design & Formatting Preferences**
-- Do you prefer a **1-page** or **2-page** resume?
-- What design style do you like? (Examples: Modern minimalist, Clean corporate, Slightly creative, Premium executive, Tech-focused, etc.)
-- Any preferred color scheme or accent color? (I usually recommend elegant, professional palettes like deep navy + charcoal, teal accents, or sophisticated gray + black.)
-- Any sections you specifically want or don’t want on the resume?
-
-**Final Instructions**
-- Once I answer all your questions, create a **visually stunning, modern, and aesthetically pleasing resume**.
-- Use excellent visual hierarchy, generous but balanced white space, professional typography, and a clean layout that looks premium (not generic or outdated).
-- Make every bullet point achievement-oriented and results-driven.
-- Ensure the resume is ATS-friendly while still looking beautiful.
-- Present the final resume in well-formatted Markdown that I can easily copy into a design tool or convert to PDF.
-- Offer 2–3 different layout/style variations if appropriate.
-
-Start by asking me the questions now.''',
+              'Open Resume Studio to build, tailor, and export a resume.',
         ),
         QuickAction(
           label: 'Écrire',
@@ -9165,6 +9080,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   void _useQuickAction(QuickAction action) {
+    if (const {'Write my Resume', 'Rédiger mon CV', 'Crear mi currículum'}.contains(action.label)) { unawaited(_openResumeStudio()); return; }
     if (action.label == 'Tax Prep') { unawaited(_openTaxPrep()); return; }
     if (action.label == 'BabyBlend') { unawaited(_openBabyBlend()); return; }
     if (action.label == 'FieldProof') { unawaited(_openFieldProof()); return; }
@@ -9310,6 +9226,13 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         TextPosition(offset: _controller.text.length),
       );
     });
+  }
+
+  Future<void> _openResumeStudio() async {
+    final client=ResumeClient(baseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision,language:_selectedLanguage);
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>ResumeScreen(client:client,
+      ensureConsent:(context)=>KorlixThirdPartyAiConsent.ensure(context:context,featureName:'Resume Studio and K-Nova',providers:{KorlixThirdPartyAiProvider.openAi},dataCategories:{KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.filesAndDocuments}),
+    )));
   }
 
   Future<void> _openKorlixSocial() async {
