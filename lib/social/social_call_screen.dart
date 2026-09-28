@@ -115,6 +115,135 @@ class _SocialCallScreenState extends State<SocialCallScreen>
     );
   }
 
+  void _speaker() {
+    // Keep this invocation inside the tap, before opening an asynchronous sheet.
+    unawaited(call.media.audio.resume());
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => AnimatedBuilder(
+        animation: call,
+        builder: (context, _) {
+          final a = call.media.audio, s = korlixSkinOf(context);
+          return SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.spatial_audio_off_rounded,
+                        color: s.primary,
+                        size: 30,
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          'Speaker & sound',
+                          style: TextStyle(
+                            fontSize: 23,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Close sound controls',
+                        onPressed: () => Navigator.pop(sheetContext),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    call.ended
+                        ? 'This call has ended.'
+                        : a.blocked
+                        ? 'Your browser needs a tap to play the call.'
+                        : 'Control how you hear the other person.',
+                    style: TextStyle(color: s.mutedText, height: 1.5),
+                  ),
+                  const SizedBox(height: 20),
+                  KorlixActionButton(
+                    label: 'Resume sound',
+                    icon: Icons.volume_up_rounded,
+                    onPressed: call.ended ? null : () => unawaited(a.resume()),
+                  ),
+                  if (a.canRouteSpeaker)
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Speakerphone'),
+                      subtitle: const Text(
+                        'Play through the phone’s loudspeaker',
+                      ),
+                      value: a.speaker,
+                      onChanged: call.ended
+                          ? null
+                          : (v) => unawaited(a.routeSpeaker(v)),
+                    ),
+                  if (a.canSetVolume) ...[
+                    const SizedBox(height: 20),
+                    Text(
+                      'Call volume · ${(a.volume * 100).round()}%',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    Slider(
+                      semanticFormatterCallback: (v) =>
+                          '${(v * 100).round()} percent',
+                      value: a.volume,
+                      onChanged: call.ended
+                          ? null
+                          : (v) => unawaited(a.setVolume(v)),
+                    ),
+                  ],
+                  if (a.canChooseOutput)
+                    TextButton.icon(
+                      icon: const Icon(Icons.headphones_rounded),
+                      label: const Text('Choose speaker or headphones'),
+                      onPressed: call.ended
+                          ? null
+                          : () => unawaited(a.chooseOutput()),
+                    ),
+                  if (a.issue.isNotEmpty && !call.ended)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(
+                        a.issue,
+                        style: TextStyle(color: s.primary, height: 1.5),
+                      ),
+                    ),
+                  const SizedBox(height: 18),
+                  SocialPanel(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.info_outline_rounded,
+                          color: s.primary,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            a.guidance,
+                            style: TextStyle(color: s.mutedText, height: 1.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = korlixSkinOf(context), m = call.media;
@@ -354,6 +483,12 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                             m.ready ? call.toggleMicrophone : null,
                             selected: !m.microphone,
                           ),
+                          _control(
+                            'Speaker',
+                            Icons.volume_up_rounded,
+                            m.ready ? _speaker : null,
+                            selected: m.audio.speaker,
+                          ),
                           if (widget.video)
                             _control(
                               m.camera ? 'Camera off' : 'Camera on',
@@ -370,6 +505,15 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                             danger: true,
                           ),
                         ],
+                      ),
+                    if (!call.ended && m.audio.blocked)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: KorlixActionButton(
+                          label: 'Tap to hear the call',
+                          icon: Icons.volume_up_rounded,
+                          onPressed: () => unawaited(m.audio.resume()),
+                        ),
                       ),
                     if (!call.ended && widget.video && m.ready && m.camera)
                       TextButton.icon(

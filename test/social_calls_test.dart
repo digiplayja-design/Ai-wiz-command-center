@@ -15,6 +15,7 @@ import 'social_test.dart' as social;
 import 'agent_studio_test.dart' as fixtures;
 
 class FakeMedia extends SocialCallMedia {
+  FakeMedia({super.audio});
   int opened = 0, closed = 0, offers = 0, answers = 0;
   bool stopped = false, deny = false;
   Completer<void>? permission;

@@ -2,10 +2,75 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'social_client.dart';
+import 'social_audio_output.dart';
+import 'social_audio_output_native.dart'
+    if (dart.library.js_interop) 'social_audio_output_web.dart';
 
-/// Device I/O is replaceable in tests; consent, signaling and teardown are not.
+/// Injectable device boundary also exercises the real media wiring in tests.
+class SocialCallIo {
+  rtc.RTCVideoRenderer renderer() => rtc.RTCVideoRenderer();
+  Future<rtc.MediaStream> stream(String name) =>
+      rtc.createLocalMediaStream(name);
+  Future<rtc.RTCPeerConnection> peer(List<dynamic> servers) =>
+      rtc.createPeerConnection({
+        'iceServers': servers,
+        'sdpSemantics': 'unified-plan',
+      });
+  Future<rtc.MediaStream> capture(bool video) =>
+      rtc.navigator.mediaDevices.getUserMedia({
+        'audio': {
+          'echoCancellation': true,
+          'noiseSuppression': true,
+          'autoGainControl': true,
+        },
+        'video': video
+            ? {
+                'facingMode': 'user',
+                'width': {'ideal': 640},
+                'height': {'ideal': 480},
+                'frameRate': {'ideal': 24, 'max': 30},
+              }
+            : false,
+      });
+  Future<void> prepare() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      await rtc.Helper.ensureAudioSession();
+    }
+  }
+
+  Future<void> configure() async {
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.android)) {
+      await rtc.Helper.setSpeakerphoneOn(false);
+    }
+  }
+
+  Future<void> clear() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      await rtc.Helper.clearAndroidCommunicationDevice();
+    }
+  }
+}
+
+/// Consent, signaling and teardown remain independent of device I/O.
 class SocialCallMedia extends ChangeNotifier {
-  final local = rtc.RTCVideoRenderer(), remote = rtc.RTCVideoRenderer();
+  SocialCallMedia({SocialCallIo? io, SocialAudioOutput? audio})
+    : io = io ?? SocialCallIo(),
+      audio = audio ?? createSocialAudioOutput() {
+    local = this.io.renderer();
+    remote = this.io.renderer();
+    this.audio.addListener(_audioChanged);
+  }
+  final SocialCallIo io;
+  final SocialAudioOutput audio;
+  late final rtc.RTCVideoRenderer local, remote;
+  rtc.MediaStream? _localVideo, _remoteVideo, _remoteAudio;
+  Future<void> _tracks = Future.value();
+  void _audioChanged() {
+    if (!_closed) notifyListeners();
+  }
+
   rtc.RTCPeerConnection? _peer;
   rtc.MediaStream? _stream;
   Future<void>? _rendererInit;
@@ -25,14 +90,9 @@ class SocialCallMedia extends ChangeNotifier {
     ]).then((_) {});
     await _rendererInit;
     if (_closed) return;
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-      await rtc.Helper.ensureAudioSession();
-    }
+    await io.prepare();
     if (_closed) return;
-    final peer = await rtc.createPeerConnection({
-      'iceServers': servers,
-      'sdpSemantics': 'unified-plan',
-    });
+    final peer = await io.peer(servers);
     if (_closed) {
       await peer.close();
       await peer.dispose();
@@ -55,35 +115,38 @@ class SocialCallMedia extends ChangeNotifier {
         );
       }
     };
+    // Render video-only projections. The native renderer's `muted` setter
+    // mutes the actual local microphone, not merely a preview monitor.
+    _localVideo = await io.stream('social-local-video');
+    _remoteVideo = await io.stream('social-remote-video');
+    _remoteAudio = await io.stream('social-remote-audio');
+    if (_closed) {
+      await _disposeProjections();
+      return;
+    }
     peer.onTrack = (event) {
-      if (!_closed && event.streams.isNotEmpty) {
-        remote.srcObject = event.streams.first;
-        remote.muted = false;
-        notifyListeners();
-      }
+      // RTCTrackEvent.streams can be empty. Track delivery is authoritative.
+      _tracks = _tracks.then((_) => _receiveTrack(event.track)).catchError((
+        Object _,
+      ) {
+        if (!_closed) {
+          audio.issue =
+              'Could not start incoming sound. Tap Resume sound or call again.';
+          audio.changed();
+        }
+      });
     };
-    final stream = await rtc.navigator.mediaDevices.getUserMedia({
-      'audio': {
-        'echoCancellation': true,
-        'noiseSuppression': true,
-        'autoGainControl': true,
-      },
-      'video': video
-          ? {
-              'facingMode': 'user',
-              'width': {'ideal': 640},
-              'height': {'ideal': 480},
-              'frameRate': {'ideal': 24, 'max': 30},
-            }
-          : false,
-    });
+    final stream = await io.capture(video);
     if (_closed) {
       await _releaseStream(stream);
       return;
     }
     _stream = stream;
-    local.srcObject = stream;
-    local.muted = true;
+    for (final track in stream.getVideoTracks()) {
+      await _localVideo!.addTrack(track);
+      if (_closed) return;
+    }
+    if (video) local.srcObject = _localVideo;
     for (final track in stream.getTracks()) {
       if (_closed) return;
       track.onEnded = () {
@@ -92,10 +155,36 @@ class SocialCallMedia extends ChangeNotifier {
       await peer.addTrack(track, stream);
     }
     if (_closed) return;
-    if (!kIsWeb) await rtc.Helper.setSpeakerphoneOnButPreferBluetooth();
+    await io.configure();
     if (_closed) return;
     ready = true;
     notifyListeners();
+  }
+
+  Future<void> _receiveTrack(rtc.MediaStreamTrack track) async {
+    if (_closed) return;
+    final stream = track.kind == 'audio' ? _remoteAudio : _remoteVideo;
+    if (stream == null) return;
+    if (!stream.getTracks().any((t) => t.id == track.id)) {
+      await stream.addTrack(track);
+    }
+    if (_closed) return;
+    if (track.kind == 'audio') {
+      await audio.attach(stream);
+    } else if (track.kind == 'video') {
+      remote.srcObject = stream;
+    }
+    if (!_closed) notifyListeners();
+  }
+
+  Future<void> _disposeProjections() async {
+    final streams = [_localVideo, _remoteVideo, _remoteAudio];
+    _localVideo = _remoteVideo = _remoteAudio = null;
+    for (final stream in streams) {
+      try {
+        await stream?.dispose();
+      } catch (_) {}
+    }
   }
 
   Future<String> offer() async {
@@ -166,6 +255,8 @@ class SocialCallMedia extends ChangeNotifier {
     if (_closed) return;
     _closed = true;
     ready = false;
+    audio.removeListener(_audioChanged);
+    final audioClosing = audio.close();
     final stream = _stream, peer = _peer;
     _stream = null;
     _peer = null;
@@ -173,6 +264,7 @@ class SocialCallMedia extends ChangeNotifier {
     for (final track in stream?.getTracks() ?? <rtc.MediaStreamTrack>[]) {
       track.enabled = false;
     }
+    await audioClosing;
     try {
       if (stream != null) await _releaseStream(stream);
     } catch (_) {}
@@ -189,11 +281,11 @@ class SocialCallMedia extends ChangeNotifier {
         await remote.dispose();
       }
     } catch (_) {}
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      try {
-        await rtc.Helper.clearAndroidCommunicationDevice();
-      } catch (_) {}
-    }
+    await _tracks;
+    await _disposeProjections();
+    try {
+      await io.clear();
+    } catch (_) {}
   }
 }
 
