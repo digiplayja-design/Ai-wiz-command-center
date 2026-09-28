@@ -17,6 +17,7 @@ import 'theme/korlix_action_grid.dart';
 import 'auth/korlix_welcome_confirmation.dart';
 import 'input_tools/upload_studio.dart';
 import 'input_tools/voice_composer.dart';
+import 'locator/locator_screen.dart';
 import 'theme/korlix_theme_picker.dart';
 import 'theme/korlix_screen_skin.dart';
 import 'theme/korlix_appearance_preferences.dart';
@@ -64,7 +65,6 @@ import 'package:image_picker/image_picker.dart' as ip;
 import 'package:speech_to_text/speech_to_text.dart' as speech_to_text;
 import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:geolocator/geolocator.dart' as geo;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'korlix_video_downloader.dart';
@@ -13098,289 +13098,21 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     timer.cancel();
   }
 
-  Future<geo.Position?> _getKorlixLocation() async {
-    final serviceEnabled = await geo.Geolocator.isLocationServiceEnabled();
-
-    if (!serviceEnabled) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Location services are disabled. Please turn on location.',
-          ),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-      return null;
-    }
-
-    var permission = await geo.Geolocator.checkPermission();
-
-    if (permission == geo.LocationPermission.denied) {
-      permission = await geo.Geolocator.requestPermission();
-    }
-
-    if (permission == geo.LocationPermission.denied) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Location permission denied.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-      return null;
-    }
-
-    if (permission == geo.LocationPermission.deniedForever) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Location permission is permanently denied. Enable it in app settings.',
-          ),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-      return null;
-    }
-
-    return geo.Geolocator.getCurrentPosition(
-      desiredAccuracy: geo.LocationAccuracy.high,
-      timeLimit: const Duration(seconds: 15),
-    );
-  }
-
-  Future<void> _recordLocatorEvent({
-    required geo.Position position,
-    required String queryType,
-  }) async {
-    try {
-      await http.post(
-        _assertValidKorlixBackendUri(
-          '$kKorlixBackendBaseUrl/api/location/record',
-        ),
-        headers: _authHeaders(),
-        body: jsonEncode({
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-          'accuracy': position.accuracy,
-          'feature': 'locator',
-          'query_type': queryType,
-          'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
-        }),
-      );
-    } catch (_) {
-      // Location recording should not block the locator feature.
-    }
-  }
-
-  String _cleanLocatorSearchText(String value) {
-    var text = value.trim();
-
-    text = text.replaceFirst(
-      RegExp(
-        r'^(find|show|locate|search|get)\s+(me\s+)?(a\s+|an\s+|the\s+)?',
-        caseSensitive: false,
-      ),
-      '',
-    );
-
-    text = text.replaceAll(
-      RegExp(r'\s+(near me|around me|nearby)$', caseSensitive: false),
-      '',
-    );
-
-    return text.trim().isEmpty ? value.trim() : text.trim();
-  }
-
-  Uri _buildLocatorMapUri({
-    required String searchText,
-    double? latitude,
-    double? longitude,
-  }) {
-    final cleanedSearchText = _cleanLocatorSearchText(searchText);
-    final encodedQuery = Uri.encodeQueryComponent(cleanedSearchText);
-
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-      final params = <String>['q=$encodedQuery'];
-
-      if (latitude != null && longitude != null) {
-        final coordinates =
-            '${latitude.toStringAsFixed(6)},${longitude.toStringAsFixed(6)}';
-
-        // Apple Maps search-near-location format.
-        // Do not use ll here, because ll can turn q into a pin label.
-        params.add('sll=$coordinates');
-        params.add('z=14');
-      }
-
-      return Uri.parse('http://maps.apple.com/?${params.join('&')}');
-    }
-
-    return Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=$encodedQuery',
-    );
-  }
-
-  Future<void> _openLocatorSearch({
-    required String queryType,
-    required String searchText,
-  }) async {
-    final position = await _getKorlixLocation();
-
-    if (position == null) {
-      return;
-    }
-
-    await _recordLocatorEvent(position: position, queryType: queryType);
-
-    final mapsUri = _buildLocatorMapUri(
-      searchText: searchText,
-      latitude: position.latitude,
-      longitude: position.longitude,
-    );
-
-    final launched = await launchUrl(
-      mapsUri,
-      mode: LaunchMode.externalApplication,
-    );
-
-    if (!launched && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open maps.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-    }
-  }
+  bool _locatorOpening = false;
 
   Future<void> _showLocatorOptions() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF071B27),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-      ),
-      builder: (context) {
-        Widget option({
-          required IconData icon,
-          required String title,
-          required String queryType,
-          required String searchText,
-        }) {
-          return ListTile(
-            leading: Icon(icon, color: const Color(0xFF69D9E8)),
-            title: Text(
-              title,
-              style: const TextStyle(
-                color: Color(0xFFE4EBEE),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            trailing: const Icon(
-              Icons.chevron_right_rounded,
-              color: Color(0xFFA9C6CF),
-            ),
-            onTap: () {
-              Navigator.of(context).pop();
-
-              _openLocatorSearch(queryType: queryType, searchText: searchText);
-            },
-          );
-        }
-
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 48,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFA9C6CF).withOpacity(0.45),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Locator',
-                  style: TextStyle(
-                    color: Color(0xFFE4EBEE),
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Choose what you want to find near your current location.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Color(0xFFA9C6CF),
-                    fontSize: 13.5,
-                    height: 1.35,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                option(
-                  icon: Icons.restaurant_rounded,
-                  title: 'Find me a restaurant',
-                  queryType: 'restaurant',
-                  searchText: 'restaurant',
-                ),
-                option(
-                  icon: Icons.local_gas_station_rounded,
-                  title: 'Find me a gas station',
-                  queryType: 'gas_station',
-                  searchText: 'gas station',
-                ),
-                option(
-                  icon: Icons.account_balance_outlined,
-                  title: 'Find me an ATM',
-                  queryType: 'atm',
-                  searchText: 'ATM',
-                ),
-                option(
-                  icon: Icons.church_rounded,
-                  title: 'Find me a church',
-                  queryType: 'church',
-                  searchText: 'church',
-                ),
-                option(
-                  icon: Icons.local_bar_rounded,
-                  title: 'Find me a bar',
-                  queryType: 'bar',
-                  searchText: 'bar',
-                ),
-                option(
-                  icon: Icons.local_police_rounded,
-                  title: 'Find me a police station',
-                  queryType: 'police_station',
-                  searchText: 'police station',
-                ),
-                option(
-                  icon: Icons.local_grocery_store_rounded,
-                  title: 'Find me a grocery store',
-                  queryType: 'grocery_or_supermarket',
-                  searchText: 'grocery store',
-                ),
-                option(
-                  icon: Icons.local_car_wash_rounded,
-                  title: 'Find me a car wash',
-                  queryType: 'car_wash',
-                  searchText: 'car wash',
-                ),
-                option(
-                  icon: Icons.tire_repair_rounded,
-                  title: 'Find me a tire shop',
-                  queryType: 'tire_shop',
-                  searchText: 'tire shop',
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+    if (_loading || _locatorOpening) return;
+    final email = kKorlixUserEmail;
+    bool current() => email != null && email == kKorlixUserEmail && kKorlixAccessToken != null;
+    if (!current()) return;
+    setState(() => _locatorOpening = true);
+    try {
+      await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => KorlixLocatorScreen(sessionChanges: kKorlixAuthRevision, isSessionCurrent: current),
+      ));
+    } finally {
+      if (mounted) setState(() => _locatorOpening = false);
+    }
   }
 
   Future<void> _openDonateCashApp() async {
