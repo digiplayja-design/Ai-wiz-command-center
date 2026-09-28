@@ -7,6 +7,7 @@ import 'social_design.dart';
 import 'social_forms.dart';
 import 'social_threads.dart';
 import 'social_call_screen.dart';
+import 'social_call_controller.dart';
 
 class SocialScreen extends StatefulWidget {
   const SocialScreen({super.key, required this.client});
@@ -144,6 +145,10 @@ class _SocialScreenState extends State<SocialScreen>
   }) async {
     if (_callOpen || !client.available || !mounted) return;
     _callOpen = true;
+    final media = SocialCallMedia();
+    // Unlock playback in the outgoing call button's gesture, before routing or
+    // authentication/network awaits. Incoming calls still wait for Answer.
+    if (incoming == null) unawaited(media.audio.activate());
     try {
       await Navigator.push(
         context,
@@ -153,10 +158,12 @@ class _SocialScreenState extends State<SocialScreen>
             peer: peer,
             video: video,
             incoming: incoming,
+            media: media,
           ),
         ),
       );
     } finally {
+      await media.close();
       _callOpen = false;
     }
   }

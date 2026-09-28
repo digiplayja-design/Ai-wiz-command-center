@@ -72,6 +72,36 @@ class SocialCallMedia extends ChangeNotifier {
   }
 
   rtc.RTCPeerConnection? _peer;
+  bool _checkingAudio = false, audioStatsAvailable = false;
+  int incomingAudioBytes = 0, outgoingAudioBytes = 0;
+  Future<void> checkAudio() async {
+    if (_closed || _peer == null || _checkingAudio) return;
+    _checkingAudio = true;
+    try {
+      final reports = await _peer!.getStats();
+      if (_closed) return;
+      var incoming = 0, outgoing = 0;
+      for (final report in reports) {
+        final v = report.values;
+        if ((v['kind'] ?? v['mediaType']) != 'audio') continue;
+        if (report.type == 'inbound-rtp') {
+          incoming += (v['bytesReceived'] as num?)?.toInt() ?? 0;
+        }
+        if (report.type == 'outbound-rtp') {
+          outgoing += (v['bytesSent'] as num?)?.toInt() ?? 0;
+        }
+      }
+      audioStatsAvailable = true;
+      incomingAudioBytes = incoming;
+      outgoingAudioBytes = outgoing;
+      notifyListeners();
+    } catch (_) {
+      /* Some browsers do not expose audio statistics. */
+    } finally {
+      _checkingAudio = false;
+    }
+  }
+
   rtc.MediaStream? _stream;
   Future<void>? _rendererInit;
   bool _closed = false, ready = false;
@@ -136,6 +166,8 @@ class SocialCallMedia extends ChangeNotifier {
         }
       });
     };
+    await audio.prepareCapture();
+    if (_closed) return;
     final stream = await io.capture(video);
     if (_closed) {
       await _releaseStream(stream);
@@ -368,6 +400,7 @@ class SocialCallController extends ChangeNotifier {
           DateTime.now().difference(_disconnectedAt!).inSeconds > 15) {
         unawaited(end('The connection was interrupted. Please call again.'));
       }
+      if (connected && elapsed.inSeconds.isEven) unawaited(media.checkAudio());
       _notify();
     });
     if (incoming) {
@@ -431,6 +464,7 @@ class SocialCallController extends ChangeNotifier {
     if (!incoming || busy || ended || _answerStarted || state != 'ringing') {
       return;
     }
+    unawaited(media.audio.activate());
     _answerStarted = true;
     busy = true;
     status =
@@ -455,6 +489,7 @@ class SocialCallController extends ChangeNotifier {
     if (ended || call.isEmpty) return;
     if (_acceptedAt != null && call['state'] == 'ringing') return;
     state = call['state'] ?? state;
+    unawaited(media.audio.setRinging(state == 'ringing' && !incoming));
     if (!['ringing', 'accepted'].contains(state)) {
       unawaited(
         end(
@@ -613,6 +648,7 @@ class SocialCallController extends ChangeNotifier {
   Future<void> end(String message, {bool notifyServer = true}) async {
     if (ended) return;
     ended = true;
+    unawaited(media.audio.setRinging(false));
     busy = false;
     connected = false;
     status = message;

@@ -81,6 +81,7 @@ class _SocialCallScreenState extends State<SocialCallScreen>
         children: [
           IconButton.filledTonal(
             tooltip: label,
+            isSelected: selected,
             onPressed: action,
             style: IconButton.styleFrom(
               minimumSize: const Size(58, 58),
@@ -115,7 +116,20 @@ class _SocialCallScreenState extends State<SocialCallScreen>
     );
   }
 
+  bool _soundPanelOpen = false;
+  void _speakerPressed() {
+    final a = call.media.audio;
+    if (a.canRouteSpeaker) {
+      unawaited(a.routeSpeaker(!a.speaker));
+      unawaited(a.resume());
+    } else {
+      _speaker();
+    }
+  }
+
   void _speaker() {
+    if (_soundPanelOpen) return;
+    setState(() => _soundPanelOpen = true);
     // Keep this invocation inside the tap, before opening an asynchronous sheet.
     unawaited(call.media.audio.resume());
     showModalBottomSheet<void>(
@@ -163,6 +177,8 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                         ? 'This call has ended.'
                         : a.blocked
                         ? 'Your browser needs a tap to play the call.'
+                        : a.selected
+                        ? 'Sound enabled · using your device’s audio output.'
                         : 'Control how you hear the other person.',
                     style: TextStyle(color: s.mutedText, height: 1.5),
                   ),
@@ -171,6 +187,38 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                     label: 'Resume sound',
                     icon: Icons.volume_up_rounded,
                     onPressed: call.ended ? null : () => unawaited(a.resume()),
+                  ),
+                  if (a.canTestSound) ...[
+                    const SizedBox(height: 12),
+                    KorlixActionButton(
+                      label: a.testing ? 'Playing test sound…' : 'Test sound',
+                      icon: Icons.music_note_rounded,
+                      onPressed: call.ended || a.testing
+                          ? null
+                          : () => unawaited(a.testSound()),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Plays three tones on your device to check sound. This does not call anyone.',
+                      style: TextStyle(
+                        color: s.mutedText,
+                        fontSize: 12,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  Text(
+                    call.state == 'ringing'
+                        ? 'Waiting for the other person to answer. You will hear their voice after they answer and the call connects.'
+                        : !call.connected
+                        ? 'Connecting the call…'
+                        : !call.media.audioStatsAvailable
+                        ? 'Connected · tap Test sound if you cannot hear them.'
+                        : call.media.incomingAudioBytes > 0
+                        ? 'Incoming audio received · check your volume and output if it is silent.'
+                        : 'Connected, but no incoming audio has arrived yet. Ask the other person to check their microphone.',
+                    style: TextStyle(color: s.mutedText, height: 1.4),
                   ),
                   if (a.canRouteSpeaker)
                     SwitchListTile.adaptive(
@@ -241,7 +289,9 @@ class _SocialCallScreenState extends State<SocialCallScreen>
           );
         },
       ),
-    );
+    ).whenComplete(() {
+      if (mounted) setState(() => _soundPanelOpen = false);
+    });
   }
 
   @override
@@ -486,8 +536,8 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                           _control(
                             'Speaker',
                             Icons.volume_up_rounded,
-                            m.ready ? _speaker : null,
-                            selected: m.audio.speaker,
+                            m.ready ? _speakerPressed : null,
+                            selected: _soundPanelOpen || m.audio.selected,
                           ),
                           if (widget.video)
                             _control(
@@ -506,6 +556,19 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                           ),
                         ],
                       ),
+                    if (!call.ended && m.ready && !incoming) ...[
+                      const SizedBox(height: 10),
+                      TextButton.icon(
+                        icon: const Icon(Icons.tune_rounded, size: 18),
+                        label: const Text('Sound settings & test'),
+                        onPressed: _speaker,
+                      ),
+                      if (call.state == 'ringing')
+                        Text(
+                          'Waiting for an answer',
+                          style: TextStyle(color: s.mutedText, fontSize: 13),
+                        ),
+                    ],
                     if (!call.ended && m.audio.blocked)
                       Padding(
                         padding: const EdgeInsets.only(top: 16),

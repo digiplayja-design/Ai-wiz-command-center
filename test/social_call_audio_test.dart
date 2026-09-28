@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:ai_wiz_command_center/social/social_audio_output.dart';
+import 'package:ai_wiz_command_center/social/social_call_tones.dart';
 import 'package:ai_wiz_command_center/social/social_call_controller.dart';
 import 'package:ai_wiz_command_center/social/social_call_screen.dart';
 import 'social_calls_test.dart' as calls;
@@ -99,6 +101,10 @@ class Peer implements rtc.RTCPeerConnection {
   Function(rtc.RTCPeerConnectionState)? onConnectionState;
   final sent = <rtc.MediaStreamTrack>[];
   bool closed = false;
+  List<rtc.StatsReport> reports = [];
+  @override
+  Future<List<rtc.StatsReport>> getStats([rtc.MediaStreamTrack? track]) async =>
+      reports;
   @override
   Future<rtc.RTCRtpSender> addTrack(
     rtc.MediaStreamTrack t, [
@@ -122,9 +128,34 @@ class Peer implements rtc.RTCPeerConnection {
 class Audio extends SocialAudioOutput {
   rtc.MediaStream? received;
   int resumes = 0;
-  bool deny = false;
+  bool deny = false, native = false;
+  int tests = 0, activations = 0;
+  final ringChanges = <bool>[];
   @override
-  bool get canRouteSpeaker => true;
+  bool get canRouteSpeaker => native;
+  @override
+  bool get canTestSound => true;
+  @override
+  Future<void> activate() async {
+    activations++;
+    activated = true;
+    changed();
+  }
+
+  @override
+  Future<void> setRinging(bool value) async {
+    if (ringing == value) return;
+    ringing = value;
+    ringChanges.add(value);
+  }
+
+  @override
+  Future<void> testSound() async {
+    tests++;
+    activated = true;
+    changed();
+  }
+
   @override
   String get guidance => 'Use your device’s volume buttons to listen louder.';
   @override
@@ -139,7 +170,7 @@ class Audio extends SocialAudioOutput {
     if (closed) return;
     resumes++;
     blocked = deny;
-    playing = !deny;
+    playing = activated = !deny;
     changed();
   }
 
@@ -266,6 +297,169 @@ void main() {
       expect(media.ready, false);
     },
   );
+  test(
+    'ringback stops on answer and on hangup; incoming never rings back',
+    () async {
+      final store = calls.CallStore(),
+          client = store.client('caller'),
+          audio = Audio();
+      final c = SocialCallController(
+        client: client,
+        peer: social.peer,
+        video: false,
+        media: calls.FakeMedia(audio: audio),
+      );
+      await c.initialize();
+      expect(audio.ringChanges, [true]);
+      await c.poll();
+      expect(audio.ringChanges, [true]);
+      store.state = 'accepted';
+      await c.poll();
+      expect(audio.ringChanges, [true, false]);
+      await c.end('done');
+      c.dispose();
+      client.dispose();
+      final second = calls.CallStore(),
+          secondClient = second.client('caller'),
+          secondAudio = Audio();
+      final d = SocialCallController(
+        client: secondClient,
+        peer: social.peer,
+        video: false,
+        media: calls.FakeMedia(audio: secondAudio),
+      );
+      await d.initialize();
+      await d.end('cancel');
+      expect(secondAudio.ringChanges, [true, false]);
+      d.dispose();
+      secondClient.dispose();
+      final third = calls.CallStore(),
+          thirdClient = third.client('callee'),
+          thirdAudio = Audio();
+      final e = SocialCallController(
+        client: thirdClient,
+        peer: social.peer,
+        video: false,
+        incoming: {'id': 'incoming', 'state': 'ringing'},
+        media: calls.FakeMedia(audio: thirdAudio),
+      );
+      await e.initialize();
+      expect(thirdAudio.activations, 0);
+      await e.accept();
+      expect(thirdAudio.activations, 1);
+      expect(thirdAudio.ringChanges, isEmpty);
+      await e.end('done');
+      e.dispose();
+      thirdClient.dispose();
+    },
+  );
+  test(
+    'audio diagnostics use received audio bytes, not video or track presence',
+    () async {
+      final io = Io();
+      final m = SocialCallMedia(io: io, audio: Audio());
+      await m.open(false, []);
+      io.connection.reports = [
+        rtc.StatsReport('v', 'inbound-rtp', 0, {
+          'kind': 'video',
+          'bytesReceived': 9999,
+        }),
+        rtc.StatsReport('a', 'inbound-rtp', 0, {
+          'kind': 'audio',
+          'bytesReceived': 0,
+        }),
+        rtc.StatsReport('s', 'outbound-rtp', 0, {
+          'kind': 'audio',
+          'bytesSent': 123,
+        }),
+      ];
+      await m.checkAudio();
+      expect(m.audioStatsAvailable, true);
+      expect(m.incomingAudioBytes, 0);
+      expect(m.outgoingAudioBytes, 123);
+      io.connection.reports.add(
+        rtc.StatsReport('a2', 'inbound-rtp', 0, {
+          'mediaType': 'audio',
+          'bytesReceived': 456,
+        }),
+      );
+      await m.checkAudio();
+      expect(m.incomingAudioBytes, 456);
+      await m.close();
+    },
+  );
+  test(
+    'local WAV tones have audible samples, quiet gaps, and a bounded level',
+    () {
+      final bytes = socialCallTone(ringing: true),
+          data = ByteData.sublistView(bytes);
+      expect(String.fromCharCodes(bytes.sublist(0, 4)), 'RIFF');
+      expect(data.getUint32(24, Endian.little), 8000);
+      expect(data.getUint32(40, Endian.little), bytes.length - 44);
+      expect(
+        [
+          for (var i = 44; i < 44 + 16000; i += 2)
+            data.getInt16(i, Endian.little),
+        ].any((v) => v.abs() > 1000),
+        true,
+      );
+      expect(
+        [
+          for (var i = 44 + 32000; i < bytes.length; i += 2)
+            data.getInt16(i, Endian.little),
+        ].every((v) => v == 0),
+        true,
+      );
+      expect(
+        [
+          for (var i = 44; i < bytes.length; i += 2)
+            data.getInt16(i, Endian.little),
+        ].every((v) => v.abs() <= 6500),
+        true,
+      );
+      expect(
+        socialCallTone(silent: true).sublist(44).every((v) => v == 0),
+        true,
+      );
+    },
+  );
+  testWidgets('native Speaker button selects and deselects the actual route', (
+    t,
+  ) async {
+    final store = calls.CallStore(),
+        client = store.client('caller'),
+        audio = Audio()..native = true;
+    await social.mount(
+      t,
+      SocialCallScreen(
+        client: client,
+        peer: social.peer,
+        video: false,
+        media: calls.FakeMedia(audio: audio),
+      ),
+    );
+    await t.pumpAndSettle();
+    final speaker = find.byTooltip('Speaker');
+    await calls.reveal(t, speaker);
+    await t.tap(speaker);
+    await t.pumpAndSettle();
+    expect(audio.speaker, true);
+    expect(
+      t
+          .widget<IconButton>(
+            find.byWidgetPredicate(
+              (w) => w is IconButton && w.tooltip == 'Speaker',
+            ),
+          )
+          .isSelected,
+      true,
+    );
+    await t.tap(speaker);
+    await t.pumpAndSettle();
+    expect(audio.speaker, false);
+    await t.pumpWidget(const SizedBox());
+    client.dispose();
+  });
   for (final width in [320.0, 390.0, 1280.0]) {
     testWidgets('Speaker and blocked sound recovery work at $width', (t) async {
       final store = calls.CallStore(), client = store.client('caller');
@@ -300,9 +494,27 @@ void main() {
       expect(find.text('Resume sound'), findsOneWidget);
       expect(t.takeException(), isNull);
       await fixtures.capture(t, 'social-speaker-panel-${width.toInt()}');
-      await t.tap(find.byType(SwitchListTile));
+      expect(
+        t
+            .widget<IconButton>(
+              find.byWidgetPredicate(
+                (w) => w is IconButton && w.tooltip == 'Speaker',
+              ),
+            )
+            .isSelected,
+        true,
+      );
+      expect(
+        find.byType(SwitchListTile),
+        findsNothing,
+        reason: 'Browsers must not show a fake hardware route switch',
+      );
+      final testSound = find.text('Test sound');
+      await calls.reveal(t, testSound);
+      await t.tap(testSound);
       await t.pumpAndSettle();
-      expect(audio.speaker, true);
+      expect(audio.tests, 1);
+      expect(audio.activated, true);
       await t.tap(find.byTooltip('Close sound controls'));
       await t.pumpAndSettle();
       await t.pumpWidget(const SizedBox());
