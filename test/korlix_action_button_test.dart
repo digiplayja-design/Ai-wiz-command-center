@@ -6,9 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ai_wiz_command_center/camera_ask/camera_ask_screen.dart';
 import 'package:ai_wiz_command_center/chat/chat_workspace.dart';
 import 'package:ai_wiz_command_center/theme/korlix_action_button.dart';
+import 'package:ai_wiz_command_center/theme/korlix_action_grid.dart';
 import 'package:ai_wiz_command_center/theme/korlix_theme.dart';
 
 Widget app(
@@ -224,7 +224,7 @@ void main() {
       ('pure_white', 390.0),
       ('korlix_blue', 1000.0),
     ]) {
-      tester.view.physicalSize = Size(review.$2, review.$2 > 500 ? 820 : 1240);
+      tester.view.physicalSize = Size(review.$2, 2700);
       final boundary = GlobalKey();
       await tester.pumpWidget(
         app(
@@ -311,64 +311,79 @@ class _ButtonReview extends StatelessWidget {
       const SizedBox(height: 18),
       KorlixLiveConvoButton(onPressed: () {}),
       const SizedBox(height: 18),
-      Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        alignment: WrapAlignment.center,
+      KorlixActionSection(
+        title: 'Start here',
+        description: 'Choose how you want to work with K-Nova.',
+        icon: Icons.tune_rounded,
         children: [
-          KorlixActionButton(
-            label: 'Upload',
-            icon: Icons.attach_file_rounded,
-            onPressed: () {},
-          ),
-          CameraAskLaunchButton(onPressed: () {}),
-          KorlixActionButton(
-            label: 'Voice',
-            icon: Icons.mic_rounded,
-            onPressed: () {},
-          ),
-          KorlixActionButton(
-            label: 'Locator',
-            icon: Icons.location_on_outlined,
-            onPressed: () {},
-          ),
-          KorlixActionButton(
-            label: 'Music Studio',
-            icon: Icons.library_music_rounded,
-            accent: korlixSkinOf(context).secondary,
-            onPressed: () {},
-          ),
-          KorlixActionButton(
-            label: 'Utility',
-            icon: Icons.build_circle_outlined,
-            onPressed: () {},
-          ),
-        ],
-      ),
-      const SizedBox(height: 22),
-      Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        alignment: WrapAlignment.center,
-        children: [
-          for (final tool in [
-            'Tax Prep',
-            'BabyBlend',
-            'FieldProof',
-            'AI Visibility',
-            'Contract Radar',
-            'Virtual Closet',
-            'Create an App',
-            'Improve my picture',
+          for (final entry in [
+            ('Upload', 'Files & photos', Icons.upload_file_rounded),
+            ('Voice', 'Speak or type', Icons.mic_rounded),
+            (
+              'Camera Ask',
+              'See it. Ask it.',
+              Icons.center_focus_strong_rounded,
+            ),
+            ('More tools', 'Open the toolbox', Icons.apps_rounded),
           ])
             KorlixActionButton(
-              label: tool,
-              icon: korlixToolIcon(tool),
-              size: KorlixButtonSize.compact,
+              label: entry.$1,
+              subtitle: entry.$2,
+              icon: entry.$3,
+              tile: true,
               onPressed: () {},
             ),
         ],
       ),
+      const SizedBox(height: 30),
+      for (final section in [
+        (
+          'For business',
+          'Manage operations, grow your reach, and get work done.',
+          Icons.business_center_outlined,
+          [
+            'Inventory Studio',
+            'Bookkeeping 2027',
+            'FieldProof',
+            'AI Visibility',
+            'Contract Radar',
+            'Workforce',
+            'Email enhancer',
+            'Create an App',
+          ],
+        ),
+        (
+          'For personal use',
+          'Create, learn, organize, and explore your everyday life.',
+          Icons.person_outline_rounded,
+          [
+            'Tax Prep',
+            'BabyBlend',
+            'Virtual Closet',
+            'Cybersecurity Defender',
+            'Improve my picture',
+            'Study / learn',
+            'Music Studio',
+            'Locator',
+          ],
+        ),
+      ]) ...[
+        KorlixActionSection(
+          title: section.$1,
+          description: section.$2,
+          icon: section.$3,
+          children: [
+            for (final tool in section.$4)
+              KorlixActionButton(
+                label: tool,
+                icon: korlixToolIcon(tool),
+                tile: true,
+                onPressed: () {},
+              ),
+          ],
+        ),
+        const SizedBox(height: 30),
+      ],
     ],
   );
 }

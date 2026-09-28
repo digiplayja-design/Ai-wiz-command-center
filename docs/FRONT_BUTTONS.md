@@ -11,6 +11,16 @@ Voice, Locator, Music Studio, Utility and its tools, quick actions and older
 conversation-result actions. Existing callbacks, access gates and busy states
 remain connected to their original handlers.
 
+Home shortcuts now use `KorlixActionGrid` with exactly two equally sized tiles
+per row, including the final incomplete row. Shared Upload, Voice, Camera Ask
+and More tools controls appear under Start here. Operations and growth tools
+are grouped under For business; everyday creative, learning and personal
+tools are under For personal use. Enterprise-only entries keep their existing
+visibility and access checks. Grid height expands for accessibility text sizes.
+
+Upload and Voice open reviewable input studios described in
+`docs/HOME_INPUT_STUDIOS.md`.
+
 - Colors derive from the selected KORLIX palette, including Pure White and
   Pure Black. Text is painted above the decorative surface.
 - Native `TextButton` handles pointer, keyboard, focus and disabled behavior.

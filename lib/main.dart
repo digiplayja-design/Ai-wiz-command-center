@@ -13,6 +13,10 @@ import 'music_studio/music_studio_screen.dart';
 import 'chat/chat_workspace.dart';
 import 'theme/korlix_theme.dart';
 import 'theme/korlix_action_button.dart';
+import 'theme/korlix_action_grid.dart';
+import 'auth/korlix_welcome_confirmation.dart';
+import 'input_tools/upload_studio.dart';
+import 'input_tools/voice_composer.dart';
 import 'theme/korlix_theme_picker.dart';
 import 'theme/korlix_screen_skin.dart';
 import 'theme/korlix_appearance_preferences.dart';
@@ -795,8 +799,9 @@ class _AuthGateState extends State<AuthGate> {
 
 class AuthScreen extends StatefulWidget {
   final Future<void> Function(KorlixAuthSession) onSignedIn;
+  final http.Client? client;
 
-  const AuthScreen({super.key, required this.onSignedIn});
+  const AuthScreen({super.key, required this.onSignedIn, this.client});
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -811,6 +816,7 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _resetLoading = false;
   bool _showForgotPassword = false;
   String? _message;
+  String? _confirmationEmail;
   String? _error;
 
   @override
@@ -892,6 +898,8 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _submit() async {
+    if (_loading || _resetLoading) return;
+    final signingUp = _isSignUp;
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
@@ -922,13 +930,15 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       await KorlixDeviceStore.ensureLoaded();
-      final path = _isSignUp ? '/api/auth/signup' : '/api/auth/signin';
+      final path = signingUp ? '/api/auth/signup' : '/api/auth/signin';
 
-      final response = await http.post(
+      final post = widget.client?.post ?? http.post;
+      final response = await post(
         Uri.parse('$kKorlixBackendBaseUrl$path'),
         headers: const {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'password': password}),
-      );
+      ).timeout(const Duration(seconds: 30));
+      if (!mounted) return;
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
 
@@ -939,10 +949,11 @@ class _AuthScreenState extends State<AuthScreen> {
       final session = data['session'] as Map<String, dynamic>?;
 
       if (session == null || session['access_token'] == null) {
+        if (!signingUp) throw Exception('Sign-in did not return a session. Please try again.');
+        _passwordController.clear();
         setState(() {
-          _message =
-              data['message']?.toString() ??
-              'Account created. Check your email to confirm your account, then sign in.';
+          _confirmationEmail = email;
+          _message = null;
           _isSignUp = false;
         });
         return;
@@ -956,10 +967,17 @@ class _AuthScreenState extends State<AuthScreen> {
         ),
       );
     } catch (error) {
+      if (!mounted) return;
       final cleanedError = _cleanError(error);
 
       setState(() {
-        _error = cleanedError;
+        final lower = cleanedError.toLowerCase();
+        final unconfirmed = lower.contains('email not confirmed') || lower.contains('email_not_confirmed');
+        if (unconfirmed) {
+          _confirmationEmail = email;
+          _passwordController.clear();
+        }
+        _error = unconfirmed ? null : cleanedError;
         _showForgotPassword =
             !_isSignUp && _shouldOfferPasswordReset(cleanedError);
       });
@@ -974,6 +992,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final skin = korlixSkinOf(context);
     final title = _isSignUp
         ? 'Create your Korlix AI account'
         : 'Sign in to Korlix AI';
@@ -998,7 +1017,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.34),
+                    color: skin.panel,
                     borderRadius: BorderRadius.circular(28),
                     border: Border.all(
                       color: const Color(0xFF2EC7DF).withOpacity(0.38),
@@ -1011,7 +1030,13 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                     ],
                   ),
-                  child: Column(
+                  child: _confirmationEmail != null
+                    ? KorlixWelcomeConfirmation(
+                        email: _confirmationEmail!,
+                        onSignIn: () => setState(() { _confirmationEmail = null; _isSignUp = false; }),
+                        onChangeEmail: () => setState(() { _confirmationEmail = null; _isSignUp = true; _emailController.clear(); _passwordController.clear(); }),
+                      )
+                    : Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Image.asset(
@@ -1020,23 +1045,23 @@ class _AuthScreenState extends State<AuthScreen> {
                         fit: BoxFit.contain,
                       ),
                       const SizedBox(height: 14),
-                      const Text(
+                      Text(
                         'KORLIX AI',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 36,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 4,
-                          color: Color(0xFFE4EBEE),
+                          color: skin.text,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         title,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 18,
-                          color: Color(0xFFA9C6CF),
+                          color: skin.mutedText,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -1044,12 +1069,12 @@ class _AuthScreenState extends State<AuthScreen> {
                       TextField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
-                        style: const TextStyle(color: Color(0xFFE4EBEE)),
+                        style: TextStyle(color: skin.text),
                         decoration: InputDecoration(
                           labelText: 'Email',
-                          labelStyle: const TextStyle(color: Color(0xFFA9C6CF)),
+                          labelStyle: TextStyle(color: skin.mutedText),
                           filled: true,
-                          fillColor: const Color(0xFF071B27).withOpacity(0.86),
+                          fillColor: skin.inputFill,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
@@ -1059,12 +1084,12 @@ class _AuthScreenState extends State<AuthScreen> {
                       TextField(
                         controller: _passwordController,
                         obscureText: true,
-                        style: const TextStyle(color: Color(0xFFE4EBEE)),
+                        style: TextStyle(color: skin.text),
                         decoration: InputDecoration(
                           labelText: 'Password',
-                          labelStyle: const TextStyle(color: Color(0xFFA9C6CF)),
+                          labelStyle: TextStyle(color: skin.mutedText),
                           filled: true,
-                          fillColor: const Color(0xFF071B27).withOpacity(0.86),
+                          fillColor: skin.inputFill,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
@@ -1075,7 +1100,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         Text(
                           _error!,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.redAccent),
+                          style: TextStyle(color: Colors.redAccent),
                         ),
                       ],
                       if (!_isSignUp && _showForgotPassword) ...[
@@ -1085,12 +1110,12 @@ class _AuthScreenState extends State<AuthScreen> {
                               ? null
                               : _requestPasswordReset,
                           icon: _resetLoading
-                              ? const SizedBox(
+                              ? SizedBox(
                                   width: 16,
                                   height: 16,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: Color(0xFF69D9E8),
+                                    color: skin.primary,
                                   ),
                                 )
                               : const Icon(Icons.lock_reset_rounded, size: 18),
@@ -1109,7 +1134,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         Text(
                           _message!,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: Color(0xFF69D9E8)),
+                          style: TextStyle(color: skin.primary),
                         ),
                       ],
                       const SizedBox(height: 20),
@@ -1126,17 +1151,17 @@ class _AuthScreenState extends State<AuthScreen> {
                             ),
                           ),
                           child: _loading
-                              ? const SizedBox(
+                              ? SizedBox(
                                   width: 22,
                                   height: 22,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: Color(0xFFE4EBEE),
+                                    color: skin.text,
                                   ),
                                 )
                               : Text(
                                   buttonText,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 17,
                                     fontWeight: FontWeight.w800,
                                   ),
@@ -1159,7 +1184,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           _isSignUp
                               ? 'Already have an account? Sign in'
                               : 'New here? Create account',
-                          style: const TextStyle(color: Color(0xFF69D9E8)),
+                          style: TextStyle(color: skin.primary),
                         ),
                       ),
                     ],
@@ -5190,6 +5215,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
 
   bool _createAppMode = false;
   bool _voiceListening = false;
+  bool _uploadOpening = false;
+  bool _voiceComposerOpening = false;
   fp.PlatformFile? _pickedUploadFile;
   final List<fp.PlatformFile> _pickedUploadFiles = <fp.PlatformFile>[];
   bool _loadingTier = false;
@@ -5592,126 +5619,16 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
 
   Widget _buildSelectedUploadFilesPanel() {
     final files = _activeUploadFiles;
-
-    if (files.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(top: 12, bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.18),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF2EC7DF).withOpacity(0.42)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Icon(
-                files.length == 1
-                    ? Icons.attach_file_rounded
-                    : Icons.file_copy_rounded,
-                color: const Color(0xFF69D9E8),
-                size: 18,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  files.length == 1
-                      ? '1 file attached'
-                      : '${files.length} files attached',
-                  style: const TextStyle(
-                    color: Color(0xFFE4EBEE),
-                    fontWeight: FontWeight.w900,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: _clearPickedUploadFiles,
-                icon: const Icon(Icons.delete_sweep_rounded, size: 16),
-                label: const Text('Clear all'),
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.redAccent,
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ...files.asMap().entries.map((entry) {
-            final index = entry.key;
-            final file = entry.value;
-            final sizeLabel = _formatUploadFileSize(file.size);
-
-            return Container(
-              margin: EdgeInsets.only(top: index == 0 ? 0 : 8),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-              decoration: BoxDecoration(
-                color: const Color(0xFF071B27).withOpacity(0.92),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: const Color(0xFF69D9E8).withOpacity(0.25),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    _mimeTypeForPickedFile(file).startsWith('image/')
-                        ? Icons.image_rounded
-                        : Icons.description_rounded,
-                    color: const Color(0xFF69D9E8),
-                    size: 18,
-                  ),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          file.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFFE4EBEE),
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12.5,
-                          ),
-                        ),
-                        if (sizeLabel.isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            sizeLabel,
-                            style: const TextStyle(
-                              color: Colors.white54,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Remove this file',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => _removePickedUploadFileAt(index),
-                    icon: const Icon(
-                      Icons.close_rounded,
-                      color: Colors.white70,
-                      size: 20,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
+    final skin = korlixSkinOf(context);
+    if (files.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(children: [
+        Expanded(child: Text('${files.length} ${files.length == 1 ? 'file' : 'files'} attached', style: TextStyle(color: skin.text, fontWeight: FontWeight.w700))),
+        TextButton(onPressed: _loading ? null : _handleUploadPressed, child: const Text('Manage')),
+        IconButton(tooltip: 'Clear all attachments', onPressed: _loading ? null : _clearPickedUploadFiles, icon: const Icon(Icons.delete_sweep_outlined)),
+      ]),
+      for (var i = 0; i < files.length; i++) Padding(padding: const EdgeInsets.only(bottom: 8), child: KorlixUploadFileCard(file: files[i], onRemove: _loading ? null : () => _removePickedUploadFileAt(i))),
+    ]);
   }
 
   void _clearPickedUploadFiles() {
@@ -5772,89 +5689,6 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     );
   }
 
-  Future<String?> _showIosUploadSourceSheet() async {
-    return showModalBottomSheet<String>(
-      context: context,
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Photo Library'),
-                subtitle: const Text(
-                  'Choose a picture from your iPhone photos',
-                ),
-                onTap: () => Navigator.of(sheetContext).pop('photos'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.insert_drive_file_outlined),
-                title: const Text('Files'),
-                subtitle: const Text(
-                  'Choose documents, PDFs, CSV, or other files',
-                ),
-                onTap: () => Navigator.of(sheetContext).pop('files'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.close),
-                title: const Text('Cancel'),
-                onTap: () => Navigator.of(sheetContext).pop(null),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _pickSinglePhotoFromIosLibrary() async {
-    try {
-      final pickedImage = await ip.ImagePicker().pickImage(
-        source: ip.ImageSource.gallery,
-        requestFullMetadata: false,
-        imageQuality: 95,
-      );
-
-      if (pickedImage == null) {
-        return;
-      }
-
-      final bytes = await pickedImage.readAsBytes();
-      final fallbackName = pickedImage.name.trim().isNotEmpty
-          ? pickedImage.name.trim()
-          : 'korlix-photo.jpg';
-
-      final platformFile = fp.PlatformFile(
-        name: fallbackName,
-        size: bytes.length,
-        bytes: bytes,
-        path: pickedImage.path,
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _error = null;
-        _pickedUploadFile = platformFile;
-        _pickedUploadFiles
-          ..clear()
-          ..add(platformFile);
-      });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _error =
-            'Could not open your photo library. Please try again or choose Files.';
-      });
-    }
-  }
-
   // KORLIX_CAMERA_ASK_STUDIO
   bool _cameraAskOpening = false;
   Future<void> _capturePhotoAndAskShortcut() async {
@@ -5890,91 +5724,26 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
 
 
   Future<void> _handleUploadPressed() async {
-    if (Theme.of(context).platform == TargetPlatform.iOS) {
-      final source = await _showIosUploadSourceSheet();
-
-      if (source == 'photos') {
-        await _pickSinglePhotoFromIosLibrary();
-        return;
-      }
-
-      if (source == null) {
-        return;
-      }
-    }
-
+    if (_loading || _uploadOpening) return;
+    final email = kKorlixUserEmail;
+    final topic = _activeChatTopicId;
+    bool current() => email != null && email == kKorlixUserEmail && kKorlixAccessToken != null;
+    if (!current()) return;
+    setState(() => _uploadOpening = true);
     try {
-      final result = await fp.FilePicker.platform.pickFiles(
-        allowMultiple: true,
-        withData: true,
-        type: fp.FileType.custom,
-        allowedExtensions: const [
-          'jpg',
-          'jpeg',
-          'png',
-          'webp',
-          'pdf',
-          'txt',
-          'md',
-          'csv',
-          'doc',
-          'docx',
-          'xls',
-          'xlsx',
-          'ppt',
-          'pptx',
-        ],
-      );
-
-      if (result == null || result.files.isEmpty) {
-        return;
-      }
-
-      final selectedFiles = result.files
-          .where((file) => file.bytes != null && file.bytes!.isNotEmpty)
-          .toList();
-
-      if (selectedFiles.isEmpty) {
-        setState(() {
-          _error = 'Could not read the selected file. Try again.';
-        });
-        return;
-      }
-
-      const maxFiles = 8;
-
-      if (selectedFiles.length > maxFiles) {
-        setState(() {
-          _error = 'You can upload up to $maxFiles files at once.';
-        });
-        return;
-      }
-
-      final unsupported = selectedFiles
-          .where((file) => !_isSupportedMultiUploadName(file.name))
-          .map((file) => file.name)
-          .toList();
-
-      if (unsupported.isNotEmpty) {
-        setState(() {
-          _error =
-              'Unsupported file type: ${unsupported.join(', ')}. Use image, PDF, TXT, CSV, DOCX, XLSX, or PPTX files.';
-        });
-        return;
-      }
-
+      final draft = await Navigator.of(context).push<KorlixUploadDraft>(MaterialPageRoute(
+        builder: (_) => KorlixUploadStudio(initialFiles: _activeUploadFiles,
+          initialPrompt: _controller.text, sessionChanges: kKorlixAuthRevision,
+          isSessionCurrent: current),
+      ));
+      if (!mounted || !current() || topic != _activeChatTopicId || draft == null) return;
       setState(() {
-        _pickedUploadFile = selectedFiles.first;
-        _pickedUploadFiles
-          ..clear()
-          ..addAll(selectedFiles);
+        _pickedUploadFiles..clear()..addAll(draft.files);
+        _pickedUploadFile = draft.files.isEmpty ? null : draft.files.first;
+        _controller.value = TextEditingValue(text: draft.prompt, selection: TextSelection.collapsed(offset: draft.prompt.length));
         _error = null;
       });
-    } catch (error) {
-      setState(() {
-        _error = korlixFriendlyErrorMessage(error);
-      });
-    }
+    } finally { if (mounted) setState(() => _uploadOpening = false); }
   }
 
   void _clearPickedUploadFile() {
@@ -9188,7 +8957,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     );
   }
 
-  Widget _buildSafeUiQuickActionChip(QuickAction action) {
+  Widget _buildSafeUiQuickActionChip(QuickAction action, {bool tile = false}) {
     // KORLIX_BUILD113_FIX_CREDIT_TOGGLE_BEGIN
     if (_isCreditReportActionSafeUi(action)) {
       final fixCreditSkin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
@@ -9280,6 +9049,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         : null;
 
     return KorlixActionButton(
+      tile: tile,
       label: label,
       icon: icon ?? korlixToolIcon(label),
       onPressed: _loading ? null : () => _useQuickAction(action),
@@ -12328,9 +12098,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
             ),
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          KorlixActionGrid(
             children: _utilityTools.where((tool) => !['Contacts CRM', 'Funnel Studio'].contains(tool) || _currentTier.trim().toLowerCase() == 'enterprise').map((tool) {
               final selected = selectedTool == tool;
               final status = statusFor(tool);
@@ -12339,6 +12107,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
               return Tooltip(
                 message: status,
                 child: KorlixActionButton(
+                  tile: true,
                   label: tool,
                   icon: korlixToolIcon(tool),
                   selected: selected,
@@ -12398,105 +12167,23 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   Future<void> _handleVoiceInput() async {
-    await _loadCurrentTier();
-
-    if (!_hasVoiceAccess) {
-      await _showPremiumFeaturePrompt(
-        title: 'Voice Input',
-        availability: 'Pro, Ultra Premium, Enterprise',
-        description:
-            'Speak your request instead of typing. Voice input is available for Pro and higher tiers.',
-      );
-      return;
-    }
-
-    if (_voiceListening) {
-      await _speechToText.stop();
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _voiceListening = false;
-      });
-
-      return;
-    }
-
+    if (_loading || _voiceComposerOpening) return;
+    final email = kKorlixUserEmail;
+    final topic = _activeChatTopicId;
+    bool current() => email != null && email == kKorlixUserEmail && kKorlixAccessToken != null;
+    if (!current()) return;
+    setState(() => _voiceComposerOpening = true);
     try {
-      final available = await _speechToText.initialize(
-        onStatus: (status) {
-          if (status == 'done' || status == 'notListening') {
-            if (mounted) {
-              setState(() {
-                _voiceListening = false;
-              });
-            }
-          }
-        },
-        onError: (_) {
-          if (mounted) {
-            setState(() {
-              _voiceListening = false;
-            });
-          }
-        },
-      );
-
-      if (!available) {
-        if (!mounted) {
-          return;
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Voice input is not available on this device.'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-        return;
-      }
-
-      setState(() {
-        _voiceListening = true;
-      });
-
-      await _speechToText.listen(
-        listenMode: speech_to_text.ListenMode.dictation,
-        onResult: (result) {
-          final words = result.recognizedWords.trim();
-
-          if (words.isEmpty) {
-            return;
-          }
-
-          setState(() {
-            _controller.text = words;
-            _controller.selection = TextSelection.fromPosition(
-              TextPosition(offset: _controller.text.length),
-            );
-          });
-        },
-      );
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _voiceListening = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Voice input could not start. Check microphone permission.',
-          ),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-    }
+      await _stopAiCharacterTalkingForQuery();
+      if (!mounted || !current()) return;
+      final draft = await Navigator.of(context).push<KorlixVoiceDraft>(MaterialPageRoute(
+        builder: (_) => KorlixVoiceComposer(initialText: _controller.text,
+          language: _selectedLanguage, sessionChanges: kKorlixAuthRevision, isSessionCurrent: current),
+      ));
+      if (!mounted || !current() || topic != _activeChatTopicId || draft == null) return;
+      setState(() => _controller.value = TextEditingValue(text: draft.text, selection: TextSelection.collapsed(offset: draft.text.length)));
+      if (draft.openLiveConvo) await _openLiveConvoAudioTest();
+    } finally { if (mounted) setState(() => _voiceComposerOpening = false); }
   }
 
   Widget _buildPremiumHeader() {
@@ -14770,27 +14457,16 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         ? _results.first
         : null;
 
-    Widget toolButton({
-      required IconData icon,
-      required String label,
-      required VoidCallback? onPressed,
-      bool locked = false,
-      bool active = false,
-      bool success = false,
-    }) {
-      final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
-
-      return _buildKorlixBelowInputBeveledButton(
-        icon: icon,
-        label: label,
-        onPressed: onPressed,
-        locked: locked,
-        active: active,
-        success: success,
-        accentColor: locked ? skin.premium : skin.primary,
-        showStopIconWhenActive: active,
-      );
-    }
+    Widget tile(String label, IconData icon, VoidCallback? onPressed, {String? subtitle, bool? selected, bool locked = false}) => KorlixActionButton(
+      label: label, icon: icon, onPressed: onPressed, subtitle: subtitle,
+      tile: true, selected: selected, locked: locked,
+    );
+    Widget toolTile(String label) => tile(label, korlixToolIcon(label),
+      _loading || _customAccessLoading ? null : () => _selectUtilityTool(label));
+    bool businessAction(QuickAction action) => const {
+      'create an app', 'email enhancer', 'negocios', 'crear plan', 'ideas de contenido', 'idées contenu',
+    }.contains(action.label.toLowerCase());
+    final quickActions = t.quickActions.where((a) => !_isCreditReportActionSafeUi(a)).toList();
 
     Widget answerReadyBody() => _buildAnswerReadyConversationView(
       activeResult, compact: MediaQuery.sizeOf(context).width < 430);
@@ -14968,77 +14644,59 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 ),
                 const SizedBox(height: 14),
                 // KORLIX_LIVE_CONVO_HERO_HOME_SLOT_BUILD131_END
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  alignment: WrapAlignment.center,
+                KorlixActionSection(
+                  title: 'Start here', description: 'Choose how you want to work with K-Nova.',
+                  icon: Icons.tune_rounded,
                   children: [
-                    // K135Z_B4A_MEETING_COPILOT_COMMAND_CENTER_ENTRY_BEGIN
-                    // K135Z_B4A_MEETING_COPILOT_COMMAND_CENTER_ENTRY_END
-                    toolButton(
-                      icon: Icons.attach_file_rounded,
-                      label: 'Upload',
-                      locked: !_hasDocumentUploadAccess,
-                      success: _activeUploadFiles.isNotEmpty,
-                      active: false,
-                      onPressed: _loading ? null : _handleUploadPressed,
-                    ),
-                    // KORLIX_BUILD120_CAMERA_ASK_BUTTON
-                    CameraAskLaunchButton(
-                      onPressed: _loading || _cameraAskOpening ? null : _capturePhotoAndAskShortcut,
-                    ),
-                    toolButton(
-                      icon: Icons.mic_rounded,
-                      label: 'Voice',
-                      locked: !_hasVoiceAccess,
-                      active: _voiceListening,
-                      onPressed: _loading ? null : _handleVoiceInput,
-                    ),
-                    _buildKorlixBelowInputBeveledButton(
-                      icon: Icons.location_on_outlined,
-                      label: 'Locator',
-                      onPressed: _loading ? null : _showLocatorOptions,
-                      accentColor: skin.primary,
-                    ),
-                    _buildMusicStudioButton(),
-                    ..._korlixMusicDistributionPrelaunchButtonSlots(),
-                    _buildUtilityButton(),
-                    if (_currentTier == 'basic' &&
-                        !kKorlixHideTipDeveloperOnIos)
-                      _buildKorlixBelowInputBeveledButton(
-                        icon: Icons.favorite_rounded,
-                        label: 'Tip the developer',
-                        onPressed: _loading ? null : _openDonateCashApp,
-                        accentColor: skin.premium,
-                      ),
+                    tile('Upload', Icons.upload_file_rounded,
+                      _loading || _uploadOpening ? null : _handleUploadPressed,
+                      subtitle: _activeUploadFiles.isEmpty ? 'Files & photos' : '${_activeUploadFiles.length} files attached',
+                      selected: _activeUploadFiles.isEmpty ? null : true,
+                      locked: !_hasDocumentUploadAccess),
+                    tile('Voice', Icons.mic_rounded,
+                      _loading || _voiceComposerOpening ? null : _handleVoiceInput,
+                      subtitle: 'Speak or type', locked: !_hasVoiceAccess),
+                    tile('Camera Ask', Icons.center_focus_strong_rounded,
+                      _loading || _cameraAskOpening ? null : _capturePhotoAndAskShortcut,
+                      subtitle: 'See it. Ask it.'),
+                    tile('More tools', Icons.apps_rounded, _loading ? null : _toggleUtilityPanel,
+                      subtitle: 'Open the toolbox', selected: _utilityPanelOpen),
                   ],
                 ),
-
-                if (_utilityPanelOpen) ...[
-                  SizedBox(height: 12),
-                  _buildUtilityPanel(),
-                ],
-
                 if (_activeUploadFiles.isNotEmpty) ...[
-                  SizedBox(height: 12),
-                  _buildSelectedUploadFilesPanel(),
+                  const SizedBox(height: 16), _buildSelectedUploadFilesPanel(),
                 ],
-
-                SizedBox(height: 14),
-
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  alignment: WrapAlignment.center,
-                  // KORLIX_CREDIT_PUBLIC_ENTRY_HIDDEN_BUILD131_BEGIN
-                  // Preserve the credit QuickActions in source while excluding
-                  // them from the public home-screen action list.
-                  children: [const QuickAction(label:'Tax Prep',prompt:''), const QuickAction(label:'BabyBlend',prompt:''), const QuickAction(label:'FieldProof',prompt:''), const QuickAction(label:'AI Visibility',prompt:''), const QuickAction(label:'Contract Radar',prompt:''), const QuickAction(label:'Virtual Closet',prompt:''), ...t.quickActions]
-                      .where((action) => !_isCreditReportActionSafeUi(action))
-                      .map(_buildSafeUiQuickActionChip)
-                      .toList(),
-                  // KORLIX_CREDIT_PUBLIC_ENTRY_HIDDEN_BUILD131_END
+                if (_utilityPanelOpen) ...[
+                  const SizedBox(height: 16), _buildUtilityPanel(),
+                ],
+                const SizedBox(height: 30),
+                KorlixActionSection(
+                  title: 'For business', description: 'Manage operations, grow your reach, and get work done.',
+                  icon: Icons.business_center_outlined,
+                  children: [
+                    for (final tool in ['Inventory Studio', 'Bookkeeping 2027', 'FieldProof', 'AI Visibility', 'Contract Radar', 'Workforce']) toolTile(tool),
+                    if (_currentTier.trim().toLowerCase() == 'enterprise') ...[
+                      toolTile('Contacts CRM'), toolTile('Funnel Studio'),
+                    ],
+                    for (final action in quickActions.where(businessAction)) _buildSafeUiQuickActionChip(action, tile: true),
+                  ],
                 ),
+                const SizedBox(height: 30),
+                KorlixActionSection(
+                  title: 'For personal use', description: 'Create, learn, organize, and explore your everyday life.',
+                  icon: Icons.person_outline_rounded,
+                  children: [
+                    for (final tool in ['Tax Prep', 'BabyBlend', 'Virtual Closet', 'Cybersecurity Defender']) toolTile(tool),
+                    for (final action in quickActions.where((a) => !businessAction(a))) _buildSafeUiQuickActionChip(action, tile: true),
+                    tile('Music Studio', Icons.library_music_rounded, _loading ? null : _showMusicStudio),
+                    tile('Locator', Icons.location_on_outlined, _loading ? null : _showLocatorOptions),
+                    if (kKorlixMusicDistributionPrelaunchVisible) tile('Music Distribution', Icons.public_rounded, _loading ? null : _showMusicDistribution),
+                  ],
+                ),
+                if (_currentTier == 'basic' && !kKorlixHideTipDeveloperOnIos) ...[
+                  const SizedBox(height: 20),
+                  TextButton.icon(icon: const Icon(Icons.favorite_outline_rounded), label: const Text('Tip the developer'), onPressed: _loading ? null : _openDonateCashApp),
+                ],
 
                 if (_error != null) ...[
                   SizedBox(height: 14),

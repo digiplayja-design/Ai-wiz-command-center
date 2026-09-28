@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/korlix_action_button.dart';
+import '../theme/korlix_action_grid.dart';
 
 class KorlixChatTurn {
   const KorlixChatTurn({
@@ -294,30 +295,27 @@ class KorlixChatModeBar extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
+      KorlixActionGrid(
+        compact: true,
         children: [
           KorlixActionButton(
             label: 'Chat',
-            icon: Icons.chat_bubble_outline,
-            size: KorlixButtonSize.compact,
             selected: !imageMode,
+            expand: true,
             onPressed: busy ? null : () => onModeChanged(false),
           ),
           KorlixActionButton(
             label: 'Create image',
-            icon: Icons.image_outlined,
-            size: KorlixButtonSize.compact,
             selected: imageMode,
+            expand: true,
             onPressed: busy ? null : () => onModeChanged(true),
           ),
-          Text(
-            imageMode ? 'Extra-high image quality' : 'Astra · Extra high',
-            style: const TextStyle(fontSize: 12),
-          ),
         ],
+      ),
+      const SizedBox(height: 6),
+      Text(
+        imageMode ? 'Extra-high image quality' : 'Astra · Extra high',
+        style: const TextStyle(fontSize: 12),
       ),
       if (imageMode) ...[
         const SizedBox(height: 10),

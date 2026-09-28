@@ -23,6 +23,7 @@ class KorlixActionButton extends StatelessWidget {
     this.size = KorlixButtonSize.regular,
     this.leading,
     this.focusNode,
+    this.tile = false,
   });
 
   final String label;
@@ -35,6 +36,7 @@ class KorlixActionButton extends StatelessWidget {
   final KorlixButtonSize size;
   final Widget? leading;
   final FocusNode? focusNode;
+  final bool tile;
 
   @override
   Widget build(BuildContext context) {
@@ -113,7 +115,55 @@ class KorlixActionButton extends StatelessWidget {
           ),
         );
 
-    final content = iconOnly
+    final content = tile
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (icon != null || leading != null)
+                    ExcludeSemantics(child: emblem),
+                  if (locked || active) ...[
+                    const SizedBox(width: 8),
+                    ExcludeSemantics(
+                      child: Icon(
+                        locked
+                            ? Icons.lock_outline_rounded
+                            : Icons.check_circle_rounded,
+                        size: 15,
+                        color: color,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: ink,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  height: 1.25,
+                ),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 5),
+                Text(
+                  subtitle!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: skin.mutedText,
+                    fontSize: 11,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ],
+          )
+        : iconOnly
         ? SizedBox(
             width: 24,
             height: 24,
