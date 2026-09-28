@@ -1,3 +1,4 @@
+import 'agent_studio_design.dart';
 import 'dart:async';
 
 import 'package:file_picker/file_picker.dart' as fp;
@@ -114,15 +115,11 @@ String _korlixAgentFileMemorySizeLabel(int bytes) {
 }
 
 class _KorlixAgentFileMemoryReviewItem {
-  _KorlixAgentFileMemoryReviewItem({
-    required this.suggestion,
-    this.selected = false,
-    this.saved = false,
-  });
+  _KorlixAgentFileMemoryReviewItem({required this.suggestion});
 
   KorlixLiveConvoAgentMemoryFileSuggestion suggestion;
-  bool selected;
-  bool saved;
+  bool selected = false;
+  bool saved = false;
 }
 
 class _KorlixAgentFileMemorySheet extends StatefulWidget {
@@ -1267,6 +1264,24 @@ class _KorlixAgentFileMemorySheetState
                         ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: EdgeInsets.only(bottom: 18 + bottomInset),
                     children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: AgentBrainHero(
+                          name: widget.agent.name,
+                          memories: widget.agent.memoryCount + _savedCount,
+                          version: widget.agent.version,
+                          compact: true,
+                          activity: _analyzing
+                              ? 'analyzing'
+                              : _saving
+                              ? 'memory'
+                              : _error != null
+                              ? 'error'
+                              : _savedCount > 0
+                              ? 'saved'
+                              : 'ready',
+                        ),
+                      ),
                       _buildSafetyNotice(),
                       _buildErrorBanner(),
                       _buildFileSection(accent),

@@ -1,3 +1,7 @@
+import 'agent_studio_design.dart';
+import 'agent_studio_hub.dart';
+import 'agent_studio_client.dart';
+import 'agent_studio_workflows.dart';
 import '../contacts_crm/contacts_client.dart';
 import '../contacts_crm/contacts_screen.dart';
 import 'dart:async';
@@ -134,16 +138,38 @@ class _KorlixLiveConvoAgentHubSheetState
   bool _busy = false;
 
   String? _error;
+  String _brainActivity = 'ready';
+  late final AgentStudioClient _studioClient;
+  Timer? _accountMonitor;
+  bool _accountClosed = false;
 
   @override
   void initState() {
     super.initState();
 
+    _studioClient = AgentStudioClient(
+      baseUrl: widget.client.backendBaseUrl,
+      headersBuilder: widget.client.headersBuilder,
+    );
     final activeId = widget.activeAgent.id.trim();
 
     _selectedAgentId = activeId.isEmpty ? 'general' : activeId;
 
     unawaited(_load());
+    _accountMonitor = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _accountClosed) return;
+      try {
+        widget.client.assertCurrentAccount();
+      } catch (_) {
+        _accountClosed = true;
+        final route = ModalRoute.of(context);
+        if (route != null && route.isActive) {
+          final navigator = Navigator.of(context);
+          navigator.popUntil((r) => identical(r, route));
+          navigator.pop();
+        }
+      }
+    });
   }
 
   String _cleanError(Object error) {
@@ -254,6 +280,7 @@ class _KorlixLiveConvoAgentHubSheetState
       if (mounted) {
         setState(() {
           _error = _cleanError(error);
+          _brainActivity = 'error';
         });
       }
 
@@ -299,67 +326,6 @@ class _KorlixLiveConvoAgentHubSheetState
     }
 
     Navigator.of(context).pop(runtime);
-  }
-
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 12, 12, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color: const Color(0xFF123A47),
-                  border: Border.all(color: const Color(0xFF21D4F4)),
-                ),
-                child: const Icon(Icons.hub_rounded, color: Color(0xFF69D9E8)),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'LIVE CONVO AGENTS',
-                      style: TextStyle(
-                        color: Color(0xFFF0F7F8),
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    SizedBox(height: 3),
-                    Text(
-                      'Select, train, and manage '
-                      'private long-term memory.',
-                      style: TextStyle(color: Color(0xFFA9C6CF), height: 1.3),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                tooltip: 'Close Agent Hub',
-                onPressed: _busy
-                    ? null
-                    : () {
-                        Navigator.of(context).pop();
-                      },
-                icon: const Icon(Icons.close_rounded),
-                color: const Color(0xFFC7D7DC),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          // K135Z_B4B_V11_AGENT_HUB_CARD_SLOT
-          _buildMeetingCopilotEnterpriseCard(),
-        ],
-      ),
-    );
   }
 
   Widget _buildModelProofCard() {
@@ -452,456 +418,6 @@ class _KorlixLiveConvoAgentHubSheetState
     );
   }
 
-  Widget _buildPersistenceNotice() {
-    final configured = _catalog.persistenceConfigured;
-
-    final color = configured
-        ? const Color(0xFF62D6A7)
-        : const Color(0xFFF2C14E);
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: configured ? const Color(0xFF0B2A24) : const Color(0xFF332916),
-        border: Border.all(color: color),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            configured ? Icons.cloud_done_rounded : Icons.storage_rounded,
-            color: color,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              configured
-                  ? 'Private agent training '
-                        'and long-term memory '
-                        'are connected.'
-                  : 'Agent selection is '
-                        'available. Apply the '
-                        'included Supabase '
-                        'migration before '
-                        'saving training or '
-                        'long-term memory.',
-              style: const TextStyle(
-                color: Color(0xFFD8E7EA),
-                height: 1.35,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildErrorBanner() {
-    final error = _error?.trim() ?? '';
-
-    if (error.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFF351923),
-        border: Border.all(color: const Color(0xFFFF7185)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.error_outline_rounded, color: Color(0xFFFF8B9B)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              error,
-              style: const TextStyle(
-                color: Color(0xFFFFD8DE),
-                height: 1.35,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          IconButton(
-            tooltip: 'Retry',
-            onPressed: _busy
-                ? null
-                : () {
-                    unawaited(_load());
-                  },
-            icon: const Icon(Icons.refresh_rounded),
-            color: const Color(0xFFFFB2BE),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAgentCard(KorlixLiveConvoAgent agent) {
-    final accent = korlixLiveConvoAgentAccent(agent.accentHex);
-
-    final selected = agent.id == _selectedAgentId;
-
-    final currentlyActive = agent.id == widget.activeAgent.id;
-
-    final enabled = agent.active && !_busy;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: enabled
-              ? () {
-                  setState(() {
-                    _selectedAgentId = agent.id;
-                  });
-                }
-              : null,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              color: selected
-                  ? accent.withValues(alpha: 0.13)
-                  : const Color(0xFF071722),
-              border: Border.all(
-                color: selected ? accent : const Color(0xFF244D5C),
-                width: selected ? 1.6 : 1,
-              ),
-              boxShadow: selected
-                  ? <BoxShadow>[
-                      BoxShadow(
-                        color: accent.withValues(alpha: 0.12),
-                        blurRadius: 22,
-                      ),
-                    ]
-                  : const <BoxShadow>[],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(15),
-                        color: accent.withValues(alpha: 0.16),
-                        border: Border.all(
-                          color: accent.withValues(alpha: 0.72),
-                        ),
-                      ),
-                      child: Icon(
-                        korlixLiveConvoAgentIcon(agent.iconName),
-                        color: accent,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Wrap(
-                            spacing: 7,
-                            runSpacing: 6,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              Text(
-                                agent.name,
-                                style: const TextStyle(
-                                  color: Color(0xFFF0F7F8),
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              if (currentlyActive)
-                                _KorlixAgentBadge(
-                                  text: 'ACTIVE',
-                                  color: accent,
-                                ),
-                              if (agent.isCustom)
-                                const _KorlixAgentBadge(
-                                  text: 'CUSTOM',
-                                  color: Color(0xFFB794F4),
-                                ),
-                              if (agent.hasPublishedTraining)
-                                const _KorlixAgentBadge(
-                                  text: 'TRAINED',
-                                  color: Color(0xFF62D6A7),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            agent.description,
-                            style: const TextStyle(
-                              color: Color(0xFFA9C6CF),
-                              height: 1.35,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 160),
-                      child: selected
-                          ? Icon(
-                              Icons.check_circle_rounded,
-                              key: ValueKey<String>('selected-${agent.id}'),
-                              color: accent,
-                              size: 26,
-                            )
-                          : Icon(
-                              Icons.radio_button_unchecked_rounded,
-                              key: ValueKey<String>('idle-${agent.id}'),
-                              color: const Color(0xFF66818A),
-                              size: 26,
-                            ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Icon(
-                      agent.memoryEnabled
-                          ? Icons.psychology_alt_rounded
-                          : Icons.memory_outlined,
-                      size: 19,
-                      color: agent.memoryEnabled
-                          ? const Color(0xFF8CDDE8)
-                          : const Color(0xFF9AA8AD),
-                    ),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child: Text(
-                        agent.memorySummary,
-                        style: TextStyle(
-                          color: agent.memoryEnabled
-                              ? const Color(0xFF8CDDE8)
-                              : const Color(0xFF9AA8AD),
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      'Version ${agent.version}',
-                      style: const TextStyle(
-                        color: Color(0xFF8299A2),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    FilledButton.icon(
-                      onPressed: enabled
-                          ? () {
-                              unawaited(_activateAgent(agent));
-                            }
-                          : null,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: accent,
-                        foregroundColor: const Color(0xFF03110E),
-                      ),
-                      icon: const Icon(Icons.play_arrow_rounded),
-                      label: Text(
-                        currentlyActive ? 'Reload Agent' : 'Use Agent',
-                        style: const TextStyle(fontWeight: FontWeight.w900),
-                      ),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: enabled
-                          ? () {
-                              unawaited(_openTraining(agent));
-                            }
-                          : null,
-                      icon: const Icon(Icons.school_rounded),
-                      label: const Text('Train'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: enabled
-                          ? () {
-                              unawaited(_openMemoryManager(agent));
-                            }
-                          : null,
-                      icon: const Icon(Icons.psychology_alt_rounded),
-                      label: const Text('Memory'),
-                    ),
-                    // KORLIX_AGENT_EMAIL_BUTTON_BUILD133_BEGIN
-                    if (agent.isCustom && agent.toolIds.contains('agent_email'))
-                      OutlinedButton.icon(
-                        onPressed: enabled
-                            ? () {
-                                unawaited(_openAgentEmail(agent));
-                              }
-                            : null,
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: accent),
-                          foregroundColor: accent,
-                        ),
-                        icon: const Icon(Icons.alternate_email_rounded),
-                        label: const Text(
-                          'Agent Email',
-                          style: TextStyle(fontWeight: FontWeight.w900),
-                        ),
-                      ),
-                    // KORLIX_AGENT_EMAIL_BUTTON_BUILD133_END
-                    if (widget.meetingCopilotEnterpriseEnabled && agent.toolIds.contains('agent_email'))
-                      OutlinedButton.icon(
-                        onPressed: enabled ? () => Navigator.of(context).push(MaterialPageRoute<void>(
-                          builder: (_) => ContactsScreen(client: ContactsClient(
-                            backendBaseUrl: widget.client.backendBaseUrl,
-                            headersBuilder: widget.client.headersBuilder)))) : null,
-                        icon: const Icon(Icons.contacts_outlined),
-                        label: const Text('Contacts CRM'),
-                      ),
-                    OutlinedButton.icon(
-                      onPressed: enabled
-                          ? () {
-                              unawaited(_openBrainVault(agent));
-                            }
-                          : null,
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFFB794F4)),
-                        foregroundColor: const Color(0xFFE0CBFF),
-                      ),
-                      icon: const Icon(Icons.lock_rounded),
-                      label: const Text(
-                        'Brain Vault • Locked',
-                        style: TextStyle(fontWeight: FontWeight.w900),
-                      ),
-                    ),
-                    PopupMenuButton<String>(
-                      enabled: enabled,
-                      tooltip: 'More agent options',
-                      color: const Color(0xFF071722),
-                      icon: const Icon(
-                        Icons.more_horiz_rounded,
-                        color: Color(0xFFC7D7DC),
-                      ),
-                      onSelected: (value) {
-                        switch (value) {
-                          case 'versions':
-                            unawaited(_openVersionHistory(agent));
-                            break;
-
-                          case 'reset':
-                            unawaited(_resetOrDeleteAgent(agent));
-                            break;
-                        }
-                      },
-                      itemBuilder: (context) {
-                        return <PopupMenuEntry<String>>[
-                          const PopupMenuItem<String>(
-                            value: 'versions',
-                            child: ListTile(
-                              dense: true,
-                              leading: Icon(Icons.history_rounded),
-                              title: Text('Training history'),
-                            ),
-                          ),
-                          PopupMenuItem<String>(
-                            value: 'reset',
-                            child: ListTile(
-                              dense: true,
-                              leading: Icon(
-                                agent.isCustom
-                                    ? Icons.delete_outline_rounded
-                                    : Icons.restart_alt_rounded,
-                              ),
-                              title: Text(
-                                agent.isCustom
-                                    ? 'Delete custom agent'
-                                    : 'Reset personal training',
-                              ),
-                            ),
-                          ),
-                        ];
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAgentCatalog() {
-    final agents = _catalog.agents
-        .where((agent) => agent.active)
-        .toList(growable: false);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (_loading)
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 6, 16, 14),
-            child: LinearProgressIndicator(
-              minHeight: 3,
-              color: Color(0xFF69D9E8),
-              backgroundColor: Color(0xFF123A47),
-            ),
-          ),
-        for (final agent in agents) _buildAgentCard(agent),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
-          child: OutlinedButton.icon(
-            onPressed: _busy
-                ? null
-                : () {
-                    unawaited(_openCustomAgentCreator());
-                  },
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
-              side: const BorderSide(color: Color(0xFFB794F4)),
-              foregroundColor: const Color(0xFFE0CBFF),
-            ),
-            icon: const Icon(Icons.add_circle_outline_rounded),
-            label: const Text(
-              'Create Your Own Agent',
-              style: TextStyle(fontWeight: FontWeight.w900),
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: TextButton.icon(
-            onPressed: _busy
-                ? null
-                : () {
-                    unawaited(_load());
-                  },
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Refresh Agent Hub'),
-          ),
-        ),
-      ],
-    );
-  }
-
   Future<bool> _confirmAction({
     required String title,
     required String message,
@@ -977,6 +493,7 @@ class _KorlixLiveConvoAgentHubSheetState
       return;
     }
 
+    setState(() => _brainActivity = 'training');
     final updated = await _runBusy<KorlixLiveConvoAgent>(() {
       return widget.client.saveTraining(agentId: agent.id, update: update);
     });
@@ -986,6 +503,7 @@ class _KorlixLiveConvoAgentHubSheetState
     }
 
     _replaceAgent(updated);
+    setState(() => _brainActivity = 'saved');
 
     // KORLIX_LIVE_CONVO_IMMEDIATE_AGENT_REFRESH_BUILD131_V1
     final appliesToActiveAgent = updated.id == widget.activeAgent.id;
@@ -1004,6 +522,7 @@ class _KorlixLiveConvoAgentHubSheetState
   }
 
   Future<void> _openMemoryManager(KorlixLiveConvoAgent agent) async {
+    var memoryChanged = false;
     final changed = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -1014,11 +533,12 @@ class _KorlixLiveConvoAgentHubSheetState
         return _KorlixAgentMemoryManagerSheet(
           client: widget.client,
           agent: agent,
+          onChanged: () => memoryChanged = true,
         );
       },
     );
 
-    if (!mounted || changed != true) {
+    if (!mounted || _accountClosed || (changed != true && !memoryChanged)) {
       return;
     }
 
@@ -2003,8 +1523,8 @@ class _KorlixLiveConvoAgentHubSheetState
     return Semantics(
       button: true,
       label: enterprise
-          ? 'Open Nova Meeting Copilot'
-          : 'Nova Meeting Copilot, Enterprise upgrade required',
+          ? 'Open K-Nova Meeting Copilot'
+          : 'K-Nova Meeting Copilot, Enterprise upgrade required',
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: () {
@@ -2012,7 +1532,10 @@ class _KorlixLiveConvoAgentHubSheetState
             // K135Z_GATE6C_EXPLICIT_SELECTED_AGENT
             final selected = _catalog.agentById(_selectedAgentId);
             if (_loading || _busy || selected == null || !selected.active) {
-              _showMessage('Select an available agent after Agent Hub finishes loading.', error: true);
+              _showMessage(
+                'Select an available agent after Agent Hub finishes loading.',
+                error: true,
+              );
               return;
             }
             final selectedClient = widget.client;
@@ -2021,7 +1544,10 @@ class _KorlixLiveConvoAgentHubSheetState
                 agentId: selected.id,
                 backendBaseUri: Uri.parse(selectedClient.backendBaseUrl),
                 headersBuilder: selectedClient.headersBuilder,
-                isCurrent: () => mounted && !_loading && !_busy &&
+                isCurrent: () =>
+                    mounted &&
+                    !_loading &&
+                    !_busy &&
                     widget.meetingCopilotEnterpriseEnabled &&
                     identical(widget.client, selectedClient) &&
                     _selectedAgentId == selected.id &&
@@ -2029,10 +1555,14 @@ class _KorlixLiveConvoAgentHubSheetState
               );
               setKorlixMeetingCopilotEnterpriseAccess(true);
               Navigator.of(context).pushNamed(
-                KorlixMeetingCopilotRoute.routeName, arguments: launch,
+                KorlixMeetingCopilotRoute.routeName,
+                arguments: launch,
               );
             } catch (_) {
-              _showMessage('Sign in and reopen Copilot from the selected Agent Hub.', error: true);
+              _showMessage(
+                'Sign in and reopen Copilot from the selected Agent Hub.',
+                error: true,
+              );
             }
 
             return;
@@ -2069,8 +1599,8 @@ class _KorlixLiveConvoAgentHubSheetState
                   child: Image.asset(
                     'assets/meeting_copilot/nova_canonical.webp',
                     fit: BoxFit.cover,
-                    semanticLabel: 'Nova, KORLIX AI meeting assistant',
-                    errorBuilder: (_, __, ___) => const Icon(
+                    semanticLabel: 'K-Nova, KORLIX AI meeting assistant',
+                    errorBuilder: (_, _, _) => const Icon(
                       Icons.smart_toy_rounded,
                       color: Color(0xFF69D9E8),
                     ),
@@ -2083,7 +1613,7 @@ class _KorlixLiveConvoAgentHubSheetState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'NOVA MEETING COPILOT',
+                      'K-NOVA MEETING COPILOT',
                       style: TextStyle(
                         color: Color(0xFFF0F7F8),
                         fontSize: 16,
@@ -2097,7 +1627,7 @@ class _KorlixLiveConvoAgentHubSheetState
                                 'intelligence, live notes, '
                                 'decisions, and action items.'
                           : 'Locked — upgrade to '
-                                'Enterprise for Nova '
+                                'Enterprise for K-Nova '
                                 'meeting intelligence.',
                       style: const TextStyle(
                         color: Color(0xFFA9C6CF),
@@ -2143,92 +1673,88 @@ class _KorlixLiveConvoAgentHubSheetState
   // K135Z_B4B_V11_AGENT_HUB_ENTERPRISE_CARD_END
 
   @override
-  Widget build(BuildContext context) {
-    final screenSize = MediaQuery.sizeOf(context);
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-
-    return Material(
-      color: Colors.transparent,
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: Container(
-          width: double.infinity,
-          constraints: BoxConstraints(
-            maxWidth: 920,
-            maxHeight: screenSize.height * 0.94,
-          ),
-          margin: const EdgeInsets.only(top: 24),
-          decoration: const BoxDecoration(
-            color: Color(0xFF041019),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: Color(0x66000000),
-                blurRadius: 34,
-                offset: Offset(0, -8),
-              ),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: SafeArea(
-            top: false,
-            child: Column(
-              children: [
-                _buildHeader(),
-                if (_busy)
-                  const LinearProgressIndicator(
-                    minHeight: 3,
-                    color: Color(0xFF69D9E8),
-                    backgroundColor: Color(0xFF123A47),
-                  ),
-                Expanded(
-                  child: ListView(
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: EdgeInsets.only(bottom: 18 + bottomInset),
-                    children: [
-                      _buildModelProofCard(),
-                      _buildPersistenceNotice(),
-                      _buildErrorBanner(),
-                      _buildAgentCatalog(),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+  void dispose() {
+    _accountMonitor?.cancel();
+    _studioClient.dispose();
+    super.dispose();
   }
+
+  void _studioAction(String action, KorlixLiveConvoAgent agent) {
+    if (_busy || _loading) return;
+    setState(() => _selectedAgentId = agent.id);
+    switch (action) {
+      case 'use':
+        unawaited(_activateAgent(agent));
+        break;
+      case 'train':
+        unawaited(_openTraining(agent));
+        break;
+      case 'memory':
+        unawaited(_openMemoryManager(agent));
+        break;
+      case 'vault':
+        unawaited(_openBrainVault(agent));
+        break;
+      case 'versions':
+        unawaited(_openVersionHistory(agent));
+        break;
+      case 'reset':
+        unawaited(_resetOrDeleteAgent(agent));
+        break;
+      // KORLIX_AGENT_EMAIL_BUTTON_BUILD133_BEGIN
+      case 'email':
+        unawaited(_openAgentEmail(agent));
+        break;
+      case 'contacts':
+        if (widget.meetingCopilotEnterpriseEnabled &&
+            agent.toolIds.contains('agent_email')) {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => ContactsScreen(
+                client: ContactsClient(
+                  backendBaseUrl: widget.client.backendBaseUrl,
+                  headersBuilder: widget.client.headersBuilder,
+                ),
+              ),
+            ),
+          );
+        }
+        break;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AgentStudioHub(
+    agents: _catalog.agents,
+    selectedId: _selectedAgentId,
+    activeId: widget.activeAgent.id,
+    busy: _busy,
+    loading: _loading,
+    connected: _catalog.persistenceConfigured,
+    error: _error,
+    activity: _brainActivity,
+    onSelect: (id) => setState(() => _selectedAgentId = id),
+    onAction: _studioAction,
+    onCreate: () => unawaited(_openCustomAgentCreator()),
+    onClose: () => Navigator.of(context).pop(),
+    onRefresh: () => unawaited(_load()),
+    workflows: AgentStudioWorkflows(
+      client: _studioClient,
+      agents: _catalog.agents.where((a) => a.active).toList(),
+    ),
+    // K135Z_B4B_V11_AGENT_HUB_CARD_SLOT
+    meetingCard: _buildMeetingCopilotEnterpriseCard(),
+    modelProof: _buildModelProofCard(),
+    contactsEnabled: widget.meetingCopilotEnterpriseEnabled,
+  );
 }
 
 class _KorlixAgentBadge extends StatelessWidget {
   const _KorlixAgentBadge({required this.text, required this.color});
-
   final String text;
   final Color color;
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.78)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 0.8,
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => AgentStudioPill(text, color: color);
 }
 
 const List<String> _korlixAgentAllToolIds = <String>[
@@ -2327,6 +1853,7 @@ class _KorlixAgentTrainingSheet extends StatefulWidget {
 
 class _KorlixAgentTrainingSheetState extends State<_KorlixAgentTrainingSheet> {
   late final TextEditingController _instructionsController;
+  final _trainingScroll = ScrollController();
 
   late final List<String> _availableTools;
   late final Set<String> _selectedTools;
@@ -2389,6 +1916,7 @@ class _KorlixAgentTrainingSheetState extends State<_KorlixAgentTrainingSheet> {
   @override
   void dispose() {
     _instructionsController.dispose();
+    _trainingScroll.dispose();
 
     super.dispose();
   }
@@ -2468,6 +1996,7 @@ class _KorlixAgentTrainingSheetState extends State<_KorlixAgentTrainingSheet> {
       _validationMessage = null;
     });
 
+    if (_trainingScroll.hasClients) _trainingScroll.jumpTo(0);
     try {
       final result = await fp.FilePicker.platform.pickFiles(
         allowMultiple: true,
@@ -2646,900 +2175,270 @@ class _KorlixAgentTrainingSheetState extends State<_KorlixAgentTrainingSheet> {
     );
   }
 
-  InputDecoration _trainingDecoration({required String label, String? hint}) {
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      alignLabelWithHint: true,
-      filled: true,
-      fillColor: const Color(0xFF071722),
-      labelStyle: const TextStyle(
-        color: Color(0xFF8CDDE8),
-        fontWeight: FontWeight.w800,
-      ),
-      hintStyle: const TextStyle(color: Color(0xFF718A96)),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFF244D5C)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFF69D9E8), width: 1.6),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFFFF7185)),
-      ),
-    );
-  }
-
-  Widget _buildTrainingDocumentControl(Color accent, bool canSave) {
-    final hasSummary = (_documentSummary ?? '').trim().isNotEmpty;
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: const Color(0xFF071722),
-        border: Border.all(
-          color: _documentDraftLoaded
-              ? const Color(0xFF3A9778)
-              : const Color(0xFF244D5C),
+  @override
+  Widget build(BuildContext context) {
+    final p = AgentStudioColors(context);
+    final canSave =
+        widget.agent.persistenceConfigured && !_trainingDocumentBusy;
+    return Material(
+      color: p.background,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 880,
+          maxHeight: MediaQuery.sizeOf(context).height * .94,
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  color: accent.withValues(alpha: 0.14),
-                  border: Border.all(color: accent.withValues(alpha: 0.55)),
-                ),
-                child: Icon(Icons.upload_file_rounded, color: accent),
-              ),
-              const SizedBox(width: 11),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Upload Training Document',
-                      style: TextStyle(
-                        color: Color(0xFFF0F7F8),
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Attach up to five PDFs, Word files, spreadsheets, '
-                      'presentations, text files, or images. KORLIX will '
-                      'create a draft for you to review and edit.',
-                      style: TextStyle(
-                        color: Color(0xFFA9C6CF),
-                        height: 1.35,
-                        fontSize: 12.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+        child: ListView(
+          controller: _trainingScroll,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.fromLTRB(
+            22,
+            20,
+            22,
+            28 + MediaQuery.viewInsetsOf(context).bottom,
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: canSave && !_trainingDocumentBusy
-                  ? _uploadTrainingDocuments
-                  : null,
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF143B4A),
-                foregroundColor: const Color(0xFFE7F7FA),
-                disabledBackgroundColor: const Color(0xFF26383E),
-                disabledForegroundColor: const Color(0xFF8299A2),
-                padding: const EdgeInsets.symmetric(vertical: 13),
-              ),
-              icon: _trainingDocumentBusy
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Color(0xFFE7F7FA),
-                      ),
-                    )
-                  : const Icon(Icons.attach_file_rounded),
-              label: Text(
-                _trainingDocumentBusy
-                    ? 'Analyzing Training Document…'
-                    : _documentDraftLoaded
-                    ? 'Upload Different Training Document'
-                    : 'Choose Training Document',
-                style: const TextStyle(fontWeight: FontWeight.w900),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Training studio',
+                    style: TextStyle(
+                      color: p.text,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -.7,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Close training',
+                  onPressed: _trainingDocumentBusy
+                      ? null
+                      : () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Teach ${widget.agent.name} how you like things done.',
+              style: TextStyle(color: p.muted, height: 1.5),
+            ),
+            const SizedBox(height: 20),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _instructionsController,
+              builder: (context, value, _) => AgentBrainHero(
+                name: widget.agent.name,
+                memories: widget.agent.memoryCount,
+                version: widget.agent.version,
+                compact: true,
+                activity: _trainingDocumentBusy
+                    ? 'analyzing'
+                    : value.text.isNotEmpty
+                    ? 'editing'
+                    : 'ready',
               ),
             ),
-          ),
-          if (_documentDraftLoaded) ...[
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                color: const Color(0xFF0B2A24),
-                border: Border.all(color: const Color(0xFF3A9778)),
-              ),
+            const SizedBox(height: 20),
+            AgentStudioPanel(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
-                    children: [
-                      Icon(
-                        Icons.fact_check_rounded,
-                        color: Color(0xFF62D6A7),
-                        size: 19,
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'REVIEWABLE DRAFT CREATED',
-                          style: TextStyle(
-                            color: Color(0xFF62D6A7),
-                            fontWeight: FontWeight.w900,
-                            fontSize: 12,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                    ],
+                  Text(
+                    'Start with a document',
+                    style: TextStyle(
+                      color: p.text,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                  if (_documentFileNames.isNotEmpty) ...[
-                    const SizedBox(height: 7),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Upload up to five documents or images. Review and edit the suggested instructions before publishing.',
+                    style: TextStyle(color: p.muted, height: 1.5),
+                  ),
+                  const SizedBox(height: 14),
+                  OutlinedButton.icon(
+                    onPressed: canSave ? _uploadTrainingDocuments : null,
+                    icon: const Icon(Icons.upload_file_rounded),
+                    label: Text(
+                      _trainingDocumentBusy
+                          ? 'Reading documents…'
+                          : 'Choose training documents',
+                    ),
+                  ),
+                  if (_trainingDocumentBusy) ...[
+                    const SizedBox(height: 12),
+                    const LinearProgressIndicator(minHeight: 2),
+                  ],
+                  if (_documentDraftLoaded) ...[
+                    const SizedBox(height: 12),
+                    const AgentStudioPill(
+                      'Draft ready for review',
+                      icon: Icons.fact_check_outlined,
+                    ),
+                    const SizedBox(height: 8),
                     Text(
                       _documentFileNames.join(' · '),
-                      style: const TextStyle(
-                        color: Color(0xFFD8E7EA),
-                        height: 1.35,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: TextStyle(color: p.muted, fontSize: 12),
                     ),
-                  ],
-                  if (hasSummary) ...[
-                    const SizedBox(height: 7),
+                    if (_documentSummary != null)
+                      Text(
+                        _documentSummary!,
+                        style: TextStyle(color: p.muted, height: 1.5),
+                      ),
+                    const SizedBox(height: 8),
                     Text(
-                      _documentSummary!,
-                      style: const TextStyle(
-                        color: Color(0xFFA9C6CF),
-                        height: 1.35,
-                        fontSize: 12.5,
-                      ),
+                      'Source files are not retained. The draft is not published yet.',
+                      style: TextStyle(color: p.muted, fontSize: 12),
                     ),
                   ],
-                  const SizedBox(height: 7),
-                  const Text(
-                    'The uploaded source file was not retained. This draft '
-                    'has not been published and may be edited below.',
-                    style: TextStyle(
-                      color: Color(0xFF8CDDE8),
-                      height: 1.35,
-                      fontSize: 12.5,
-                    ),
-                  ),
                 ],
               ),
             ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTrainingModeOption({
-    required Color accent,
-    required String value,
-    required String title,
-    required String description,
-    required IconData icon,
-  }) {
-    final selected = _trainingMode == value;
-
-    return Expanded(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          _setTrainingMode(value);
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 170),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: selected
-                ? accent.withValues(alpha: 0.15)
-                : const Color(0xFF071722),
-            border: Border.all(
-              color: selected ? accent : const Color(0xFF244D5C),
-              width: selected ? 1.5 : 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+            const SizedBox(height: 18),
+            if (widget.agent.hasPublishedTraining)
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: Text('Current training · v${widget.agent.version}'),
                 children: [
-                  Icon(
-                    selected
-                        ? Icons.radio_button_checked_rounded
-                        : Icons.radio_button_off_rounded,
-                    color: selected ? accent : const Color(0xFF8299A2),
-                    size: 19,
-                  ),
-                  const SizedBox(width: 7),
-                  Icon(
-                    icon,
-                    color: selected ? accent : const Color(0xFFA9C6CF),
-                    size: 18,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                style: TextStyle(
-                  color: selected
-                      ? const Color(0xFFF0F7F8)
-                      : const Color(0xFFBBD0D6),
-                  fontWeight: FontWeight.w900,
-                  fontSize: 13,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                description,
-                style: const TextStyle(
-                  color: Color(0xFFA9C6CF),
-                  height: 1.3,
-                  fontSize: 11.8,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTrainingModeControl(Color accent) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'HOW SHOULD THIS TRAINING BE APPLIED?',
-          style: TextStyle(
-            color: Color(0xFF8CDDE8),
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0.6,
-            fontSize: 12,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildTrainingModeOption(
-              accent: accent,
-              value: 'append',
-              title: 'Append',
-              description: 'Keep the current training and add this update.',
-              icon: Icons.playlist_add_rounded,
-            ),
-            const SizedBox(width: 10),
-            _buildTrainingModeOption(
-              accent: accent,
-              value: 'replace',
-              title: 'Replace',
-              description: 'Replace the current training with this draft.',
-              icon: Icons.find_replace_rounded,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTrainingHeader(Color accent) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: accent.withValues(alpha: 0.14),
-            border: Border.all(color: accent.withValues(alpha: 0.72)),
-          ),
-          child: Icon(
-            korlixLiveConvoAgentIcon(widget.agent.iconName),
-            color: accent,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'TRAIN ${widget.agent.name.toUpperCase()}',
-                style: const TextStyle(
-                  color: Color(0xFFF0F7F8),
-                  fontSize: 19,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.4,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Add private instructions and '
-                'choose the tools this agent '
-                'may use.',
-                style: const TextStyle(color: Color(0xFFA9C6CF), height: 1.35),
-              ),
-            ],
-          ),
-        ),
-        IconButton(
-          tooltip: 'Close training',
-          onPressed: () {
-            Navigator.of(context).pop();
-          },
-          icon: const Icon(Icons.close_rounded),
-          color: const Color(0xFFC7D7DC),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProtectedMissionNotice(Color accent) {
-    final isBuiltIn = widget.agent.isBuiltIn;
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(17),
-        color: const Color(0xFF081B25),
-        border: Border.all(color: accent.withValues(alpha: 0.52)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            isBuiltIn ? Icons.verified_user_rounded : Icons.smart_toy_rounded,
-            color: accent,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isBuiltIn
-                      ? 'Protected built-in mission'
-                      : 'Custom-agent mission',
-                  style: TextStyle(color: accent, fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  widget.agent.mission,
-                  style: const TextStyle(color: Color(0xFFD8E7EA), height: 1.4),
-                ),
-                if (isBuiltIn) ...[
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Personal training supplements '
-                    'this mission. It cannot replace '
-                    'Korlix safety rules or unlock '
-                    'tools that this agent is not '
-                    'authorized to use.',
-                    style: TextStyle(
-                      color: Color(0xFFA9C6CF),
-                      height: 1.35,
-                      fontSize: 12.5,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCurrentTraining() {
-    final training = widget.agent.trainingInstructions.trim();
-
-    if (training.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: const Color(0xFF071722),
-          border: Border.all(color: const Color(0xFF244D5C)),
-        ),
-        child: const Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.school_outlined, color: Color(0xFF8CDDE8)),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'No personal training has been '
-                'published for this agent yet.',
-                style: TextStyle(color: Color(0xFFBBD0D6), height: 1.35),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFF0B2A24),
-        border: Border.all(color: const Color(0xFF3A9778)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.check_circle_rounded, color: Color(0xFF62D6A7)),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Text(
-                  'CURRENT PUBLISHED TRAINING '
-                  '· VERSION '
-                  '${widget.agent.version}',
-                  style: const TextStyle(
-                    color: Color(0xFF62D6A7),
-                    fontWeight: FontWeight.w900,
-                    fontSize: 12,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 9),
-          Text(
-            training,
-            style: const TextStyle(color: Color(0xFFD8E7EA), height: 1.4),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPersistenceWarning() {
-    if (widget.agent.persistenceConfigured) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFF332916),
-        border: Border.all(color: const Color(0xFFF2C14E)),
-      ),
-      child: const Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.storage_rounded, color: Color(0xFFF2C14E)),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Agent selection is available, '
-              'but training cannot be saved '
-              'until the included Supabase '
-              'long-term-memory migration '
-              'has been reviewed and applied.',
-              style: TextStyle(
-                color: Color(0xFFFFE7A3),
-                height: 1.4,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMemoryControl(Color accent) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(13, 10, 10, 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFF071722),
-        border: Border.all(color: const Color(0xFF244D5C)),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            _memoryEnabled
-                ? Icons.psychology_alt_rounded
-                : Icons.memory_outlined,
-            color: _memoryEnabled ? accent : const Color(0xFF8299A2),
-          ),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Long-term memory',
-                  style: TextStyle(
-                    color: Color(0xFFF0F7F8),
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                SizedBox(height: 3),
-                Text(
-                  'Allows this agent to load '
-                  'and save private user-approved '
-                  'memories across sessions.',
-                  style: TextStyle(
-                    color: Color(0xFFA9C6CF),
-                    height: 1.3,
-                    fontSize: 12.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Switch(
-            value: _memoryEnabled,
-            onChanged: _availableTools.contains('memory')
-                ? _toggleMemory
-                : null,
-            activeThumbColor: accent,
-            activeTrackColor: accent.withValues(alpha: 0.45),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildToolPermissions(Color accent) {
-    final tools = _availableTools
-        .where((toolId) => toolId != 'memory')
-        .toList(growable: false);
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: const Color(0xFF071722),
-        border: Border.all(color: const Color(0xFF244D5C)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          for (var index = 0; index < tools.length; index += 1) ...[
-            Builder(
-              builder: (context) {
-                final toolId = tools[index];
-
-                final required = _isRequiredTool(toolId);
-
-                final selected = _selectedTools.contains(toolId);
-
-                return CheckboxListTile(
-                  value: selected,
-                  onChanged: required
-                      ? null
-                      : (value) {
-                          if (value == null) {
-                            return;
-                          }
-
-                          _toggleTool(toolId, value);
-                        },
-                  controlAffinity: ListTileControlAffinity.leading,
-                  activeColor: accent,
-                  checkColor: const Color(0xFF03110E),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 2,
-                  ),
-                  title: Text(
-                    _korlixAgentToolLabel(toolId),
-                    style: TextStyle(
-                      color: selected
-                          ? const Color(0xFFF0F7F8)
-                          : const Color(0xFF8299A2),
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  subtitle: Text(
-                    required
-                        ? '${_korlixAgentToolDescription(toolId)} '
-                              'Required for this agent.'
-                        : _korlixAgentToolDescription(toolId),
-                    style: const TextStyle(
-                      color: Color(0xFFA9C6CF),
-                      height: 1.3,
-                      fontSize: 12.5,
-                    ),
-                  ),
-                );
-              },
-            ),
-            if (index != tools.length - 1)
-              const Divider(height: 1, color: Color(0xFF173541)),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildConsentControl() {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFF071722),
-        border: Border.all(
-          color: _confirmed ? const Color(0xFF62D6A7) : const Color(0xFF244D5C),
-        ),
-      ),
-      child: CheckboxListTile(
-        value: _confirmed,
-        onChanged: (value) {
-          setState(() {
-            _confirmed = value == true;
-
-            _validationMessage = null;
-          });
-        },
-        controlAffinity: ListTileControlAffinity.leading,
-        activeColor: const Color(0xFF62D6A7),
-        checkColor: const Color(0xFF03110E),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-        title: const Text(
-          'Save as long-term agent training',
-          style: TextStyle(
-            color: Color(0xFFF0F7F8),
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        subtitle: const Text(
-          'I understand that these '
-          'instructions will remain active '
-          'for this agent across future '
-          'sessions until I reset, replace, '
-          'or restore its training.',
-          style: TextStyle(color: Color(0xFFA9C6CF), height: 1.35),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final screenSize = MediaQuery.sizeOf(context);
-
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-
-    final accent = korlixLiveConvoAgentAccent(widget.agent.accentHex);
-
-    final canSave = widget.agent.persistenceConfigured;
-
-    return Material(
-      color: Colors.transparent,
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: Container(
-          width: double.infinity,
-          constraints: BoxConstraints(
-            maxWidth: 780,
-            maxHeight: screenSize.height * 0.94,
-          ),
-          margin: const EdgeInsets.only(top: 24),
-          decoration: const BoxDecoration(
-            color: Color(0xFF041019),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: Color(0x66000000),
-                blurRadius: 34,
-                offset: Offset(0, -8),
-              ),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: SafeArea(
-            top: false,
-            child: ListView(
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: EdgeInsets.fromLTRB(18, 14, 18, 26 + bottomInset),
-              children: [
-                _buildTrainingHeader(accent),
-                const SizedBox(height: 14),
-                _buildProtectedMissionNotice(accent),
-                const SizedBox(height: 14),
-                _buildPersistenceWarning(),
-                if (!widget.agent.persistenceConfigured)
-                  const SizedBox(height: 14),
-                const Text(
-                  'CURRENT TRAINING',
-                  style: TextStyle(
-                    color: Color(0xFF8CDDE8),
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.6,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _buildCurrentTraining(),
-                const SizedBox(height: 18),
-                _buildTrainingDocumentControl(accent, canSave),
-                const SizedBox(height: 18),
-                _buildTrainingModeControl(accent),
-                const SizedBox(height: 18),
-                const Text(
-                  'TRAINING UPDATE',
-                  style: TextStyle(
-                    color: Color(0xFF8CDDE8),
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.6,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  _trainingMode == 'replace'
-                      ? 'This text will replace the current published training.'
-                      : 'This text will be added after the current published training.',
-                  style: const TextStyle(
-                    color: Color(0xFFA9C6CF),
-                    height: 1.35,
-                    fontSize: 12.5,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _instructionsController,
-                  minLines: 5,
-                  maxLines: 12,
-                  maxLength: 12000,
-                  enabled: canSave && !_trainingDocumentBusy,
-                  style: const TextStyle(color: Color(0xFFF0F7F8), height: 1.4),
-                  decoration: _trainingDecoration(
-                    label:
-                        'Instructions for '
-                        '${widget.agent.name}',
-                    hint:
-                        'Type or paste instructions, or upload a training '
-                        'document above to generate a reviewable draft.',
-                  ),
-                  onChanged: (_) {
-                    if (_validationMessage != null || _confirmed) {
-                      setState(() {
-                        _validationMessage = null;
-                        _confirmed = false;
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'MEMORY',
-                  style: TextStyle(
-                    color: Color(0xFF8CDDE8),
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.6,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _buildMemoryControl(accent),
-                const SizedBox(height: 18),
-                const Text(
-                  'AUTHORIZED TOOLS',
-                  style: TextStyle(
-                    color: Color(0xFF8CDDE8),
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.6,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                const Text(
-                  'Built-in agents may use '
-                  'only their protected tool '
-                  'set. Custom agents may use '
-                  'only tools explicitly enabled '
-                  'here.',
-                  style: TextStyle(
-                    color: Color(0xFFA9C6CF),
-                    height: 1.35,
-                    fontSize: 12.5,
-                  ),
-                ),
-                const SizedBox(height: 9),
-                _buildToolPermissions(accent),
-                const SizedBox(height: 18),
-                _buildConsentControl(),
-                if (_validationMessage != null) ...[
-                  const SizedBox(height: 12),
-                  Container(
+                  Padding(
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      color: const Color(0xFF351923),
-                      border: Border.all(color: const Color(0xFFFF7185)),
-                    ),
-                    child: Text(
-                      _validationMessage!,
-                      style: const TextStyle(
-                        color: Color(0xFFFFD8DE),
-                        fontWeight: FontWeight.w700,
-                        height: 1.35,
-                      ),
+                    child: SelectableText(
+                      widget.agent.trainingInstructions,
+                      style: TextStyle(color: p.muted, height: 1.5),
                     ),
                   ),
                 ],
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                        },
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                        ),
-                        child: const Text('Cancel'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: FilledButton.icon(
-                        onPressed: canSave && !_trainingDocumentBusy
-                            ? _submitTraining
-                            : null,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: accent,
-                          foregroundColor: const Color(0xFF03110E),
-                          disabledBackgroundColor: const Color(0xFF33454B),
-                          disabledForegroundColor: const Color(0xFF83969C),
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                        ),
-                        icon: const Icon(Icons.publish_rounded),
-                        label: Text(
-                          canSave ? 'Publish Training' : 'Migration Required',
-                          style: const TextStyle(fontWeight: FontWeight.w900),
-                        ),
-                      ),
-                    ),
-                  ],
+              ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  label: const Text('Add to training'),
+                  selected: _trainingMode == 'append',
+                  onSelected: canSave
+                      ? (_) => _setTrainingMode('append')
+                      : null,
+                ),
+                ChoiceChip(
+                  label: const Text('Replace training'),
+                  selected: _trainingMode == 'replace',
+                  onSelected: canSave
+                      ? (_) => _setTrainingMode('replace')
+                      : null,
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 10),
+            Text(
+              _trainingMode == 'append'
+                  ? 'Your existing instructions will be kept.'
+                  : 'This replaces the current instructions. Previous versions remain in history.',
+              style: TextStyle(color: p.muted, fontSize: 12, height: 1.5),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _instructionsController,
+              enabled: canSave,
+              minLines: 5,
+              maxLines: 12,
+              maxLength: 12000,
+              decoration: const InputDecoration(
+                labelText: 'Instructions to learn',
+                hintText:
+                    'Tone, working style, recurring processes, or examples…',
+                alignLabelWithHint: true,
+              ),
+              onChanged: (_) => setState(() {
+                _validationMessage = null;
+                _confirmed = false;
+              }),
+            ),
+            const SizedBox(height: 18),
+            AgentStudioPanel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Capabilities & memory',
+                    style: TextStyle(
+                      color: p.text,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _memoryEnabled,
+                    onChanged: canSave ? _toggleMemory : null,
+                    title: const Text('Long-term memory'),
+                    subtitle: const Text(
+                      'Use this agent’s approved private records.',
+                    ),
+                  ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final t in _availableTools)
+                        FilterChip(
+                          label: Text(_korlixAgentToolLabel(t)),
+                          selected: _selectedTools.contains(t),
+                          onSelected: canSave && !_isRequiredTool(t)
+                              ? (v) => _toggleTool(t, v)
+                              : null,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'The agent’s core mission and required capabilities stay protected.',
+                    style: TextStyle(color: p.muted, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: _confirmed,
+              onChanged: canSave
+                  ? (v) => setState(() {
+                      _confirmed = v == true;
+                      _validationMessage = null;
+                    })
+                  : null,
+              title: const Text('Publish as long-term agent training'),
+              subtitle: const Text(
+                'These instructions stay active until I replace, reset, or restore them.',
+              ),
+            ),
+            if (!widget.agent.persistenceConfigured)
+              const Text(
+                'Training storage is unavailable. Reconnect and try again.',
+              ),
+            if (_validationMessage != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  _validationMessage!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: canSave ? _submitTraining : null,
+              icon: const Icon(Icons.publish_outlined),
+              label: const Text('Publish Training'),
+            ),
+          ],
         ),
       ),
     );
@@ -3550,10 +2449,12 @@ class _KorlixAgentMemoryManagerSheet extends StatefulWidget {
   const _KorlixAgentMemoryManagerSheet({
     required this.client,
     required this.agent,
+    required this.onChanged,
   });
 
   final KorlixLiveConvoAgentClient client;
   final KorlixLiveConvoAgent agent;
+  final VoidCallback onChanged;
 
   @override
   State<_KorlixAgentMemoryManagerSheet> createState() {
@@ -3569,6 +2470,13 @@ class _KorlixAgentMemoryManagerSheetState
   bool _loading = true;
   bool _busy = false;
   bool _changed = false;
+  final _memoryScroll = ScrollController();
+
+  @override
+  void dispose() {
+    _memoryScroll.dispose();
+    super.dispose();
+  }
 
   String? _error;
 
@@ -3790,7 +2698,9 @@ class _KorlixAgentMemoryManagerSheetState
       backgroundColor: Colors.transparent,
       barrierColor: const Color(0xCC02070C),
       builder: (sheetContext) {
-        return _KorlixAgentMemoryDraftSheet(agent: widget.agent);
+        return _KorlixAgentMemoryDraftSheet(
+          agent: widget.agent.copyWith(memoryCount: _memories.length),
+        );
       },
     );
 
@@ -3798,6 +2708,8 @@ class _KorlixAgentMemoryManagerSheetState
       return;
     }
 
+    setState(() => _memoryActivity = 'memory');
+    if (_memoryScroll.hasClients) _memoryScroll.jumpTo(0);
     final saved = await _runMemoryBusy<KorlixLiveConvoAgentMemory>(() {
       return widget.client.saveMemory(agentId: widget.agent.id, draft: draft);
     });
@@ -3808,6 +2720,8 @@ class _KorlixAgentMemoryManagerSheetState
 
     setState(() {
       _changed = true;
+      widget.onChanged();
+      _memoryActivity = 'saved';
 
       _memories = _sortMemories(<KorlixLiveConvoAgentMemory>[
         for (final memory in _memories)
@@ -3816,13 +2730,7 @@ class _KorlixAgentMemoryManagerSheetState
       ]);
     });
 
-    _showMemoryMessage(
-      'Memory saved privately for ${widget.agent.name}. Applying it now.',
-    );
-    await Future<void>.delayed(const Duration(milliseconds: 120));
-    if (mounted) {
-      _closeMemoryManager();
-    }
+    _showMemoryMessage('Memory saved privately for ${widget.agent.name}.');
   }
 
   // KORLIX_AGENT_FILE_MEMORY_MANAGER_INTEGRATION_BUILD131_V1_BEGIN
@@ -3852,7 +2760,7 @@ class _KorlixAgentMemoryManagerSheetState
     final savedCount = await showKorlixLiveConvoAgentFileMemorySheet(
       context: context,
       client: widget.client,
-      agent: widget.agent,
+      agent: widget.agent.copyWith(memoryCount: _memories.length),
     );
 
     if (!mounted || savedCount == null || savedCount <= 0) {
@@ -3861,6 +2769,7 @@ class _KorlixAgentMemoryManagerSheetState
 
     setState(() {
       _changed = true;
+      widget.onChanged();
     });
 
     await _loadMemories(showLoading: false);
@@ -3872,16 +2781,12 @@ class _KorlixAgentMemoryManagerSheetState
     _showMemoryMessage(
       savedCount == 1
           ? '1 file-derived memory was saved privately for '
-                '${widget.agent.name}. Applying it now.'
+                '${widget.agent.name}.'
           : '$savedCount file-derived memories were saved privately for '
-                '${widget.agent.name}. Applying them now.',
+                '${widget.agent.name}.',
     );
 
-    await Future<void>.delayed(const Duration(milliseconds: 120));
-
-    if (mounted) {
-      _closeMemoryManager();
-    }
+    setState(() => _memoryActivity = 'saved');
   }
   // KORLIX_AGENT_FILE_MEMORY_MANAGER_INTEGRATION_BUILD131_V1_END
 
@@ -3922,6 +2827,7 @@ class _KorlixAgentMemoryManagerSheetState
 
     setState(() {
       _changed = true;
+      widget.onChanged();
 
       _memories = List<KorlixLiveConvoAgentMemory>.unmodifiable(
         _memories.where((candidate) => candidate.id != memory.id),
@@ -3976,6 +2882,7 @@ class _KorlixAgentMemoryManagerSheetState
 
     setState(() {
       _changed = true;
+      widget.onChanged();
 
       _memories = const <KorlixLiveConvoAgentMemory>[];
     });
@@ -4122,6 +3029,7 @@ class _KorlixAgentMemoryManagerSheetState
     }
 
     _changed = true;
+    widget.onChanged();
 
     await _loadMemories(showLoading: false);
 
@@ -4189,32 +3097,6 @@ class _KorlixAgentMemoryManagerSheetState
     }
   }
 
-  Color _memoryKindColor(String kind) {
-    switch (kind.trim().toLowerCase()) {
-      case 'fact':
-        return const Color(0xFF69D9E8);
-
-      case 'goal':
-        return const Color(0xFFF2C14E);
-
-      case 'style':
-        return const Color(0xFFB794F4);
-
-      case 'example':
-        return const Color(0xFFFFB86B);
-
-      case 'correction':
-        return const Color(0xFFFF7185);
-
-      case 'vocabulary':
-        return const Color(0xFF7CC4FF);
-
-      case 'preference':
-      default:
-        return const Color(0xFF62D6A7);
-    }
-  }
-
   String _memorySourceLabel(String source) {
     final clean = source.trim().replaceAll('_', ' ');
 
@@ -4249,776 +3131,355 @@ class _KorlixAgentMemoryManagerSheetState
         '$hour:$minute $period';
   }
 
-  Widget _buildMemoryHeader(Color accent) {
-    final memoryCount = _memories.length;
+  String _memorySearch = '', _kindFilter = 'all', _memorySort = 'importance';
+  bool _sensitiveOnly = false;
+  String _memoryActivity = 'ready';
 
-    final countLabel = memoryCount == 1
-        ? '1 saved memory'
-        : '$memoryCount saved memories';
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 12, 12, 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: accent.withValues(alpha: 0.14),
-              border: Border.all(color: accent.withValues(alpha: 0.72)),
-            ),
-            child: Icon(Icons.psychology_alt_rounded, color: accent),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${widget.agent.name.toUpperCase()} MEMORY',
-                  style: const TextStyle(
-                    color: Color(0xFFF0F7F8),
-                    fontSize: 19,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.4,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  countLabel,
-                  style: const TextStyle(
-                    color: Color(0xFFA9C6CF),
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            tooltip: 'Close memory manager',
-            onPressed: _busy ? null : _closeMemoryManager,
-            icon: const Icon(Icons.close_rounded),
-            color: const Color(0xFFC7D7DC),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMemoryStatusNotice() {
-    final persistenceReady = widget.agent.persistenceConfigured;
-
-    final memoryEnabled = widget.agent.memoryEnabled;
-
-    final ready = persistenceReady && memoryEnabled;
-
-    final color = ready ? const Color(0xFF62D6A7) : const Color(0xFFF2C14E);
-
-    final message = !persistenceReady
-        ? 'Apply the included Supabase migration '
-              'before saving or deleting private '
-              'long-term memories.'
-        : !memoryEnabled
-        ? 'Long-term memory is disabled for '
-              '${widget.agent.name}. Open Train '
-              'Agent to enable it.'
-        : 'These records are private to '
-              '${widget.agent.name} and are loaded '
-              'only when this agent is active.';
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: ready ? const Color(0xFF0B2A24) : const Color(0xFF332916),
-        border: Border.all(color: color),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            ready ? Icons.lock_rounded : Icons.info_outline_rounded,
-            color: color,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                color: Color(0xFFD8E7EA),
-                height: 1.4,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMemoryErrorBanner() {
-    final error = _error?.trim() ?? '';
-
-    if (error.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFF351923),
-        border: Border.all(color: const Color(0xFFFF7185)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.error_outline_rounded, color: Color(0xFFFF8B9B)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              error,
-              style: const TextStyle(
-                color: Color(0xFFFFD8DE),
-                height: 1.35,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          IconButton(
-            tooltip: 'Retry memory load',
-            onPressed: _busy
-                ? null
-                : () {
-                    unawaited(_loadMemories());
-                  },
-            icon: const Icon(Icons.refresh_rounded),
-            color: const Color(0xFFFFB2BE),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildImportanceIndicator({
-    required int importance,
-    required Color color,
-  }) {
-    final safeImportance = importance < 1
-        ? 1
-        : importance > 5
-        ? 5
-        : importance;
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var index = 1; index <= 5; index += 1)
-          Padding(
-            padding: EdgeInsets.only(right: index == 5 ? 0 : 2),
-            child: Icon(
-              index <= safeImportance
-                  ? Icons.star_rounded
-                  : Icons.star_border_rounded,
-              size: 15,
-              color: index <= safeImportance ? color : const Color(0xFF607680),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildMemoryTag(String tag) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: const Color(0xFF102B38),
-        border: Border.all(color: const Color(0xFF28596A)),
-      ),
-      child: Text(
-        tag,
-        style: const TextStyle(
-          color: Color(0xFFB7D7DE),
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
+  List<KorlixLiveConvoAgentMemory> get _visibleMemories {
+    final q = _memorySearch.trim().toLowerCase();
+    final result = _memories
+        .where(
+          (m) =>
+              (_kindFilter == 'all' || m.kind == _kindFilter) &&
+              (!_sensitiveOnly || m.sensitive) &&
+              (q.isEmpty ||
+                  '${m.label} ${m.content} ${m.tags.join(' ')}'
+                      .toLowerCase()
+                      .contains(q)),
+        )
+        .toList();
+    if (_memorySort == 'recent') {
+      result.sort(
+        (a, b) => (b.updatedAt ?? b.createdAt ?? DateTime(1970)).compareTo(
+          a.updatedAt ?? a.createdAt ?? DateTime(1970),
         ),
-      ),
-    );
+      );
+    }
+    return result;
   }
 
-  Widget _buildMemoryCard(KorlixLiveConvoAgentMemory memory) {
-    final kindColor = _memoryKindColor(memory.kind);
-
-    final cleanLabel = memory.label.trim();
-
-    final title = cleanLabel.isEmpty
-        ? _memoryKindLabel(memory.kind)
-        : cleanLabel;
-
-    final dateLabel = _formatMemoryDate(memory.updatedAt ?? memory.createdAt);
-
-    final sourceLabel = _memorySourceLabel(memory.source);
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: const Color(0xFF071722),
-        border: Border.all(color: kindColor.withValues(alpha: 0.52)),
-      ),
+  Widget _memoryCard(
+    KorlixLiveConvoAgentMemory m,
+    AgentStudioColors p,
+  ) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: AgentStudioPanel(
+      padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  color: kindColor.withValues(alpha: 0.15),
-                  border: Border.all(color: kindColor.withValues(alpha: 0.68)),
-                ),
-                child: Icon(
-                  _memoryKindIcon(memory.kind),
-                  color: kindColor,
-                  size: 22,
+              Icon(_memoryKindIcon(m.kind), color: p.cyan, size: 21),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  m.label.isEmpty ? _memoryKindLabel(m.kind) : m.label,
+                  style: TextStyle(
+                    color: p.text,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              IconButton(
+                tooltip: 'Delete memory',
+                onPressed: _busy ? null : () => _deleteMemory(m),
+                icon: Icon(
+                  Icons.delete_outline_rounded,
+                  color: p.muted,
+                  size: 19,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SelectableText(
+            m.content,
+            style: TextStyle(color: p.text, height: 1.6),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: [
+              AgentStudioPill(_memoryKindLabel(m.kind), color: p.cyan),
+              AgentStudioPill('Priority ${m.importance}/5', color: p.muted),
+              if (m.sensitive)
+                AgentStudioPill(
+                  'Sensitive',
+                  icon: Icons.lock_outline_rounded,
+                  color: p.dark
+                      ? const Color(0xFFFFCB86)
+                      : const Color(0xFF875B12),
+                ),
+              for (final t in m.tags) AgentStudioPill(t, color: p.muted),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '${_memorySourceLabel(m.source)} · ${_formatMemoryDate(m.updatedAt ?? m.createdAt)}',
+            style: TextStyle(color: p.muted, fontSize: 11),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AgentStudioColors(context), visible = _visibleMemories;
+    final canAdd =
+        widget.agent.persistenceConfigured &&
+        widget.agent.memoryEnabled &&
+        !_busy;
+    return PopScope(
+      canPop: !_busy,
+      onPopInvokedWithResult: (didPop, result) {},
+      child: Material(
+        color: p.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 1000,
+            maxHeight: MediaQuery.sizeOf(context).height * .94,
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 15, 10, 10),
+                child: Row(
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: Color(0xFFF0F7F8),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
+                    Expanded(
+                      child: Text(
+                        'Memory library',
+                        style: TextStyle(
+                          color: p.text,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -.7,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    IconButton(
+                      tooltip: 'Close memory library',
+                      onPressed: _busy ? null : _closeMemoryManager,
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              if (_busy || _loading)
+                const LinearProgressIndicator(minHeight: 2),
+              Expanded(
+                child: ListView(
+                  controller: _memoryScroll,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    10,
+                    20,
+                    24 + MediaQuery.viewInsetsOf(context).bottom,
+                  ),
+                  children: [
+                    AgentBrainHero(
+                      name: widget.agent.name,
+                      memories: _memories.length,
+                      version: widget.agent.version,
+                      compact: true,
+                      activity: _busy
+                          ? _memoryActivity
+                          : _error != null
+                          ? 'error'
+                          : _memoryActivity == 'saved'
+                          ? 'saved'
+                          : 'ready',
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'A memory for what matters.',
+                      style: TextStyle(
+                        color: p.text,
+                        fontSize: 23,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -.6,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Keep useful preferences, facts, and examples. Every record is private to ${widget.agent.name}.',
+                      style: TextStyle(color: p.muted, height: 1.5),
+                    ),
+                    const SizedBox(height: 16),
                     Wrap(
                       spacing: 8,
-                      runSpacing: 6,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: canAdd ? _openAddMemory : null,
+                          icon: const Icon(Icons.add_rounded),
+                          label: const Text('Add memory'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: canAdd ? _openAttachFileMemory : null,
+                          icon: const Icon(Icons.upload_file_rounded),
+                          label: const Text('Learn from a file'),
+                        ),
+                        IconButton(
+                          tooltip: 'Refresh memories',
+                          onPressed: _busy ? null : () => _loadMemories(),
+                          icon: const Icon(Icons.refresh_rounded),
+                        ),
+                      ],
+                    ),
+                    if (!widget.agent.memoryEnabled) ...[
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Enable long-term memory in Training studio to add records.',
+                      ),
+                    ],
+                    if (_error != null) ...[
+                      const SizedBox(height: 14),
+                      Text(
+                        _error!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 22),
+                    TextField(
+                      onChanged: (q) => setState(() => _memorySearch = q),
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search_rounded),
+                        hintText: 'Search content, labels, or tags',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final kind in [
+                          'all',
+                          ..._korlixAgentMemoryKindIds,
+                        ])
+                          ChoiceChip(
+                            label: Text(
+                              kind == 'all'
+                                  ? 'All types'
+                                  : _memoryKindLabel(kind),
+                            ),
+                            selected: _kindFilter == kind,
+                            onSelected: (_) =>
+                                setState(() => _kindFilter = kind),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        _KorlixAgentBadge(
-                          text: _memoryKindLabel(memory.kind).toUpperCase(),
-                          color: kindColor,
+                        FilterChip(
+                          label: const Text('Sensitive only'),
+                          selected: _sensitiveOnly,
+                          onSelected: (v) => setState(() => _sensitiveOnly = v),
                         ),
-                        if (memory.sensitive)
-                          const _KorlixAgentBadge(
-                            text: 'SENSITIVE',
-                            color: Color(0xFFFFB86B),
-                          ),
+                        DropdownButton<String>(
+                          value: _memorySort,
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'importance',
+                              child: Text('Highest priority'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'recent',
+                              child: Text('Most recent'),
+                            ),
+                          ],
+                          onChanged: (v) => setState(() => _memorySort = v!),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      '${visible.length} of ${_memories.length} memories',
+                      style: TextStyle(color: p.muted, fontSize: 12),
+                    ),
+                    const SizedBox(height: 12),
+                    if (visible.isEmpty && !_loading)
+                      AgentStudioPanel(
+                        child: Text(
+                          _memories.isEmpty
+                              ? 'No memories yet. Add something you want this agent to remember.'
+                              : 'No memories match these filters.',
+                          style: TextStyle(color: p.muted, height: 1.5),
+                        ),
+                      ),
+                    for (final m in visible) _memoryCard(m, p),
+                    const SizedBox(height: 15),
+                    ExpansionTile(
+                      title: const Text('Memory cleanup'),
+                      subtitle: const Text(
+                        'Review before removing saved knowledge',
+                      ),
+                      tilePadding: EdgeInsets.zero,
+                      children: [
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 8,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: _busy || _memories.isEmpty
+                                  ? null
+                                  : _forgetMatchingMemories,
+                              icon: const Icon(Icons.search_off_rounded),
+                              label: const Text('Forget matching'),
+                            ),
+                            TextButton.icon(
+                              onPressed: _busy || _memories.isEmpty
+                                  ? null
+                                  : _clearAllMemories,
+                              icon: const Icon(Icons.delete_sweep_outlined),
+                              label: const Text('Clear all memories'),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ],
                 ),
               ),
-              IconButton(
-                tooltip: 'Delete memory',
-                onPressed: _busy
-                    ? null
-                    : () {
-                        unawaited(_deleteMemory(memory));
-                      },
-                icon: const Icon(Icons.delete_outline_rounded),
-                color: const Color(0xFFFF8B9B),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SelectableText(
-            memory.content,
-            style: const TextStyle(
-              color: Color(0xFFD8E7EA),
-              height: 1.45,
-              fontSize: 14,
-            ),
-          ),
-          if (memory.tags.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 7,
-              runSpacing: 7,
-              children: [for (final tag in memory.tags) _buildMemoryTag(tag)],
-            ),
-          ],
-          const SizedBox(height: 13),
-          const Divider(height: 1, color: Color(0xFF173541)),
-          const SizedBox(height: 11),
-          Wrap(
-            spacing: 12,
-            runSpacing: 9,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Importance',
-                    style: TextStyle(
-                      color: Color(0xFF8FA8B1),
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(width: 7),
-                  _buildImportanceIndicator(
-                    importance: memory.importance,
-                    color: kindColor,
-                  ),
-                ],
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.person_outline_rounded,
-                    size: 16,
-                    color: Color(0xFF8FA8B1),
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    sourceLabel,
-                    style: const TextStyle(
-                      color: Color(0xFF8FA8B1),
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-              if (dateLabel.isNotEmpty)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 15),
+                child: Row(
                   children: [
-                    const Icon(
-                      Icons.schedule_rounded,
-                      size: 16,
-                      color: Color(0xFF8FA8B1),
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      dateLabel,
-                      style: const TextStyle(
-                        color: Color(0xFF8FA8B1),
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
+                    Expanded(
+                      child: Text(
+                        _changed
+                            ? 'Your changes are saved. Done applies them to the active agent.'
+                            : 'Only records you confirm are saved.',
+                        style: TextStyle(
+                          color: p.muted,
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
                       ),
+                    ),
+                    const SizedBox(width: 12),
+                    FilledButton(
+                      onPressed: _busy ? null : _closeMemoryManager,
+                      child: const Text('Done'),
                     ),
                   ],
                 ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMemoryActions(Color accent) {
-    final persistenceReady = widget.agent.persistenceConfigured;
-
-    final memoryEnabled = widget.agent.memoryEnabled;
-
-    final canAdd = persistenceReady && memoryEnabled && !_busy;
-
-    final hasMemories = _memories.isNotEmpty;
-
-    final typeMemoryButton = FilledButton.icon(
-      onPressed: canAdd
-          ? () {
-              unawaited(_openAddMemory());
-            }
-          : null,
-      style: FilledButton.styleFrom(
-        backgroundColor: accent,
-        foregroundColor: const Color(0xFF03110E),
-        disabledBackgroundColor: const Color(0xFF33454B),
-        disabledForegroundColor: const Color(0xFF83969C),
-        padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
-      ),
-      icon: const Icon(Icons.edit_note_rounded),
-      label: const Text(
-        'Type Memory',
-        style: TextStyle(fontWeight: FontWeight.w900),
-      ),
-    );
-
-    final attachFileButton = OutlinedButton.icon(
-      onPressed: canAdd
-          ? () {
-              unawaited(_openAttachFileMemory());
-            }
-          : null,
-      style: OutlinedButton.styleFrom(
-        foregroundColor: accent,
-        disabledForegroundColor: const Color(0xFF83969C),
-        side: BorderSide(
-          color: canAdd
-              ? accent.withValues(alpha: 0.78)
-              : const Color(0xFF33454B),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
-      ),
-      icon: const Icon(Icons.attach_file_rounded),
-      label: const Text(
-        'Attach File',
-        style: TextStyle(fontWeight: FontWeight.w900),
-      ),
-    );
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'ADD MEMORY',
-            style: TextStyle(
-              color: accent,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.6,
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(height: 8),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              if (constraints.maxWidth < 430) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    typeMemoryButton,
-                    const SizedBox(height: 9),
-                    attachFileButton,
-                  ],
-                );
-              }
-
-              return Row(
-                children: [
-                  Expanded(child: typeMemoryButton),
-                  const SizedBox(width: 9),
-                  Expanded(child: attachFileButton),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 9),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton.icon(
-                onPressed: _busy || !hasMemories
-                    ? null
-                    : () {
-                        unawaited(_forgetMatchingMemories());
-                      },
-                icon: const Icon(Icons.search_off_rounded),
-                label: const Text('Forget Matching'),
-              ),
-              TextButton.icon(
-                onPressed: _busy || !hasMemories
-                    ? null
-                    : () {
-                        unawaited(_clearAllMemories());
-                      },
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFFFF8B9B),
-                ),
-                icon: const Icon(Icons.delete_sweep_rounded),
-                label: const Text('Clear All'),
-              ),
-              TextButton.icon(
-                onPressed: _busy
-                    ? null
-                    : () {
-                        unawaited(_loadMemories());
-                      },
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Refresh'),
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyMemoryState(Color accent) {
-    final persistenceReady = widget.agent.persistenceConfigured;
-
-    final memoryEnabled = widget.agent.memoryEnabled;
-
-    final title = !persistenceReady
-        ? 'Memory setup is required'
-        : !memoryEnabled
-        ? 'Long-term memory is disabled'
-        : 'No saved memories yet';
-
-    final message = !persistenceReady
-        ? 'Apply the included Supabase migration, '
-              'then reopen this memory manager.'
-        : !memoryEnabled
-        ? 'Open Train Agent and enable long-term '
-              'memory before adding private records.'
-        : 'Add a confirmed preference, fact, goal, '
-              'style, example, correction, or vocabulary '
-              'record for ${widget.agent.name}.';
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: const Color(0xFF071722),
-        border: Border.all(color: accent.withValues(alpha: 0.46)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: accent.withValues(alpha: 0.13),
-              border: Border.all(color: accent.withValues(alpha: 0.62)),
-            ),
-            child: Icon(
-              memoryEnabled
-                  ? Icons.psychology_alt_rounded
-                  : Icons.memory_outlined,
-              color: accent,
-              size: 29,
-            ),
-          ),
-          const SizedBox(height: 13),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFFF0F7F8),
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 7),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Color(0xFFA9C6CF), height: 1.4),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMemoryCollection(Color accent) {
-    if (_loading) {
-      return const Padding(
-        padding: EdgeInsets.fromLTRB(16, 30, 16, 30),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(color: Color(0xFF69D9E8)),
-              SizedBox(height: 13),
-              Text(
-                'Loading private memories…',
-                style: TextStyle(
-                  color: Color(0xFFA9C6CF),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (_memories.isEmpty) {
-      return _buildEmptyMemoryState(accent);
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 2, 16, 9),
-          child: Text(
-            _memories.length == 1 ? 'SAVED MEMORY' : 'SAVED MEMORIES',
-            style: const TextStyle(
-              color: Color(0xFF8CDDE8),
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.6,
-              fontSize: 12,
-            ),
-          ),
-        ),
-        for (final memory in _memories) _buildMemoryCard(memory),
-      ],
-    );
-  }
-
-  Widget _buildMemoryPrivacyFooter(Color accent) {
-    final statusMessage = _changed
-        ? 'Your confirmed memory changes are saved. '
-              'Reload the active agent to use the latest records.'
-        : 'Only memories you explicitly confirm are saved. '
-              'Each record remains private to this agent.';
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 11, 12, 11),
-      decoration: const BoxDecoration(
-        color: Color(0xFF06131C),
-        border: Border(top: BorderSide(color: Color(0xFF173541))),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            _changed ? Icons.cloud_done_rounded : Icons.lock_outline_rounded,
-            color: _changed ? const Color(0xFF62D6A7) : accent,
-            size: 21,
-          ),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Text(
-              statusMessage,
-              style: const TextStyle(
-                color: Color(0xFFA9C6CF),
-                height: 1.35,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          FilledButton.icon(
-            onPressed: _busy ? null : _closeMemoryManager,
-            style: FilledButton.styleFrom(
-              backgroundColor: accent,
-              foregroundColor: const Color(0xFF03110E),
-              disabledBackgroundColor: const Color(0xFF33454B),
-              disabledForegroundColor: const Color(0xFF83969C),
-              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-            ),
-            icon: const Icon(Icons.check_rounded, size: 19),
-            label: const Text(
-              'Done',
-              style: TextStyle(fontWeight: FontWeight.w900),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final screenSize = MediaQuery.sizeOf(context);
-
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-
-    final accent = korlixLiveConvoAgentAccent(widget.agent.accentHex);
-
-    return Material(
-      color: Colors.transparent,
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: Container(
-          width: double.infinity,
-          constraints: BoxConstraints(
-            maxWidth: 860,
-            maxHeight: screenSize.height * 0.94,
-          ),
-          margin: const EdgeInsets.only(top: 24),
-          decoration: const BoxDecoration(
-            color: Color(0xFF041019),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: Color(0x66000000),
-                blurRadius: 34,
-                offset: Offset(0, -8),
-              ),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: SafeArea(
-            top: false,
-            child: Column(
-              children: [
-                _buildMemoryHeader(accent),
-                if (_busy)
-                  const LinearProgressIndicator(
-                    minHeight: 3,
-                    color: Color(0xFF69D9E8),
-                    backgroundColor: Color(0xFF123A47),
-                  ),
-                Expanded(
-                  child: ListView(
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: EdgeInsets.only(bottom: 18 + bottomInset),
-                    children: [
-                      _buildMemoryStatusNotice(),
-                      _buildMemoryErrorBanner(),
-                      _buildMemoryActions(accent),
-                      _buildMemoryCollection(accent),
-                      Container(
-                        margin: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                        padding: const EdgeInsets.all(13),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          color: const Color(0xFF081B25),
-                          border: Border.all(color: const Color(0xFF244D5C)),
-                        ),
-                        child: const Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              Icons.verified_user_outlined,
-                              color: Color(0xFF8CDDE8),
-                              size: 21,
-                            ),
-                            SizedBox(width: 9),
-                            Expanded(
-                              child: Text(
-                                'Agent memories are '
-                                'lower-priority user '
-                                'data. They cannot '
-                                'override Korlix safety, '
-                                'privacy, authorization, '
-                                'tool, or confirmation '
-                                'rules.',
-                                style: TextStyle(
-                                  color: Color(0xFFA9C6CF),
-                                  height: 1.4,
-                                  fontSize: 12.5,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                _buildMemoryPrivacyFooter(accent),
-              ],
-            ),
           ),
         ),
       ),
@@ -5125,58 +3586,6 @@ class _KorlixAgentMemoryDraftSheetState
     }
   }
 
-  IconData _draftKindIcon(String value) {
-    switch (value.trim().toLowerCase()) {
-      case 'fact':
-        return Icons.fact_check_rounded;
-
-      case 'goal':
-        return Icons.flag_rounded;
-
-      case 'style':
-        return Icons.tune_rounded;
-
-      case 'example':
-        return Icons.lightbulb_rounded;
-
-      case 'correction':
-        return Icons.rule_rounded;
-
-      case 'vocabulary':
-        return Icons.translate_rounded;
-
-      case 'preference':
-      default:
-        return Icons.favorite_rounded;
-    }
-  }
-
-  Color _draftKindColor(String value) {
-    switch (value.trim().toLowerCase()) {
-      case 'fact':
-        return const Color(0xFF69D9E8);
-
-      case 'goal':
-        return const Color(0xFFF2C14E);
-
-      case 'style':
-        return const Color(0xFFB794F4);
-
-      case 'example':
-        return const Color(0xFFFFB86B);
-
-      case 'correction':
-        return const Color(0xFFFF7185);
-
-      case 'vocabulary':
-        return const Color(0xFF7CC4FF);
-
-      case 'preference':
-      default:
-        return const Color(0xFF62D6A7);
-    }
-  }
-
   List<String> _normalizedDraftTags() {
     final result = <String>[];
     final seen = <String>{};
@@ -5256,686 +3665,184 @@ class _KorlixAgentMemoryDraftSheetState
     );
   }
 
-  InputDecoration _memoryDraftDecoration({
-    required String label,
-    String? hint,
-    String? helper,
-  }) {
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      helperText: helper,
-      alignLabelWithHint: true,
-      filled: true,
-      fillColor: const Color(0xFF071722),
-      labelStyle: const TextStyle(
-        color: Color(0xFF8CDDE8),
-        fontWeight: FontWeight.w800,
-      ),
-      hintStyle: const TextStyle(color: Color(0xFF718A96)),
-      helperStyle: const TextStyle(color: Color(0xFF8FA8B1), height: 1.3),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFF244D5C)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFF69D9E8), width: 1.6),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFFFF7185)),
-      ),
-    );
-  }
-
-  Widget _buildMemoryDraftHeader(Color accent) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: accent.withValues(alpha: 0.14),
-            border: Border.all(color: accent.withValues(alpha: 0.72)),
-          ),
-          child: Icon(Icons.add_task_rounded, color: accent),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'ADD CONFIRMED MEMORY',
-                style: TextStyle(
-                  color: Color(0xFFF0F7F8),
-                  fontSize: 19,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.4,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Save a private record for '
-                '${widget.agent.name}.',
-                style: const TextStyle(color: Color(0xFFA9C6CF), height: 1.35),
-              ),
-            ],
-          ),
-        ),
-        IconButton(
-          tooltip: 'Close memory form',
-          onPressed: () {
-            Navigator.of(context).pop();
-          },
-          icon: const Icon(Icons.close_rounded),
-          color: const Color(0xFFC7D7DC),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMemoryKindSelector(Color accent) {
-    final selectedColor = _draftKindColor(_kind);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'MEMORY TYPE',
-          style: TextStyle(
-            color: accent,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0.6,
-            fontSize: 12,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final kind in _korlixAgentMemoryKindIds)
-              Builder(
-                builder: (context) {
-                  final selected = kind == _kind;
-
-                  final kindColor = _draftKindColor(kind);
-
-                  return ChoiceChip(
-                    selected: selected,
-                    showCheckmark: false,
-                    onSelected: (_) {
-                      setState(() {
-                        _kind = kind;
-                        _validationMessage = null;
-                      });
-                    },
-                    avatar: Icon(
-                      _draftKindIcon(kind),
-                      size: 18,
-                      color: selected ? kindColor : const Color(0xFF8FA8B1),
-                    ),
-                    label: Text(_draftKindLabel(kind)),
-                    labelStyle: TextStyle(
-                      color: selected
-                          ? const Color(0xFFF0F7F8)
-                          : const Color(0xFFB1C4CA),
-                      fontWeight: FontWeight.w800,
-                    ),
-                    selectedColor: kindColor.withValues(alpha: 0.20),
-                    backgroundColor: const Color(0xFF071722),
-                    side: BorderSide(
-                      color: selected ? kindColor : const Color(0xFF244D5C),
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  );
-                },
-              ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
-            color: selectedColor.withValues(alpha: 0.10),
-            border: Border.all(color: selectedColor.withValues(alpha: 0.46)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(_draftKindIcon(_kind), color: selectedColor, size: 20),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Text(
-                  _draftKindDescription(_kind),
-                  style: const TextStyle(
-                    color: Color(0xFFD8E7EA),
-                    height: 1.4,
-                    fontSize: 12.5,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _importanceDescription(int value) {
-    switch (value) {
-      case 1:
-        return 'Low priority. Use only when directly relevant.';
-
-      case 2:
-        return 'Useful context for occasional related requests.';
-
-      case 4:
-        return 'High priority for this agent’s related work.';
-
-      case 5:
-        return 'Critical preference or fact to apply whenever relevant.';
-
-      case 3:
-      default:
-        return 'Normal priority for relevant future conversations.';
-    }
-  }
-
-  Widget _buildImportanceSelector(Color accent) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(17),
-        color: const Color(0xFF071722),
-        border: Border.all(color: const Color(0xFF244D5C)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.star_rounded,
-                color: Color(0xFFF2C14E),
-                size: 21,
-              ),
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text(
-                  'Importance',
-                  style: TextStyle(
-                    color: Color(0xFFF0F7F8),
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              Text(
-                '$_importance / 5',
-                style: TextStyle(color: accent, fontWeight: FontWeight.w900),
-              ),
-            ],
-          ),
-          const SizedBox(height: 11),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (var level = 1; level <= 5; level += 1)
-                ChoiceChip(
-                  selected: _importance == level,
-                  showCheckmark: false,
-                  onSelected: (_) {
-                    setState(() {
-                      _importance = level;
-                      _validationMessage = null;
-                    });
-                  },
-                  avatar: Icon(
-                    level <= _importance
-                        ? Icons.star_rounded
-                        : Icons.star_border_rounded,
-                    size: 17,
-                    color: const Color(0xFFF2C14E),
-                  ),
-                  label: Text('$level'),
-                  labelStyle: const TextStyle(
-                    color: Color(0xFFF0F7F8),
-                    fontWeight: FontWeight.w900,
-                  ),
-                  selectedColor: const Color(0xFF3A3218),
-                  backgroundColor: const Color(0xFF0A1B24),
-                  side: BorderSide(
-                    color: _importance == level
-                        ? const Color(0xFFF2C14E)
-                        : const Color(0xFF244D5C),
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(13),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            _importanceDescription(_importance),
-            style: const TextStyle(
-              color: Color(0xFFA9C6CF),
-              height: 1.35,
-              fontSize: 12.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSensitiveMemoryControl(Color accent) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(13, 10, 10, 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(17),
-        color: _sensitive ? const Color(0xFF302217) : const Color(0xFF071722),
-        border: Border.all(
-          color: _sensitive ? const Color(0xFFFFB86B) : const Color(0xFF244D5C),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 3),
-            child: Icon(
-              _sensitive
-                  ? Icons.privacy_tip_rounded
-                  : Icons.privacy_tip_outlined,
-              color: _sensitive ? const Color(0xFFFFB86B) : accent,
-            ),
-          ),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Sensitive memory',
-                  style: TextStyle(
-                    color: Color(0xFFF0F7F8),
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Mark private details that '
-                  'the agent should avoid '
-                  'repeating unnecessarily. '
-                  'This label supplements, '
-                  'but does not replace, '
-                  'account access controls.',
-                  style: TextStyle(
-                    color: Color(0xFFA9C6CF),
-                    height: 1.35,
-                    fontSize: 12.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Switch(
-            value: _sensitive,
-            onChanged: (value) {
-              setState(() {
-                _sensitive = value;
-                _validationMessage = null;
-              });
-            },
-            activeThumbColor: const Color(0xFFFFB86B),
-            activeTrackColor: const Color(0x665B4026),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMemoryConsentControl(Color accent) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(17),
-        color: const Color(0xFF071722),
-        border: Border.all(
-          color: _confirmed ? accent : const Color(0xFF244D5C),
-        ),
-      ),
-      child: CheckboxListTile(
-        value: _confirmed,
-        onChanged: (value) {
-          setState(() {
-            _confirmed = value == true;
-
-            _validationMessage = null;
-          });
-        },
-        controlAffinity: ListTileControlAffinity.leading,
-        activeColor: accent,
-        checkColor: const Color(0xFF03110E),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        title: Text(
-          'Save in ${widget.agent.name} '
-          'long-term memory',
-          style: const TextStyle(
-            color: Color(0xFFF0F7F8),
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        subtitle: const Text(
-          'I confirm that this record may '
-          'remain available to this agent '
-          'across future sessions until I '
-          'delete it, clear the agent’s '
-          'memory, or reset the agent.',
-          style: TextStyle(color: Color(0xFFA9C6CF), height: 1.4),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMemoryDraftValidation() {
-    final message = _validationMessage?.trim() ?? '';
-
-    if (message.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        color: const Color(0xFF351923),
-        border: Border.all(color: const Color(0xFFFF7185)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(
-            Icons.error_outline_rounded,
-            color: Color(0xFFFF8B9B),
-            size: 21,
-          ),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                color: Color(0xFFFFD8DE),
-                fontWeight: FontWeight.w700,
-                height: 1.35,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMemoryDraftPrivacyNotice(Color accent) {
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFF081B25),
-        border: Border.all(color: accent.withValues(alpha: 0.48)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.lock_outline_rounded, color: accent, size: 21),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Text(
-              'This record is scoped to '
-              '${widget.agent.name}. It is '
-              'treated as lower-priority '
-              'user data and cannot override '
-              'Korlix safety, privacy, tool, '
-              'authorization, or confirmation '
-              'rules.',
-              style: const TextStyle(
-                color: Color(0xFFA9C6CF),
-                height: 1.4,
-                fontSize: 12.5,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDraftTagChip(String tag) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: const Color(0xFF102B38),
-        border: Border.all(color: const Color(0xFF28596A)),
-      ),
-      child: Text(
-        tag,
-        style: const TextStyle(
-          color: Color(0xFFB7D7DE),
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDraftTagPreview() {
-    return ValueListenableBuilder<TextEditingValue>(
-      valueListenable: _tagsController,
-      builder: (context, value, child) {
-        final tags = _normalizedDraftTags();
-
-        if (tags.isEmpty) {
-          return const Text(
-            'No tags added. Tags are optional.',
-            style: TextStyle(color: Color(0xFF8299A2), fontSize: 12),
-          );
-        }
-
-        return Wrap(
-          spacing: 7,
-          runSpacing: 7,
-          children: [for (final tag in tags) _buildDraftTagChip(tag)],
-        );
-      },
-    );
-  }
-
-  Widget _buildMemoryDraftFields(Color accent) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'MEMORY DETAILS',
-          style: TextStyle(
-            color: accent,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0.6,
-            fontSize: 12,
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _labelController,
-          maxLength: 120,
-          textInputAction: TextInputAction.next,
-          textCapitalization: TextCapitalization.sentences,
-          style: const TextStyle(color: Color(0xFFF0F7F8)),
-          decoration: _memoryDraftDecoration(
-            label: 'Short label',
-            hint: 'Example: Report style',
-            helper:
-                'Optional. Use a clear name '
-                'that will help you recognize '
-                'this memory later.',
-          ),
-          onChanged: (_) {
-            _clearDraftValidation();
-          },
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _contentController,
-          minLines: 6,
-          maxLines: 14,
-          maxLength: 4000,
-          keyboardType: TextInputType.multiline,
-          textInputAction: TextInputAction.newline,
-          textCapitalization: TextCapitalization.sentences,
-          style: const TextStyle(color: Color(0xFFF0F7F8), height: 1.42),
-          decoration: _memoryDraftDecoration(
-            label: 'What should this agent remember?',
-            hint:
-                'Example: Use a one-page '
-                'executive summary for '
-                'internal audit reports.',
-            helper:
-                'Store only information that '
-                'you are authorized to retain '
-                'and use in future sessions.',
-          ),
-          onChanged: (_) {
-            _clearDraftValidation();
-          },
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _tagsController,
-          maxLength: 600,
-          textInputAction: TextInputAction.done,
-          style: const TextStyle(color: Color(0xFFF0F7F8)),
-          decoration: _memoryDraftDecoration(
-            label: 'Tags',
-            hint: 'reports, executive, audit',
-            helper:
-                'Optional. Separate up to '
-                '12 tags with commas, '
-                'semicolons, or new lines.',
-          ),
-          onChanged: (_) {
-            _clearDraftValidation();
-          },
-        ),
-        const SizedBox(height: 3),
-        _buildDraftTagPreview(),
-      ],
-    );
-  }
-
-  Widget _buildMemoryDraftActions(Color accent) {
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 15),
-            ),
-            child: const Text('Cancel'),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 2,
-          child: FilledButton.icon(
-            onPressed: _submitMemoryDraft,
-            style: FilledButton.styleFrom(
-              backgroundColor: accent,
-              foregroundColor: const Color(0xFF03110E),
-              padding: const EdgeInsets.symmetric(vertical: 15),
-            ),
-            icon: const Icon(Icons.save_rounded),
-            label: const Text(
-              'Save Confirmed Memory',
-              style: TextStyle(fontWeight: FontWeight.w900),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.sizeOf(context);
-
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-
-    final accent = korlixLiveConvoAgentAccent(widget.agent.accentHex);
-
+    final p = AgentStudioColors(context);
     return Material(
-      color: Colors.transparent,
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: Container(
-          width: double.infinity,
-          constraints: BoxConstraints(
-            maxWidth: 760,
-            maxHeight: screenSize.height * 0.94,
+      color: p.background,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 820,
+          maxHeight: MediaQuery.sizeOf(context).height * .94,
+        ),
+        child: ListView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.fromLTRB(
+            22,
+            20,
+            22,
+            26 + MediaQuery.viewInsetsOf(context).bottom,
           ),
-          margin: const EdgeInsets.only(top: 24),
-          decoration: const BoxDecoration(
-            color: Color(0xFF041019),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: Color(0x66000000),
-                blurRadius: 34,
-                offset: Offset(0, -8),
-              ),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: SafeArea(
-            top: false,
-            child: ListView(
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: EdgeInsets.fromLTRB(18, 14, 18, 26 + bottomInset),
+          children: [
+            Row(
               children: [
-                _buildMemoryDraftHeader(accent),
-                const SizedBox(height: 14),
-                _buildMemoryDraftPrivacyNotice(accent),
-                const SizedBox(height: 18),
-                _buildMemoryKindSelector(accent),
-                const SizedBox(height: 20),
-                _buildMemoryDraftFields(accent),
-                const SizedBox(height: 20),
-                _buildImportanceSelector(accent),
-                const SizedBox(height: 14),
-                _buildSensitiveMemoryControl(accent),
-                const SizedBox(height: 14),
-                _buildMemoryConsentControl(accent),
-                const SizedBox(height: 12),
-                _buildMemoryDraftValidation(),
-                const SizedBox(height: 18),
-                _buildMemoryDraftActions(accent),
+                Expanded(
+                  child: Text(
+                    'Add a memory',
+                    style: TextStyle(
+                      color: p.text,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -.7,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Close memory form',
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                ),
               ],
             ),
-          ),
+            const SizedBox(height: 8),
+            Text(
+              'Give ${widget.agent.name} something useful to remember.',
+              style: TextStyle(color: p.muted, height: 1.5),
+            ),
+            const SizedBox(height: 18),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _contentController,
+              builder: (context, value, _) => AgentBrainHero(
+                name: widget.agent.name,
+                memories: widget.agent.memoryCount,
+                version: widget.agent.version,
+                compact: true,
+                activity: value.text.isEmpty ? 'ready' : 'editing',
+              ),
+            ),
+            const SizedBox(height: 20),
+            DropdownButtonFormField<String>(
+              initialValue: _kind,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Memory type'),
+              items: [
+                for (final kind in _korlixAgentMemoryKindIds)
+                  DropdownMenuItem(
+                    value: kind,
+                    child: Text(_draftKindLabel(kind)),
+                  ),
+              ],
+              onChanged: (v) => setState(() {
+                _kind = v!;
+                _validationMessage = null;
+              }),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _draftKindDescription(_kind),
+              style: TextStyle(color: p.muted, fontSize: 12, height: 1.5),
+            ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: _labelController,
+              maxLength: 120,
+              decoration: const InputDecoration(
+                labelText: 'Short label',
+                hintText: 'e.g. My writing style',
+              ),
+              onChanged: (_) => _clearDraftValidation(),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _contentController,
+              maxLength: 4000,
+              minLines: 4,
+              maxLines: 8,
+              decoration: const InputDecoration(
+                labelText: 'What should this agent remember?',
+                alignLabelWithHint: true,
+              ),
+              onChanged: (_) => _clearDraftValidation(),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _tagsController,
+              maxLength: 500,
+              decoration: const InputDecoration(
+                labelText: 'Tags',
+                hintText: 'writing, brand, preferences',
+                helperText: 'Up to 12 tags, separated by commas.',
+              ),
+              onChanged: (_) => _clearDraftValidation(),
+            ),
+            const SizedBox(height: 18),
+            AgentStudioPanel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Memory priority · $_importance of 5',
+                    style: TextStyle(
+                      color: p.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Text(
+                    'Higher-priority memories are considered first when context is limited.',
+                    style: TextStyle(color: p.muted, fontSize: 12, height: 1.5),
+                  ),
+                  Slider(
+                    value: _importance.toDouble(),
+                    min: 1,
+                    max: 5,
+                    divisions: 4,
+                    label: 'Priority $_importance',
+                    onChanged: (v) => setState(() => _importance = v.round()),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _sensitive,
+                    onChanged: (v) => setState(() => _sensitive = v),
+                    title: const Text('Sensitive information'),
+                    subtitle: const Text(
+                      'Mark private personal or business details. Sensitive records are excluded from workflow memory.',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: _confirmed,
+              onChanged: (v) => setState(() {
+                _confirmed = v == true;
+                _validationMessage = null;
+              }),
+              title: const Text('Save in this agent’s long-term memory'),
+              subtitle: const Text(
+                'This record remains until I delete it, clear memory, or reset this agent.',
+              ),
+            ),
+            if (_validationMessage != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  _validationMessage!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            const SizedBox(height: 18),
+            FilledButton.icon(
+              onPressed: _submitMemoryDraft,
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('Save Confirmed Memory'),
+            ),
+          ],
         ),
       ),
     );

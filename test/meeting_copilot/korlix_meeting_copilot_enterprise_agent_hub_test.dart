@@ -97,7 +97,7 @@ void main() {
     final s = r(a);
     expect(s, contains('ENTERPRISE ONLY'));
     expect(s, contains('Locked — upgrade to '));
-    expect(s, contains('Enterprise for Nova'));
+    expect(s, contains('Enterprise for K-Nova'));
     expect(s, contains('Icons.lock_outline_rounded'));
     expect(s, contains('KorlixMeetingCopilotLockedPanel'));
   });

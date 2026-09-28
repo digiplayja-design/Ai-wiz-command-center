@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
+import 'agent_studio_client.dart' show agentAccountScope;
 import 'korlix_live_convo_agent.dart';
 import 'korlix_live_convo_brain_vault.dart';
 
@@ -850,7 +851,9 @@ class KorlixLiveConvoAgentClient {
     http.Client? client,
     this.timeout = const Duration(seconds: 45),
   }) : _client = client ?? http.Client(),
-       _ownsClient = client == null;
+       _ownsClient = client == null {
+    _accountScope = agentAccountScope(headersBuilder());
+  }
 
   final String backendBaseUrl;
   final KorlixLiveConvoAgentHeadersBuilder headersBuilder;
@@ -858,6 +861,19 @@ class KorlixLiveConvoAgentClient {
 
   final http.Client _client;
   final bool _ownsClient;
+  late final String _accountScope;
+  bool _accountExpired = false;
+  void assertCurrentAccount() {
+    if (_accountExpired ||
+        _accountScope != agentAccountScope(headersBuilder())) {
+      _accountExpired = true;
+      throw const KorlixLiveConvoAgentClientException(
+        'Your account changed. Close and reopen Agent Studio.',
+        code: 'agent_account_changed',
+        statusCode: 401,
+      );
+    }
+  }
 
   String get _cleanBase {
     final clean = backendBaseUrl.trim().replaceFirst(RegExp(r'/+$'), '');
@@ -873,6 +889,7 @@ class KorlixLiveConvoAgentClient {
   }
 
   Map<String, String> _requestHeaders({required bool hasJsonBody}) {
+    assertCurrentAccount();
     final headers = Map<String, String>.from(headersBuilder())
       ..removeWhere((name, _) => name.trim().toLowerCase() == 'content-type')
       ..['Accept'] = 'application/json';
@@ -993,6 +1010,8 @@ class KorlixLiveConvoAgentClient {
     }
 
     final response = await http.Response.fromStream(streamedResponse);
+    assertCurrentAccount();
+    if (response.statusCode == 401) _accountExpired = true;
 
     final decoded = _decodeResponse(response);
 
@@ -1386,6 +1405,8 @@ class KorlixLiveConvoAgentClient {
     }
 
     final response = await http.Response.fromStream(streamedResponse);
+    assertCurrentAccount();
+    if (response.statusCode == 401) _accountExpired = true;
 
     final decoded = _decodeResponse(response);
 
@@ -1507,6 +1528,8 @@ class KorlixLiveConvoAgentClient {
     }
 
     final response = await http.Response.fromStream(streamedResponse);
+    assertCurrentAccount();
+    if (response.statusCode == 401) _accountExpired = true;
     final decoded = _decodeResponse(response);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
