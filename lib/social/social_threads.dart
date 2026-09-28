@@ -6,6 +6,7 @@ import 'social_client.dart';
 import 'social_design.dart';
 import 'social_forms.dart';
 import 'social_emoji.dart';
+import 'social_message_quote.dart';
 
 class SocialChatScreen extends StatefulWidget {
   const SocialChatScreen({
@@ -25,6 +26,10 @@ class SocialChatScreen extends StatefulWidget {
 class _SocialChatScreenState extends State<SocialChatScreen>
     with WidgetsBindingObserver {
   final _text = TextEditingController(), _scroll = ScrollController();
+  final _composeFocus = FocusNode();
+  SocialMap? _replyTo;
+  String? _sendReplyId;
+  bool _openingOriginal = false;
   List<SocialMap> _messages = [];
   late SocialMap _peer = widget.peer;
   Timer? _timer;
@@ -57,6 +62,8 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       _generation++;
       setState(() {
         _messages = [];
+        _replyTo = null;
+        _sendKey = _sendBody = _sendReplyId = null;
         _peer = {
           'id': '',
           'name': 'Conversation',
@@ -83,6 +90,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     widget.client.removeListener(_access);
     WidgetsBinding.instance.removeObserver(this);
     _text.dispose();
+    _composeFocus.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -142,6 +150,32 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       setState(() {
         _messages = merged.values.toList()
           ..sort((a, b) => (a['seq'] as num).compareTo(b['seq'] as num));
+        final removed = <String>{
+          for (final m in page) ...[
+            if (m['deleted'] == true) '${m['id']}',
+            if (socialMap(m['reply'])['deleted'] == true)
+              '${socialMap(m['reply'])['id']}',
+          ],
+        };
+        if (removed.isNotEmpty) {
+          _messages = [
+            for (final m in _messages)
+              if (removed.contains(m['id']))
+                {...m, 'body': '', 'deleted': true, 'reply': null}
+              else if (removed.contains(socialMap(m['reply'])['id']))
+                {
+                  ...m,
+                  'reply': {
+                    ...socialMap(m['reply']),
+                    'body': '',
+                    'deleted': true,
+                  },
+                }
+              else
+                m,
+          ];
+          if (removed.contains(_replyTo?['id'])) _replyTo = null;
+        }
         _peer = socialMap(r['peer']);
         if (older || _messages.length <= 50) _more = list.length > 50;
         _unavailable = false;
@@ -154,6 +188,8 @@ class _SocialChatScreenState extends State<SocialChatScreen>
           _error = '$e';
           if (e is SocialException && [401, 403, 404].contains(e.status)) {
             _messages = [];
+            _replyTo = null;
+            _sendKey = _sendBody = _sendReplyId = null;
             _unavailable = true;
             _text.clear();
           }
@@ -167,8 +203,10 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   Future<void> _send() async {
     final body = _text.text.trim();
     if (body.isEmpty || _sending || _unavailable) return;
-    if (_sendBody != body) {
+    final replyId = _replyTo?['id'] as String?;
+    if (_sendBody != body || _sendReplyId != replyId) {
       _sendBody = body;
+      _sendReplyId = replyId;
       _sendKey = socialId();
     }
     setState(() => _sending = true);
@@ -177,11 +215,14 @@ class _SocialChatScreenState extends State<SocialChatScreen>
         'id': _sendKey,
         'peer': _peer['id'],
         'body': body,
+        'reply_to': ?replyId,
       });
       if (!mounted || !widget.client.available) return;
       _text.clear();
       _sendBody = null;
       _sendKey = null;
+      _sendReplyId = null;
+      _replyTo = null;
       await _load();
       _bottom();
     } catch (e) {
@@ -191,7 +232,147 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     }
   }
 
+  String _author(SocialMap m) =>
+      m['sender'] == widget.me['id'] ? 'You' : '${_peer['name']}';
+
+  void _chooseReply(SocialMap m) {
+    if (_sending ||
+        _unavailable ||
+        !widget.client.available ||
+        m['deleted'] == true) {
+      return;
+    }
+    setState(() => _replyTo = Map<String, dynamic>.from(m));
+    _composeFocus.requestFocus();
+  }
+
+  Future<void> _viewOriginal(String id) async {
+    if (_openingOriginal || _unavailable || !widget.client.available) return;
+    _openingOriginal = true;
+    try {
+      final result = await widget.client.get('message', {
+        'peer': _peer['id'],
+        'id': id,
+      });
+      if (!mounted || !widget.client.available || _unavailable) return;
+      final message = socialMap(result['message']);
+      if (message.isEmpty) {
+        throw const SocialException('Message is no longer available.');
+      }
+      // Refresh any loaded copies; the server is authoritative about removals.
+      setState(() {
+        _messages = [
+          for (final m in _messages)
+            m['id'] == id
+                ? message
+                : socialMap(m['reply'])['id'] == id
+                ? {...m, 'reply': message}
+                : m,
+        ];
+        if (_replyTo?['id'] == id) {
+          _replyTo = message['deleted'] == true ? null : message;
+        }
+      });
+      _composeFocus.unfocus();
+      final selected = await showModalBottomSheet<SocialMap>(
+        context: context,
+        showDragHandle: true,
+        isScrollControlled: true,
+        builder: (sheetContext) => AnimatedBuilder(
+          animation: widget.client,
+          builder: (context, _) {
+            if (!widget.client.available || _unavailable) {
+              return const SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('This conversation is unavailable.'),
+                ),
+              );
+            }
+            final s = korlixSkinOf(context),
+                removed = message['deleted'] == true;
+            return SafeArea(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(context).height * .75,
+                ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Original message',
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Close original message',
+                            onPressed: () => Navigator.pop(sheetContext),
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        _author(message),
+                        style: TextStyle(
+                          color: s.primary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SelectableText(
+                        removed
+                            ? 'Message removed'
+                            : '${message['body'] ?? ''}',
+                        style: TextStyle(
+                          height: 1.5,
+                          color: removed ? s.mutedText : s.text,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        socialTime(message['created_at']),
+                        style: TextStyle(color: s.mutedText, fontSize: 12),
+                      ),
+                      if (!removed && !_sending) ...[
+                        const SizedBox(height: 20),
+                        KorlixActionButton(
+                          label: 'Reply to this message',
+                          icon: Icons.reply_rounded,
+                          onPressed: () => Navigator.pop(sheetContext, message),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      );
+      if (selected != null && mounted && widget.client.available) {
+        _chooseReply(selected);
+      }
+    } catch (e) {
+      if (mounted && widget.client.available) socialNotice(context, e);
+    } finally {
+      _openingOriginal = false;
+    }
+  }
+
   Future<void> _messageAction(String action, SocialMap m) async {
+    if (action == 'reply') {
+      _chooseReply(m);
+      return;
+    }
     if (action == 'report') {
       final sent = await socialReport(
         context,
@@ -215,12 +396,24 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     try {
       await widget.client.post('delete_message', {'id': m['id']});
       if (mounted) {
-        setState(
-          () => _messages = [
+        setState(() {
+          if (_replyTo?['id'] == m['id']) _replyTo = null;
+          _messages = [
             for (final x in _messages)
-              x['id'] == m['id'] ? {...x, 'body': '', 'deleted': true} : x,
-          ],
-        );
+              x['id'] == m['id']
+                  ? {...x, 'body': '', 'deleted': true, 'reply': null}
+                  : socialMap(x['reply'])['id'] == m['id']
+                  ? {
+                      ...x,
+                      'reply': {
+                        ...socialMap(x['reply']),
+                        'body': '',
+                        'deleted': true,
+                      },
+                    }
+                  : x,
+          ];
+        });
         await _load();
       }
     } catch (e) {
@@ -296,10 +489,29 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                     ),
                   ),
                   if (!removed)
+                    IconButton(
+                      key: ValueKey('reply-${m['id']}'),
+                      tooltip: 'Reply to message',
+                      onPressed: _sending || _unavailable
+                          ? null
+                          : () => _chooseReply(m),
+                      icon: Icon(
+                        Icons.reply_rounded,
+                        size: 20,
+                        color: s.primary,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  if (!removed)
                     PopupMenuButton<String>(
                       tooltip: 'Message options',
                       onSelected: (v) => _messageAction(v, m),
                       itemBuilder: (_) => [
+                        PopupMenuItem(
+                          value: 'reply',
+                          enabled: !_sending && !_unavailable,
+                          child: const Text('Reply'),
+                        ),
                         PopupMenuItem(
                           value: mine ? 'delete' : 'report',
                           child: Text(
@@ -312,6 +524,16 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                     ),
                 ],
               ),
+              if (!removed && socialMap(m['reply']).isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: SocialMessageQuote(
+                    key: ValueKey('quote-${m['id']}'),
+                    message: socialMap(m['reply']),
+                    author: _author(socialMap(m['reply'])),
+                    onOpen: () => _viewOriginal('${m['reply']['id']}'),
+                  ),
+                ),
               SelectableText(
                 removed ? 'Message removed' : m['body'],
                 style: TextStyle(
@@ -498,6 +720,19 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                   ],
                 ),
               ),
+              if (!_unavailable && _replyTo != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: SocialMessageQuote(
+                    key: const ValueKey('reply-composer-preview'),
+                    message: _replyTo!,
+                    author: _author(_replyTo!),
+                    composing: true,
+                    onCancel: _sending
+                        ? null
+                        : () => setState(() => _replyTo = null),
+                  ),
+                ),
               if (!_unavailable)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -519,6 +754,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                       Expanded(
                         child: TextField(
                           controller: _text,
+                          focusNode: _composeFocus,
                           enabled: !_sending,
                           minLines: 1,
                           maxLines: 5,
