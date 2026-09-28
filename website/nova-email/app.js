@@ -23,6 +23,11 @@ const APP = {
   delivery: {},
   selectedDraft: null,
   connected: false,
+  panelErrors: {},
+  workspaceUpdatedAt: null,
+  refreshRevision: 0,
+  workspaceScope: '',
+  workspaceStale: false,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -993,6 +998,7 @@ function normalizeRecipient(row) {
     name: firstDefined(
       row.name,
       row.displayName,
+      row.display_name,
       row.recipientName,
       "",
     ),
@@ -1053,6 +1059,7 @@ function normalizeDraft(row) {
     recipientEmail: firstDefined(
       row.recipientEmail,
       row.recipient_email,
+      row.to_email,
       row.to,
       "",
     ),
@@ -3783,6 +3790,10 @@ function korlixResetEmailSessionV3() {
     );
   }
 
+  APP.refreshRevision++;
+  APP.statusPayload = null;
+  APP.settings = {}; APP.drafts = []; APP.recipients = []; APP.rules = []; APP.events = []; APP.delivery = {};
+  APP.workspaceUpdatedAt = null; APP.workspaceScope = ''; APP.workspaceStale = true;
   APP.token = null;
   APP.refreshToken = null;
   APP.userEmail = null;
@@ -4387,6 +4398,11 @@ findSessionToken = function findSessionTokenV2() {
   return null;
 };
 
+function korlixEmailScopeV4() {
+  const claims = decodeJwtPayload(APP.token) || {};
+  return `${claims.iss || ''}|${claims.sub || ''}|${claims.session_id || ''}|${APP.agentId || ''}|${APP.apiBase || ''}`;
+}
+
 requestJson = async function requestJsonV2(path, options = {}) {
   if (!APP.token) {
     throw new Error(
@@ -4394,6 +4410,7 @@ requestJson = async function requestJsonV2(path, options = {}) {
     );
   }
 
+  const requestScope = korlixEmailScopeV4();
   const url = path.startsWith("http")
     ? path
     : `${APP.apiBase}${path}`;
@@ -4413,6 +4430,9 @@ requestJson = async function requestJsonV2(path, options = {}) {
   );
 
   const payload = await korlixReadJsonResponseV2(response);
+  if (requestScope !== korlixEmailScopeV4()) {
+    throw new Error('Your account or agent changed. Reconnect Email Center.');
+  }
 
   if (!response.ok) {
     throw korlixResponseErrorV2(response, payload);
@@ -4622,6 +4642,9 @@ refreshDashboard = async function refreshDashboardV2(
     return false;
   }
 
+  const refreshScope = korlixEmailScopeV4();
+  const revision = ++APP.refreshRevision;
+  APP.workspaceStale = APP.workspaceScope !== refreshScope;
   els.refreshButton.disabled = true;
   setConnectedState(true, "Connecting to KORLIX…");
 
@@ -4651,6 +4674,10 @@ refreshDashboard = async function refreshDashboardV2(
     loadHealth().catch((error) => ({ error })),
   ]);
 
+  if (revision !== APP.refreshRevision || refreshScope !== korlixEmailScopeV4()) return false;
+  APP.panelErrors = Object.fromEntries([
+    ['recipients', recipientResult], ['drafts', draftResult], ['rules', ruleResult], ['events', eventResult],
+  ].map(([kind, result]) => [kind, Boolean(result.error)]));
   if (statusResult.error) {
     const message = korlixConnectionErrorTextV2(statusResult.error);
 
@@ -4679,6 +4706,9 @@ refreshDashboard = async function refreshDashboardV2(
     return false;
   }
 
+  APP.workspaceScope = refreshScope;
+  APP.workspaceStale = false;
+  APP.workspaceUpdatedAt = new Date().toISOString();
   APP.statusPayload = statusResult.payload || {};
   APP.recipients = recipientResult.list;
   APP.drafts = draftResult.list;

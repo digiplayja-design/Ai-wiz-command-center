@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'korlix_live_convo_agent.dart';
+import '../theme/korlix_action_button.dart';
+import '../theme/korlix_action_grid.dart';
 import 'korlix_live_convo_agent_client.dart';
 
 // KORLIX_AGENT_EMAIL_UI_BUILD133_BEGIN
@@ -433,6 +435,7 @@ class _KorlixAgentEmailApi {
     required String path,
     Map<String, dynamic>? body,
   }) async {
+    client.assertCurrentAccount();
     final uri = Uri.parse('$_baseUrl$path');
 
     final normalized = method.trim().toUpperCase();
@@ -461,6 +464,7 @@ class _KorlixAgentEmailApi {
       throw ArgumentError('Unsupported Agent Email method: $normalized');
     }
 
+    client.assertCurrentAccount();
     Object? decoded;
 
     if (response.body.trim().isNotEmpty) {
@@ -561,6 +565,38 @@ class _KorlixLiveConvoAgentEmailSheetState
   int _section = 0;
   String? _error;
   DateTime? _loadedAt;
+  final _search = TextEditingController();
+  String _query = '', _draftFilter = 'All';
+  int _loadRevision = 0;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> _matching(List<Map<String, dynamic>> items) =>
+      items
+          .where(
+            (row) =>
+                _query.trim().isEmpty ||
+                row.values
+                    .join(' ')
+                    .toLowerCase()
+                    .contains(_query.trim().toLowerCase()),
+          )
+          .toList();
+
+  List<Map<String, dynamic>> get _visibleDrafts =>
+      _matching(_drafts).where((d) {
+        final status = _emailText(d, ['status']).toLowerCase();
+        return _draftFilter == 'All' ||
+            (_draftFilter == 'Needs review' &&
+                ['draft', 'pending_approval'].contains(status)) ||
+            (_draftFilter == 'Approved' && status == 'approved') ||
+            (_draftFilter == 'Issues' &&
+                ['failed', 'bounced', 'complained'].contains(status));
+      }).toList();
 
   Color get _accent => _emailAccent(widget.agent.accentHex);
 
@@ -571,6 +607,7 @@ class _KorlixLiveConvoAgentEmailSheetState
   }
 
   bool get _canSend {
+    if (_loading || _error != null) return false;
     final combined = _combinedStatus;
 
     if (combined.containsKey('canSend') || combined.containsKey('can_send')) {
@@ -641,6 +678,7 @@ class _KorlixLiveConvoAgentEmailSheetState
       return;
     }
 
+    final revision = ++_loadRevision;
     if (showLoader) {
       setState(() {
         _loading = true;
@@ -662,6 +700,7 @@ class _KorlixLiveConvoAgentEmailSheetState
       return;
     }
 
+    if (revision != _loadRevision) return;
     final errors = results
         .map((result) => _emailText(result, const <String>['_loadError']))
         .where((message) => message.isNotEmpty)
@@ -729,7 +768,7 @@ class _KorlixLiveConvoAgentEmailSheetState
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF071722),
+          backgroundColor: const Color(0xFF101D30),
           title: Text(
             title,
             style: const TextStyle(
@@ -772,7 +811,7 @@ class _KorlixLiveConvoAgentEmailSheetState
     required Future<void> Function() action,
     required String successMessage,
   }) async {
-    if (_busy) {
+    if (_busy || _loading) {
       return;
     }
 
@@ -822,7 +861,7 @@ class _KorlixLiveConvoAgentEmailSheetState
       fillColor: const Color(0xFF06141D),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFF315866)),
+        borderSide: const BorderSide(color: Color(0xFF34445E)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -942,7 +981,7 @@ class _KorlixLiveConvoAgentEmailSheetState
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF071722),
+              backgroundColor: const Color(0xFF101D30),
               title: Text(
                 '${widget.agent.name} Email Settings',
                 style: const TextStyle(
@@ -957,8 +996,8 @@ class _KorlixLiveConvoAgentEmailSheetState
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       DropdownButtonFormField<String>(
-                        value: mode,
-                        dropdownColor: const Color(0xFF071722),
+                        initialValue: mode,
+                        dropdownColor: const Color(0xFF101D30),
                         style: const TextStyle(color: Color(0xFFE4EBEE)),
                         decoration: _decoration('Operating mode'),
                         items: const [
@@ -988,7 +1027,7 @@ class _KorlixLiveConvoAgentEmailSheetState
                       const SizedBox(height: 8),
                       SwitchListTile(
                         value: enabled,
-                        activeColor: _accent,
+                        activeThumbColor: _accent,
                         contentPadding: EdgeInsets.zero,
                         title: const Text(
                           'Enable Agent Email',
@@ -1005,7 +1044,7 @@ class _KorlixLiveConvoAgentEmailSheetState
                       ),
                       SwitchListTile(
                         value: paused,
-                        activeColor: const Color(0xFFF28B82),
+                        activeThumbColor: const Color(0xFFF28B82),
                         contentPadding: EdgeInsets.zero,
                         title: const Text(
                           'Emergency Pause',
@@ -1026,7 +1065,7 @@ class _KorlixLiveConvoAgentEmailSheetState
                       ),
                       SwitchListTile(
                         value: marketingEnabled,
-                        activeColor: _accent,
+                        activeThumbColor: _accent,
                         contentPadding: EdgeInsets.zero,
                         title: const Text(
                           'Approved Marketing Email',
@@ -1246,7 +1285,7 @@ class _KorlixLiveConvoAgentEmailSheetState
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF071722),
+              backgroundColor: const Color(0xFF101D30),
               title: const Text(
                 'Add Approved Recipient',
                 style: TextStyle(
@@ -1278,8 +1317,8 @@ class _KorlixLiveConvoAgentEmailSheetState
                     ),
                     const SizedBox(height: 11),
                     DropdownButtonFormField<String>(
-                      value: consentScope,
-                      dropdownColor: const Color(0xFF071722),
+                      initialValue: consentScope,
+                      dropdownColor: const Color(0xFF101D30),
                       style: const TextStyle(color: Color(0xFFE4EBEE)),
                       decoration: _decoration('Consent scope'),
                       items: const [
@@ -1510,7 +1549,7 @@ class _KorlixLiveConvoAgentEmailSheetState
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF071722),
+              backgroundColor: const Color(0xFF101D30),
               title: Text(
                 'Create ${widget.agent.name} Email Draft',
                 style: const TextStyle(
@@ -1525,9 +1564,9 @@ class _KorlixLiveConvoAgentEmailSheetState
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       DropdownButtonFormField<String>(
-                        value: recipientId,
+                        initialValue: recipientId,
                         isExpanded: true,
-                        dropdownColor: const Color(0xFF071722),
+                        dropdownColor: const Color(0xFF101D30),
                         style: const TextStyle(color: Color(0xFFE4EBEE)),
                         decoration: _decoration('Approved recipient'),
                         items: recipients
@@ -1580,7 +1619,7 @@ class _KorlixLiveConvoAgentEmailSheetState
                       const SizedBox(height: 5),
                       SwitchListTile(
                         value: marketing,
-                        activeColor: _accent,
+                        activeThumbColor: _accent,
                         contentPadding: EdgeInsets.zero,
                         title: const Text(
                           'Marketing Email',
@@ -1905,7 +1944,7 @@ class _KorlixLiveConvoAgentEmailSheetState
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF071722),
+              backgroundColor: const Color(0xFF101D30),
               title: const Text(
                 'Create Agent Email Rule',
                 style: TextStyle(
@@ -1941,9 +1980,9 @@ class _KorlixLiveConvoAgentEmailSheetState
                       ),
                       const SizedBox(height: 11),
                       DropdownButtonFormField<String>(
-                        value: recipientId,
+                        initialValue: recipientId,
                         isExpanded: true,
-                        dropdownColor: const Color(0xFF071722),
+                        dropdownColor: const Color(0xFF101D30),
                         style: const TextStyle(color: Color(0xFFE4EBEE)),
                         decoration: _decoration('Approved recipient'),
                         items: recipients
@@ -1981,8 +2020,8 @@ class _KorlixLiveConvoAgentEmailSheetState
                       ),
                       const SizedBox(height: 11),
                       DropdownButtonFormField<String>(
-                        value: sendMode,
-                        dropdownColor: const Color(0xFF071722),
+                        initialValue: sendMode,
+                        dropdownColor: const Color(0xFF101D30),
                         style: const TextStyle(color: Color(0xFFE4EBEE)),
                         decoration: _decoration('Rule action'),
                         items: const [
@@ -2023,7 +2062,7 @@ class _KorlixLiveConvoAgentEmailSheetState
                       ),
                       SwitchListTile(
                         value: enabled,
-                        activeColor: _accent,
+                        activeThumbColor: _accent,
                         contentPadding: EdgeInsets.zero,
                         title: const Text(
                           'Enable after saving',
@@ -2176,7 +2215,7 @@ class _KorlixLiveConvoAgentEmailSheetState
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: const Color(0xFF071722),
+        color: const Color(0xFF101D30),
         border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Row(
@@ -2291,6 +2330,69 @@ class _KorlixLiveConvoAgentEmailSheetState
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
       children: [
+        Container(
+          padding: const EdgeInsets.all(22),
+          margin: const EdgeInsets.only(bottom: 18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF182D49), Color(0xFF0E192C)],
+            ),
+            border: Border.all(color: _accent.withValues(alpha: .3)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x33000000),
+                blurRadius: 22,
+                offset: Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'A calmer way to manage email.',
+                style: TextStyle(
+                  color: Color(0xFFF1F6FF),
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -.8,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                '${_drafts.where((d) => ['draft', 'pending_approval'].contains(d['status'])).length} drafts to review · ${_rules.where((r) => r['enabled'] == true).length} enabled rules',
+                style: const TextStyle(color: Color(0xFFAFBED3), height: 1.5),
+              ),
+              const SizedBox(height: 18),
+              KorlixActionGrid(
+                compact: true,
+                minimumHeight: 100,
+                children: [
+                  KorlixActionButton(
+                    label: 'New draft',
+                    icon: Icons.edit_note_rounded,
+                    tile: true,
+                    size: KorlixButtonSize.compact,
+                    onPressed: _busy ? null : () => unawaited(_createDraft()),
+                  ),
+                  KorlixActionButton(
+                    label: 'Review queue',
+                    icon: Icons.fact_check_outlined,
+                    tile: true,
+                    size: KorlixButtonSize.compact,
+                    onPressed: () => setState(() {
+                      _section = 2;
+                      _draftFilter = 'Needs review';
+                      _query = '';
+                      _search.clear();
+                    }),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
         Wrap(
           spacing: 10,
           runSpacing: 10,
@@ -2326,8 +2428,8 @@ class _KorlixLiveConvoAgentEmailSheetState
           padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            color: const Color(0xFF071722),
-            border: Border.all(color: const Color(0xFF2B5360)),
+            color: const Color(0xFF101D30),
+            border: Border.all(color: const Color(0xFF2C405B)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2384,13 +2486,13 @@ class _KorlixLiveConvoAgentEmailSheetState
           ),
         ),
         const SizedBox(height: 9),
-        if (_events.isEmpty)
+        if (_matching(_events).isEmpty)
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
-              color: const Color(0xFF071722),
-              border: Border.all(color: const Color(0xFF2B5360)),
+              color: const Color(0xFF101D30),
+              border: Border.all(color: const Color(0xFF2C405B)),
             ),
             child: const Text(
               'No delivery events are available yet.',
@@ -2398,7 +2500,7 @@ class _KorlixLiveConvoAgentEmailSheetState
             ),
           )
         else
-          ..._events.take(12).map((event) {
+          ..._matching(_events).take(100).map((event) {
             final type = _emailText(event, const <String>[
               'type',
               'eventType',
@@ -2429,7 +2531,7 @@ class _KorlixLiveConvoAgentEmailSheetState
               padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                color: const Color(0xFF071722),
+                color: const Color(0xFF101D30),
                 border: Border.all(color: const Color(0xFF244D5C)),
               ),
               child: Row(
@@ -2506,7 +2608,7 @@ class _KorlixLiveConvoAgentEmailSheetState
           ],
         ),
         const SizedBox(height: 12),
-        if (_recipients.isEmpty)
+        if (_matching(_recipients).isEmpty)
           _emptyState(
             icon: Icons.people_outline_rounded,
             title: 'No approved recipients',
@@ -2515,7 +2617,7 @@ class _KorlixLiveConvoAgentEmailSheetState
                 'confirmed by the user. KORLIX will not scrape or guess them.',
           )
         else
-          ..._recipients.map((recipient) {
+          ..._matching(_recipients).map((recipient) {
             final email = _emailText(recipient, const <String>[
               'email',
             ], fallback: 'Email unavailable');
@@ -2542,11 +2644,11 @@ class _KorlixLiveConvoAgentEmailSheetState
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
-                color: const Color(0xFF071722),
+                color: const Color(0xFF101D30),
                 border: Border.all(
                   color: blocked
                       ? const Color(0xFF8D3344)
-                      : const Color(0xFF2B5360),
+                      : const Color(0xFF2C405B),
                 ),
               ),
               child: Row(
@@ -2591,7 +2693,7 @@ class _KorlixLiveConvoAgentEmailSheetState
                   if (!blocked)
                     PopupMenuButton<String>(
                       enabled: !_busy,
-                      color: const Color(0xFF071722),
+                      color: const Color(0xFF101D30),
                       icon: const Icon(
                         Icons.more_vert_rounded,
                         color: Color(0xFFA9C6CF),
@@ -2652,16 +2754,29 @@ class _KorlixLiveConvoAgentEmailSheetState
           ],
         ),
         const SizedBox(height: 12),
-        if (_drafts.isEmpty)
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            for (final filter in ['All', 'Needs review', 'Approved', 'Issues'])
+              ChoiceChip(
+                label: Text(filter),
+                selected: _draftFilter == filter,
+                onSelected: (_) => setState(() => _draftFilter = filter),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_visibleDrafts.isEmpty)
           _emptyState(
             icon: Icons.drafts_outlined,
-            title: 'No drafts yet',
+            title: _drafts.isEmpty ? 'No drafts yet' : 'No matching drafts',
             message:
                 '${widget.agent.name} can prepare a draft without '
                 'sending anything. Approval and sending remain separate.',
           )
         else
-          ..._drafts.map((draft) {
+          ..._visibleDrafts.map((draft) {
             final messageId = _emailId(draft, const <String>[
               'id',
               'messageId',
@@ -2700,13 +2815,13 @@ class _KorlixLiveConvoAgentEmailSheetState
               padding: const EdgeInsets.all(15),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
-                color: const Color(0xFF071722),
+                color: const Color(0xFF101D30),
                 border: Border.all(
                   color: sent
                       ? const Color(0xFF62D6A7)
                       : held
                       ? const Color(0xFFF2C14E)
-                      : const Color(0xFF2B5360),
+                      : const Color(0xFF2C405B),
                 ),
               ),
               child: Column(
@@ -2836,6 +2951,34 @@ class _KorlixLiveConvoAgentEmailSheetState
     );
   }
 
+  Future<void> _toggleRule(Map<String, dynamic> rule) async {
+    final enabled = _emailBool(rule, ['enabled']);
+    final name = _emailText(rule, ['name'], fallback: 'this rule');
+    if (!await _confirm(
+          title: enabled ? 'Pause $name?' : 'Resume $name?',
+          message: enabled
+              ? 'Future matching sends will pause. A send already in progress may finish.'
+              : 'This rule will become eligible at its next matching event or scheduled time, within your email settings and approved scope.',
+          confirmLabel: enabled ? 'Pause rule' : 'Resume rule',
+        ) ||
+        !mounted) {
+      return;
+    }
+    await _runMutation(
+      action: () async {
+        await _api.request(
+          method: 'PATCH',
+          path: _route(
+            KorlixAgentEmailApiContract.ruleTemplate,
+            ruleId: _emailId(rule, ['id', 'ruleId', 'rule_id']),
+          ),
+          body: {'confirmed': true, 'enabled': !enabled},
+        );
+      },
+      successMessage: enabled ? 'Rule paused.' : 'Rule resumed.',
+    );
+  }
+
   Widget _ruleList() {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
@@ -2856,9 +2999,8 @@ class _KorlixLiveConvoAgentEmailSheetState
               SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Autopilot execution is server-controlled. This screen '
-                  'may create preapproved rules but cannot run the internal '
-                  'trigger or call the Resend webhook.',
+                  'Choose what happens automatically. Review each rule’s '
+                  'recipients, message, and timing before enabling it.',
                   style: TextStyle(
                     color: Color(0xFFE7D79D),
                     height: 1.4,
@@ -2898,7 +3040,7 @@ class _KorlixLiveConvoAgentEmailSheetState
           ],
         ),
         const SizedBox(height: 12),
-        if (_rules.isEmpty)
+        if (_matching(_rules).isEmpty)
           _emptyState(
             icon: Icons.rule_folder_outlined,
             title: 'No Agent Email rules',
@@ -2907,7 +3049,7 @@ class _KorlixLiveConvoAgentEmailSheetState
                 'a tightly restricted Autopilot rule.',
           )
         else
-          ..._rules.map((rule) {
+          ..._matching(_rules).map((rule) {
             final name = _emailText(rule, const <String>[
               'name',
             ], fallback: 'Unnamed rule');
@@ -2934,11 +3076,11 @@ class _KorlixLiveConvoAgentEmailSheetState
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
-                color: const Color(0xFF071722),
+                color: const Color(0xFF101D30),
                 border: Border.all(
                   color: enabled
                       ? _accent.withValues(alpha: 0.62)
-                      : const Color(0xFF2B5360),
+                      : const Color(0xFF2C405B),
                 ),
               ),
               child: Row(
@@ -2980,6 +3122,64 @@ class _KorlixLiveConvoAgentEmailSheetState
                             fontWeight: FontWeight.w800,
                           ),
                         ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            KorlixActionButton(
+                              label: enabled ? 'Pause rule' : 'Resume rule',
+                              icon: enabled
+                                  ? Icons.pause_rounded
+                                  : Icons.play_arrow_rounded,
+                              size: KorlixButtonSize.compact,
+                              onPressed:
+                                  _busy ||
+                                      _loading ||
+                                      (!enabled &&
+                                          sendMode == 'autopilot' &&
+                                          !preapproved)
+                                  ? null
+                                  : () => unawaited(_toggleRule(rule)),
+                            ),
+                            if (_emailText(rule, [
+                              'nextRunAt',
+                              'next_run_at',
+                            ]).isNotEmpty)
+                              Text(
+                                'Next: ${_emailDate(_emailFirst(rule, ['nextRunAt', 'next_run_at']))}',
+                                style: const TextStyle(
+                                  color: Color(0xFFA9C6CF),
+                                  fontSize: 12,
+                                ),
+                              ),
+                          ],
+                        ),
+                        Material(
+                          type: MaterialType.transparency,
+                          child: ExpansionTile(
+                            tilePadding: EdgeInsets.zero,
+                            title: const Text(
+                              'Review rule details',
+                              style: TextStyle(
+                                color: Color(0xFFA9C6CF),
+                                fontSize: 13,
+                              ),
+                            ),
+                            children: [
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: SelectableText(
+                                  'Subject: ${_emailText(rule, ['subjectTemplate', 'subject_template'], fallback: 'Not provided')}\n\n${_emailText(rule, ['textTemplate', 'text_template'], fallback: 'Message unavailable')}\n\nDaily limit: ${_emailText(rule, ['maxSendsPerDay', 'max_sends_per_day'], fallback: 'Not provided')}\nTime zone: ${_emailText(rule, ['scheduleTimezone', 'schedule_timezone'], fallback: 'Event based')}',
+                                  style: const TextStyle(
+                                    color: Color(0xFFD9E4F3),
+                                    height: 1.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -2996,7 +3196,7 @@ class _KorlixLiveConvoAgentEmailSheetState
       (icon: Icons.dashboard_rounded, label: 'Overview'),
       (icon: Icons.people_alt_rounded, label: 'Recipients'),
       (icon: Icons.drafts_rounded, label: 'Drafts'),
-      (icon: Icons.auto_mode_rounded, label: 'Autopilot'),
+      (icon: Icons.auto_mode_rounded, label: 'Automation'),
     ];
 
     return SingleChildScrollView(
@@ -3014,7 +3214,7 @@ class _KorlixLiveConvoAgentEmailSheetState
               selected: selected,
               selectedColor: _accent.withValues(alpha: 0.22),
               side: BorderSide(
-                color: selected ? _accent : const Color(0xFF315866),
+                color: selected ? _accent : const Color(0xFF34445E),
               ),
               avatar: Icon(
                 section.icon,
@@ -3031,6 +3231,8 @@ class _KorlixLiveConvoAgentEmailSheetState
               onSelected: (_) {
                 setState(() {
                   _section = index;
+                  _query = '';
+                  _search.clear();
                 });
               },
             ),
@@ -3070,7 +3272,7 @@ class _KorlixLiveConvoAgentEmailSheetState
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1080),
           child: Material(
-            color: const Color(0xFF041019),
+            color: const Color(0xFF080F1B),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
             clipBehavior: Clip.antiAlias,
             child: Column(
@@ -3078,7 +3280,7 @@ class _KorlixLiveConvoAgentEmailSheetState
                 Container(
                   padding: const EdgeInsets.fromLTRB(16, 13, 10, 12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF071722),
+                    color: const Color(0xFF101D30),
                     border: Border(
                       bottom: BorderSide(
                         color: _accent.withValues(alpha: 0.38),
@@ -3108,7 +3310,7 @@ class _KorlixLiveConvoAgentEmailSheetState
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'AGENT EMAIL',
+                              'EMAIL STUDIO',
                               style: TextStyle(
                                 color: Color(0xFFA9C6CF),
                                 fontSize: 11,
@@ -3179,9 +3381,8 @@ class _KorlixLiveConvoAgentEmailSheetState
                       SizedBox(width: 9),
                       Expanded(
                         child: Text(
-                          'Draft Only is the safe default. Sending requires '
-                          'explicit approval or a preapproved server-side rule. '
-                          'Scraped and guessed recipients are prohibited.',
+                          'Draft, review, then send. Autonomous email follows '
+                          'only the rules and recipients you approve.',
                           style: TextStyle(
                             color: Color(0xFFB9CDD4),
                             height: 1.4,
@@ -3194,6 +3395,45 @@ class _KorlixLiveConvoAgentEmailSheetState
                   ),
                 ),
                 _sectionSelector(),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: TextField(
+                    controller: _search,
+                    onChanged: (value) => setState(() => _query = value),
+                    style: const TextStyle(color: Color(0xFFE4EBEE)),
+                    decoration: InputDecoration(
+                      hintText: [
+                        'Search delivery activity',
+                        'Search recipients',
+                        'Search drafts',
+                        'Search automation rules',
+                      ][_section],
+                      hintStyle: const TextStyle(color: Color(0xFFA9C6CF)),
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        color: Color(0xFFA9C6CF),
+                      ),
+                      suffixIcon: _query.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Clear search',
+                              onPressed: () => setState(() {
+                                _query = '';
+                                _search.clear();
+                              }),
+                              icon: const Icon(
+                                Icons.close,
+                                color: Color(0xFFA9C6CF),
+                              ),
+                            ),
+                      filled: true,
+                      fillColor: const Color(0xFF101E2F),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                ),
                 if (_error != null)
                   Container(
                     width: double.infinity,

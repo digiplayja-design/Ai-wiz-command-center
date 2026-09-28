@@ -1679,10 +1679,16 @@ class _KorlixLiveConvoAgentHubSheetState
     super.dispose();
   }
 
+  KorlixLiveConvoAgent? _workflowLead;
+  int _workflowSeed = 0;
+
   void _studioAction(String action, KorlixLiveConvoAgent agent) {
     if (_busy || _loading) return;
     setState(() => _selectedAgentId = agent.id);
     switch (action) {
+      case 'workflow':
+        setState(() { _workflowLead = agent; _workflowSeed++; });
+        break;
       case 'use':
         unawaited(_activateAgent(agent));
         break;
@@ -1739,6 +1745,9 @@ class _KorlixLiveConvoAgentHubSheetState
     onClose: () => Navigator.of(context).pop(),
     onRefresh: () => unawaited(_load()),
     workflows: AgentStudioWorkflows(
+      key: ValueKey(_workflowSeed),
+      leadAgent: _workflowLead,
+      onLeadConsumed: () => setState(() => _workflowLead = null),
       client: _studioClient,
       agents: _catalog.agents.where((a) => a.active).toList(),
     ),

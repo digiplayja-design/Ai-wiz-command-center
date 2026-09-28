@@ -9,9 +9,11 @@ class KorlixActionGrid extends StatelessWidget {
     super.key,
     required this.children,
     this.compact = false,
+    this.minimumHeight = 0,
   });
   final List<Widget> children;
   final bool compact;
+  final double minimumHeight;
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) {
@@ -22,7 +24,7 @@ class KorlixActionGrid extends StatelessWidget {
           ? (compact ? 24.0 : 112.0) * math.max(0, scale - 1)
           : 0.0;
       final height =
-          (compact ? 80.0 : 136.0) * math.max(1, scale) +
+          math.max(minimumHeight, compact ? 80.0 : 136.0) * math.max(1, scale) +
           extraLines +
           (width < 125 ? 16 : 0);
       return Column(

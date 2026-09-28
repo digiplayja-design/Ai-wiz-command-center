@@ -23,7 +23,11 @@ class AgentStudioWorkflows extends StatefulWidget {
     super.key,
     required this.client,
     required this.agents,
+    this.leadAgent,
+    this.onLeadConsumed,
   });
+  final KorlixLiveConvoAgent? leadAgent;
+  final VoidCallback? onLeadConsumed;
   final AgentStudioClient client;
   final List<KorlixLiveConvoAgent> agents;
   @override
@@ -42,6 +46,36 @@ class _AgentStudioWorkflowsState extends State<AgentStudioWorkflows> {
   void initState() {
     super.initState();
     unawaited(_load());
+    if (widget.leadAgent != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final a = widget.leadAgent!;
+        widget.onLeadConsumed?.call();
+        unawaited(
+          _create({
+            'title': '${a.name} workflow',
+            'new_plan': true,
+            'objective': '',
+            'priority': 'normal',
+            'use_memory': false,
+            'steps': [
+              {
+                'agent_id': a.id,
+                'title': 'Prepare the deliverable',
+                'instruction':
+                    'Use the objective and provided context to prepare a complete written deliverable. Identify assumptions and any missing information.',
+              },
+              {
+                'agent_id': 'general',
+                'title': 'Review and refine',
+                'instruction':
+                    'Review the approved deliverable for accuracy, clarity, and completeness. Provide an improved final version and remaining questions.',
+              },
+            ],
+          }),
+        );
+      });
+    }
     _timer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!widget.client.current) {
         _lock();
@@ -845,7 +879,9 @@ class _WorkflowComposerState extends State<_WorkflowComposer> {
     super.initState();
     final r = widget.recipe;
     if (r != null) {
-      final reusedTitle = '${r['title']} — new run';
+      final reusedTitle = r['new_plan'] == true
+          ? '${r['title']}'
+          : '${r['title']} — new run';
       _title.text = reusedTitle.length > 120
           ? reusedTitle.substring(0, 120)
           : reusedTitle;

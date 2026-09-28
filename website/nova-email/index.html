@@ -43,6 +43,7 @@
   <link rel="stylesheet" href="/nova-email/template-rule-builder.css?v=k133-template-rule-builder-v1-r1">
   <link rel="stylesheet" href="/nova-email/k134b-schedule-dashboard.css">
   <link rel="stylesheet" href="/nova-email/k134b-draft-delete.css?v=1">
+  <link rel="stylesheet" href="/nova-email/email-workspace.css?v=20260928">
 </head>
 
 <body>
@@ -120,16 +121,16 @@
       <section class="sidebar-widget plan-widget">
         <span class="plan-icon">♛</span>
         <div>
-          <span class="eyebrow">KORLIX AI PLAN</span>
-          <strong>Enterprise</strong>
+          <span class="eyebrow">YOUR WORKSPACE</span>
+          <strong>K-Nova</strong>
         </div>
-        <span class="state-positive">Active</span>
+        <span class="state-positive">Email</span>
       </section>
 
       <button class="account-card" id="connectionButton">
         <span class="avatar">KA</span>
         <span class="account-details">
-          <strong>KORLIX Admin</strong>
+          <strong>Your account</strong>
           <small id="connectionLabel">Connect session</small>
         </span>
         <span>⌄</span>
@@ -145,9 +146,9 @@
         >☰</button>
 
         <div>
-          <h1>KORLIX AUTONOMOUS EMAIL CONTROL CENTER</h1>
+          <h1>Email Center</h1>
           <p>
-            Command and monitor KORLIX’s autonomous email system in real time.
+            Draft. Review. Automate with confidence.
           </p>
         </div>
 
@@ -191,7 +192,7 @@
             <strong
               id="systemStatus"
               class="state-positive"
-            >CONNECTING</strong>
+            >NOT CONNECTED</strong>
           </div>
           <i class="indicator" id="systemStatusIndicator"></i>
         </article>
@@ -277,7 +278,7 @@
           <div class="cap-block">
             <div class="cap-heading">
               <span>Daily Cap</span>
-              <strong id="dailyCapLabel">5 emails per day</strong>
+              <strong id="dailyCapLabel">Connect to view limits</strong>
             </div>
 
             <div class="progress-track">
@@ -287,12 +288,12 @@
               ></div>
             </div>
 
-            <small id="dailyCapUsage">0 / 5 used</small>
+            <small id="dailyCapUsage">Usage unavailable</small>
           </div>
 
           <div class="quiet-hours">
             <span>Quiet Hours</span>
-            <strong id="quietHoursValue">10:00 PM – 6:00 AM</strong>
+            <strong id="quietHoursValue">Connect to view hours</strong>
             <span class="moon">◒</span>
           </div>
         </article>
@@ -971,10 +972,12 @@
     aria-live="polite"
   ></div>
 
-  <script src="/nova-email/app.js?v=korlix-brand-20260927"></script>
+  <script src="/nova-email/app.js?v=korlix-email-studio-20260928"></script>
   <!-- K133_NOVA_EMAIL_TEMPLATE_RULE_BUILDER_INDEX_BINDING_V1_SCRIPT -->
   <script src="/nova-email/template-rule-builder.js?v=korlix-brand-20260927"></script>
   <script src="/nova-email/k134b-schedule-dashboard.js?v=korlix-brand-20260927" defer></script>
   <script src="/nova-email/k134b-draft-delete.js?v=korlix-brand-20260927" defer></script>
+  <script src="/nova-email/email-workspace-model.js?v=20260928" defer></script>
+  <script src="/nova-email/email-workspace.js?v=20260928" defer></script>
 </body>
 </html>

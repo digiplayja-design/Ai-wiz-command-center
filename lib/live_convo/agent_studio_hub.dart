@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'agent_studio_design.dart';
+import 'agent_studio_profile.dart';
+import '../theme/korlix_action_button.dart';
+import '../theme/korlix_action_grid.dart';
 import 'korlix_live_convo_agent.dart';
 import 'korlix_live_convo_agent_sheet.dart'
     show korlixLiveConvoAgentIcon, korlixLiveConvoAgentAccent;
@@ -40,6 +43,8 @@ class AgentStudioHub extends StatefulWidget {
 
 class _AgentStudioHubState extends State<AgentStudioHub> {
   String _tab = 'Agents', _query = '', _filter = 'All agents';
+  String _capability = 'Any capability', _sort = 'Recommended';
+  final Set<String> _pinned = {};
   final _search = TextEditingController();
   final _pageScroll = ScrollController();
   @override
@@ -75,21 +80,35 @@ class _AgentStudioHubState extends State<AgentStudioHub> {
     KorlixLiveConvoAgent agent, {
     bool primary = false,
   }) {
-    if (primary) {
-      return FilledButton.icon(
-        onPressed: widget.busy || widget.loading
-            ? null
-            : () => widget.onAction(action, agent),
-        icon: Icon(icon, size: 18),
-        label: Text(label),
-      );
-    }
-    return OutlinedButton.icon(
+    return KorlixActionButton(
+      label: label,
+      icon: icon,
+      selected: primary,
+      size: KorlixButtonSize.compact,
       onPressed: widget.busy || widget.loading
           ? null
           : () => widget.onAction(action, agent),
-      icon: Icon(icon, size: 18),
-      label: Text(label),
+    );
+  }
+
+  void _profile(KorlixLiveConvoAgent agent) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      constraints: const BoxConstraints(maxWidth: 760),
+      builder: (sheetContext) => AgentStudioProfile(
+        agent: agent,
+        onAction: (action) {
+          Navigator.pop(sheetContext);
+          if (action == 'brain') {
+            _brain(agent);
+            return;
+          }
+          widget.onAction(action, agent);
+          if (action == 'workflow') setState(() => _tab = 'Workflows');
+        },
+      ),
     );
   }
 
@@ -254,7 +273,9 @@ class _AgentStudioHubState extends State<AgentStudioHub> {
   Widget _card(KorlixLiveConvoAgent a, AgentStudioColors p) {
     final selected = a.id == widget.selectedId;
     return AgentStudioPanel(
-      accent: selected ? p.cyan : null,
+      accent: selected
+          ? p.cyan
+          : korlixLiveConvoAgentAccent(a.accentHex).withValues(alpha: .35),
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -264,11 +285,20 @@ class _AgentStudioHubState extends State<AgentStudioHub> {
             children: [
               _avatar(a),
               const Spacer(),
-              if (a.id == widget.activeId)
-                const AgentStudioPill(
-                  'In conversation',
-                  icon: Icons.graphic_eq_rounded,
+              IconButton(
+                tooltip: _pinned.contains(a.id)
+                    ? 'Unpin ${a.name}'
+                    : 'Pin ${a.name}',
+                onPressed: () => setState(() {
+                  if (!_pinned.add(a.id)) _pinned.remove(a.id);
+                }),
+                icon: Icon(
+                  _pinned.contains(a.id)
+                      ? Icons.push_pin_rounded
+                      : Icons.push_pin_outlined,
+                  color: _pinned.contains(a.id) ? p.cyan : p.muted,
                 ),
+              ),
               PopupMenuButton<String>(
                 tooltip: 'Options for ${a.name}',
                 onSelected: (s) => widget.onAction(s, a),
@@ -303,7 +333,14 @@ class _AgentStudioHubState extends State<AgentStudioHub> {
               ),
             ],
           ),
-          const SizedBox(height: 19),
+          const SizedBox(height: 14),
+          if (a.id == widget.activeId) ...[
+            const AgentStudioPill(
+              'In conversation',
+              icon: Icons.graphic_eq_rounded,
+            ),
+            const SizedBox(height: 10),
+          ],
           Text(
             a.name,
             style: TextStyle(
@@ -318,7 +355,18 @@ class _AgentStudioHubState extends State<AgentStudioHub> {
             a.description,
             style: TextStyle(color: p.muted, height: 1.5, fontSize: 13),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
+          Text(
+            a.toolIds
+                .where((id) => !['memory', 'agent_training'].contains(id))
+                .map(
+                  (id) => agentCapabilityLabels[id] ?? id.replaceAll('_', ' '),
+                )
+                .take(3)
+                .join(' · '),
+            style: TextStyle(color: p.cyan, fontSize: 12, height: 1.5),
+          ),
+          const SizedBox(height: 14),
           Wrap(
             spacing: 6,
             runSpacing: 7,
@@ -341,23 +389,36 @@ class _AgentStudioHubState extends State<AgentStudioHub> {
             ],
           ),
           const SizedBox(height: 20),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          KorlixActionGrid(
+            compact: true,
+            minimumHeight: 100,
             children: [
-              _action(
-                'use',
-                a.id == widget.activeId ? 'Reload agent' : 'Use agent',
-                Icons.play_arrow_rounded,
-                a,
-                primary: true,
+              KorlixActionButton(
+                label: a.id == widget.activeId ? 'Reload agent' : 'Use agent',
+                icon: Icons.play_arrow_rounded,
+                tile: true,
+                size: KorlixButtonSize.compact,
+                selected: true,
+                onPressed: widget.busy || widget.loading
+                    ? null
+                    : () => widget.onAction('use', a),
               ),
-              OutlinedButton.icon(
-                onPressed: widget.busy ? null : () => _brain(a),
-                icon: const Icon(Icons.psychology_outlined, size: 18),
-                label: const Text('Manage brain'),
+              KorlixActionButton(
+                label: 'View profile',
+                icon: Icons.badge_outlined,
+                tile: true,
+                size: KorlixButtonSize.compact,
+                onPressed: widget.busy || widget.loading
+                    ? null
+                    : () => _profile(a),
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          TextButton.icon(
+            onPressed: widget.busy ? null : () => _brain(a),
+            icon: const Icon(Icons.psychology_outlined, size: 18),
+            label: const Text('Manage brain'),
           ),
         ],
       ),
@@ -371,14 +432,37 @@ class _AgentStudioHubState extends State<AgentStudioHub> {
           (a) =>
               a.active &&
               (q.isEmpty ||
-                  '${a.name} ${a.description} ${a.toolIds.join(' ')}'
+                  '${a.name} ${a.description} ${a.mission} ${a.toolIds.map((id) => agentCapabilityLabels[id] ?? id).join(' ')}'
                       .toLowerCase()
                       .contains(q)) &&
+              agentMatchesCapability(a, _capability) &&
               (_filter == 'All agents' ||
+                  (_filter == 'Pinned' && _pinned.contains(a.id)) ||
                   (_filter == 'Custom' && a.isCustom) ||
                   (_filter == 'Trained' && a.hasPublishedTraining)),
         )
         .toList();
+    agents.sort((a, b) {
+      if (_sort == 'Name A–Z') {
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      }
+      if (_sort == 'Most memories') {
+        return b.memoryCount.compareTo(a.memoryCount);
+      }
+      final rankA = a.id == widget.activeId
+          ? 0
+          : _pinned.contains(a.id)
+          ? 1
+          : 2;
+      final rankB = b.id == widget.activeId
+          ? 0
+          : _pinned.contains(b.id)
+          ? 1
+          : 2;
+      return rankA != rankB
+          ? rankA.compareTo(rankB)
+          : widget.agents.indexOf(a).compareTo(widget.agents.indexOf(b));
+    });
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -428,13 +512,49 @@ class _AgentStudioHubState extends State<AgentStudioHub> {
           spacing: 8,
           runSpacing: 6,
           children: [
-            for (final f in ['All agents', 'Custom', 'Trained'])
+            for (final f in ['All agents', 'Pinned', 'Custom', 'Trained'])
               ChoiceChip(
                 label: Text(f),
                 selected: _filter == f,
                 onSelected: (_) => setState(() => _filter = f),
               ),
           ],
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 14,
+          runSpacing: 12,
+          children: [
+            SizedBox(
+              width: 225,
+              child: DropdownButtonFormField<String>(
+                initialValue: _capability,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Capability'),
+                items: ['Any capability', ...agentCapabilityLabels.values]
+                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                    .toList(),
+                onChanged: (s) => setState(() => _capability = s!),
+              ),
+            ),
+            SizedBox(
+              width: 225,
+              child: DropdownButtonFormField<String>(
+                initialValue: _sort,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Sort agents'),
+                items: ['Recommended', 'Name A–Z', 'Most memories']
+                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                    .toList(),
+                onChanged: (s) => setState(() => _sort = s!),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          '${agents.length} agents · Pins stay while this studio is open',
+          style: TextStyle(color: p.muted, fontSize: 12),
         ),
         const SizedBox(height: 20),
         if (agents.isEmpty)
