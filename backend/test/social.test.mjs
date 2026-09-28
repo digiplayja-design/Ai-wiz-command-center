@@ -5,11 +5,18 @@ import {readFile,readdir} from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
 import express from 'express';
 import {registerSocial} from '../social/routes.mjs';
+import sharp from 'sharp';
+import { socialCallConfig } from '../social/calls.mjs';
 let db,server,base,a,b,c;
 const users=[randomUUID(),randomUUID(),randomUUID()];
-const call=async(actor,action,data={})=>(await db.query('select korlix_social_v1($1,$2,$3::jsonb) result',[actor,action,JSON.stringify(data)])).rows[0].result;
+const call=async(actor,action,data={})=>(await db.query(`select ${action.startsWith('call_')?'korlix_social_calls_v1':'korlix_social_v1'}($1,$2,$3::jsonb) result`,[actor,action,JSON.stringify(data)])).rows[0].result;
 const profile=(handle,extra={})=>({handle,name:handle,bio:'A community member',color:'cyan',discoverable:true,show_online:true,accepted_rules:true,...extra});
-const rpc={rpc:async(_n,p)=>{try{return {data:await call(p.p_actor,p.p_action,p.p_data)};}catch(e){return {error:{code:e.code,message:e.message}};}}};
+const stored=new Map();
+const rpc={storage:{from:()=>({
+ upload:async(path,buffer,options)=>{stored.set(path,{buffer,options});return {data:{path}};},
+ remove:async(paths)=>{for(const path of paths)stored.delete(path);return {data:[]};},
+ createSignedUrls:async(paths,ttl)=>({data:paths.map(path=>({path,signedUrl:`https://fixture.test/${path}?expires=${ttl}`}))})
+})},rpc:async(n,p)=>{try{return {data:n==='korlix_social_avatar'?(await db.query('select korlix_social_avatar($1,$2,$3) result',[p.p_actor,p.p_action,p.p_path??null])).rows[0].result:await call(p.p_actor,p.p_action,p.p_data)};}catch(e){return {error:{code:e.code,message:e.message}};}}};
 const api=async(action,data={},actor=users[0],method='POST',status=200)=>{const res=await fetch(base+action+(method==='GET'?'?'+new URLSearchParams(data):''),{method,headers:{Authorization:actor,'Content-Type':'application/json'},body:method==='POST'?JSON.stringify(data):undefined});const result=await res.json();assert.equal(res.status,status,JSON.stringify(result));assert.equal(res.headers.get('cache-control'),'no-store');return result;};
 const connect=async()=>{await call(users[0],'request',{peer:b.id});await call(users[1],'accept',{peer:a.id});};
 const send=async(actor=users[0],peer=b.id,body='Hello',id=randomUUID())=>call(actor,'send',{peer,body,id});
@@ -19,7 +26,10 @@ before(async()=>{
  for(const u of users)await db.query('insert into auth.users values($1)',[u]);
  const folder=new URL('../../supabase/migrations/',import.meta.url),file=(await readdir(folder)).find(f=>f.endsWith('_korlix_social.sql'));
  await db.exec(await readFile(new URL(file,folder),'utf8'));
- const app=express();app.use(express.json());registerSocial(app,{database:rpc,requireUser:async q=>{if(!users.includes(q.headers.authorization))throw Error();return {id:q.headers.authorization,email_confirmed_at:'2026-01-01'};},logger:{warn(){}}});
+ await db.exec("create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id uuid primary key,bucket_id text,name text);alter table storage.objects enable row level security;grant usage on schema storage to anon,authenticated;grant all on storage.objects to anon,authenticated;create policy fixture_existing_allow on storage.objects to anon,authenticated using(true) with check(true);");
+ const extension=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_profiles_calls.sql'));
+ await db.exec(await readFile(new URL(extension,folder),'utf8'));
+ const app=express();app.use(express.json({limit:'250kb'}));registerSocial(app,{database:rpc,requireUser:async q=>{if(!users.includes(q.headers.authorization))throw Error();return {id:q.headers.authorization,email_confirmed_at:'2026-01-01'};},logger:{warn(){}}});
  server=app.listen(0);await new Promise(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}/api/social/`;
 });
 beforeEach(async()=>{await db.exec('truncate korlix_social_profiles,korlix_social_connections,korlix_social_blocks,korlix_social_messages,korlix_social_topics,korlix_social_replies,korlix_social_reports,korlix_social_limits,korlix_social_moderators restart identity cascade;');
@@ -43,3 +53,101 @@ test('moderator lock and suspension are enforced server-side',async()=>{const t=
 test('rate limits are durable and enforced across requests',async()=>{await connect();for(let i=0;i<60;i++)await send();await assert.rejects(send(),/limit/);await api('send',{peer:b.id,id:randomUUID(),body:'over limit'},users[0],'POST',429);});
 test('message paging has no duplicates or gaps',async()=>{await connect();for(let i=0;i<55;i++)await send();const page=(await call(users[0],'messages',{peer:b.id})).items;assert.equal(page.length,51);const older=(await call(users[0],'messages',{peer:b.id,before:page[0].seq})).items;assert.equal(older.length,4);assert.equal(new Set([...page,...older].map(m=>m.id)).size,55);});
 test('public roles cannot read social data or invoke privileged functions; no definer functions',async()=>{const r=await db.query("select has_table_privilege('authenticated','korlix_social_messages','select') as table_access,has_function_privilege('anon','korlix_social_v1(uuid,text,jsonb)','execute') as rpc_access,(select relrowsecurity from pg_class where oid='korlix_social_messages'::regclass) as rls,(select prosecdef from pg_proc where proname='korlix_social_v1') as definer");assert.deepEqual(r.rows[0],{table_access:false,rpc_access:false,rls:true,definer:false});await db.exec('set role service_role');try{assert.equal((await call(users[0],'bootstrap')).profile.id,a.id);}finally{await db.exec('reset role');}});
+const devices=users.map(()=>randomUUID());
+const avatar=async(actor,action,path=null)=>{const r=await rpc.rpc('korlix_social_avatar',{p_actor:actor,p_action:action,p_path:path});if(r.error)throw Error(r.error.message);return r.data;};
+const callData=(id,who=0,extra={})=>({id,device:devices[who],...extra});
+const start=async()=>call(users[0],'call_start',callData(randomUUID(),0,{peer:b.id,mode:'video'}));
+const signal=(id,who,kind,payload,signal_id=randomUUID())=>call(users[who],'call_signal',callData(id,who,{kind,payload,signal_id}));
+test('profession is optional, bounded, searchable and present on member cards',async()=>{
+ const saved=await call(users[1],'save_profile',profile('bruno',{profession:'  Registered Nurse  '}));assert.equal(saved.profile.profession,'Registered Nurse');
+ assert.equal((await call(users[0],'members',{q:'nurs'})).items[0].id,b.id);
+ await assert.rejects(call(users[1],'save_profile',profile('bruno',{profession:'a'.repeat(101)})),/100/);
+ await call(users[1],'save_profile',profile('bruno'));assert.equal((await call(users[1],'bootstrap')).profile.profession,'Registered Nurse');
+ await call(users[1],'block',{peer:a.id});assert.equal((await call(users[0],'members',{q:'nurs'})).items.length,0);
+});
+test('emoji sequences and non-Latin text survive send, retry, read and previews',async()=>{
+ await connect();const body='Hi 👋🏽 👨‍👩‍👧‍👦 ❤️ مرحبا 你好';await send(users[0],b.id,body);
+ assert.equal((await api('messages',{peer:a.id},users[1],'GET')).items[0].body,body);
+ assert.equal((await call(users[1],'connections')).items[0].last_message,body);
+});
+test('photos accept real images, strip metadata, resize, replace and remove owned objects',async()=>{
+ stored.clear(); const bytes=await sharp({create:{width:600,height:900,channels:3,background:'#12bbdd'}}).withMetadata({exif:{IFD0:{Artist:'Private metadata'}}}).png().toBuffer();
+ const upload=async(buffer,status=200)=>{const form=new FormData();form.append('photo',new Blob([buffer]),'picture.png');const res=await fetch(base+'profile_photo',{method:'POST',headers:{Authorization:users[0]},body:form});const result=await res.json();assert.equal(res.status,status,JSON.stringify(result));return result;};
+ await upload(Buffer.from('<svg>not a bitmap</svg>'),400);assert.equal(stored.size,0);
+ const r=await upload(bytes);assert.match(r.profile.avatar_url,/fixture.test/);assert.equal(r.profile.avatar_path,undefined);
+ assert.equal(stored.size,1);const file=[...stored.values()][0];const meta=await sharp(file.buffer).metadata();assert.equal(meta.width,512);assert.equal(meta.height,512);assert.equal(meta.format,'jpeg');assert.equal(meta.exif,undefined);
+ await upload(bytes);assert.equal(stored.size,1);
+ await api('profile_photo',{remove:true});assert.equal(stored.size,0);
+ assert.equal((await call(users[0],'bootstrap')).profile.avatar_path,null);
+ await assert.rejects(avatar(users[1],'save',`${a.id}/${randomUUID()}.jpg`),/path/);
+ const untouched=await call(users[1],'save_profile',profile('bruno',{avatar_path:'https://evil.test/file'}));assert.equal(untouched.profile.avatar_path,null);
+ await api('profile_photo',{remove:true},'', 'POST',401);
+});
+test('calls require accepted connections; only the recipient can answer and inbox exposes no device IDs or signals',async()=>{
+ await assert.rejects(start(),/accepted/);await connect();const {call:c}=await start();assert.equal(c.state,'ringing');
+ const inbox=await api('call_inbox',{device:devices[1]},users[1],'GET');assert.equal(inbox.call.id,c.id);assert.equal(inbox.call.peer.id,a.id);
+ assert(!JSON.stringify(inbox).includes(devices[0]));assert.equal(inbox.signals,undefined);
+ await assert.rejects(call(users[0],'call_accept',callData(c.id)),/recipient/);
+ await assert.rejects(call(users[2],'call_poll',callData(c.id,2)),/not found/);
+ await assert.rejects(signal(c.id,0,'offer',{sdp:'offer'}),/not connected/);
+ const accepted=await call(users[1],'call_accept',callData(c.id,1));assert.equal(accepted.call.state,'accepted');
+ await assert.rejects(call(users[1],'call_poll',{id:c.id,device:randomUUID()}),/another device/);
+});
+test('signaling enforces sender roles, idempotent IDs, paging cursor and call ownership',async()=>{
+ await connect();const {call:c}=await start();await call(users[1],'call_accept',callData(c.id,1));
+ await assert.rejects(signal(c.id,1,'offer',{sdp:'forged'}),/sender/);
+ const sid=randomUUID();await signal(c.id,0,'offer',{sdp:'v=0\r\n'},sid);await signal(c.id,0,'offer',{sdp:'v=0\r\n'},sid);
+ await assert.rejects(signal(c.id,1,'answer',{sdp:'changed'},sid),/ID/);
+ await signal(c.id,0,'candidate',{candidate:'candidate:123',sdpMid:'0',sdpMLineIndex:0});
+ let p=await api('call_poll',callData(c.id,1),users[1],'GET');assert.equal(p.signals.length,2);assert.equal(p.signals[0].kind,'offer');
+ assert.equal((await call(users[1],'call_poll',callData(c.id,1,{after:p.signals[1].seq}))).signals.length,0);
+ await signal(c.id,1,'answer',{sdp:'answer'});assert.equal((await call(users[0],'call_poll',callData(c.id))).signals[0].kind,'answer');
+ await assert.rejects(signal(c.id,0,'candidate',{candidate:'x'.repeat(4001)}),/candidate/);
+ await call(users[1],'call_end',callData(c.id,1));assert.equal((await call(users[0],'call_poll',callData(c.id))).call.state,'ended');
+ assert.equal((await db.query('select count(*)::int n from korlix_social_call_signals')).rows[0].n,0);
+ await assert.rejects(signal(c.id,0,'media',{camera:true,microphone:true}),/not connected/);
+});
+test('busy calls, crossed invitations, decline and retry cannot auto-answer or duplicate calls',async()=>{
+ await connect();const id=randomUUID(),data=callData(id,0,{peer:b.id,mode:'audio'});
+ await call(users[0],'call_start',data);await call(users[0],'call_start',data);
+ await assert.rejects(call(users[1],'call_start',callData(randomUUID(),1,{peer:a.id,mode:'audio'})),/already/);
+ await call(users[1],'call_end',callData(id,1));assert.equal((await call(users[0],'call_poll',callData(id))).call.state,'declined');
+ assert.equal((await call(users[1],'call_accept',callData(id,1))).call.state,'declined');
+ assert.equal((await start()).call.state,'ringing');
+});
+test('ring timeout, abandoned accepted calls and revoked consent end access',async()=>{
+ await connect();let c=(await start()).call;
+ await db.query("update korlix_social_calls set created_at=now()-interval '46 seconds' where id=$1",[c.id]);
+ assert.equal((await call(users[1],'call_inbox',{device:devices[1]})).call,null);
+ assert.equal((await call(users[0],'call_poll',callData(c.id))).call.state,'missed');
+ c=(await start()).call;await call(users[1],'call_accept',callData(c.id,1));
+ await db.query("update korlix_social_calls set callee_seen=now()-interval '61 seconds' where id=$1",[c.id]);
+ assert.equal((await call(users[0],'call_poll',callData(c.id))).call.state,'ended');
+ c=(await start()).call;await call(users[1],'call_accept',callData(c.id,1));await call(users[1],'block',{peer:a.id});
+ assert.equal((await call(users[0],'call_poll',callData(c.id))).call.state,'ended');
+ await assert.rejects(signal(c.id,0,'offer',{sdp:'late'}),/not connected/);
+});
+test('call attempts are rate limited and private tables/functions are unavailable to browser roles',async()=>{
+ await connect();for(let i=0;i<10;i++){const c=(await start()).call;await call(users[0],'call_end',callData(c.id));}
+ await assert.rejects(start(),/limit/);
+ for(const table of ['korlix_social_calls','korlix_social_call_signals']) {
+ const {rows}=await db.query("select has_table_privilege('authenticated',$1,'select') access,(select relrowsecurity from pg_class where oid=$1::regclass) rls",[table]);assert.deepEqual(rows[0],{access:false,rls:true});
+ }
+ const r=await db.query("select has_function_privilege('anon','korlix_social_calls_v1(uuid,text,jsonb)','execute') calls,has_function_privilege('authenticated','korlix_social_avatar(uuid,text,text)','execute') photos");assert.deepEqual(r.rows[0],{calls:false,photos:false});
+ await db.exec('set role service_role');try{assert.equal((await call(users[1],'call_inbox',{device:devices[1]})).call,null);}finally{await db.exec('reset role');}
+});
+test('call config authenticates, exposes optional relay correctly and supports the operational kill switch',async()=>{
+ const direct=socialCallConfig({});assert.equal(direct.enabled,true);assert.equal(direct.relay,false);
+ const relay=socialCallConfig({SOCIAL_ICE_SERVERS:JSON.stringify([{urls:'turns:relay.example:443',username:'test',credential:'test-password'}])});assert.equal(relay.relay,true);
+ assert.equal(socialCallConfig({SOCIAL_CALLS_ENABLED:'false'}).enabled,false);
+ await api('call_config',{},'', 'GET',401);const r=await api('call_config',{},users[0],'GET');assert.equal(r.enabled,true);
+});
+
+test('private photo bucket stays denied even if another storage policy permits arbitrary buckets',async()=>{
+ await db.exec("insert into storage.objects values(gen_random_uuid(),'korlix-social-avatars','private.jpg'),(gen_random_uuid(),'fixture-other','public.jpg');set role authenticated");
+ try {
+  const r=await db.query("select * from storage.objects where bucket_id='korlix-social-avatars'");assert.equal(r.rows.length,0);
+  assert((await db.query("select * from storage.objects where bucket_id='fixture-other'")).rows.length>0);
+  await assert.rejects(db.exec("insert into storage.objects values(gen_random_uuid(),'korlix-social-avatars','forged.jpg')"),/row-level security/);
+ } finally {await db.exec('reset role');}
+});
