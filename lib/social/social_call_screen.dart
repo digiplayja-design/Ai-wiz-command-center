@@ -118,6 +118,9 @@ class _SocialCallScreenState extends State<SocialCallScreen>
   @override
   Widget build(BuildContext context) {
     final s = korlixSkinOf(context), m = call.media;
+    final displayPeer = widget.client.available
+        ? widget.peer
+        : <String, dynamic>{'name': 'Connection', 'color': 'cyan'};
     final incoming = call.incoming && call.state == 'ringing' && !call.ended;
     final time =
         '${call.elapsed.inMinutes.toString().padLeft(2, '0')}:${(call.elapsed.inSeconds % 60).toString().padLeft(2, '0')}';
@@ -212,14 +215,14 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                                           ],
                                         ),
                                         child: SocialAvatar(
-                                          member: widget.peer,
+                                          member: displayPeer,
                                           size: box.maxHeight < 600 ? 70 : 100,
                                           showStatus: false,
                                         ),
                                       ),
                                       const SizedBox(height: 18),
                                       Text(
-                                        widget.peer['name'] ??
+                                        displayPeer['name'] ??
                                             'Your connection',
                                         textAlign: TextAlign.center,
                                         style: const TextStyle(
@@ -227,11 +230,11 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                                           fontWeight: FontWeight.w800,
                                         ),
                                       ),
-                                      if ('${widget.peer['profession'] ?? ''}'
+                                      if ('${displayPeer['profession'] ?? ''}'
                                           .isNotEmpty) ...[
                                         const SizedBox(height: 6),
                                         Text(
-                                          widget.peer['profession'],
+                                          displayPeer['profession'],
                                           textAlign: TextAlign.center,
                                           style: TextStyle(color: s.mutedText),
                                         ),

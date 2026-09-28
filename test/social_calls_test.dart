@@ -402,6 +402,34 @@ void main() {
       store.client.dispose();
     },
   );
+  testWidgets(
+    'changing accounts clears the caller identity from an open call screen',
+    (t) async {
+      final store = CallStore(),
+          client = store.client('caller'),
+          media = FakeMedia();
+      await social.mount(
+        t,
+        SocialCallScreen(
+          client: client,
+          peer: {...social.peer, 'profession': 'Designer'},
+          video: true,
+          incoming: {'id': 'incoming', 'state': 'ringing'},
+          media: media,
+        ),
+      );
+      expect(find.text('Jordan Rivera'), findsOneWidget);
+      store.token = 'Bearer different-account';
+      store.revision.value++;
+      await t.pumpAndSettle();
+      expect(find.text('Jordan Rivera'), findsNothing);
+      expect(find.text('Designer'), findsNothing);
+      expect(find.text('Connection'), findsOneWidget);
+      expect(media.stopped, true);
+      await t.pumpWidget(const SizedBox());
+      client.dispose();
+    },
+  );
   for (final width in [320.0, 390.0, 1280.0]) {
     testWidgets(
       'incoming call fits $width and declining never opens microphone',
