@@ -1,3 +1,4 @@
+import { registerSocial } from './social/routes.mjs';
 import { registerAgentStudio } from './agent_studio/routes.mjs';
 import { generateStep, WorkflowError } from './agent_studio/model.mjs';
 import { registerInventory } from './inventory/routes.mjs';
@@ -12585,6 +12586,7 @@ const bookkeepingStorage = supabaseUrl && supabaseServiceRoleKey ? createClient(
   auth: { autoRefreshToken: false, persistSession: false },
   global: { fetch: (url, init = {}) => fetch(url, { ...init, signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(45000)]) : AbortSignal.timeout(45000) }) },
 }) : null;
+registerSocial(app, {database:supabaseAdmin,requireUser});
 registerAgentStudio(app, {database:supabaseAdmin,requireUser,
  loadContext:async(user,agentId,useMemory)=>{
   const profile=await korlixAgentLoadProfileV1({client:supabaseAdmin,userId:user.id,agentId});
