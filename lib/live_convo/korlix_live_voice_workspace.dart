@@ -96,15 +96,36 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
             ],
           ),
         ),
-        Tooltip(
-          message: 'Time in the current voice connection',
-          child: _tag(
-            _elapsedText,
-            widget.connected
-                ? Icons.graphic_eq_rounded
-                : Icons.schedule_rounded,
+        if (widget.inventoryResults == null)
+          Tooltip(
+            message: widget.paused
+                ? 'Resume Live Convo to open Agent Studio'
+                : 'Agents, memory, training & workflows',
+            child: OutlinedButton.icon(
+              key: const Key('live-voice-agents'),
+              onPressed: widget.onOpenAgentHub == null
+                  ? null
+                  : () => unawaited(widget.onOpenAgentHub!()),
+              icon: const Icon(Icons.hub_outlined, size: 19),
+              label: const Text('Agents'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _accent,
+                backgroundColor: _accent.withValues(alpha: 0.08),
+                side: BorderSide(color: _accent.withValues(alpha: 0.35)),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+              ),
+            ),
+          )
+        else
+          Tooltip(
+            message: 'Time in the current voice connection',
+            child: _tag(
+              _elapsedText,
+              widget.connected
+                  ? Icons.graphic_eq_rounded
+                  : Icons.schedule_rounded,
+            ),
           ),
-        ),
         const SizedBox(width: 8),
       ],
     ),
@@ -131,6 +152,16 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
                 Icons.spatial_audio_off_rounded,
               ),
               _tag('Avatar · ${_character.name}', Icons.face_rounded),
+              if (widget.inventoryResults == null)
+                Tooltip(
+                  message: 'Time in the current voice connection',
+                  child: _tag(
+                    _elapsedText,
+                    widget.connected
+                        ? Icons.graphic_eq_rounded
+                        : Icons.schedule_rounded,
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 12),
@@ -488,8 +519,9 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
             if (widget.inventoryResults == null) ...[
             _settingsTile(
               icon: _activeAgentIcon,
-              title: _activeAgentName,
+              title: 'Agent Studio',
               subtitle:
+                  '$_activeAgentName · Memory, training & workflows\n'
                   '$_activeAgentDescription\nVersion $_activeAgentVersion · '
                   '${widget.activeAgentMemoryEnabled ? 'Memory on' : 'Memory off'}',
               action: widget.onOpenAgentHub,

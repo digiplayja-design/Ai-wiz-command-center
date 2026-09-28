@@ -1,6 +1,6 @@
 # Agent Studio and reviewed workflows
 
-The existing Live Convo Agents entry opens Agent Studio. The frontend and API remain on their existing, separate Render release branches. No additional service, secret, or provider connection is required.
+Open Live Convo and choose **Agents** at the top right to open Agent Studio, before or during a voice session. This shortcut stays visible while scrolling. The existing **Make it yours** section also contains a clearly named **Agent Studio** entry. Paused sessions retain their lock; focused Inventory voice retains its separate tools. The frontend and API remain on their existing, separate Render release branches. No additional service, secret, or provider connection is required.
 
 ## User experience
 
