@@ -12,6 +12,7 @@ import 'music_studio/music_client.dart';
 import 'music_studio/music_studio_screen.dart';
 import 'chat/chat_workspace.dart';
 import 'theme/korlix_theme.dart';
+import 'theme/korlix_action_button.dart';
 import 'theme/korlix_theme_picker.dart';
 import 'theme/korlix_screen_skin.dart';
 import 'theme/korlix_appearance_preferences.dart';
@@ -4570,448 +4571,7 @@ class LanguageCopy {
   });
 }
 
-// KORLIX_LIVE_CONVO_HERO_BUTTON_BUILD131_BEGIN
 
-class _KorlixLiveConvoHeroButton extends StatefulWidget {
-  const _KorlixLiveConvoHeroButton({required this.onPressed});
-
-  final VoidCallback? onPressed;
-
-  @override
-  State<_KorlixLiveConvoHeroButton> createState() {
-    return _KorlixLiveConvoHeroButtonState();
-  }
-}
-
-class _KorlixLiveConvoHeroButtonState extends State<_KorlixLiveConvoHeroButton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _energyController;
-
-  bool _hovered = false;
-  bool _pressed = false;
-  bool _reduceMotion = false;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _energyController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2400),
-    );
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-
-    final media = MediaQuery.maybeOf(context);
-
-    final reduceMotion =
-        (media?.disableAnimations ?? false) ||
-        (media?.accessibleNavigation ?? false);
-
-    _reduceMotion = reduceMotion;
-
-    if (_reduceMotion) {
-      _energyController
-        ..stop()
-        ..value = 0.22;
-    } else if (!_energyController.isAnimating) {
-      _energyController.repeat();
-    }
-  }
-
-  @override
-  void dispose() {
-    _energyController.dispose();
-    super.dispose();
-  }
-
-  double _triangleWave(double value) {
-    final doubled = (value * 2.0) % 2.0;
-
-    return doubled <= 1.0 ? doubled : 2.0 - doubled;
-  }
-
-  double _barHeight(double phase, int index) {
-    if (_reduceMotion) {
-      const heights = <double>[17, 29, 22, 33, 14];
-
-      return heights[index];
-    }
-
-    final shifted = (phase + (index * 0.165)) % 1.0;
-
-    final wave = 1.0 - ((shifted * 2.0) - 1.0).abs();
-
-    return 12.0 + (wave * 23.0);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = widget.onPressed != null;
-
-    return Semantics(
-      button: true,
-      enabled: enabled,
-      label: 'LIVE CONVO',
-      hint: 'Start a real-time voice conversation with Korlix.',
-      child: Tooltip(
-        message: 'Start LIVE CONVO',
-        child: AnimatedBuilder(
-          animation: _energyController,
-          builder: (context, child) {
-            final phase = _reduceMotion ? 0.22 : _energyController.value;
-
-            final pulse = _reduceMotion ? 0.58 : _triangleWave(phase);
-
-            final interactionScale = _pressed
-                ? 0.974
-                : _hovered
-                ? 1.018
-                : 1.0;
-
-            final pulseScale = _reduceMotion ? 0.0 : 0.011 * pulse;
-
-            final cyanAlpha = enabled ? 0.34 + (0.38 * pulse) : 0.10;
-
-            final magentaAlpha = enabled ? 0.20 + (0.28 * pulse) : 0.07;
-
-            return Transform.scale(
-              scale: interactionScale + pulseScale,
-              child: Opacity(
-                opacity: enabled ? 1.0 : 0.54,
-                child: Container(
-                  width: double.infinity,
-                  constraints: const BoxConstraints(minHeight: 82),
-                  padding: const EdgeInsets.all(2.7),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(26),
-                    gradient: SweepGradient(
-                      colors: const <Color>[
-                        Color(0xFFFFD166),
-                        Color(0xFFFFFFFF),
-                        Color(0xFF21D4F4),
-                        Color(0xFF7C4DFF),
-                        Color(0xFFFF4FD8),
-                        Color(0xFFFFD166),
-                      ],
-                      stops: const <double>[0.00, 0.14, 0.31, 0.52, 0.76, 1.00],
-                      transform: GradientRotation(phase * 6.283185307179586),
-                    ),
-                    boxShadow: <BoxShadow>[
-                      BoxShadow(
-                        color: const Color(
-                          0xFF21D4F4,
-                        ).withValues(alpha: cyanAlpha),
-                        blurRadius: 25 + (pulse * 18),
-                        spreadRadius: 0.7 + (pulse * 2.2),
-                      ),
-                      BoxShadow(
-                        color: const Color(
-                          0xFFFF4FD8,
-                        ).withValues(alpha: magentaAlpha),
-                        blurRadius: 34 + (pulse * 17),
-                        spreadRadius: 0.3 + (pulse * 1.3),
-                      ),
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.52),
-                        blurRadius: 18,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(23.3),
-                    child: Ink(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(23.3),
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: <Color>[
-                            Color(0xFF020C14),
-                            Color(0xFF073149),
-                            Color(0xFF281044),
-                            Color(0xFF07131D),
-                          ],
-                          stops: <double>[0.00, 0.36, 0.72, 1.00],
-                        ),
-                        border: Border.all(
-                          color: Colors.white.withValues(
-                            alpha: 0.15 + (pulse * 0.18),
-                          ),
-                          width: 1.1,
-                        ),
-                      ),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(23.3),
-                        onTap: widget.onPressed,
-                        onHover: enabled
-                            ? (value) {
-                                if (!mounted || _hovered == value) {
-                                  return;
-                                }
-
-                                setState(() {
-                                  _hovered = value;
-                                });
-                              }
-                            : null,
-                        onHighlightChanged: enabled
-                            ? (value) {
-                                if (!mounted || _pressed == value) {
-                                  return;
-                                }
-
-                                setState(() {
-                                  _pressed = value;
-                                });
-                              }
-                            : null,
-                        splashColor: const Color(
-                          0xFF21D4F4,
-                        ).withValues(alpha: 0.25),
-                        highlightColor: Colors.white.withValues(alpha: 0.07),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          child: Row(
-                            children: <Widget>[
-                              Container(
-                                width: 58,
-                                height: 58,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: const LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: <Color>[
-                                      Color(0xFFFFD166),
-                                      Color(0xFF21D4F4),
-                                      Color(0xFF7C4DFF),
-                                    ],
-                                  ),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.76),
-                                    width: 1.1,
-                                  ),
-                                  boxShadow: <BoxShadow>[
-                                    BoxShadow(
-                                      color: const Color(0xFF21D4F4).withValues(
-                                        alpha: 0.38 + (pulse * 0.34),
-                                      ),
-                                      blurRadius: 16 + (pulse * 10),
-                                    ),
-                                  ],
-                                ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: List<Widget>.generate(5, (index) {
-                                    return Container(
-                                      width: 4,
-                                      height: _barHeight(phase, index),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(99),
-                                        gradient: const LinearGradient(
-                                          begin: Alignment.topCenter,
-                                          end: Alignment.bottomCenter,
-                                          colors: <Color>[
-                                            Color(0xFFFFFFFF),
-                                            Color(0xFF07131D),
-                                          ],
-                                        ),
-                                        boxShadow: <BoxShadow>[
-                                          BoxShadow(
-                                            color: Colors.white.withValues(
-                                              alpha: 0.42,
-                                            ),
-                                            blurRadius: 3,
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  }),
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    Row(
-                                      children: <Widget>[
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 7,
-                                            vertical: 3,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFFF335F),
-                                            borderRadius: BorderRadius.circular(
-                                              999,
-                                            ),
-                                            boxShadow: <BoxShadow>[
-                                              BoxShadow(
-                                                color: const Color(0xFFFF335F)
-                                                    .withValues(
-                                                      alpha:
-                                                          0.42 + (pulse * 0.42),
-                                                    ),
-                                                blurRadius: 6 + (pulse * 7),
-                                              ),
-                                            ],
-                                          ),
-                                          child: const Text(
-                                            'LIVE',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontFamily: 'monospace',
-                                              fontSize: 8.5,
-                                              fontWeight: FontWeight.w900,
-                                              letterSpacing: 1.4,
-                                              height: 1.0,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 7),
-                                        const Text(
-                                          'VOICE-FIRST AI',
-                                          style: TextStyle(
-                                            color: Color(0xFFBDEFFF),
-                                            fontFamily: 'monospace',
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w800,
-                                            letterSpacing: 1.65,
-                                            height: 1.0,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 7),
-                                    ShaderMask(
-                                      blendMode: BlendMode.srcIn,
-                                      shaderCallback: (bounds) {
-                                        return LinearGradient(
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                          colors: const <Color>[
-                                            Color(0xFFFFD166),
-                                            Color(0xFFFFFFFF),
-                                            Color(0xFF21D4F4),
-                                            Color(0xFFFF4FD8),
-                                          ],
-                                          stops: const <double>[
-                                            0.00,
-                                            0.28,
-                                            0.64,
-                                            1.00,
-                                          ],
-                                          transform: GradientRotation(
-                                            (phase - 0.5) * 0.72,
-                                          ),
-                                        ).createShader(bounds);
-                                      },
-                                      child: const Text(
-                                        'LIVE CONVO',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontFamily: 'monospace',
-                                          fontSize: 21,
-                                          fontWeight: FontWeight.w900,
-                                          fontStyle: FontStyle.italic,
-                                          letterSpacing: 3.1,
-                                          height: 1.0,
-                                          shadows: <Shadow>[
-                                            Shadow(
-                                              color: Color(0xB821D4F4),
-                                              blurRadius: 10,
-                                            ),
-                                            Shadow(
-                                              color: Color(0x99FF4FD8),
-                                              blurRadius: 16,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    const Text(
-                                      'TAP TO TALK  •  REAL-TIME AI',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: Color(0xFFD9F8FF),
-                                        fontFamily: 'monospace',
-                                        fontSize: 9.5,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: 1.35,
-                                        height: 1.0,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Container(
-                                width: 38,
-                                height: 38,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Colors.white.withValues(
-                                    alpha: 0.10 + (pulse * 0.08),
-                                  ),
-                                  border: Border.all(
-                                    color: const Color(
-                                      0xFFFFD166,
-                                    ).withValues(alpha: 0.75),
-                                    width: 1.1,
-                                  ),
-                                  boxShadow: <BoxShadow>[
-                                    BoxShadow(
-                                      color: const Color(0xFFFFD166).withValues(
-                                        alpha: 0.18 + (pulse * 0.24),
-                                      ),
-                                      blurRadius: 10 + (pulse * 8),
-                                    ),
-                                  ],
-                                ),
-                                child: const Icon(
-                                  Icons.arrow_forward_rounded,
-                                  color: Color(0xFFFFE8A6),
-                                  size: 22,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-// KORLIX_LIVE_CONVO_HERO_BUTTON_BUILD131_END
 
 class AppLanguages {
   static const List<LanguageCopy> all = [
@@ -9719,81 +9279,15 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         ? Icons.app_shortcut_rounded
         : null;
 
-    final lightQuickActionFill =
-        Color.lerp(skin.buttonFill, const Color(0xFFFFFFFF), 0.82) ??
-        const Color(0xFFFFFFFF);
-
-    final enabledTextColor = isHighlighted
-        ? const Color(0xFF061008)
-        : skin.isLight
-        ? skin.text
-        : const Color(0xFFF7FCFF);
-
-    final disabledTextColor = skin.isLight
-        ? skin.text.withValues(alpha: 0.78)
-        : const Color(0xFFE4EBEE).withValues(alpha: 0.72);
-
-    final enabledBackgroundColor = isHighlighted
-        ? const Color(0xFFB7FF00)
-        : skin.isLight
-        ? lightQuickActionFill
-        : const Color(0xFF120D18);
-
-    final disabledBackgroundColor = skin.isLight
-        ? (Color.lerp(lightQuickActionFill, skin.panel, 0.18) ??
-              lightQuickActionFill)
-        : const Color(0xFF120D18).withValues(alpha: 0.92);
-
-    final enabledBorderColor = isHighlighted
-        ? const Color(0xFFD9FF5A)
-        : skin.isLight
-        ? skin.border.withValues(alpha: 0.92)
-        : skin.primary.withValues(alpha: 0.88);
-
-    final disabledBorderColor = skin.isLight
-        ? skin.border.withValues(alpha: 0.72)
-        : skin.primary.withValues(alpha: 0.42);
-
-    return _korlixBeveledButtonSurface(
-      skin: skin,
-      fill: _loading ? disabledBackgroundColor : enabledBackgroundColor,
-      border: _loading ? disabledBorderColor : enabledBorderColor,
-      active: isHighlighted,
-      disabled: false,
-      borderRadius: BorderRadius.circular(13),
-      borderWidth: isHighlighted ? 2.2 : 1.85,
-      depth: _loading ? 0.84 : 1.16,
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: _loading ? null : () => _useQuickAction(action),
-          borderRadius: BorderRadius.circular(13),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (icon != null) ...[
-                  Icon(
-                    icon,
-                    size: 17,
-                    color: _loading ? disabledTextColor : enabledTextColor,
-                  ),
-                  const SizedBox(width: 6),
-                ],
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: _loading ? disabledTextColor : enabledTextColor,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 12.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return KorlixActionButton(
+      label: label,
+      icon: icon ?? korlixToolIcon(label),
+      onPressed: _loading ? null : () => _useQuickAction(action),
+      selected: isHighlighted ? true : null,
+      accent: isHighlighted ? skin.success :
+          (isVideoAction || isImproveAction || isImagineAction || isAppAction)
+              ? skin.secondary : skin.primary,
+      size: KorlixButtonSize.compact,
     );
   }
 
@@ -10106,7 +9600,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 980),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 28, 24, 40),
+                padding: EdgeInsets.fromLTRB(MediaQuery.sizeOf(context).width < 430 ? 12 : 24, 28, MediaQuery.sizeOf(context).width < 430 ? 12 : 24, 40),
                 child: Column(
                   children: [
                     _buildMockupHomeHeader(),
@@ -10689,75 +10183,13 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     bool showStopIconWhenActive = false,
   }) {
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
-    final disabled = onPressed == null;
-    final isGreen = active || success;
-    final accent =
-        accentColor ?? (locked ? skin.premium : _korlixDefinitionBorder(skin));
-
-    final normalFill = skin.isLight
-        ? (Color.lerp(skin.buttonFill, const Color(0xFFFFFFFF), 0.76) ??
-              const Color(0xFFFFFFFF))
-        : skin.buttonFill.withValues(alpha: 0.80);
-
-    final fill = isGreen ? skin.success : normalFill;
-    final foreground = isGreen
-        ? skin.textOnAccent
-        : skin.isLight
-        ? skin.text
-        : _korlixReadableToolForeground(skin);
-
-    final disabledForeground = skin.isLight
-        ? skin.text.withValues(alpha: 0.72)
-        : skin.mutedText.withValues(alpha: 0.70);
-
-    final borderColor = isGreen ? skin.success : accent.withValues(alpha: 0.94);
-
-    return _korlixBeveledButtonSurface(
-      skin: skin,
-      fill: fill,
-      border: borderColor,
-      active: isGreen,
-      disabled: false,
-      borderRadius: BorderRadius.circular(999),
-      borderWidth: isGreen ? 2.2 : 1.85,
-      depth: disabled ? 0.84 : 1.18,
-      child: OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: [
-            Icon(
-              showStopIconWhenActive && active
-                  ? Icons.stop_circle_outlined
-                  : icon,
-              size: 18,
-            ),
-            if (locked)
-              Positioned(
-                right: -7,
-                top: -7,
-                child: Icon(Icons.lock_rounded, size: 10, color: skin.premium),
-              ),
-          ],
-        ),
-        label: Text(label),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: disabled ? disabledForeground : foreground,
-          disabledForegroundColor: disabledForeground,
-          backgroundColor: Colors.transparent,
-          disabledBackgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          side: BorderSide.none,
-          padding: EdgeInsets.symmetric(
-            horizontal: label.length > 18 ? 12 : 14,
-            vertical: 10,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(999),
-          ),
-        ),
-      ),
+    return KorlixActionButton(
+      icon: showStopIconWhenActive && active ? Icons.stop_circle_outlined : icon,
+      label: label,
+      onPressed: onPressed,
+      locked: locked,
+      selected: active || success ? true : null,
+      accent: active || success ? skin.success : accentColor,
     );
   }
 
@@ -12906,28 +12338,12 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
 
               return Tooltip(
                 message: status,
-                child: ActionChip(
-                  label: Text(tool),
-                  labelStyle: TextStyle(
-                    color: selected
-                        ? skin.textOnAccent
-                        : _korlixReadableForeground(skin),
-                    fontWeight: FontWeight.w900,
-                  ),
-                  backgroundColor: selected
-                      ? skin.success
-                      : skin.buttonFill.withValues(
-                          alpha: skin.isLight ? 0.94 : 0.76,
-                        ),
-                  side: BorderSide(
-                    color: selected
-                        ? skin.success.withValues(alpha: 0.96)
-                        : statusColor.withValues(alpha: 0.88),
-                    width: selected ? 2.25 : 1.75,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                child: KorlixActionButton(
+                  label: tool,
+                  icon: korlixToolIcon(tool),
+                  selected: selected,
+                  accent: selected ? skin.success : statusColor,
+                  size: KorlixButtonSize.compact,
                   onPressed: _loading || _customAccessLoading
                       ? null
                       : () => _selectUtilityTool(tool),
@@ -13338,105 +12754,23 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     );
   }
 
-  Widget _buildMockupLanguageTabs() {
-    return ValueListenableBuilder<String>(
-      valueListenable: kKorlixThemeNotifier,
-      builder: (context, theme, _) {
-        final skin = korlixSkinPaletteFor(theme);
-
-        Widget tab({required String code, required String label}) {
-          final selected = _selectedLanguage == code;
-
-          return Expanded(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () {
-                if (_loading) {
-                  return;
-                }
-
-                setState(() {
-                  _selectedLanguage = code;
-                });
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                height: 58,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? skin.isPureWhite ? Colors.white : skin.primary.withOpacity(skin.isLight ? 0.24 : 0.20)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(20),
-                  border: selected
-                      ? Border.all(
-                          color: skin.primary.withOpacity(
-                            skin.isLight ? 0.72 : 0.54,
-                          ),
-                        )
-                      : null,
-                  boxShadow: [
-                    if (selected)
-                      BoxShadow(
-                        color: skin.glow.withOpacity(
-                          skin.isLight ? 0.14 : 0.22,
-                        ),
-                        blurRadius: 18,
-                      ),
-                  ],
-                ),
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: selected ? skin.text : skin.mutedText,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ),
-          );
-        }
-
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: skin.panel.withOpacity(skin.isLight ? 0.56 : 0.66),
-              borderRadius: BorderRadius.circular(26),
-              border: Border.all(
-                color: skin.border.withOpacity(skin.isLight ? 0.36 : 0.28),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: skin.glow.withOpacity(skin.isLight ? 0.06 : 0.12),
-                  blurRadius: 16,
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                tab(code: 'en', label: 'English'),
-                Container(
-                  width: 1,
-                  height: 32,
-                  color: skin.border.withOpacity(0.18),
-                ),
-                tab(code: 'es', label: 'Español'),
-                Container(
-                  width: 1,
-                  height: 32,
-                  color: skin.border.withOpacity(0.18),
-                ),
-                tab(code: 'fr', label: 'Français'),
-              ],
-            ),
+  Widget _buildMockupLanguageTabs() => Padding(
+    padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
+    child: Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 10,
+      runSpacing: 8,
+      children: [
+        for (final language in const {'en': 'English', 'es': 'Español', 'fr': 'Français'}.entries)
+          KorlixActionButton(
+            label: language.value,
+            selected: _selectedLanguage == language.key,
+            size: KorlixButtonSize.compact,
+            onPressed: _loading ? null : () => setState(() => _selectedLanguage = language.key),
           ),
-        );
-      },
-    );
-  }
+      ],
+    ),
+  );
 
   String _featuredResultShareText(GeneratedItem item) {
     final title = item.title.trim().isNotEmpty
@@ -14566,41 +13900,13 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                                   ),
                                 ),
                                 SizedBox(height: compact ? 12 : 22),
-                                SizedBox(
-                                  height: compact ? 38 : 46,
-                                  child: OutlinedButton(
-                                    onPressed: () {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Open Settings → View characters to preview and unlock more characters.',
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: skin.primary,
-                                      side: BorderSide(
-                                        color: skin.border.withOpacity(0.62),
-                                      ),
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: compact ? 14 : 24,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(
-                                          999,
-                                        ),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      compact ? 'View' : 'View Character',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: compact ? 12 : 15,
-                                      ),
-                                    ),
+                                KorlixActionButton(
+                                  label: compact ? 'View' : 'View Character',
+                                  size: KorlixButtonSize.compact,
+                                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text(
+                                      'Open Settings → View characters to preview and unlock more characters.',
+                                    )),
                                   ),
                                 ),
                               ],
@@ -15319,87 +14625,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   Color _korlixDefinitionShadow(KorlixSkinPalette skin) =>
     Colors.black.withValues(alpha: skin.isLight ? .07 : .22);
 
-  // KORLIX_3D_BEVEL_HELPERS_BEGIN
-  Widget _korlixBeveledButtonSurface({
-    required KorlixSkinPalette skin,
-    required Widget child,
-    required Color fill,
-    required Color border,
-    BorderRadius? borderRadius,
-    bool active = false,
-    bool disabled = false,
-    double borderWidth = 1.55,
-    double depth = 1.0,
-    EdgeInsetsGeometry padding = EdgeInsets.zero,
-  }) {
-    final radius = borderRadius ?? BorderRadius.circular(999);
-    if (skin.isPureWhite) {
-      return Container(padding: padding, decoration: BoxDecoration(color: Colors.white,
-        borderRadius: radius, border: Border.all(color: border.withValues(alpha: disabled ? .4 : .7), width: borderWidth)), child: child);
-    }
-    final disabledFillAlpha = skin.isLight ? 0.92 : 0.58;
-    final safeFill = fill.withValues(alpha: disabled ? disabledFillAlpha : 1.0);
-    final topFace =
-        Color.lerp(safeFill, Colors.white, skin.isLight ? 0.42 : 0.18) ??
-        safeFill;
-    final midFace = safeFill;
-    final lowerFace =
-        Color.lerp(safeFill, Colors.black, skin.isLight ? 0.08 : 0.30) ??
-        safeFill;
 
-    final edgeColor = disabled
-        ? (skin.isLight
-              ? border.withValues(alpha: 0.72)
-              : skin.mutedText.withValues(alpha: 0.46))
-        : border.withValues(alpha: active ? 0.98 : 0.78);
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: radius,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [topFace, midFace, lowerFace],
-          stops: const [0.0, 0.48, 1.0],
-        ),
-        border: Border.all(color: edgeColor, width: borderWidth),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.white.withValues(alpha: skin.isLight ? 0.72 : 0.07),
-            blurRadius: 1.6 * depth,
-            spreadRadius: 0,
-            offset: Offset(-0.9 * depth, -0.9 * depth),
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: skin.isLight ? 0.18 : 0.44),
-            blurRadius: 7.5 * depth,
-            spreadRadius: 0.15,
-            offset: Offset(0, 3.7 * depth),
-          ),
-          BoxShadow(
-            color: border.withValues(alpha: active ? 0.24 : 0.11),
-            blurRadius: 10.0 * depth,
-            spreadRadius: active ? 0.35 : 0.05,
-          ),
-        ],
-      ),
-      foregroundDecoration: BoxDecoration(
-        borderRadius: radius,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withValues(alpha: skin.isLight ? 0.38 : 0.18),
-            Colors.transparent,
-            Colors.black.withValues(alpha: skin.isLight ? 0.10 : 0.30),
-          ],
-          stops: const [0.0, 0.48, 1.0],
-        ),
-      ),
-      child: Padding(padding: padding, child: child),
-    );
-  }
-  // KORLIX_3D_BEVEL_HELPERS_END
 
   Widget _buildAnswerText(String value, {required bool compact}) {
     final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
@@ -15679,40 +14905,12 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 ),
               ),
               SizedBox(width: 8),
-              Semantics(
-                button: true,
-                label: 'Send',
-                child: InkWell(
-                  onTap: (_loading || !canSubmit) ? null : _generate,
-                  borderRadius: BorderRadius.circular(18),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 140),
-                    width: 48,
-                    height: 48,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: canSubmit ? skin.primary : skin.panelSoft,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: canSubmit ? skin.primary : skin.border.withValues(alpha: .5)),
-                    ),
-                    child: _loading
-                        ? SizedBox(
-                            width: 21,
-                            height: 21,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: inputTextColor,
-                            ),
-                          )
-                        : Icon(
-                            Icons.send_rounded,
-                            size: 25,
-                            color: canSubmit
-                                ? skin.textOnAccent
-                                : inputHintColor.withOpacity(0.64),
-                          ),
-                  ),
-                ),
+              KorlixActionButton(
+                label: _loading ? 'Sending' : 'Send',
+                icon: Icons.arrow_upward_rounded,
+                iconOnly: true,
+                busy: _loading,
+                onPressed: (_loading || !canSubmit) ? null : _generate,
               ),
             ],
           ),
@@ -15765,14 +14963,14 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 SizedBox(height: 12),
 
                 // KORLIX_LIVE_CONVO_HERO_HOME_SLOT_BUILD131_BEGIN
-                _KorlixLiveConvoHeroButton(
+                KorlixLiveConvoButton(
                   onPressed: _loading ? null : _openLiveConvoAudioTest,
                 ),
                 const SizedBox(height: 14),
                 // KORLIX_LIVE_CONVO_HERO_HOME_SLOT_BUILD131_END
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: 10,
+                  runSpacing: 10,
                   alignment: WrapAlignment.center,
                   children: [
                     // K135Z_B4A_MEETING_COPILOT_COMMAND_CENTER_ENTRY_BEGIN
@@ -15829,8 +15027,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 SizedBox(height: 14),
 
                 Wrap(
-                  spacing: 9,
-                  runSpacing: 9,
+                  spacing: 10,
+                  runSpacing: 10,
                   alignment: WrapAlignment.center,
                   // KORLIX_CREDIT_PUBLIC_ENTRY_HIDDEN_BUILD131_BEGIN
                   // Preserve the credit QuickActions in source while excluding
@@ -16339,7 +15537,9 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
             CompositedTransformFollower(
               link: _savedTopicsMenuLayerLink,
               showWhenUnlinked: false,
-              offset: const Offset(0, 52),
+              targetAnchor: Alignment.bottomLeft,
+              followerAnchor: Alignment.topLeft,
+              offset: const Offset(0, 8),
               child: Material(
                 type: MaterialType.transparency,
                 child: SizedBox(
@@ -16674,36 +15874,16 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     ).showSnackBar(SnackBar(content: Text('Deleted "${topic.title}".')));
   }
 
-  Widget _buildSavedTopicsMenuButton() {
-    final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
-
-    return CompositedTransformTarget(
-      link: _savedTopicsMenuLayerLink,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _toggleSavedTopicsPanel,
-          borderRadius: BorderRadius.circular(15),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: _showSavedTopicsPanel
-                  ? skin.panelSoft.withOpacity(skin.isLight ? 0.88 : 0.96)
-                  : skin.panel.withOpacity(skin.isLight ? 0.88 : 0.80),
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(
-                color: _showSavedTopicsPanel ? skin.secondary : skin.primary,
-                width: 1.25,
-              ),
-            ),
-            child: Icon(Icons.menu_rounded, color: skin.text, size: 27),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget _buildSavedTopicsMenuButton() => CompositedTransformTarget(
+    link: _savedTopicsMenuLayerLink,
+    child: KorlixActionButton(
+      label: 'Saved conversations',
+      icon: Icons.menu_rounded,
+      iconOnly: true,
+      selected: _showSavedTopicsPanel,
+      onPressed: _toggleSavedTopicsPanel,
+    ),
+  );
 
   int _chatTopicMessageCount(KorlixLocalChatTopic topic) {
     var count = 0;
@@ -18296,43 +17476,12 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     required IconData icon,
     required String label,
     required VoidCallback onTap,
-  }) {
-    final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
-
-    return _korlixBeveledButtonSurface(
-      skin: skin,
-      fill: skin.buttonFill.withValues(alpha: skin.isLight ? 0.96 : 0.72),
-      border: skin.primary.withValues(alpha: 0.88),
-      borderRadius: BorderRadius.circular(20),
-      borderWidth: 1.35,
-      depth: 0.78,
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 14, color: skin.primary),
-                const SizedBox(width: 4),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: _korlixReadableToolForeground(skin),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  }) => KorlixActionButton(
+    icon: icon,
+    label: label,
+    onPressed: onTap,
+    size: KorlixButtonSize.compact,
+  );
 
   Widget _buildResultCard(GeneratedItem item) {
     if (item.command == '__DOWNLOAD_CARD__') {

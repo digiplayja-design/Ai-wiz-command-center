@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+
 import '../bookkeeping/bookkeeping_file_save.dart';
+import '../theme/korlix_action_button.dart';
 import 'camera_ask_client.dart';
 import 'camera_capture.dart';
 
@@ -48,60 +51,11 @@ class CameraAskLaunchButton extends StatelessWidget {
   const CameraAskLaunchButton({super.key, required this.onPressed});
   final VoidCallback? onPressed;
   @override
-  Widget build(BuildContext context) => Material(
-    color: const Color(0xFF102435),
-    borderRadius: BorderRadius.circular(18),
-    child: InkWell(
-      onTap: onPressed,
-      borderRadius: BorderRadius.circular(18),
-      child: Ink(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: const Color(
-              0xFF63CFC5,
-            ).withValues(alpha: onPressed == null ? .2 : .65),
-          ),
-          gradient: const LinearGradient(
-            colors: [Color(0xFF183A4A), Color(0xFF16273F)],
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.center_focus_strong_rounded,
-                color: onPressed == null
-                    ? Colors.white38
-                    : const Color(0xFF9DEADD),
-                size: 25,
-              ),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Camera Ask',
-                    style: TextStyle(
-                      color: onPressed == null ? Colors.white38 : Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const Text(
-                    'See it. Ask it.',
-                    style: TextStyle(color: Color(0xFFB7D6DC), fontSize: 10),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    ),
+  Widget build(BuildContext context) => KorlixActionButton(
+    label: 'Camera Ask',
+    subtitle: 'See it. Ask it.',
+    icon: Icons.center_focus_strong_rounded,
+    onPressed: onPressed,
   );
 }
 
@@ -197,9 +151,7 @@ class _CameraAskScreenState extends State<CameraAskScreen> {
   void _fail(Object error) {
     if (!mounted || _expired) return;
     setState(
-      () => _error = error is CameraAskException
-          ? error.message
-          : 'That action could not be completed. Try again or choose a different photo.',
+      () => _error = error is CameraAskException ? error.message : 'That action could not be completed. Try again or choose a different photo.',
     );
   }
 
@@ -373,9 +325,8 @@ class _CameraAskScreenState extends State<CameraAskScreen> {
       widget.client.guard();
       await Clipboard.setData(ClipboardData(text: turn.answer));
       if (mounted && !_expired) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Answer copied')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Answer copied')));
       }
     } catch (e) {
       _fail(e);

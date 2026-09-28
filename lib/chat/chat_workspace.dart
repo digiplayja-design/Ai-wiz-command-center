@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../theme/korlix_action_button.dart';
+
 class KorlixChatTurn {
   const KorlixChatTurn({
     required this.id,
@@ -89,23 +91,26 @@ class KorlixChatTimeline extends StatelessWidget {
                 runSpacing: 8,
                 alignment: WrapAlignment.center,
                 children: [
-                  ActionChip(
-                    label: const Text('Help me write'),
-                    avatar: const Icon(Icons.edit_outlined, size: 17),
+                  KorlixActionButton(
+                    label: 'Help me write',
+                    icon: Icons.edit_outlined,
+                    size: KorlixButtonSize.compact,
                     onPressed: onStarter == null
                         ? null
                         : () => onStarter!('Help me write ', false),
                   ),
-                  ActionChip(
-                    label: const Text('Explore an idea'),
-                    avatar: const Icon(Icons.lightbulb_outline, size: 17),
+                  KorlixActionButton(
+                    label: 'Explore an idea',
+                    icon: Icons.lightbulb_outline,
+                    size: KorlixButtonSize.compact,
                     onPressed: onStarter == null
                         ? null
                         : () => onStarter!('Help me think through ', false),
                   ),
-                  ActionChip(
-                    label: const Text('Create a picture'),
-                    avatar: const Icon(Icons.image_outlined, size: 17),
+                  KorlixActionButton(
+                    label: 'Create a picture',
+                    icon: Icons.image_outlined,
+                    size: KorlixButtonSize.compact,
                     onPressed: onStarter == null
                         ? null
                         : () => onStarter!('', true),
@@ -225,13 +230,14 @@ class KorlixChatTimeline extends StatelessWidget {
                         await Clipboard.setData(
                           ClipboardData(text: turn.answer),
                         );
-                        if (context.mounted)
+                        if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Answer copied'),
                               duration: Duration(seconds: 2),
                             ),
                           );
+                        }
                       },
                       icon: const Icon(Icons.copy_outlined, size: 16),
                       label: const Text('Copy'),
@@ -293,17 +299,19 @@ class KorlixChatModeBar extends StatelessWidget {
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          ChoiceChip(
-            label: const Text('Chat'),
-            avatar: const Icon(Icons.chat_bubble_outline, size: 17),
+          KorlixActionButton(
+            label: 'Chat',
+            icon: Icons.chat_bubble_outline,
+            size: KorlixButtonSize.compact,
             selected: !imageMode,
-            onSelected: busy ? null : (_) => onModeChanged(false),
+            onPressed: busy ? null : () => onModeChanged(false),
           ),
-          ChoiceChip(
-            label: const Text('Create image'),
-            avatar: const Icon(Icons.image_outlined, size: 17),
+          KorlixActionButton(
+            label: 'Create image',
+            icon: Icons.image_outlined,
+            size: KorlixButtonSize.compact,
             selected: imageMode,
-            onSelected: busy ? null : (_) => onModeChanged(true),
+            onPressed: busy ? null : () => onModeChanged(true),
           ),
           Text(
             imageMode ? 'Extra-high image quality' : 'Astra · Extra high',
