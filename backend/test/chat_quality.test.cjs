@@ -144,3 +144,10 @@ test('startup model visibility check is read-only, bounded, and distinguishes ac
   assert(calls.every(c=>!c.options.method&&!c.options.body&&c.options.signal));
   assert.deepEqual(await quality.probeModelAccess({apiKey:''}),{chat:'not_configured',images:'not_configured'});
 });
+
+test('Imagine Studio creative styles reach the real image route and preserve exact lettering', async()=>{
+ for(const [style,direction] of [['3d','three-dimensional'],['watercolor','watercolor'],['sketch','pencil'],['minimal','minimalist']]){
+  const f=fixture(),r=await f.run({prompt:'A poster. Exact lettering: SOMETHING GOOD\nIS BREWING',imageSize:'1024x1536',imageStyle:style},'/api/image/create');
+  assert.equal(r.statusCode,200);assert.match(f.calls[0].prompt,new RegExp(direction));assert.match(f.calls[0].prompt,/SOMETHING GOOD\nIS BREWING/);assert.equal(f.calls[0].n,1);assert.equal(f.usage.length,1);
+ }
+});

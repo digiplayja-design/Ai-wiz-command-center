@@ -12,6 +12,10 @@ const IMAGE_STYLES = Object.freeze({
   illustration: 'Create a cohesive, deliberate illustration with clean forms and an intentional palette.',
   design: 'Create a polished graphic design with a clear visual hierarchy, balanced spacing, and legible typography.',
   cinematic: 'Use cinematic composition, purposeful lighting, rich tonal depth, and coherent detail.',
+  '3d': 'Create polished three-dimensional artwork with sculpted forms, physically coherent materials, dimensional lighting, and intentional reflections.',
+  watercolor: 'Create expressive watercolor artwork with translucent pigment, subtle paper texture, organic edges, and controlled washes.',
+  sketch: 'Create a deliberate pencil drawing with expressive line work, layered graphite shading, and a coherent hand-drawn finish.',
+  minimal: 'Create restrained minimalist artwork with deliberate negative space, simple forms, a focused palette, and a strong focal point.',
 });
 
 function invalid(message) {
