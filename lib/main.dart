@@ -87,6 +87,9 @@ import 'imagine_studio/imagine_client.dart';
 import 'imagine_studio/imagine_screen.dart';
 import 'imagine_studio/imagine_art.dart';
 import 'logo_studio/logo_client.dart';
+import 'email_enhancer/email_client.dart';
+import 'email_enhancer/email_screen.dart';
+import 'email_enhancer/email_artwork.dart';
 import 'logo_studio/logo_screen.dart';
 import 'image_to_video/image_to_video_screen.dart';
 
@@ -5081,6 +5084,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   ImagineClient? _imagineStudio;
   bool _imagineStudioOpening = false;
   bool _logoStudioOpening = false;
+  bool _emailEnhancerOpening = false;
   String _pendingChatPrompt = '';
   String _pendingChatStatus = 'Thinking through your request…';
   String? _pendingChatTopicId;
@@ -8613,6 +8617,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     final isVideoAction = _isCreateVideoQuickAction(action);
     final isImproveAction = _isImprovePictureQuickAction(action);
     final isImagineAction = _isImaginePictureQuickAction(action);
+    final isEmailAction = action.label.toLowerCase() == 'email enhancer';
     final isCreditAction = _isCreditReportActionSafeUi(action);
 
     if (isCreditAction && _creditDebtValidationRoundsVisible) {
@@ -8672,14 +8677,14 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     return KorlixActionButton(
       tile: tile,
       label: label,
-      subtitle: isImagineAction ? 'Styles, scenes & art' : null,
+      subtitle: isEmailAction ? 'Polish, draft & reply' : isImagineAction ? 'Styles, scenes & art' : null,
       leading: isImagineAction ? ClipRRect(borderRadius: BorderRadius.circular(11),
-        child: const SizedBox(width: 38, height: 38, child: ImagineArtwork())) : null,
+        child: const SizedBox(width: 38, height: 38, child: ImagineArtwork())) : isEmailAction ? const SizedBox(width: 38, height: 38, child: EmailArtwork()) : null,
       icon: icon ?? korlixToolIcon(label),
       onPressed: _loading ? null : () => _useQuickAction(action),
       selected: isHighlighted ? true : null,
       accent: isHighlighted ? skin.success :
-          (isVideoAction || isImproveAction || isImagineAction || isAppAction)
+          (isVideoAction || isImproveAction || isImagineAction || isAppAction || isEmailAction)
               ? skin.secondary : skin.primary,
       size: KorlixButtonSize.compact,
     );
@@ -8777,6 +8782,30 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     } finally { client?.dispose(); _logoStudioOpening = false; }
   }
 
+  Future<void> _openEmailEnhancer() async {
+    if (_loading || _emailEnhancerOpening) return;
+    _emailEnhancerOpening = true;
+    EmailEnhancerClient? client;
+    try {
+      if (_voiceListening) {
+        await _speechToText.stop();
+        if (mounted) setState(() => _voiceListening = false);
+      }
+      await _stopAiCharacterTalkingForQuery();
+      if (!mounted) return;
+      client = EmailEnhancerClient(baseUrl: kKorlixBackendBaseUrl,
+        headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision);
+      final studio = client;
+      await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => EmailEnhancerScreen(
+        client: studio, language: _selectedLanguage, allowVoice: _hasVoiceAccess,
+        ensureConsent: () => ensureKorlixThirdPartyAiConsent(
+          context: context, featureName: 'Email Enhancer',
+          providers: const {KorlixThirdPartyAiProvider.openAi},
+          dataCategories: const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts}),
+      )));
+    } finally { client?.dispose(); _emailEnhancerOpening = false; }
+  }
+
   Future<void> _openImprovePictureStudio() async {
     if (_loading) return;
     final client = PictureStudioClient(backendBaseUrl: kKorlixBackendBaseUrl,
@@ -8868,6 +8897,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   void _useQuickAction(QuickAction action) {
+    if (action.label.toLowerCase() == 'email enhancer') { unawaited(_openEmailEnhancer()); return; }
     if (const {'Write my Resume', 'Rédiger mon CV', 'Crear mi currículum'}.contains(action.label)) { unawaited(_openResumeStudio()); return; }
     if (action.label == 'Tax Prep') { unawaited(_openTaxPrep()); return; }
     if (action.label == 'BabyBlend') { unawaited(_openBabyBlend()); return; }
@@ -13886,6 +13916,9 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       'create an app', 'email enhancer', 'negocios', 'crear plan', 'ideas de contenido', 'idées contenu',
     }.contains(action.label.toLowerCase());
     final quickActions = t.quickActions.where((a) => !_isCreditReportActionSafeUi(a)).toList();
+    if (!quickActions.any((a) => a.label.toLowerCase() == 'email enhancer')) {
+      quickActions.add(const QuickAction(label: 'Email enhancer', prompt: 'Open Email Enhancer.'));
+    }
 
     Widget answerReadyBody() => _buildAnswerReadyConversationView(
       activeResult, compact: MediaQuery.sizeOf(context).width < 430);
