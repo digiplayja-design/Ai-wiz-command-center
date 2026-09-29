@@ -2,6 +2,7 @@
 // accept an actor ID, moderation role, or email address from a request body.
 import { registerSocialPhotos, socialPhotos } from './media.mjs';
 import { socialCallConfig } from './calls.mjs';
+import { registerDomino } from './domino.mjs';
 import { registerSocialAttachments, socialAttachments } from './attachments.mjs';
 export function registerSocial(app, { database, requireUser, logger = console, env = process.env } = {}) {
   const actions = new Set(['bootstrap', 'members', 'connections', 'messages', 'message', 'topics', 'topic', 'blocks', 'reports',
@@ -23,6 +24,7 @@ export function registerSocial(app, { database, requireUser, logger = console, e
     return user;
   };
   registerSocialPhotos(app, { database, authenticate, logger });
+  registerDomino(app, { database, authenticate, env, logger });
   registerSocialAttachments(app, { database, authenticate, logger });
   const route = async (req, res) => {
     res.set('Cache-Control', 'no-store');
