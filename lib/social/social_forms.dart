@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import '../theme/korlix_action_button.dart';
 import 'social_client.dart';
 import 'social_design.dart';
@@ -110,17 +110,20 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
     }
   }
 
-  Future<void> _choosePhoto() async {
+  Future<void> _choosePhoto({bool camera = false}) async {
     setState(() => _picking = true);
     try {
+      final photo = widget.photoPicker == null
+          ? await ImagePicker().pickImage(
+              source: camera ? ImageSource.camera : ImageSource.gallery,
+              maxWidth: 2048,
+              maxHeight: 2048,
+              imageQuality: 90,
+            )
+          : null;
       final bytes = widget.photoPicker != null
           ? await widget.photoPicker!()
-          : (await FilePicker.platform.pickFiles(
-              type: FileType.custom,
-              allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
-              allowMultiple: false,
-              withData: true,
-            ))?.files.single.bytes;
+          : await photo?.readAsBytes();
       if (!mounted || !widget.client.available || bytes == null) return;
       if (bytes.length > 8 * 1024 * 1024 || bytes.isEmpty) {
         throw const SocialException('Choose a photo smaller than 8 MB.');
@@ -212,6 +215,14 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
                             onPressed: _saving || _picking
                                 ? null
                                 : _choosePhoto,
+                          ),
+                          KorlixActionButton(
+                            label: 'Take photo',
+                            icon: Icons.camera_alt_outlined,
+                            onPressed: _saving || _picking
+                                ? null
+                                : () => _choosePhoto(camera: true),
+                            size: KorlixButtonSize.compact,
                           ),
                           if (_photo != null ||
                               (!_removePhoto &&

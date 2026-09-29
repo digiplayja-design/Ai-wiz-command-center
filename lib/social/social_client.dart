@@ -112,12 +112,49 @@ class SocialClient extends ChangeNotifier {
     return _send(request);
   }
 
-  Future<SocialMap> _send(http.BaseRequest request) async {
+  Future<SocialMap> uploadAttachment({
+    required Uint8List bytes,
+    required String filename,
+    required String kind,
+    required String id,
+    required SocialMap destination,
+  }) async {
+    _guard();
+    if (bytes.isEmpty || bytes.length > 20 * 1024 * 1024) {
+      throw const SocialException('Choose an attachment smaller than 20 MB.');
+    }
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse(
+        '${baseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/social/attachment_upload',
+      ).replace(
+        queryParameters: {
+          'id': id,
+          'kind': kind,
+          ...destination.map((k, v) => MapEntry(k, '$v')),
+        },
+      ),
+    );
+    request.headers.addEntries(
+      headersBuilder().entries.where(
+        (e) => e.key.toLowerCase() != 'content-type',
+      ),
+    );
+    request.files.add(
+      http.MultipartFile.fromBytes('file', bytes, filename: filename),
+    );
+    return _send(request, timeout: const Duration(seconds: 120));
+  }
+
+  Future<SocialMap> _send(
+    http.BaseRequest request, {
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
     try {
       final response = await _http
           .send(request)
           .then(http.Response.fromStream)
-          .timeout(const Duration(seconds: 30));
+          .timeout(timeout);
       _guard();
       if (response.statusCode == 401) {
         _denied = true;

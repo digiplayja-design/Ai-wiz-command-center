@@ -54,6 +54,7 @@ dependencies:
   flutter_webrtc: ^1.5.2
   dart_webrtc: 1.8.1
   web: 1.1.1
+  record: 7.1.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -98,6 +98,12 @@ class Replies {
 Future<void> tap(WidgetTester t, Finder f) async {
   FocusManager.instance.primaryFocus?.unfocus();
   await t.pumpAndSettle();
+  if (f.evaluate().isEmpty) {
+    final scroll = find.byType(Scrollable).first;
+    t.state<ScrollableState>(scroll).position.jumpTo(0);
+    await t.pumpAndSettle();
+    await t.scrollUntilVisible(f, 240, scrollable: scroll);
+  }
   await Scrollable.ensureVisible(t.element(f), alignment: .5);
   await t.pumpAndSettle();
   await t.tap(f);

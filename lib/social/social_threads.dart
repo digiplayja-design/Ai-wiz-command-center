@@ -1,4 +1,9 @@
 import 'dart:async';
+import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
+import 'social_media_widgets.dart';
+import 'social_voice_note.dart';
 import 'package:flutter/material.dart';
 import '../theme/korlix_theme.dart';
 import '../theme/korlix_action_button.dart';
@@ -17,11 +22,13 @@ class SocialChatScreen extends StatefulWidget {
     this.onCall,
     this.groupChat = false,
     this.onGroupDetails,
+    this.attachmentPicker,
   });
   final SocialClient client;
   final SocialMap me, peer;
   final Future<void> Function(bool video)? onCall;
   final bool groupChat;
+  final Future<SocialAttachmentDraft?> Function(String kind)? attachmentPicker;
   final Future<bool> Function()? onGroupDetails;
   @override
   State<SocialChatScreen> createState() => _SocialChatScreenState();
@@ -34,6 +41,9 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   SocialMap? _replyTo;
   String? _sendReplyId;
   bool _openingOriginal = false;
+  SocialAttachmentDraft? _attachment;
+  bool _pickingAttachment = false, _uploading = false;
+  String? _sendAttachmentId;
   List<SocialMap> _messages = [];
   late SocialMap _peer = widget.peer;
   Timer? _timer;
@@ -70,6 +80,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       _generation++;
       setState(() {
         _messages = [];
+        _attachment = null;
         _replyTo = null;
         _sendKey = _sendBody = _sendReplyId = null;
         _peer = {
@@ -95,6 +106,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   @override
   void dispose() {
     _timer?.cancel();
+    _discardAttachment();
     widget.client.removeListener(_access);
     WidgetsBinding.instance.removeObserver(this);
     _text.dispose();
@@ -169,6 +181,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                   'author': {'name': 'Unavailable member'},
                   'body': '',
                   'deleted': true,
+                  'attachment': null,
                   'reply': null,
                 }
               else if (hidden.contains(socialMap(m['reply'])['sender']))
@@ -189,7 +202,13 @@ class _SocialChatScreenState extends State<SocialChatScreen>
           _messages = [
             for (final m in _messages)
               if (removed.contains(m['id']))
-                {...m, 'body': '', 'deleted': true, 'reply': null}
+                {
+                  ...m,
+                  'body': '',
+                  'deleted': true,
+                  'reply': null,
+                  'attachment': null,
+                }
               else if (removed.contains(socialMap(m['reply'])['id']))
                 {
                   ...m,
@@ -216,6 +235,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
           _error = '$e';
           if (e is SocialException && [401, 403, 404].contains(e.status)) {
             _messages = [];
+            _attachment = null;
             _replyTo = null;
             _sendKey = _sendBody = _sendReplyId = null;
             _unavailable = true;
@@ -228,36 +248,244 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     }
   }
 
+  void _discardAttachment() {
+    final draft = _attachment;
+    _attachment = null;
+    if (draft?.uploaded != null && widget.client.available) {
+      unawaited(
+        widget.client
+            .post('attachment_discard', {'id': draft!.id})
+            .catchError((_) => <String, dynamic>{}),
+      );
+    }
+  }
+
+  Future<void> _pickAttachment(String kind) async {
+    if (_sending ||
+        _pickingAttachment ||
+        _unavailable ||
+        !widget.client.available) {
+      return;
+    }
+    setState(() => _pickingAttachment = true);
+    try {
+      SocialAttachmentDraft? picked;
+      if (widget.attachmentPicker != null) {
+        picked = await widget.attachmentPicker!(kind);
+      } else if (kind == 'voice') {
+        final bytes = await showModalBottomSheet<Uint8List>(
+          context: context,
+          isScrollControlled: true,
+          showDragHandle: true,
+          builder: (_) => SocialVoiceNoteSheet(client: widget.client),
+        );
+        if (bytes != null) {
+          picked = SocialAttachmentDraft(
+            bytes: bytes,
+            filename: 'Voice note.wav',
+            kind: 'voice',
+          );
+        }
+      } else if (kind == 'image') {
+        final photo = await ImagePicker().pickImage(
+          source: ImageSource.gallery,
+          maxWidth: 2048,
+          maxHeight: 2048,
+          imageQuality: 90,
+        );
+        if (photo != null) {
+          picked = SocialAttachmentDraft(
+            bytes: await photo.readAsBytes(),
+            filename: photo.name,
+            kind: 'image',
+          );
+        }
+      } else {
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: [
+            'pdf',
+            'doc',
+            'docx',
+            'xls',
+            'xlsx',
+            'ppt',
+            'pptx',
+            'txt',
+            'csv',
+            'zip',
+          ],
+          withData: false,
+          withReadStream: true,
+        );
+        if (result != null) {
+          final file = result.files.single;
+          if (file.size > 20 * 1024 * 1024) {
+            throw const SocialException('Choose a file smaller than 20 MB.');
+          }
+          final data = BytesBuilder(copy: false);
+          if (file.bytes != null) {
+            data.add(file.bytes!);
+          } else if (file.readStream != null) {
+            await for (final chunk in file.readStream!) {
+              data.add(chunk);
+              if (data.length > 20 * 1024 * 1024) {
+                throw const SocialException(
+                  'Choose a file smaller than 20 MB.',
+                );
+              }
+            }
+          }
+          picked = SocialAttachmentDraft(
+            bytes: data.takeBytes(),
+            filename: file.name,
+            kind: 'file',
+          );
+        }
+      }
+      if (!mounted ||
+          !widget.client.available ||
+          _unavailable ||
+          picked == null) {
+        return;
+      }
+      if (picked.bytes.isEmpty || picked.bytes.length > 20 * 1024 * 1024) {
+        throw const SocialException('Choose an attachment smaller than 20 MB.');
+      }
+      _discardAttachment();
+      setState(() {
+        _attachment = picked;
+        _error = null;
+      });
+    } catch (e) {
+      if (mounted && widget.client.available) socialNotice(context, e);
+    } finally {
+      if (mounted) setState(() => _pickingAttachment = false);
+    }
+  }
+
   Future<void> _send() async {
-    final body = _text.text.trim();
-    if (body.isEmpty || _sending || _unavailable) return;
+    final body = _text.text.trim(), draft = _attachment;
+    if ((body.isEmpty && draft == null) ||
+        _sending ||
+        _pickingAttachment ||
+        _unavailable) {
+      return;
+    }
     final replyId = _replyTo?['id'] as String?;
-    if (_sendBody != body || _sendReplyId != replyId) {
+    if (_sendBody != body ||
+        _sendReplyId != replyId ||
+        _sendAttachmentId != draft?.id) {
       _sendBody = body;
       _sendReplyId = replyId;
+      _sendAttachmentId = draft?.id;
       _sendKey = socialId();
     }
     setState(() => _sending = true);
     try {
+      if (draft != null && draft.uploaded == null) {
+        setState(() => _uploading = true);
+        final uploaded = await widget.client.uploadAttachment(
+          bytes: draft.bytes,
+          filename: draft.filename,
+          kind: draft.kind,
+          id: draft.id,
+          destination: _destination,
+        );
+        if (!mounted || !widget.client.available || _unavailable) return;
+        draft.uploaded = socialMap(uploaded['attachment']);
+        if (draft.uploaded?['id'] != draft.id) {
+          throw const SocialException(
+            'Attachment upload was not confirmed. Please retry.',
+          );
+        }
+        setState(() => _uploading = false);
+      }
       await widget.client.post(_action('send'), {
         'id': _sendKey,
         ..._destination,
         'body': body,
         'reply_to': ?replyId,
+        if (draft != null) 'attachment_id': draft.id,
       });
       if (!mounted || !widget.client.available) return;
       _text.clear();
-      _sendBody = null;
-      _sendKey = null;
-      _sendReplyId = null;
+      _sendBody = _sendKey = _sendReplyId = _sendAttachmentId = null;
       _replyTo = null;
+      _attachment = null;
       await _load();
       _bottom();
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _uploading = false;
+        });
+      }
     }
+  }
+
+  Widget _attachmentDraft() {
+    final draft = _attachment!;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: SocialPanel(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Expanded(
+              child: draft.kind == 'voice'
+                  ? SocialVoicePlayer(
+                      key: ValueKey(draft.id),
+                      bytes: draft.bytes,
+                    )
+                  : Row(
+                      children: [
+                        if (draft.kind == 'image')
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.memory(
+                              draft.bytes,
+                              width: 52,
+                              height: 52,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) =>
+                                  const Icon(Icons.image_outlined),
+                            ),
+                          )
+                        else
+                          const Icon(Icons.description_outlined),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                draft.filename,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                socialFileSize(draft.bytes.length),
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+            IconButton(
+              tooltip: 'Remove attachment',
+              onPressed: _sending ? null : () => setState(_discardAttachment),
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String _author(SocialMap m) => m['sender'] == widget.me['id']
@@ -359,6 +587,14 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                         ),
                       ),
                       const SizedBox(height: 8),
+                      if (!removed &&
+                          socialMap(message['attachment']).isNotEmpty) ...[
+                        SocialAttachmentView(
+                          client: widget.client,
+                          attachment: socialMap(message['attachment']),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       SelectableText(
                         removed
                             ? 'Message removed'
@@ -420,8 +656,8 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       context,
       'Remove this message?',
       widget.groupChat
-          ? 'Its text will be removed for everyone in the group.'
-          : 'Its text will be removed for both members.',
+          ? 'This message and its attachment will be removed for everyone in the group.'
+          : 'This message and its attachment will be removed for both members.',
       action: 'Remove',
     )) {
       return;
@@ -437,7 +673,13 @@ class _SocialChatScreenState extends State<SocialChatScreen>
           _messages = [
             for (final x in _messages)
               x['id'] == m['id']
-                  ? {...x, 'body': '', 'deleted': true, 'reply': null}
+                  ? {
+                      ...x,
+                      'body': '',
+                      'deleted': true,
+                      'reply': null,
+                      'attachment': null,
+                    }
                   : socialMap(x['reply'])['id'] == m['id']
                   ? {
                       ...x,
@@ -514,6 +756,18 @@ class _SocialChatScreenState extends State<SocialChatScreen>
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (!removed) ...[
+                    SocialAvatar(
+                      member: mine
+                          ? widget.me
+                          : widget.groupChat
+                          ? socialMap(m['author'])
+                          : _peer,
+                      size: 26,
+                      showStatus: false,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   Flexible(
                     child: Text(
                       _author(m),
@@ -570,6 +824,14 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                     onOpen: () => _viewOriginal('${m['reply']['id']}'),
                   ),
                 ),
+              if (!removed && socialMap(m['attachment']).isNotEmpty) ...[
+                SocialAttachmentView(
+                  key: ValueKey('attachment-${m['id']}'),
+                  client: widget.client,
+                  attachment: socialMap(m['attachment']),
+                ),
+                const SizedBox(height: 8),
+              ],
               SelectableText(
                 removed ? 'Message removed' : m['body'],
                 style: TextStyle(
@@ -783,6 +1045,43 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                   ],
                 ),
               ),
+              if (!_unavailable && _attachment != null) _attachmentDraft(),
+              if (_uploading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  child: Column(
+                    children: [
+                      LinearProgressIndicator(),
+                      SizedBox(height: 4),
+                      Text(
+                        'Uploading attachment…',
+                        style: TextStyle(fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              if (!_unavailable)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Wrap(
+                    spacing: 4,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      for (final item in [
+                        ('image', 'Photo', Icons.photo_outlined),
+                        ('file', 'File', Icons.attach_file_rounded),
+                        ('voice', 'Voice note', Icons.mic_none_rounded),
+                      ])
+                        TextButton.icon(
+                          onPressed: _sending || _pickingAttachment
+                              ? null
+                              : () => _pickAttachment(item.$1),
+                          icon: Icon(item.$3, size: 19),
+                          label: Text(item.$2),
+                        ),
+                    ],
+                  ),
+                ),
               if (!_unavailable && _replyTo != null)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),

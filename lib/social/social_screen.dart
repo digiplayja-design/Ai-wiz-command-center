@@ -1055,6 +1055,50 @@ class _SocialScreenState extends State<SocialScreen>
                       ),
                     ),
                 ] else ...[
+                  SocialPanel(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      children: [
+                        InkWell(
+                          onTap: _editProfile,
+                          borderRadius: BorderRadius.circular(36),
+                          child: SocialAvatar(
+                            member: _profile!,
+                            size: 60,
+                            showStatus: false,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${_profile!['name']}',
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              TextButton.icon(
+                                onPressed: _editProfile,
+                                icon: const Icon(
+                                  Icons.add_a_photo_outlined,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  _profile!['avatar_url'] == null
+                                      ? 'Add profile photo'
+                                      : 'Change profile photo',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                   _hero(),
                   const SizedBox(height: 22),
                   _searchBox(),
