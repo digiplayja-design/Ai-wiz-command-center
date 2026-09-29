@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'bookkeeping_client.dart';
 import 'bookkeeping_csv_save.dart';
 import 'bookkeeping_models.dart';
+import 'bookkeeping_ui.dart';
+import 'bookkeeping_receipts.dart';
 import 'ledger_models.dart';
 import 'ledger_form.dart';
 
@@ -26,7 +28,8 @@ class _BookkeepingLedgerState extends State<BookkeepingLedger> {
   final _month = TextEditingController(
     text: bookkeepingDate(DateTime.now()).substring(0, 7),
   );
-  final _exportKey = GlobalKey();
+  final _exportKey = GlobalKey(), _feedbackKey = GlobalKey();
+  String? _exportError, _exportNotice;
   late String _selectedMonth = _month.text;
   Map<String, dynamic>? _data;
   bool _busy = false, _denied = false;
@@ -46,6 +49,7 @@ class _BookkeepingLedgerState extends State<BookkeepingLedger> {
         _denied = true;
         _data = null;
         _error = null;
+        _exportError = _exportNotice = null;
         _month.clear();
       });
     }
@@ -59,10 +63,11 @@ class _BookkeepingLedgerState extends State<BookkeepingLedger> {
   }
 
   Future<void> _load() async {
-    if (!_alive) return;
+    if (!mounted || !_alive) return;
     setState(() {
       _busy = true;
       _error = null;
+      _exportError = _exportNotice = null;
       _data = null;
     });
     try {
@@ -100,6 +105,7 @@ class _BookkeepingLedgerState extends State<BookkeepingLedger> {
     Map<String, dynamic>? original,
     bool account = false,
   }) async {
+    String? attemptedDate;
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: false,
@@ -110,25 +116,38 @@ class _BookkeepingLedgerState extends State<BookkeepingLedger> {
         initialKind: kind,
         original: original,
         accountOnly: account,
+        onSaveAttempt: (date) => attemptedDate = date,
       ),
     );
-    if (!_alive) return;
-    if (result?['entry_date'] != null) {
-      _selectedMonth = (result!['entry_date'] as String).substring(0, 7);
+    if (!mounted || !_alive) return;
+    final date = result?['entry_date'] as String? ?? attemptedDate;
+    if (date != null) {
+      _selectedMonth = date.substring(0, 7);
       _month.text = _selectedMonth;
       _offset = 0;
     }
     await _load();
   }
 
+  Future<void> _evidence(Map<String, dynamic> journal) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => BookkeepingReceipts(
+        client: widget.client,
+        businessId: widget.businessId,
+        businessName: widget.businessName,
+        categories: const [],
+        journal: journal,
+      ),
+    );
+    if (_alive) await _load();
+  }
+
   Future<void> _export() async {
-    final box = _exportKey.currentContext?.findRenderObject() as RenderBox?;
-    final origin = box == null
-        ? const Rect.fromLTWH(0, 0, 1, 1)
-        : box.localToGlobal(Offset.zero) & box.size;
     setState(() {
       _busy = true;
-      _error = null;
+      _exportError = _exportNotice = null;
     });
     try {
       final d = await widget.client.request(
@@ -136,23 +155,30 @@ class _BookkeepingLedgerState extends State<BookkeepingLedger> {
         '/businesses/${widget.businessId}/ledger/export',
         query: {'month': _selectedMonth},
       );
-      if (!_alive) return;
+      if (!mounted || !_alive) return;
       if (widget.onExport != null) {
         await widget.onExport!(d['csv'] as String, d['filename'] as String);
       } else {
         await saveBookkeepingCsv(
           d['csv'] as String,
           d['filename'] as String,
-          origin,
+          bookkeepingShareOrigin(_exportKey, context),
+        );
+      }
+      if (_alive) {
+        setState(
+          () =>
+              _exportNotice = 'CSV prepared from the latest recorded entries.',
         );
       }
     } catch (e) {
       if (_alive) {
-        setState(() => _error = e.toString());
+        setState(() => _exportError = e.toString());
       }
     } finally {
       if (_alive) {
         setState(() => _busy = false);
+        revealBookkeepingFeedback(_feedbackKey, () => _alive);
       }
     }
   }
@@ -201,6 +227,11 @@ class _BookkeepingLedgerState extends State<BookkeepingLedger> {
             style: const TextStyle(fontSize: 12),
           ),
         ),
+      OutlinedButton.icon(
+        onPressed: _busy ? null : () => _evidence(j),
+        icon: const Icon(Icons.attach_file),
+        label: const Text('Supporting documents'),
+      ),
       if (!reverse && !reversed)
         TextButton.icon(
           onPressed: _busy ? null : () => _entry(original: j),
@@ -317,6 +348,11 @@ class _BookkeepingLedgerState extends State<BookkeepingLedger> {
                                     : _export,
                                 icon: const Icon(Icons.download_outlined),
                                 label: const Text('Export combined ledger'),
+                              ),
+                              BookkeepingExportFeedback(
+                                key: _feedbackKey,
+                                error: _exportError,
+                                notice: _exportNotice,
                               ),
                             ],
                           ),

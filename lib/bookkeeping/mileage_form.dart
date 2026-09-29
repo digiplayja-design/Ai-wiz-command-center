@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'bookkeeping_client.dart';
 import 'bookkeeping_models.dart';
+import 'bookkeeping_ui.dart';
 import 'mileage_models.dart';
 
 class MileageForm extends StatefulWidget {
@@ -9,12 +10,14 @@ class MileageForm extends StatefulWidget {
     required this.client,
     required this.businessId,
     this.original,
+    this.onSaveAttempt,
     this.voidOnly = false,
   });
   final BookkeepingClient client;
   final String businessId;
   final Map<String, dynamic>? original;
   final bool voidOnly;
+  final void Function(String date)? onSaveAttempt;
   @override
   State<MileageForm> createState() => _MileageFormState();
 }
@@ -63,7 +66,7 @@ class _MileageFormState extends State<MileageForm> {
 
   String value(String key) => _fields[key]!.text.trim();
   void _prepare() {
-    if (!_form.currentState!.validate()) return;
+    if (!validateBookkeepingForm(context, _form)) return;
     if (!widget.voidOnly && _method == 'odometer') {
       final start = mileageTenths(value('odometer_start'), odometer: true),
           end = mileageTenths(value('odometer_end'), odometer: true);
@@ -107,6 +110,10 @@ class _MileageFormState extends State<MileageForm> {
 
   Future<void> _save() async {
     if (_busy || _denied || _review == null) return;
+    widget.onSaveAttempt?.call(
+      (widget.voidOnly ? widget.original!['trip_date'] : _review!['trip_date'])
+          as String,
+    );
     setState(() {
       _busy = true;
       _attempted = true;
@@ -161,7 +168,9 @@ class _MileageFormState extends State<MileageForm> {
                   BigInt.zero) -
               (mileageTenths(value('odometer_start'), odometer: true) ??
                   BigInt.zero);
-    return AlertDialog(
+    return BookkeepingDialog(
+      client: widget.client,
+      busy: _busy,
       title: Text(
         _review == null
             ? _title
@@ -174,6 +183,7 @@ class _MileageFormState extends State<MileageForm> {
       content: SizedBox(
         width: 520,
         child: SingleChildScrollView(
+          key: ValueKey(_review != null),
           child: _denied
               ? const Text('Session changed. Reopen Bookkeeping.')
               : Column(

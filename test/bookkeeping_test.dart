@@ -68,6 +68,7 @@ BookkeepingClient client(
 Future<void> tap(WidgetTester t, String label) async {
   final f = find.text(label).last;
   await t.ensureVisible(f);
+  await t.pumpAndSettle();
   await t.tap(f);
   await t.pumpAndSettle();
 }
@@ -122,23 +123,25 @@ Future<void> screenshot(WidgetTester t, String name, GlobalKey key) async {
   });
 }
 
+Future<void> loadBookkeepingFonts() async {
+  final root = Platform.environment['KORLIX_FLUTTER_ROOT'];
+  if (root == null) return;
+  for (final e in {
+    'MaterialIcons': 'MaterialIcons-Regular.otf',
+    'Roboto': 'Roboto-Regular.ttf',
+  }.entries) {
+    await (FontLoader(e.key)..addFont(
+          File(
+            '$root/bin/cache/artifacts/material_fonts/${e.value}',
+          ).readAsBytes().then(ByteData.sublistView),
+        ))
+        .load();
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUpAll(() async {
-    final root = Platform.environment['KORLIX_FLUTTER_ROOT'];
-    if (root == null) return;
-    for (final e in {
-      'MaterialIcons': 'MaterialIcons-Regular.otf',
-      'Roboto': 'Roboto-Regular.ttf',
-    }.entries) {
-      await (FontLoader(e.key)..addFont(
-            File(
-              '$root/bin/cache/artifacts/material_fonts/${e.value}',
-            ).readAsBytes().then(ByteData.sublistView),
-          ))
-          .load();
-    }
-  });
+  setUpAll(loadBookkeepingFonts);
   test('money stays exact above JS safe integer range and validates cents', () {
     expect(bookkeepingMoney('9007199254740993'), r'$90,071,992,547,409.93');
     expect(bookkeepingMoney('-999'), r'-$9.99');

@@ -31,8 +31,8 @@ class BookkeepingClient {
   final bool _ownsClient;
   final Listenable? sessionChanges;
   String? _sessionScope;
-  bool _sessionChanged = false, _disposed = false;
-  bool get sessionChanged => _sessionChanged;
+  bool _sessionChanged = false, _accessDenied = false, _disposed = false;
+  bool get sessionChanged => _sessionChanged || _accessDenied;
   static const _changed = BookkeepingException(
     'Sign in again and reopen Bookkeeping to continue.',
     401,
@@ -74,6 +74,8 @@ class BookkeepingClient {
   }
 
   void _notifyAccessDenied() {
+    if (_accessDenied) return;
+    _accessDenied = true;
     onAccessDenied?.call();
     for (final listener in _accessListeners.toList()) {
       listener();
@@ -100,7 +102,7 @@ class BookkeepingClient {
       _sessionChanged = true;
       _notifyAccessDenied();
     }
-    if (_sessionChanged) throw _changed;
+    if (sessionChanged) throw _changed;
   }
 
   void dispose() {
@@ -184,17 +186,33 @@ class BookkeepingClient {
   }
 
   Future<http.Response> _response(http.BaseRequest req) async {
+    var active = true;
     try {
       await Future<void>.value();
       _ensureSession(req.headers);
-      final response = await (() async => http.Response.fromStream(
-        await _http.send(req),
-      ))().timeout(const Duration(seconds: 100));
+      final response = await (() async {
+        final streamed = await _http.send(req);
+        // A timed-out request must not revoke a newer successful session or
+        // consume a response body after its UI has moved on.
+        if (!active) {
+          unawaited(streamed.stream.listen(null).cancel());
+          throw TimeoutException('Expired bookkeeping request');
+        }
+        try {
+          _ensureSession();
+        } catch (_) {
+          unawaited(streamed.stream.listen(null).cancel());
+          rethrow;
+        }
+        if (streamed.statusCode == 401 || streamed.statusCode == 403) {
+          _notifyAccessDenied();
+          unawaited(streamed.stream.listen(null).cancel());
+          throw BookkeepingException(_changed.message, streamed.statusCode);
+        }
+        return http.Response.fromStream(streamed);
+      })().timeout(const Duration(seconds: 100));
       _ensureSession();
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        if (response.statusCode == 401 || response.statusCode == 403) {
-          _notifyAccessDenied();
-        }
         String? error;
         try {
           error = (jsonDecode(response.body) as Map)['error']?.toString();
@@ -218,6 +236,8 @@ class BookkeepingClient {
       throw const BookkeepingException(
         'Check your connection. Refresh before retrying a save.',
       );
+    } finally {
+      active = false;
     }
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'bookkeeping_client.dart';
 import 'bookkeeping_csv_save.dart';
 import 'bookkeeping_models.dart';
+import 'bookkeeping_ui.dart';
 
 const reportTitles = {
   'profit_loss': 'Profit & loss',
@@ -30,7 +31,9 @@ class BookkeepingReports extends StatefulWidget {
 class _BookkeepingReportsState extends State<BookkeepingReports> {
   late final _period = TextEditingController(text: widget.initialPeriod);
   late String _selectedPeriod = widget.initialPeriod;
-  final _exportKey = GlobalKey();
+  final _exportKey = GlobalKey(), _feedbackKey = GlobalKey();
+  String? _exportError, _exportNotice;
+  final _ledgerExportKey = GlobalKey();
   String _kind = 'profit_loss';
   Map<String, dynamic>? _data;
   String? _error, _notice;
@@ -49,6 +52,7 @@ class _BookkeepingReportsState extends State<BookkeepingReports> {
       _denied = true;
       _data = null;
       _error = null;
+      _exportError = _exportNotice = null;
       _notice = null;
       _period.clear();
     });
@@ -67,6 +71,7 @@ class _BookkeepingReportsState extends State<BookkeepingReports> {
       _busy = true;
       _data = null;
       _error = null;
+      _exportError = _exportNotice = null;
       _notice = null;
     });
     try {
@@ -95,14 +100,10 @@ class _BookkeepingReportsState extends State<BookkeepingReports> {
 
   Future<void> _export(String kind) async {
     if (!_alive || _busy) return;
-    final box = _exportKey.currentContext?.findRenderObject() as RenderBox?;
-    final origin = box == null
-        ? const Rect.fromLTWH(0, 0, 1, 1)
-        : box.localToGlobal(Offset.zero) & box.size;
     setState(() {
       _busy = true;
-      _error = null;
-      _notice = null;
+      _exportError = _exportNotice = null;
+      _exportNotice = null;
     });
     try {
       final d = await widget.client.request(
@@ -110,25 +111,32 @@ class _BookkeepingReportsState extends State<BookkeepingReports> {
         '/businesses/${widget.businessId}/reports/export',
         query: {'period': _selectedPeriod, 'kind': kind},
       );
-      if (!_alive) return;
+      if (!mounted || !_alive) return;
       if (widget.onExport != null) {
         await widget.onExport!(d['csv'] as String, d['filename'] as String);
       } else {
         await saveBookkeepingCsv(
           d['csv'] as String,
           d['filename'] as String,
-          origin,
+          bookkeepingShareOrigin(
+            kind == 'ledger' ? _ledgerExportKey : _exportKey,
+            context,
+          ),
         );
       }
       if (_alive) {
         setState(
-          () => _notice = 'CSV prepared from the latest recorded entries.',
+          () =>
+              _exportNotice = 'CSV prepared from the latest recorded entries.',
         );
       }
     } catch (e) {
-      if (_alive) setState(() => _error = e.toString());
+      if (_alive) setState(() => _exportError = e.toString());
     } finally {
-      if (_alive) setState(() => _busy = false);
+      if (_alive) {
+        setState(() => _busy = false);
+        revealBookkeepingFeedback(_feedbackKey, () => _alive);
+      }
     }
   }
 
@@ -385,6 +393,8 @@ class _BookkeepingReportsState extends State<BookkeepingReports> {
                                             setState(() {
                                               _kind = v;
                                               _notice = null;
+                                              _exportError = _exportNotice =
+                                                  null;
                                             });
                                           }
                                         },
@@ -466,11 +476,11 @@ class _BookkeepingReportsState extends State<BookkeepingReports> {
                               ),
                             ]),
                             Wrap(
-                              key: _exportKey,
                               spacing: 12,
                               runSpacing: 12,
                               children: [
                                 FilledButton.icon(
+                                  key: _exportKey,
                                   onPressed: _busy
                                       ? null
                                       : () => _export(_kind),
@@ -478,6 +488,7 @@ class _BookkeepingReportsState extends State<BookkeepingReports> {
                                   label: const Text('Export report CSV'),
                                 ),
                                 OutlinedButton.icon(
+                                  key: _ledgerExportKey,
                                   onPressed: _busy
                                       ? null
                                       : () => _export('ledger'),
@@ -487,8 +498,13 @@ class _BookkeepingReportsState extends State<BookkeepingReports> {
                               ],
                             ),
                             const SizedBox(height: 12),
+                            BookkeepingExportFeedback(
+                              key: _feedbackKey,
+                              error: _exportError,
+                              notice: _exportNotice,
+                            ),
                             const Text(
-                              'Ledger export includes period entries, reversals and current receipt references. Original files stay in the receipt inbox. Journal attachments are not supported yet.',
+                              'Ledger export includes period entries, reversals and current receipt references. Original files stay in the receipt inbox. Cash and journal evidence is included; reversals reference original evidence.',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Color(0xff566a7f),

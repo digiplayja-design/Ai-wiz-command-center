@@ -243,7 +243,7 @@ void main() {
         find.textContaining('Retry upload keeps the same request.'),
         findsOneWidget,
       );
-      await f.tap(t, 'Upload original');
+      await f.tap(t, 'Retry same upload');
       expect(uploads, 2);
       expect(keys[0], keys[1]);
       expect(find.text('Upload original'), findsNothing);

@@ -4,6 +4,7 @@ import 'bookkeeping_client.dart';
 import 'bookkeeping_models.dart';
 import 'bookkeeping_file_save.dart';
 import 'receipt_dialogs.dart';
+import 'bookkeeping_ui.dart';
 
 class BookkeepingReceiptViewer extends StatefulWidget {
   const BookkeepingReceiptViewer({
@@ -28,12 +29,14 @@ class BookkeepingReceiptViewer extends StatefulWidget {
 class _BookkeepingReceiptViewerState extends State<BookkeepingReceiptViewer> {
   MemoryImage? _image;
   Map<String, dynamic>? _scan;
-  String? _error;
+  String? _error, _previewError, _scanKey;
+  bool _previewBusy = false, _scanSubmitting = false;
+  int _scanOperation = 0, _previewOperation = 0;
   bool _busy = true, _denied = false;
   final _downloadKey = GlobalKey();
   String get _path =>
       '/businesses/${widget.businessId}/receipts/${widget.receipt['id']}';
-  bool get _current => mounted && !_denied;
+  bool get _current => mounted && !_denied && !widget.client.sessionChanged;
   @override
   void initState() {
     super.initState();
@@ -53,7 +56,10 @@ class _BookkeepingReceiptViewerState extends State<BookkeepingReceiptViewer> {
         _denied = true;
         _clearImage();
         _scan = null;
-        _error = null;
+        _error = _previewError = _scanKey = null;
+        _scanOperation++;
+        _previewOperation++;
+        _busy = _previewBusy = _scanSubmitting = false;
       });
     }
   }
@@ -66,98 +72,151 @@ class _BookkeepingReceiptViewerState extends State<BookkeepingReceiptViewer> {
   }
 
   Future<void> _load() async {
+    unawaited(_loadPreview());
+    await _refreshScan();
+  }
+
+  Future<void> _loadPreview() async {
+    if (!_current ||
+        _previewBusy ||
+        (widget.receipt['preview_size'] as num? ?? 0) <= 0) {
+      return;
+    }
+    final op = ++_previewOperation;
+    setState(() {
+      _previewBusy = true;
+      _previewError = null;
+      _clearImage();
+    });
     try {
-      if ((widget.receipt['preview_size'] as num? ?? 0) > 0) {
-        final bytes = await widget.client.receiptBytes(
-          widget.businessId,
-          widget.receipt['id'] as String,
-          preview: true,
-        );
-        if (!_current) return;
-        _image = MemoryImage(bytes);
+      final bytes = await widget.client.receiptBytes(
+        widget.businessId,
+        widget.receipt['id'] as String,
+        preview: true,
+      );
+      if (_current && op == _previewOperation) {
+        setState(() => _image = MemoryImage(bytes));
       }
-      final data = await widget.client.request('GET', '$_path/scan');
-      if (!_current) return;
-      _scan = data['scan'] is Map
-          ? Map<String, dynamic>.from(data['scan'] as Map)
-          : null;
     } catch (e) {
-      if (_current) _error = e.toString();
+      if (_current && op == _previewOperation) {
+        setState(() => _previewError = '$e');
+      }
     } finally {
-      if (_current) setState(() => _busy = false);
+      if (_current && op == _previewOperation) {
+        setState(() => _previewBusy = false);
+      }
     }
   }
 
+  void _acceptScan(Map<String, dynamic> data) {
+    final value = data['scan'];
+    if (!data.containsKey('scan') ||
+        (value != null &&
+            (value is! Map ||
+                ![
+                  'ready',
+                  'scanning',
+                  'failed',
+                  'expired',
+                ].contains(value['state']) ||
+                (value['state'] == 'ready' && value['suggestions'] is! Map)))) {
+      throw const BookkeepingException(
+        'Scan status could not be read. Refresh its status before using suggested fields.',
+      );
+    }
+    _scan = value == null ? null : Map<String, dynamic>.from(value as Map);
+    if (_scan != null) _scanKey = null;
+  }
+
+  Future<Map<String, dynamic>> _status() => widget.client.request(
+    'GET',
+    '$_path/scan',
+    query: _scanKey == null ? null : {'request_key': _scanKey!},
+  );
   Future<void> _refreshScan() async {
+    if (!_current || _scanSubmitting) return;
+    final op = ++_scanOperation;
     setState(() {
       _busy = true;
       _error = null;
+      _scan = null;
     });
     try {
-      final d = await widget.client.request('GET', '$_path/scan');
-      if (_current) {
-        _scan = d['scan'] is Map
-            ? Map<String, dynamic>.from(d['scan'] as Map)
-            : null;
-      }
+      final data = await _status();
+      if (_current && op == _scanOperation) setState(() => _acceptScan(data));
     } catch (e) {
-      if (_current) _error = e.toString();
+      if (_current && op == _scanOperation) {
+        setState(() {
+          _scan = null;
+          _error = '$e';
+        });
+      }
     } finally {
-      if (_current) setState(() => _busy = false);
+      if (_current && op == _scanOperation) setState(() => _busy = false);
     }
   }
 
   Future<void> _startScan() async {
+    if (!_current || _busy) return;
     final confirmed = await showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const ReceiptConfirmation(
-        title: 'Scan receipt with AI?',
+      builder: (_) => ReceiptConfirmation(
+        title: _scanKey == null
+            ? 'Scan receipt with AI?'
+            : 'Retry the same scan?',
         message:
-            'This sends the receipt to KORLIX’s AI provider to suggest a vendor, printed date, total and currency. A successful scan uses 1 generation credit. Daily plan and receipt-attempt limits apply. Review every field before recording an entry.',
-        button: 'Scan now',
+            'This sends the receipt to KORLIX’s AI provider to suggest a vendor, printed date, total and currency. A successful scan uses 1 generation credit. A saved result is reused without another provider call. Review every field before recording an entry.',
+        button: _scanKey == null ? 'Scan now' : 'Retry same scan',
       ),
     );
     if (!_current || confirmed == null) return;
+    final op = ++_scanOperation;
+    _scanKey ??= bookkeepingRequestKey();
     setState(() {
-      _busy = true;
+      _busy = _scanSubmitting = true;
       _error = null;
+      _scan = null;
     });
     try {
-      final d = await widget.client.request(
+      final data = await widget.client.request(
         'POST',
         '$_path/scan',
-        body: {'request_key': bookkeepingRequestKey(), 'confirmed': true},
+        body: {'request_key': _scanKey, 'confirmed': true},
       );
-      if (_current) {
-        _scan = d['scan'] is Map
-            ? Map<String, dynamic>.from(d['scan'] as Map)
-            : null;
-      }
+      if (_current && op == _scanOperation) setState(() => _acceptScan(data));
     } catch (e) {
-      if (_current) {
-        _error = e.toString();
-        try {
-          final status = await widget.client.request('GET', '$_path/scan');
-          if (_current) {
-            _scan = status['scan'] is Map
-                ? Map<String, dynamic>.from(status['scan'] as Map)
-                : null;
-          }
-        } catch (_) {
-          /* Keep the error; no provider retry. */
+      if (!_current || op != _scanOperation) return;
+      setState(() {
+        _scan = null;
+        _error = '$e';
+      });
+      try {
+        final status = await _status();
+        if (_current && op == _scanOperation) {
+          setState(() {
+            _acceptScan(status);
+            if (_scan != null) _error = null;
+          });
+        }
+      } catch (statusError) {
+        if (_current && op == _scanOperation) {
+          setState(() {
+            _scan = null;
+            _error = '$e\nStatus refresh: $statusError';
+          });
         }
       }
     } finally {
-      if (_current) setState(() => _busy = false);
+      if (_current && op == _scanOperation) {
+        setState(() {
+          _busy = _scanSubmitting = false;
+        });
+      }
     }
   }
 
   Future<void> _download() async {
-    final box = _downloadKey.currentContext?.findRenderObject() as RenderBox?;
-    final origin = box == null
-        ? const Rect.fromLTWH(0, 0, 1, 1)
-        : box.localToGlobal(Offset.zero) & box.size;
     setState(() {
       _busy = true;
       _error = null;
@@ -167,7 +226,7 @@ class _BookkeepingReceiptViewerState extends State<BookkeepingReceiptViewer> {
         widget.businessId,
         widget.receipt['id'] as String,
       );
-      if (!_current) return;
+      if (!mounted || !_current) return;
       if (widget.onDownload != null) {
         await widget.onDownload!(bytes, widget.receipt['filename'] as String);
       } else {
@@ -175,7 +234,7 @@ class _BookkeepingReceiptViewerState extends State<BookkeepingReceiptViewer> {
           bytes,
           widget.receipt['filename'] as String,
           widget.receipt['mime_type'] as String,
-          origin,
+          bookkeepingShareOrigin(_downloadKey, context),
         );
       }
     } catch (e) {
@@ -195,7 +254,9 @@ class _BookkeepingReceiptViewerState extends State<BookkeepingReceiptViewer> {
         _scan?['state'] == 'scanning' &&
         (created == null ||
             DateTime.now().toUtc().difference(created).inMinutes < 5);
-    return AlertDialog(
+    return BookkeepingDialog(
+      client: widget.client,
+      busy: _scanSubmitting,
       title: Text(
         _denied ? 'Session changed' : widget.receipt['filename'] as String,
         maxLines: 2,
@@ -211,6 +272,18 @@ class _BookkeepingReceiptViewerState extends State<BookkeepingReceiptViewer> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (_busy) const LinearProgressIndicator(),
+                    if (_scanSubmitting)
+                      const Text(
+                        'Checking the submitted scan. Please keep this review open.',
+                      ),
+                    if (_previewBusy) const Text('Loading original preview…'),
+                    if (_previewError != null) ...[
+                      Text(_previewError!),
+                      TextButton(
+                        onPressed: _previewBusy ? null : _loadPreview,
+                        child: const Text('Retry preview'),
+                      ),
+                    ],
                     if (_image != null)
                       Container(
                         height: 300,
@@ -223,6 +296,18 @@ class _BookkeepingReceiptViewerState extends State<BookkeepingReceiptViewer> {
                             image: _image!,
                             fit: BoxFit.contain,
                             semanticLabel: 'Private receipt preview',
+                            errorBuilder: (_, _, _) => Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text(
+                                  'The preview could not be displayed.',
+                                ),
+                                TextButton(
+                                  onPressed: _loadPreview,
+                                  child: const Text('Retry preview'),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       )
@@ -256,12 +341,17 @@ class _BookkeepingReceiptViewerState extends State<BookkeepingReceiptViewer> {
                           onPressed:
                               _busy ||
                                   pending ||
-                                  widget.scanning['available'] != true
+                                  (widget.scanning['available'] != true &&
+                                      _scanKey == null)
                               ? null
                               : _startScan,
                           icon: const Icon(Icons.document_scanner_outlined),
                           label: Text(
-                            _scan == null ? 'Scan receipt' : 'Scan again',
+                            _scanKey != null
+                                ? 'Retry same scan'
+                                : _scan == null
+                                ? 'Scan receipt'
+                                : 'Scan again',
                           ),
                         ),
                         TextButton(
@@ -373,7 +463,7 @@ class _BookkeepingReceiptViewerState extends State<BookkeepingReceiptViewer> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: _scanSubmitting ? null : () => Navigator.pop(context),
           child: const Text('Close'),
         ),
       ],

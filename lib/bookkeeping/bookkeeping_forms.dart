@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'bookkeeping_client.dart';
 import 'bookkeeping_models.dart';
+import 'bookkeeping_ui.dart';
 
 class BookkeepingProfileDialog extends StatefulWidget {
   const BookkeepingProfileDialog({
@@ -35,7 +36,7 @@ class _BookkeepingProfileDialogState extends State<BookkeepingProfileDialog> {
   }
 
   Future<void> _save() async {
-    if (_busy || !_form.currentState!.validate()) return;
+    if (_busy || !validateBookkeepingForm(context, _form)) return;
     final payload =
         _submitted ??
         {
@@ -68,7 +69,9 @@ class _BookkeepingProfileDialogState extends State<BookkeepingProfileDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => BookkeepingDialog(
+    client: widget.client,
+    busy: _busy,
     title: Text(
       widget.business == null ? 'Add your business' : 'Business profile',
     ),
@@ -196,12 +199,14 @@ class BookkeepingEntryDialog extends StatefulWidget {
     required this.categories,
     required this.kind,
     this.original,
+    this.onSaveAttempt,
     this.receipt,
     this.suggestions,
     this.cashAccounts = const [],
   });
   final BookkeepingClient client;
   final String businessId, kind;
+  final void Function(String date)? onSaveAttempt;
   final List<Map<String, dynamic>> categories, cashAccounts;
   final Map<String, dynamic>? original, receipt, suggestions;
   @override
@@ -263,7 +268,7 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
   }
 
   void _prepare() {
-    if (!_form.currentState!.validate()) return;
+    if (!validateBookkeepingForm(context, _form)) return;
     if (widget.receipt != null && !_receiptReviewed) {
       setState(
         () => _error = 'Check the receipt details before reviewing this entry.',
@@ -294,6 +299,10 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
 
   Future<void> _save() async {
     if (_busy || _review == null) return;
+    widget.onSaveAttempt?.call(
+      (_reversing ? widget.original!['entry_date'] : _review!['entry_date'])
+          as String,
+    );
     setState(() {
       _busy = true;
       _attempted = true;
@@ -324,7 +333,9 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
   @override
   Widget build(BuildContext context) {
     final label = widget.kind == 'income' ? 'income' : 'expense';
-    return AlertDialog(
+    return BookkeepingDialog(
+      client: widget.client,
+      busy: _busy,
       title: Text(
         _reversing
             ? 'Reverse entry'
@@ -335,6 +346,7 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
       content: SizedBox(
         width: 480,
         child: SingleChildScrollView(
+          key: ValueKey(_review != null),
           child: _review != null
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

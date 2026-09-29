@@ -4,9 +4,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'bookkeeping_client.dart';
 import 'bookkeeping_models.dart';
+import 'file_reader.dart';
+import 'bookkeeping_ui.dart';
 
 List<String> statementHeaders(String text) {
-  final value = text.replaceFirst('\uFEFF', '');
+  final value = text.startsWith('\uFEFF') ? text.substring(1) : text;
   final result = <String>[];
   var field = '', quoted = false, closed = false;
   for (var i = 0; i < value.length; i++) {
@@ -39,8 +41,8 @@ List<String> statementHeaders(String text) {
   }
   if (quoted ||
       result.length < 3 ||
-      result.any((h) => h.isEmpty) ||
-      result.toSet().length != result.length) {
+      result.any((h) => h.isEmpty || h.length > 80) ||
+      result.map((h) => h.toLowerCase()).toSet().length != result.length) {
     throw const FormatException(
       'Choose a CSV with distinct date, description and amount headers.',
     );
@@ -76,7 +78,8 @@ class _BookkeepingStatementPreviewState
       _amount,
       _debit,
       _credit;
-  String _duplicateReason = '';
+  String _duplicateReason = '', _overlapReason = '';
+  bool _overlapConfirmed = false;
   String _year = DateTime.now().year.toString();
   List<String> _headers = [];
   Map<String, dynamic>? _preview;
@@ -107,6 +110,8 @@ class _BookkeepingStatementPreviewState
       _imported = null;
       _headers = [];
       _duplicateReason = '';
+      _overlapReason = '';
+      _overlapConfirmed = false;
       _duplicatesConfirmed = false;
       _error = null;
       _busy = false;
@@ -126,14 +131,21 @@ class _BookkeepingStatementPreviewState
       type: FileType.custom,
       allowedExtensions: ['csv'],
       allowMultiple: false,
-      withData: true,
+      withData: false,
+      withReadStream: true,
     );
     if (selected == null || selected.files.isEmpty) return null;
     final file = selected.files.single;
-    if (file.size > 256 * 1024 || file.bytes == null) {
-      throw const BookkeepingException('Choose a CSV statement up to 256 KB.');
-    }
-    return (file.name, file.bytes!);
+    return (
+      file.name,
+      await readBookkeepingFile(
+        advertisedSize: file.size,
+        maxBytes: 256 * 1024,
+        limitMessage: 'Choose a CSV statement up to 256 KB.',
+        bytes: file.bytes,
+        stream: file.readStream,
+      ),
+    );
   }
 
   Future<void> _select() async {
@@ -144,6 +156,14 @@ class _BookkeepingStatementPreviewState
       _error = null;
       _csv = null;
       _preview = null;
+      _filename = null;
+      _headers = [];
+      _date = _description = _amount = _debit = _credit = null;
+      _duplicateReason = '';
+      _overlapReason = '';
+      _overlapConfirmed = false;
+      _duplicatesConfirmed = false;
+      _importConfirmed = false;
     });
     try {
       final picked = await _pick();
@@ -154,7 +174,14 @@ class _BookkeepingStatementPreviewState
             'Choose a CSV statement up to 256 KB.',
           );
         }
-        final text = utf8.decode(picked.$2, allowMalformed: false);
+        String text;
+        try {
+          text = utf8.decode(picked.$2, allowMalformed: false);
+        } on FormatException {
+          throw const BookkeepingException(
+            'Export your statement as a UTF-8 CSV and choose the file again.',
+          );
+        }
         final headers = statementHeaders(text);
         setState(() {
           _filename = picked.$1;
@@ -162,6 +189,8 @@ class _BookkeepingStatementPreviewState
           _headers = headers;
           _date = _description = _amount = _debit = _credit = null;
           _duplicateReason = '';
+          _overlapReason = '';
+          _overlapConfirmed = false;
           _duplicatesConfirmed = false;
         });
       }
@@ -203,6 +232,8 @@ class _BookkeepingStatementPreviewState
       _preview = null;
       _importConfirmed = false;
       _duplicateReason = '';
+      _overlapReason = '';
+      _overlapConfirmed = false;
       _duplicatesConfirmed = false;
     });
     try {
@@ -257,6 +288,23 @@ class _BookkeepingStatementPreviewState
       );
       return;
     }
+    if (_preview!['fully_overlapping'] == true) {
+      setState(
+        () => _error =
+            'Every row already appears in saved statements. Review the existing imports.',
+      );
+      return;
+    }
+    if ((_preview!['overlap_count'] as int? ?? 0) > 0 &&
+        (!_overlapConfirmed ||
+            _overlapReason.trim().length < 10 ||
+            _overlapReason.trim().length > 500)) {
+      setState(
+        () => _error =
+            'Review the overlapping rows and explain why this partial overlap should be retained.',
+      );
+      return;
+    }
     _pendingImport ??= {
       'csv': _csv,
       'cash_account': _account,
@@ -269,6 +317,10 @@ class _BookkeepingStatementPreviewState
           'credit': _credit,
         } else
           'amount': _amount,
+      },
+      if ((_preview!['overlap_count'] as int? ?? 0) > 0) ...{
+        'overlap_review_reason': _overlapReason.trim(),
+        'overlap_snapshot': _preview!['overlap_snapshot'],
       },
       'request_key': bookkeepingRequestKey(),
       'confirmed': true,
@@ -327,7 +379,9 @@ class _BookkeepingStatementPreviewState
         ),
       );
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => BookkeepingDialog(
+    client: widget.client,
+    busy: _busy && _pendingImport != null,
     title: const Text('Statement CSV preview'),
     content: SizedBox(
       width: 650,
@@ -390,7 +444,7 @@ class _BookkeepingStatementPreviewState
                 ),
                 keyboardType: TextInputType.number,
                 maxLength: 4,
-                enabled: _pendingImport == null && _imported == null,
+                enabled: !_busy && _pendingImport == null && _imported == null,
                 onChanged: (v) => setState(() {
                   _year = v;
                   _preview = null;
@@ -412,6 +466,14 @@ class _BookkeepingStatementPreviewState
                         _split = v;
                         _preview = null;
                       }),
+              ),
+              Text(
+                _split
+                    ? 'Debit/withdrawal reduces cash; credit/deposit adds cash. Use a blank or 0 in the unused column.'
+                    : 'Use negative amounts for withdrawals and positive amounts for deposits.',
+              ),
+              const Text(
+                'Use USD numbers such as 1234.56 and dates as YYYY-MM-DD.',
               ),
               if (_split) ...[
                 _column('Debit / withdrawal column', _debit, (v) => _debit = v),
@@ -446,12 +508,12 @@ class _BookkeepingStatementPreviewState
                   ),
                   subtitle: Text(
                     row['error'] as String? ??
-                        '${row['date']} · ${row['amount_cents']} cents · ${row['status']} · ${(row['candidates'] as List?)?.length ?? 0} candidate(s)',
+                        '${row['date']} · ${row['amount_cents']} cents · ${row['status']} · ${row['candidate_total'] ?? (row['candidates'] as List?)?.length ?? 0} candidate(s)',
                   ),
                 ),
               if (_preview!['duplicate_count'] != 0 && _imported == null) ...[
                 const Text(
-                  'Repeated rows may be separate bank transactions. Compare every flagged line with the original statement. Possible overlap with earlier imports is still blocked.',
+                  'Repeated rows may be separate bank transactions. Compare every flagged line with the original statement. Also review any overlap with earlier imports below.',
                 ),
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
@@ -470,6 +532,42 @@ class _BookkeepingStatementPreviewState
                   ),
                   enabled: !_busy && _pendingImport == null,
                   onChanged: (v) => _duplicateReason = v,
+                ),
+              ],
+              if (_preview!['fully_overlapping'] == true)
+                const Text(
+                  'Every row already appears in saved statements. Open the existing import instead.',
+                ),
+              if ((_preview!['overlap_count'] as int? ?? 0) > 0 &&
+                  _imported == null) ...[
+                Text(
+                  '${_preview!['overlap_count']} rows overlap earlier imports. Imported rows do not post money. Check the original statements before retaining overlapping source rows.',
+                ),
+                for (final overlap in bookkeepingRows(
+                  _preview!['overlap_snapshot'],
+                ))
+                  Text(
+                    'Line ${overlap['line']} overlaps statement ${overlap['statement_id']}, line ${overlap['existing_line']}',
+                  ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text(
+                    'I reviewed these overlaps against the original statements.',
+                  ),
+                  value: _overlapConfirmed,
+                  onChanged: _busy || _pendingImport != null
+                      ? null
+                      : (v) => setState(() => _overlapConfirmed = v == true),
+                ),
+                TextField(
+                  maxLength: 500,
+                  minLines: 2,
+                  maxLines: 4,
+                  enabled: !_busy && _pendingImport == null,
+                  decoration: const InputDecoration(
+                    labelText: 'Reason for partial overlap',
+                  ),
+                  onChanged: (v) => _overlapReason = v,
                 ),
               ],
               if (_imported == null)
@@ -497,7 +595,9 @@ class _BookkeepingStatementPreviewState
     ),
     actions: [
       TextButton(
-        onPressed: () => Navigator.pop(context),
+        onPressed: _busy && _pendingImport != null
+            ? null
+            : () => Navigator.pop(context),
         child: const Text('Close'),
       ),
       FilledButton(

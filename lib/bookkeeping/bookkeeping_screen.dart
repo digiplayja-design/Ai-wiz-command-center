@@ -4,6 +4,8 @@ import 'bookkeeping_client.dart';
 import 'bookkeeping_csv_save.dart';
 import 'bookkeeping_forms.dart';
 import 'bookkeeping_models.dart';
+import 'bookkeeping_ui.dart';
+import 'bookkeeping_guide.dart';
 import 'bookkeeping_receipts.dart';
 import 'mileage_screen.dart';
 import 'ledger_screen.dart';
@@ -38,7 +40,8 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
   bool _busy = false, _denied = false;
   String? _error;
   final _dialogs = <DialogRoute<dynamic>>{};
-  final _exportKey = GlobalKey();
+  final _exportKey = GlobalKey(), _feedbackKey = GlobalKey();
+  String? _exportError, _exportNotice;
   @override
   void initState() {
     super.initState();
@@ -64,6 +67,7 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
       _overview = null;
       _busy = false;
       _error = null;
+      _exportError = _exportNotice = null;
     });
     final ownRoute = ModalRoute.of(context);
     final obsolete = _dialogs.toList();
@@ -98,12 +102,13 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
     setState(() {
       _busy = true;
       _error = null;
+      _exportError = _exportNotice = null;
       _overview = null;
     });
     try {
       if (list) {
         final data = await widget.client.request('GET', '/businesses');
-        if (!_current(op)) return;
+        if (!mounted || !_current(op)) return;
         _businesses = bookkeepingRows(data['businesses']);
         final target = select ?? _business?['id'];
         _business =
@@ -116,7 +121,7 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
           '/businesses/${_business!['id']}/overview',
           query: {'month': _month, 'offset': '$_offset'},
         );
-        if (!_current(op)) return;
+        if (!mounted || !_current(op)) return;
         _overview = data;
         _business = Map<String, dynamic>.from(data['business'] as Map);
       }
@@ -124,6 +129,32 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
       if (_current(op)) _error = e.toString();
     } finally {
       if (_current(op)) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _guide() async {
+    final op = _operation;
+    final action = await _dialog<String>(
+      BookkeepingGuide(businessName: _business?['name'] as String?),
+    );
+    if (!_current(op) || action == null) return;
+    switch (action) {
+      case 'profile':
+        await _profile(edit: _business != null);
+      case 'ledger':
+        await _openLedger();
+      case 'entry':
+        await _entry('expense');
+      case 'receipts':
+        await _openReceipts();
+      case 'mileage':
+        await _openMileage();
+      case 'statements':
+        await _openStatementHistory();
+      case 'reports':
+        await _openReports();
+      case 'tax':
+        await _openTaxPrep();
     }
   }
 
@@ -135,7 +166,7 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
         business: edit ? _business : null,
       ),
     );
-    if (!_current(op)) return;
+    if (!mounted || !_current(op)) return;
     _offset = 0;
     // A closed dialog may follow a lost save response; refresh authoritative data.
     await _load(select: result?['id'] as String?);
@@ -144,6 +175,7 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
   Future<void> _entry(String kind, {Map<String, dynamic>? original}) async {
     if (_business == null || _overview == null) return;
     final op = _operation;
+    String? attemptedDate;
     final saved = await _dialog<Map<String, dynamic>>(
       BookkeepingEntryDialog(
         client: widget.client,
@@ -152,10 +184,12 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
         cashAccounts: bookkeepingRows(_overview!['cash_accounts']),
         kind: kind,
         original: original,
+        onSaveAttempt: (date) => attemptedDate = date,
       ),
     );
-    if (!_current(op)) return;
-    if (saved != null) _month = (saved['entry_date'] as String).substring(0, 7);
+    if (!mounted || !_current(op)) return;
+    final date = saved?['entry_date'] as String? ?? attemptedDate;
+    if (date != null) _month = date.substring(0, 7);
     _offset = 0;
     await _load(list: false);
   }
@@ -234,6 +268,7 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
   Future<void> _openReceipts({Map<String, dynamic>? entry}) async {
     if (_business == null || _overview == null) return;
     final op = _operation;
+    String? attemptedDate;
     final saved = await _dialog<Map<String, dynamic>>(
       BookkeepingReceipts(
         client: widget.client,
@@ -242,10 +277,12 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
         categories: bookkeepingRows(_overview!['categories']),
         cashAccounts: bookkeepingRows(_overview!['cash_accounts']),
         entry: entry,
+        onSaveAttempt: (date) => attemptedDate = date,
       ),
     );
-    if (!_current(op)) return;
-    if (saved != null) _month = (saved['entry_date'] as String).substring(0, 7);
+    if (!mounted || !_current(op)) return;
+    final date = saved?['entry_date'] as String? ?? attemptedDate;
+    if (date != null) _month = date.substring(0, 7);
     _offset = 0;
     await _load(list: false);
   }
@@ -253,13 +290,9 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
   Future<void> _export() async {
     if (_business == null || _busy) return;
     final op = ++_operation;
-    final box = _exportKey.currentContext?.findRenderObject() as RenderBox?;
-    final origin = box == null
-        ? const Rect.fromLTWH(0, 0, 1, 1)
-        : box.localToGlobal(Offset.zero) & box.size;
     setState(() {
       _busy = true;
-      _error = null;
+      _exportError = _exportNotice = null;
     });
     try {
       final data = await widget.client.request(
@@ -267,17 +300,30 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
         '/businesses/${_business!['id']}/export',
         query: {'month': _month},
       );
-      if (!_current(op)) return;
+      if (!mounted || !_current(op)) return;
       final csv = data['csv'] as String, filename = data['filename'] as String;
       if (widget.onExport != null) {
         await widget.onExport!(csv, filename);
       } else {
-        await saveBookkeepingCsv(csv, filename, origin);
+        await saveBookkeepingCsv(
+          csv,
+          filename,
+          bookkeepingShareOrigin(_exportKey, context),
+        );
+      }
+      if (_current(op)) {
+        setState(
+          () =>
+              _exportNotice = 'CSV prepared from the latest recorded entries.',
+        );
       }
     } catch (e) {
-      if (_current(op)) _error = e.toString();
+      if (_current(op)) _exportError = e.toString();
     } finally {
-      if (_current(op)) setState(() => _busy = false);
+      if (_current(op)) {
+        setState(() => _busy = false);
+        revealBookkeepingFeedback(_feedbackKey, () => _current(op));
+      }
     }
   }
 
@@ -553,6 +599,11 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
             icon: const Icon(Icons.add_business_outlined),
             label: const Text('Add your first business'),
           ),
+          TextButton.icon(
+            onPressed: _busy ? null : _guide,
+            icon: const Icon(Icons.menu_book_outlined),
+            label: const Text('How to use Bookkeeping'),
+          ),
           const SizedBox(height: 24),
           _scope(),
         ],
@@ -641,6 +692,11 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
     runSpacing: 10,
     crossAxisAlignment: WrapCrossAlignment.center,
     children: [
+      OutlinedButton.icon(
+        onPressed: _busy ? null : _guide,
+        icon: const Icon(Icons.menu_book_outlined),
+        label: const Text('Bookkeeping guide'),
+      ),
       DecoratedBox(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -719,6 +775,11 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
         icon: const Icon(Icons.download_outlined, size: 18),
         label: const Text('Export month'),
       ),
+      BookkeepingExportFeedback(
+        key: _feedbackKey,
+        error: _exportError,
+        notice: _exportNotice,
+      ),
     ],
   );
   Widget _statementGuide() => _panel(
@@ -739,7 +800,7 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  '2. Preview the bank CSV, map the columns, fix invalid or duplicate rows, then confirm the import.',
+                  '2. Preview the bank CSV, map the columns, fix invalid rows, explain distinct repeated rows and partial overlaps, then confirm the import.',
                 ),
                 SizedBox(height: 8),
                 Text(
@@ -1049,7 +1110,7 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
         ),
         SizedBox(height: 6),
         Text(
-          'Next: real-statement owner acceptance, completeness checks, and release hardening. Statement review is not a completed bank reconciliation.',
+          'Next: real-statement owner acceptance, completeness checks, and release hardening. Reversed matches need review again. Statement review is not a completed bank reconciliation.',
           style: TextStyle(color: _muted, height: 1.6),
         ),
         SizedBox(height: 10),

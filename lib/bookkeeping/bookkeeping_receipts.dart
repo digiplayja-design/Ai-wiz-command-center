@@ -7,6 +7,7 @@ import 'bookkeeping_models.dart';
 import 'receipt_dialogs.dart';
 import 'receipt_picker.dart';
 import 'receipt_viewer.dart';
+import 'bookkeeping_ui.dart';
 
 class BookkeepingReceipts extends StatefulWidget {
   const BookkeepingReceipts({
@@ -16,13 +17,16 @@ class BookkeepingReceipts extends StatefulWidget {
     required this.businessName,
     required this.categories,
     this.entry,
+    this.journal,
+    this.onSaveAttempt,
     this.cashAccounts = const [],
     this.picker,
   });
   final BookkeepingClient client;
   final String businessId, businessName;
   final List<Map<String, dynamic>> categories, cashAccounts;
-  final Map<String, dynamic>? entry;
+  final Map<String, dynamic>? entry, journal;
+  final void Function(String date)? onSaveAttempt;
   final Future<BookkeepingPickedReceipt?> Function({bool camera})? picker;
   @override
   State<BookkeepingReceipts> createState() => _BookkeepingReceiptsState();
@@ -32,8 +36,16 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
   List<Map<String, dynamic>> _receipts = [];
   Map<String, dynamic> _scanning = {};
   int _offset = 0, _total = 0, _used = 0;
-  bool _busy = false, _denied = false;
-  late bool _history = widget.entry != null;
+  bool _busy = false,
+      _denied = false,
+      _loaded = false,
+      _uploading = false,
+      _uploadAttempted = false;
+  int _loadOperation = 0;
+  final _attachmentKeys = <String, String>{};
+  String? _pendingReceiptId;
+  Map<String, dynamic>? get _target => widget.journal ?? widget.entry;
+  late bool _history = _target != null;
   String? _error, _notice, _uploadKey;
   BookkeepingPickedReceipt? _picked;
   String get _base => '/businesses/${widget.businessId}/receipts';
@@ -53,6 +65,10 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
         _picked = null;
         _error = null;
         _notice = null;
+        _uploadKey = _pendingReceiptId = null;
+        _attachmentKeys.clear();
+        _loadOperation++;
+        _busy = _uploading = _uploadAttempted = false;
       });
     }
   }
@@ -71,34 +87,65 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
   );
   Future<void> _load() async {
     if (!_alive) return;
+    final op = ++_loadOperation;
     setState(() {
       _busy = true;
       _error = null;
+      _loaded = false;
+      _receipts = [];
     });
     try {
-      final data = await widget.client.request(
+      var data = await widget.client.request(
         'GET',
         _base,
         query: {'offset': '$_offset'},
       );
-      if (!_alive) return;
-      final history = _history
-          ? await widget.client.request(
+      if (!_alive || op != _loadOperation) return;
+      final total = data['total'] as int;
+      if (_offset > 0 && _offset >= total) {
+        _offset = total == 0 ? 0 : ((total - 1) ~/ 30) * 30;
+        data = await widget.client.request(
+          'GET',
+          _base,
+          query: {'offset': '$_offset'},
+        );
+        if (!_alive || op != _loadOperation) return;
+      }
+      final history = _target == null
+          ? null
+          : await widget.client.request(
               'GET',
-              '/businesses/${widget.businessId}/entries/${widget.entry!['id']}/receipts',
-            )
-          : null;
-      if (!_alive) return;
+              '/businesses/${widget.businessId}/${widget.journal == null ? 'entries' : 'ledger/journals'}/${_target!['id']}/receipts',
+            );
+      if (!_alive || op != _loadOperation) return;
       setState(() {
-        _receipts = bookkeepingRows((history ?? data)['receipts']);
+        final inbox = bookkeepingRows(data['receipts']);
+        final evidence = bookkeepingRows(history?['receipts']);
+        _receipts = _history ? evidence : inbox;
         _scanning = Map<String, dynamic>.from(data['scanning'] as Map? ?? {});
         _total = data['total'] as int;
         _used = data['used_bytes'] as int;
+        _loaded = true;
+        final resolvedKeys = {...inbox, ...evidence}
+            .map((r) => (r['link'] as Map?)?['request_key'])
+            .whereType<String>()
+            .toSet();
+        _attachmentKeys.removeWhere((_, key) => resolvedKeys.contains(key));
+        if (_pendingReceiptId != null &&
+            inbox.any(
+              (r) => r['id'] == _pendingReceiptId && r['state'] == 'ready',
+            )) {
+          _picked = null;
+          _uploadKey = _pendingReceiptId = null;
+          _uploadAttempted = false;
+          _notice =
+              'Original saved privately. Open it to scan or record an entry.';
+        }
       });
     } catch (e) {
-      if (_alive) setState(() => _error = e.toString());
+      if (_alive && op == _loadOperation) setState(() => _error = '$e');
     } finally {
-      if (_alive) setState(() => _busy = false);
+      if (_alive && op == _loadOperation) setState(() => _busy = false);
     }
   }
 
@@ -116,6 +163,8 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
         setState(() {
           _picked = file;
           _uploadKey = bookkeepingRequestKey();
+          _pendingReceiptId = null;
+          _uploadAttempted = false;
         });
       }
     } catch (e) {
@@ -128,7 +177,7 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
   Future<void> _upload() async {
     if (_picked == null || _busy) return;
     setState(() {
-      _busy = true;
+      _busy = _uploading = _uploadAttempted = true;
       _error = null;
     });
     try {
@@ -139,14 +188,17 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
         _picked!.bytes,
       );
       if (!_alive) return;
-      final ready = (result['receipt'] as Map)['state'] == 'ready';
+      final rec = result['receipt'] as Map;
+      _pendingReceiptId = rec['id'] as String;
+      final ready = rec['state'] == 'ready';
       setState(() {
         _notice = ready
             ? 'Original saved privately. Open it to scan or record an entry.'
             : 'Upload is still pending. Refresh shortly. If interrupted, retry the same file after 10 minutes.';
         if (ready) {
           _picked = null;
-          _uploadKey = null;
+          _uploadKey = _pendingReceiptId = null;
+          _uploadAttempted = false;
         }
         _history = false;
         _offset = 0;
@@ -157,16 +209,22 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
       }
     } finally {
       if (_alive) {
-        setState(() => _busy = false);
+        setState(() {
+          _busy = _uploading = false;
+        });
         await _loadPreservingError();
       }
     }
   }
 
   Future<void> _loadPreservingError() async {
-    final error = _error;
+    final error = _error, uploadPending = _uploadAttempted;
     await _load();
-    if (_alive && error != null) setState(() => _error = error);
+    if (_alive && error != null && !(uploadPending && !_uploadAttempted)) {
+      setState(
+        () => _error = _error == null ? error : '$error\nRefresh: $_error',
+      );
+    }
   }
 
   Future<void> _mutate(
@@ -181,7 +239,10 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
       _notice = null;
     });
     try {
-      await widget.client.request(method, path, body: body);
+      final result = await widget.client.request(method, path, body: body);
+      if (!_alive) return;
+      final key = (result['link'] as Map?)?['request_key'];
+      if (key != null) _attachmentKeys.removeWhere((_, value) => value == key);
     } catch (e) {
       if (_alive) setState(() => _error = e.toString());
     } finally {
@@ -206,6 +267,7 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
         kind: kind,
         receipt: receipt,
         suggestions: suggestions,
+        onSaveAttempt: widget.onSaveAttempt,
       ),
     );
     if (!mounted || !_alive) return;
@@ -223,7 +285,8 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
         businessId: widget.businessId,
         receipt: receipt,
         scanning: _scanning,
-        canCreate: !_history && receipt['link'] == null,
+        canCreate:
+            widget.journal == null && !_history && receipt['link'] == null,
       ),
     );
     if (!_alive) return;
@@ -240,7 +303,7 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
 
   Future<void> _link(Map<String, dynamic> receipt) async {
     final entry =
-        widget.entry ??
+        _target ??
         await _dialog<Map<String, dynamic>>(
           ReceiptEntryPicker(
             client: widget.client,
@@ -252,15 +315,23 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
       ReceiptConfirmation(
         title: 'Attach original receipt?',
         message:
-            '${receipt['filename']}\n\n${bookkeepingMoney(entry['amount_cents'])} · ${entry['entry_date']}\n${entry['purpose']}\n\nThe file and link history are retained with your records, including after a link correction.',
+            '${receipt['filename']}\n\n${widget.journal == null ? bookkeepingMoney(entry['amount_cents']) : 'Journal'} · ${entry['entry_date']}\n${entry['purpose']}\n\nThe file and link history are retained with your records, including after a link correction.',
         button: 'Confirm attachment',
       ),
     );
     if (!_alive || confirmed == null) return;
-    await _mutate('POST', '$_base/${receipt['id']}/link', {
-      'confirmed': true,
-      'entry_id': entry['id'],
-    });
+    final target =
+        '${receipt['id']}:${widget.journal == null ? 'entry' : 'journal'}:${entry['id']}';
+    final key = _attachmentKeys.putIfAbsent(target, bookkeepingRequestKey);
+    await _mutate(
+      'POST',
+      '$_base/${receipt['id']}/${widget.journal == null ? 'link' : 'journal-link'}',
+      {
+        'confirmed': true,
+        'request_key': key,
+        widget.journal == null ? 'entry_id' : 'journal_id': entry['id'],
+      },
+    );
   }
 
   Future<void> _unlink(Map<String, dynamic> receipt) async {
@@ -294,7 +365,9 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
   }
 
   @override
-  Widget build(BuildContext context) => Dialog(
+  Widget build(BuildContext context) => BookkeepingPanel(
+    client: widget.client,
+    busy: _uploading,
     insetPadding: const EdgeInsets.all(16),
     child: SizedBox(
       width: 880,
@@ -317,7 +390,11 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
                     children: [
                       Expanded(
                         child: Text(
-                          _history ? 'Entry receipt history' : 'Receipt inbox',
+                          _history
+                              ? (widget.journal == null
+                                    ? 'Entry receipt history'
+                                    : 'Journal evidence history')
+                              : 'Receipt inbox',
                           style: const TextStyle(
                             fontSize: 23,
                             fontWeight: FontWeight.w800,
@@ -326,7 +403,9 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
                       ),
                       IconButton(
                         tooltip: 'Close receipts',
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: _uploading
+                            ? null
+                            : () => Navigator.pop(context),
                         icon: const Icon(Icons.close),
                       ),
                     ],
@@ -339,9 +418,9 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
                   Expanded(
                     child: ListView(
                       children: [
-                        if (widget.entry != null) ...[
+                        if (_target != null) ...[
                           Text(
-                            '${bookkeepingMoney(widget.entry!['amount_cents'])} · ${widget.entry!['entry_date']}\n${widget.entry!['purpose']}',
+                            '${widget.journal == null ? bookkeepingMoney(_target!['amount_cents']) : 'Journal'} · ${_target!['entry_date']}\n${_target!['purpose']}',
                           ),
                           const SizedBox(height: 10),
                           TextButton(
@@ -351,6 +430,8 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
                                     setState(() {
                                       _history = !_history;
                                       _offset = 0;
+                                      _receipts = [];
+                                      _loaded = false;
                                     });
                                     unawaited(_load());
                                   },
@@ -417,14 +498,20 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
                                       children: [
                                         FilledButton(
                                           onPressed: _busy ? null : _upload,
-                                          child: const Text('Upload original'),
+                                          child: Text(
+                                            _uploadAttempted
+                                                ? 'Retry same upload'
+                                                : 'Upload original',
+                                          ),
                                         ),
                                         TextButton(
                                           onPressed: _busy
                                               ? null
                                               : () => setState(() {
                                                   _picked = null;
-                                                  _uploadKey = null;
+                                                  _uploadKey =
+                                                      _pendingReceiptId = null;
+                                                  _uploadAttempted = false;
                                                 }),
                                           child: const Text('Clear selection'),
                                         ),
@@ -435,13 +522,19 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
                               ),
                             ),
                           const SizedBox(height: 8),
-                          Text(
-                            '${(_used / (1024 * 1024)).toStringAsFixed(1)} of 250 MB used across your businesses · 1,000 file limit',
-                            style: const TextStyle(fontSize: 12),
-                          ),
+                          if (_loaded)
+                            Text(
+                              '${(_used / (1024 * 1024)).toStringAsFixed(1)} of 250 MB used across your businesses · 1,000 file limit',
+                              style: const TextStyle(fontSize: 12),
+                            ),
                           const Divider(height: 24),
                         ],
                         if (_busy) const LinearProgressIndicator(),
+                        if (_history)
+                          TextButton(
+                            onPressed: _busy ? null : _load,
+                            child: const Text('Refresh history'),
+                          ),
                         if (_error != null)
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -455,7 +548,7 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             child: Text(_notice!),
                           ),
-                        if (_receipts.isEmpty && !_busy)
+                        if (_receipts.isEmpty && !_busy && _loaded)
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 32),
                             child: Text(
@@ -466,7 +559,7 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
                             ),
                           ),
                         for (final receipt in _receipts) _card(receipt),
-                        if (!_history && _total > 30)
+                        if (!_history && _loaded && _total > 30)
                           Wrap(
                             spacing: 10,
                             crossAxisAlignment: WrapCrossAlignment.center,
@@ -507,10 +600,10 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
     final link = receipt['link'] as Map?;
     final current = link != null && link['unlinked_at'] == null;
     final eligibleTarget =
-        widget.entry == null ||
-        (widget.entry!['kind'] != 'reversal' &&
-            widget.entry!['reversed_by'] == null);
-    final summary = receipt['linked_entry'] as Map?;
+        _target == null ||
+        (_target!['kind'] != 'reversal' && _target!['reversed_by'] == null);
+    final summary =
+        (receipt['linked_entry'] ?? receipt['linked_journal']) as Map?;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -556,10 +649,12 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
                 child: Text('Previous attachment · ${link!['unlink_reason']}'),
               ),
             if (!ready)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  'Refresh to check progress. An interrupted upload can be retried with the same file after 10 minutes.',
+                  receipt['state'] == 'deleting'
+                      ? 'Deletion is unfinished. Confirm Retry deletion to finish removing this unused original.'
+                      : 'Refresh to check progress. An interrupted upload can be retried with the same file after 10 minutes.',
                   style: TextStyle(fontSize: 12),
                 ),
               ),
@@ -574,7 +669,7 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
                     child: const Text('View / scan'),
                   ),
                 if (ready && !_history && link == null) ...[
-                  if (widget.entry == null) ...[
+                  if (_target == null) ...[
                     FilledButton(
                       onPressed: _busy
                           ? null
@@ -590,9 +685,11 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
                     TextButton(
                       onPressed: _busy ? null : () => _link(receipt),
                       child: Text(
-                        widget.entry == null
+                        _target == null
                             ? 'Link existing entry'
-                            : 'Attach to this entry',
+                            : widget.journal == null
+                            ? 'Attach to this entry'
+                            : 'Attach to this journal',
                       ),
                     ),
                 ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'bookkeeping_client.dart';
 import 'bookkeeping_models.dart';
+import 'bookkeeping_ui.dart';
 import 'ledger_models.dart';
 
 class _Line {
@@ -18,6 +19,7 @@ class LedgerForm extends StatefulWidget {
     required this.accounts,
     this.initialKind = 'contribution',
     this.original,
+    this.onSaveAttempt,
     this.accountOnly = false,
   });
   final BookkeepingClient client;
@@ -25,6 +27,7 @@ class LedgerForm extends StatefulWidget {
   final List<Map<String, dynamic>> accounts;
   final Map<String, dynamic>? original;
   final bool accountOnly;
+  final void Function(String date)? onSaveAttempt;
   @override
   State<LedgerForm> createState() => _LedgerFormState();
 }
@@ -114,7 +117,7 @@ class _LedgerFormState extends State<LedgerForm> {
   }
 
   void _prepare() {
-    if (!_form.currentState!.validate()) return;
+    if (!validateBookkeepingForm(context, _form)) return;
     final base = <String, dynamic>{
       'request_key': bookkeepingRequestKey(),
       'confirmed': true,
@@ -163,6 +166,12 @@ class _LedgerFormState extends State<LedgerForm> {
 
   Future<void> _save() async {
     if (_busy || _denied || _review == null) return;
+    if (!widget.accountOnly) {
+      widget.onSaveAttempt?.call(
+        (_reversing ? widget.original!['entry_date'] : _review!['entry_date'])
+            as String,
+      );
+    }
     setState(() {
       _busy = true;
       _attempted = true;
@@ -362,7 +371,9 @@ class _LedgerFormState extends State<LedgerForm> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => BookkeepingDialog(
+    client: widget.client,
+    busy: _busy,
     title: Text(
       _review != null
           ? 'Review ${widget.accountOnly
@@ -381,6 +392,7 @@ class _LedgerFormState extends State<LedgerForm> {
     content: SizedBox(
       width: 560,
       child: SingleChildScrollView(
+        key: ValueKey(_review != null),
         child: _denied
             ? const Text('Session changed. Reopen Bookkeeping.')
             : Column(

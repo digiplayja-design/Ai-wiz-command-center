@@ -371,7 +371,7 @@ void main() {
       expect(find.textContaining('0 matched · 1 open'), findsOneWidget);
       await f.tap(
         t,
-        'Review match: 2027-01-15 · income · 22222222-2222-4222-8222-222222222222',
+        'Review match: Purpose unavailable\n2027-01-15 · income · 22222222-2222-4222-8222-222222222222',
       );
       expect(writes, isEmpty);
       await f.tap(t, 'Confirm decision');

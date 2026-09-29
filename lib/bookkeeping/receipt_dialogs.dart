@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'bookkeeping_client.dart';
 import 'bookkeeping_models.dart';
+import 'bookkeeping_ui.dart';
 
 class ReceiptConfirmation extends StatefulWidget {
   const ReceiptConfirmation({
@@ -21,7 +22,7 @@ class _ReceiptConfirmationState extends State<ReceiptConfirmation> {
   final _form = GlobalKey<FormState>();
   String _reason = '';
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => BookkeepingDialog(
     title: Text(widget.title),
     content: SizedBox(
       width: 440,
@@ -59,7 +60,7 @@ class _ReceiptConfirmationState extends State<ReceiptConfirmation> {
       ),
       FilledButton(
         onPressed: () {
-          if (_form.currentState!.validate()) {
+          if (validateBookkeepingForm(context, _form)) {
             Navigator.pop(context, {
               'confirmed': true,
               'reason': _reason.trim(),
@@ -149,7 +150,7 @@ class _ReceiptEntryPickerState extends State<ReceiptEntryPicker> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => BookkeepingDialog(
     title: const Text('Choose an existing entry'),
     content: SizedBox(
       width: 600,

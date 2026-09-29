@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'bookkeeping_client.dart';
 import 'bookkeeping_csv_save.dart';
 import 'bookkeeping_models.dart';
+import 'bookkeeping_ui.dart';
 import 'mileage_form.dart';
 import 'mileage_models.dart';
 
@@ -27,7 +28,8 @@ class _BookkeepingMileageState extends State<BookkeepingMileage> {
         text: bookkeepingDate(DateTime.now()).substring(0, 7),
       ),
       _vehicle = TextEditingController();
-  final _exportKey = GlobalKey();
+  final _exportKey = GlobalKey(), _feedbackKey = GlobalKey();
+  String? _exportError, _exportNotice;
   String _selectedPeriod = bookkeepingDate(DateTime.now()).substring(0, 7),
       _selectedVehicle = '';
   Map<String, dynamic>? _data;
@@ -48,6 +50,7 @@ class _BookkeepingMileageState extends State<BookkeepingMileage> {
         _denied = true;
         _data = null;
         _error = null;
+        _exportError = _exportNotice = null;
         _period.clear();
         _vehicle.clear();
       });
@@ -63,10 +66,11 @@ class _BookkeepingMileageState extends State<BookkeepingMileage> {
   }
 
   Future<void> _load() async {
-    if (!_alive) return;
+    if (!mounted || !_alive) return;
     setState(() {
       _busy = true;
       _error = null;
+      _exportError = _exportNotice = null;
       _data = null;
     });
     try {
@@ -106,6 +110,7 @@ class _BookkeepingMileageState extends State<BookkeepingMileage> {
     Map<String, dynamic>? trip,
     bool voidOnly = false,
   }) async {
+    String? attemptedDate;
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: false,
@@ -114,14 +119,13 @@ class _BookkeepingMileageState extends State<BookkeepingMileage> {
         businessId: widget.businessId,
         original: trip,
         voidOnly: voidOnly,
+        onSaveAttempt: (date) => attemptedDate = date,
       ),
     );
-    if (!_alive) return;
-    if (result != null) {
-      _selectedPeriod = (result['trip_date'] as String).substring(
-        0,
-        _selectedPeriod.length,
-      );
+    if (!mounted || !_alive) return;
+    final date = result?['trip_date'] as String? ?? attemptedDate;
+    if (date != null) {
+      _selectedPeriod = date.substring(0, _selectedPeriod.length);
       _period.text = _selectedPeriod;
       _selectedVehicle = '';
       _vehicle.clear();
@@ -131,13 +135,9 @@ class _BookkeepingMileageState extends State<BookkeepingMileage> {
   }
 
   Future<void> _export() async {
-    final box = _exportKey.currentContext?.findRenderObject() as RenderBox?;
-    final origin = box == null
-        ? const Rect.fromLTWH(0, 0, 1, 1)
-        : box.localToGlobal(Offset.zero) & box.size;
     setState(() {
       _busy = true;
-      _error = null;
+      _exportError = _exportNotice = null;
     });
     try {
       final d = await widget.client.request(
@@ -145,20 +145,29 @@ class _BookkeepingMileageState extends State<BookkeepingMileage> {
         '/businesses/${widget.businessId}/mileage/export',
         query: {'period': _selectedPeriod, 'vehicle': _selectedVehicle},
       );
-      if (!_alive) return;
+      if (!mounted || !_alive) return;
       if (widget.onExport != null) {
         await widget.onExport!(d['csv'] as String, d['filename'] as String);
       } else {
         await saveBookkeepingCsv(
           d['csv'] as String,
           d['filename'] as String,
-          origin,
+          bookkeepingShareOrigin(_exportKey, context),
+        );
+      }
+      if (_alive) {
+        setState(
+          () =>
+              _exportNotice = 'CSV prepared from the latest recorded entries.',
         );
       }
     } catch (e) {
-      if (_alive) setState(() => _error = e.toString());
+      if (_alive) setState(() => _exportError = e.toString());
     } finally {
-      if (_alive) setState(() => _busy = false);
+      if (_alive) {
+        setState(() => _busy = false);
+        revealBookkeepingFeedback(_feedbackKey, () => _alive);
+      }
     }
   }
 
@@ -244,6 +253,11 @@ class _BookkeepingMileageState extends State<BookkeepingMileage> {
                                     : _export,
                                 icon: const Icon(Icons.download_outlined),
                                 label: const Text('Export mileage'),
+                              ),
+                              BookkeepingExportFeedback(
+                                key: _feedbackKey,
+                                error: _exportError,
+                                notice: _exportNotice,
                               ),
                               TextButton.icon(
                                 onPressed: _busy ? null : _load,
