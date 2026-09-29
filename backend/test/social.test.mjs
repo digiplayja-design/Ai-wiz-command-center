@@ -15,7 +15,8 @@ const stored=new Map();
 const rpc={storage:{from:()=>({
  upload:async(path,buffer,options)=>{stored.set(path,{buffer,options});return {data:{path}};},
  remove:async(paths)=>{for(const path of paths)stored.delete(path);return {data:[]};},
- createSignedUrls:async(paths,ttl)=>({data:paths.map(path=>({path,signedUrl:`https://fixture.test/${path}?expires=${ttl}`}))})
+ createSignedUrls:async(paths,ttl)=>({data:paths.map(path=>({path,signedUrl:`https://fixture.test/${path}?expires=${ttl}`}))}),
+ createSignedUrl:async(path,ttl,options={})=>({data:{signedUrl:`https://fixture.test/${path}?expires=${ttl}&download=${encodeURIComponent(options.download||'')}`}})
 })},rpc:async(n,p)=>{try{return {data:n==='korlix_social_avatar'?(await db.query('select korlix_social_avatar($1,$2,$3) result',[p.p_actor,p.p_action,p.p_path??null])).rows[0].result:(await db.query(`select ${n}($1,$2,$3::jsonb) result`,[p.p_actor,p.p_action,JSON.stringify(p.p_data)])).rows[0].result};}catch(e){return {error:{code:e.code,message:e.message}};}}};
 const api=async(action,data={},actor=users[0],method='POST',status=200)=>{const res=await fetch(base+action+(method==='GET'?'?'+new URLSearchParams(data):''),{method,headers:{Authorization:actor,'Content-Type':'application/json'},body:method==='POST'?JSON.stringify(data):undefined});const result=await res.json();assert.equal(res.status,status,JSON.stringify(result));assert.equal(res.headers.get('cache-control'),'no-store');return result;};
 const connect=async()=>{await call(users[0],'request',{peer:b.id});await call(users[1],'accept',{peer:a.id});};
@@ -33,6 +34,8 @@ before(async()=>{
  await db.exec(await readFile(new URL(replies,folder),'utf8'));
  const groups=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_groups.sql'));
  await db.exec(await readFile(new URL(groups,folder),'utf8'));
+ const attachments=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_attachments.sql'));
+ await db.exec(await readFile(new URL(attachments,folder),'utf8'));
  const app=express();app.use(express.json({limit:'250kb'}));registerSocial(app,{database:rpc,requireUser:async q=>{if(!users.includes(q.headers.authorization))throw Error();return {id:q.headers.authorization,email_confirmed_at:'2026-01-01'};},logger:{warn(){}}});
  server=app.listen(0);await new Promise(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}/api/social/`;
 });
@@ -326,4 +329,71 @@ test('group capacity includes pending invitations and cannot be exceeded by late
  const {group}=await createGroup(targets.slice(0,49));assert.equal(group.invited_count,49);
  await api('group_invite',{group:group.id,members:[targets[49]]},users[0],'POST',400);
  assert.equal((await api('group_details',{group:group.id},users[0],'GET')).members.length,50);
+});
+
+// Attachment coverage uses the real SQL permissions and HTTP multipart routes.
+const uploadAttachment=async({actor=users[0],destination={peer:b.id},kind='file',name='notes.txt',bytes=Buffer.from('Fixture notes'),id=randomUUID(),status=200}={})=>{
+ const form=new FormData();form.append('file',new Blob([bytes]),name);
+ const response=await fetch(base+'attachment_upload?'+new URLSearchParams({...destination,kind,id}),{method:'POST',headers:{Authorization:actor},body:form});
+ const result=await response.json();assert.equal(response.status,status,JSON.stringify(result));assert.equal(response.headers.get('cache-control'),'no-store');return result;
+};
+const mediaRpc=async(actor,action,data)=>(await db.query('select korlix_social_attachment_v1($1,$2,$3::jsonb) result',[actor,action,JSON.stringify(data)])).rows[0].result;
+test('attachments require authentication and accepted destinations before upload',async()=>{
+ await uploadAttachment({actor:'',status:401});await uploadAttachment({status:403});
+ await connectAll();const {group}=await createGroup();await uploadAttachment({actor:users[1],destination:{group:group.id},status:403});
+ await api('group_accept',{group:group.id},users[1]);assert.equal((await uploadAttachment({actor:users[1],destination:{group:group.id}})).attachment.kind,'file');
+});
+test('direct files send without text, retain exact retry identity and deny outsiders',async()=>{
+ await connectAll();const {attachment:a1}=await uploadAttachment();assert.equal(a1.object_path,undefined);assert.equal(a1.url,undefined);
+ const payload={id:randomUUID(),peer:b.id,body:'',attachment_id:a1.id};await api('send',payload);await api('send',payload);
+ const messages=(await api('messages',{peer:a.id},users[1],'GET')).items;assert.equal(messages.length,1);assert.equal(messages[0].body,'notes.txt');assert.equal(messages[0].attachment.id,a1.id);
+ const download=await api('attachment_link',{id:a1.id},users[1],'GET');assert.match(download.url,/expires=60&download=notes.txt/);
+ await api('attachment_link',{id:a1.id},users[2],'GET',404);
+ await api('send',{...payload,id:randomUUID()},users[0],'POST',403);
+ await api('send',{...payload,attachment_id:null},users[0],'POST',409);
+ await api('send',{...payload,id:randomUUID(),peer:c.id},users[0],'POST',403);
+ await api('send',{...payload,id:randomUUID(),peer:a.id},users[1],'POST',403);
+ await api('attachment_discard',{id:a1.id},users[0],'POST',400);
+});
+test('image normalization removes metadata; malformed files and voices are rejected',async()=>{
+ await connect();const image=await sharp({create:{width:2200,height:1100,channels:3,background:'#224466'}}).withMetadata({exif:{IFD0:{Artist:'Private author'}}}).png().toBuffer();
+ const result=await uploadAttachment({kind:'image',name:'photo.png',bytes:image});assert.match(result.attachment.url,/expires=300/);
+ const storedPhoto=[...stored.entries()].find(([path])=>path.includes(result.attachment.id))[1];const meta=await sharp(storedPhoto.buffer).metadata();assert.equal(meta.width,2048);assert.equal(meta.format,'jpeg');assert.equal(meta.exif,undefined);
+ for(const [kind,name,bytes] of [['image','fake.png',Buffer.from('<svg/>')],['file','file.pdf',Buffer.from('not a pdf')],['file','file.html',Buffer.from('<html>')],['voice','voice.wav',Buffer.from('bad sound')],['file','notes.txt',Buffer.from([0xff,0])]])await uploadAttachment({kind,name,bytes,status:400});
+ const {validateAttachment}=await import('../social/attachments.mjs');const wav=Buffer.alloc(48044);wav.write('RIFF');wav.writeUInt32LE(wav.length-8,4);wav.write('WAVEfmt ',8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(24000,24);wav.writeUInt32LE(48000,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(48000,40);
+ const voice=await uploadAttachment({kind:'voice',name:'note.wav',bytes:wav});assert.equal(voice.attachment.duration_ms,1000);assert.equal(voice.attachment.content_type,'audio/wav');
+ await assert.rejects(validateAttachment({buffer:Buffer.alloc(20971521),originalname:'large.txt'},'file'),/20 MB/);
+ wav.writeUInt32LE(22050,24);await assert.rejects(validateAttachment({buffer:wav,originalname:'fake.wav'},'voice'),/incomplete/);
+});
+test('upload retries preserve immutable bytes and deleted messages revoke attachment links',async()=>{
+ await connect();const id=randomUUID();await uploadAttachment({id});await uploadAttachment({id});await uploadAttachment({id,bytes:Buffer.from('different'),status:409});
+ const message=await api('send',{id:randomUUID(),peer:b.id,body:'See this',attachment_id:id});
+ await call(users[0],'delete_message',{id:message.id});await api('attachment_link',{id},users[1],'GET',404);
+ assert.equal((await api('message',{peer:b.id,id:message.id},users[0],'GET')).message.attachment,null);
+ assert.equal((await db.query('select purged_at is not null purged from korlix_social_attachments where id=$1',[id])).rows[0].purged,true);
+});
+test('group attachments respect join boundaries, removal, rejoin and blocking',async()=>{
+ await connectAll();const {group}=await createGroup();const before=(await uploadAttachment({destination:{group:group.id}})).attachment;
+ await groupSend(group.id,users[0],'Before joining',{attachment_id:before.id});await api('group_accept',{group:group.id},users[1]);
+ await api('attachment_link',{id:before.id},users[1],'GET',404);
+ const after=(await uploadAttachment({destination:{group:group.id}})).attachment;await groupSend(group.id,users[0],'Shared after joining',{attachment_id:after.id});
+ await api('attachment_link',{id:after.id},users[1],'GET');await call(users[1],'block',{peer:a.id});await api('attachment_link',{id:after.id},users[1],'GET',404);
+ await call(users[1],'unblock',{peer:a.id});await api('group_remove',{group:group.id,member:b.id});await api('attachment_link',{id:after.id},users[1],'GET',403);
+});
+test('expired, discarded and orphaned drafts are eligible for storage cleanup',async()=>{
+ await connect();const {attachment:draft}=await uploadAttachment();await api('attachment_discard',{id:draft.id},users[1],'POST',404);
+ await db.query("update korlix_social_attachments set expires_at=now()-interval '1 minute' where id=$1",[draft.id]);
+ await api('send',{id:randomUUID(),peer:b.id,body:'expired',attachment_id:draft.id},users[0],'POST',403);await api('attachment_link',{id:draft.id},users[0],'GET',404);
+ const rows=(await db.query('select korlix_social_attachment_cleanup() result')).rows[0].result;assert(rows.some(x=>x.id===draft.id));
+ await db.query('select korlix_social_attachment_cleanup($1::uuid[])',[[draft.id]]);assert.equal((await db.query('select count(*)::int n from korlix_social_attachments')).rows[0].n,0);
+});
+test('attachment tables, helper RPCs and bucket are closed to browser roles',async()=>{
+ const security=(await db.query("select has_table_privilege('authenticated','korlix_social_attachments','select') readable,(select relrowsecurity from pg_class where oid='korlix_social_attachments'::regclass) rls,(select public from storage.buckets where id='korlix-social-attachments') public")).rows[0];assert.deepEqual(security,{readable:false,rls:true,public:false});
+ for(const name of ['korlix_social_attachment_v1(uuid,text,jsonb)','korlix_social_media_chat_v1(uuid,text,jsonb)','korlix_social_attachment_cleanup(uuid[])']){const r=(await db.query("select has_function_privilege('anon',$1,'execute') anon,has_function_privilege('authenticated',$1,'execute') authenticated,has_function_privilege('service_role',$1,'execute') service,(select prosecdef from pg_proc where oid=$1::regprocedure) definer",[name])).rows[0];assert.deepEqual(r,{anon:false,authenticated:false,service:true,definer:false});}
+ await db.query("insert into storage.objects values($1,'korlix-social-attachments','private')",[randomUUID()]);await db.exec('set role authenticated');try{assert.equal((await db.query("select * from storage.objects where bucket_id='korlix-social-attachments'")).rows.length,0);await assert.rejects(db.query("insert into storage.objects values($1,'korlix-social-attachments','forged')",[randomUUID()]),/row-level/);}finally{await db.exec('reset role');}
+});
+test('cleanup acknowledges database rows only after storage deletion succeeds',async()=>{
+ const {registerSocialAttachments}=await import('../social/attachments.mjs');let fail=true;const calls=[];const item={id:randomUUID(),path:'fixture/path'};
+ const database={rpc:async(_,params)=>{calls.push(params);return {data:params.p_ids?[]:[item]};},storage:{from:()=>({remove:async paths=>{assert.deepEqual(paths,[item.path]);return fail?{error:{message:'retry'}}:{data:[]};}})}};
+ const {cleanup}=registerSocialAttachments(express(),{database,authenticate:async()=>null,maintenance:false});await cleanup();assert.equal(calls.length,1);fail=false;await cleanup();assert.equal(calls.length,3);assert.deepEqual(calls[2],{p_ids:[item.id]});
 });

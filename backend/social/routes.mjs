@@ -2,6 +2,7 @@
 // accept an actor ID, moderation role, or email address from a request body.
 import { registerSocialPhotos, socialPhotos } from './media.mjs';
 import { socialCallConfig } from './calls.mjs';
+import { registerSocialAttachments, socialAttachments } from './attachments.mjs';
 export function registerSocial(app, { database, requireUser, logger = console, env = process.env } = {}) {
   const actions = new Set(['bootstrap', 'members', 'connections', 'messages', 'message', 'topics', 'topic', 'blocks', 'reports',
     'save_profile', 'presence', 'request', 'accept', 'decline', 'remove', 'block', 'unblock', 'send', 'read',
@@ -22,6 +23,7 @@ export function registerSocial(app, { database, requireUser, logger = console, e
     return user;
   };
   registerSocialPhotos(app, { database, authenticate, logger });
+  registerSocialAttachments(app, { database, authenticate, logger });
   const route = async (req, res) => {
     res.set('Cache-Control', 'no-store');
     try {
@@ -40,7 +42,8 @@ export function registerSocial(app, { database, requireUser, logger = console, e
       // p_actor is derived exclusively from a Supabase-verified identity.
       const groupReport = action === 'report' && data.kind === 'group_message';
       const groupAction = groupActions.has(action) || groupReport || action === 'moderate';
-      const result = await database.rpc(groupAction ? 'korlix_social_groups_v1' : callActions.has(action) ? 'korlix_social_calls_v1' : chatActions.has(action) ? 'korlix_social_chat_v1' : 'korlix_social_v1', { p_actor: user.id, p_action: groupReport ? 'group_report' : action, p_data: data });
+      const mediaChat = chatActions.has(action) || ['group_messages','group_message','group_send'].includes(action);
+      const result = await database.rpc(mediaChat ? 'korlix_social_media_chat_v1' : groupAction ? 'korlix_social_groups_v1' : callActions.has(action) ? 'korlix_social_calls_v1' : 'korlix_social_v1', { p_actor: user.id, p_action: groupReport ? 'group_report' : action, p_data: data });
       if (result.error) {
         const code = result.error.code;
         const status = { P0001: 400, P0002: 404, '42501': 403, '23505': 409, '23514': 400, '22P02': 400, '22003': 400, '54000': 429 }[code];
@@ -49,7 +52,7 @@ export function registerSocial(app, { database, requireUser, logger = console, e
         return res.status(503).json({ error: 'This change could not be confirmed. Refresh before retrying.' });
       }
       if (result.data == null) return res.status(503).json({ error: 'KORLIX Social is temporarily unavailable.' });
-      res.json(await socialPhotos(database, result.data));
+      res.json(await socialPhotos(database, await socialAttachments(database, result.data)));
     } catch {
       res.status(503).json({ error: 'KORLIX Social could not finish this request. Refresh before retrying.' });
     }
