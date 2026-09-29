@@ -147,11 +147,13 @@ class KorlixVoiceComposer extends StatefulWidget {
     this.engine,
     this.sessionChanges,
     this.isSessionCurrent,
+    this.showLiveConvo = true,
   });
   final String initialText, language;
   final KorlixDictationEngine? engine;
   final Listenable? sessionChanges;
   final bool Function()? isSessionCurrent;
+  final bool showLiveConvo;
   @override
   State<KorlixVoiceComposer> createState() => _KorlixVoiceComposerState();
 }
@@ -573,19 +575,21 @@ class _KorlixVoiceComposerState extends State<KorlixVoiceComposer>
                   height: 1.5,
                 ),
               ),
-              const SizedBox(height: 18),
-              KorlixActionButton(
-                label: 'Talk with K-Nova instead',
-                subtitle: 'Open Live Convo',
-                icon: Icons.spatial_audio_off_rounded,
-                expand: true,
-                onPressed: _recording
-                    ? null
-                    : () => Navigator.pop(
-                        context,
-                        KorlixVoiceDraft(_draft.text, openLiveConvo: true),
-                      ),
-              ),
+              if (widget.showLiveConvo) ...[
+                const SizedBox(height: 18),
+                KorlixActionButton(
+                  label: 'Talk with K-Nova instead',
+                  subtitle: 'Open Live Convo',
+                  icon: Icons.spatial_audio_off_rounded,
+                  expand: true,
+                  onPressed: _recording
+                      ? null
+                      : () => Navigator.pop(
+                          context,
+                          KorlixVoiceDraft(_draft.text, openLiveConvo: true),
+                        ),
+                ),
+              ],
             ],
           ),
         ),

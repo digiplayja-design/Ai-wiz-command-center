@@ -82,6 +82,10 @@ import 'korlix_cyber_widgets.dart';
 import 'improve_picture/screens/portrait_studio_home.dart';
 import 'improve_picture/picture_studio_client.dart';
 import 'improve_picture/picture_studio_screen.dart';
+import 'imagine_studio/imagine_catalog.dart';
+import 'imagine_studio/imagine_client.dart';
+import 'imagine_studio/imagine_screen.dart';
+import 'imagine_studio/imagine_art.dart';
 import 'image_to_video/image_to_video_screen.dart';
 
 import 'live_convo/korlix_live_convo_test_screen.dart';
@@ -5072,6 +5076,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   bool _imaginePictureMode = false;
   String _chatImageSize = '1024x1024';
   String _chatImageStyle = 'auto';
+  ImagineClient? _imagineStudio;
+  bool _imagineStudioOpening = false;
   String _pendingChatPrompt = '';
   String _pendingChatStatus = 'Thinking through your request…';
   String? _pendingChatTopicId;
@@ -5376,6 +5382,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _chatMemory.dispose();
+    _imagineStudio?.dispose();
     _savedTopicsOverlayEntry?.remove();
     _savedTopicsOverlayEntry = null;
     _renameTopicController.dispose();
@@ -8651,7 +8658,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         : isImproveAction
         ? Icons.auto_fix_high_rounded
         : isImagineAction
-        ? Icons.image_search_rounded
+        ? Icons.auto_awesome_mosaic_rounded
         : isCreditAction
         ? Icons.credit_score_rounded
         : isAppAction
@@ -8661,6 +8668,9 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     return KorlixActionButton(
       tile: tile,
       label: label,
+      subtitle: isImagineAction ? 'Styles, scenes & art' : null,
+      leading: isImagineAction ? ClipRRect(borderRadius: BorderRadius.circular(11),
+        child: const SizedBox(width: 38, height: 38, child: ImagineArtwork())) : null,
       icon: icon ?? korlixToolIcon(label),
       onPressed: _loading ? null : () => _useQuickAction(action),
       selected: isHighlighted ? true : null,
@@ -8680,6 +8690,62 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         ),
       ),
     );
+  }
+
+  Future<void> _openImagineStudio() async {
+    if (_loading || _imagineStudioOpening) return;
+    _imagineStudioOpening = true;
+    try {
+      if (_voiceListening) {
+        await _speechToText.stop();
+        if (mounted) setState(() => _voiceListening = false);
+      }
+      await _stopAiCharacterTalkingForQuery();
+      if (!mounted) return;
+      if (_imagineStudio?.available != true) {
+        _imagineStudio?.dispose();
+        _imagineStudio = ImagineClient(baseUrl: kKorlixBackendBaseUrl,
+          headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision);
+        _imagineStudio!.draft = ImagineBrief(prompt: _controller.text.trim(),
+          style: _chatImageStyle, size: _chatImageSize);
+      }
+      final studio = _imagineStudio!;
+      Future<bool> consent() => ensureKorlixThirdPartyAiConsent(
+        context: context, featureName: 'Imagine a Picture',
+        providers: const {KorlixThirdPartyAiProvider.openAi},
+        dataCategories: const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts});
+      await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ImagineStudioScreen(
+        client: studio, language: _selectedLanguage, ensureConsent: consent, allowVoice: _hasVoiceAccess,
+        onRefine: (result) async {
+          if (!studio.available) return;
+          final editor = PictureStudioClient(backendBaseUrl: kKorlixBackendBaseUrl,
+            headersBuilder: korlixAuthenticatedBackendHeaders);
+          try {
+            await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => AnimatedBuilder(
+              animation: studio, builder: (context, _) => !studio.available
+                ? Scaffold(appBar: AppBar(title: const Text('Picture Studio')),
+                    body: const Center(child: Text('Your session changed. Sign in again.')))
+                : PictureStudioScreen(
+                    initialFile: fp.PlatformFile(name: 'korlix-imagined-picture.png',
+                      size: result.bytes.length, bytes: result.bytes),
+                    language: _selectedLanguage,
+                    onImprove: (file, options) async {
+                      if (!studio.available) throw const ImagineException('Your session changed.');
+                      final edited = await editor.improve(file, options);
+                      if (!studio.available) throw const ImagineException('Your session changed.');
+                      return edited;
+                    },
+                    ensureConsent: () => ensureKorlixThirdPartyAiConsent(
+                      context: context, featureName: 'Refine Picture',
+                      providers: const {KorlixThirdPartyAiProvider.openAi},
+                      dataCategories: const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
+                        KorlixThirdPartyAiDataCategory.imagesAndPhotos}),
+                    onOpenTemplates: () => unawaited(_openPortraitTemplateGallery()),
+                  ))));
+          } finally { editor.dispose(); }
+        },
+      )));
+    } finally { _imagineStudioOpening = false; }
   }
 
   Future<void> _openImprovePictureStudio() async {
@@ -8865,42 +8931,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     }
 
     if (_isImaginePictureQuickAction(action)) {
-      // Toggle off if already active.
-      if (_imaginePictureMode) {
-        setState(() {
-          _imaginePictureMode = false;
-          _error = null;
-          _controller.text = '';
-          _controller.selection = const TextSelection.collapsed(offset: 0);
-        });
-        return;
-      }
-
-      setState(() {
-        _imaginePictureMode = true;
-        _createVideoMode = false;
-        _improvePictureMode = false;
-        _fixCreditReportMode = false;
-
-        _creditDebtValidationRoundsVisible = false;
-
-        _creditDebtValidationRound = null;
-        _createAppMode = false;
-        _error = null;
-        _controller.text = '';
-        _controller.selection = TextSelection.fromPosition(
-          const TextPosition(offset: 0),
-        );
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Describe the picture you want Korlix AI to create, then tap submit.',
-          ),
-        ),
-      );
-
+      unawaited(_openImagineStudio());
       return;
     }
 
@@ -13990,6 +14021,13 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                   onStyleChanged: (value) => setState(() => _chatImageStyle = value)),
                 const SizedBox(height: 12),
                 singleInputBoard(),
+                if (_imaginePictureMode) ...[
+                  const SizedBox(height: 10),
+                  KorlixActionButton(label: 'Open Imagine Studio',
+                    subtitle: 'Explore styles, creative briefs & your gallery',
+                    icon: Icons.auto_awesome_mosaic_rounded, expand: true,
+                    onPressed: _loading ? null : _openImagineStudio),
+                ],
                 if (!_imaginePictureMode) ...[
                   const SizedBox(height: 10),
                   ChatMemoryButton(client: _chatMemory, onPressed: _loading ? null : () async {

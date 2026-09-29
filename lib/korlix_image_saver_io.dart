@@ -9,7 +9,7 @@ Future<void> saveKorlixGeneratedImage({
 }) async {
   await Share.shareXFiles(
     [XFile.fromData(bytes, name: filename, mimeType: mimeType)],
-    text: 'Save or share your Korlix AI improved image.',
-    subject: 'Korlix AI improved image',
+    text: 'Save or share your KORLIX AI image.',
+    subject: 'KORLIX AI image',
   );
 }
