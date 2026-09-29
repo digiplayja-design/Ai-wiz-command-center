@@ -1,5 +1,6 @@
 import { registerChatMemory, prepareChatMemory } from './chat_memory/memory.mjs';
 import { resumeTextPolicy } from './resume_studio/policy.mjs';
+import { registerEmailEnhancer, enhanceEmail } from './email_enhancer/enhancer.mjs';
 import { registerSocial } from './social/routes.mjs';
 import { registerAgentStudio } from './agent_studio/routes.mjs';
 import { generateStep, WorkflowError } from './agent_studio/model.mjs';
@@ -12604,6 +12605,20 @@ const bookkeepingStorage = supabaseUrl && supabaseServiceRoleKey ? createClient(
 }) : null;
 registerSocial(app, {database:supabaseAdmin,requireUser});
 registerChatMemory(app, {database:supabaseAdmin,requireUser});
+registerEmailEnhancer(app, {requireUser,
+  access: async user => {
+    if (!process.env.OPENAI_API_KEY) return {allowed:false,status:503,reason:'Email Enhancer is temporarily unavailable.'};
+    const profile = await getOrCreateProfile(user), usageCounter = await getOrCreateUsageCounter(user.id);
+    if (!profile || !usageCounter) throw new Error('Email usage unavailable');
+    return {...checkUsageAllowed({profile, usageCounter, creditsNeeded:1}), status:429};
+  },
+  charge: async user => {
+    const usageCounter = await getOrCreateUsageCounter(user.id);
+    if (!usageCounter) throw new Error('Email usage unavailable');
+    await incrementUsage({usageCounter, liveSearchUsed:false, fileRequested:false, creditsNeeded:1});
+  },
+  generate: input => enhanceEmail({input, client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
+});
 registerAgentStudio(app, {database:supabaseAdmin,requireUser,
  loadContext:async(user,agentId,useMemory)=>{
   const profile=await korlixAgentLoadProfileV1({client:supabaseAdmin,userId:user.id,agentId});
