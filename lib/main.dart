@@ -8960,6 +8960,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   Future<void> _openKorlixSocial() async {
+    await _stopAiCharacterTalkingForQuery();
+    if (!mounted) return;
     final client = SocialClient(baseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
     await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>SocialScreen(client:client)));
   }

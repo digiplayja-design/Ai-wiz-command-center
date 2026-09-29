@@ -72,6 +72,35 @@ class SocialCallMedia extends ChangeNotifier {
   }
 
   rtc.RTCPeerConnection? _peer;
+  rtc.RTCRtpSender? _audioSender;
+  rtc.MediaStreamTrack? _microphoneTrack;
+  rtc.MediaStream? _replacementAudio, _pendingAudio;
+  bool _microphoneEnded = false, repairingMicrophone = false;
+  String microphoneIssue = '';
+  double? microphoneLevel;
+  DateTime? _lastVoice;
+  double? _lastEnergy;
+  bool get microphoneInterrupted =>
+      microphone &&
+      (_microphoneEnded ||
+          _microphoneTrack?.muted == true ||
+          _microphoneTrack?.enabled == false);
+  bool get microphoneSoundDetected =>
+      microphone &&
+      !microphoneInterrupted &&
+      _lastVoice != null &&
+      DateTime.now().difference(_lastVoice!).inSeconds < 5;
+  String get microphoneStatus => repairingMicrophone
+      ? 'Reconnecting your microphone…'
+      : !microphone
+      ? 'Your microphone is off'
+      : microphoneInterrupted
+      ? 'Your microphone was interrupted'
+      : microphoneSoundDetected
+      ? 'Your microphone is picking up sound'
+      : microphoneLevel != null
+      ? 'Speak to check your microphone'
+      : 'Microphone on · speak to the other person';
   bool _checkingAudio = false, audioStatsAvailable = false;
   int incomingAudioBytes = 0, outgoingAudioBytes = 0;
   Future<void> checkAudio() async {
@@ -81,6 +110,7 @@ class SocialCallMedia extends ChangeNotifier {
       final reports = await _peer!.getStats();
       if (_closed) return;
       var incoming = 0, outgoing = 0;
+      double? level, energy;
       for (final report in reports) {
         final v = report.values;
         if ((v['kind'] ?? v['mediaType']) != 'audio') continue;
@@ -90,10 +120,25 @@ class SocialCallMedia extends ChangeNotifier {
         if (report.type == 'outbound-rtp') {
           outgoing += (v['bytesSent'] as num?)?.toInt() ?? 0;
         }
+        if (report.type == 'media-source' ||
+            report.type == 'track' && v['remoteSource'] == false) {
+          level = (v['audioLevel'] as num?)?.toDouble() ?? level;
+          energy = (v['totalAudioEnergy'] as num?)?.toDouble() ?? energy;
+        }
       }
       audioStatsAvailable = true;
       incomingAudioBytes = incoming;
       outgoingAudioBytes = outgoing;
+      microphoneLevel = microphone && !microphoneInterrupted
+          ? level?.clamp(0, 1)
+          : 0;
+      if (microphone &&
+          !microphoneInterrupted &&
+          ((level ?? 0) > .01 ||
+              energy != null && _lastEnergy != null && energy > _lastEnergy!)) {
+        _lastVoice = DateTime.now();
+      }
+      _lastEnergy = energy;
       notifyListeners();
     } catch (_) {
       /* Some browsers do not expose audio statistics. */
@@ -104,6 +149,7 @@ class SocialCallMedia extends ChangeNotifier {
 
   rtc.MediaStream? _stream;
   Future<void>? _rendererInit;
+  Future<void>? _closing;
   bool _closed = false, ready = false;
   bool microphone = true,
       camera = true,
@@ -174,6 +220,14 @@ class SocialCallMedia extends ChangeNotifier {
       return;
     }
     _stream = stream;
+    final microphones = stream.getAudioTracks();
+    if (microphones.isEmpty) {
+      throw const SocialException(
+        'No microphone was opened. Allow microphone access and call again.',
+      );
+    }
+    _watchMicrophone(microphones.first);
+    microphones.first.enabled = microphone;
     for (final track in stream.getVideoTracks()) {
       await _localVideo!.addTrack(track);
       if (_closed) return;
@@ -181,10 +235,13 @@ class SocialCallMedia extends ChangeNotifier {
     if (video) local.srcObject = _localVideo;
     for (final track in stream.getTracks()) {
       if (_closed) return;
-      track.onEnded = () {
-        if (!_closed) onState?.call('device-ended');
-      };
-      await peer.addTrack(track, stream);
+      if (track.kind != 'audio') {
+        track.onEnded = () {
+          if (!_closed) onState?.call('device-ended');
+        };
+      }
+      final sender = await peer.addTrack(track, stream);
+      if (track == _microphoneTrack) _audioSender = sender;
     }
     if (_closed) return;
     await io.configure();
@@ -202,6 +259,9 @@ class SocialCallMedia extends ChangeNotifier {
     }
     if (_closed) return;
     if (track.kind == 'audio') {
+      track.onUnMute = () {
+        if (!_closed) unawaited(audio.resume());
+      };
       await audio.attach(stream);
     } else if (track.kind == 'video') {
       remote.srcObject = stream;
@@ -243,11 +303,82 @@ class SocialCallMedia extends ChangeNotifier {
     ),
   );
   void toggleMicrophone() {
+    if (_closed || !ready || repairingMicrophone) return;
     microphone = !microphone;
-    for (final track in _stream?.getAudioTracks() ?? <rtc.MediaStreamTrack>[]) {
-      track.enabled = microphone;
-    }
+    _microphoneTrack?.enabled = microphone;
+    _lastVoice = null;
+    microphoneLevel = null;
     notifyListeners();
+  }
+
+  void _watchMicrophone(rtc.MediaStreamTrack track) {
+    _microphoneTrack = track;
+    _microphoneEnded = false;
+    void changed() {
+      if (!_closed && identical(_microphoneTrack, track)) notifyListeners();
+    }
+
+    track.onMute = changed;
+    track.onUnMute = changed;
+    track.onEnded = () {
+      if (!_closed && identical(_microphoneTrack, track)) {
+        _microphoneEnded = true;
+        _lastVoice = null;
+        changed();
+      }
+    };
+  }
+
+  /// User-triggered recovery replaces only the existing audio sender. It keeps
+  /// the call, camera and user's intentional mute state intact.
+  Future<void> restartMicrophone() async {
+    if (_closed || !ready || repairingMicrophone || _audioSender == null) {
+      return;
+    }
+    repairingMicrophone = true;
+    microphoneIssue = '';
+    notifyListeners();
+    rtc.MediaStream? fresh;
+    try {
+      await audio.prepareCapture();
+      if (_closed) return;
+      fresh = await io.capture(false);
+      if (_closed) return;
+      _pendingAudio = fresh;
+      final tracks = fresh.getAudioTracks();
+      if (tracks.isEmpty) throw StateError('No microphone track');
+      final next = tracks.first;
+      next.enabled = microphone;
+      await _audioSender!.replaceTrack(next);
+      if (_closed) return;
+      final oldTrack = _microphoneTrack, oldStream = _replacementAudio;
+      _replacementAudio = fresh;
+      _pendingAudio = null;
+      fresh = null;
+      _watchMicrophone(next);
+      _lastVoice = null;
+      _lastEnergy = null;
+      microphoneLevel = null;
+      try {
+        if (oldStream != null) {
+          await _releaseStream(oldStream);
+        } else {
+          oldTrack?.enabled = false;
+          await oldTrack?.stop();
+        }
+      } catch (_) {}
+      if (!_closed) await audio.resume();
+    } catch (_) {
+      if (!_closed) {
+        microphoneIssue =
+            'Could not reopen the microphone. Allow microphone access for KORLIX in your browser settings, close other microphone apps or tabs, then try again.';
+      }
+    } finally {
+      if (identical(_pendingAudio, fresh)) _pendingAudio = null;
+      if (fresh != null) await _releaseStream(fresh);
+      repairingMicrophone = false;
+      if (!_closed) notifyListeners();
+    }
   }
 
   void toggleCamera() {
@@ -283,15 +414,29 @@ class SocialCallMedia extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> close() async {
+  // Navigation can call close after the controller starts teardown. Every
+  // caller must await the same cleanup before a new call opens its devices.
+  Future<void> close() => _closing ??= _close();
+
+  Future<void> _close() async {
     if (_closed) return;
     _closed = true;
     ready = false;
     audio.removeListener(_audioChanged);
     final audioClosing = audio.close();
-    final stream = _stream, peer = _peer;
+    final stream = _stream,
+        peer = _peer,
+        replacement = _replacementAudio,
+        pending = _pendingAudio;
     _stream = null;
     _peer = null;
+    _replacementAudio = null;
+    _pendingAudio = null;
+    _audioSender = null;
+    _microphoneTrack?.enabled = false;
+    for (final track in pending?.getTracks() ?? <rtc.MediaStreamTrack>[]) {
+      track.enabled = false;
+    }
     // Disable synchronously, including during logout/navigation.
     for (final track in stream?.getTracks() ?? <rtc.MediaStreamTrack>[]) {
       track.enabled = false;
@@ -299,6 +444,8 @@ class SocialCallMedia extends ChangeNotifier {
     await audioClosing;
     try {
       if (stream != null) await _releaseStream(stream);
+      if (replacement != null) await _releaseStream(replacement);
+      if (pending != null) await _releaseStream(pending);
     } catch (_) {}
     try {
       await peer?.close();
@@ -626,6 +773,13 @@ class SocialCallController extends ChangeNotifier {
     if (ended || !media.ready) return;
     media.toggleMicrophone();
     _publishMedia();
+  }
+
+  Future<void> reconnectMicrophone() async {
+    if (ended || !media.ready) return;
+    unawaited(media.audio.resume());
+    await media.restartMicrophone();
+    if (!ended) _publishMedia();
   }
 
   void toggleCamera() {

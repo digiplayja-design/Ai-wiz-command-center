@@ -117,6 +117,86 @@ class _SocialCallScreenState extends State<SocialCallScreen>
   }
 
   bool _soundPanelOpen = false;
+  Widget _microphoneCheck({bool controls = false}) {
+    final m = call.media, s = korlixSkinOf(context);
+    return SocialPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                m.microphone && !m.microphoneInterrupted
+                    ? Icons.mic_rounded
+                    : Icons.mic_off_rounded,
+                color: m.microphoneSoundDetected
+                    ? s.success
+                    : m.microphoneInterrupted
+                    ? s.danger
+                    : s.primary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  m.microphoneStatus,
+                  style: TextStyle(
+                    color: s.text,
+                    fontWeight: FontWeight.w600,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (m.microphoneLevel != null &&
+              m.microphone &&
+              !m.microphoneInterrupted) ...[
+            const SizedBox(height: 12),
+            LinearProgressIndicator(
+              value: (m.microphoneLevel! * 4).clamp(0, 1),
+              minHeight: 6,
+              borderRadius: BorderRadius.circular(4),
+              color: s.success,
+              backgroundColor: s.panelSoft,
+              semanticsLabel: 'Microphone input level',
+              semanticsValue: m.microphoneSoundDetected
+                  ? 'Sound detected'
+                  : 'Waiting for speech',
+            ),
+          ],
+          if (controls ||
+              m.microphoneInterrupted ||
+              m.microphoneIssue.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            KorlixActionButton(
+              label: m.repairingMicrophone
+                  ? 'Reconnecting microphone…'
+                  : 'Reconnect microphone',
+              icon: Icons.mic_external_on_rounded,
+              busy: m.repairingMicrophone,
+              tile: MediaQuery.textScalerOf(context).scale(1) > 1.3,
+              onPressed: call.ended || m.repairingMicrophone
+                  ? null
+                  : () => unawaited(call.reconnectMicrophone()),
+              expand: true,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              m.microphoneIssue.isNotEmpty
+                  ? m.microphoneIssue
+                  : 'Reopens the microphone without ending this call. If you muted it, tap Unmute to speak.',
+              style: TextStyle(
+                color: m.microphoneIssue.isNotEmpty ? s.danger : s.mutedText,
+                fontSize: 12,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   void _speakerPressed() {
     final a = call.media.audio;
     if (a.canRouteSpeaker) {
@@ -183,6 +263,10 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                     style: TextStyle(color: s.mutedText, height: 1.5),
                   ),
                   const SizedBox(height: 20),
+                  if (call.media.ready && !call.ended) ...[
+                    _microphoneCheck(controls: true),
+                    const SizedBox(height: 16),
+                  ],
                   KorlixActionButton(
                     label: 'Resume sound',
                     icon: Icons.volume_up_rounded,
@@ -490,6 +574,10 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                           style: TextStyle(color: s.primary, fontSize: 16),
                         ),
                       ),
+                    if (!call.ended && m.ready && !incoming) ...[
+                      const SizedBox(height: 16),
+                      _microphoneCheck(),
+                    ],
                     const SizedBox(height: 22),
                     if (call.ended)
                       KorlixActionButton(
@@ -530,7 +618,9 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                             m.microphone
                                 ? Icons.mic_rounded
                                 : Icons.mic_off_rounded,
-                            m.ready ? call.toggleMicrophone : null,
+                            m.ready && !m.repairingMicrophone
+                                ? call.toggleMicrophone
+                                : null,
                             selected: !m.microphone,
                           ),
                           _control(

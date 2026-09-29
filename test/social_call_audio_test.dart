@@ -19,6 +19,8 @@ class Track extends rtc.MediaStreamTrack {
   final String id, kind;
   @override
   bool enabled = true;
+  @override
+  bool muted = false;
   bool stopped = false;
   @override
   Future<void> stop() async {
@@ -88,6 +90,17 @@ class Renderer extends rtc.RTCVideoRenderer {
 }
 
 class Sender implements rtc.RTCRtpSender {
+  Sender(this.current);
+  rtc.MediaStreamTrack current;
+  Completer<void>? pending;
+  bool fail = false;
+  @override
+  Future<void> replaceTrack(rtc.MediaStreamTrack? track) async {
+    if (pending != null) await pending!.future;
+    if (fail) throw StateError('Cannot replace');
+    current = track!;
+  }
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -100,6 +113,7 @@ class Peer implements rtc.RTCPeerConnection {
   @override
   Function(rtc.RTCPeerConnectionState)? onConnectionState;
   final sent = <rtc.MediaStreamTrack>[];
+  final recordedSenders = <Sender>[];
   bool closed = false;
   List<rtc.StatsReport> reports = [];
   @override
@@ -111,7 +125,9 @@ class Peer implements rtc.RTCPeerConnection {
     rtc.MediaStream? s,
   ]) async {
     sent.add(t);
-    return Sender();
+    final sender = Sender(t);
+    recordedSenders.add(sender);
+    return sender;
   }
 
   @override
@@ -197,6 +213,8 @@ class Io extends SocialCallIo {
   final mic = Track('mic', 'audio'), camera = Track('camera', 'video');
   final connection = Peer(), projections = <Stream>[], renderers = <Renderer>[];
   Completer<rtc.MediaStream>? permission;
+  final nextCaptures = <rtc.MediaStream>[];
+  final captureModes = <bool>[];
   @override
   rtc.RTCVideoRenderer renderer() {
     final r = Renderer();
@@ -214,15 +232,28 @@ class Io extends SocialCallIo {
   @override
   Future<rtc.RTCPeerConnection> peer(List<dynamic> servers) async => connection;
   @override
-  Future<rtc.MediaStream> capture(bool video) async => permission == null
-      ? Stream('capture', [mic, if (video) camera])
-      : permission!.future;
+  Future<rtc.MediaStream> capture(bool video) async {
+    captureModes.add(video);
+    if (permission != null) return permission!.future;
+    if (nextCaptures.isNotEmpty) return nextCaptures.removeAt(0);
+    return Stream('capture', [mic, if (video) camera]);
+  }
+
   @override
   Future<void> prepare() async {}
   @override
   Future<void> configure() async {}
   @override
   Future<void> clear() async {}
+}
+
+class PendingAudioClose extends Audio {
+  final gate = Completer<void>();
+  @override
+  Future<void> close() async {
+    await gate.future;
+    await super.close();
+  }
 }
 
 Future<void> settleTrack() => Future<void>.delayed(Duration.zero);
@@ -280,6 +311,213 @@ void main() {
       );
       await settleTrack();
       expect(audio.received, isNull);
+    },
+  );
+  test(
+    'interrupted microphone can be replaced without replacing camera or incoming audio',
+    () async {
+      final io = Io(), audio = Audio();
+      io.mic.enabled = false;
+      final m = SocialCallMedia(io: io, audio: audio);
+      await m.open(true, []);
+      expect(io.mic.enabled, true);
+      io.mic.muted = true;
+      io.mic.onMute!();
+      expect(m.microphoneInterrupted, true);
+      final replacement = Track('fresh-mic', 'audio');
+      io.nextCaptures.add(Stream('recovery', [replacement]));
+      final remote = Track('remote', 'audio');
+      io.connection.onTrack!(rtc.RTCTrackEvent(streams: [], track: remote));
+      await settleTrack();
+      final received = audio.received;
+      await m.restartMicrophone();
+      expect(io.captureModes, [true, false]);
+      expect(io.connection.recordedSenders.first.current, replacement);
+      expect(io.connection.recordedSenders.last.current, io.camera);
+      expect(io.camera.stopped, false);
+      expect(io.mic.stopped, true);
+      expect(m.microphoneInterrupted, false);
+      expect(audio.received, received);
+      final resumes = audio.resumes;
+      remote.onUnMute!();
+      await settleTrack();
+      expect(audio.resumes, resumes + 1);
+      io.mic.onEnded!();
+      expect(
+        m.microphoneInterrupted,
+        false,
+        reason:
+            'Old microphone events must not mark the replacement interrupted',
+      );
+      final close = m.close();
+      expect(replacement.enabled, false);
+      await close;
+      expect(replacement.stopped, true);
+    },
+  );
+  test(
+    'microphone replacement respects intentional mute and failed replacement keeps old source',
+    () async {
+      final io = Io();
+      final call = SocialCallMedia(io: io, audio: Audio());
+      await call.open(false, []);
+      call.toggleMicrophone();
+      final replacement = Track('fresh', 'audio');
+      io.nextCaptures.add(Stream('fresh-stream', [replacement]));
+      await call.restartMicrophone();
+      expect(call.microphone, false);
+      expect(replacement.enabled, false);
+      call.toggleMicrophone();
+      expect(replacement.enabled, true);
+      final rejected = Track('failed-mic', 'audio');
+      io.nextCaptures.add(Stream('failed-stream', [rejected]));
+      io.connection.recordedSenders.single.fail = true;
+      await call.restartMicrophone();
+      expect(io.connection.recordedSenders.single.current, replacement);
+      expect(replacement.stopped, false);
+      expect(rejected.stopped, true);
+      expect(call.microphoneIssue, contains('Could not reopen'));
+      await call.close();
+    },
+  );
+  test(
+    'hangup during microphone replacement disables pending capture immediately',
+    () async {
+      final io = Io(), audio = Audio();
+      final m = SocialCallMedia(io: io, audio: audio);
+      await m.open(false, []);
+      final replacement = Track('pending-mic', 'audio');
+      io.nextCaptures.add(Stream('pending-stream', [replacement]));
+      final pending = Completer<void>();
+      io.connection.recordedSenders.single.pending = pending;
+      final repair = m.restartMicrophone();
+      await settleTrack();
+      final close = m.close();
+      expect(replacement.enabled, false);
+      pending.complete();
+      await Future.wait([repair, close]);
+      expect(replacement.stopped, true);
+      expect(m.ready, false);
+    },
+  );
+  test(
+    'hangup during recovery permission releases late microphone without swapping sender',
+    () async {
+      final io = Io(), audio = Audio();
+      final m = SocialCallMedia(io: io, audio: audio);
+      await m.open(false, []);
+      io.permission = Completer<rtc.MediaStream>();
+      final repair = m.restartMicrophone();
+      await settleTrack();
+      await m.close();
+      final late = Track('late-recovery', 'audio');
+      io.permission!.complete(Stream('late-recovery-stream', [late]));
+      await repair;
+      expect(late.stopped, true);
+      expect(io.connection.recordedSenders.single.current, io.mic);
+    },
+  );
+  test(
+    'sound detection uses microphone source level, not sent packets or received sound',
+    () async {
+      final io = Io();
+      final call = SocialCallMedia(io: io, audio: Audio());
+      await call.open(false, []);
+      io.connection.reports = [
+        rtc.StatsReport('out', 'outbound-rtp', 0, {
+          'kind': 'audio',
+          'bytesSent': 1000,
+        }),
+        rtc.StatsReport('in', 'track', 0, {
+          'kind': 'audio',
+          'remoteSource': true,
+          'audioLevel': .7,
+        }),
+        rtc.StatsReport('mic', 'media-source', 0, {
+          'kind': 'audio',
+          'audioLevel': 0.0,
+          'totalAudioEnergy': 0.0,
+        }),
+      ];
+      await call.checkAudio();
+      expect(call.microphoneSoundDetected, false);
+      io.connection.reports = [
+        rtc.StatsReport('mic', 'media-source', 0, {
+          'kind': 'audio',
+          'audioLevel': .12,
+          'totalAudioEnergy': .05,
+        }),
+      ];
+      await call.checkAudio();
+      expect(call.microphoneSoundDetected, true);
+      io.mic.muted = true;
+      io.mic.onMute!();
+      expect(call.microphoneSoundDetected, false);
+      expect(call.microphoneInterrupted, true);
+      await call.close();
+    },
+  );
+  testWidgets('interrupted microphone recovery stays usable on small screens', (
+    t,
+  ) async {
+    final store = calls.CallStore();
+    final client = store.client('caller');
+    final io = Io(), audio = Audio();
+    final m = SocialCallMedia(io: io, audio: audio);
+    await social.mount(
+      t,
+      SocialCallScreen(
+        client: client,
+        peer: social.peer,
+        video: false,
+        media: m,
+      ),
+      width: 320,
+      height: 1000,
+      scale: 1.4,
+    );
+    await t.pumpAndSettle();
+    io.mic.muted = true;
+    io.mic.onMute!();
+    await t.pumpAndSettle();
+    expect(find.text('Your microphone was interrupted'), findsOneWidget);
+    final repair = find.text('Reconnect microphone');
+    await calls.reveal(t, repair);
+    await fixtures.capture(t, 'social-microphone-interrupted-320');
+    expect(t.takeException(), isNull);
+    final fresh = Track('recovered', 'audio');
+    io.nextCaptures.add(Stream('recovered-stream', [fresh]));
+    await t.tap(repair);
+    await t.pumpAndSettle();
+    expect(m.microphoneInterrupted, false);
+    expect(fresh.enabled, true);
+    expect(store.signals, isEmpty);
+    await calls.reveal(t, find.text('Sound settings & test'));
+    await t.tap(find.text('Sound settings & test'));
+    await t.pumpAndSettle();
+    expect(find.text('Reconnect microphone'), findsOneWidget);
+    expect(t.takeException(), isNull);
+    await fixtures.capture(t, 'social-microphone-settings-320');
+    await t.pumpWidget(const SizedBox());
+    await t.pumpAndSettle();
+    expect(fresh.stopped, true);
+    client.dispose();
+  });
+  test(
+    'repeated hangup awaits the same cleanup before another call can open',
+    () async {
+      final io = Io(), audio = PendingAudioClose();
+      final m = SocialCallMedia(io: io, audio: audio);
+      await m.open(false, []);
+      final first = m.close(), second = m.close();
+      expect(identical(first, second), true);
+      expect(io.mic.enabled, false);
+      expect(io.connection.closed, false);
+      audio.gate.complete();
+      await second;
+      expect(io.connection.closed, true);
+      expect(io.mic.stopped, true);
+      expect(io.projections.every((s) => s.disposed), true);
     },
   );
   test(
@@ -515,6 +753,7 @@ void main() {
       await t.pumpAndSettle();
       expect(audio.tests, 1);
       expect(audio.activated, true);
+      await calls.reveal(t, find.byTooltip('Close sound controls'));
       await t.tap(find.byTooltip('Close sound controls'));
       await t.pumpAndSettle();
       await t.pumpWidget(const SizedBox());
