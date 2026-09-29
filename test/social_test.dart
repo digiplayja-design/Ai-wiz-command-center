@@ -251,10 +251,25 @@ void main() {
       expect(s.calls.where((c) => c['action'] == 'request').length, 1);
       await t.tap(find.text('Forums').last);
       await t.pumpAndSettle();
+      final scroll = t
+          .state<ScrollableState>(find.byType(Scrollable).first)
+          .position;
+      for (var i = 0; i < 20 && find.text('Sports').evaluate().isEmpty; i++) {
+        scroll.jumpTo((scroll.pixels + 160).clamp(0, scroll.maxScrollExtent));
+        await t.pumpAndSettle();
+      }
       expect(find.text('Sports'), findsWidgets);
       expect(t.takeException(), isNull);
       await fixtures.capture(t, 'social-forums-${width.toInt()}');
       await fixtures.tap(t, find.text('Sports').first);
+      for (
+        var i = 0;
+        i < 20 && find.text('All forums').evaluate().isEmpty;
+        i++
+      ) {
+        scroll.jumpTo((scroll.pixels + 160).clamp(0, scroll.maxScrollExtent));
+        await t.pumpAndSettle();
+      }
       expect(find.text('All forums'), findsOneWidget);
       expect(t.takeException(), isNull);
       await t.pumpWidget(const SizedBox());

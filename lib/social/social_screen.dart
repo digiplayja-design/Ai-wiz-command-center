@@ -9,6 +9,7 @@ import 'social_threads.dart';
 import 'social_call_screen.dart';
 import 'social_call_controller.dart';
 import 'social_groups.dart';
+import 'social_invite_screen.dart';
 
 class SocialScreen extends StatefulWidget {
   const SocialScreen({super.key, required this.client});
@@ -190,6 +191,18 @@ class _SocialScreenState extends State<SocialScreen>
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _inviteFriends() async {
+    if (_profile == null || !client.available || !mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SocialInviteScreen(
+          client: client,
+          handle: '${_profile!['handle'] ?? ''}',
+        ),
+      ),
+    );
   }
 
   Future<void> _load({bool quiet = false, bool next = false}) async {
@@ -472,6 +485,17 @@ class _SocialScreenState extends State<SocialScreen>
                       height: 1.5,
                       color: korlixSkinOf(context).mutedText,
                     ),
+                  ),
+                  const SizedBox(height: 18),
+                  KorlixActionButton(
+                    label: 'Invite friends & family',
+                    icon: Icons.person_add_alt_1_rounded,
+                    onPressed: _inviteFriends,
+                    tile:
+                        c.maxWidth < 360 ||
+                        MediaQuery.textScalerOf(context).scale(1) > 1.3,
+                    expand: true,
+                    accent: korlixSkinOf(context).secondary,
                   ),
                 ],
               ),
@@ -901,6 +925,12 @@ class _SocialScreenState extends State<SocialScreen>
     appBar: AppBar(
       title: const Text('KORLIX Social'),
       actions: [
+        if (_profile != null && !_denied)
+          IconButton(
+            tooltip: 'Invite friends & family',
+            onPressed: _inviteFriends,
+            icon: const Icon(Icons.person_add_alt_1_rounded),
+          ),
         IconButton(
           tooltip: 'Refresh Social',
           onPressed: _loading
