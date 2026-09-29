@@ -86,6 +86,8 @@ import 'imagine_studio/imagine_catalog.dart';
 import 'imagine_studio/imagine_client.dart';
 import 'imagine_studio/imagine_screen.dart';
 import 'imagine_studio/imagine_art.dart';
+import 'logo_studio/logo_client.dart';
+import 'logo_studio/logo_screen.dart';
 import 'image_to_video/image_to_video_screen.dart';
 
 import 'live_convo/korlix_live_convo_test_screen.dart';
@@ -5078,6 +5080,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   String _chatImageStyle = 'auto';
   ImagineClient? _imagineStudio;
   bool _imagineStudioOpening = false;
+  bool _logoStudioOpening = false;
   String _pendingChatPrompt = '';
   String _pendingChatStatus = 'Thinking through your request…';
   String? _pendingChatTopicId;
@@ -5103,6 +5106,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   // Hide inactive Utility tools until full native workflows are ready.
   // Keep active Utility tools visible.
   static const List<String> _utilityTools = <String>[
+    'Logo Studio',
     'Inventory Studio',
     'Cybersecurity Defender',
     'Study Studio',
@@ -8748,6 +8752,31 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     } finally { _imagineStudioOpening = false; }
   }
 
+  Future<void> _openLogoStudio() async {
+    if (_loading || _logoStudioOpening) return;
+    _logoStudioOpening = true;
+    LogoClient? client;
+    try {
+      if (_voiceListening) {
+        await _speechToText.stop();
+        if (mounted) setState(() => _voiceListening = false);
+      }
+      await _stopAiCharacterTalkingForQuery();
+      if (!mounted) return;
+      client = LogoClient(headers: _authHeaders(), images: ImagineClient(
+        baseUrl: kKorlixBackendBaseUrl, headersBuilder: _authHeaders,
+        sessionChanges: kKorlixAuthRevision));
+      final studio = client;
+      await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => LogoStudioScreen(
+        client: studio, language: _selectedLanguage, allowVoice: _hasVoiceAccess,
+        ensureConsent: () => ensureKorlixThirdPartyAiConsent(
+          context: context, featureName: 'Logo Studio AI concepts',
+          providers: const {KorlixThirdPartyAiProvider.openAi},
+          dataCategories: const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts}),
+      )));
+    } finally { client?.dispose(); _logoStudioOpening = false; }
+  }
+
   Future<void> _openImprovePictureStudio() async {
     if (_loading) return;
     final client = PictureStudioClient(backendBaseUrl: kKorlixBackendBaseUrl,
@@ -9504,6 +9533,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
 
   void _selectUtilityTool(String tool) {
     if (tool == 'Inventory Studio') { unawaited(_openInventoryStudio()); return; }
+    if (tool == 'Logo Studio') { unawaited(_openLogoStudio()); return; }
     if (tool == 'Cybersecurity Defender') { unawaited(_openCyberDefender()); return; }
     if (tool == 'Study Studio') { unawaited(_openStudyStudio()); return; }
     if (tool == 'App Studio') { unawaited(_showAppCreationDialog()); return; }
@@ -11607,6 +11637,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
 
     String statusFor(String tool) {
       if (tool == 'Inventory Studio') return 'Find, scan and manage stock across every location with K-Nova';
+      if (tool == 'Logo Studio') return 'Create editable logos, explore AI concepts, and download your brand kit';
       if (tool == 'Cybersecurity Defender') return 'Check suspicious messages, strengthen habits and get incident help';
       if (tool == 'Study Studio') return 'Learn with lessons, flashcards and practice quizzes';
       if (tool == 'App Studio') return 'Build, preview and export your own app';
@@ -14077,7 +14108,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                   title: 'For business', description: 'Manage operations, grow your reach, and get work done.',
                   icon: Icons.business_center_outlined,
                   children: [
-                    for (final tool in ['Inventory Studio', 'Bookkeeping 2027', 'FieldProof', 'AI Visibility', 'Contract Radar', 'Workforce']) toolTile(tool),
+                    for (final tool in ['Logo Studio', 'Inventory Studio', 'Bookkeeping 2027', 'FieldProof', 'AI Visibility', 'Contract Radar', 'Workforce']) toolTile(tool),
                     if (_currentTier.trim().toLowerCase() == 'enterprise') ...[
                       toolTile('Contacts CRM'), toolTile('Funnel Studio'),
                     ],

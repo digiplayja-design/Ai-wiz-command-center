@@ -497,6 +497,7 @@ class KorlixLiveConvoButton extends StatelessWidget {
 }
 
 IconData korlixToolIcon(String label) => switch (label.toLowerCase()) {
+  'logo studio' => Icons.polyline_outlined,
   'tax prep' => Icons.receipt_long_outlined,
   'babyblend' => Icons.child_care_rounded,
   'fieldproof' => Icons.fact_check_outlined,
