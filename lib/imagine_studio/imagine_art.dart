@@ -22,7 +22,21 @@ class _ImaginePainter extends CustomPainter {
     final bounds = Offset.zero & size;
     canvas.save();
     canvas.clipRect(bounds);
-    canvas.scale(size.width / 300, size.height / 240);
+    canvas.drawRect(
+      bounds,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xff191a43), Color(0xff080f24)],
+        ).createShader(bounds),
+    );
+    final scale = math.min(size.width / 300, size.height / 240);
+    canvas.translate(
+      (size.width - 300 * scale) / 2,
+      (size.height - 240 * scale) / 2,
+    );
+    canvas.scale(scale);
     final palette = variant % 4 == 0
         ? [const Color(0xfff1ba85), const Color(0xff453751)]
         : variant % 4 == 1
@@ -30,13 +44,7 @@ class _ImaginePainter extends CustomPainter {
         : variant % 4 == 2
         ? [const Color(0xffee988e), const Color(0xff432755)]
         : [const Color(0xff87a9ff), const Color(0xff191a43)];
-    final p = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [palette[1], const Color(0xff080f24)],
-      ).createShader(const Rect.fromLTWH(0, 0, 300, 240));
-    canvas.drawRect(const Rect.fromLTWH(0, 0, 300, 240), p);
+    final p = Paint();
     p.shader = RadialGradient(
       colors: [
         palette[0].withValues(alpha: .5),
@@ -220,6 +228,23 @@ class _ImaginePainter extends CustomPainter {
       canvas.drawCircle(o, 1.5, p);
     }
     canvas.restore();
+    if (size.shortestSide < 65) {
+      final bezel = RRect.fromRectAndRadius(
+        bounds.deflate(.8),
+        const Radius.circular(10),
+      );
+      canvas.drawRRect(
+        bezel,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.3
+          ..shader = const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xffd5f6ff), Color(0xff6376bc), Color(0xff8b63c3)],
+          ).createShader(bounds),
+      );
+    }
   }
 
   @override

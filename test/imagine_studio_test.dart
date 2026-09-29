@@ -357,6 +357,90 @@ void main() {
       expect(t.takeException(), isNull);
     },
   );
+  testWidgets(
+    'guided idea builder preserves choices and supports undo without generating',
+    (t) async {
+      final s = Studio();
+      s.client.draft = const ImagineBrief(prompt: 'A glass house', style: '3d');
+      addTearDown(s.client.dispose);
+      await mount(t, s);
+      await actions.tap(t, find.byKey(const Key('imagine-build-idea')));
+      expect(
+        t
+            .widget<TextField>(find.byKey(const Key('imagine-idea-subject')))
+            .controller!
+            .text,
+        'A glass house',
+      );
+      await t.enterText(
+        find.byKey(const Key('imagine-idea-setting')),
+        'Above the clouds',
+      );
+      await actions.tap(t, find.text('Dreamlike'));
+      await t.enterText(
+        find.byKey(const Key('imagine-idea-detail')),
+        'A rooftop garden',
+      );
+      await fixtures.capture(t, 'imagine-idea-builder-390');
+      await actions.tap(t, find.byKey(const Key('imagine-use-idea')));
+      final prompt = t
+          .widget<TextField>(find.byKey(const Key('imagine-prompt')))
+          .controller!;
+      expect(prompt.text, contains('A glass house'));
+      expect(prompt.text, contains('Setting: Above the clouds'));
+      expect(prompt.text, contains('Mood: Dreamlike'));
+      expect(prompt.text, contains('Details: A rooftop garden'));
+      expect(s.requests, isEmpty);
+      await actions.tap(t, find.text('Undo'));
+      expect(prompt.text, 'A glass house');
+      await actions.tap(t, find.byKey(const Key('imagine-create')));
+      expect(s.requests.single['imageStyle'], '3d');
+      expect(s.requests.single['prompt'], 'A glass house');
+      expect(t.takeException(), isNull);
+    },
+  );
+  testWidgets('open idea builder clears its private draft on account change', (
+    t,
+  ) async {
+    final s = Studio();
+    addTearDown(s.client.dispose);
+    await mount(t, s, width: 320, scale: 1.6);
+    await actions.tap(t, find.byKey(const Key('imagine-build-idea')));
+    await t.enterText(
+      find.byKey(const Key('imagine-idea-subject')),
+      'Private campaign',
+    );
+    await fixtures.capture(t, 'imagine-idea-builder-320');
+    expect(t.takeException(), isNull);
+    s.change();
+    await t.pumpAndSettle();
+    expect(find.text('Private campaign'), findsNothing);
+    expect(find.byKey(const Key('imagine-use-idea')), findsNothing);
+    expect(s.requests, isEmpty);
+    expect(t.takeException(), isNull);
+  });
+  testWidgets(
+    'layout guide changes shape and sticky create sends that choice',
+    (t) async {
+      final s = Studio();
+      addTearDown(s.client.dispose);
+      await mount(t, s);
+      await t.enterText(find.byKey(const Key('imagine-prompt')), 'A landscape');
+      final create = find.byKey(const Key('imagine-create'));
+      final dockPosition = t.getCenter(create);
+      await actions.tap(t, find.text('Landscape'));
+      final frame = t.getSize(
+        find.byKey(const Key('imagine-canvas-guide-frame')),
+      );
+      expect(frame.width / frame.height, closeTo(1.5, .01));
+      expect(t.getCenter(create), dockPosition);
+      await fixtures.capture(t, 'imagine-canvas-390');
+      expect(s.requests, isEmpty);
+      await actions.tap(t, create);
+      expect(s.requests.single['imageSize'], '1536x1024');
+      expect(t.takeException(), isNull);
+    },
+  );
   for (final v in [
     (390.0, 1.0, 'korlix_blue'),
     (320.0, 1.6, 'pure_black'),

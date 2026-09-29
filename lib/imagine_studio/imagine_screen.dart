@@ -9,6 +9,8 @@ import '../input_tools/voice_composer.dart';
 import 'imagine_catalog.dart';
 import 'imagine_client.dart';
 import 'imagine_art.dart';
+import 'imagine_idea_builder.dart';
+import 'imagine_canvas_guide.dart';
 
 class ImagineStudioScreen extends StatefulWidget {
   const ImagineStudioScreen({
@@ -134,11 +136,55 @@ class _ImagineStudioScreenState extends State<ImagineStudioScreen> {
     }
   }
 
+  Future<void> _buildIdea() async {
+    if (locked) return;
+    final previous = _prompt.text;
+    final idea = await showDialog<String>(
+      context: context,
+      builder: (_) => AnimatedBuilder(
+        animation: c,
+        builder: (context, _) => c.available
+            ? ImagineIdeaBuilder(initialText: previous)
+            : AlertDialog(
+                title: const Text('Your session changed'),
+                content: const Text('Close this window and sign in again.'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close'),
+                  ),
+                ],
+              ),
+      ),
+    );
+    if (idea == null || !mounted || !c.available || locked) return;
+    setState(() {
+      _prompt.text = idea;
+      _localError = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+          'Your idea is ready to edit. Choose Create when ready.',
+        ),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () {
+            if (mounted && c.available && !locked) {
+              setState(() => _prompt.text = previous);
+            }
+          },
+        ),
+      ),
+    );
+  }
+
   Future<void> _create() async {
     if (locked) return;
     final b = brief;
     if (b.error != null) {
       setState(() => _localError = b.error);
+      notice(b.error!);
       return;
     }
     setState(() => _consenting = true);
@@ -154,7 +200,10 @@ class _ImagineStudioScreenState extends State<ImagineStudioScreen> {
         });
       }
     } catch (e) {
-      if (mounted && c.available) setState(() => _localError = c.error ?? '$e');
+      if (mounted && c.available) {
+        setState(() => _localError = c.error ?? '$e');
+        notice(_localError!);
+      }
     } finally {
       if (mounted) setState(() => _consenting = false);
     }
@@ -416,7 +465,7 @@ class _ImagineStudioScreenState extends State<ImagineStudioScreen> {
         subtitle: 'Swipe through visual styles. Your words stay in control.',
       ),
       SizedBox(
-        height: 138 * MediaQuery.textScalerOf(context).scale(1).clamp(1, 2),
+        height: 154 * MediaQuery.textScalerOf(context).scale(1).clamp(1, 2),
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           itemCount: imagineStyles.length,
@@ -443,6 +492,18 @@ class _ImagineStudioScreenState extends State<ImagineStudioScreen> {
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(18),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color.lerp(
+                              s.panel,
+                              s.secondary,
+                              active ? .23 : .05,
+                            )!,
+                            s.panelDeep,
+                          ],
+                        ),
                         border: Border.all(
                           color: active ? s.secondary : s.border,
                           width: active ? 1.8 : 1,
@@ -453,9 +514,32 @@ class _ImagineStudioScreenState extends State<ImagineStudioScreen> {
                         children: [
                           Row(
                             children: [
-                              Icon(
-                                choice.icon,
-                                color: active ? s.secondary : s.mutedText,
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  color: s.secondary.withValues(
+                                    alpha: active ? .17 : .07,
+                                  ),
+                                  border: Border.all(
+                                    color: s.secondary.withValues(
+                                      alpha: active ? .5 : .18,
+                                    ),
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.white.withValues(
+                                        alpha: .06,
+                                      ),
+                                      offset: const Offset(-1, -1),
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  choice.icon,
+                                  color: active ? s.secondary : s.mutedText,
+                                  size: 23,
+                                ),
                               ),
                               const Spacer(),
                               if (active)
@@ -502,6 +586,8 @@ class _ImagineStudioScreenState extends State<ImagineStudioScreen> {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       heading('Frame your idea'),
+      ImagineCanvasGuide(brief: brief),
+      const SizedBox(height: 14),
       LayoutBuilder(
         builder: (context, box) => Wrap(
           spacing: 10,
@@ -639,6 +725,14 @@ class _ImagineStudioScreenState extends State<ImagineStudioScreen> {
           spacing: 8,
           runSpacing: 4,
           children: [
+            KorlixActionButton(
+              key: const Key('imagine-build-idea'),
+              label: 'Build my idea',
+              icon: Icons.auto_fix_high_rounded,
+              size: KorlixButtonSize.compact,
+              accent: s.secondary,
+              onPressed: locked ? null : _buildIdea,
+            ),
             TextButton.icon(
               onPressed: locked
                   ? null
@@ -682,34 +776,68 @@ class _ImagineStudioScreenState extends State<ImagineStudioScreen> {
             ),
           ),
         const SizedBox(height: 16),
-        KorlixActionButton(
-          key: const Key('imagine-create'),
-          label: c.busy
-              ? 'Creating your picture…'
-              : _consenting
-              ? 'Preparing…'
-              : 'Create picture',
-          subtitle: '1 image · 1 credit · High-quality PNG',
-          icon: Icons.auto_awesome_rounded,
-          accent: s.secondary,
-          tile:
-              MediaQuery.sizeOf(context).width < 360 ||
-              MediaQuery.textScalerOf(context).scale(1) > 1.3,
-          size:
-              MediaQuery.sizeOf(context).width < 360 ||
-                  MediaQuery.textScalerOf(context).scale(1) > 1.3
-              ? KorlixButtonSize.regular
-              : KorlixButtonSize.hero,
-          expand: true,
-          busy: locked,
-          onPressed: locked ? null : _create,
-        ),
         const SizedBox(height: 12),
         Text(
           'Nothing is generated until you tap Create. You can adjust the result in Picture Studio afterward.',
           style: TextStyle(color: s.mutedText, fontSize: 12, height: 1.5),
         ),
       ],
+    ),
+  );
+  Widget _createDock() => Container(
+    decoration: BoxDecoration(
+      color: s.panelDeep,
+      border: Border(top: BorderSide(color: s.border)),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: .12),
+          blurRadius: 20,
+          offset: const Offset(0, -4),
+        ),
+      ],
+    ),
+    child: SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Align(
+        heightFactor: 1,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 650),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${brief.sizeLabel} · ${brief.styleLabel}',
+                style: TextStyle(color: s.mutedText, fontSize: 11),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 7),
+              KorlixActionButton(
+                key: const Key('imagine-create'),
+                label: c.busy
+                    ? 'Creating your picture…'
+                    : _consenting
+                    ? 'Preparing…'
+                    : 'Create picture',
+                subtitle: '1 image · 1 credit · High-quality PNG',
+                icon: Icons.auto_awesome_rounded,
+                accent: s.secondary,
+                tile:
+                    MediaQuery.sizeOf(context).width < 360 ||
+                    MediaQuery.textScalerOf(context).scale(1) > 1.3,
+                size:
+                    MediaQuery.sizeOf(context).width < 360 ||
+                        MediaQuery.textScalerOf(context).scale(1) > 1.3
+                    ? KorlixButtonSize.regular
+                    : KorlixButtonSize.hero,
+                expand: true,
+                busy: locked,
+                onPressed: locked ? null : _create,
+              ),
+            ],
+          ),
+        ),
+      ),
     ),
   );
   Widget _progress() => panel(
@@ -1151,6 +1279,12 @@ class _ImagineStudioScreenState extends State<ImagineStudioScreen> {
         title: const Text('Imagine a Picture'),
         centerTitle: false,
       ),
+      bottomNavigationBar:
+          c.available &&
+              _tab == 0 &&
+              MediaQuery.viewInsetsOf(context).bottom == 0
+          ? _createDock()
+          : null,
       body: !c.available
           ? Center(
               child: Padding(
