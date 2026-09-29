@@ -21,7 +21,7 @@ function fixture(options = {}) {
     }
   }
   const user = options.anonymous ? null : {id:'signed-in-user'};
-  const scope = {...quality, ...studio, createTextResponse, OpenAI, Buffer, AbortSignal,
+  const scope = {...quality, ...studio, ...require('../chat_memory/memory.mjs'), ...require('../resume_studio/policy.mjs'), createTextResponse, OpenAI, Buffer, AbortSignal,
     process: {env: {OPENAI_API_KEY:'offline', OPENAI_MODEL:'old-model', OPENAI_SEARCH_MODEL:'old-search'}},
     languageMap: {en:{name:'English',instruction:'Use English.'}},
     shouldUseLiveSearch: command => command.includes('today'), wantsFile: () => false,
@@ -57,7 +57,7 @@ function fixture(options = {}) {
   }
   return {calls,saved,usage,scope,async run(body = {}, path='/api/generate') {
     const result = {statusCode:200};
-    await scope.routes[path]({body}, {status(n){result.statusCode=n;return this;},json(value){result.body=value;return this;}});
+    await scope.routes[path]({body}, {set(){return this;},status(n){result.statusCode=n;return this;},json(value){result.body=value;return this;}});
     return result;
   }};
 }

@@ -1,3 +1,4 @@
+import { registerChatMemory, prepareChatMemory } from './chat_memory/memory.mjs';
 import { resumeTextPolicy } from './resume_studio/policy.mjs';
 import { registerSocial } from './social/routes.mjs';
 import { registerAgentStudio } from './agent_studio/routes.mjs';
@@ -4564,6 +4565,7 @@ app.post("/api/analyze-document", documentUpload.single("file"), async (req, res
 
 
 app.post("/api/generate", async (req, res) => {
+  res.set("Cache-Control", "no-store");
   try {
     const command = String(req.body.command || req.body.prompt || "").trim();
     const selectedHistory = chatHistory(req.body.history);
@@ -4595,10 +4597,14 @@ app.post("/api/generate", async (req, res) => {
     let profile = null;
     let usageCounter = null;
     let updatedUsage = null;
+    let mainMemory = {prompt: "", reply: null};
 
     try {
       user = await getAuthenticatedUser(req);
       if (!user) return res.status(401).json({error: "Sign in to use KORLIX chat."});
+
+      mainMemory = await prepareChatMemory({database: supabaseAdmin, user, body: req.body});
+      if (mainMemory.reply) return res.json({content: mainMemory.reply, title: 'Long-term memory', memorySaved: mainMemory.saved, creditsUsed: 0});
 
       if (user) {
         profile = await getOrCreateProfile(user);
@@ -4618,7 +4624,7 @@ app.post("/api/generate", async (req, res) => {
         }
       }
     } catch (authError) {
-      return res.status(401).json({
+      return res.status(authError.statusCode || 401).json({
         error: sanitize(authError?.message),
       });
     }
@@ -4672,7 +4678,7 @@ ${language.name}
 Language rule:
 ${language.instruction}
 
-${memoryBlock}The user wrote:
+${mainMemory.prompt}${memoryBlock}The user wrote:
 "${command}"
 
 User tier:
@@ -4787,6 +4793,7 @@ Important: Live search was attempted but failed. Give the most useful answer pos
       usage: updatedUsage,
       generationId: historyItem?.id || null,
       content,
+      memory: {enabled: mainMemory.enabled ?? false, count: mainMemory.count ?? 0},
     });
   } catch (error) {
     console.error("AI generation error:", sanitize(error?.message));
@@ -5110,7 +5117,7 @@ global.__korlixResumableJsonJobs = korlixResumableJsonJobs;
 const korlixResumableJsonJobTtlMs = 1000 * 60 * 60 * 6;
 
 function makeKorlixResumableJobId() {
-  return `korlix_job_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+  return `korlix_job_${crypto.randomUUID()}`;
 }
 
 function cleanKorlixResumableJobs() {
@@ -5219,6 +5226,9 @@ job.updatedAt = new Date().toISOString();
 }
 
 app.post("/api/korlix/jobs", async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  let owner;
+  try { owner = await requireUser(req); } catch { return res.status(401).json({error: 'Sign in to continue this request.'}); }
   try {
     cleanKorlixResumableJobs();
 
@@ -5246,6 +5256,7 @@ app.post("/api/korlix/jobs", async (req, res) => {
     const now = new Date().toISOString();
 
     const job = {
+      ownerId: owner.id,
       jobId,
       clientRequestId,
       kind,
@@ -5279,12 +5290,15 @@ app.post("/api/korlix/jobs", async (req, res) => {
 });
 
 app.get("/api/korlix/jobs/:jobId", async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  let owner;
+  try { owner = await requireUser(req); } catch { return res.status(401).json({error: 'Sign in to continue this request.'}); }
   cleanKorlixResumableJobs();
 
   const jobId = String(req.params.jobId || "").trim();
   const job = korlixResumableJsonJobs.get(jobId);
 
-  if (!job) {
+  if (!job || job.ownerId !== owner.id) {
     return res.status(404).json({
       error: "Korlix job not found.",
     });
@@ -12589,6 +12603,7 @@ const bookkeepingStorage = supabaseUrl && supabaseServiceRoleKey ? createClient(
   global: { fetch: (url, init = {}) => fetch(url, { ...init, signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(45000)]) : AbortSignal.timeout(45000) }) },
 }) : null;
 registerSocial(app, {database:supabaseAdmin,requireUser});
+registerChatMemory(app, {database:supabaseAdmin,requireUser});
 registerAgentStudio(app, {database:supabaseAdmin,requireUser,
  loadContext:async(user,agentId,useMemory)=>{
   const profile=await korlixAgentLoadProfileV1({client:supabaseAdmin,userId:user.id,agentId});
