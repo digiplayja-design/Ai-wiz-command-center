@@ -10,6 +10,7 @@ import 'social_call_screen.dart';
 import 'social_call_controller.dart';
 import 'social_groups.dart';
 import 'social_invite_screen.dart';
+import 'domino/domino_screen.dart';
 
 class SocialScreen extends StatefulWidget {
   const SocialScreen({super.key, required this.client});
@@ -398,6 +399,21 @@ class _SocialScreenState extends State<SocialScreen>
     await _openGroup(group);
   }
 
+  Future<void> _openDominoes() async {
+    if (_profile == null || _denied || _callOpen) return;
+    _callOpen = true;
+    try {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DominoLobby(client: client, profile: _profile!),
+        ),
+      );
+    } finally {
+      _callOpen = false;
+    }
+  }
+
   Future<void> _openGroup(SocialMap group) async {
     if (_profile == null || _denied) return;
     await socialOpenGroup(context, client, _profile!, group);
@@ -496,6 +512,17 @@ class _SocialScreenState extends State<SocialScreen>
                         MediaQuery.textScalerOf(context).scale(1) > 1.3,
                     expand: true,
                     accent: korlixSkinOf(context).secondary,
+                  ),
+                  const SizedBox(height: 12),
+                  KorlixActionButton(
+                    label: 'Dominoes · play with video',
+                    icon: Icons.casino_outlined,
+                    onPressed: _openDominoes,
+                    tile:
+                        c.maxWidth < 360 ||
+                        MediaQuery.textScalerOf(context).scale(1) > 1.3,
+                    expand: true,
+                    accent: const Color(0xFF65E7C6),
                   ),
                 ],
               ),
