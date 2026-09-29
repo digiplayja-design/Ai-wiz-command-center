@@ -1,3 +1,5 @@
+import 'chat/chat_memory_client.dart';
+import 'chat/chat_memory_screen.dart';
 import 'resume_studio/resume_client.dart';
 import 'resume_studio/resume_screen.dart';
 import 'social/social_client.dart';
@@ -5047,6 +5049,7 @@ class CommandCenterScreen extends StatefulWidget {
 
 class _CommandCenterScreenState extends State<CommandCenterScreen>
     with WidgetsBindingObserver {
+  late final ChatMemoryClient _chatMemory;
   bool _showSavedTopicsPanel = false;
   final ScrollController _savedTopicsScrollController = ScrollController();
   final TextEditingController _renameTopicController = TextEditingController();
@@ -5144,13 +5147,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   final List<GeneratedItem> _results = [];
   final List<ChatMessage> _chatMessages = [];
   final ScrollController _chatScrollController = ScrollController();
-  static const String _localChatTopicsPrefsKey =
-      'korlix_local_chat_topics_strict_v1';
+  late final String _localChatTopicsPrefsKey;
   final Map<String, KorlixLocalChatTopic> _chatTopicsById =
       <String, KorlixLocalChatTopic>{};
   String? _activeChatTopicId;
-  static const String _pendingGenerationJobsPrefsKey =
-      'korlix_pending_generation_jobs_v1';
+  late final String _pendingGenerationJobsPrefsKey;
   bool _appLifecyclePaused = false;
   bool _resumePendingGenerationJobsRunning = false;
   OverlayEntry? _savedTopicsOverlayEntry;
@@ -5348,6 +5349,12 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    final chatStorageScope = chatAccountStorageKey(_authHeaders());
+    _localChatTopicsPrefsKey = 'korlix_chat_topics_account_v2_$chatStorageScope';
+    _pendingGenerationJobsPrefsKey = 'korlix_chat_jobs_account_v2_$chatStorageScope';
+    _chatMemory = ChatMemoryClient(baseUrl: kKorlixBackendBaseUrl,
+      headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision);
+    unawaited(_chatMemory.load());
     unawaited(
       KorlixAppleBillingService.instance.configure(
         backendBaseUrl: kKorlixBackendBaseUrl,
@@ -5368,6 +5375,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _chatMemory.dispose();
     _savedTopicsOverlayEntry?.remove();
     _savedTopicsOverlayEntry = null;
     _renameTopicController.dispose();
@@ -5682,6 +5690,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     if (state == AppLifecycleState.resumed) {
       _appLifecyclePaused = false;
       unawaited(_resumePendingGenerationJobs());
+      unawaited(_chatMemory.load());
     }
   }
 
@@ -6112,6 +6121,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
 
         try {
           final statusData = await _fetchKorlixBackendJobStatus(backendJobId);
+          if (!mounted || !_chatMemory.available) return;
           final status = (statusData['status'] ?? '').toString().toLowerCase();
 
           if (status == 'failed') {
@@ -6728,314 +6738,6 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     return List<ChatMessage>.unmodifiable(topic.messages);
   }
 
-  int? _strictMemoryNormalizeNumber(String value) {
-    final cleaned = value.toLowerCase().trim();
-
-    final parsed = int.tryParse(cleaned);
-
-    if (parsed != null) {
-      return parsed;
-    }
-
-    const words = <String, int>{
-      'zero': 0,
-      'no': 0,
-      'one': 1,
-      'a': 1,
-      'an': 1,
-      'two': 2,
-      'three': 3,
-      'four': 4,
-      'five': 5,
-      'six': 6,
-      'seven': 7,
-      'eight': 8,
-      'nine': 9,
-      'ten': 10,
-      'eleven': 11,
-      'twelve': 12,
-      'thirteen': 13,
-      'fourteen': 14,
-      'fifteen': 15,
-      'sixteen': 16,
-      'seventeen': 17,
-      'eighteen': 18,
-      'nineteen': 19,
-      'twenty': 20,
-    };
-
-    return words[cleaned];
-  }
-
-  String _strictMemoryCleanFactName(String value) {
-    var cleaned = value.trim();
-
-    cleaned = cleaned.replaceAll(RegExp(r'[.!?,;:]+$'), '');
-
-    cleaned = cleaned.replaceAll(
-      RegExp(
-        r'\s+(and|but|because|so|with|from|in|at|for|about)\s+.*$',
-        caseSensitive: false,
-      ),
-      '',
-    );
-
-    cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
-
-    if (cleaned.length > 40) {
-      cleaned = cleaned.substring(0, 40).trim();
-    }
-
-    return cleaned;
-  }
-
-  String? _strictExtractNameFromTopic() {
-    final messages = _strictActiveTopicMessages();
-
-    final patterns = <RegExp>[
-      RegExp(
-        r"\bmy\s+name\s+is\s+([a-z][a-z .'\-]{0,50})",
-        caseSensitive: false,
-      ),
-      RegExp(r"\bi\s+am\s+([a-z][a-z .'\-]{0,50})", caseSensitive: false),
-      RegExp(r"\bi'm\s+([a-z][a-z .'\-]{0,50})", caseSensitive: false),
-    ];
-
-    final badStarts = <String>{
-      'not',
-      'going',
-      'looking',
-      'trying',
-      'asking',
-      'wondering',
-      'working',
-      'using',
-      'here',
-      'from',
-      'sure',
-      'ready',
-      'confused',
-    };
-
-    for (final message in messages.reversed) {
-      final text = message.userText.trim();
-
-      if (text.isEmpty) {
-        continue;
-      }
-
-      for (final pattern in patterns) {
-        final match = pattern.firstMatch(text);
-
-        if (match == null) {
-          continue;
-        }
-
-        final name = _strictMemoryCleanFactName(match.group(1) ?? '');
-
-        if (name.isEmpty) {
-          continue;
-        }
-
-        final firstWord = name.toLowerCase().split(RegExp(r'\s+')).first;
-
-        if (badStarts.contains(firstWord)) {
-          continue;
-        }
-
-        return name;
-      }
-    }
-
-    return null;
-  }
-
-  String? _strictExtractSiblingFactFromTopic() {
-    final messages = _strictActiveTopicMessages();
-
-    int? brothers;
-    int? sisters;
-    int? siblings;
-
-    for (final message in messages) {
-      final text = message.userText.toLowerCase();
-
-      final brotherMatch = RegExp(
-        r'\bi\s+have\s+(\d+|zero|no|one|a|an|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+brothers?\b',
-      ).firstMatch(text);
-
-      if (brotherMatch != null) {
-        brothers = _strictMemoryNormalizeNumber(brotherMatch.group(1) ?? '');
-      }
-
-      final sisterMatch = RegExp(
-        r'\bi\s+have\s+(\d+|zero|no|one|a|an|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+sisters?\b',
-      ).firstMatch(text);
-
-      if (sisterMatch != null) {
-        sisters = _strictMemoryNormalizeNumber(sisterMatch.group(1) ?? '');
-      }
-
-      final siblingMatch = RegExp(
-        r'\bi\s+have\s+(\d+|zero|no|one|a|an|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+siblings?\b',
-      ).firstMatch(text);
-
-      if (siblingMatch != null) {
-        siblings = _strictMemoryNormalizeNumber(siblingMatch.group(1) ?? '');
-      }
-    }
-
-    if (brothers == null && sisters == null && siblings == null) {
-      return null;
-    }
-
-    final parts = <String>[];
-
-    if (brothers != null) {
-      parts.add('$brothers brother${brothers == 1 ? '' : 's'}');
-    }
-
-    if (sisters != null) {
-      parts.add('$sisters sister${sisters == 1 ? '' : 's'}');
-    }
-
-    if (siblings != null && brothers == null && sisters == null) {
-      parts.add('$siblings sibling${siblings == 1 ? '' : 's'}');
-    }
-
-    if (parts.isEmpty) {
-      return null;
-    }
-
-    if (parts.length == 1) {
-      return 'In this chat, you told me you have ${parts.first}.';
-    }
-
-    return 'In this chat, you told me you have ${parts.join(' and ')}.';
-  }
-
-  bool _strictIsNameQuestion(String command) {
-    final lower = command.toLowerCase();
-
-    return RegExp(r"\bwhat'?s\s+my\s+name\b").hasMatch(lower) ||
-        RegExp(r'\bwhat\s+is\s+my\s+name\b').hasMatch(lower) ||
-        RegExp(r'\bwho\s+am\s+i\b').hasMatch(lower) ||
-        RegExp(r'\bdo\s+you\s+know\s+my\s+name\b').hasMatch(lower);
-  }
-
-  bool _strictIsSiblingQuestion(String command) {
-    final lower = command.toLowerCase();
-
-    final mentionsSibling =
-        lower.contains('brother') ||
-        lower.contains('sister') ||
-        lower.contains('sibling');
-
-    if (!mentionsSibling) {
-      return false;
-    }
-
-    return lower.contains('how many') ||
-        lower.contains('do i have') ||
-        lower.contains('do you know') ||
-        lower.contains('remember');
-  }
-
-  bool _strictIsPersonalMemoryQuestion(String command) {
-    final lower = command.toLowerCase();
-
-    if (_strictIsNameQuestion(command) || _strictIsSiblingQuestion(command)) {
-      return true;
-    }
-
-    final asksAboutUser =
-        RegExp(r"\bwhat'?s\s+my\b").hasMatch(lower) ||
-        RegExp(r'\bwhat\s+is\s+my\b').hasMatch(lower) ||
-        RegExp(r'\bwhat\s+do\s+i\s+have\b').hasMatch(lower) ||
-        RegExp(r'\bhow\s+many\b.*\bdo\s+i\s+have\b').hasMatch(lower) ||
-        RegExp(r'\bdo\s+you\s+remember\b').hasMatch(lower) ||
-        RegExp(r'\bdid\s+i\s+tell\s+you\b').hasMatch(lower) ||
-        RegExp(r'\bwhat\s+do\s+you\s+know\s+about\s+me\b').hasMatch(lower);
-
-    return asksAboutUser;
-  }
-
-  String? _strictTopicMemoryGuardAnswer(String command) {
-    if (!_strictIsPersonalMemoryQuestion(command)) {
-      return null;
-    }
-
-    if (_strictIsNameQuestion(command)) {
-      final name = _strictExtractNameFromTopic();
-
-      if (name != null && name.trim().isNotEmpty) {
-        return 'In this chat, you told me your name is $name.';
-      }
-
-      return 'You have not told me your name in this chat.';
-    }
-
-    if (_strictIsSiblingQuestion(command)) {
-      final siblingFact = _strictExtractSiblingFactFromTopic();
-
-      if (siblingFact != null && siblingFact.trim().isNotEmpty) {
-        return siblingFact;
-      }
-
-      return 'You have not told me how many brothers or sisters you have in this chat.';
-    }
-
-    final hasSelectedTopicMemory = _strictActiveTopicMessages().isNotEmpty;
-
-    if (!hasSelectedTopicMemory) {
-      return 'You have not provided that information in this chat.';
-    }
-
-    return 'I do not see that information in this chat.';
-  }
-
-  bool _respondWithStrictTopicMemoryGuard(String command) {
-    final answer = _strictTopicMemoryGuardAnswer(command);
-
-    if (answer == null) {
-      return false;
-    }
-
-    final item = GeneratedItem(
-      command: command,
-      title: 'Topic Memory',
-      content: answer,
-      language: _selectedLanguage,
-      allowPdf: false,
-    );
-
-    final message = ChatMessage(
-      userText: command,
-      aiText: answer,
-      language: _selectedLanguage,
-      allowPdf: false,
-      generatedItem: item,
-      createdAt: DateTime.now(),
-    );
-
-    setState(() {
-      _controller.clear();
-      _error = null;
-      _featuredAnswerDismissed = false;
-      _answerMinimized = false;
-
-      _results
-        ..clear()
-        ..add(item);
-
-      _addChatMessage(message);
-    });
-
-    _scrollChatThreadToBottomSoon();
-
-    return true;
-  }
-
   Future<void> _generate() async {
     if (_loading) return;
     // KORLIX_AI_CONSENT_GATE_BUILD131_V1_MAIN_GENERATE_BEGIN
@@ -7122,23 +6824,12 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       return;
     }
 
-    final command = korlixApplyProductionQualityDirective(
-      _controller.text.trim(),
-    );
+    final command = _controller.text.trim();
 
-    if (command.isNotEmpty &&
-        !_fixCreditReportMode &&
-        !_improvePictureMode &&
-        !_imaginePictureMode &&
-        !_createVideoMode &&
-        _activeUploadFiles.isEmpty &&
-        _respondWithStrictTopicMemoryGuard(command)) {
-      return;
-    }
-
-    if (_createVideoMode ||
+    final isMemoryRequest = RegExp(r'^(?:please\s+)?remember\s+', caseSensitive: false).hasMatch(command);
+    if (_createVideoMode || (!isMemoryRequest && (
         command.toLowerCase().contains('create a video') ||
-        command.toLowerCase().contains('cinematic video masterpiece')) {
+        command.toLowerCase().contains('cinematic video masterpiece')))) {
       await _startOpenAIVideoGeneration(command);
       return;
     }
@@ -7177,7 +6868,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         kind: 'text',
         endpoint: '/api/generate',
         payload: {'command': command, 'language': _selectedLanguage,
-          'history': selectedHistory, 'topicId': topicId},
+          'history': selectedHistory, 'topicId': topicId, 'mainChatMemory': true},
         prompt: command,
         language: _selectedLanguage,
         topicId: topicId,
@@ -7202,6 +6893,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         return;
       }
 
+      if (!mounted || !_chatMemory.available) return;
+      unawaited(_chatMemory.load());
       final content = (data['content'] ?? '').toString().trim();
 
       if (content.isEmpty) {
@@ -14297,6 +13990,14 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                   onStyleChanged: (value) => setState(() => _chatImageStyle = value)),
                 const SizedBox(height: 12),
                 singleInputBoard(),
+                if (!_imaginePictureMode) ...[
+                  const SizedBox(height: 10),
+                  ChatMemoryButton(client: _chatMemory, onPressed: _loading ? null : () async {
+                    await Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => ChatMemoryScreen(client: _chatMemory)));
+                    if (mounted) unawaited(_chatMemory.load());
+                  }),
+                ],
 
                 SizedBox(height: 12),
 
