@@ -38,6 +38,6 @@ test('owner authentication precedes preview parsing and repository access',async
   const body=JSON.stringify(input('Date,Memo,Amount\n2027-01-15,Service,123.45'));
   const req=(authorization)=>fetch(url,{method:'POST',headers:{'content-type':'application/json',authorization},body});
   const denied=await req('');assert.equal(denied.status,401);assert.equal(denied.headers.get('cache-control'),'no-store');assert.equal(calls,0);
-  const allowed=await req('owner');assert.equal(allowed.status,200);assert.equal((await allowed.json()).entries[0].status,'suggested');assert.equal(calls,1);
+  const allowed=await req('owner');assert.equal(allowed.status,200);assert.equal((await allowed.json()).entries[0].status,'suggested');assert.equal(calls,2);
  }finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
 });

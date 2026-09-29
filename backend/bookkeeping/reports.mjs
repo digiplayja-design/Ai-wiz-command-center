@@ -44,7 +44,7 @@ export function reportsCsv(d,kind){
  }else{
   rows.push(['Entry ID','Date','Source','Type','Description','Account code','Account name','Account type','Debit USD','Credit USD','Reverses entry','Recorded at','Current receipt references (JSON)']);
   for(const l of d.lines)rows.push([l.entry_id,l.entry_date,l.source,l.kind,l.purpose,l.account_code,l.account_name,l.account_kind,number(l.debit_cents),number(l.credit_cents),l.reversal_of,l.created_at,JSON.stringify(l.receipts)]);
-  rows.push([],['Note','Receipt references describe currently linked evidence, repeated on each cash-entry leg. Reversals reference original evidence. Original files remain private in the receipt inbox; files are not embedded. Journal attachments are not supported yet.']);
+  rows.push([],['Note','Receipt references describe currently linked evidence, repeated on each cash or journal leg. Reversals reference original evidence. Original files remain private in the receipt inbox; files are not embedded.']);
  }
  const cell=v=>{let value;if(v&&typeof v==='object'&&/^-?\d+\.\d{2}$/.test(v.numeric)){value=v.numeric;}else{value=String(v??'');if(/^\s*[=+\-@]/.test(value)||/^[\t\r\n]/.test(value))value="'"+value;}return '"'+value.replaceAll('"','""')+'"';};
  return {filename:`korlix-${kind.replaceAll('_','-')}-${d.business.id}-${d.period}.csv`,csv:'\uFEFF'+rows.map(r=>r.map(cell).join(',')).join('\r\n')+'\r\n',period:d.period,kind,generated_at:d.generated_at};

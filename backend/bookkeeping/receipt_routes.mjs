@@ -54,8 +54,14 @@ export function registerReceiptRoutes(app,{route,database,storageDatabase=databa
  }));
  app.post(base+'/:receipt/link',route(async(q,r,u)=>{
   if(q.body?.confirmed!==true)fail('Review and confirm receipt attachment.');
-  r.json(await call(u,'link',businessId(q),receiptId(q),{entry_id:id(q.body.entry_id),confirmed:true}));
+  r.json(await call(u,'link',businessId(q),receiptId(q),{entry_id:id(q.body.entry_id),confirmed:true,...(q.body.request_key?{request_key:id(q.body.request_key)}:{})}));
  }));
+ app.post(base+'/:receipt/journal-link',route(async(q,r,u)=>{
+  if(q.body?.confirmed!==true)fail('Review and confirm receipt attachment.');
+  r.json(await call(u,'link_journal',businessId(q),receiptId(q),{journal_id:id(q.body.journal_id),request_key:id(q.body.request_key),confirmed:true}));
+ }));
+ app.get('/api/bookkeeping/businesses/:id/ledger/journals/:journal/receipts',route(async(q,r,u)=>
+  r.json(await call(u,'journal_receipts',businessId(q),null,{journal_id:id(q.params.journal)}))));
  app.post(base+'/:receipt/unlink',route(async(q,r,u)=>{
   if(q.body?.confirmed!==true||typeof q.body.reason!=='string'||!q.body.reason.trim()||q.body.reason.length>500)fail('Enter a reason and confirm correcting the receipt link.');
   r.json(await call(u,'unlink',businessId(q),receiptId(q),{link_id:id(q.body.link_id),reason:q.body.reason.trim(),confirmed:true}));
@@ -65,11 +71,13 @@ export function registerReceiptRoutes(app,{route,database,storageDatabase=databa
   const payload=entry(q.body);r.status(201).json(await call(u,'post_entry',businessId(q),receiptId(q),{entry:payload,confirmed:true}));
  }));
  app.get('/api/bookkeeping/businesses/:id/entries/:entry/receipts',route(async(q,r,u)=>r.json(await call(u,'entry_receipts',businessId(q),null,{entry_id:id(q.params.entry)}))));
- app.get(base+'/:receipt/scan',route(async(q,r,u)=>r.json(await call(u,'scan_status',businessId(q),receiptId(q)))));
+ app.get(base+'/:receipt/scan',route(async(q,r,u)=>r.json(await call(u,'scan_status',businessId(q),receiptId(q),q.query.request_key===undefined?{}:{request_key:id(q.query.request_key)}))));
  app.post(base+'/:receipt/scan',route(async(q,r,u,user)=>{
   const b=businessId(q),rid=receiptId(q),key=id(q.body?.request_key);
   if(q.body?.confirmed!==true)fail('Confirm AI scanning.');
   available();const file=await call(u,'get',b,rid);if(file.receipt.state!=='ready')fail('Finish uploading the receipt first.',409);
+  const existing=await call(u,'scan_status',b,rid,{request_key:key});
+  if(existing.scan){r.json(existing);return;}
   const eligibility=await access(user);if(!eligibility.available||!scanReceipt||!chargeScan)fail(eligibility.reason||'AI scanning is not available.',422,'BOOKKEEPING_SCAN_UNAVAILABLE');
   if(pendingScans>=2||running.has(u))fail('A receipt scan is running. Refresh its status shortly.',409);
   pendingScans++;running.add(u);

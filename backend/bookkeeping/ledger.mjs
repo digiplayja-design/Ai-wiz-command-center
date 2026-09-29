@@ -17,8 +17,8 @@ export function journalPayload(v,journalId){
 export function ledgerCsv(d){
  const cell=v=>{let s=String(v??'');if(/^\s*[=+\-@]/.test(s)||/^[\t\r\n]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';};
  const dollars=n=>`${BigInt(n)/100n}.${(BigInt(n)%100n).toString().padStart(2,'0')}`;
- const rows=[['Business','Entry ID','Date','Source','Type','Description','Account code','Account name','Account type','Debit USD','Credit USD','Reverses entry','Recorded at']];
- for(const l of d.lines)rows.push([d.business.name,l.entry_id,l.entry_date,l.source,l.kind,l.purpose,l.account_code,l.account_name,l.account_kind,dollars(l.debit_cents),dollars(l.credit_cents),l.reversal_of,l.created_at]);
+ const rows=[['Business','Entry ID','Date','Source','Type','Description','Account code','Account name','Account type','Debit USD','Credit USD','Reverses entry','Recorded at','Current receipt references (JSON)']];
+ for(const l of d.lines)rows.push([d.business.name,l.entry_id,l.entry_date,l.source,l.kind,l.purpose,l.account_code,l.account_name,l.account_kind,dollars(l.debit_cents),dollars(l.credit_cents),l.reversal_of,l.created_at,JSON.stringify(l.receipts??[])]);
  return {filename:`korlix-ledger-${d.business.id}-${d.month}.csv`,count:d.lines.length,csv:'\uFEFF'+rows.map(r=>r.map(cell).join(',')).join('\r\n')+'\r\n'};
 }
 export function registerLedgerRoutes(app,{route,database}){

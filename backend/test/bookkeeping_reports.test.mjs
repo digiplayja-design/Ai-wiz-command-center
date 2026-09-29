@@ -25,6 +25,7 @@ test.before(async()=>{
  owner=randomUUID();await db.query('insert into auth.users values($1)',[owner]);b=(await core('create_business',{name:'Legacy',legal_structure:'llc',tax_treatment:'unsure',request_key:randomUUID()},null)).business;
  const p=cashPayload();legacy={owner,b,p,e:(await core('post',p)).entry};
  await db.exec(await readFile(new URL('../../supabase/migrations/20260925152053_bookkeeping_reports.sql',import.meta.url),'utf8'));
+ for(const f of ['20260925163933_bookkeeping_statement_imports.sql','20260925175309_bookkeeping_repeated_statement_rows.sql','20260929121715_bookkeeping_statement_review_rebuild.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+f,import.meta.url),'utf8'));
  const database={rpc:async(name,p)=>{try{const args=name==='korlix_bookkeeping_reports_v1'?[p.p_actor,p.p_business,p.p_data]:[p.p_actor,p.p_action,p.p_business,p.p_data];return{data:await call(name,args)};}catch(error){return{error};}}};
  const app=express();app.use(express.json());registerBookkeeping(app,{database,requireUser:async q=>[owner,other].includes(q.headers.authorization)?{id:q.headers.authorization}:null});
  server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));base='http://127.0.0.1:'+server.address().port;
