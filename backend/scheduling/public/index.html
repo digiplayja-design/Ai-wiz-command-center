@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="theme-color" content="#101d31" />
+    <title>Book a time · KORLIX Scheduling</title>
+    <link rel="stylesheet" href="/book/assets/booking.css" />
+    <script src="/book/assets/booking.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <a href="https://www.korlixdeveloper.com" class="brand"
+        ><img
+          src="https://www.korlixdeveloper.com/korlix-logo.png"
+          alt="KORLIX"
+        /><span>KORLIX<span class="brand-sub">SCHEDULING</span></span></a
+      ><span class="header-note">Make time for what matters.</span>
+    </header>
+    <main>
+      <div id="loading" class="loading" role="status">
+        Finding your meeting…
+      </div>
+      <div id="error" class="error" role="alert" hidden></div>
+      <section id="booking-layout" class="layout" hidden>
+        <aside>
+          <div class="eyebrow">LET’S CONNECT</div>
+          <div id="avatar" class="avatar" aria-hidden="true">K</div>
+          <p id="host" class="host"></p>
+          <h1 id="title"></h1>
+          <p id="description" class="description"></p>
+          <div class="details">
+            <p id="duration"></p>
+            <p id="location"></p>
+            <p id="capacity"></p>
+          </div>
+          <div class="policy">
+            <strong>Your time, clearly planned.</strong>
+            <p id="cancel-policy"></p>
+            <p>
+              Times are shown in your selected time zone. Availability is
+              provided by your host.
+            </p>
+          </div>
+          <div class="powered">Powered by KORLIX</div>
+        </aside>
+        <section class="booking-panel">
+          <div class="steps">
+            <span id="step1" class="current">01 · Choose a time</span
+            ><span id="step2">02 · Your details</span>
+          </div>
+          <section id="time-section">
+            <h2>Find your moment.</h2>
+            <p class="muted">Choose the time that works best for you.</p>
+            <label for="timezone">Your time zone</label
+            ><select id="timezone"></select>
+            <div class="week-nav">
+              <button id="previous" class="quiet" aria-label="Previous week">
+                ←</button
+              ><span id="week-label"></span
+              ><button id="next" class="quiet" aria-label="Next week">→</button>
+            </div>
+            <div id="dates" class="dates" aria-label="Available dates"></div>
+            <h3 id="day-label"></h3>
+            <div
+              id="slots"
+              class="slots"
+              role="group"
+              aria-label="Available appointment times"
+            ></div>
+            <p id="empty" class="muted" hidden>
+              No available times in this week. Try another week.
+            </p>
+          </section>
+          <section id="details-section" hidden>
+            <button id="back" class="text-button">← Choose another time</button>
+            <h2>Let’s make it happen.</h2>
+            <div id="selected-summary" class="selected-summary"></div>
+            <form id="details-form">
+              <fieldset id="form-fields">
+                <label for="guest-name">Your name</label
+                ><input
+                  id="guest-name"
+                  name="name"
+                  required
+                  maxlength="100"
+                  autocomplete="name"
+                /><label for="guest-email">Email address</label
+                ><input
+                  id="guest-email"
+                  name="email"
+                  type="email"
+                  required
+                  maxlength="254"
+                  autocomplete="email"
+                />
+                <div id="questions"></div>
+                <div class="trap" aria-hidden="true">
+                  <label for="website">Website</label
+                  ><input id="website" tabindex="-1" autocomplete="off" />
+                </div>
+                <label class="check"
+                  ><input type="checkbox" id="consent" required /><span
+                    >I confirm this appointment and agree to share these details
+                    with the host to arrange this meeting.</span
+                  ></label
+                >
+                <p id="email-policy" class="muted small">
+                  This booking does not sign you up for marketing. Save your
+                  confirmation and private management link; the host has not
+                  enabled booking emails.
+                </p>
+              </fieldset>
+              <button id="confirm" class="primary" type="submit">
+                Confirm booking →
+              </button>
+            </form>
+          </section>
+        </section>
+      </section>
+      <section id="receipt" class="receipt" hidden>
+        <span id="receipt-icon" class="success-icon" aria-hidden="true">✓</span>
+        <div class="eyebrow">KORLIX SCHEDULING</div>
+        <h1 id="receipt-title">You’re booked.</h1>
+        <p id="receipt-subtitle" class="muted"></p>
+        <div id="receipt-details" class="receipt-details"></div>
+        <p id="delivery-status" class="notice">
+          Booking email is not enabled. Add this appointment to your calendar
+          and keep your private booking link.
+        </p>
+        <div class="actions">
+          <button id="calendar" class="primary">Add to calendar</button
+          ><button id="copy" class="secondary">Copy private booking link</button
+          ><button id="reschedule" class="secondary">Reschedule</button
+          ><button id="cancel" class="text-button danger">
+            Cancel appointment
+          </button>
+        </div>
+        <p class="small muted">
+          Anyone with your private link can view and manage this appointment.
+          Keep it private.
+        </p>
+        <section id="reschedule-section" hidden>
+          <h2>Choose a new time</h2>
+          <p id="reschedule-note"></p>
+          <label for="reschedule-date">Week starting</label
+          ><input type="date" id="reschedule-date" /><button
+            id="reschedule-search"
+            class="secondary"
+          >
+            Find times
+          </button>
+          <div id="reschedule-slots" class="reschedule-slots"></div>
+        </section>
+        <p id="feedback" role="status"></p>
+      </section>
+    </main>
+    <footer>
+      <a href="https://www.korlixdeveloper.com">KORLIX</a
+      ><span>More than a meeting. A connection.</span>
+    </footer>
+  </body>
+</html>

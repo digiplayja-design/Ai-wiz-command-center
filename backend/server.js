@@ -15,6 +15,7 @@ import { generateSpec } from './app_studio/model.mjs';
 import { registerMusicStudio } from './music/routes.mjs';
 import { registerFunnels } from './funnels/routes.mjs'; // K139_FUNNEL_STUDIO
 import { registerPayroll } from './payroll/routes.mjs';
+import { registerScheduling } from './scheduling/routes.mjs';
 import { registerWorkforce } from './workforce/routes.mjs'; // K138_WORKFORCE
 import { registerContactsCrm } from './contacts_crm/routes.mjs'; // K137_ENTERPRISE_CONTACTS
 import { registerBookkeeping } from './bookkeeping/routes.mjs';
@@ -12710,6 +12711,7 @@ registerVirtualCloset(app, { database: supabaseAdmin, storageDatabase: bookkeepi
   style: data => suggestOutfit({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
 });
 registerPayroll(app, { database: supabaseAdmin, requireUser });
+registerScheduling(app, { database: supabaseAdmin, requireUser });
 registerBookkeeping(app, { database: supabaseAdmin, requireUser, receiptOptions: {
   storageDatabase: bookkeepingStorage,
   scanAccess: async (user) => {
