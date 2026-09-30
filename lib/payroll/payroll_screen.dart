@@ -19,7 +19,7 @@ class PayrollScreen extends StatefulWidget {
 class _PayrollScreenState extends State<PayrollScreen>
     with WidgetsBindingObserver {
   List<PayrollMap> _accounts = [], _businesses = [], _audit = [];
-  PayrollMap _provider = {}, _onboarding = {};
+  PayrollMap _provider = {}, _onboarding = {}, _offer = {};
   String? _selected, _error;
   bool _loading = true, _busy = false;
   Timer? _timer;
@@ -27,8 +27,13 @@ class _PayrollScreenState extends State<PayrollScreen>
   int _generation = 0;
   PayrollMap get _account =>
       _accounts.where((a) => a['id'] == _selected).firstOrNull ?? {};
+  PayrollMap get _addon => payrollMap(_account['addon']);
+  bool get _paid => _addon['active'] == true;
+  bool get _requested =>
+      payrollMap(_addon['activation_request'])['status'] == 'requested';
   bool get _connected => _account['status'] == 'connected';
   bool get _usable =>
+      _paid &&
       _connected &&
       _account['terms_accepted'] == true &&
       _provider['ready'] == true &&
@@ -71,6 +76,7 @@ class _PayrollScreenState extends State<PayrollScreen>
       _audit = [];
       _onboarding = {};
       _provider = {};
+      _offer = {};
       _selected = null;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -106,7 +112,9 @@ class _PayrollScreenState extends State<PayrollScreen>
         _accounts = accounts;
         _businesses = payrollItems(result['businesses']);
         _provider = payrollMap(result['provider']);
+        _offer = payrollMap(result['offer']);
         _selected = current;
+        if (!_paid) _onboarding = {};
         _audit = payrollItems(details['audit']);
       });
     } catch (e) {
@@ -128,6 +136,9 @@ class _PayrollScreenState extends State<PayrollScreen>
       widget.client.guard();
       await action();
     } catch (e) {
+      if (mounted && e is PayrollException && e.status == 402) {
+        await _load(quiet: true);
+      }
       if (mounted) setState(() => _error = '$e');
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -233,7 +244,188 @@ class _PayrollScreenState extends State<PayrollScreen>
     }
   }
 
+  Future<void> _requestActivation() async {
+    final account = _selected;
+    final employees = TextEditingController();
+    final result = await showDialog<int>(
+      context: context,
+      builder: (dialog) => StatefulBuilder(
+        builder: (context, update) {
+          final estimate = int.tryParse(employees.text.trim());
+          return AlertDialog(
+            title: const Text('Request payroll activation'),
+            content: SizedBox(
+              width: 440,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${_account['legal_name']}'),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Payroll is a separate paid add-on for this business. Pricing will include a monthly business fee and a per-employee fee. You will review the price before subscribing.',
+                    ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: employees,
+                      keyboardType: TextInputType.number,
+                      maxLength: 6,
+                      decoration: const InputDecoration(
+                        labelText: 'Estimated employees',
+                        helperText: 'Enter 0 if you have no employees yet.',
+                      ),
+                      onChanged: (_) => update(() {}),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Submitting this request does not start a subscription, charge your business, or activate payroll.',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialog),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed:
+                    estimate != null && estimate >= 0 && estimate <= 100000
+                    ? () => Navigator.pop(dialog, estimate)
+                    : null,
+                child: const Text('Submit request'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    Future<void>.delayed(const Duration(seconds: 1), employees.dispose);
+    if (result != null && mounted && account == _selected) {
+      await _run(() async {
+        await widget.client.post('workspaces/$account/activation-request', {
+          'confirmed': true,
+          'estimated_employees': result,
+        });
+        await _load(quiet: true);
+      });
+    }
+  }
+
+  Future<void> _withdrawActivation() async {
+    final account = _selected;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Withdraw activation request?'),
+        content: const Text(
+          'This removes your pending request. You can request activation again later.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Keep request'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Confirm withdrawal'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted && account == _selected) {
+      await _run(() async {
+        await widget.client.post(
+          'workspaces/$account/activation-request/withdraw',
+          {'confirmed': true},
+        );
+        await _load(quiet: true);
+      });
+    }
+  }
+
+  Widget _addonPanel() {
+    final request = payrollMap(_addon['activation_request']);
+    final status = _paid
+        ? 'Active for this business'
+        : _requested
+        ? 'Activation requested'
+        : switch (_addon['status']) {
+            'expired' => 'Paid access expired',
+            'past_due' => 'Payment needs attention',
+            'canceled' => 'Add-on canceled',
+            'suspended' => 'Add-on suspended',
+            'scheduled' => 'Activation scheduled',
+            _ => 'Activation required',
+          };
+    final through = DateTime.tryParse('${_addon['paid_through']}')?.toLocal();
+    return _panel(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 16,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                'Payroll paid add-on',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              Chip(label: Text(status)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Enterprise membership gives you access to this workspace. Payroll requires a separate paid add-on for each business.',
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Monthly business fee + per-employee fee',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${_offer['message'] ?? 'Pricing will be provided before you subscribe. Checkout is not available yet.'}',
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Your business separately funds employee wages and payroll taxes.',
+          ),
+          if (_paid && through != null) ...[
+            const SizedBox(height: 16),
+            Text(
+              'Paid access through ${through.year}-${through.month.toString().padLeft(2, '0')}-${through.day.toString().padLeft(2, '0')}.',
+            ),
+          ] else if (_requested) ...[
+            const SizedBox(height: 16),
+            Text(
+              'Request saved · ${request['estimated_employees']} estimated employees. No subscription has started and no charge has been made for this request.',
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: _busy || _loading ? null : _withdrawActivation,
+              child: const Text('Withdraw request'),
+            ),
+          ] else if (!_paid) ...[
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: _busy || _loading ? null : _requestActivation,
+              icon: const Icon(Icons.add_task),
+              label: const Text('Request activation'),
+            ),
+            const SizedBox(height: 8),
+            const Text('Request only. No charge or subscription.'),
+          ],
+        ],
+      ),
+    );
+  }
+
   Future<void> _connect() async {
+    if (!_paid) return;
     final account = _selected;
     final first = TextEditingController(), last = TextEditingController();
     bool confirmed = false;
@@ -521,6 +713,9 @@ class _PayrollScreenState extends State<PayrollScreen>
       return 'Secure session opened · ${action.split(':').last.replaceAll('_', ' ')}';
     }
     return switch (action) {
+      'payroll_addon_requested' => 'Payroll add-on activation requested',
+      'payroll_addon_request_withdrawn' =>
+        'Payroll activation request withdrawn',
       'workspace_created' => 'US payroll workspace created',
       'provider_connection_started' => 'Provider connection requested',
       'provider_connected' => 'Payroll provider connected',
@@ -597,6 +792,7 @@ class _PayrollScreenState extends State<PayrollScreen>
                               label: Text('ENTERPRISE'),
                             ),
                             const Chip(label: Text('UNITED STATES · USD')),
+                            const Chip(label: Text('PAID ADD-ON')),
                             if (_provider['environment'] == 'demo')
                               const Chip(
                                 label: Text('DEMO · NO REAL PAYMENTS'),
@@ -723,16 +919,18 @@ class _PayrollScreenState extends State<PayrollScreen>
                                 ),
                                 const SizedBox(height: 10),
                                 const Text(
-                                  'Add your business in Bookkeeping, then create its payroll workspace. Only the Enterprise business owner can access payroll.',
+                                  'Add your business in Bookkeeping, then prepare its payroll workspace. Payroll is a separate paid add-on for each Enterprise business. You will review pricing before subscribing.',
                                 ),
                                 const SizedBox(height: 24),
                                 const Text(
-                                  '1. Create your workspace     2. Complete company setup     3. Review and run payroll',
+                                  '1. Prepare your workspace     2. Activate your paid add-on     3. Set up and run payroll',
                                 ),
                               ],
                             ),
                           )
                         else ...[
+                          _addonPanel(),
+                          const SizedBox(height: 24),
                           _panel(
                             Wrap(
                               spacing: 35,
@@ -752,7 +950,9 @@ class _PayrollScreenState extends State<PayrollScreen>
                                 ),
                                 _label(
                                   'Access',
-                                  'Enterprise owner',
+                                  _paid
+                                      ? 'Enterprise + Payroll'
+                                      : 'Add-on required',
                                   Icons.shield_outlined,
                                 ),
                               ],
@@ -793,7 +993,9 @@ class _PayrollScreenState extends State<PayrollScreen>
                                   const SizedBox(height: 20),
                                   FilledButton.icon(
                                     onPressed:
-                                        !_busy && _provider['ready'] == true
+                                        !_busy &&
+                                            _paid &&
+                                            _provider['ready'] == true
                                         ? _connect
                                         : null,
                                     icon: const Icon(Icons.link),
@@ -819,7 +1021,9 @@ class _PayrollScreenState extends State<PayrollScreen>
                                   const SizedBox(height: 12),
                                   FilledButton(
                                     onPressed:
-                                        _busy || _provider['ready'] != true
+                                        _busy ||
+                                            !_paid ||
+                                            _provider['ready'] != true
                                         ? null
                                         : _terms,
                                     child: const Text(

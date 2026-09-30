@@ -134,6 +134,107 @@ void main() {
       );
     },
   );
+  test('paid add-on denial preserves Enterprise workspace access', () async {
+    final client = clientFor(
+      (_) async => response({
+        'error': 'An active Payroll paid add-on is required for this business.',
+      }, 402),
+    );
+    await expectLater(
+      client.post('workspaces/workspace-1/refresh', {}),
+      throwsA(isA<PayrollException>().having((e) => e.status, 'status', 402)),
+    );
+    expect(client.available, true);
+    client.dispose();
+  });
+  testWidgets(
+    'requesting activation saves an estimate without unlocking payroll, and can be withdrawn',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 1100);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final requests = <http.Request>[];
+      Map<String, dynamic> activation = {};
+      final client = clientFor((r) async {
+        if (r.method == 'POST') {
+          requests.add(r);
+          activation = r.url.path.endsWith('/withdraw')
+              ? {'status': 'withdrawn', 'estimated_employees': 8}
+              : {'status': 'requested', 'estimated_employees': 8};
+        }
+        final current = {
+          ...account,
+          'addon': {
+            'active': false,
+            'status': 'inactive',
+            'activation_request': activation,
+          },
+        };
+        return response(
+          r.url.path.endsWith('/workspaces')
+              ? {
+                  'accounts': [current],
+                  'businesses': [
+                    {'id': 'business-1', 'name': 'Atlas Design LLC'},
+                  ],
+                  'provider': {'ready': true, 'environment': 'production'},
+                }
+              : {'account': current, 'audit': []},
+        );
+      });
+      await tester.pumpWidget(MaterialApp(home: PayrollScreen(client: client)));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Connect payroll provider'),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tester.ensureVisible(find.text('Request activation'));
+      await tester.tap(find.text('Request activation'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Submit request'),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tester.enterText(find.byType(TextField), '8');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Submit request'));
+      await tester.pumpAndSettle();
+      expect(jsonDecode(requests.single.body), {
+        'confirmed': true,
+        'estimated_employees': 8,
+      });
+      expect(find.text('Activation requested'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Connect payroll provider'),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tester.ensureVisible(find.text('Withdraw request'));
+      await tester.tap(find.text('Withdraw request'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Confirm withdrawal'));
+      await tester.pumpAndSettle();
+      expect(requests.last.url.path, endsWith('/activation-request/withdraw'));
+      expect(jsonDecode(requests.last.body), {'confirmed': true});
+      expect(find.text('Activation requested'), findsNothing);
+      expect(find.text('Request activation'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
   testWidgets('non-Enterprise account sees only locked screen', (tester) async {
     final client = clientFor(
       (_) async => response({'error': 'Enterprise business required'}, 403),
