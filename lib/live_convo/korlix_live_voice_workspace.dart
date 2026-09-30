@@ -96,7 +96,7 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
             ],
           ),
         ),
-        if (widget.inventoryResults == null)
+        if (widget.inventoryResults == null && !widget.schedulingMode)
           Tooltip(
             message: widget.paused
                 ? 'Resume Live Convo to open Agent Studio'
@@ -516,7 +516,7 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
                   '${widget.selectedVoicePresentation} · ${widget.selectedAccentName}',
               action: widget.onOpenVoiceSelector,
             ),
-            if (widget.inventoryResults == null) ...[
+            if (widget.inventoryResults == null && !widget.schedulingMode) ...[
             _settingsTile(
               icon: _activeAgentIcon,
               title: 'Agent Studio',
@@ -755,6 +755,7 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
                           24,
                         ),
                         children: [
+                          if (widget.schedulingPanel != null) ...[widget.schedulingPanel!, const SizedBox(height: 16)],
                           if (widget.inventoryResults != null) ...[widget.inventoryResults!(_closeInventoryView), const SizedBox(height: 16)],
                           if (constraints.maxWidth >= 850)
                             Row(

@@ -38,6 +38,7 @@ import 'payroll/payroll_client.dart';
 import 'payroll/payroll_screen.dart';
 import 'scheduling/scheduling_client.dart';
 import 'scheduling/scheduling_screen.dart';
+import 'scheduling/scheduling_voice.dart';
 import 'virtual_closet/closet_client.dart';
 import 'virtual_closet/closet_screen.dart';
 import 'contract_radar/radar_client.dart';
@@ -5411,6 +5412,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     WidgetsBinding.instance.removeObserver(this);
     _chatMemory.dispose();
     _socialNotifications.dispose();
+    _schedulingVoice?.dispose();
+    _schedulingVoiceClient?.dispose();
     _imagineStudio?.dispose();
     _savedTopicsOverlayEntry?.remove();
     _savedTopicsOverlayEntry = null;
@@ -9599,7 +9602,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     final enterprise = _currentTier.trim().toLowerCase() == 'enterprise';
     await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
       SchedulingScreen(client: client, openFunnels: enterprise ? _openFunnelStudio : null,
-        openContacts: enterprise ? _openContactsCrm : null)));
+        openContacts: enterprise ? _openContactsCrm : null,
+        openVoice: () => _openLiveConvoAudioTest(schedulingMode: true))));
   }
 
   Future<void> _openPayroll() async {
@@ -13889,12 +13893,26 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   // KORLIX_LIVE_CONVO_PHASE2B_OPEN_BEGIN
-  Future<void> _openLiveConvoAudioTest() async {
+  bool _liveConvoOpening = false;
+  SchedulingClient? _schedulingVoiceClient;
+  SchedulingVoiceController? _schedulingVoice;
+
+  Future<void> _openLiveConvoAudioTest({bool schedulingMode = false}) async {
+    if (_liveConvoOpening) return;
+    _liveConvoOpening = true;
+    try {
+      await _openLiveConvoSession(schedulingMode: schedulingMode);
+    } finally {
+      _liveConvoOpening = false;
+    }
+  }
+
+  Future<void> _openLiveConvoSession({required bool schedulingMode}) async {
     // KORLIX_AI_CONSENT_GATE_BUILD131_V1_LIVE_CONVO_BEGIN
     final korlixThirdPartyAiConsentGranted =
         await ensureKorlixThirdPartyAiConsent(
           context: context,
-          featureName: 'LIVE CONVO',
+          featureName: schedulingMode ? 'KORLIX 2MEETU and K-Nova' : 'LIVE CONVO',
           providers: const <KorlixThirdPartyAiProvider>{
             KorlixThirdPartyAiProvider.openAi,
           },
@@ -13924,22 +13942,40 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       return;
     }
 
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (context) => KorlixLiveConvoTestScreen(
-          sessionChanges: kKorlixAuthRevision,
-          backendBaseUrl: kKorlixBackendBaseUrl,
-          headersBuilder: _authHeaders,
-          characterId: normalizeKorlixCharacterId(
-            kKorlixSelectedCharacterNotifier.value,
+    // Retain an unresolved approved-write receipt across voice routes for the
+    // same account. Client account changes erase it; home disposal releases it.
+    if (_schedulingVoice?.available != true) {
+      _schedulingVoice?.dispose();
+      _schedulingVoiceClient?.dispose();
+      _schedulingVoiceClient = SchedulingClient(
+        baseUrl: kKorlixBackendBaseUrl,
+        headersBuilder: _authHeaders,
+        sessionChanges: kKorlixAuthRevision,
+      );
+      _schedulingVoice = SchedulingVoiceController(_schedulingVoiceClient!);
+    }
+    final schedulingVoice = _schedulingVoice!;
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (context) => KorlixLiveConvoTestScreen(
+            schedulingVoice: schedulingVoice,
+            schedulingMode: schedulingMode,
+            sessionChanges: kKorlixAuthRevision,
+            backendBaseUrl: kKorlixBackendBaseUrl,
+            headersBuilder: _authHeaders,
+            characterId: normalizeKorlixCharacterId(
+              kKorlixSelectedCharacterNotifier.value,
+            ),
+            language: _t.label,
+            meetingCopilotEnterpriseEnabled:
+                korlixMeetingCopilotEnterpriseEnabled(_currentTier),
           ),
-          language: _t.label,
-
-          meetingCopilotEnterpriseEnabled:
-              korlixMeetingCopilotEnterpriseEnabled(_currentTier),
         ),
-      ),
-    );
+      );
+    } finally {
+      schedulingVoice.clearPending();
+    }
   }
   // KORLIX_LIVE_CONVO_PHASE2B_OPEN_END
 

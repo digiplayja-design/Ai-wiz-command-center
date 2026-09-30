@@ -39,6 +39,8 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
     required this.muted,
     this.microphoneActive,
     this.inventoryResults,
+    this.schedulingPanel,
+    this.schedulingMode = false,
     this.paused = false,
     required this.error,
     required this.userTranscript,
@@ -91,6 +93,8 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
   });
 
   final Widget Function(Future<bool> Function())? inventoryResults;
+  final Widget? schedulingPanel;
+  final bool schedulingMode;
   final String characterId;
   final String language;
   final String status;

@@ -14,10 +14,12 @@ class SchedulingScreen extends StatefulWidget {
     required this.client,
     this.openFunnels,
     this.openContacts,
+    this.openVoice,
     this.disposeClient = true,
   });
   final SchedulingClient client;
   final Future<void> Function()? openFunnels, openContacts;
+  final Future<void> Function()? openVoice;
   final bool disposeClient;
   @override
   State<SchedulingScreen> createState() => _SchedulingScreenState();
@@ -127,6 +129,15 @@ class _SchedulingScreenState extends State<SchedulingScreen>
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _openVoice() async {
+    final open = widget.openVoice;
+    if (open == null) return;
+    await _run(() async {
+      await open();
+      if (mounted && widget.client.available) await _load(quiet: true);
+    });
   }
 
   void _notice(String value) {
@@ -1348,6 +1359,12 @@ class _SchedulingScreenState extends State<SchedulingScreen>
                                   icon: const Icon(Icons.schedule),
                                   label: const Text('My availability'),
                                 ),
+                                if (widget.openVoice != null)
+                                  OutlinedButton.icon(
+                                    onPressed: _busy ? null : _openVoice,
+                                    icon: const Icon(Icons.mic_none),
+                                    label: const Text('Talk to K-Nova'),
+                                  ),
                               ],
                             ),
                           ],
