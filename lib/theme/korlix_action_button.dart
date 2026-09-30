@@ -512,6 +512,7 @@ IconData korlixToolIcon(String label) => switch (label.toLowerCase()) {
   'music studio' => Icons.music_note_rounded,
   'bookkeeping 2027' => Icons.account_balance_wallet_outlined,
   'workforce' => Icons.groups_outlined,
+  'payroll' => Icons.payments_outlined,
   'contacts crm' => Icons.contacts_outlined,
   'funnel studio' => Icons.filter_alt_outlined,
   'voice-scribe' || 'voice recorder' => Icons.graphic_eq_rounded,

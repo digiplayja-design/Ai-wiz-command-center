@@ -34,6 +34,8 @@ export 'theme/korlix_theme.dart';
 import 'chat/chat_request.dart';
 import 'bookkeeping/bookkeeping_client.dart';
 import 'bookkeeping/bookkeeping_screen.dart';
+import 'payroll/payroll_client.dart';
+import 'payroll/payroll_screen.dart';
 import 'virtual_closet/closet_client.dart';
 import 'virtual_closet/closet_screen.dart';
 import 'contract_radar/radar_client.dart';
@@ -5128,6 +5130,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     'Virtual Closet',
     'Bookkeeping 2027',
     'Funnel Studio',
+    'Payroll',
     'Contacts CRM',
     'Workforce',
     'Voice-scribe',
@@ -9587,6 +9590,14 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         headersBuilder: _authHeaders))));
   }
 
+  Future<void> _openPayroll() async {
+    if (_currentTier.trim().toLowerCase() != 'enterprise') return;
+    final client = PayrollClient(baseUrl: kKorlixBackendBaseUrl,
+      headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision);
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
+      PayrollScreen(client: client, openBookkeeping: _openBookkeeping, openWorkforce: _openWorkforce)));
+  }
+
   Future<void> _openWorkforce() async {
     await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
       WorkforceScreen(client: WorkforceClient(backendBaseUrl: kKorlixBackendBaseUrl,
@@ -9624,6 +9635,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       unawaited(_openFunnelStudio());
       return;
     }
+
+    if (tool == 'Payroll') { unawaited(_openPayroll()); return; }
 
     if (tool == 'Workforce') {
       unawaited(_openWorkforce());
@@ -11712,6 +11725,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       if (tool == 'Contract Radar') return 'Find source-linked contracts, save opportunities and prepare bids with KORLIX';
       if (tool == 'Bookkeeping 2027') return 'Early access: business records, income, expenses and CSV export';
       if (tool == 'Funnel Studio') return 'Enterprise pages, lead capture and campaign links';
+      if (tool == 'Payroll') return 'Enterprise US payroll, employee onboarding and payroll tax workflows';
       if (tool == 'Workforce') return 'Enterprise attendance, work updates and employee access';
       if (tool == 'Contacts CRM') return 'Enterprise contacts, imports and KORLIX connections';
       if (tool == 'Voice-scribe') {
@@ -11848,7 +11862,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
           ),
           const SizedBox(height: 12),
           KorlixActionGrid(
-            children: _utilityTools.where((tool) => !['Contacts CRM', 'Funnel Studio'].contains(tool) || _currentTier.trim().toLowerCase() == 'enterprise').map((tool) {
+            children: _utilityTools.where((tool) => !['Contacts CRM', 'Funnel Studio', 'Payroll'].contains(tool) || _currentTier.trim().toLowerCase() == 'enterprise').map((tool) {
               final selected = selectedTool == tool;
               final status = statusFor(tool);
               final statusColor = statusColorFor(tool);
@@ -14175,7 +14189,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                   children: [
                     for (final tool in ['Logo Studio', 'Inventory Studio', 'Bookkeeping 2027', 'FieldProof', 'AI Visibility', 'Contract Radar', 'Workforce']) toolTile(tool),
                     if (_currentTier.trim().toLowerCase() == 'enterprise') ...[
-                      toolTile('Contacts CRM'), toolTile('Funnel Studio'),
+                      toolTile('Contacts CRM'), toolTile('Funnel Studio'), toolTile('Payroll'),
                     ],
                     for (final action in quickActions.where(businessAction)) _buildSafeUiQuickActionChip(action, tile: true),
                   ],
