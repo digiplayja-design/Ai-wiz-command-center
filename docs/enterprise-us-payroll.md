@@ -2,9 +2,19 @@
 
 KORLIX Payroll is a US-only, USD workspace available to verified, active Enterprise business owners. It uses Gusto Embedded Payroll hosted flows for company/employee onboarding, regular and off-cycle payroll, contractor payments, schedules, benefits, history, reports, and year-end company tax document review. The owner reviews and submits payroll inside Gusto. KORLIX does not calculate taxes, initiate payroll autonomously, or claim a payment/filing is complete based on opening a session.
 
+## Paid add-on model
+
+Payroll is a separate paid add-on **for each business**, in addition to active Enterprise membership. The intended customer price is a monthly business fee plus a per-employee fee in USD. Customers pay KORLIX for the add-on; KORLIX covers the agreed Gusto Embedded partner fee, subject to the eventual commercial agreement. The employer separately funds wages and payroll taxes. Gusto retail subscription prices are not the Embedded partner quote.
+
+No provider quote, customer dollar amount, checkout, recurring billing, payment collection, or automatic activation is enabled in this release. The offer returns `pricing_status: pending`, null amounts, and `checkout_available: false`. Owners can submit an employee estimate and request activation, or withdraw that request. Requests are saved once per business, create an audit event, send no external messages, and **never grant access, subscribe, or charge**. Repeated submissions are idempotent. No existing workspace receives a complimentary entitlement.
+
+Before accepting a paid subscription, obtain the Gusto commercial quote/agreement, approve customer prices and billing terms, and implement a verified billing integration with checkout, authenticated and idempotent payment events, employee metering, reconciliation, cancellation, and refunds as appropriate. The current request screen must not be presented as functioning checkout.
+
+`korlix_payroll_addons` is server-only entitlement storage, separate from tier and activation requests. Access requires `state=active`, verified billing evidence, a started access interval, and an unexpired `paid_through`. Active intervals require a nonempty billing reference and finite dates, capped at 62 days from verification; an approved monthly billing process must renew them. No customer API can grant or edit these values. Do not activate production accounts from request JSON or customer-editable profile metadata. Future activation must follow confirmed payment and approved terms through a trusted server workflow. Test entitlements exist only in isolated automated fixtures.
+
 ## Deployment and activation
 
-Apply `supabase/migrations/20260930132942_enterprise_us_payroll.sql`, deploy the backend, then deploy the frontend. The feature is useful for preparing a US business workspace before the provider is configured. No secrets or provider account creation are required for deployment.
+Apply `supabase/migrations/20260930132942_enterprise_us_payroll.sql` and then `supabase/migrations/20260930141241_payroll_paid_addon.sql`, deploy the backend, then deploy the frontend. The feature is useful for preparing a US business workspace and requesting paid add-on activation before the provider is configured. No secrets or provider account creation are required for deployment.
 
 Gusto production access requires its commercial, security, and implementation approval. Complete partner onboarding at https://docs.gusto.com/embedded-payroll/docs/introduction and obtain app credentials from https://dev.gusto.com. Demo credentials cannot process real payroll. Run a complete provider demo acceptance exercise before enabling production; automated tests use fixtures, not Gusto's live service.
 
@@ -27,17 +37,19 @@ API version is pinned to `2026-06-15`. Request partner scopes for managed compan
 
 1. From KORLIX business tools, open **Payroll**. Non-Enterprise customers cannot see its tool tile and are rejected by every API/database command.
 2. Choose an owned Bookkeeping business, enter its legal name, and explicitly confirm US business authority.
-3. Once the provider is activated, enter the payroll administrator's first/last name and authorize sharing those names, the business name, and the verified account email with Gusto. This creates one new partner-managed company. Existing Gusto customers require an assisted migration; do not create a duplicate company.
-4. Review and explicitly accept the linked Gusto Embedded terms. The backend records acceptance with Gusto; it never accepts by default.
-5. Complete provider onboarding: addresses, EIN, state/federal setup, bank verification, employees, pay schedule, signed forms, and prior payroll when applicable. These details remain in the provider's secure UI.
-6. Refresh setup status. Open the desired payroll action in a new secure window. Complete onboarding before payroll-related flows can open. Gusto additionally controls underwriting, funding, state coverage, deadlines, calculations, and final submission.
-7. Return to KORLIX. Payroll history/reports and tax document flows show provider records. Workspace activity records access/setup events only, never claims payroll was submitted or taxes filed.
+3. Request activation for this business with an estimated employee count. Review approved pricing before subscribing when billing becomes available. The request alone leaves all provider actions locked.
+4. Once this business has a verified paid add-on and the provider is activated, enter the payroll administrator's first/last name and authorize sharing those names, the business name, and the verified account email with Gusto. This creates one new partner-managed company. Existing Gusto customers require an assisted migration; do not create a duplicate company.
+5. Review and explicitly accept the linked Gusto Embedded terms. The backend records acceptance with Gusto; it never accepts by default.
+6. Complete provider onboarding: addresses, EIN, state/federal setup, bank verification, employees, pay schedule, signed forms, and prior payroll when applicable. These details remain in the provider's secure UI.
+7. Refresh setup status. Open the desired payroll action in a new secure window. Complete onboarding before payroll-related flows can open. Gusto additionally controls underwriting, funding, state coverage, deadlines, calculations, and final submission.
+8. Return to KORLIX. Payroll history/reports and tax document flows show provider records. Workspace activity records access/setup events only, never claims payroll was submitted or taxes filed.
 
 Workforce and Bookkeeping navigation is included. Approved time, employee identity mapping, payroll journal posting, and reconciliation are **manual** in this release. The UI states this explicitly. There is no automated payroll scheduler or AI payment execution.
 
 ## Access and failure handling
 
 - Supabase's authoritative `user_profiles.tier` and `is_disabled` plus business ownership are checked server-side and again inside the service-role-only database RPC. Client tier labels do not grant access.
+- A valid business-specific paid add-on is checked before provider creation, lease acquisition, token refresh, each provider operation, and before returning a session URL. Expired, future, past-due, canceled, and suspended access is blocked with HTTP 402. Workspace metadata and activation requests remain available to the Enterprise owner. Successful credential writes and lease cleanup can complete if access expires during an upstream operation so credentials are not lost. Existing provider sessions retain the expiry limitation below, including after add-on cancellation.
 - Browser roles have no table, sequence, or function access to payroll storage. RLS is enabled with no browser policies. Provider tokens, company UUIDs, admin emails, and lease IDs are excluded from public responses.
 - Account/session changes and 401/403 responses clear the Flutter workspace and close its dialogs. The open screen rechecks access every 45 seconds. Already-issued provider sessions are bearer capabilities: Gusto expires them after one hour of inactivity or 24 hours total. KORLIX cannot instantly revoke an already-issued Gusto flow after a tier downgrade. New sessions and KORLIX data are blocked immediately by the backend. The UI only allows a generated link to be launched for one minute and never persists it.
 - Each business has one payroll workspace. Connection claims serialize provider company creation. An ambiguous provider response or crash leaves `connecting`/`connection_review`; it is never automatically retried into a duplicate company.
@@ -55,6 +67,6 @@ Automated verification:
 - `flutter test test/payroll_test.dart test/social_notifications_test.dart`
 - `dart analyze lib/payroll`
 
-These cover tier/ownership isolation, anonymous/browser-role denial, production configuration gates, encrypted credentials, duplicate company prevention, ambiguous failures, refresh leases, explicit consent, onboarding gating, URL validation, redacted errors, account-switch clearing, US-only workspace creation, and mobile/desktop layout.
+These cover tier/ownership and per-business paid access isolation, activation request validation/idempotency/withdrawal, expired/canceled/future entitlements, cancellation during provider work, billing proof constraints, anonymous/browser-role denial, production configuration gates, encrypted credentials, duplicate company prevention, ambiguous failures, refresh leases, explicit consent, onboarding gating, URL validation, redacted errors, account-switch clearing, US-only workspace creation, and mobile/desktop layout.
 
 Official references: https://docs.gusto.com/embedded-payroll/docs/flow-types, https://docs.gusto.com/embedded-payroll/docs/authentication-and-authorization, https://docs.gusto.com/embedded-payroll/docs/flows-quickstart, https://docs.gusto.com/embedded-payroll/reference/post-v1-partner-managed-companies.

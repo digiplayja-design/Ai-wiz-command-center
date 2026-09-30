@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { isIP } from 'node:net';
 import { PayrollError, fail, id, text, FLOW_TYPES, configuration, publicConfiguration, seal, unseal, tokenPair, safeFlowUrl, onboardingSummary } from './core.mjs';
 import { createGustoProvider } from './provider.mjs';
+import { payrollOffer, activationPayload } from './addon.mjs';
 
 export function registerPayroll(app, { database, requireUser, environment = process.env, provider, now = Date.now } = {}) {
   const config = configuration(environment), gusto = provider || createGustoProvider(config);
@@ -9,10 +10,10 @@ export function registerPayroll(app, { database, requireUser, environment = proc
     if (!database) fail('Payroll storage is unavailable.', 503);
     const result = await database.rpc('korlix_payroll_v1', { p_actor: actor, p_action: action, p_account: account, p_data: data });
     if (result.error) {
-      const e = result.error, statuses = { '42501': 403, P0002: 404, '40001': 409, '54000': 429, P0001: 400, '23514': 400, '23502': 400, '22P02': 400 };
+      const e = result.error, statuses = { P0402: 402, '42501': 403, P0002: 404, '40001': 409, '54000': 429, P0001: 400, '23514': 400, '23502': 400, '22P02': 400 };
       fail(e.code === '42501' ? 'Payroll is available only to active Enterprise business owners.' :
-        ['P0001','P0002','40001','54000'].includes(e.code) ? e.message : 'Payroll storage could not complete this request.',
-        statuses[e.code] || 503, e.code === '42501' ? 'PAYROLL_ENTERPRISE_REQUIRED' : 'PAYROLL_STORAGE_ERROR');
+        ['P0402','P0001','P0002','40001','54000'].includes(e.code) ? e.message : 'Payroll storage could not complete this request.',
+        statuses[e.code] || 503, e.code === 'P0402' ? 'PAYROLL_ADDON_REQUIRED' : e.code === '42501' ? 'PAYROLL_ENTERPRISE_REQUIRED' : 'PAYROLL_STORAGE_ERROR');
     }
     if (!result.data) fail('Payroll storage is unavailable.', 503);
     return result.data;
@@ -37,6 +38,7 @@ export function registerPayroll(app, { database, requireUser, environment = proc
   const context = (account, company) => `korlix-payroll:${account}:${config.mode}:${company}`;
   const expiresAt = seconds => new Date(now() + (seconds - 60) * 1000).toISOString();
   async function session(user, account, work, { termsRequired = true } = {}) {
+    await call(user.id, 'check_addon', account);
     ready();
     const lease = randomUUID();
     const record = await call(user.id, 'lease', account, { lease_id: lease, environment: config.mode });
@@ -55,30 +57,42 @@ export function registerPayroll(app, { database, requireUser, environment = proc
       }
       if (!(Date.parse(record.expires_at) > now())) await refresh();
       const api = async action => {
+        await call(user.id, 'check_addon', account);
         try { return await action(company, tokens.access_token); }
         catch (e) {
           if (e.providerStatus !== 401) throw e;
-          await refresh(); return action(company, tokens.access_token);
+          await refresh();
+          await call(user.id, 'check_addon', account);
+          return action(company, tokens.access_token);
         }
       };
       const result = await work({ api, lease, record });
       // A downgrade or account transfer during an upstream request must not disclose its result.
-      await call(user.id, 'get', account);
+      await call(user.id, 'check_addon', account);
       return result;
     } finally {
       try { await call(user.id, 'release', account, { lease_id: lease }); } catch { /* bounded lease expires */ }
     }
   }
   const base = '/api/payroll';
-  app.get(base + '/workspaces', wrap(async (_q, r, u) => r.json({ ...await call(u.id, 'list'), provider: publicConfiguration(config) })));
+  app.get(base + '/workspaces', wrap(async (_q, r, u) => r.json({ ...await call(u.id, 'list'), provider: publicConfiguration(config), offer: payrollOffer() })));
   app.post(base + '/workspaces', wrap(async (q, r, u) => {
     if (q.body.confirmed !== true || q.body.country !== 'US') fail('Confirm this is a US business you are authorized to manage.');
     r.status(201).json(await call(u.id, 'create', null, { business_id: id(q.body.business_id),
       legal_name: text(q.body.legal_name, 160), country: 'US', confirmed: true }));
   }));
-  app.get(base + '/workspaces/:id', wrap(async (q, r, u) => r.json({ ...await call(u.id, 'get', id(q.params.id)), provider: publicConfiguration(config) })));
+  app.get(base + '/workspaces/:id', wrap(async (q, r, u) => r.json({ ...await call(u.id, 'get', id(q.params.id)), provider: publicConfiguration(config), offer: payrollOffer() })));
+  app.post(base + '/workspaces/:id/activation-request', wrap(async (q, r, u) => {
+    r.json(await call(u.id, 'request_activation', id(q.params.id), activationPayload(q.body)));
+  }));
+  app.post(base + '/workspaces/:id/activation-request/withdraw', wrap(async (q, r, u) => {
+    if (q.body.confirmed !== true) fail('Confirm you want to withdraw this activation request.');
+    r.json(await call(u.id, 'withdraw_activation', id(q.params.id), { confirmed: true }));
+  }));
   app.post(base + '/workspaces/:id/connect', wrap(async (q, r, u) => {
-    ready(); const account = id(q.params.id);
+    const account = id(q.params.id);
+    await call(u.id, 'check_addon', account);
+    ready();
     if (q.body.confirmed !== true || q.body.new_company !== true) fail('Confirm you want to create a new payroll company. Existing Gusto companies need assisted migration.');
     const firstName = text(q.body.first_name), lastName = text(q.body.last_name), connection = randomUUID();
     const record = await call(u.id, 'begin_connection', account, { environment: config.mode, email: u.email, connection_id: connection });
