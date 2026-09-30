@@ -273,8 +273,16 @@ void main() {
       await show(t, c, consent: () async => false);
       expect(c.starts, isEmpty);
       expect(c.monitoring, isEmpty);
+      expect(
+        find.text('3 credits + 1 generation per audit\nUp to 5 public pages'),
+        findsOneWidget,
+      );
       await tap(t, find.byKey(const Key('seo-monitoring')));
       expect(find.text('Enable weekly monitoring?'), findsOneWidget);
+      expect(
+        find.textContaining('Each audit uses 3 credits and 1 generation'),
+        findsOneWidget,
+      );
       await tap(t, find.text('Cancel'));
       expect(c.monitoring, isEmpty);
       await tap(t, find.byKey(const Key('seo-monitoring')));

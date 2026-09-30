@@ -389,7 +389,7 @@ class _SeoAgentScreenState extends State<SeoAgentScreen> {
       if (enabled) {
         if (!await _confirm(
               'Enable weekly monitoring?',
-              'KORLIX will automatically audit up to 5 public website pages each week and prepare findings and drafts. Your business details and sampled public page text are sent to OpenAI to prepare the report. Each audit costs $_credits credits while monitoring is enabled. You can pause it here. Drafts are never published automatically.',
+              'KORLIX will automatically audit up to 5 public website pages each week and prepare findings and drafts. Your business details and sampled public page text are sent to OpenAI to prepare the report. Each audit uses $_credits credits and 1 generation while monitoring is enabled. You can pause it here. Drafts are never published automatically.',
               'Enable weekly',
             ) ||
             !_alive()) {
@@ -647,15 +647,11 @@ class _SeoAgentScreenState extends State<SeoAgentScreen> {
                 ),
               ),
               icon: const Icon(Icons.travel_explore),
-              label: Text(
-                _active != null
-                    ? 'Audit in progress'
-                    : 'Audit now · $_credits credits',
-              ),
+              label: Text(_active != null ? 'Audit in progress' : 'Audit now'),
             ),
             Text(
-              'Up to 5 public pages per audit',
-              style: const TextStyle(color: Color(0xFFB5D0DD)),
+              '$_credits credits + 1 generation per audit\nUp to 5 public pages',
+              style: const TextStyle(color: Color(0xFFB5D0DD), height: 1.5),
             ),
           ],
         ),
@@ -702,7 +698,7 @@ class _SeoAgentScreenState extends State<SeoAgentScreen> {
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(
-              '${_active!['charged']} credits reserved',
+              '${_active!['charged']} credits + 1 generation reserved',
               style: const TextStyle(color: _muted),
             ),
           ),
@@ -780,7 +776,7 @@ class _SeoAgentScreenState extends State<SeoAgentScreen> {
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
                 subtitle: Text(
-                  '$_credits credits per automatic audit while enabled. Pause anytime.',
+                  '$_credits credits + 1 generation per automatic audit while enabled. Pause anytime.',
                 ),
               ),
               const Divider(height: 28),
@@ -1039,7 +1035,7 @@ class _SeoAgentScreenState extends State<SeoAgentScreen> {
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(
-                        '${run['charged']} credits ${_running(run) ? 'reserved' : 'used'}',
+                        '${run['charged']} credits + 1 generation ${_running(run) ? 'reserved' : 'used'}',
                         style: const TextStyle(color: _muted),
                       ),
                     ),
