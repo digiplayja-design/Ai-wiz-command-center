@@ -155,7 +155,7 @@ function setEvent(e) {
   $("cancel-policy").textContent = e.cancel_notice_minutes
     ? `Online cancellations and rescheduling close ${e.cancel_notice_minutes} minutes before the appointment.`
     : "You can cancel or reschedule online before the appointment starts.";
-  document.title = e.title + " · KORLIX Scheduling";
+  document.title = e.title + " · KORLIX 2MEETU";
 }
 function timezoneOptions() {
   let zones;

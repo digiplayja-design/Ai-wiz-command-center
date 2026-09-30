@@ -237,7 +237,7 @@ export function schedulingAI({
     base + "/ai/propose",
     route(async (q, r, u) => {
       if (!generate)
-        fail("KORLIX scheduling AI needs administrator setup.", 503);
+        fail("KORLIX 2MEETU AI needs administrator setup.", 503);
       const prompt = text(q.body.prompt, 3000),
         request_id = uuid(q.body.request_id),
         id = randomUUID();

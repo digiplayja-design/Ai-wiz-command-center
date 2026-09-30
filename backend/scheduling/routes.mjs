@@ -61,7 +61,7 @@ export function registerScheduling(
     conflict_scope: "KORLIX bookings and manual time blocks",
   };
   async function call(name, args) {
-    if (!database) fail("Scheduling is temporarily unavailable.", 503);
+    if (!database) fail("KORLIX 2MEETU is temporarily unavailable.", 503);
     const r = await database.rpc(name, args);
     if (r.error) {
       const status = {
@@ -84,7 +84,7 @@ export function registerScheduling(
             ? "This request is already being handled. Refresh before retrying."
             : status === 400
               ? "Review the scheduling fields."
-              : "Scheduling could not confirm this request. Refresh before retrying.",
+              : "KORLIX 2MEETU could not confirm this request. Refresh before retrying.",
         status || 503,
       );
     }
@@ -117,7 +117,7 @@ export function registerScheduling(
       if (buckets.size > 5000)
         for (const [k, v] of buckets) if (v.until < t) buckets.delete(k);
       if (buckets.size > 6000)
-        fail("Scheduling is busy. Try again shortly.", 429);
+        fail("KORLIX 2MEETU is busy. Try again shortly.", 429);
       buckets.set(key, { count: 1, until: t + 60000 });
     } else if (++bucket.count > limit)
       fail("Too many requests. Try again shortly.", 429);
@@ -141,7 +141,7 @@ export function registerScheduling(
           } catch {}
           if (!user?.id || user.is_anonymous || !user.email_confirmed_at)
             fail(
-              "Sign in with a verified KORLIX account to use Scheduling.",
+              "Sign in with a verified KORLIX account to use KORLIX 2MEETU.",
               401,
             );
           rate("owner:" + user.id, 180);
@@ -174,7 +174,7 @@ export function registerScheduling(
           error:
             e instanceof SchedulingError || e instanceof ProviderError
               ? e.message
-              : "Scheduling is temporarily unavailable. Refresh before retrying.",
+              : "KORLIX 2MEETU is temporarily unavailable. Refresh before retrying.",
         });
       }
     };

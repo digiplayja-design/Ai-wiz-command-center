@@ -69,7 +69,7 @@ export function schedulingNotifications({
     return {
       from: environment.KORLIX_AGENT_EMAIL_FROM,
       to: [job.payload.to],
-      subject: ("KORLIX · " + label + ": " + s.title)
+      subject: ("KORLIX 2MEETU · " + label + ": " + s.title)
         .replace(/[\r\n]/g, " ")
         .slice(0, 200),
       text: [
@@ -81,7 +81,7 @@ export function schedulingNotifications({
         job.kind === "cancellation" ? "" : s.location_detail || "",
         guest
           ? "Manage this appointment (keep this private):"
-          : "Open Scheduling in KORLIX:",
+          : "Open KORLIX 2MEETU:",
         link,
         "",
         "This is an appointment update, not a marketing message. Calendar files are available from your booking page.",

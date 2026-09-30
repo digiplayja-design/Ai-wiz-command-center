@@ -24,7 +24,7 @@ import {
 
 const binding = (c) => `${c.owner_id}:${c.provider}:${c.remote_id}`;
 const html =
-  '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KORLIX connection</title><body><main><h1>Account verified</h1><p>Return to KORLIX Scheduling → Connections. Refresh, review the account, then confirm the connection.</p><p>You can close this tab.</p></main></body></html>';
+  '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KORLIX 2MEETU connection</title><body><main><h1>Account verified</h1><p>Return to KORLIX 2MEETU → Connections. Refresh, review the account, then confirm the connection.</p><p>You can close this tab.</p></main></body></html>';
 export function schedulingConnected({
   app,
   base,

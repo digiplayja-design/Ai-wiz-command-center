@@ -323,7 +323,7 @@ export function calendarFile(b, now = new Date()) {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//KORLIX//Scheduling//EN",
+    "PRODID:-//KORLIX//2MEETU//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",

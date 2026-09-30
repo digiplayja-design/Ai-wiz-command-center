@@ -1,6 +1,6 @@
-# KORLIX Scheduling — connected release
+# KORLIX 2MEETU — connected release
 
-Verified, active KORLIX accounts can open **Scheduling**, save availability, create a draft event type, and explicitly publish its public booking link. Enterprise users can also open their existing Funnel Studio and Contacts CRM from the dashboard. Sharing a link into those products is manual; this release does not automatically create CRM contacts or trigger marketing campaigns.
+Verified, active KORLIX accounts can open **KORLIX 2MEETU**, save availability, create a draft event type, and explicitly publish its public booking link. Enterprise users can also open their existing Funnel Studio and Contacts CRM from the dashboard. Sharing a link into those products is manual; this release does not automatically create CRM contacts or trigger marketing campaigns.
 
 ## Included
 

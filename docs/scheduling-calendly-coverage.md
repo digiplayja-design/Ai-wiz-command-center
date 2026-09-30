@@ -1,8 +1,8 @@
-# Calendly comparison and completion gates
+# KORLIX 2MEETU — Calendly comparison and completion gates
 
 Reviewed official Calendly scheduling and pricing pages on 2026-09-30. This is an implementation checklist, not a claim that KORLIX already matches or exceeds every Calendly capability. Providers' plans and features can change.
 
-| Area | KORLIX connected release | Remaining gate |
+| Area | KORLIX 2MEETU connected release | Remaining gate |
 | --- | --- | --- |
 | Personal booking pages | Native one-to-one and group pages; manual location/link | Custom domains, broader page styling and embed widgets |
 | Availability | Time zones, DST, split hours, overrides, buffers, limits; Google/Microsoft OAuth, multi-calendar checks, host calendar updates | Provider setup and real-account acceptance; incremental/push sync |

@@ -361,7 +361,7 @@ export function calendarProvider(
 export function calendarWire(provider, job, creating = true) {
   const b = job.booking,
     s = b.snapshot,
-    description = `KORLIX appointment\nGuest: ${b.guest_name} (${b.guest_email})\nManage in KORLIX Scheduling: https://www.korlixdeveloper.com/app/`;
+    description = `KORLIX 2MEETU appointment\nGuest: ${b.guest_name} (${b.guest_email})\nManage in KORLIX 2MEETU: https://www.korlixdeveloper.com/app/`;
   if (provider === "google")
     return {
       ...(creating
