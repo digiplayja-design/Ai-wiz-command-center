@@ -4,6 +4,8 @@ import 'resume_studio/resume_client.dart';
 import 'resume_studio/resume_screen.dart';
 import 'social/social_client.dart';
 import 'social/social_screen.dart';
+import 'social/social_notifications.dart';
+import 'social/social_notification_banner.dart';
 import 'camera_ask/camera_ask_client.dart';
 import 'camera_ask/camera_ask_screen.dart';
 import 'inventory/inventory_client.dart';
@@ -5059,6 +5061,8 @@ class CommandCenterScreen extends StatefulWidget {
 class _CommandCenterScreenState extends State<CommandCenterScreen>
     with WidgetsBindingObserver {
   late final ChatMemoryClient _chatMemory;
+  late final SocialNotifications _socialNotifications;
+  bool _socialOpening = false;
   bool _showSavedTopicsPanel = false;
   final ScrollController _savedTopicsScrollController = ScrollController();
   final TextEditingController _renameTopicController = TextEditingController();
@@ -5368,6 +5372,16 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     _pendingGenerationJobsPrefsKey = 'korlix_chat_jobs_account_v2_$chatStorageScope';
     _chatMemory = ChatMemoryClient(baseUrl: kKorlixBackendBaseUrl,
       headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision);
+    _socialNotifications = SocialNotifications(
+      baseUrl: kKorlixBackendBaseUrl,
+      headersBuilder: _authHeaders,
+      sessionChanges: kKorlixAuthRevision,
+      shouldPoll: () => mounted && !_socialOpening &&
+          ModalRoute.of(context)?.isCurrent == true,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_socialNotifications.refresh());
+    });
     unawaited(_chatMemory.load());
     unawaited(
       KorlixAppleBillingService.instance.configure(
@@ -5390,6 +5404,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _chatMemory.dispose();
+    _socialNotifications.dispose();
     _imagineStudio?.dispose();
     _savedTopicsOverlayEntry?.remove();
     _savedTopicsOverlayEntry = null;
@@ -5701,6 +5716,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         state == AppLifecycleState.hidden;
 
     _appLifecyclePaused = paused;
+    _socialNotifications.setForeground(state == AppLifecycleState.resumed);
 
     if (state == AppLifecycleState.resumed) {
       _appLifecyclePaused = false;
@@ -9018,11 +9034,23 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     )));
   }
 
-  Future<void> _openKorlixSocial() async {
-    await _stopAiCharacterTalkingForQuery();
-    if (!mounted) return;
-    final client = SocialClient(baseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
-    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>SocialScreen(client:client)));
+  Future<void> _openKorlixSocial({SocialUnreadConversation? conversation}) async {
+    if (_socialOpening) return;
+    _socialOpening = true;
+    final revision = kKorlixAuthRevision.value;
+    try {
+      await _stopAiCharacterTalkingForQuery();
+      if (!mounted || revision != kKorlixAuthRevision.value) return;
+      final client = SocialClient(baseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
+      await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>SocialScreen(
+        client:client,
+        initialConversation: conversation?.card,
+        initialGroupChat: conversation?.group ?? false,
+      )));
+    } finally {
+      _socialOpening = false;
+      if (mounted) unawaited(_socialNotifications.refresh());
+    }
   }
 
   Future<void> _openInventoryStudio() async {
@@ -9089,6 +9117,10 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 child: Column(
                   children: [
                     _buildMockupHomeHeader(),
+                    SocialNotificationBanner(
+                      notifications: _socialNotifications,
+                      onOpen: (conversation) => _openKorlixSocial(conversation: conversation),
+                    ),
                     _buildMockupLanguageTabs(),
                     _buildMockupFeaturedCharacterCard(),
                     _buildReportCurrentAiOutputButton(),
@@ -14153,7 +14185,16 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                   title: 'For personal use', description: 'Create, learn, organize, and explore your everyday life.',
                   icon: Icons.person_outline_rounded,
                   children: [
-                    tile('KORLIX Social', Icons.people_outline_rounded, _loading ? null : _openKorlixSocial, subtitle: 'People, messages & forums'),
+                    AnimatedBuilder(
+                      animation: _socialNotifications,
+                      builder: (context, _) => tile('KORLIX Social',
+                        _socialNotifications.totalUnread > 0
+                          ? Icons.mark_chat_unread_rounded : Icons.people_outline_rounded,
+                        () => _openKorlixSocial(),
+                        subtitle: _socialNotifications.totalUnread > 0
+                          ? '${_socialNotifications.countLabel} unread messages'
+                          : 'People, messages & forums'),
+                    ),
                     for (final tool in ['Tax Prep', 'BabyBlend', 'Virtual Closet', 'Cybersecurity Defender']) toolTile(tool),
                     for (final action in quickActions.where((a) => !businessAction(a))) _buildSafeUiQuickActionChip(action, tile: true),
                     tile('Music Studio', Icons.library_music_rounded, _loading ? null : _showMusicStudio),

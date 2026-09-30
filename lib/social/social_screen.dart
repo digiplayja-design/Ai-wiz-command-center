@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../theme/korlix_theme.dart';
 import '../theme/korlix_action_button.dart';
 import 'social_client.dart';
@@ -13,8 +15,15 @@ import 'social_invite_screen.dart';
 import 'domino/domino_screen.dart';
 
 class SocialScreen extends StatefulWidget {
-  const SocialScreen({super.key, required this.client});
+  const SocialScreen({
+    super.key,
+    required this.client,
+    this.initialConversation,
+    this.initialGroupChat = false,
+  });
   final SocialClient client;
+  final SocialMap? initialConversation;
+  final bool initialGroupChat;
   @override
   State<SocialScreen> createState() => _SocialScreenState();
 }
@@ -39,10 +48,14 @@ class _SocialScreenState extends State<SocialScreen>
   Timer? _poll, _heartbeat, _debounce;
   Timer? _calls;
   bool _checkingCalls = false, _callOpen = false;
+  bool _initialConversationOpened = false;
   SocialClient get client => widget.client;
   @override
   void initState() {
     super.initState();
+    if (widget.initialConversation != null) {
+      _tab = widget.initialGroupChat ? 3 : 1;
+    }
     WidgetsBinding.instance.addObserver(this);
     client.addListener(_access);
     unawaited(_initialize());
@@ -186,6 +199,17 @@ class _SocialScreenState extends State<SocialScreen>
       if (_profile != null) {
         _presence(true);
         await _load();
+        if (mounted &&
+            !_denied &&
+            !_initialConversationOpened &&
+            widget.initialConversation != null) {
+          _initialConversationOpened = true;
+          unawaited(
+            widget.initialGroupChat
+                ? _openGroup(widget.initialConversation!)
+                : _chat(widget.initialConversation!),
+          );
+        }
       }
     } catch (e) {
       if (mounted && !_denied) setState(() => _error = '$e');
@@ -801,18 +825,15 @@ class _SocialScreenState extends State<SocialScreen>
                                   borderRadius: BorderRadius.circular(14),
                                   gradient: LinearGradient(
                                     colors: [
-                                      socialColor(
-                                        category['color'],
-                                      ).withValues(alpha: .3),
-                                      socialColor(
-                                        category['color'],
-                                      ).withValues(alpha: .07),
+                                      socialColor(category['color'])
+                                          .withValues(alpha: .3),
+                                      socialColor(category['color'])
+                                          .withValues(alpha: .07),
                                     ],
                                   ),
                                   border: Border.all(
-                                    color: socialColor(
-                                      category['color'],
-                                    ).withValues(alpha: .4),
+                                    color: socialColor(category['color'])
+                                        .withValues(alpha: .4),
                                   ),
                                 ),
                                 child: Icon(
@@ -1031,8 +1052,7 @@ class _SocialScreenState extends State<SocialScreen>
                   const SocialEmpty(
                     icon: Icons.lock_outline_rounded,
                     title: 'Sign in to join the conversation.',
-                    body:
-                        'Sign in to your KORLIX account, then reopen Social. Your previous account’s content has been cleared.',
+                    body: 'Sign in to your KORLIX account, then reopen Social. Your previous account’s content has been cleared.',
                   )
                 else if (_profile == null) ...[
                   const Center(child: SocialOrbit(size: 210)),
@@ -1246,8 +1266,7 @@ class _SocialScreenState extends State<SocialScreen>
                       const SocialEmpty(
                         icon: Icons.groups_outlined,
                         title: 'Make space for your circle.',
-                        body:
-                            'Create a group or accept an invitation here to start chatting together.',
+                        body: 'Create a group or accept an invitation here to start chatting together.',
                       ),
                     _grid([
                       for (final g in _items)
