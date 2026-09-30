@@ -29,6 +29,9 @@ import { registerFieldProof } from './fieldproof/routes.mjs';
 import { reviewEvidence, CREDIT_COST as FIELDPROOF_CREDIT_COST } from './fieldproof/model.mjs';
 import { registerAiVisibility } from './ai_visibility/routes.mjs';
 import { scanVisibility, CREDIT_COST as VISIBILITY_CREDIT_COST } from './ai_visibility/ai.mjs';
+import { registerSeoAgent } from './seo_agent/routes.mjs';
+import { scanSeo } from './seo_agent/ai.mjs';
+import { CREDIT_COST as SEO_CREDIT_COST } from './seo_agent/core.mjs';
 import { discoverContracts, reviewContract } from './contract_radar/ai.mjs';
 import { extractReceipt } from './bookkeeping/receipt_scanner.mjs';
 // K135Z_GATE5_ESM_IMPORTS_BEGIN
@@ -12675,6 +12678,21 @@ registerAiVisibility(app, {database: supabaseAdmin, requireUser,
     return {...check,status:429,usageId:usageCounter.id};
   },
   scan: data => scanVisibility({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
+});
+registerSeoAgent(app, {database: supabaseAdmin, requireUser, autoStartScheduler: true,
+  aiAccess: async (user, {reserved = false} = {}) => {
+    if (!process.env.OPENAI_API_KEY) return {allowed:false,status:503,reason:'KORLIX SEO analysis is temporarily unavailable.'};
+    const profile = await getOrCreateProfile(user);
+    const tier = String(profile?.tier || 'basic').trim().toLowerCase();
+    if (!['ultra', 'enterprise'].includes(tier)) return {allowed:false,status:403,reason:'SEO Agent audits and weekly monitoring require Ultra Premium or Enterprise.'};
+    if (reserved) return {allowed:true};
+    const usageCounter = await getOrCreateUsageCounter(user.id);
+    if (!profile || !usageCounter) throw new Error('SEO usage unavailable');
+    const limits = getTierLimits(tier);
+    return {...checkUsageAllowed({profile,usageCounter,creditsNeeded:SEO_CREDIT_COST}),status:429,
+      usageId:usageCounter.id,creditLimit:limits.dailyCreditLimit,requestLimit:limits.dailyRequestLimit};
+  },
+  scan: data => scanSeo({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
 });
 registerContractRadar(app, {database: supabaseAdmin, requireUser,
   aiAccess: async user => {
