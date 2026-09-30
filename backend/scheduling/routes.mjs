@@ -1,4 +1,7 @@
 import express from "express";
+import { schedulingConnected } from "./connected.mjs";
+import { ProviderError } from "./provider_core.mjs";
+import { schedulingAI } from "./ai.mjs";
 import { schedulingNotifications } from "./notifications.mjs";
 import { fileURLToPath } from "node:url";
 import {
@@ -30,6 +33,7 @@ export function registerScheduling(
     now = Date.now,
     autoStartWorker = true,
     fetcher = fetch,
+    generateAI,
   } = {},
 ) {
   const base = "/api/scheduling",
@@ -162,14 +166,48 @@ export function registerScheduling(
         }
         await fn(q, r, user);
       } catch (e) {
-        r.status(e instanceof SchedulingError ? e.status : 503).json({
+        r.status(
+          e instanceof SchedulingError || e instanceof ProviderError
+            ? e.status
+            : 503,
+        ).json({
           error:
-            e instanceof SchedulingError
+            e instanceof SchedulingError || e instanceof ProviderError
               ? e.message
               : "Scheduling is temporarily unavailable. Refresh before retrying.",
         });
       }
     };
+  const connected = schedulingConnected({
+    app,
+    base,
+    route,
+    call,
+    ownerCall,
+    publicCall,
+    environment,
+    publicRoot,
+    notifications,
+    fetcher,
+    now,
+    autoStart: autoStartWorker,
+  });
+  Object.assign(capability, connected.capabilities);
+  const ai = schedulingAI({
+    app,
+    base,
+    route,
+    call,
+    ownerCall,
+    connected,
+    generate: generateAI,
+    now,
+  });
+  capability.ai_scheduling = !!generateAI;
+  if (autoStartWorker)
+    console.info(
+      `[Scheduling] AI configured=${capability.ai_scheduling}; proposals require host approval.`,
+    );
   const link = (e) => ({ ...e, url: `${publicRoot}/book/${e.slug}` });
   app.get(
     base,
@@ -177,6 +215,9 @@ export function registerScheduling(
       const d = await ownerCall(u.id, "dashboard");
       r.json({
         ...d,
+        ...(d.profile
+          ? await connected.dashboard(u.id)
+          : { connections: [], pending: [], teams: [] }),
         events: d.events.map(link),
         capabilities: capability,
         timezones: ["UTC", ...Intl.supportedValuesOf("timeZone")],
@@ -364,32 +405,30 @@ export function registerScheduling(
           email: d.email_enabled && notifications.ready,
           sms: false,
         },
-        calendar_sync: false,
+        calendar_sync: d.event.calendar_sync === true,
       });
     }),
   );
   app.post(
     base + "/public/:slug/slots",
-    route(async (q, r) =>
-      r.json(
-        await publicCall("slots", slug(q), {
-          ...context(q),
-          date: date(q.body.date),
-        }),
-      ),
-    ),
+    route(async (q, r) => {
+      const data = { ...context(q), date: date(q.body.date) };
+      await connected.checkAvailability(null, slug(q), data);
+      r.json(await publicCall("slots", slug(q), data));
+    }),
   );
   app.post(
     base + "/public/:slug/book",
     route(async (q, r) => {
-      const d = booking(q.body);
+      const data = { ...booking(q.body), ...context(q) };
+      await connected.checkAvailability(null, slug(q), data);
       r.status(201).json({
         booking: await publicCall("book", slug(q), {
-          ...d,
-          ...context(q),
+          ...data,
+          payments_ready: connected.paymentsReady,
           sealed_manage_token: notifications.seal(
             q.body.manage_token,
-            d.request_id,
+            data.request_id,
           ),
         }),
       });
@@ -404,19 +443,16 @@ export function registerScheduling(
   app.post(
     base + "/manage",
     route(async (q, r) =>
-      r.json({ booking: await publicCall("manage", null, manage(q)) }),
+      r.json({ booking: await connected.reconcilePublic(manage(q)) }),
     ),
   );
   app.post(
     base + "/manage/slots",
-    route(async (q, r) =>
-      r.json(
-        await publicCall("manage_slots", null, {
-          ...manage(q),
-          date: date(q.body.date),
-        }),
-      ),
-    ),
+    route(async (q, r) => {
+      const data = { ...manage(q), date: date(q.body.date) };
+      await connected.checkAvailability(null, null, data);
+      r.json(await publicCall("manage_slots", null, data));
+    }),
   );
   app.post(
     base + "/manage/calendar",
@@ -430,21 +466,22 @@ export function registerScheduling(
   for (const action of ["cancel", "reschedule"])
     app.post(
       base + "/manage/" + action,
-      route(async (q, r) =>
-        r.json({
-          booking: await publicCall(action, null, {
-            ...manage(q),
-            revision: integer(q.body.revision, 1, 1e9),
-            confirmed: q.body.confirmed === true,
-            ...(action === "reschedule"
-              ? {
-                  starts_at: instant(q.body.starts_at),
-                  event_revision: integer(q.body.event_revision, 1, 1e9),
-                }
-              : {}),
-          }),
-        }),
-      ),
+      route(async (q, r) => {
+        const data = {
+          ...manage(q),
+          revision: integer(q.body.revision, 1, 1e9),
+          confirmed: q.body.confirmed === true,
+          ...(action === "reschedule"
+            ? {
+                starts_at: instant(q.body.starts_at),
+                event_revision: integer(q.body.event_revision, 1, 1e9),
+              }
+            : {}),
+        };
+        if (action === "reschedule")
+          await connected.checkAvailability(null, null, data);
+        r.json({ booking: await publicCall(action, null, data) });
+      }),
     );
   const directory = fileURLToPath(new URL("./public/", import.meta.url));
   app.use(
@@ -452,7 +489,7 @@ export function registerScheduling(
     express.static(directory, {
       index: false,
       fallthrough: false,
-      maxAge: "1h",
+      maxAge: 0,
       setHeaders: (r) =>
         r.set({
           "X-Content-Type-Options": "nosniff",
@@ -469,5 +506,5 @@ export function registerScheduling(
     });
     r.sendFile(directory + "index.html");
   });
-  return { ownerCall, publicCall, notifications };
+  return { ownerCall, publicCall, notifications, connected, ai };
 }

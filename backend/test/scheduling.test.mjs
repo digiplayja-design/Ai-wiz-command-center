@@ -160,6 +160,15 @@ test.before(async () => {
       "utf8",
     ),
   );
+  await db.exec(
+    await readFile(
+      new URL(
+        "../../supabase/migrations/20260930163605_scheduling_connected.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
   await db.exec("set role service_role");
   host = await user();
   other = await user();
@@ -174,10 +183,14 @@ test.before(async () => {
       rpc: async (name, p) => {
         try {
           return {
-            data:
-              name === "korlix_schedule_owner_v1"
-                ? await owner(p.p_actor, p.p_action, p.p_id, p.p_data)
-                : await pub(p.p_action, p.p_slug, p.p_data),
+            data: (
+              await db.query(
+                `select ${name}(${Object.keys(p)
+                  .map((k, i) => k + "=> $" + (i + 1))
+                  .join(",")}) value`,
+                Object.values(p),
+              )
+            ).rows[0].value,
           };
         } catch (error) {
           return { error };

@@ -34,10 +34,13 @@
             <p id="duration"></p>
             <p id="location"></p>
             <p id="capacity"></p>
+            <p id="price"></p>
           </div>
           <div class="policy">
             <strong>Your time, clearly planned.</strong>
             <p id="cancel-policy"></p>
+            <p id="refund-policy"></p>
+            <p id="calendar-policy"></p>
             <p>
               Times are shown in your selected time zone. Availability is
               provided by your host.
@@ -129,7 +132,14 @@
           Booking email is not enabled. Add this appointment to your calendar
           and keep your private booking link.
         </p>
+        <p id="payment-status" class="notice" hidden></p>
         <div class="actions">
+          <button id="checkout" class="primary" hidden>
+            Continue to secure payment
+          </button>
+          <button id="payment-refresh" class="secondary" hidden>
+            Refresh payment status
+          </button>
           <button id="calendar" class="primary">Add to calendar</button
           ><button id="copy" class="secondary">Copy private booking link</button
           ><button id="reschedule" class="secondary">Reschedule</button

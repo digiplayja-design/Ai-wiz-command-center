@@ -60,7 +60,7 @@ function node(tag, content, className) {
 }
 async function api(path, body) {
   const controller = new AbortController(),
-    timer = setTimeout(() => controller.abort(), 25000);
+    timer = setTimeout(() => controller.abort(), 70000);
   try {
     const r = await fetch("/api/scheduling/" + path, {
       method: "POST",
@@ -108,6 +108,10 @@ async function run(action) {
     if (!isManage && !bookingRecord && slots.length) renderDays();
   }
 }
+const money = (c) =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
+    (c || 0) / 100,
+  ) + " USD";
 function setEvent(e) {
   event = e;
   $("host").textContent = e.host_name;
@@ -130,6 +134,24 @@ function setEvent(e) {
     e.kind === "group"
       ? `Group session · up to ${e.capacity} guests`
       : "One-to-one appointment";
+  $("price").textContent =
+    e.price_cents > 0
+      ? money(e.price_cents) +
+        (e.payment_live === false ? " · TEST MODE — no real payment" : "")
+      : "Free booking";
+  $("refund-policy").textContent =
+    e.price_cents > 0
+      ? "Refund policy: " +
+        e.refund_policy +
+        " Canceling an appointment does not automatically issue a refund. If payment succeeds but your appointment cannot be confirmed, a full refund is requested automatically."
+      : "";
+  $("calendar-policy").textContent = e.calendar_sync
+    ? "Your host’s enabled calendars are checked for conflicts."
+    : "Your host’s KORLIX bookings and blocked times are checked for conflicts.";
+  if (e.routing_mode === "round_robin")
+    $("capacity").textContent = "One available team host will be assigned";
+  if (e.routing_mode === "collective")
+    $("capacity").textContent = "Meet with all selected team hosts";
   $("cancel-policy").textContent = e.cancel_notice_minutes
     ? `Online cancellations and rescheduling close ${e.cancel_notice_minutes} minutes before the appointment.`
     : "You can cancel or reschedule online before the appointment starts.";
@@ -249,7 +271,10 @@ function choose(s) {
   pendingBody = null;
   requestId = crypto.randomUUID();
   $("form-fields").disabled = false;
-  $("confirm").textContent = "Confirm booking →";
+  $("confirm").textContent =
+    event.price_cents > 0
+      ? "Reserve time and continue to payment →"
+      : "Confirm booking →";
   $("selected-summary").textContent =
     meetingTime(s.starts_at) + ` · ${event.duration_minutes} minutes`;
   show("time-section", false);
@@ -314,14 +339,24 @@ function receipt(b) {
   show("receipt");
   show("reschedule-section", false);
   $("receipt-title").textContent =
-    b.state === "canceled"
-      ? "Appointment canceled."
-      : b.state === "completed"
-        ? "Meeting completed."
-        : b.state === "no_show"
-          ? "Appointment marked missed."
-          : "You’re booked.";
-  $("receipt-icon").textContent = b.state === "canceled" ? "—" : "✓";
+    b.state === "awaiting_payment"
+      ? "Complete payment to confirm."
+      : b.state === "payment_failed"
+        ? "Appointment not confirmed."
+        : b.state === "canceled"
+          ? "Appointment canceled."
+          : b.state === "completed"
+            ? "Meeting completed."
+            : b.state === "no_show"
+              ? "Appointment marked missed."
+              : "You’re booked.";
+  $("receipt-icon").textContent = [
+    "awaiting_payment",
+    "payment_failed",
+    "canceled",
+  ].includes(b.state)
+    ? "—"
+    : "✓";
   $("receipt-subtitle").textContent = b.snapshot.title;
   $("receipt-details").replaceChildren(
     node("p", meetingTime(b.starts_at)),
@@ -352,9 +387,54 @@ function receipt(b) {
   const editable =
     b.state === "confirmed" && Date.parse(b.cancel_until) > Date.now();
   $("reschedule").hidden = !editable;
-  $("cancel").hidden = !editable;
+  $("cancel").hidden = !(editable || b.state === "awaiting_payment");
+  $("calendar").hidden =
+    ["awaiting_payment", "payment_failed"].includes(b.state) ||
+    b.payment?.state === "unpaid";
   $("calendar").textContent =
     b.state === "canceled" ? "Download calendar update" : "Add to calendar";
+  if (b.hosts?.length)
+    $("receipt-details").append(
+      node("p", "Assigned hosts: " + b.hosts.join(", ")),
+    );
+  if (b.calendar_updates?.length)
+    $("receipt-details").append(
+      node(
+        "p",
+        "Host calendar updates: " +
+          [...new Set(b.calendar_updates.map((c) => c.state))].join(", "),
+      ),
+    );
+  show("payment-status", !!b.payment);
+  show(
+    "checkout",
+    b.state === "awaiting_payment" &&
+      Date.parse(b.payment?.checkout_expires_at) > Date.now(),
+  );
+  show("payment-refresh", !!b.payment);
+  if (b.payment) {
+    const p = b.payment,
+      awaiting = b.state === "awaiting_payment";
+    $("checkout").textContent = "Continue to Stripe · " + money(p.amount_cents);
+    $("payment-status").textContent =
+      (p.livemode === false ? "TEST MODE — no real payment. " : "") +
+      money(p.amount_cents) +
+      " · " +
+      p.state +
+      ". " +
+      (awaiting
+        ? "Your appointment is not confirmed. Finish checkout before " +
+          meetingTime(p.checkout_expires_at) +
+          ". Keep this private link to check the result. "
+        : "") +
+      (p.refund_state !== "none"
+        ? "Full refund: " + p.refund_state + ". "
+        : "") +
+      (b.snapshot.refund_policy || "");
+    if (awaiting || b.state === "payment_failed")
+      $("delivery-status").textContent =
+        "This appointment is not confirmed. Payment and refund status are verified with Stripe. Returning from checkout alone does not confirm a booking.";
+  }
   if (manageToken)
     history.replaceState(null, "", `/book/manage#${b.id}.${manageToken}`);
 }
@@ -412,7 +492,10 @@ $("details-form").onsubmit = (e) => {
       if ([400, 403, 404, 409].includes(error.status)) {
         pendingBody = null;
         $("form-fields").disabled = false;
-        $("confirm").textContent = "Confirm booking →";
+        $("confirm").textContent =
+          event.price_cents > 0
+            ? "Reserve time and continue to payment →"
+            : "Confirm booking →";
       }
       throw error;
     }
@@ -422,6 +505,44 @@ const management = () => ({
   booking_id: bookingRecord.id,
   manage_token: manageToken,
 });
+$("checkout").onclick = () =>
+  run(async () => {
+    const d = await api("manage/checkout", {
+      ...management(),
+      confirmed: true,
+    });
+    receipt(d.booking);
+    const url = d.booking.payment?.checkout_url;
+    if (!url)
+      throw new Error(
+        "Checkout is not ready. Refresh the payment status and try again.",
+      );
+    const target = new URL(url);
+    if (
+      target.origin !== "https://checkout.stripe.com" ||
+      target.username ||
+      target.password
+    )
+      throw new Error("Checkout link could not be verified.");
+    location.assign(target.href);
+  });
+$("payment-refresh").onclick = () =>
+  run(async () => receipt((await api("manage", management())).booking));
+setInterval(async () => {
+  if (busy || document.hidden || !bookingRecord?.payment || !manageToken)
+    return;
+  if (
+    bookingRecord.state !== "awaiting_payment" &&
+    !["required", "sending", "pending"].includes(
+      bookingRecord.payment.refund_state,
+    )
+  )
+    return;
+  try {
+    const d = await api("manage", management());
+    if (!busy) receipt(d.booking);
+  } catch {}
+}, 15000);
 $("calendar").onclick = () =>
   run(async () => {
     const d = await api("manage/calendar", management());
@@ -437,7 +558,7 @@ $("copy").onclick = () =>
 $("cancel").onclick = () => {
   if (
     confirm(
-      "Cancel this appointment? The host will see the cancellation in KORLIX. If booking emails are enabled, an update will be queued.",
+      "Cancel this appointment? Paid appointments are not automatically refunded; contact the host under the displayed refund policy. If booking emails are enabled, an update will be queued.",
     )
   )
     run(async () => {

@@ -1,4 +1,4 @@
-# KORLIX Scheduling — initial release
+# KORLIX Scheduling — connected release
 
 Verified, active KORLIX accounts can open **Scheduling**, save availability, create a draft event type, and explicitly publish its public booking link. Enterprise users can also open their existing Funnel Studio and Contacts CRM from the dashboard. Sharing a link into those products is manual; this release does not automatically create CRM contacts or trigger marketing campaigns.
 
@@ -12,7 +12,7 @@ Verified, active KORLIX accounts can open **Scheduling**, save availability, cre
 - Calendar-file download, CSV export, booking search/filtering, completed/no-show statuses and audit records.
 - Host-opted-in booking confirmations, changes and one guest reminder through the existing Resend account. Default: off. Enable in **Availability → Email settings** after saving availability.
 
-Calendar conflicts currently cover **KORLIX bookings and manual blocks**. Outside appointments must be entered as blocks. An imported ICS file is a calendar snapshot, not two-way calendar sync.
+Calendar conflicts cover KORLIX bookings and manual blocks, plus Google/Microsoft calendars the host has connected and enabled. An imported ICS file remains a snapshot; host calendar updates use the connected-provider workflow described below.
 
 ## Security and delivery
 
@@ -28,7 +28,7 @@ Public links currently use the backend origin `/book/<slug>`. `KORLIX_SCHEDULING
 
 ## Operational limits
 
-200 event types, 500 active time blocks, 60 date overrides and six intake questions per host/event as applicable. Dashboard/export load at most 500 bookings from the past 90 days and upcoming schedule. Daily session limits count the host's non-canceled sessions across all event types; a group session counts once. Bookings are stored beyond this dashboard window; retention/deletion automation is not included. The current API does not support multi-host accounts, pooled calendars or external calendar holds.
+200 event types, 500 active time blocks, 60 date overrides and six intake questions per host/event as applicable. Dashboard/export load at most 500 bookings from the past 90 days and upcoming schedule. Daily session limits count the host's non-canceled sessions across all event types; a group session counts once. Bookings are stored beyond this dashboard window; retention/deletion automation is not included. The connected release adds multi-host routing and selected external calendars; it does not create temporary holds in external calendars.
 
 ## Verification
 
@@ -36,6 +36,61 @@ Run `node --test backend/test/scheduling.test.mjs` from the repository root (PGl
 
 A local Chromium fixture also exercises booking, private-link reload, rescheduling and cancellation at 1366px and 390px with no horizontal overflow or browser errors. Local email tests use a fake provider. No customer appointment or live email is created as part of deployment verification. Production checks verify deployed commit IDs, health, public assets, unauthorized API behavior and database grants. Live inbox delivery and authenticated production acceptance remain unverified until a host performs an opted-in booking.
 
-## Rollout
+## Connected scheduling release — 2026-09-30
 
-Apply `20260930152919_scheduling_engine.sql` before the new backend. Add only the dedicated scheduling token key to the existing Render backend environment; preserve existing variables. Deploy backend and frontend release branches. The additive migration does not enable email or publish any booking page for existing users. A rollback can restore the prior application commits while retaining the new tables and all bookings; avoid dropping data. If email processing must stop during an incident, remove the scheduling token key from the runtime only after securely preserving it for recovery, or set host notifications off through the owner API. A planned process restart may delay reminders; queue state persists.
+This release adds the four previously unfinished areas. Provider activation is a separate gate from code deployment.
+
+### Calendar connections
+
+In **Connections**, a host starts OAuth, authorizes Google or Microsoft in a separate tab, returns to KORLIX, and explicitly confirms the identified account. Then **Choose calendars** selects one to five calendars per connection for conflicts and optionally one writable calendar for appointment updates. Up to five calendar accounts can be connected. Only one write calendar is active per host.
+
+OAuth uses a one-use handoff, hashed state, an HttpOnly browser-binding cookie, PKCE for Google/Microsoft, a ten-minute attempt lifetime, and owner confirmation. Provider grants use AES-256-GCM with a separate, identity-bound namespace under the existing scheduling key. Callback configuration changes invalidate pending attempts. Refresh-token rotation is persisted before further requests, under a database lease. Grants never reach the Flutter client or guest projections.
+
+Availability checks fetch complete, bounded event lists, including recurring instances and all-day events. Titles and attendee lists are not cached. Stale/missing caches, pagination failures, provider outages, revoked connections, and malformed times block affected booking requests. Cache windows must match the current connection revision and be no older than 60 seconds. Slots and final reservation/rescheduling both refresh the calendars. Internal reservations remain serialized and authoritative. There is no atomic transaction across KORLIX and an external calendar; a concurrent external edit can still race the final check.
+
+A durable worker writes host-only entries without attendees or invitations. It creates, updates, and removes entries for future KORLIX booking activity; no historical backfill occurs. Google uses a deterministic event ID; Microsoft uses a transaction ID. Creation payloads are frozen and IDs checkpointed before subsequent updates. Ambiguous creation retries stop after 15 minutes; after five unsuccessful updates the job becomes uncertain for manual review. Changes in external calendars do not reschedule the KORLIX appointment. Disconnecting stops checks and future updates; existing entries and provider-side app permissions must be managed in the provider dashboard. Calendar settings do not send customer invitations.
+
+### Team routing
+
+**Teams** supports owned teams, seven-day private invite codes, membership preview/consent, removal, and leaving. The owner can replace an invite code. Teams are limited to 20 active hosts; a host may own ten teams. Members must have saved verified host profiles.
+
+Event types support single-host, round-robin, and collective routing. Round-robin chooses the available host least recently assigned within the team. Collective meetings require every selected active host. Team routing currently uses one guest per appointment; group events remain single-host. The page owner's hours define business booking hours; each assigned host must also be available. Deterministically ordered locks reserve all affected hosts and protect their other KORLIX event types. Assignment changes during locking cause a retry instead of using an unlocked host. Leaving stops new assignments; existing appointments remain visible to their assigned hosts. The organizer's email preferences govern booking email; separate assigned-host emails are not implemented. Each participating host may enable their own calendar updates.
+
+### Booking payments
+
+Hosts connect **Stripe Standard** accounts in Connections. Customers pay that account directly through Stripe-hosted card checkout in USD. This integration adds no KORLIX application fee; Stripe processing costs and account terms remain applicable. KORLIX subscriptions and payroll billing are separate.
+
+Event prices are free or $0.50–$10,000 USD, with a displayed refund policy. Paid bookings must start at least 55 minutes ahead. A reservation holds capacity for 50 minutes; the checkout session expires 40 minutes after reservation. Checkout creation must begin promptly (within the first nine minutes to preserve Stripe's minimum session lifetime). Confirmation requires a server-side Stripe read matching account, booking, amount, currency, and test/live mode, followed by current calendar/host checks. The return URL is never treated as payment proof. Meeting-link details and confirmed calendar files are withheld until payment is confirmed.
+
+Checkout requests store an encrypted immutable payload and reuse the booking's idempotency key. Signed raw-body webhooks and a polling worker reconcile payments. If the create response is lost, a signed webhook plus an independent Stripe read can restore the session association. A stale event, expired hold, removed host, or unavailable final slot produces an unfulfilled-payment record and automatic full refund request. Temporary calendar errors retry while the hold is active. Expired holds no longer block other bookings.
+
+Cancellation alone does not refund a confirmed payment. The organizer can explicitly request **Refund full amount**, which cancels the appointment and queues a full refund. The worker uses a stable idempotency key and verifies Stripe's refund result. Unknown results are retried within a conservative 20-hour window, then flagged for manual review. Guests can view pending/succeeded/failed refund status; a request is not presented as a completed refund. Partial refunds, dispute management, tax calculation, multicurrency, subscriptions, deposits, and stored-card charging are outside this release. Handle those in Stripe. Disconnecting is blocked while current holds or refunds are pending; older payments may require direct Stripe administration afterward.
+
+### AI scheduling
+
+**Assistant** uses the existing GPT-6 Astra/xhigh configuration to prepare one reviewed proposal: unpublished free event drafts, weekly availability changes, actual available times, cancellation, or rescheduling. Context includes host timezone/availability, event names, and up to 100 upcoming booking names/times. Guest emails and intake answers are excluded. Requests use `store:false`; no automatic tool execution is exposed to the model.
+
+Model output is validated through ordinary scheduling validators. The backend, not the model, queries availability and controls identifiers/revisions. Proposals are owner-bound, expire after 15 minutes, and require explicit approval; stale revisions fail closed. Applying a proposal and recording its result share one transaction. Replays do not duplicate a change. The operational cap is ten proposals per host per rolling day. AI cannot publish pages, charge/refund, connect accounts, change team membership, or send marketing messages. Ambiguous requests produce clarification instead of a mutation. Live model acceptance must still be checked in the configured production account.
+
+### Administrator activation
+
+Preserve the existing `KORLIX_SCHEDULING_TOKEN_KEY`. Do not rotate it without re-encrypting stored grants, booking capabilities, and queue payloads. Configure secrets only in the backend environment, never Flutter, source code, or chat.
+
+| Provider | Backend settings | Required callback/setup |
+| --- | --- | --- |
+| Google | `KORLIX_SCHEDULING_GOOGLE_CLIENT_ID`, `KORLIX_SCHEDULING_GOOGLE_CLIENT_SECRET` | Web OAuth callback: `https://chee-chai-chee-backend.onrender.com/api/scheduling/connect/google/callback`; Calendar API enabled, consent configuration and production verification as required by Google |
+| Microsoft | `KORLIX_SCHEDULING_MICROSOFT_CLIENT_ID`, `KORLIX_SCHEDULING_MICROSOFT_CLIENT_SECRET` | Web redirect: `https://chee-chai-chee-backend.onrender.com/api/scheduling/connect/microsoft/callback`; delegated `User.Read`, `Calendars.ReadWrite`, `offline_access`; account audience must support the intended Microsoft users |
+| Stripe | `KORLIX_SCHEDULING_STRIPE_CLIENT_ID`, `KORLIX_SCHEDULING_STRIPE_SECRET_KEY`, `KORLIX_SCHEDULING_STRIPE_WEBHOOK_SECRET` | Standard Connect OAuth redirect: `https://chee-chai-chee-backend.onrender.com/api/scheduling/connect/stripe/callback`; **connected-account** webhook at `/api/scheduling/payments/webhook` for `checkout.session.completed`, `checkout.session.expired`, `checkout.session.async_payment_succeeded`, and `charge.refunded` |
+| AI | Existing `OPENAI_API_KEY` with access to the configured Astra model | No new client-side key |
+
+Stripe requests pin API version `2025-09-30.clover`; `KORLIX_SCHEDULING_STRIPE_API_VERSION` is a dedicated override. Keep OAuth ID, API key, and webhook endpoint in the same test/live mode. Test mode is visibly labeled to hosts and guests. A custom scheduling public origin must serve these backend paths and be registered with each provider.
+
+Missing settings show **Administrator setup required**, not a connected account. Credentials alone do not grant access: each host must still authorize, review, and confirm their own accounts. Real Google/Microsoft OAuth and calendar operations, real Stripe test-mode transactions/refunds/webhooks, and live AI responses are required acceptance gates before advertising those provider workflows as verified live.
+
+### Connected-release validation and rollback
+
+Run backend tests: `node --test backend/test/scheduling.test.mjs backend/test/scheduling_connected.test.mjs backend/test/payroll.test.mjs backend/test/social.test.mjs`. Run frontend tests: `flutter test --no-pub test/scheduling_test.dart test/scheduling_connected_test.dart test/payroll_test.dart test/social_notifications_test.dart`. Current local results: **102 backend + 34 frontend tests pass**; scheduling analysis reports no issues. Browser fixtures at 390px and 1366px verify free booking/reopening/rescheduling/canceling plus paid hold/checkout/return-without-payment/verified payment, without overflow or browser errors. Providers, payment events, and model responses in these tests are fakes; no customer messages, real charges, or real refunds are generated.
+
+Apply the additive `scheduling_connected` migration after the original scheduling migration and before deploying this backend. All new tables have RLS enabled and browser-role privileges revoked. Functions are service-only invoker RPCs with fixed search paths. The migration does not connect accounts, publish pages, enable email, or charge anyone.
+
+Do not roll back to the original booking engine after teams or payment holds are active: the old code does not understand those states. Prefer a forward fix. If a provider incident occurs, disable new paid event publication/booking through current settings and retain the current payment reconciliation worker until holds/refunds finish. Preserve all scheduling tables, grants, and ciphertext. Pausing event pages stops new bookings without deleting existing appointments.

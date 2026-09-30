@@ -140,6 +140,12 @@ export function event(body) {
     "location_detail",
     "questions",
     "color",
+    "routing_mode",
+    "team_id",
+    "host_ids",
+    "price_cents",
+    "currency",
+    "refund_policy",
   ];
   keys(body, allowed);
   const result = {
@@ -160,6 +166,34 @@ export function event(body) {
     location_detail: text(body.location_detail, 500, false),
     color: body.color,
   };
+  result.routing_mode = body.routing_mode ?? "single";
+  if (!["single", "round_robin", "collective"].includes(result.routing_mode))
+    fail("Choose a supported host assignment.");
+  result.team_id = result.routing_mode === "single" ? null : uuid(body.team_id);
+  if (
+    body.host_ids !== undefined &&
+    (!Array.isArray(body.host_ids) || body.host_ids.length > 20)
+  )
+    fail("Choose up to twenty hosts.");
+  result.host_ids =
+    result.routing_mode === "single"
+      ? []
+      : [...new Set((body.host_ids || []).map(uuid))];
+  if (
+    result.routing_mode !== "single" &&
+    (result.kind !== "one_to_one" || result.host_ids.length === 0)
+  )
+    fail("Choose active hosts for a one-to-one team event.");
+  result.price_cents = integer(body.price_cents ?? 0, 0, 1000000);
+  if (result.price_cents > 0 && result.price_cents < 50)
+    fail("Paid bookings must cost at least $0.50 USD.");
+  if (body.currency !== undefined && body.currency !== "usd")
+    fail("Booking payments currently use USD.");
+  result.currency = "usd";
+  result.refund_policy = text(
+    body.refund_policy ?? "Contact your host to request a refund.",
+    1000,
+  );
   if (
     !["one_to_one", "group"].includes(result.kind) ||
     (result.kind === "one_to_one" && result.capacity !== 1) ||
@@ -284,6 +318,8 @@ function fold(line) {
   return chunks.join("\r\n");
 }
 export function calendarFile(b, now = new Date()) {
+  if (["awaiting_payment", "payment_failed"].includes(b.state))
+    fail("A confirmed appointment is required for a calendar file.", 409);
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",

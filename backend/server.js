@@ -16,6 +16,7 @@ import { registerMusicStudio } from './music/routes.mjs';
 import { registerFunnels } from './funnels/routes.mjs'; // K139_FUNNEL_STUDIO
 import { registerPayroll } from './payroll/routes.mjs';
 import { registerScheduling } from './scheduling/routes.mjs';
+import { generateSchedulingAI } from './scheduling/ai.mjs';
 import { registerWorkforce } from './workforce/routes.mjs'; // K138_WORKFORCE
 import { registerContactsCrm } from './contacts_crm/routes.mjs'; // K137_ENTERPRISE_CONTACTS
 import { registerBookkeeping } from './bookkeeping/routes.mjs';
@@ -195,6 +196,7 @@ app.use(express.json({
     if (url.startsWith("/api/agent-email/resend/webhook")) {
       req.korlixAgentEmailRawBody = Buffer.from(buffer);
     }
+    if (url.split("?",1)[0] === "/api/scheduling/payments/webhook") req.korlixSchedulingRawBody = Buffer.from(buffer);
     // K135Z_GATE6H_ZOOM_RAW_BODY_BEGIN
     const zoomPath = url.split("?", 1)[0];
     if (req.method === "POST" &&
@@ -12711,7 +12713,16 @@ registerVirtualCloset(app, { database: supabaseAdmin, storageDatabase: bookkeepi
   style: data => suggestOutfit({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
 });
 registerPayroll(app, { database: supabaseAdmin, requireUser });
-registerScheduling(app, { database: supabaseAdmin, requireUser });
+registerScheduling(app, {
+  database: supabaseAdmin,
+  requireUser,
+  generateAI: process.env.OPENAI_API_KEY
+    ? data => generateSchedulingAI({
+        ...data,
+        client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY, maxRetries: 0, timeout: 90000 }),
+      })
+    : undefined,
+});
 registerBookkeeping(app, { database: supabaseAdmin, requireUser, receiptOptions: {
   storageDatabase: bookkeepingStorage,
   scanAccess: async (user) => {
