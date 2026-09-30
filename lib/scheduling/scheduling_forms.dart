@@ -291,6 +291,8 @@ Future<SchedulingMap?> editScheduleProfile(
 Future<SchedulingMap?> editScheduleEvent(
   BuildContext context, [
   SchedulingMap current = const {},
+  List<SchedulingMap> teams = const [],
+  List<SchedulingMap> connections = const [],
 ]) async {
   final defaults = <String, dynamic>{
     'title': '',
@@ -305,6 +307,8 @@ Future<SchedulingMap?> editScheduleEvent(
     'capacity': 1,
     'cancel_notice_minutes': 60,
     'location_detail': '',
+    'price': ((current['price_cents'] as num? ?? 0) / 100).toStringAsFixed(2),
+    'refund_policy': 'Contact your host to request a refund.',
   };
   final fields = {
     for (final key in defaults.keys)
@@ -313,6 +317,21 @@ Future<SchedulingMap?> editScheduleEvent(
   String kind = '${current['kind'] ?? 'one_to_one'}',
       location = '${current['location_kind'] ?? 'video'}',
       color = '${current['color'] ?? '#72D6EB'}';
+  final ownTeams = teams.where((t) => t['is_owner'] == true).toList();
+  String routing = '${current['routing_mode'] ?? 'single'}';
+  String teamId = ownTeams.any((t) => t['id'] == current['team_id'])
+      ? '${current['team_id']}'
+      : '';
+  final selectedHosts = Set<String>.from(
+    (current['host_ids'] as List? ?? []).map((x) => '$x'),
+  );
+  final merchantReady = connections.any(
+    (c) =>
+        c['provider'] == 'stripe' &&
+        c['state'] == 'connected' &&
+        c['enabled'] == true &&
+        c['charges_enabled'] == true,
+  );
   final questions = schedulingItems(current['questions'])
       .map(
         (q) => <String, dynamic>{
@@ -337,7 +356,9 @@ Future<SchedulingMap?> editScheduleEvent(
     child: TextField(
       controller: fields[key],
       maxLines: lines,
-      keyboardType: number ? TextInputType.number : null,
+      keyboardType: number
+          ? TextInputType.numberWithOptions(decimal: key == 'price')
+          : null,
       decoration: InputDecoration(labelText: label, helperText: helper),
     ),
   );
@@ -462,6 +483,103 @@ Future<SchedulingMap?> editScheduleEvent(
                   'Close online changes before start (minutes)',
                   helper: '60 = 1 hour; 0 allows changes until the start',
                   number: true,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Hosts and routing',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: routing,
+                  decoration: const InputDecoration(
+                    labelText: 'Assign appointments',
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'single', child: Text('Only me')),
+                    DropdownMenuItem(
+                      value: 'round_robin',
+                      child: Text('Round-robin · one available host'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'collective',
+                      child: Text('Collective · all selected hosts'),
+                    ),
+                  ],
+                  onChanged: (v) => update(() => routing = v!),
+                ),
+                if (routing != 'single') ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Team routing uses one-to-one event types. The event owner’s hours define the page’s booking hours; selected hosts must also be available.',
+                  ),
+                  DropdownButtonFormField<String>(
+                    key: ValueKey(teamId),
+                    initialValue: teamId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Your team'),
+                    items: [
+                      const DropdownMenuItem(
+                        value: '',
+                        child: Text('Choose a team'),
+                      ),
+                      for (final t in ownTeams)
+                        DropdownMenuItem(
+                          value: '${t['id']}',
+                          child: Text(
+                            '${t['name']}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: (v) => update(() {
+                      teamId = v!;
+                      selectedHosts.clear();
+                    }),
+                  ),
+                  for (final t in ownTeams.where((t) => t['id'] == teamId))
+                    for (final m in schedulingItems(
+                      t['members'],
+                    ).where((m) => m['active'] == true))
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text('${m['name']}'),
+                        subtitle: Text('${m['timezone']}'),
+                        value: selectedHosts.contains(m['user_id']),
+                        onChanged: (v) => update(() {
+                          if (v == true) {
+                            selectedHosts.add('${m['user_id']}');
+                          } else {
+                            selectedHosts.remove(m['user_id']);
+                          }
+                        }),
+                      ),
+                  if (ownTeams.isEmpty)
+                    const Text(
+                      'Create a team in the Teams tab and invite your hosts first.',
+                    ),
+                ],
+                const SizedBox(height: 24),
+                Text(
+                  'Booking payments',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                input(
+                  'price',
+                  'Price in USD',
+                  number: true,
+                  helper: '0.00 for free; paid bookings start at 0.50',
+                ),
+                input(
+                  'refund_policy',
+                  'Refund policy shown to guests',
+                  lines: 3,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  merchantReady
+                      ? 'Paid bookings reserve a slot during Stripe checkout and confirm only after verified payment. Guests pay your Stripe account. Cancellations do not automatically refund paid appointments; use the full refund action when appropriate.'
+                      : 'Connect your Stripe business account in Connections before charging for bookings.',
                 ),
                 const SizedBox(height: 24),
                 Text(
@@ -634,6 +752,52 @@ Future<SchedulingMap?> editScheduleEvent(
                   }
                   data[key] = key == 'capacity' && kind == 'one_to_one' ? 1 : n;
                 }
+                if (routing != 'single' &&
+                    (kind != 'one_to_one' ||
+                        teamId.isEmpty ||
+                        selectedHosts.isEmpty)) {
+                  throw const FormatException(
+                    'Choose a one-to-one event, your team, and at least one active host.',
+                  );
+                }
+                final priceText = fields['price']!.text.trim();
+                if (!RegExp(r'^\d{1,5}(\.\d{1,2})?$').hasMatch(priceText)) {
+                  throw const FormatException(
+                    'Enter a USD price with up to two decimal places.',
+                  );
+                }
+                final parts = priceText.split('.');
+                final cents =
+                    int.parse(parts[0]) * 100 +
+                    (parts.length == 2
+                        ? int.parse(parts[1].padRight(2, '0'))
+                        : 0);
+                if (cents > 1000000 || (cents > 0 && cents < 50)) {
+                  throw const FormatException(
+                    r'Use a price from $0.50 to $10,000, or 0 for free.',
+                  );
+                }
+                if (cents > 0 && !merchantReady) {
+                  throw const FormatException(
+                    'Connect your Stripe business account first.',
+                  );
+                }
+                if (fields['refund_policy']!.text.trim().isEmpty ||
+                    fields['refund_policy']!.text.length > 1000) {
+                  throw const FormatException(
+                    'Enter a refund policy of up to 1,000 characters.',
+                  );
+                }
+                data.addAll({
+                  'routing_mode': routing,
+                  'team_id': routing == 'single' ? null : teamId,
+                  'host_ids': routing == 'single'
+                      ? <String>[]
+                      : selectedHosts.toList(),
+                  'price_cents': cents,
+                  'currency': 'usd',
+                  'refund_policy': fields['refund_policy']!.text.trim(),
+                });
                 data['questions'] = questions
                     .map(
                       (q) => {

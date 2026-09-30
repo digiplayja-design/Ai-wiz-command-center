@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'scheduling_client.dart';
 import 'scheduling_forms.dart';
+import 'scheduling_connected.dart';
 import '../bookkeeping/bookkeeping_file_save.dart';
 
 class SchedulingScreen extends StatefulWidget {
@@ -274,7 +275,12 @@ class _SchedulingScreenState extends State<SchedulingScreen>
       if (_profile.isEmpty) return;
     }
     if (!mounted) return;
-    final result = await editScheduleEvent(context, event);
+    final result = await editScheduleEvent(
+      context,
+      event,
+      schedulingItems(_data['teams']),
+      schedulingItems(_data['connections']),
+    );
     if (result != null && mounted) {
       await _run(() async {
         await widget.client.post(
@@ -298,7 +304,7 @@ class _SchedulingScreenState extends State<SchedulingScreen>
         ? 'Pause new bookings?'
         : 'Archive this event type?';
     final message = state == 'published'
-        ? 'Guests with the link can book from your available hours. KORLIX checks its own bookings and your time blocks. Add outside appointments as time blocks until calendar sync is available. Booking emails follow your email settings. Text notifications are not connected.'
+        ? 'Guests with the link can book from your available hours. KORLIX checks its own bookings and your time blocks. Enabled Google and Microsoft calendars are checked before a booking is reserved. Team events use the selected hosts’ availability. Booking emails follow your email settings. Text notifications are not connected.'
         : 'The public link will stop accepting new bookings. Existing appointments stay in your schedule.';
     if (await _confirm(
           title,
@@ -535,6 +541,22 @@ class _SchedulingScreenState extends State<SchedulingScreen>
                 Text(_time(b['starts_at'])),
                 Text('${snapshot['duration_minutes']} minutes · ${b['state']}'),
                 Text('Guest time zone: ${b['guest_timezone']}'),
+                Text(
+                  'Assigned hosts: ${(b['hosts'] as List? ?? []).join(', ')}',
+                ),
+                if (b['payment'] != null) ...[
+                  Text(
+                    'Payment: ${schedulingMoney(schedulingMap(b['payment'])['amount_cents'])} · ${schedulingMap(b['payment'])['state']}',
+                  ),
+                  Text(
+                    'Refund: ${schedulingMap(b['payment'])['refund_state']}',
+                  ),
+                  Text('${snapshot['refund_policy'] ?? ''}'),
+                ],
+                for (final c in schedulingItems(b['calendar_updates']))
+                  Text(
+                    'Calendar update: ${c['state']} ${c['last_error'] ?? ''}',
+                  ),
                 const SizedBox(height: 16),
                 Text('${snapshot['location_detail'] ?? ''}'),
                 for (final q in schedulingItems(snapshot['questions'])) ...[
@@ -777,7 +799,7 @@ class _SchedulingScreenState extends State<SchedulingScreen>
         ),
         SizedBox(height: 8),
         Text(
-          'Booking conflicts are checked against KORLIX appointments and your unavailable time blocks. Google/Microsoft calendar sync, text messages, team scheduling and payments are not connected in this release. Add outside appointments as time blocks. Booking emails and reminders are optional in Availability.',
+          'Connect Google or Microsoft calendars in Connections to check outside appointments. Teams support round-robin and collective assignments. Connect your Stripe account for paid bookings. KORLIX can propose changes for review in the Assistant tab. Booking emails are optional in Availability; text messages are not connected.',
         ),
       ],
     ),
@@ -1177,6 +1199,39 @@ class _SchedulingScreenState extends State<SchedulingScreen>
                       icon: const Icon(Icons.calendar_month),
                       label: const Text('Calendar file'),
                     ),
+                    if (b['is_organizer'] == true &&
+                        schedulingMap(b['payment'])['state'] == 'paid' &&
+                        schedulingMap(b['payment'])['refund_state'] == 'none')
+                      TextButton(
+                        onPressed: _busy
+                            ? null
+                            : () async {
+                                if (await _confirm(
+                                  'Refund and cancel?',
+                                  'Issue a full ${schedulingMoney(schedulingMap(b['payment'])['amount_cents'])} refund from your Stripe account and cancel this appointment? Stripe fees may not be returned. The refund is complete only when Stripe confirms it.',
+                                  label: 'Request full refund',
+                                )) {
+                                  await _run(() async {
+                                    await widget.client.post(
+                                      'bookings/${b['id']}/refund',
+                                      {
+                                        'confirmed': true,
+                                        'revision': b['revision'],
+                                      },
+                                    );
+                                    await _load(quiet: true);
+                                  });
+                                }
+                              },
+                        child: const Text('Refund full amount'),
+                      ),
+                    if (b['state'] == 'awaiting_payment')
+                      TextButton(
+                        onPressed: _busy
+                            ? null
+                            : () => _bookingState(b, 'canceled'),
+                        child: const Text('Cancel payment hold'),
+                      ),
                     if (b['state'] == 'confirmed') ...[
                       if (DateTime.tryParse(
                             '${b['starts_at']}',
@@ -1308,6 +1363,9 @@ class _SchedulingScreenState extends State<SchedulingScreen>
                               (1, 'Event types', Icons.link),
                               (2, 'Availability', Icons.schedule),
                               (3, 'Bookings', Icons.event_note),
+                              (4, 'Connections', Icons.link),
+                              (5, 'Teams', Icons.groups_outlined),
+                              (6, 'Assistant', Icons.auto_awesome_outlined),
                             ])
                               Padding(
                                 padding: const EdgeInsets.only(right: 10),
@@ -1343,7 +1401,18 @@ class _SchedulingScreenState extends State<SchedulingScreen>
                         0 => _overview(),
                         1 => _eventTypes(),
                         2 => _availability(),
-                        _ => _bookingList(),
+                        3 => _bookingList(),
+                        _ => SchedulingConnectedPanel(
+                          key: ValueKey(_tab),
+                          mode: {
+                            4: 'connections',
+                            5: 'teams',
+                            6: 'assistant',
+                          }[_tab]!,
+                          data: _data,
+                          client: widget.client,
+                          refresh: () => _load(quiet: true),
+                        ),
                       },
                       const SizedBox(height: 28),
                     ],

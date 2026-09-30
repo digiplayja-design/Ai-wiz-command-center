@@ -86,7 +86,7 @@ class SchedulingClient extends ChangeNotifier {
       final response = await _http
           .send(request)
           .then(http.Response.fromStream)
-          .timeout(const Duration(seconds: 70));
+          .timeout(Duration(seconds: path.startsWith('ai/') ? 120 : 70));
       guard();
       if (response.statusCode == 401 || response.statusCode == 403) _deny();
       final data = schedulingMap(jsonDecode(response.body));

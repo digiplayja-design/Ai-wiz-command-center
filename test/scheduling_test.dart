@@ -229,7 +229,7 @@ void main() {
       await tester.tap(find.text('Publish'));
       await tester.pumpAndSettle();
       expect(sent, isEmpty);
-      expect(find.textContaining('outside appointments'), findsOneWidget);
+      expect(find.textContaining('Enabled Google and Microsoft calendars'), findsOneWidget);
       await tester.tap(find.text('Publish page'));
       await tester.pumpAndSettle();
       expect(jsonDecode(sent.single.body), {
