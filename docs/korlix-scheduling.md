@@ -2,6 +2,20 @@
 
 Verified, active KORLIX accounts can open **KORLIX 2MEETU**, save availability, create a draft event type, and explicitly publish its public booking link. Enterprise users can also open their existing Funnel Studio and Contacts CRM from the dashboard. Sharing a link into those products is manual; this release does not automatically create CRM contacts or trigger marketing campaigns.
 
+## K-Nova in LIVE CONVO
+
+**Talk to K-Nova** opens a dedicated signed-in 2MEETU conversation. Regular LIVE CONVO also offers the scheduling tools; Inventory voice remains isolated. The existing microphone, voice/language controls, account checks and voice usage limits apply.
+
+- Ask for upcoming confirmed appointments or the event types available in 2MEETU. Results contain at most 100 event types and 100 upcoming bookings, identify truncated results, and omit guest email, intake answers, private management tokens and connection credentials.
+- Ask for available times for a published event type. The backend checks enabled calendars and current scheduling rules. Returned slots are possibilities, not reservations.
+- Ask to prepare an unpublished free booking-page draft, change weekly availability, or reschedule/cancel a specific future booking you organize. These use the existing immutable AI proposal workflow and its ten-proposals-per-day limit.
+
+The voice model has no apply tool. A prepared change is displayed and read back with its exact effect and relevant local dates, times and timezone. Approve the displayed proposal or, after the readback finishes, say **“Confirm scheduling change.”** Generic agreement does not approve a scheduling change. Pause, Stop, account/session changes and replacement proposals invalidate pending voice approval. The server rechecks ownership, revisions and applicable calendar conflicts when applying. A timeout is not reported as success; the client checks the original proposal's status before offering a retry.
+
+This phase does not create a new guest appointment by voice or expose voice controls on public booking pages. Publishing pages, payments/refunds, calendar connections and team administration remain in their existing screens. Booking changes retain the host's existing notification settings; the confirmation explains when enabled booking emails will be queued.
+
+Device acceptance: on iPad, open 2MEETU → Talk to K-Nova, start the microphone, ask for your next appointment and real available times, then prepare a harmless unpublished draft and confirm it. Verify the draft in Event types. Also prepare a change and dismiss it or pause before confirmation; it must remain unapplied. Live voice acceptance requires the host's own signed-in device test.
+
 ## Included
 
 - KORLIX booking pages, desktop and mobile layouts, one-to-one and capacity-limited group appointments.

@@ -2,6 +2,7 @@ import express from "express";
 import { schedulingConnected } from "./connected.mjs";
 import { ProviderError } from "./provider_core.mjs";
 import { schedulingAI } from "./ai.mjs";
+import { schedulingVoice } from "./voice.mjs";
 import { schedulingNotifications } from "./notifications.mjs";
 import { fileURLToPath } from "node:url";
 import {
@@ -203,6 +204,7 @@ export function registerScheduling(
     generate: generateAI,
     now,
   });
+  schedulingVoice({ app, base, route, call, ownerCall, connected, now });
   capability.ai_scheduling = !!generateAI;
   if (autoStartWorker)
     console.info(
