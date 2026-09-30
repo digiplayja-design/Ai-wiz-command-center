@@ -36,6 +36,8 @@ import 'bookkeeping/bookkeeping_client.dart';
 import 'bookkeeping/bookkeeping_screen.dart';
 import 'payroll/payroll_client.dart';
 import 'payroll/payroll_screen.dart';
+import 'scheduling/scheduling_client.dart';
+import 'scheduling/scheduling_screen.dart';
 import 'virtual_closet/closet_client.dart';
 import 'virtual_closet/closet_screen.dart';
 import 'contract_radar/radar_client.dart';
@@ -5131,6 +5133,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     'Bookkeeping 2027',
     'Funnel Studio',
     'Payroll',
+    'Scheduling',
     'Contacts CRM',
     'Workforce',
     'Voice-scribe',
@@ -9590,6 +9593,15 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         headersBuilder: _authHeaders))));
   }
 
+  Future<void> _openScheduling() async {
+    final client = SchedulingClient(baseUrl: kKorlixBackendBaseUrl,
+      headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision);
+    final enterprise = _currentTier.trim().toLowerCase() == 'enterprise';
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
+      SchedulingScreen(client: client, openFunnels: enterprise ? _openFunnelStudio : null,
+        openContacts: enterprise ? _openContactsCrm : null)));
+  }
+
   Future<void> _openPayroll() async {
     if (_currentTier.trim().toLowerCase() != 'enterprise') return;
     final client = PayrollClient(baseUrl: kKorlixBackendBaseUrl,
@@ -9637,6 +9649,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     }
 
     if (tool == 'Payroll') { unawaited(_openPayroll()); return; }
+    if (tool == 'Scheduling') { unawaited(_openScheduling()); return; }
 
     if (tool == 'Workforce') {
       unawaited(_openWorkforce());
@@ -11726,6 +11739,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       if (tool == 'Bookkeeping 2027') return 'Early access: business records, income, expenses and CSV export';
       if (tool == 'Funnel Studio') return 'Enterprise pages, lead capture and campaign links';
       if (tool == 'Payroll') return 'Enterprise US payroll, employee onboarding and payroll tax workflows';
+      if (tool == 'Scheduling') return 'Booking pages, availability, group sessions and appointments';
       if (tool == 'Workforce') return 'Enterprise attendance, work updates and employee access';
       if (tool == 'Contacts CRM') return 'Enterprise contacts, imports and KORLIX connections';
       if (tool == 'Voice-scribe') {
@@ -14187,7 +14201,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                   title: 'For business', description: 'Manage operations, grow your reach, and get work done.',
                   icon: Icons.business_center_outlined,
                   children: [
-                    for (final tool in ['Logo Studio', 'Inventory Studio', 'Bookkeeping 2027', 'FieldProof', 'AI Visibility', 'Contract Radar', 'Workforce']) toolTile(tool),
+                    for (final tool in ['Logo Studio', 'Inventory Studio', 'Bookkeeping 2027', 'Scheduling', 'FieldProof', 'AI Visibility', 'Contract Radar', 'Workforce']) toolTile(tool),
                     if (_currentTier.trim().toLowerCase() == 'enterprise') ...[
                       toolTile('Contacts CRM'), toolTile('Funnel Studio'), toolTile('Payroll'),
                     ],
