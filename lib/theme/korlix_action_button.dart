@@ -503,6 +503,7 @@ IconData korlixToolIcon(String label) => switch (label.toLowerCase()) {
   'babyblend' => Icons.child_care_rounded,
   'fieldproof' => Icons.fact_check_outlined,
   'ai visibility' => Icons.insights_rounded,
+  'seo agent' => Icons.travel_explore_rounded,
   'contract radar' => Icons.radar_rounded,
   'virtual closet' => Icons.checkroom_rounded,
   'inventory studio' => Icons.inventory_2_outlined,

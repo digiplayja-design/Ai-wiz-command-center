@@ -50,6 +50,8 @@ import 'babyblend/babyblend_screen.dart';
 import 'tax_prep/tax_prep_screen.dart';
 import 'ai_visibility/visibility_client.dart';
 import 'ai_visibility/visibility_screen.dart';
+import 'seo_agent/seo_client.dart';
+import 'seo_agent/seo_screen.dart';
 import 'funnel_studio/funnel_client.dart';
 import 'funnel_studio/funnel_screen.dart';
 import 'workforce/workforce_client.dart';
@@ -5153,6 +5155,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     'BabyBlend',
     'FieldProof',
     'AI Visibility',
+    'SEO Agent',
     'Contract Radar',
     'Virtual Closet',
     'Bookkeeping 2027',
@@ -8955,6 +8958,10 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       unawaited(_openAiVisibility());
       return;
     }
+    if (action.label == 'SEO Agent') {
+      unawaited(_openSeoAgent());
+      return;
+    }
     if (action.label == 'Contract Radar') {
       unawaited(_openContractRadar());
       return;
@@ -9602,6 +9609,17 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     )));
   }
 
+  Future<void> _openSeoAgent() async {
+    final client = SeoClient(backendBaseUrl: kKorlixBackendBaseUrl,
+      headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision);
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SeoAgentScreen(
+      client: client, openVisibility: _openAiVisibility,
+      ensureConsent: () => ensureKorlixThirdPartyAiConsent(context: context,
+        featureName: 'KORLIX AI SEO Agent', providers: const {KorlixThirdPartyAiProvider.openAi},
+        dataCategories: const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts}),
+    )));
+  }
+
   Future<void> _openFunnelStudio() async {
     if (_currentTier.trim().toLowerCase() != 'enterprise') return;
     final client = FunnelClient(
@@ -9656,6 +9674,10 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     if (tool == 'FieldProof') { unawaited(_openFieldProof()); return; }
     if (tool == 'AI Visibility') {
       unawaited(_openAiVisibility());
+      return;
+    }
+    if (tool == 'SEO Agent') {
+      unawaited(_openSeoAgent());
       return;
     }
     if (tool == 'Contract Radar') {
@@ -11762,6 +11784,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       if (tool == 'BabyBlend') return 'Imagine a fictional child portrait from two adult photos with KORLIX';
       if (tool == 'FieldProof') return 'Job photos, evidence checklists and customer handoffs with KORLIX';
       if (tool == 'AI Visibility') return 'See sampled AI answers, improve your website content and track progress';
+      if (tool == 'SEO Agent') return 'Audit your website, prepare SEO drafts and monitor improvements weekly';
       if (tool == 'Virtual Closet') return 'Your private wardrobe, AI try-on, saved looks and KORLIX styling';
       if (tool == 'Contract Radar') return 'Find source-linked contracts, save opportunities and prepare bids with KORLIX';
       if (tool == 'Bookkeeping 2027') return 'Early access: business records, income, expenses and CSV export';
@@ -14261,7 +14284,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                   title: 'For business', description: 'Manage operations, grow your reach, and get work done.',
                   icon: Icons.business_center_outlined,
                   children: [
-                    for (final tool in ['Logo Studio', 'Inventory Studio', 'Bookkeeping 2027', 'KORLIX 2MEETU', 'FieldProof', 'AI Visibility', 'Contract Radar', 'Workforce']) toolTile(tool),
+                    for (final tool in ['Logo Studio', 'Inventory Studio', 'Bookkeeping 2027', 'KORLIX 2MEETU', 'FieldProof', 'SEO Agent', 'AI Visibility', 'Contract Radar', 'Workforce']) toolTile(tool),
                     if (_currentTier.trim().toLowerCase() == 'enterprise') ...[
                       toolTile('Contacts CRM'), toolTile('Funnel Studio'), toolTile('Payroll'),
                     ],
