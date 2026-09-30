@@ -834,6 +834,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final TextEditingController _passwordController = TextEditingController();
 
   bool _isSignUp = false;
+  bool _obscurePassword = true;
   bool _loading = false;
   bool _resetLoading = false;
   bool _showForgotPassword = false;
@@ -945,6 +946,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
     setState(() {
       _loading = true;
+      _obscurePassword = true;
       _error = null;
       _message = null;
       _showForgotPassword = false;
@@ -1105,11 +1107,32 @@ class _AuthScreenState extends State<AuthScreen> {
                       const SizedBox(height: 14),
                       TextField(
                         controller: _passwordController,
-                        obscureText: true,
+                        obscureText: _obscurePassword,
+                        keyboardType: TextInputType.visiblePassword,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        smartDashesType: SmartDashesType.disabled,
+                        smartQuotesType: SmartQuotesType.disabled,
                         style: TextStyle(color: skin.text),
                         decoration: InputDecoration(
                           labelText: 'Password',
                           labelStyle: TextStyle(color: skin.mutedText),
+                          suffixIcon: IconButton(
+                            tooltip: _obscurePassword
+                                ? 'Show password'
+                                : 'Hide password',
+                            onPressed: _loading
+                                ? null
+                                : () => setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  }),
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                              color: skin.mutedText,
+                            ),
+                          ),
                           filled: true,
                           fillColor: skin.inputFill,
                           border: OutlineInputBorder(
@@ -1197,6 +1220,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             : () {
                                 setState(() {
                                   _isSignUp = !_isSignUp;
+                                  _obscurePassword = true;
                                   _error = null;
                                   _message = null;
                                   _showForgotPassword = false;
