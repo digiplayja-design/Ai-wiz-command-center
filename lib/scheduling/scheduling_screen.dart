@@ -1273,7 +1273,7 @@ class _SchedulingScreenState extends State<SchedulingScreen>
     final denied = !widget.client.available;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('KORLIX Scheduling'),
+        title: const Text('KORLIX 2MEETU'),
         actions: [
           IconButton(
             tooltip: 'Refresh schedule',
@@ -1287,7 +1287,7 @@ class _SchedulingScreenState extends State<SchedulingScreen>
               child: Padding(
                 padding: EdgeInsets.all(32),
                 child: Text(
-                  'Sign in with an active, verified KORLIX account and reopen Scheduling.',
+                  'Sign in with an active, verified KORLIX account and reopen KORLIX 2MEETU.',
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -1315,7 +1315,7 @@ class _SchedulingScreenState extends State<SchedulingScreen>
                                     Icons.auto_awesome_outlined,
                                     size: 16,
                                   ),
-                                  label: Text('KORLIX SCHEDULING'),
+                                  label: Text('KORLIX 2MEETU'),
                                 ),
                                 Chip(label: Text('ONE-TO-ONE + GROUPS')),
                               ],

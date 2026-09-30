@@ -691,7 +691,7 @@ class _SchedulingConnectedPanelState extends State<SchedulingConnectedPanel> {
             label: const Text('Prepare proposal'),
           ),
           if (_cap['ai_scheduling'] != true)
-            const Text('Scheduling AI needs administrator setup.'),
+            const Text('KORLIX 2MEETU AI needs administrator setup.'),
         ]),
         if (_proposal.isNotEmpty)
           _card([

@@ -54,7 +54,7 @@ class SchedulingClient extends ChangeNotifier {
     _check();
     if (!available) {
       throw const SchedulingException(
-        'Sign in with an active verified account and reopen Scheduling.',
+        'Sign in with an active verified account and reopen KORLIX 2MEETU.',
         401,
       );
     }
@@ -93,7 +93,7 @@ class SchedulingClient extends ChangeNotifier {
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw SchedulingException(
           data['error']?.toString() ??
-              'Scheduling could not complete this request.',
+              'KORLIX 2MEETU could not complete this request.',
           response.statusCode,
         );
       }
@@ -102,11 +102,11 @@ class SchedulingClient extends ChangeNotifier {
       rethrow;
     } on TimeoutException {
       throw const SchedulingException(
-        'Scheduling took too long to respond. Refresh the workspace before retrying.',
+        'KORLIX 2MEETU took too long to respond. Refresh the workspace before retrying.',
       );
     } catch (_) {
       throw const SchedulingException(
-        'Scheduling is unavailable. Check your connection and refresh.',
+        'KORLIX 2MEETU is unavailable. Check your connection and refresh.',
       );
     }
   }

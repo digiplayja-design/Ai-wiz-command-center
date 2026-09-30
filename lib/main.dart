@@ -5133,7 +5133,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     'Bookkeeping 2027',
     'Funnel Studio',
     'Payroll',
-    'Scheduling',
+    'KORLIX 2MEETU',
     'Contacts CRM',
     'Workforce',
     'Voice-scribe',
@@ -9649,7 +9649,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     }
 
     if (tool == 'Payroll') { unawaited(_openPayroll()); return; }
-    if (tool == 'Scheduling') { unawaited(_openScheduling()); return; }
+    if (tool == 'KORLIX 2MEETU' || tool == 'Scheduling') { unawaited(_openScheduling()); return; }
 
     if (tool == 'Workforce') {
       unawaited(_openWorkforce());
@@ -11739,7 +11739,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       if (tool == 'Bookkeeping 2027') return 'Early access: business records, income, expenses and CSV export';
       if (tool == 'Funnel Studio') return 'Enterprise pages, lead capture and campaign links';
       if (tool == 'Payroll') return 'Enterprise US payroll, employee onboarding and payroll tax workflows';
-      if (tool == 'Scheduling') return 'Booking pages, availability, group sessions and appointments';
+      if (tool == 'KORLIX 2MEETU' || tool == 'Scheduling') return 'AI scheduling, booking pages, group sessions and appointments';
       if (tool == 'Workforce') return 'Enterprise attendance, work updates and employee access';
       if (tool == 'Contacts CRM') return 'Enterprise contacts, imports and KORLIX connections';
       if (tool == 'Voice-scribe') {
@@ -14201,7 +14201,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                   title: 'For business', description: 'Manage operations, grow your reach, and get work done.',
                   icon: Icons.business_center_outlined,
                   children: [
-                    for (final tool in ['Logo Studio', 'Inventory Studio', 'Bookkeeping 2027', 'Scheduling', 'FieldProof', 'AI Visibility', 'Contract Radar', 'Workforce']) toolTile(tool),
+                    for (final tool in ['Logo Studio', 'Inventory Studio', 'Bookkeeping 2027', 'KORLIX 2MEETU', 'FieldProof', 'AI Visibility', 'Contract Radar', 'Workforce']) toolTile(tool),
                     if (_currentTier.trim().toLowerCase() == 'enterprise') ...[
                       toolTile('Contacts CRM'), toolTile('Funnel Studio'), toolTile('Payroll'),
                     ],
