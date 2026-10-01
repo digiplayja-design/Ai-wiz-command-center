@@ -70,7 +70,7 @@ The application requests `https://www.googleapis.com/auth/youtube.force-ssl` for
 
 Import the updated Blueprint only after app secrets are configured. It is independent of the existing API/static services, uses no persistent disk or Redis, and keeps auto-deploy off so deployments can be performed while streams are idle. Initial CPU/memory sizing must be validated during a full-duration broadcast.
 
-The step-by-step operator handoff is [LIVE_STUDIO_GOOGLE_SETUP.md](LIVE_STUDIO_GOOGLE_SETUP.md). On October 1 the assisted browser could not load Google Cloud Console after one recovery attempt. The API encryption key and public origin are installed, with YouTube disabled while its dedicated OAuth client ID and secret are missing. No worker or broadcast has been started.
+The step-by-step operator handoff is [LIVE_STUDIO_GOOGLE_SETUP.md](LIVE_STUDIO_GOOGLE_SETUP.md). On October 1 the user saved the Google application credentials directly in Render. The approved worker is live and idle, and YouTube connections are enabled on the API. A fresh worker heartbeat and the configured OAuth-launch guard were verified; no broadcast or paid generation was started. Google client validity, consent settings and live streaming still require the authorized test-channel flow.
 
 ## Validation and remaining release work
 
@@ -78,7 +78,7 @@ Automated checks exercise actual migrations in PGlite, OAuth provider fixtures, 
 
 Before customer-ready release:
 
-1. Complete Google application setup/verification and install shared secrets; activate the already-approved Render worker.
+1. Verify the configured Google application through an authorized channel connection and complete Google's production review. The approved Render worker and shared settings are installed.
 2. Use a dedicated authorized test channel for 15- and 30-minute unlisted streams. Verify actual visibility, AI disclosure, audio/caption/source timing, iPad reopen, pause/skip/questions/end, provider timeout, disconnect and worker/network failure.
 3. Implement verified subscription billing, customer plan limits, renewal/revocation and reservation reconciliation. Establish prices from observed compute, provider and quota costs.
 4. Validate sustained CPU/memory, channel/API quotas, operational monitoring and the number of simultaneous customers supported by purchased capacity.

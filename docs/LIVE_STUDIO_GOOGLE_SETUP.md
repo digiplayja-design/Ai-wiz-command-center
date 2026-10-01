@@ -2,7 +2,7 @@
 
 This creates the **KORLIX business application's Google connection**. The owner's personal YouTube channel is not required. Customers authorize their own channels inside Live Studio. A dedicated, authorized test channel is needed later to prove broadcasting works.
 
-As of October 1, 2026, Google Cloud Console could not load in the assisted browser after a recovery attempt. No Google client ID or secret has been installed. Render already has the shared encryption key, public origin and existing database/OpenAI settings. The API's `LIVE_STUDIO_YOUTUBE_ENABLED` remains `false`. The approved US$25/month worker has not been created.
+Activation update, October 1, 2026: the user saved the Google client ID and secret directly in Render. The approved US$25/month worker is live and idle, and the API's `LIVE_STUDIO_YOUTUBE_ENABLED` is now `true`. Database heartbeat and API configuration checks passed. Google Cloud Console was unavailable in the assisted browser, so actual Google client validity and consent configuration still need the first authorized channel connection. The next user action is step 8; steps 1–7 remain the setup reference. Preserve the installed shared encryption key.
 
 1. Open [Google Cloud Console](https://console.cloud.google.com/) in your browser and select the Google Cloud project owned by the KORLIX business. In **APIs & Services → Library**, enable **YouTube Data API v3**.
 2. Open **Google Auth Platform → Branding**. Use the application's actual name, an accessible support address and monitored developer contact details. Set these public URLs:

@@ -4,14 +4,15 @@ This supersedes the earlier single-channel pilot checkpoint. The user's goal is 
 
 ## Completed and live
 
-- Backend production commit: 88e0c8a90555cc05014f480d0b9e408638c532f9. Render deploy dep-davbgkpsrm7s73bbtij0 live October 1 at 19:45:55 UTC.
+- Backend production commit: f7a87bf8a126b1bde6953ee39233a3f3c669a87f (same runtime as 88e0c8a). Activation deploy dep-davc77ekemhc73dsoptg live October 1 at 20:34:34 UTC.
+- Worker srv-davc6anavr4c73bdrqog, korlix-live-studio-worker: Docker, Ohio, 1c-2g, one instance, US$25/month, auto-deploy off. Blueprint exs-dav9d6jncjis73amohg0. Initial deployment dep-davc6avavr4c73bdrrh0 from f7a87bf became live at 20:32:49 UTC.
 - Frontend production commit: f8595ae45fff98b60dc1b64b75cf395d82a938f0. Render deploy dep-davbfuad0e5s73fb9mvg live October 1 at 19:45:49 UTC.
 - Applied Supabase migrations: 20261001180353_live_studio_customer_workspaces, 20261001180428_live_studio_connections and 20261001194226_live_studio_connection_retention.
 - Seven feature tables have RLS and no anonymous/authenticated direct grants. RPCs are service-only. Production service-role workspace/connection reads passed, while direct auth.users SELECT remains denied. The only feature advisor notice is the expected informational RLS-with-no-policies entry for intentionally server-only tables.
 - Disconnect and known revocation now erase YouTube-derived metadata/history as well as grants. Daily idle verification refreshes channel metadata; credential-independent maintenance purges unverified data at 28 days and expires OAuth attempts. Temporary execution fences and late-write guards protect stopping streams. Non-YouTube usage accounting and independently entered show settings remain.
 - Production service-role maintenance/workspace checks passed; client roles cannot execute maintenance, and service_role still cannot read auth.users directly. Before activation, production contained zero Live Studio shows, connections and OAuth attempts.
 - The customer UI requires explicit policy agreement before Google launch and provides accessible KORLIX/Google/YouTube policy links. Public privacy and terms now describe YouTube API use and data deletion.
-- Post-deploy health, app, privacy, terms and compiled bundle checks passed (200); workspace remains protected (401), and unconfigured OAuth launch reports administrator setup (503). The live bundle contains Continue to Google. Browser verification confirmed the published policy section.
+- Post-deploy health, app, privacy, terms and compiled bundle checks passed (200); workspace remains protected (401). After activation, an OAuth launch without its required ticket returns 400 instead of administrator-setup 503, confirming the API loaded its configuration. This is not a Google credential-validity test. The live bundle contains Continue to Google. Browser verification confirmed the published policy section.
 - 79 focused backend tests and 18 frontend tests passed. Real local FFmpeg fixtures were used; no paid generation or real YouTube broadcast was performed. Flutter web release build and Blueprint schema validation passed. PGlite exercises state/transaction behavior, not simultaneous independent PostgreSQL sessions.
 
 Implementation details and configuration are in LIVE_STUDIO.md. Local and GitHub trees were checked for byte identity before Render deployment.
@@ -20,15 +21,17 @@ Implementation details and configuration are in LIVE_STUDIO.md. Local and GitHub
 
 The user approved the proposed US$25/month Render worker and YouTube setup on October 1 at 12:40 Eastern, then authorized dashboard use. Do not ask for that same cost or browser approval again.
 
-The API already had its Supabase and OpenAI settings. Its new canonical 32-byte base64 LIVE_STUDIO_TOKEN_KEY and LIVE_STUDIO_PUBLIC_ORIGIN are installed, with LIVE_STUDIO_YOUTUBE_ENABLED=false. Do not replace the installed key. The dedicated Google client ID and secret are still absent. The worker Blueprint now references all six shared secrets from the existing API using fromService.envVarKey; it does not recreate or manage the API. No worker has been created and no additional worker billing has started. The Render API Environment page is the useful next settings destination; an older unsaved Blueprint form may still show the previous six manual fields until refreshed.
+At 16:29 Eastern the user replied saved after entering Google credentials directly in Render. Both expected environment-variable names were confirmed without revealing values. The canonical 32-byte base64 LIVE_STUDIO_TOKEN_KEY was preserved. The worker Blueprint references all six shared secrets from the existing API using fromService.envVarKey; it does not recreate or manage the API. The already-approved US$25/month worker was created after confirming zero connected channels, active/queued YouTube shows and ready workers. The API's LIVE_STUDIO_YOUTUBE_ENABLED is now true and its activation deployment is live.
+
+Worker identity 1dda1ad1-bdc8-4b95-98ed-d73997b1d3d0 announced successfully; updated_at advanced from 20:32:58 to 20:33:38 UTC, ready_until stayed in the future and run_id remained null. Startup logs reported live without configuration/readiness errors. No test job, paid generation or broadcast was started. The worker dashboard is https://dashboard.render.com/worker/srv-davc6anavr4c73bdrqog. The environment update itself triggered an API deploy; a subsequent explicit deploy queued a second identical deployment. Both completed; check list_deploys after future environment updates before triggering another deployment.
 
 Google Cloud Console showed Site Unavailable in the assisted browser after one reload. There was no bot-verification evidence or usable login flow. Do not repeat login prompts or claim the user's own browser sign-in shares this browser's session. The concrete independent setup guide is LIVE_STUDIO_GOOGLE_SETUP.md; credentials should be entered directly into Render, never chat.
 
 Next required work:
 
-1. Configure the dedicated business application's Google OAuth client and enable YouTube Data API, consent details/scopes and exact callback. Install client ID/secret on the existing API. Preserve the installed encryption key. Do not borrow calendar refresh tokens or ask for secrets in chat.
-2. Create the approved worker after those prerequisites are present, then enable YouTube on the API and verify readiness. New instances support separate customer jobs but the initial approved single instance supplies one encoder slot.
-3. Confirm a dedicated test channel through the product's customer OAuth flow; run 15/30-minute unlisted acceptance, including controls, app closure/reopen, provider failure, disconnect, revoke and worker termination.
+1. Connect a dedicated authorized test channel through the product's customer OAuth flow. This verifies the Google client, enabled API, exact callback and consent/test-user setup, which could not be independently checked in Google Cloud. Connecting alone does not broadcast.
+2. Confirm the returned channel identity, then run authorized 15/30-minute unlisted acceptance, including controls, app closure/reopen, provider failure, disconnect, revoke and worker termination. Initial capacity is one simultaneous encoder slot.
+3. Keep worker deployments idle and preserve the shared key. Additional encoder instances need separately approved capacity.
 4. Implement verified subscription billing, plan decisions, renewals/revocation, reservation reconciliation and operating limits. Current customer grants are explicit service-managed records; no customer checkout or commercial prices have been added.
 5. Finish Google verification and YouTube required-functionality review before broad sales. Current 80-character title, fixed description and unlisted-only acceptance controls are documented review items. External Testing grants expire after seven days.
 
