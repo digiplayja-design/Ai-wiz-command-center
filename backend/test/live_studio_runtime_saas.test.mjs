@@ -4,6 +4,7 @@ import {randomUUID} from 'node:crypto';
 import {setImmediate as nextTurn} from 'node:timers/promises';
 import {createLiveRuntime} from '../live_studio/runtime.mjs';
 import {createYouTube} from '../live_studio/youtube.mjs';
+import {LiveStudioError} from '../live_studio/core.mjs';
 
 const showFixture = () => ({
   id: randomUUID(), owner_id: randomUUID(), run_id: randomUUID(), worker_token: randomUUID(),
@@ -85,4 +86,38 @@ test('YouTube refuses a grant for another channel before creating any broadcast 
   assert.equal(requests.length, 1);
   assert.equal(requests[0].method, 'GET');
   assert.equal(new URL(requests[0].url).pathname, '/youtube/v3/channels');
+});
+
+test('YouTube eligibility rejection stops before any paid generation or encoder starts', async () => {
+  const show=showFixture(),events=[],logs=[];
+  let finished,paidCalls=0,encoders=0;
+  const store={async call(_owner,action,_id,data={}){
+    if(action==='finish'){finished=data;return {...show,state:'failed'};}
+    if(action==='event')events.push(data);
+    return show;
+  }};
+  const youtube=createYouTube({channelId:show.channel_id,accessToken:async()=>'fixture-token'}, {
+    async fetcher(url){return new Response(JSON.stringify(url.includes('/channels?')?{items:[{id:show.channel_id}]}:
+      {error:{message:'private upstream payload',errors:[{reason:'liveStreamingNotEnabled'}]}}),{status:url.includes('/channels?')?200:403});}
+  });
+  await createLiveRuntime({store,youtube,mode:'youtube',providers:{async research(){paidCalls++;},async speak(){paidCalls++;}},
+    sinkFactory(){encoders++;},logger:{warn(_message,data){logs.push(data);}}}).run(show);
+  assert.equal(paidCalls,0);assert.equal(encoders,0);assert.equal(events.length,0);
+  assert.match(finished.error,/live streaming|YouTube Live/i);
+  assert.equal(logs[0].youtube.reason,'liveStreamingNotEnabled');
+  assert(!JSON.stringify({finished,logs}).includes('private upstream payload'));
+});
+
+test('generation failure after YouTube setup cleans up only its created session', async () => {
+  const show=showFixture(),sequence=[],session={id:'created-broadcast',streamId:'created-stream',watchUrl:'https://www.youtube.com/watch?v=created-broadcast'};
+  let finished;
+  const store={async call(_owner,action,_id,data={}){
+    if(action==='finish'){finished=data;return {...show,state:'failed'};}
+    return show;
+  }};
+  const youtube={async setup(){sequence.push('setup');return session;},async finish(value){assert.equal(value,session);sequence.push('cleanup');}};
+  await createLiveRuntime({store,youtube,mode:'youtube',providers:{async research(){sequence.push('research');throw new LiveStudioError('Research temporarily unavailable.',503);}},
+    sinkFactory(){assert.fail('No encoder should start');},logger:{warn(){}}}).run(show);
+  assert.deepEqual(sequence,['setup','research','cleanup']);
+  assert.equal(finished.error,'Research temporarily unavailable.');
 });

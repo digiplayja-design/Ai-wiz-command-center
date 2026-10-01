@@ -90,6 +90,12 @@ export function createLiveRuntime({store,providers,storage,youtube:defaultYouTub
     try{
       if(mode==='youtube'&&youtubeFactory)youtube=await youtubeFactory(show);
       if(mode==='youtube'&&!youtube)throw new LiveStudioError('The channel connection is unavailable.',503);
+      if(mode==='youtube'){
+        // Confirm YouTube accepts this broadcast before spending on research or
+        // speech. The existing finally path closes this session if generation fails.
+        session=await youtube.setup(show,{signal});
+        await event('destination',{broadcastId:session.id,streamId:session.streamId,watchUrl:session.watchUrl});
+      }
       const researched=await paid('research',()=>providers.research({...show.config,style:'balanced',signal}));brief=researched.brief;
       const welcome={speaker:'host',sourceIds:[],text:`Welcome to KORLIX Live Studio. I’m K-Nova, your AI host${show.config.hostCount===2?', joined by our AI Analyst':''}. This is ${show.config.title}. We’ll separate verified facts from opinions and show our sources.`};
       // The provider enforces the 480-character speech bound.
@@ -97,9 +103,6 @@ export function createLiveRuntime({store,providers,storage,youtube:defaultYouTub
       const opening={...researched.initialTurn,speaker:show.config.hostCount===1?'host':'analyst'};
       const openingAudio=await speak(opening);
       if(mode==='youtube'){
-        session=await youtube.setup(show,{signal});
-        // No secrets are written to show state or public events.
-        await event('destination',{broadcastId:session.id,streamId:session.streamId,watchUrl:session.watchUrl});
         sink=sinkFactory(session.ingest,{signal});
         const connectDeadline=now()+90000;
         while(!streamLive){
@@ -147,7 +150,8 @@ export function createLiveRuntime({store,providers,storage,youtube:defaultYouTub
       }
     }catch(error){
       errorMessage=ended?null:error instanceof LiveStudioError?error.message:'The show stopped while preparing its next segment. Review its status before starting again.';
-      if(!ended)logger.warn?.('Live Studio run stopped',{code:error?.name||'unavailable',showId:show.id});
+      if(!ended)logger.warn?.('Live Studio run stopped',{code:error?.name||'unavailable',showId:show.id,
+        ...(error?.providerDiagnostic?{youtube:error.providerDiagnostic}:{})});
     }finally{
       clearInterval(heartbeat);controller.abort();sink?.stop();
       if(session&&(!streamLive||errorMessage||ended)){

@@ -2,6 +2,16 @@
 
 This supersedes the earlier single-channel pilot checkpoint. The user's goal is a service sold to customers. The application owner's personal YouTube channel is not required for configuration; each customer connects their own. A dedicated authorized test channel is needed later for real streaming acceptance.
 
+## First customer test and live activation blocker
+
+At 23:05 UTC October 1, the first customer confirmed their channel. A bounded initial acceptance allowance was issued (one rehearsal and one 15-minute broadcast). The private rehearsal completed. The customer initiated the live attempt at 23:12 UTC; it failed during YouTube setup before any destination event or encoder startup. Five generation calls were dispatched for rehearsal and three for the failed live attempt; those usage records must be retained.
+
+A read-only diagnostic inside the existing Render worker confirmed channels.list HTTP 200 with the expected channel and liveBroadcasts.list HTTP 403 with reason liveStreamingNotEnabled. No broadcast or paid generation was started by that diagnostic and no credentials or raw provider bodies were printed. The user must enable YouTube Live through YouTube Studio → Create → Go live for the same channel. First activation may take up to 24 hours. OAuth channel verification does not enable streaming. Official guidance: https://support.google.com/youtube/answer/2907883.
+
+The follow-up fix classifies provider failures into fixed actionable messages and logs only the constrained operation/status/reason. YouTube setup now precedes paid research/speech; a later generation failure still cleans up the worker-created broadcast. Direct-live broadcasts explicitly disable monitorStream because YouTube otherwise defaults it on and requires a testing transition. Existing channel/run authorization, unlisted consent and cleanup ownership guards remain. A new live acceptance run must wait for activation and a deliberate customer start.
+
+The failed show now displays the confirmed activation reason. One additional 15-minute test was granted through October 3 at 23:08 UTC. The two original run records and all eight generation dispatches were preserved. Grant period extension also carried both receipt period-end pins forward because usage sums match exact period endpoints; extending only the grant would incorrectly reset accounting. Production verification shows 900 broadcast seconds and 200 generation calls remaining, zero remaining rehearsals, and no active show. The bounded top-up was guarded against changed accounting, active work and repeat execution. Focused validation passed 45 tests across adapter, runtime, existing SQL/HTTP and real FFmpeg fixtures; no real broadcast was started by the fix.
+
 ## Completed and live
 
 - Backend production commit: f7a87bf8a126b1bde6953ee39233a3f3c669a87f (same runtime as 88e0c8a). Activation deploy dep-davc77ekemhc73dsoptg live October 1 at 20:34:34 UTC.
