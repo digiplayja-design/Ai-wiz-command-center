@@ -11,7 +11,7 @@ const usage = {input_tokens: 101, output_tokens: 38, total_tokens: 139, output_t
 const opening = {text: 'NASA describes a range of missions. Which priorities should guide the next steps?', sourceUrls: [sourceUrl]};
 const researchResult = () => ({status: 'completed', id: 'resp_research', _request_id: 'req_research', usage,
   output: [{type: 'web_search_call', status: 'completed', action: {type: 'search', sources: [{url: sourceUrl, title: 'NASA missions'}]}}],
-  output_text: JSON.stringify({text: brief.text, currentSourcesAvailable: true, sources: [{url: sourceUrl}], opening})});
+  output_text: JSON.stringify({text: brief.text, requiresCurrentSources: false, currentSourcesAvailable: true, sources: [{url: sourceUrl}], opening})});
 const turnResult = (text = 'Welcome! I’m K-Nova, here with our AI Analyst. What should these missions help us understand?', sourceIds = ['source-1']) =>
   ({status: 'completed', usage, output_text: JSON.stringify({text, sourceIds})});
 const turnArgs = (overrides = {}) => ({episode, brief, remainingSeconds: 300, ...overrides});
@@ -64,6 +64,9 @@ test('research uses Pod-local low reasoning without changing main chat, bounded 
   assert.deepEqual(payload.include, ['web_search_call.action.sources']);
   assert.equal(payload.text.format.strict, true);
   assert.equal(payload.text.format.schema.properties.text.maxLength, 2200);
+  assert.deepEqual(payload.text.format.schema.properties.requiresCurrentSources, {type: 'boolean'});
+  assert.equal(payload.text.format.schema.properties.sources.minItems, 1);
+  assert.equal(payload.text.format.schema.properties.sources.maxItems, 4);
   assert.equal(payload.text.format.schema.properties.opening.properties.text.maxLength, 320);
   assert.match(payload.instructions, /untrusted data/);
   assert.equal(options.maxRetries, 0);
@@ -109,11 +112,10 @@ test('research opening maps only selected verified source URLs and can be spoken
   assert.equal(result.usage.totalTokens, usage.total_tokens);
 });
 
-test('research rejects unsupported, absent or duplicate opening sources and malformed spoken text while retaining exact paid usage', async () => {
+test('research rejects unsupported or absent opening sources and malformed spoken text while retaining exact paid usage', async () => {
   const variants = [
     {...opening, sourceUrls: []},
     {...opening, sourceUrls: ['https://www.nasa.gov/invented-page']},
-    {...opening, sourceUrls: [sourceUrl, sourceUrl]},
     {...opening, sourceUrls: ['http://127.0.0.1/']},
     {...opening, text: 'x'.repeat(321)},
     {...opening, text: '[Claim](https://www.nasa.gov/)'},
@@ -292,11 +294,11 @@ test('the installed OpenAI SDK delivers the configured PCM speech as a readable 
 
 test('research rejects model-invented URLs, unsafe URLs, missing search evidence and unavailable current sources while retaining paid usage', async () => {
   const cases = [
-    result => {result.output_text = JSON.stringify({text: brief.text, currentSourcesAvailable: true, sources: [{url: 'https://www.nasa.gov/invented-page'}]});},
+    result => {result.output_text = JSON.stringify({text: brief.text, requiresCurrentSources: false, currentSourcesAvailable: true, sources: [{url: 'https://www.nasa.gov/invented-page'}]});},
     result => {result.output = [];},
     result => {result.output[0].status = 'in_progress';},
-    result => {result.output[0].action.sources[0].url = 'http://127.0.0.1/admin'; result.output_text = JSON.stringify({text: brief.text, currentSourcesAvailable: true, sources: [{url: 'http://127.0.0.1/admin'}]});},
-    result => {result.output_text = JSON.stringify({text: brief.text, currentSourcesAvailable: false, sources: [{url: sourceUrl}]});},
+    result => {result.output[0].action.sources[0].url = 'http://127.0.0.1/admin'; result.output_text = JSON.stringify({text: brief.text, requiresCurrentSources: false, currentSourcesAvailable: true, sources: [{url: 'http://127.0.0.1/admin'}]});},
+    result => {result.output_text = JSON.stringify({text: brief.text, requiresCurrentSources: true, currentSourcesAvailable: false, sources: [{url: sourceUrl}]});},
   ];
   for (const change of cases) {
     const response = researchResult(); change(response);
@@ -307,6 +309,110 @@ test('research rejects model-invented URLs, unsafe URLs, missing search evidence
       assert.equal(error.usage.kind, 'research');
       assert.equal(error.usage.totalTokens, 139);
       assert.equal(error.usage.status, 'failed');
+      return true;
+    });
+    assert.equal(fixture.calls.length, 1);
+  }
+});
+
+test('verified evergreen sports and historical politics do not require a live-news update', async () => {
+  for (const [category, topic] of [['sports', 'What makes a great team beyond individual talent?'],
+    ['sports', 'Is LeBron the GOAT?'], ['politics', 'How did the separation of powers develop?'],
+    ['sports', 'Why do rankings not settle the greatest-player debate?'], ['sports', 'How did sports news develop?']]) {
+    const response = researchResult();
+    response.output_text = JSON.stringify({...JSON.parse(response.output_text), requiresCurrentSources: false, currentSourcesAvailable: false});
+    const fixture = mock({response});
+    const result = await fixture.providers.research({...episode, category, topic});
+    assert.equal(result.initialTurn.speaker, 'analyst');
+    assert.deepEqual(result.initialTurn.sourceIds, ['source-1']);
+    assert.deepEqual(result.brief.sources, brief.sources);
+    assert.equal(fixture.calls.length, 1);
+    assert.match(fixture.calls[0].payload.instructions, /according to the requested discussion, not just its category/);
+    assert.match(fixture.calls[0].payload.instructions, /avoid claims about today’s status/);
+  }
+});
+
+test('explicit current intent and model-identified implicit current facts cannot bypass freshness checks', async () => {
+  const cases = [
+    ['trending', 'Technology developments worth discussing', false],
+    ['sports', 'What happened in the game today?', false],
+    ['sports', 'Who is currently leading?', false],
+    ['sports', 'What are the live scores?', false],
+    ['sports', 'How is the team doing this season?', false],
+    ['politics', 'What is happening next week?', false],
+    ['politics', 'Who won the most recent election?', false],
+    ['technology', 'What changed in 2026?', false],
+    ['politics', 'Who is the president?', true],
+    ['sports', 'What’s the Lakers score?', true],
+  ];
+  for (const [category, topic, requiresCurrentSources] of cases) {
+    const response = researchResult();
+    response.output_text = JSON.stringify({...JSON.parse(response.output_text), requiresCurrentSources, currentSourcesAvailable: false});
+    const fixture = mock({response});
+    await assert.rejects(fixture.providers.research({...episode, category, topic}), error => {
+      assert.equal(error.code, 'POD_SOURCES_UNAVAILABLE');
+      assert.equal(error.usage.totalTokens, 139);
+      assert.equal(error.usage.diagnostic.reason, 'current_information_unverified');
+      assert.equal(error.usage.diagnostic.requiresCurrentSources, true);
+      assert.equal(error.usage.diagnostic.currentSourcesAvailable, false);
+      return true;
+    });
+    assert.equal(fixture.calls.length, 1, 'freshness failure does not start a paid retry');
+  }
+});
+
+test('documented completed page-find evidence supports exact sources and repeated citations are deduplicated', async () => {
+  const retrieved = 'https://www.nasa.gov/%7Emissions/?topic=a%2Fb';
+  const equivalent = 'https://www.nasa.gov/~missions/?topic=a%2fb#heading';
+  const response = researchResult();
+  response.output = [{type: 'web_search_call', status: 'completed', action: {type: 'find_in_page', url: retrieved, pattern: 'missions'}}];
+  response.output_text = JSON.stringify({...JSON.parse(response.output_text), sources: [{url: equivalent}, {url: retrieved}],
+    opening: {...opening, sourceUrls: [equivalent, retrieved]}});
+  const fixture = mock({response});
+  const result = await fixture.providers.research(episode);
+  assert.deepEqual(result.brief.sources, [{id: 'source-1', url: retrieved, title: 'www.nasa.gov'}]);
+  assert.deepEqual(result.initialTurn.sourceIds, ['source-1']);
+  assert.equal(fixture.calls.length, 1);
+});
+
+test('source comparison preserves path, query, protocol and trailing-slash distinctions', async () => {
+  for (const url of ['https://www.nasa.gov/missions', 'https://nasa.gov/missions/',
+    sourceUrl + '?utm_source=chatgpt.com', 'https://www.nasa.gov/Missions/', 'http://www.nasa.gov/missions/',
+    'https://www.nasa.gov/missions%2F']) {
+    const response = researchResult();
+    response.output_text = JSON.stringify({...JSON.parse(response.output_text), sources: [{url}], opening: {...opening, sourceUrls: [url]}});
+    await assert.rejects(mock({response}).providers.research(episode), error => error.code === 'POD_SOURCES_UNAVAILABLE');
+  }
+});
+
+test('source failures retain private reason and counts without logging source URLs, queries or the topic', async () => {
+  const secret = 'PRIVATE_TOPIC_AND_QUERY';
+  const mutations = [
+    ['no_completed_search', response => {response.output[0].status = 'failed';}],
+    ['source_count', (_response, body) => {body.sources = [];}],
+    ['temporal_requirement_missing', (_response, body) => {delete body.requiresCurrentSources;}],
+    ['freshness_missing', (_response, body) => {delete body.currentSourcesAvailable;}],
+    ['unsafe_source_url', (_response, body) => {body.sources[0].url = 'http://127.0.0.1/private';}],
+    ['source_not_retrieved', (_response, body) => {body.sources[0].url = 'https://www.nasa.gov/not-retrieved';}],
+  ];
+  for (const [reason, mutate] of mutations) {
+    const response = researchResult(), body = JSON.parse(response.output_text);
+    response.output[0].action.query = secret;
+    response.output[0].action.sources.push({type: 'api', name: 'oai-sports'}, {url: 'http://127.0.0.1/private'});
+    mutate(response, body); response.output_text = JSON.stringify(body);
+    const fixture = mock({response});
+    await assert.rejects(fixture.providers.research({...episode, topic: secret}), error => {
+      assert.equal(error.code, 'POD_SOURCES_UNAVAILABLE');
+      assert.equal(error.usage.totalTokens, 139);
+      assert.equal(error.usage.diagnostic.stage, 'research_sources');
+      assert.equal(error.usage.diagnostic.reason, reason);
+      if (reason !== 'no_completed_search') {
+        assert.equal(error.usage.diagnostic.completedSearchCalls, 1);
+        assert.equal(error.usage.diagnostic.retrievedSourceCount, 1);
+        assert.equal(error.usage.diagnostic.feedSourceCount, 1);
+        assert.equal(error.usage.diagnostic.unsupportedSourceCount, 1);
+      }
+      assert.doesNotMatch(JSON.stringify(error.usage.diagnostic), /PRIVATE|https?:|nasa|127\.0\.0\.1|oai-sports/);
       return true;
     });
     assert.equal(fixture.calls.length, 1);

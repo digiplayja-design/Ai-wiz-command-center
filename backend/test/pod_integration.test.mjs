@@ -13,7 +13,7 @@ let db,store,runtime,owner,calls,turnInputs,providers;
 const limits={tier:'ultra',monthlySessions:20,monthlySeconds:10800,monthlyTokens:4000000,maxSessionSeconds:900,maxResponses:37};
 const input={category:'technology',topic:'How can technology help a community?',durationSeconds:900,hostCount:3,style:'balanced'};
 const access=async()=>({allowed:true,limits});
-const create=async()=>(await store.create(owner,{requestId:randomUUID(),input,limits})).episode;
+const create=async(overrides={})=>(await store.create(owner,{requestId:randomUUID(),input:{...input,...overrides},limits})).episode;
 const next=(episode,requestId=randomUUID())=>runtime.run({user:{id:owner},id:episode.id,version:episode.version,requestId,kind:'next'});
 const monthly=async()=>(await db.query('select * from korlix_live_convo_monthly_usage where user_id=$1',[owner])).rows[0];
 const wav=()=>{
@@ -99,13 +99,17 @@ test('the 36th host turn can commit its closing audio under maxResponses 37, the
 
 // Exercise SDK response decoding and provider validation before the runtime and
 // durable SQL transaction. Mocking already-parsed providers misses format errors.
-async function offlineSdk({sourceUrl='https://www.nasa.gov/missions/',researchStatus=200}={}) {
+async function offlineSdk({sourceUrl,researchStatus=200,requiresCurrentSources=false,currentSourcesAvailable=true,evergreenSports=false}={}) {
  const {default:OpenAI}=await import('openai');
- const retrievedUrl='https://www.nasa.gov/missions/';
- const briefText=`## Research notes\n**Verified context:** [NASA missions](${retrievedUrl}) describes a range of missions.\n`+
+ const retrievedUrl=evergreenSports?'https://www.olympics.com/ioc/olympic-values':'https://www.nasa.gov/missions/';
+ sourceUrl??=retrievedUrl;
+ const sourceTitle=evergreenSports?'Teamwork source fixture':'NASA missions';
+ const briefText=evergreenSports?'Verified historical fixture: a dated coaching resource describes cooperation and complementary team roles. '+
+  'This is an evergreen discussion of teamwork, not an update on any current team, season, player record or game.':
+  `## Research notes\n**Verified context:** [NASA missions](${retrievedUrl}) describes a range of missions.\n`+
   'Discussion note: compare the purpose of a mission with the needs of its community, and distinguish evidence from opinion.\n'.repeat(24)+
   'Final caveat: this brief does not verify any new mission, score, quotation or breaking event.';
- assert(briefText.length>2200&&briefText.length<6000);
+ if(!evergreenSports)assert(briefText.length>2200&&briefText.length<6000);
  const sent=[];
  const client=new OpenAI({apiKey:'pod-offline-integration-fixture-not-a-real-key',
   // Intentionally retain the SDK retry default; provider per-call options must
@@ -121,12 +125,13 @@ async function offlineSdk({sourceUrl='https://www.nasa.gov/missions/',researchSt
    const researching=payload.text.format.name==='pod_research';
    if(researching&&researchStatus!==200)return new Response(JSON.stringify({error:{message:'Offline upstream failure',type:'server_error'}}),
     {status:researchStatus,headers:{'content-type':'application/json','x-request-id':'req_research_failure'}});
-   const value=researching?{text:briefText,currentSourcesAvailable:true,sources:[{url:sourceUrl}],
-    opening:{text:'NASA describes a range of missions. What priorities should guide their contribution to communities?',sourceUrls:[sourceUrl]}}:
+   const value=researching?{text:briefText,requiresCurrentSources,currentSourcesAvailable,sources:[{url:sourceUrl}],
+    opening:{text:evergreenSports?'Cooperation is one way to think about team roles. How should a team balance individual strengths with working together?':
+     'NASA describes a range of missions. What priorities should guide their contribution to communities?',sourceUrls:[sourceUrl]}}:
     {text:'That raises a useful tradeoff: how would we decide which community needs should come first?',sourceIds:['source-1']};
    const usage=researching?{input_tokens:101,output_tokens:38,total_tokens:139,output_tokens_details:{reasoning_tokens:20}}:
     {input_tokens:31,output_tokens:13,total_tokens:44,output_tokens_details:{reasoning_tokens:4}};
-   const output=[...(researching?[{type:'web_search_call',id:'ws_fixture',status:'completed',action:{type:'search',sources:[{url:retrievedUrl,title:'NASA missions'}]}}]:[]),
+   const output=[...(researching?[{type:'web_search_call',id:'ws_fixture',status:'completed',action:{type:'search',sources:[{url:retrievedUrl,title:sourceTitle}]}}]:[]),
     {type:'message',id:'msg_fixture',status:'completed',role:'assistant',content:[{type:'output_text',text:JSON.stringify(value),annotations:[]}]}];
    return new Response(JSON.stringify({id:researching?'resp_research':'resp_turn',object:'response',status:'completed',output,usage}),
     {headers:{'content-type':'application/json','x-request-id':researching?'req_research':'req_turn'}});
@@ -183,6 +188,44 @@ test('real provider validation rejects an invented source after the welcome, per
  assert(replay.replayed);assert.equal(replay.audio,null);assert.equal(replay.turn,null);
  await assert.rejects(next(saved.episode),/This pod has ended/);
  assert.equal(sent.length,2,'neither replay nor a new request can repeat failed paid research');
+});
+
+test('real SDK, providers and SQL continue an evergreen sports pod beyond the welcome without live-news freshness',async()=>{
+ const {sent}=await offlineSdk({requiresCurrentSources:false,currentSourcesAvailable:false,evergreenSports:true});
+ const first=await next(await create({category:'sports',topic:'What makes a great team beyond individual talent?'}));
+ const second=await next(first.episode),third=await next(second.episode);
+ assert.deepEqual([first,second,third].map(result=>result.turn.speaker),['host','analyst','challenger']);
+ assert.equal(third.episode.state,'active');assert.equal(third.episode.error,null);
+ assert.equal(third.episode.deadlineAt,first.episode.deadlineAt);
+ for(const result of [first,second,third])assert.equal(validatePodWav(Buffer.from(result.audio.base64,'base64')).durationSeconds,1);
+ const persisted=(await store.get(owner,first.episode.id)).brief;
+ assert.match(persisted.text,/evergreen discussion of teamwork/);
+ assert.deepEqual(persisted.sources,[{id:'source-1',title:'Teamwork source fixture',url:'https://www.olympics.com/ioc/olympic-values'}]);
+ assert.deepEqual(JSON.parse(sent[3].payload.input).brief,persisted);
+ assert.deepEqual(sent.map(call=>call.path),['/v1/audio/speech','/v1/responses','/v1/audio/speech','/v1/responses','/v1/audio/speech']);
+ assert.deepEqual(sent.filter(call=>call.path==='/v1/audio/speech').map(call=>call.payload.voice),['marin','cedar','coral']);
+ const receipts=(await db.query('select call_key,evidence from korlix_pod_usage_receipts where episode_id=$1',[first.episode.id])).rows;
+ assert.equal(receipts.length,5);assert.equal(receipts.filter(receipt=>receipt.call_key==='research').length,1);
+ assert.equal(receipts.find(receipt=>receipt.call_key==='research').evidence.totalTokens,139);
+ assert.equal((await monthly()).total_tokens,183);assert.equal((await monthly()).response_count,2);
+});
+
+test('real SDK, providers and SQL stop live sports with unverified freshness and retain precise private diagnostics',async()=>{
+ const {sent}=await offlineSdk({requiresCurrentSources:false,currentSourcesAvailable:false,evergreenSports:true});
+ const first=await next(await create({category:'sports',topic:'What are the live scores today?'})),requestId=randomUUID();
+ await assert.rejects(next(first.episode,requestId),error=>error.code==='POD_SOURCES_UNAVAILABLE');
+ const saved=await store.get(owner,first.episode.id);
+ assert.equal(saved.episode.state,'failed');assert.equal(saved.episode.turns.length,1);
+ assert.deepEqual(saved.brief,{});assert.deepEqual(saved.episode.sources,[]);
+ const receipt=(await db.query("select evidence from korlix_pod_usage_receipts where episode_id=$1 and call_key='research'",[first.episode.id])).rows[0];
+ assert.equal(receipt.evidence.status,'failed');assert.equal(receipt.evidence.totalTokens,139);
+ assert.equal(receipt.evidence.diagnostic.reason,'current_information_unverified');
+ assert.equal(receipt.evidence.diagnostic.requiresCurrentSources,true);
+ assert.equal(receipt.evidence.diagnostic.currentSourcesAvailable,false);
+ assert.doesNotMatch(JSON.stringify(receipt.evidence.diagnostic),/https?:|live scores|olympics/);
+ const replay=await next(first.episode,requestId);assert(replay.replayed);assert.equal(replay.audio,null);
+ assert.deepEqual(sent.map(call=>call.path),['/v1/audio/speech','/v1/responses']);
+ assert.equal((await monthly()).total_tokens,139);
 });
 
 test('a retryable research transport failure makes exactly one SDK request and ends the episode visibly',async()=>{
