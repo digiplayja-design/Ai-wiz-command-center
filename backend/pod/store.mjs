@@ -8,24 +8,49 @@ export class PodStorageError extends Error {
   }
 }
 
-export function createPodStore({database, logger = console} = {}) {
+const POD_STORAGE_ACTIONS = new Set(['list','sweep','quota_lookup','create','get','claim','dispatch','receipt','discard_prepared','play_prepared','finish','fail','control','contribute','remove']);
+const POD_TIMEOUT_CODES = new Set(['ETIMEDOUT','UND_ERR_CONNECT_TIMEOUT','UND_ERR_HEADERS_TIMEOUT','UND_ERR_BODY_TIMEOUT']);
+const storageMessage = action => action === 'contribute'
+  ? 'Your comment could not be confirmed as saved. Keep your text and retry.'
+  : 'Your pod could not be confirmed. Refresh before trying again.';
+
+// SDK transport failures can arrive as resolved PostgREST results with status 0
+// and an empty SQL code. Inspect only enough to classify; never log provider text.
+function storageDiagnostic(action, error, response, elapsedMs) {
+  const code = typeof error?.code === 'string' && /^(?:[0-9A-Z]{5}|PGRST[0-9]{3})$/.test(error.code) ? error.code : null;
+  const status = response?.status ?? error?.status;
+  const httpStatus = Number.isInteger(status) && status >= 100 && status <= 599 ? status : null;
+  const wrappedName = typeof error?.message === 'string' ? error.message.match(/^(TimeoutError|AbortError|TypeError|FetchError):/)?.[1] : null;
+  const timeout = error?.name === 'TimeoutError' || wrappedName === 'TimeoutError' ||
+    POD_TIMEOUT_CODES.has(error?.code) || POD_TIMEOUT_CODES.has(error?.cause?.code) || httpStatus === 408 || httpStatus === 504;
+  const transport = status === 0 || ['AbortError','TypeError','FetchError'].includes(error?.name) ||
+    ['AbortError','TypeError','FetchError'].includes(wrappedName) || (!code && !httpStatus && !!error);
+  return {action:POD_STORAGE_ACTIONS.has(action) ? action : 'unknown',category:timeout ? 'timeout' : transport ? 'transport' : 'database',
+    elapsedMs:Number.isFinite(elapsedMs) ? Math.max(0,Math.round(elapsedMs)) : 0,code,httpStatus};
+}
+
+export function createPodStore({database, logger = console, now = Date.now} = {}) {
   const call = async (actor, action, id = null, data = {}) => {
     if (!database || (!actor && action !== 'sweep')) throw new PodStorageError('Sign in before starting your pod.', actor ? 503 : 401);
     let response;
+    const startedAt = now();
+    const unavailable = error => {
+      try { logger.warn?.('Pod storage unavailable', storageDiagnostic(action, error, response, now()-startedAt)); } catch {}
+      return new PodStorageError(storageMessage(action));
+    };
     try {
       response = await database.rpc('korlix_pod_v1', {p_actor:actor, p_action:action, p_id:id, p_data:data});
-    } catch {
-      throw new PodStorageError('Your pod could not be confirmed. Refresh before trying again.');
+    } catch (error) {
+      throw unavailable(error);
     }
-    if (response.error) {
+    if (response?.error) {
       const e = response.error;
       const status = {P0002:404, '40001':409, '23505':409, '54000':429, '42501':403, '22023':400, P0001:400}[e.code];
       if (status) throw new PodStorageError(e.code === '23505' ? 'A pod or request is already active. Refresh before trying again.' : e.message, status, e.code);
-      logger.warn?.('Pod storage unavailable', {action, code:e.code});
-      throw new PodStorageError('Your pod could not be confirmed. Refresh before trying again.');
+      throw unavailable(e);
     }
-    const value = Array.isArray(response.data) ? response.data[0] : response.data;
-    if (!value || typeof value !== 'object') throw new PodStorageError('Your pod could not be confirmed. Refresh before trying again.');
+    const value = Array.isArray(response?.data) ? response.data[0] : response?.data;
+    if (!value || typeof value !== 'object') throw unavailable(null);
     return value;
   };
   return Object.freeze({

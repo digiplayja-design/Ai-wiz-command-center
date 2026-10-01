@@ -48,7 +48,10 @@ export function registerPod(app,{database,requireUser,access,providers,store:pro
     if(!['pause','resume','interrupt','end','heartbeat'].includes(action))throw new PodError('Choose a valid episode control.');
     if(action==='resume')await allowed(u);
     const data=await store.control(u.id,id,action);
-    if(['pause','interrupt','end'].includes(action)||['ended','failed'].includes(data.episode?.state)||data.episode?.state==='paused') {
+    // A normal heartbeat while the listener is recording/transcribing must not
+    // cancel that paused-state operation. Only a lost heartbeat is an interruption.
+    if(['pause','interrupt','end'].includes(action)||['ended','failed'].includes(data.episode?.state)||
+      (data.episode?.state==='paused'&&data.episode?.endReason==='heartbeat_lost')) {
       runtime.abort(u.id,id,'Episode playback changed.',{preservePrepared:!['interrupt','end'].includes(action)&&data.episode?.state==='paused'});
     }
     reply(r,{episode:data.episode});

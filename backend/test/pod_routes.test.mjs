@@ -336,3 +336,39 @@ test('preparing during the final recap neither ends that speaking turn nor dispa
   const ended=await h.invoke('POST','/api/pod/episodes/:id/next',{body:{requestId:REQUEST,version:1}});
   assert.equal(ended.body.episode.state,'ended');assert.equal(h.providerCalls.length,0);
 });
+
+test('ordinary paused heartbeats preserve an in-flight transcription and its reviewable text',async t=>{
+  const started=deferred(),completed=deferred();
+  const state=episode({state:'paused',phase:'paused',endReason:'interrupt'});
+  const h=harness(t,{state,providers:{transcribe:async args=>{started.resolve(args);return completed.promise;}}});
+  const pending=h.start('POST','/api/pod/episodes/:id/transcribe',{
+    body:{requestId:REQUEST,audioBase64:wav().toString('base64')},
+  });
+  const args=await started.promise;
+  const heartbeat=await h.invoke('POST','/api/pod/episodes/:id/control',{body:{action:'heartbeat'}});
+  assert.equal(heartbeat.statusCode,200);assert.equal(heartbeat.body.episode.state,'paused');
+  assert.equal(args.signal.aborted,false,'a paused listener can keep their transcription alive');
+  completed.resolve({text:'Please explain that point.',usage:clone(usage)});
+  await pending.done;
+  assert.equal(pending.response.statusCode,200);assert.equal(pending.response.body.text,'Please explain that point.');
+  assert.equal(h.calls.filter(call=>call.method==='fail').length,0);
+  assert.deepEqual(h.providerCalls.map(call=>call.method),['transcribe']);
+});
+
+test('actual heartbeat loss still cancels an in-flight paused transcription and retains its usage receipt',async t=>{
+  const started=deferred(),completed=deferred();
+  const state=episode({state:'paused',phase:'paused',endReason:'interrupt'});
+  const h=harness(t,{state,store:{control:async()=>({episode:{...state,endReason:'heartbeat_lost',version:2}})},
+    providers:{transcribe:async args=>{started.resolve(args);return completed.promise;}}});
+  const pending=h.start('POST','/api/pod/episodes/:id/transcribe',{
+    body:{requestId:REQUEST,audioBase64:wav().toString('base64')},
+  });
+  const args=await started.promise;
+  await h.invoke('POST','/api/pod/episodes/:id/control',{body:{action:'heartbeat'}});
+  assert.equal(args.signal.aborted,true);
+  completed.resolve({text:'Must not leak after disconnect.',usage:clone(usage)});
+  await pending.done;
+  assert.equal(pending.response.statusCode,409);assert.equal(pending.response.body.text,undefined);
+  assert.equal(h.calls.filter(call=>call.method==='recordUsage').length,1);
+  assert.equal(h.calls.filter(call=>call.method==='finish').length,0);
+});

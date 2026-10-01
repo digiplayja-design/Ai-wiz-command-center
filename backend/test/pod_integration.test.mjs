@@ -429,3 +429,53 @@ test('real HTTP prepare exposes only safe metadata and play-prepared delivers th
   assert.equal((await monthly()).total_tokens,139);
  }finally{api.stop();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });
+
+test('real HTTP paused heartbeats preserve in-flight transcription and the reviewed contribution reaches the resumed panelist',async()=>{
+ const created=await create();let release,started,transcriptionSignal;
+ const entered=new Promise(resolve=>{started=resolve;}),finishTranscription=new Promise(resolve=>{release=resolve;});
+ const originalTranscribe=providers.transcribe;
+ providers.transcribe=async args=>{
+  transcriptionSignal=args.signal;started();await finishTranscription;
+  args.signal.throwIfAborted();return originalTranscribe(args);
+ };
+ const app=express();app.use(express.json());
+ const api=registerPod(app,{store,providers,access,requireUser:async()=>({id:owner}),logger:{warn(){}},startSweep:false});
+ const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
+ const baseUrl=`http://127.0.0.1:${server.address().port}/api/pod/episodes/${created.id}`;
+ const request=async(path,body)=>{
+  const response=await fetch(`${baseUrl}${path}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const value=await response.json();assert.equal(response.status,200,JSON.stringify(value));return value;
+ };
+ try {
+  const welcome=await request('/next',{requestId:randomUUID(),version:created.version});
+  const opening=await request('/next',{requestId:randomUUID(),version:welcome.episode.version});
+  const paused=await request('/control',{action:'interrupt'}),requestId=randomUUID();
+  const pending=request('/transcribe',{requestId,audioBase64:wav().toString('base64')})
+   .then(value=>({value}),error=>({error}));
+  await entered;assert.equal(api.runtime.activeCount,1);
+  const heartbeat=await request('/control',{action:'heartbeat'});
+  assert.equal(heartbeat.episode.state,'paused');assert.equal(heartbeat.episode.version,paused.episode.version);
+  const secondHeartbeat=await request('/control',{action:'heartbeat'});
+  assert.equal(secondHeartbeat.episode.version,paused.episode.version);
+  const wasAborted=transcriptionSignal.aborted;release();
+  const transcribed=await pending;
+  assert.equal(wasAborted,false,'a routine heartbeat must not cancel transcription in an already-paused pod');
+  if(transcribed.error)throw transcribed.error;
+  assert.equal(transcribed.value.text,'I think community access matters.');
+  assert.equal(transcribed.value.episode.state,'paused');assert.equal(transcribed.value.episode.turns.length,2);
+  const replay=await request('/transcribe',{requestId,audioBase64:wav().toString('base64')});
+  assert(replay.replayed);assert.equal(replay.text,transcribed.value.text);assert.equal(calls.transcribe,1);
+  const contribution='I think affordable community access matters most.',contributionId=randomUUID();
+  const contributed=await request('/contributions',{requestId:contributionId,text:contribution});
+  assert.equal(contributed.episode.turns.at(-1).speaker,'user');assert.equal(contributed.episode.turns.at(-1).text,contribution);
+  const resumed=await request('/control',{action:'resume'});
+  const panelist=await request('/next',{requestId:randomUUID(),version:resumed.episode.version});
+  assert.equal(turnInputs.at(-1).episode.turns.at(-1).text,contribution);
+  assert.deepEqual(panelist.episode.turns.map(turn=>turn.speaker),['host','analyst','user','host']);
+  assert.equal(panelist.episode.deadlineAt,opening.episode.deadlineAt);assert(panelist.audio);
+  assert.deepEqual(calls,{research:1,turn:1,speak:3,transcribe:1});
+  const receipts=(await db.query("select usage,evidence from korlix_pod_usage_receipts where episode_id=$1 and request_id=$2 and call_key='transcribe'",[created.id,requestId])).rows;
+  assert.equal(receipts.length,1);assert.equal(receipts[0].usage.transcriptionTokens,11);
+  assert.equal((await monthly()).total_tokens,95);assert.equal((await monthly()).transcription_tokens,11);
+ }finally{release();api.stop();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+});
