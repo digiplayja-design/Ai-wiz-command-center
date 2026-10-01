@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:url_launcher/link.dart';
 import 'package:ai_wiz_command_center/live_studio/live_studio_client.dart';
 import 'package:ai_wiz_command_center/live_studio/live_studio_screen.dart';
 
@@ -41,6 +42,7 @@ class FixtureClient extends LiveStudioClient {
   List<Map<String, dynamic>> pendingConnections = [];
   String? confirmedChannel;
   int disconnections = 0, ends = 0;
+  int connectionStarts = 0;
   String? disconnectMessage;
   int starts = 0, saves = 0;
   String? requestId;
@@ -79,6 +81,12 @@ class FixtureClient extends LiveStudioClient {
       'generationsRemaining': generations,
     },
   };
+  @override
+  Future<Uri> startYouTubeConnection() async {
+    connectionStarts++;
+    throw const LiveStudioException('Authorization request stopped in test.');
+  }
+
   @override
   Future<void> confirmYouTubeConnection(String id) async {
     confirmedChannel = id;
@@ -288,6 +296,89 @@ void main() {
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     });
+  }
+  for (final width in [320.0, 768.0]) {
+    testWidgets(
+      'YouTube consent requires agreement and exposes accessible policy links at $width pixels',
+      (tester) async {
+        tester.view.physicalSize = Size(width, 1000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final client = FixtureClient();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: LiveStudioScreen(
+              client: client,
+              ensureConsent: () async => true,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final expectedLinks = {
+          'https://www.korlixdeveloper.com/privacy-policy.html',
+          'https://www.korlixdeveloper.com/terms.html',
+          'https://www.youtube.com/t/terms',
+          'https://policies.google.com/privacy',
+        };
+        expect(
+          tester
+              .widgetList<Link>(find.byType(Link))
+              .map((link) => link.uri.toString())
+              .toSet(),
+          expectedLinks,
+        );
+        final connect = find.byKey(
+          const ValueKey('live-studio-connect-youtube'),
+        );
+        await tester.ensureVisible(connect);
+        await tester.tap(connect);
+        await tester.pumpAndSettle();
+        final dialog = find.byType(AlertDialog);
+        final links = find.descendant(of: dialog, matching: find.byType(Link));
+        expect(
+          tester
+              .widgetList<Link>(links)
+              .map((link) => link.uri.toString())
+              .toSet(),
+          expectedLinks,
+        );
+        for (final link in tester.widgetList<Link>(links)) {
+          expect(link.target, LinkTarget.blank);
+        }
+        final proceed = find.byKey(
+          const ValueKey('live-studio-youtube-consent-continue'),
+        );
+        final agreement = find.byKey(
+          const ValueKey('live-studio-youtube-agreement'),
+        );
+        expect(tester.widget<FilledButton>(proceed).onPressed, isNull);
+        expect(tester.widget<CheckboxListTile>(agreement).value, isFalse);
+        expect(client.connectionStarts, 0);
+        await tester.ensureVisible(agreement);
+        await tester.tap(agreement);
+        await tester.pumpAndSettle();
+        expect(tester.widget<FilledButton>(proceed).onPressed, isNotNull);
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        expect(client.connectionStarts, 0);
+        await tester.tap(connect);
+        await tester.pumpAndSettle();
+        expect(tester.widget<FilledButton>(proceed).onPressed, isNull);
+        await tester.ensureVisible(agreement);
+        await tester.tap(agreement);
+        await tester.pumpAndSettle();
+        await tester.tap(proceed);
+        await tester.pumpAndSettle();
+        expect(client.connectionStarts, 1);
+        expect(
+          find.text('Authorization request stopped in test.'),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
   }
   testWidgets(
     'save is persistent, YouTube stays disabled, and declining rehearsal never dispatches',

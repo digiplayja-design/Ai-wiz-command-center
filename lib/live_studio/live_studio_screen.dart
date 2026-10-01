@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:url_launcher/link.dart';
 import 'package:video_player/video_player.dart';
 
 import 'live_studio_client.dart';
@@ -43,6 +44,13 @@ class _LiveStudioScreenState extends State<LiveStudioScreen>
   VideoPlayerController? _player;
   static const _active = {'queued', 'preparing', 'live', 'paused'};
   static const _violet = Color(0xffa18bff), _mint = Color(0xff57dfc5);
+  static const _youtubePolicies = {
+    'KORLIX Privacy Policy':
+        'https://www.korlixdeveloper.com/privacy-policy.html',
+    'KORLIX Terms of Use': 'https://www.korlixdeveloper.com/terms.html',
+    'YouTube Terms of Service': 'https://www.youtube.com/t/terms',
+    'Google Privacy Policy': 'https://policies.google.com/privacy',
+  };
   @override
   void initState() {
     super.initState();
@@ -366,14 +374,72 @@ class _LiveStudioScreenState extends State<LiveStudioScreen>
         (remaining is! num || (duration is num && remaining >= duration));
   }
 
+  Widget _youtubePolicyLinks() => Wrap(
+    spacing: 4,
+    runSpacing: 2,
+    children: [
+      for (final policy in _youtubePolicies.entries)
+        Link(
+          uri: Uri.parse(policy.value),
+          target: LinkTarget.blank,
+          builder: (context, followLink) =>
+              TextButton(onPressed: followLink, child: Text(policy.key)),
+        ),
+    ],
+  );
+
+  Future<bool> _agreeToYouTubeConnection() async {
+    var agreed = false;
+    return await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => StatefulBuilder(
+            builder: (context, updateDialog) => AlertDialog(
+              scrollable: true,
+              title: const Text('Connect your YouTube channel?'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'KORLIX uses YouTube API Services to manage your selected channel’s live shows and read live chat. Selected chat questions may be sent to OpenAI to moderate and answer during a show. You will review the channel here before it becomes active. Connecting does not start a broadcast.',
+                  ),
+                  const SizedBox(height: 10),
+                  _youtubePolicyLinks(),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    key: const ValueKey('live-studio-youtube-agreement'),
+                    value: agreed,
+                    onChanged: (value) =>
+                        updateDialog(() => agreed = value == true),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'I agree to the KORLIX Privacy Policy and Terms of Use, including the YouTube Terms of Service.',
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  key: const ValueKey('live-studio-youtube-consent-continue'),
+                  onPressed: agreed
+                      ? () => Navigator.pop(dialogContext, true)
+                      : null,
+                  child: const Text('Continue to Google'),
+                ),
+              ],
+            ),
+          ),
+        ) ??
+        false;
+  }
+
   Future<void> _connectYouTube() async {
-    if (!await _confirm(
-          'Connect your YouTube channel?',
-          'Choose the Google account and YouTube channel you want this workspace to use. KORLIX will request permission to manage your broadcasts and read live chat. You will review the channel here before it becomes active. Connecting does not start a show.',
-          'Continue to YouTube',
-        ) ||
-        !mounted)
-      return;
+    if (!await _agreeToYouTubeConnection() || !mounted) return;
     await _action(() async {
       final uri = await widget.client.startYouTubeConnection();
       if (!mounted || _invalid) return;
@@ -412,7 +478,7 @@ class _LiveStudioScreenState extends State<LiveStudioScreen>
     final connection = _connection;
     if (!await _confirm(
           'Disconnect YouTube?',
-          'Disconnect ${connection?['channelTitle'] ?? 'YouTube'}${connection == null ? '' : ' (${connection['channelId']})'}? Queued YouTube shows will be cancelled and running broadcasts will be asked to stop. KORLIX will remove the stored authorization credentials. Existing YouTube videos remain on YouTube.',
+          'Disconnect ${connection?['channelTitle'] ?? 'YouTube'}${connection == null ? '' : ' (${connection['channelId']})'}? Queued YouTube shows will be cancelled and running broadcasts will be asked to stop. KORLIX will remove stored authorization credentials and YouTube-derived channel data and history. Existing YouTube videos remain on YouTube.',
           'Disconnect channel',
         ) ||
         !mounted)
@@ -501,6 +567,7 @@ class _LiveStudioScreenState extends State<LiveStudioScreen>
               ),
           ],
         ),
+        _youtubePolicyLinks(),
         for (final pending in _pendingConnections) ...[
           const Divider(height: 28),
           const Text(
