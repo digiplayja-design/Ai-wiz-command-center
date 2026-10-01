@@ -18,6 +18,7 @@ import 'app_studio/app_studio_client.dart';
 import 'app_studio/app_studio_screen.dart';
 import 'music_studio/music_client.dart';
 import 'music_studio/music_studio_screen.dart';
+import 'music_studio/music_voice.dart';
 import 'chat/chat_workspace.dart';
 import 'theme/korlix_theme.dart';
 import 'theme/korlix_action_button.dart';
@@ -11784,6 +11785,36 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       ensureConsent:(context)=>KorlixThirdPartyAiConsent.ensure(context:context,
         featureName:'Music Studio',providers:{KorlixThirdPartyAiProvider.musicApiAi},
         dataCategories:{KorlixThirdPartyAiDataCategory.typedTextAndPrompts}),
+      openVoice:(workingDraft) async {
+        final revision = kKorlixAuthRevision.value;
+        final consent = await ensureKorlixThirdPartyAiConsent(
+          context: context, featureName: 'Music Studio and K-Nova',
+          providers: const {KorlixThirdPartyAiProvider.openAi},
+          dataCategories: const {
+            KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
+            KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,
+            KorlixThirdPartyAiDataCategory.musicDraftsAndLibrary,
+          },
+        );
+        if (!consent || !mounted || client.sessionChanged ||
+            revision != kKorlixAuthRevision.value) return null;
+        final voice = MusicVoiceController(client: client, workingDraft: workingDraft);
+        try {
+          final route = MaterialPageRoute<Map<String, dynamic>>(builder: (_) =>
+            KorlixLiveConvoTestScreen(musicVoice: voice,
+              sessionChanges: kKorlixAuthRevision,
+              backendBaseUrl: kKorlixBackendBaseUrl,
+              headersBuilder: _authHeaders,
+              characterId: normalizeKorlixCharacterId(kKorlixSelectedCharacterNotifier.value),
+              language: _t.label,
+            ));
+          final result = await Navigator.of(context).push<Map<String, dynamic>>(route);
+          await route.completed;
+          return result;
+        } finally {
+          voice.dispose();
+        }
+      },
       onReport:(job,track)=>_showReportGeneratedContentSheet(contentType:'music',
         prompt:(job['settings']?['idea']??job['settings']?['lyrics']??'').toString(),
         outputSummary:'Generated music: ${track['title']??'Track'}',contentId:track['id']?.toString()),

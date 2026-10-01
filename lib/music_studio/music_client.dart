@@ -40,6 +40,25 @@ class MusicClient {
   String? _scope;
   bool _closed = false, _changed = false;
   VoidCallback? onAccessDenied;
+  final Set<VoidCallback> _accessDeniedListeners = {};
+  bool get sessionChanged =>
+      _closed ||
+      _changed ||
+      (sessionChanges != null && (_scope == null || _scope != _readScope()));
+
+  void addAccessDeniedListener(VoidCallback listener) =>
+      _accessDeniedListeners.add(listener);
+  void removeAccessDeniedListener(VoidCallback listener) =>
+      _accessDeniedListeners.remove(listener);
+
+  void _accessDenied() {
+    if (_closed || _changed) return;
+    _changed = true;
+    onAccessDenied?.call();
+    for (final listener in List<VoidCallback>.of(_accessDeniedListeners)) {
+      listener();
+    }
+  }
   String? _readScope([Map<String, String>? headers]) {
     try {
       final value = (headers ?? headersBuilder()).entries
@@ -62,8 +81,7 @@ class MusicClient {
         !_changed &&
         sessionChanges != null &&
         (_scope == null || _scope != _readScope())) {
-      _changed = true;
-      onAccessDenied?.call();
+      _accessDenied();
     }
   }
 
@@ -76,8 +94,7 @@ class MusicClient {
         sessionChanges != null &&
         headers != null &&
         _scope != _readScope(headers)) {
-      _changed = true;
-      onAccessDenied?.call();
+      _accessDenied();
     }
     if (_changed) {
       throw const MusicException('Sign in again and reopen Music Studio.', 401);
@@ -89,6 +106,7 @@ class MusicClient {
     _closed = true;
     sessionChanges?.removeListener(_checkSession);
     onAccessDenied = null;
+    _accessDeniedListeners.clear();
     if (_ownsClient) _http.close();
   }
 
@@ -105,8 +123,7 @@ class MusicClient {
       _guard();
       if (response.statusCode < 200 || response.statusCode >= 300) {
         if (response.statusCode == 401) {
-          _changed = true;
-          onAccessDenied?.call();
+          _accessDenied();
         }
         String? error;
         try {
@@ -225,6 +242,9 @@ class MusicClient {
 
   Future<Map<String, dynamic>> draft() async =>
       checkedDraft((await _request('GET', '/draft'))['draft']);
+  Future<Map<String, dynamic>> prepareVoiceDraft(
+    Map<String, dynamic> body,
+  ) async => _request('POST', '/voice/draft', body);
   Future<Map<String, dynamic>> saveDraft(Map<String, dynamic> body) async =>
       checkedDraft((await _request('PUT', '/draft', body))['draft']);
   Future<Map<String, dynamic>> generate(Map<String, dynamic> body) async {

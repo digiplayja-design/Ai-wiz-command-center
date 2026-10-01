@@ -85,7 +85,9 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
                 ),
               ),
               Text(
-                widget.bookkeepingMode
+                widget.musicMode
+                    ? 'MUSIC STUDIO · LIVE PRODUCER'
+                    : widget.bookkeepingMode
                     ? 'BOOKKEEPING · LIVE VOICE'
                     : 'LIVE VOICE',
                 style: TextStyle(
@@ -100,7 +102,7 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
         ),
         if (widget.inventoryResults == null &&
             !widget.schedulingMode &&
-            !widget.bookkeepingMode)
+            !widget.bookkeepingMode && !widget.musicMode)
           Tooltip(
             message: widget.paused
                 ? 'Resume Live Convo to open Agent Studio'
@@ -509,7 +511,7 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
             ),
           ),
           subtitle: Text(
-            widget.inventoryResults != null || widget.bookkeepingMode
+            widget.inventoryResults != null || widget.bookkeepingMode || widget.musicMode
                 ? 'Voice & accent'
                 : 'Voice, agent, files & documents',
             style: TextStyle(color: _secondary, fontSize: 12),
@@ -524,7 +526,7 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
             ),
             if (widget.inventoryResults == null &&
                 !widget.schedulingMode &&
-                !widget.bookkeepingMode) ...[
+                !widget.bookkeepingMode && !widget.musicMode) ...[
               _settingsTile(
                 icon: _activeAgentIcon,
                 title: 'Agent Studio',
@@ -763,6 +765,10 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
                           24,
                         ),
                         children: [
+                          if (widget.musicPanelBuilder != null) ...[
+                            widget.musicPanelBuilder!(_finishMusicAction),
+                            const SizedBox(height: 16),
+                          ],
                           if (widget.bookkeepingPanelBuilder != null) ...[
                             widget.bookkeepingPanelBuilder!(
                               _finishBookkeepingReview,

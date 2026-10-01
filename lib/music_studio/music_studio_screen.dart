@@ -7,6 +7,7 @@ import '../bookkeeping/bookkeeping_file_save.dart';
 import 'music_client.dart';
 import 'music_models.dart';
 import 'music_player.dart';
+import 'music_voice.dart';
 
 class MusicStudioScreen extends StatefulWidget {
   const MusicStudioScreen({
@@ -14,6 +15,7 @@ class MusicStudioScreen extends StatefulWidget {
     required this.client,
     required this.ensureConsent,
     this.onReport,
+    this.openVoice,
     this.player,
     this.saveFile,
     this.pollInterval = const Duration(seconds: 20),
@@ -22,6 +24,8 @@ class MusicStudioScreen extends StatefulWidget {
   final Future<bool> Function(BuildContext) ensureConsent;
   final Future<void> Function(Map<String, dynamic>, Map<String, dynamic>)?
   onReport;
+  final Future<Map<String, dynamic>?> Function(Map<String, dynamic> workingDraft)?
+  openVoice;
   final MusicPlayback? player;
   final Future<void> Function(Uint8List, String, String, Rect)? saveFile;
   final Duration pollInterval;
@@ -42,7 +46,7 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
   Map<String, dynamic>? _pendingGenerate, _pendingDraft;
   String _mode = 'idea', _voice = 'auto';
   int? _length;
-  int _tab = 0, _version = 0, _epoch = 0, _listSequence = 0;
+  int _tab = 0, _version = 0, _epoch = 0, _listSequence = 0, _editRevision = 0;
   bool _loading = true,
       _busy = false,
       _locked = false,
@@ -51,10 +55,12 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
       _polling = false,
       _hasMore = false,
       _favorites = false,
-      _listing = false;
+      _listing = false,
+      _voiceOpen = false,
+      _voicePrepared = false;
   String? _error, _nextBefore, _notice;
   Timer? _timer, _searchTimer;
-  bool get _editable => !_busy && !_locked && _pendingGenerate == null;
+  bool get _editable => !_busy && !_locked && !_voiceOpen && _pendingGenerate == null;
   ColorScheme get _colors => Theme.of(context).colorScheme;
   Map<String, dynamic> get _data => {
     'mode': _mode,
@@ -65,7 +71,14 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
     'voice': _voice,
     'duration': _length,
   };
-  bool _alive(int epoch) => mounted && !_locked && epoch == _epoch;
+  bool _alive(int epoch) {
+    if (!mounted || _locked || epoch != _epoch) return false;
+    if (widget.client.sessionChanged) {
+      _lock();
+      return false;
+    }
+    return true;
+  }
   @override
   void initState() {
     super.initState();
@@ -111,6 +124,7 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
       _pendingGenerate = _pendingDraft = null;
       _busy = false;
       _dirty = false;
+      _voicePrepared = false;
       _error = _notice = null;
       for (final c in [_idea, _title, _style, _lyrics, _search]) {
         c.clear();
@@ -119,6 +133,7 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
   }
 
   void _hydrate(Map<String, dynamic> d) {
+    _editRevision++;
     final v = {...blankMusic(), ...d};
     _mode = v['mode'];
     _voice = v['voice'];
@@ -129,12 +144,14 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
     _lyrics.text = v['lyrics'];
     _dirty = false;
     _pendingDraft = null;
+    _voicePrepared = false;
   }
 
   void _edit([VoidCallback? fn]) {
     if (!_editable) return;
     setState(() {
       fn?.call();
+      _editRevision++;
       _dirty = true;
       _pendingDraft = null;
       _error = null;
@@ -284,7 +301,7 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
   }
 
   Future<void> _poll() async {
-    if (_locked || _polling || _busy || _loading) return;
+    if (_locked || _polling || _busy || _loading || _voiceOpen) return;
     final active = _jobs
         .where(musicPending)
         .take(3)
@@ -296,7 +313,7 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
     try {
       for (final id in active) {
         final j = await widget.client.status(id);
-        if (!_alive(epoch)) return;
+        if (!_alive(epoch) || _voiceOpen) return;
         setState(() => _replaceJob(j));
       }
     } catch (e) {
@@ -330,6 +347,7 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
   }
 
   Future<void> _persistDraft(int epoch) async {
+    final voicePrepared = _voicePrepared;
     _pendingDraft ??= {
       'version': _version,
       'request_key': musicRequestKey(),
@@ -340,6 +358,7 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
     setState(() {
       _version = draft['version'];
       _hydrate(musicMap(draft['data']));
+      _voicePrepared = voicePrepared;
       _error = null;
     });
   }
@@ -389,6 +408,119 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
     return null;
   }
 
+  Future<bool> _confirmVoiceGeneration() async {
+    final recipe = Map<String, dynamic>.from(_data);
+    final mode = recipe['mode'] == 'instrumental'
+        ? 'Instrumental'
+        : recipe['mode'] == 'lyrics' ? 'Song from lyrics' : 'Song from idea';
+    final voice = recipe['mode'] == 'instrumental'
+        ? 'No vocals'
+        : recipe['voice'] == 'f' ? 'Female voice'
+        : recipe['voice'] == 'm' ? 'Male voice' : 'Automatic voice';
+    return await _dialog<bool>((c) => AlertDialog(
+      title: const Text('Create this music?'),
+      content: SizedBox(
+        width: 520,
+        child: SingleChildScrollView(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Uses 1 creation from your Music Production allowance when accepted.'),
+            const SizedBox(height: 16),
+            Text('${recipe['title'].toString().trim().isEmpty ? 'Untitled creation' : recipe['title']} · $mode',
+              style: const TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            Text('$voice · ${recipe['duration'] == null ? 'Automatic length' : 'About ${recipe['duration']} seconds'}'),
+            const SizedBox(height: 12),
+            Text('Sound & style: ${recipe['style'].toString().trim().isEmpty ? 'Automatic' : recipe['style']}'),
+            const SizedBox(height: 12),
+            Text(recipe['mode'] == 'lyrics' ? 'Lyrics' : 'Idea',
+              style: const TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            SelectableText('${recipe['mode'] == 'lyrics' ? recipe['lyrics'] : recipe['idea']}'),
+          ],
+        )),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, false),
+          child: const Text('Keep editing')),
+        FilledButton(key: const ValueKey('music-voice-confirm-generation'),
+          onPressed: () => Navigator.pop(c, true), child: const Text('Create music')),
+      ],
+    )) ?? false;
+  }
+
+  Future<void> _openVoice() async {
+    if (!_editable || widget.openVoice == null) return;
+    final epoch = _epoch, revision = _editRevision, version = _version;
+    final current = jsonEncode(_data);
+    final workingDraft = musicMap(jsonDecode(current));
+    setState(() {
+      _voiceOpen = true;
+      _busy = true;
+      _listSequence++;
+      _listing = false;
+      _error = _notice = null;
+    });
+    try {
+      await _player.pauseForVoice();
+      if (!_alive(epoch)) return;
+      if (_player.playing) throw StateError('Music has not paused.');
+      final result = await widget.openVoice!(workingDraft);
+      if (!_alive(epoch) || result == null) return;
+      if (revision != _editRevision || version != _version || current != jsonEncode(_data)) {
+        setState(() => _notice = 'Your studio changed. Your current edits were kept. Talk to K-Nova again when you are ready.');
+        return;
+      }
+      if (result['action'] == 'draft' && result.length == 2) {
+        final draft = checkedMusicVoiceRecipe(result['draft']);
+        setState(() {
+          _hydrate(draft);
+          _dirty = true;
+          _voicePrepared = true;
+          _tab = 0;
+          _notice = 'K-Nova prepared your idea. Review or edit it below, then save the draft or create your music. Nothing has been generated.';
+        });
+        _top();
+      } else if (result['action'] == 'listen' && result.length == 3) {
+        final id = result['job_id'], index = result['track_index'];
+        if (id is! String || !RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(id) ||
+            index is! int || index < 0) {
+          throw const MusicException('That track selection could not be confirmed. Choose a track from My tracks.');
+        }
+        // Re-read the signed-in owner's job. Voice never supplies a media URL.
+        final job = await widget.client.status(id);
+        if (!_alive(epoch)) return;
+        final checked = widget.client.checkedJob(job, id);
+        final tracks = checked['tracks'] as List;
+        if (index >= tracks.length || tracks[index] is! Map ||
+            tracks[index]['state'] != 'succeeded' || musicUrl(tracks[index]['audioUrl']) == null) {
+          throw const MusicException('That version is not ready to play. Check My tracks for the latest status.');
+        }
+        setState(() {
+          _jobs = [checked, ..._jobs.where((j) => j['id'] != id)];
+          _search.clear();
+          _favorites = false;
+          _tab = 1;
+          _notice = 'Listen mode · K-Nova’s microphone is off. Tap Play if your browser needs a tap to start audio.';
+        });
+        _top();
+        // The callback returns only after LIVE CONVO has released its microphone.
+        await _player.toggle('$id:$index', tracks[index]['audioUrl']);
+        if (_alive(epoch) && _player.error != null) {
+          setState(() => _notice = 'Your track is ready. Tap Play in My tracks to begin listening.');
+        }
+      } else {
+        throw const MusicException('K-Nova’s studio selection could not be confirmed. Your current idea was kept.');
+      }
+    } catch (e) {
+      if (_alive(epoch)) setState(() => _error = e is MusicException
+          ? '$e' : 'Could not switch audio modes. Pause your music and try Talk to K-Nova again.');
+    } finally {
+      if (_alive(epoch)) setState(() { _voiceOpen = false; _busy = false; });
+    }
+  }
+
   Future<void> _generate() async {
     if (_busy || _locked) return;
     if (_pendingGenerate == null && _validation != null) {
@@ -401,6 +533,9 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
       _error = null;
     });
     try {
+      if (_pendingGenerate == null && _voicePrepared &&
+          !await _confirmVoiceGeneration()) return;
+      if (!_alive(epoch)) return;
       _dialogOpen = true;
       bool consent;
       try {
@@ -688,6 +823,47 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
       ),
     );
   }
+
+  Widget _voiceCard() => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(22),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(colors: [
+        _colors.tertiaryContainer,
+        Color.alphaBlend(_colors.primary.withValues(alpha: .06), _colors.surface),
+      ]),
+      border: Border.all(color: _colors.tertiary.withValues(alpha: .3)),
+      borderRadius: BorderRadius.circular(24),
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(width: 48, height: 48,
+          decoration: BoxDecoration(color: _colors.tertiary,
+            borderRadius: BorderRadius.circular(16)),
+          child: Icon(Icons.multitrack_audio_rounded, color: _colors.onTertiary)),
+        const SizedBox(width: 14),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('K-NOVA · YOUR MUSIC PRODUCER',
+            style: TextStyle(fontSize: 11, letterSpacing: 1.1,
+              fontWeight: FontWeight.w800, color: _colors.onSurfaceVariant)),
+          const SizedBox(height: 5),
+          _heading('Create with K-Nova'),
+        ])),
+      ]),
+      const SizedBox(height: 14),
+      _text('Talk through an idea, shape your lyrics, or find a saved track. Your current draft comes with you.'),
+      const SizedBox(height: 16),
+      Wrap(spacing: 10, runSpacing: 10, children: [
+        FilledButton.icon(key: const ValueKey('music-open-voice'),
+          onPressed: _editable ? _openVoice : null,
+          icon: const Icon(Icons.mic_rounded), label: const Text('Talk to K-Nova')),
+        Chip(avatar: Icon(_player.playing ? Icons.headphones_rounded : Icons.tune_rounded, size: 17),
+          label: Text(_player.playing ? 'Listen mode' : 'Your studio, your direction')),
+      ]),
+      const SizedBox(height: 10),
+      _text('Talk pauses your music. Listen closes the microphone. You review every new creation before it uses your music allowance.', muted: true),
+    ]),
+  );
 
   Widget _starterList() => _card(
     Column(
@@ -1482,6 +1658,10 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
                         ],
                       ),
                       const SizedBox(height: 20),
+                      if (widget.openVoice != null) ...[
+                        _voiceCard(),
+                        const SizedBox(height: 20),
+                      ],
                       if (_error != null) _message(_error!, error: true),
                       if (_notice != null) _message(_notice!),
                       if (_tab == 1)

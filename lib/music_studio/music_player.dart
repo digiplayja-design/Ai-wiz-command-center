@@ -9,6 +9,7 @@ abstract class MusicPlayback extends ChangeNotifier {
   Future<void> toggle(String id, String url);
   Future<void> seek(Duration value);
   Future<void> stop();
+  Future<void> pauseForVoice() => stop();
 }
 
 class DeviceMusicPlayback extends MusicPlayback {
@@ -96,6 +97,27 @@ class DeviceMusicPlayback extends MusicPlayback {
         _changed();
       }
     });
+  }
+
+  @override
+  Future<void> pauseForVoice() async {
+    if (_closed) throw StateError('Music playback is closed.');
+    _revision++;
+    busy = true;
+    _changed();
+    try {
+      await _queue(() async {
+        if (_closed) throw StateError('Music playback is closed.');
+        // The completed native pause, rather than a UI flag, permits the mic.
+        await _player.pause();
+        playing = false;
+      });
+    } finally {
+      if (!_closed) {
+        busy = false;
+        _changed();
+      }
+    }
   }
 
   @override
