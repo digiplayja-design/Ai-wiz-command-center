@@ -171,6 +171,40 @@ class LiveStudioClient {
   }
 
   Future<Map<String, dynamic>> load() => _request('GET', '');
+  Future<Uri> startYouTubeConnection() async {
+    final result = await _request('POST', '/connections/youtube/start', {
+      'confirmed': true,
+    });
+    _guard();
+    final uri = Uri.tryParse(result['url']?.toString() ?? '');
+    final base = Uri.tryParse(backendBaseUrl);
+    if (uri == null ||
+        base == null ||
+        uri.scheme != 'https' ||
+        uri.origin != base.origin ||
+        uri.userInfo.isNotEmpty ||
+        uri.path != '/api/live-studio/connect/youtube/launch' ||
+        uri.fragment.isNotEmpty ||
+        uri.queryParametersAll.length != 1 ||
+        uri.queryParametersAll['ticket']?.length != 1 ||
+        (uri.queryParameters['ticket']?.isEmpty ?? true)) {
+      throw const LiveStudioException(
+        'The YouTube connection link could not be verified.',
+      );
+    }
+    return uri;
+  }
+
+  Future<void> confirmYouTubeConnection(String id) async {
+    await _request('POST', '/connections/youtube/confirm', {
+      'id': id,
+      'confirmed': true,
+    });
+  }
+
+  Future<Map<String, dynamic>> disconnectYouTube() =>
+      _request('DELETE', '/connections/youtube', {'confirmed': true});
+
   Future<Map<String, dynamic>> save(
     Map<String, dynamic> input,
     String requestId,
@@ -185,6 +219,8 @@ class LiveStudioClient {
     String mode,
     String requestId, {
     DateTime? scheduledAt,
+    String? connectionId,
+    int? connectionRevision,
   }) async => Map<String, dynamic>.from(
     (await _request('POST', '/shows/${Uri.encodeComponent(id)}/start', {
       'mode': mode,
@@ -192,6 +228,10 @@ class LiveStudioClient {
       'consent': true,
       'confirmed': true,
       'scheduledAt': scheduledAt?.toUtc().toIso8601String(),
+      if (mode == 'youtube') ...{
+        'connectionId': connectionId,
+        'connectionRevision': connectionRevision,
+      },
     }))['show'],
   );
   Future<Map<String, dynamic>> control(

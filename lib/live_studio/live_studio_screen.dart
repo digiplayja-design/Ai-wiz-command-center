@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
+
 import 'live_studio_client.dart';
 
 class LiveStudioScreen extends StatefulWidget {
@@ -18,7 +20,8 @@ class LiveStudioScreen extends StatefulWidget {
   State<LiveStudioScreen> createState() => _LiveStudioScreenState();
 }
 
-class _LiveStudioScreenState extends State<LiveStudioScreen> {
+class _LiveStudioScreenState extends State<LiveStudioScreen>
+    with WidgetsBindingObserver {
   final _title = TextEditingController(text: 'KORLIX Live');
   final _topic = TextEditingController(
     text: 'How can AI help a small business?',
@@ -27,23 +30,35 @@ class _LiveStudioScreenState extends State<LiveStudioScreen> {
   String _category = 'business';
   int _duration = 900, _hosts = 2;
   Map<String, dynamic> _access = {};
+  Map<String, dynamic> _entitlement = {}, _usage = {};
+  Map<String, dynamic>? _connection;
+  List<Map<String, dynamic>> _pendingConnections = [];
+  bool _connectionConfigured = false;
   List<Map<String, dynamic>> _shows = [];
   Map<String, dynamic>? _selected;
   bool _busy = false, _loading = true, _invalid = false;
   String? _error, _notice, _saveHash, _saveKey, _startHash, _startKey;
   Timer? _poll;
-  int _epoch = 0;
+  int _epoch = 0, _loadSequence = 0;
   VideoPlayerController? _player;
   static const _active = {'queued', 'preparing', 'live', 'paused'};
   static const _violet = Color(0xffa18bff), _mint = Color(0xff57dfc5);
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.client.onAccessDenied = _deny;
     unawaited(_load());
     _poll = Timer.periodic(const Duration(seconds: 5), (_) {
       if (!_busy && !_invalid) unawaited(_load(silent: true));
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !_busy && !_invalid) {
+      unawaited(_load(silent: true));
+    }
   }
 
   void _deny() {
@@ -56,6 +71,11 @@ class _LiveStudioScreenState extends State<LiveStudioScreen> {
       _selected = null;
       _shows = [];
       _access = {};
+      _entitlement = {};
+      _usage = {};
+      _connection = null;
+      _pendingConnections = [];
+      _connectionConfigured = false;
       _error = 'Your session changed. Reopen Live Studio after signing in.';
     });
   }
@@ -68,6 +88,7 @@ class _LiveStudioScreenState extends State<LiveStudioScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _poll?.cancel();
     _closePlayer();
     _title.dispose();
@@ -91,12 +112,25 @@ class _LiveStudioScreenState extends State<LiveStudioScreen> {
   }
 
   Future<void> _load({bool silent = false}) async {
-    final epoch = _epoch;
+    final epoch = _epoch, sequence = ++_loadSequence;
     try {
       final result = await widget.client.load();
-      if (!mounted || _invalid || epoch != _epoch) return;
+      if (!mounted || _invalid || epoch != _epoch || sequence != _loadSequence)
+        return;
       setState(() {
         _access = Map<String, dynamic>.from(result['access'] as Map? ?? {});
+        _entitlement = Map<String, dynamic>.from(
+          result['entitlement'] as Map? ?? {},
+        );
+        _usage = Map<String, dynamic>.from(result['usage'] as Map? ?? {});
+        _connection = result['connection'] is Map
+            ? Map<String, dynamic>.from(result['connection'])
+            : null;
+        _pendingConnections = (result['pendingConnections'] as List? ?? [])
+            .whereType<Map>()
+            .map((c) => Map<String, dynamic>.from(c))
+            .toList();
+        _connectionConfigured = result['connectionConfigured'] == true;
         final incoming = (result['shows'] as List? ?? [])
             .whereType<Map>()
             .map((s) => Map<String, dynamic>.from(s))
@@ -109,7 +143,7 @@ class _LiveStudioScreenState extends State<LiveStudioScreen> {
         if (!silent) _error = null;
       });
     } catch (e) {
-      if (mounted && !_invalid && epoch == _epoch)
+      if (mounted && !_invalid && epoch == _epoch && sequence == _loadSequence)
         setState(() {
           _loading = false;
           _error = '$e';
@@ -119,6 +153,7 @@ class _LiveStudioScreenState extends State<LiveStudioScreen> {
 
   Future<void> _action(Future<void> Function() operation) async {
     if (_busy || _invalid) return;
+    _epoch++;
     setState(() {
       _busy = true;
       _error = null;
@@ -160,6 +195,7 @@ class _LiveStudioScreenState extends State<LiveStudioScreen> {
       await showDialog<bool>(
         context: context,
         builder: (c) => AlertDialog(
+          scrollable: true,
           title: Text(title),
           content: Text(message),
           actions: [
@@ -177,7 +213,10 @@ class _LiveStudioScreenState extends State<LiveStudioScreen> {
       false;
   Future<void> _start(String mode, {bool scheduled = false}) async {
     final show = _selected;
-    if (show == null) return;
+    if (show == null || !_canStart(mode, show)) return;
+    final connection = _connection == null
+        ? null
+        : Map<String, dynamic>.from(_connection!);
     DateTime? when;
     if (scheduled) {
       final now = DateTime.now();
@@ -198,12 +237,12 @@ class _LiveStudioScreenState extends State<LiveStudioScreen> {
       when = DateTime(date.year, date.month, date.day, time.hour, time.minute);
     }
     final message = mode == 'rehearsal'
-        ? 'KORLIX will research your topic and generate a private video of up to 60 seconds with AI voices. This pilot allows 3 starts in 24 hours. It uses provider resources; no audience broadcast will start.'
-        : 'Start an unlisted YouTube show${when == null ? ' now' : ' at ${when.toLocal()}'}? Anyone with its link can watch. KORLIX will send AI voices, visuals and selected chat questions to the configured providers. The show is limited to ${(show['config']['durationSeconds'] as num) ~/ 60} minutes and 200 generation calls. You can end it from this screen.';
+        ? 'KORLIX will research your topic and generate a private video of up to 60 seconds with AI voices. This uses your rehearsal and generation allowance. No audience broadcast will start.'
+        : 'Start an unlisted YouTube show on ${connection?['channelTitle'] ?? 'your connected channel'} (${connection?['channelId'] ?? ''})${when == null ? ' now' : ' at ${when.toLocal()}'}? Anyone with its link can watch. KORLIX will send AI voices, visuals and selected chat questions to the configured providers. This reserves ${(show['config']['durationSeconds'] as num) ~/ 60} broadcast minutes and uses your generation allowance. You can end it from this screen.';
     if (!await _confirm(
           mode == 'rehearsal'
               ? 'Create private rehearsal?'
-              : 'Start YouTube pilot?',
+              : 'Start YouTube broadcast?',
           message,
           mode == 'rehearsal' ? 'Create rehearsal' : 'Confirm broadcast',
         ) ||
@@ -211,7 +250,8 @@ class _LiveStudioScreenState extends State<LiveStudioScreen> {
       return;
     await _action(() async {
       if (!await widget.ensureConsent() || !mounted || _invalid) return;
-      final hash = '${show['id']}/$mode/${when?.toIso8601String()}';
+      final hash =
+          '${show['id']}/$mode/${when?.toIso8601String()}/${connection?['id']}/${connection?['revision']}';
       if (hash != _startHash) {
         _startHash = hash;
         _startKey = liveStudioRequestId();
@@ -221,12 +261,17 @@ class _LiveStudioScreenState extends State<LiveStudioScreen> {
         mode,
         _startKey!,
         scheduledAt: when,
+        connectionId: mode == 'youtube' ? (connection?['id'] as String?) : null,
+        connectionRevision: mode == 'youtube'
+            ? (connection?['revision'] as num?)?.toInt()
+            : null,
       );
       if (!mounted || _invalid) return;
       _startHash = null;
       _startKey = null;
       _closePlayer();
       setState(() => _apply(result));
+      await _load(silent: true);
     });
   }
 
@@ -296,6 +341,254 @@ class _LiveStudioScreenState extends State<LiveStudioScreen> {
       });
     });
   }
+
+  bool _canStart(String mode, Map<String, dynamic> show) {
+    if (_access['canStart'] != true ||
+        _access[mode == 'rehearsal' ? 'rehearsalReady' : 'youtubeReady'] !=
+            true)
+      return false;
+    final generations = _usage['generationsRemaining'];
+    if (generations is num && generations < (mode == 'rehearsal' ? 10 : 200))
+      return false;
+    if (mode == 'rehearsal') {
+      final remaining = _usage['rehearsalsRemaining'];
+      return remaining is! num || remaining > 0;
+    }
+    final remaining = _usage['broadcastSecondsRemaining'];
+    final duration = (show['config'] as Map?)?['durationSeconds'];
+    return _connection?['state'] == 'connected' &&
+        _connection?['id'] is String &&
+        RegExp(
+          r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+        ).hasMatch(_connection!['id']) &&
+        _connection?['revision'] is int &&
+        (_connection!['revision'] as int) > 0 &&
+        (remaining is! num || (duration is num && remaining >= duration));
+  }
+
+  Future<void> _connectYouTube() async {
+    if (!await _confirm(
+          'Connect your YouTube channel?',
+          'Choose the Google account and YouTube channel you want this workspace to use. KORLIX will request permission to manage your broadcasts and read live chat. You will review the channel here before it becomes active. Connecting does not start a show.',
+          'Continue to YouTube',
+        ) ||
+        !mounted)
+      return;
+    await _action(() async {
+      final uri = await widget.client.startYouTubeConnection();
+      if (!mounted || _invalid) return;
+      widget.client.checkAccess();
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication))
+        throw const LiveStudioException(
+          'The connection page could not open. Try connecting again.',
+        );
+      if (!mounted || _invalid) return;
+      setState(
+        () => _notice =
+            'After authorizing YouTube, return here and refresh to review your channel.',
+      );
+      await _load(silent: true);
+    });
+  }
+
+  Future<void> _confirmConnection(Map<String, dynamic> connection) async {
+    final replacing = _connection != null;
+    if (!await _confirm(
+          'Use this YouTube channel?',
+          '${connection['channelTitle']}\nChannel ID: ${connection['channelId']}\n\nFuture YouTube shows from this workspace will use this channel.${replacing ? ' This replaces your current connection, cancels queued YouTube shows and requests running broadcasts to stop. A new broadcast must wait for the previous broadcast to stop.' : ''} No broadcast starts now.',
+          'Confirm channel',
+        ) ||
+        !mounted)
+      return;
+    await _action(() async {
+      await widget.client.confirmYouTubeConnection('${connection['id']}');
+      if (!mounted || _invalid) return;
+      setState(() => _notice = 'Your YouTube channel is connected.');
+      await _load(silent: true);
+    });
+  }
+
+  Future<void> _disconnectYouTube() async {
+    final connection = _connection;
+    if (!await _confirm(
+          'Disconnect YouTube?',
+          'Disconnect ${connection?['channelTitle'] ?? 'YouTube'}${connection == null ? '' : ' (${connection['channelId']})'}? Queued YouTube shows will be cancelled and running broadcasts will be asked to stop. KORLIX will remove the stored authorization credentials. Existing YouTube videos remain on YouTube.',
+          'Disconnect channel',
+        ) ||
+        !mounted)
+      return;
+    await _action(() async {
+      final result = await widget.client.disconnectYouTube();
+      if (!mounted || _invalid) return;
+      setState(() {
+        _connection = null;
+        _pendingConnections = [];
+        final message = result['message'];
+        _notice = message is String && message.trim().isNotEmpty
+            ? message
+            : 'YouTube disconnected. Refresh show status to check any stop request.';
+      });
+      await _load(silent: true);
+    });
+  }
+
+  String _count(dynamic value) => value is num ? '${value.floor()}' : '—';
+  String _minutes(dynamic value) {
+    if (value is! num) return '—';
+    final minutes = value / 60;
+    return minutes == minutes.floorToDouble()
+        ? '${minutes.toInt()}'
+        : minutes.toStringAsFixed(1);
+  }
+
+  Widget _workspace() => _panel(
+    'Your channel & allowance',
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Each customer connects their own YouTube channel. Your shows and allowance belong to your signed-in workspace.',
+        ),
+        const SizedBox(height: 14),
+        if (_connection != null) ...[
+          Text(
+            '${_connection!['channelTitle']}',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          SelectableText(
+            'Channel ID: ${_connection!['channelId']}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _connection!['state'] == 'connected'
+                ? 'Connected to this workspace'
+                : 'Reconnect YouTube to restore channel access.',
+          ),
+        ] else
+          const Text('No YouTube channel connected.'),
+        if (!_connectionConfigured) ...[
+          const SizedBox(height: 8),
+          const Text(
+            'YouTube connection setup is not available yet. You can save shows while setup is completed.',
+          ),
+        ],
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              key: const ValueKey('live-studio-connect-youtube'),
+              onPressed: _busy || _invalid || !_connectionConfigured
+                  ? null
+                  : _connectYouTube,
+              icon: const Icon(Icons.link),
+              label: Text(
+                _connection == null
+                    ? 'Connect YouTube'
+                    : _connection!['state'] == 'connected'
+                    ? 'Change channel'
+                    : 'Reconnect YouTube',
+              ),
+            ),
+            if (_connection != null || _pendingConnections.isNotEmpty)
+              TextButton.icon(
+                key: const ValueKey('live-studio-disconnect-youtube'),
+                onPressed: _busy || _invalid ? null : _disconnectYouTube,
+                icon: const Icon(Icons.link_off),
+                label: const Text('Disconnect'),
+              ),
+          ],
+        ),
+        for (final pending in _pendingConnections) ...[
+          const Divider(height: 28),
+          const Text(
+            'Review channel before connecting',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 6),
+          Text('${pending['channelTitle']}'),
+          SelectableText('Channel ID: ${pending['channelId']}'),
+          if (DateTime.tryParse('${pending['expiresAt']}')
+              case final DateTime expires)
+            Text(
+              'Confirmation expires: ${expires.toLocal()}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          const SizedBox(height: 8),
+          FilledButton.tonal(
+            key: ValueKey('live-studio-confirm-${pending['id']}'),
+            onPressed: _busy || _invalid
+                ? null
+                : () => _confirmConnection(pending),
+            child: const Text('Review and confirm'),
+          ),
+        ],
+        const Divider(height: 28),
+        Text(
+          _entitlement['enabled'] == true
+              ? (_entitlement['label']?.toString() ?? 'Workspace allowance')
+              : 'Allowance not active',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 6),
+        if (_entitlement['enabled'] != true)
+          const Text(
+            'Generation and broadcasting are unavailable until your allowance is activated. You can still manage your channel and saved shows.',
+          ),
+        if (_entitlement['enabled'] == true || _usage.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _pill(
+                Icons.movie_outlined,
+                '${_count(_usage['rehearsalsRemaining'])} rehearsals remaining',
+              ),
+              _pill(
+                Icons.timer_outlined,
+                '${_minutes(_usage['broadcastSecondsRemaining'])} broadcast minutes remaining',
+              ),
+              _pill(
+                Icons.auto_awesome,
+                '${_count(_usage['generationsRemaining'])} generations remaining',
+              ),
+              if (_entitlement['maxDailyStarts'] is num)
+                _pill(
+                  Icons.today_outlined,
+                  '${_count(_usage['dailyStarts'])} / ${_count(_entitlement['maxDailyStarts'])} starts in 24 hours',
+                ),
+            ],
+          ),
+          if (DateTime.tryParse('${_entitlement['periodEnd']}')
+              case final DateTime end) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Allowance period ends: ${end.toLocal()}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          const SizedBox(height: 8),
+          Text(
+            'Queued shows reserve allowance. Each rehearsal reserves up to 10 generations; a broadcast reserves up to 200. Check the available allowance before starting.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+        const SizedBox(height: 12),
+        Text(
+          _access['message']?.toString() ??
+              'Save a show, connect your channel, and check your allowance before starting.',
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Broadcast beta · Unlisted YouTube shows · Private rehearsals up to 60 seconds',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    ),
+  );
 
   Widget _pill(IconData icon, String label, {Color color = _violet}) =>
       Container(
@@ -695,10 +988,7 @@ class _LiveStudioScreenState extends State<LiveStudioScreen> {
               FilledButton.icon(
                 key: const ValueKey('live-studio-rehearse'),
                 onPressed:
-                    _busy ||
-                        running ||
-                        _invalid ||
-                        _access['rehearsalReady'] != true
+                    _busy || running || _invalid || !_canStart('rehearsal', s)
                     ? null
                     : () => _start('rehearsal'),
                 icon: const Icon(Icons.play_circle_outline),
@@ -706,10 +996,7 @@ class _LiveStudioScreenState extends State<LiveStudioScreen> {
               ),
               OutlinedButton.icon(
                 onPressed:
-                    _busy ||
-                        running ||
-                        _invalid ||
-                        _access['youtubeReady'] != true
+                    _busy || running || _invalid || !_canStart('youtube', s)
                     ? null
                     : () => _start('youtube'),
                 icon: const Icon(Icons.sensors),
@@ -717,10 +1004,7 @@ class _LiveStudioScreenState extends State<LiveStudioScreen> {
               ),
               OutlinedButton.icon(
                 onPressed:
-                    _busy ||
-                        running ||
-                        _invalid ||
-                        _access['youtubeReady'] != true
+                    _busy || running || _invalid || !_canStart('youtube', s)
                     ? null
                     : () => _start('youtube', scheduled: true),
                 icon: const Icon(Icons.schedule),
@@ -900,44 +1184,7 @@ class _LiveStudioScreenState extends State<LiveStudioScreen> {
                   ),
                 _stage(),
                 const SizedBox(height: 18),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          _access['youtubeReady'] == true
-                              ? Icons.check_circle_outline
-                              : Icons.link_off,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Single-channel pilot',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 5),
-                              Text(
-                                _access['message']?.toString() ??
-                                    'Private rehearsals first. YouTube broadcasting requires the connected channel and worker.',
-                              ),
-                              const SizedBox(height: 5),
-                              const Text(
-                                'Up to 60 seconds per rehearsal · 3 starts per 24 hours · No public broadcasts in this pilot',
-                                style: TextStyle(fontSize: 12),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                _workspace(),
                 const SizedBox(height: 18),
                 LayoutBuilder(
                   builder: (context, c) {

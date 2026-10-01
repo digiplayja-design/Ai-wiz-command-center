@@ -27,24 +27,87 @@ Map<String, dynamic> show({String state = 'draft', int version = 1}) => {
 };
 
 class FixtureClient extends LiveStudioClient {
-  FixtureClient({this.saved = false})
+  FixtureClient({this.saved = false, this.connected = false})
     : super(
         backendBaseUrl: 'https://fixture.invalid',
         headersBuilder: () => {},
       );
   bool saved;
+  bool connected, enabled = true;
+  int connectionRevision = 1;
+  String channelTitle = 'Customer Channel';
+  String state = 'draft';
+  int rehearsals = 6, broadcastSeconds = 3600, generations = 450;
+  List<Map<String, dynamic>> pendingConnections = [];
+  String? confirmedChannel;
+  int disconnections = 0, ends = 0;
+  String? disconnectMessage;
   int starts = 0, saves = 0;
   String? requestId;
+  String? startedConnectionId;
+  int? startedConnectionRevision;
   Map<String, dynamic>? input;
   @override
   Future<Map<String, dynamic>> load() async => {
-    'shows': saved ? [show()] : [],
+    'shows': saved ? [show(state: state)] : [],
     'access': {
       'rehearsalReady': true,
-      'youtubeReady': false,
-      'message': 'Connect YouTube and activate the broadcast worker.',
+      'youtubeReady': connected,
+      'canStart': enabled,
+      'message': 'Manage shows and your channel from this workspace.',
+    },
+    'connectionConfigured': true,
+    'connection': connected
+        ? {
+            'id': '6aa0fc74-df5b-4b3d-953c-9b49a40c1fc3',
+            'channelId': 'UC-customer-channel',
+            'channelTitle': channelTitle,
+            'state': 'connected',
+            'revision': connectionRevision,
+          }
+        : null,
+    'pendingConnections': pendingConnections,
+    'entitlement': {
+      'enabled': enabled,
+      'label': 'Customer allowance',
+      'maxDailyStarts': 7,
+    },
+    'usage': {
+      'dailyStarts': 2,
+      'rehearsalsRemaining': rehearsals,
+      'broadcastSecondsRemaining': broadcastSeconds,
+      'generationsRemaining': generations,
     },
   };
+  @override
+  Future<void> confirmYouTubeConnection(String id) async {
+    confirmedChannel = id;
+    connected = true;
+    pendingConnections = [];
+  }
+
+  @override
+  Future<Map<String, dynamic>> disconnectYouTube() async {
+    disconnections++;
+    connected = false;
+    pendingConnections = [];
+    return {
+      'providerRevoked': disconnectMessage == null,
+      if (disconnectMessage != null) 'message': disconnectMessage,
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> control(
+    String id,
+    String action, {
+    String? text,
+  }) async {
+    if (action == 'end') ends++;
+    state = 'completed';
+    return show(state: state, version: 3);
+  }
+
   @override
   Future<Map<String, dynamic>> save(
     Map<String, dynamic> data,
@@ -63,8 +126,13 @@ class FixtureClient extends LiveStudioClient {
     String mode,
     String requestId, {
     DateTime? scheduledAt,
+    String? connectionId,
+    int? connectionRevision,
   }) async {
     starts++;
+    startedConnectionId = connectionId;
+    startedConnectionRevision = connectionRevision;
+    state = 'queued';
     return {...show(state: 'queued', version: 2), 'mode': mode};
   }
 }
@@ -125,6 +193,67 @@ void main() {
       expect(denied, 1);
       client.dispose();
       session.dispose();
+    },
+  );
+  test('connection launch accepts only the trusted backend ticket endpoint', () async {
+    for (final url in [
+      'https://attacker.invalid/api/live-studio/connect/youtube/launch?ticket=safe',
+      'https://fixture.invalid.evil.example/api/live-studio/connect/youtube/launch?ticket=safe',
+      'http://fixture.invalid/api/live-studio/connect/youtube/launch?ticket=safe',
+      'https://user@fixture.invalid/api/live-studio/connect/youtube/launch?ticket=safe',
+      'https://fixture.invalid/api/live-studio/connect/youtube/callback?ticket=safe',
+      'https://fixture.invalid/api/live-studio/connect/youtube/launch?ticket=safe&ticket=other',
+      'https://fixture.invalid/api/live-studio/connect/youtube/launch?ticket=safe&redirect=https://evil.example',
+      'https://fixture.invalid/api/live-studio/connect/youtube/launch?ticket=',
+      'https://fixture.invalid/api/live-studio/connect/youtube/launch?ticket=safe#other',
+      'https://fixture.invalid/api/live-studio/connect/youtube/launch?ticket=safe',
+    ]) {
+      final client = LiveStudioClient(
+        backendBaseUrl: 'https://fixture.invalid',
+        headersBuilder: () => {'Authorization': 'Bearer ${token('one')}'},
+        client: MockClient((r) async {
+          expect(r.method, 'POST');
+          expect(r.url.path, '/api/live-studio/connections/youtube/start');
+          expect(jsonDecode(r.body), {'confirmed': true});
+          return http.Response(jsonEncode({'id': 'pending', 'url': url}), 200);
+        }),
+      );
+      if (url ==
+          'https://fixture.invalid/api/live-studio/connect/youtube/launch?ticket=safe') {
+        expect((await client.startYouTubeConnection()).toString(), url);
+      } else {
+        await expectLater(
+          client.startYouTubeConnection(),
+          throwsA(isA<LiveStudioException>()),
+        );
+      }
+      client.dispose();
+    }
+  });
+  test(
+    'connection confirmation and disconnect send authenticated explicit consent',
+    () async {
+      final calls = <http.Request>[];
+      final client = LiveStudioClient(
+        backendBaseUrl: 'https://fixture.invalid',
+        headersBuilder: () => {'Authorization': 'Bearer ${token('one')}'},
+        client: MockClient((r) async {
+          calls.add(r);
+          expect(r.headers['authorization'], isNotEmpty);
+          return http.Response('{}', 200);
+        }),
+      );
+      await client.confirmYouTubeConnection('pending-customer-channel');
+      await client.disconnectYouTube();
+      expect(calls[0].url.path, '/api/live-studio/connections/youtube/confirm');
+      expect(jsonDecode(calls[0].body), {
+        'id': 'pending-customer-channel',
+        'confirmed': true,
+      });
+      expect(calls[1].method, 'DELETE');
+      expect(calls[1].url.path, '/api/live-studio/connections/youtube');
+      expect(jsonDecode(calls[1].body), {'confirmed': true});
+      client.dispose();
     },
   );
   for (final width in [320.0, 390.0, 768.0, 1280.0]) {
@@ -236,6 +365,288 @@ void main() {
       );
       await tester.pumpWidget(const SizedBox());
       expect(client.starts, 1);
+    },
+  );
+  testWidgets(
+    'allowance changes disable generation but keep saved shows manageable',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 1700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final client = FixtureClient(saved: true, connected: true);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LiveStudioScreen(
+            client: client,
+            ensureConsent: () async => true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('6 rehearsals remaining'), findsOneWidget);
+      expect(find.text('60 broadcast minutes remaining'), findsOneWidget);
+      expect(find.text('2 / 7 starts in 24 hours'), findsOneWidget);
+      await tester.ensureVisible(find.byType(ListTile).first);
+      await tester.tap(find.byType(ListTile).first);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('live-studio-rehearse')),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.widgetWithText(OutlinedButton, 'Go live · unlisted'),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      client.generations = 9;
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('live-studio-rehearse')),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.widgetWithText(OutlinedButton, 'Go live · unlisted'),
+            )
+            .onPressed,
+        isNull,
+      );
+      client.generations = 450;
+      client.broadcastSeconds = 899;
+      client.rehearsals = 0;
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('live-studio-rehearse')),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.widgetWithText(OutlinedButton, 'Go live · unlisted'),
+            )
+            .onPressed,
+        isNull,
+      );
+      client.enabled = false;
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(find.text('Allowance not active'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('live-studio-save')),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, 'Remove'))
+            .onPressed,
+        isNotNull,
+      );
+      expect(
+        tester
+            .widget<TextButton>(
+              find.byKey(const ValueKey('live-studio-disconnect-youtube')),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'channel review confirms the exact pending channel and disconnect explains stopping shows',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 1700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final client = FixtureClient()
+        ..pendingConnections = [
+          {
+            'id': 'pending-2',
+            'channelTitle': 'Customer Two',
+            'channelId': 'UC-customer-two',
+            'expiresAt': '2027-01-01T00:00:00Z',
+          },
+        ];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LiveStudioScreen(
+            client: client,
+            ensureConsent: () async => true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final review = find.byKey(
+        const ValueKey('live-studio-confirm-pending-2'),
+      );
+      await tester.ensureVisible(review);
+      await tester.tap(review);
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Customer Two\nChannel ID: UC-customer-two'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(client.confirmedChannel, isNull);
+      await tester.tap(review);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Confirm channel'));
+      await tester.pumpAndSettle();
+      expect(client.confirmedChannel, 'pending-2');
+      expect(find.text('Review channel before connecting'), findsNothing);
+      final disconnect = find.byKey(
+        const ValueKey('live-studio-disconnect-youtube'),
+      );
+      await tester.ensureVisible(disconnect);
+      await tester.tap(disconnect);
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Queued YouTube shows will be cancelled'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Customer Channel (UC-customer-channel)'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Disconnect channel'));
+      await tester.pumpAndSettle();
+      expect(client.disconnections, 1);
+      expect(find.text('No YouTube channel connected.'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'disconnect displays provider revocation instructions from the server',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 1700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const message =
+          'YouTube disconnected from KORLIX. Google revocation could not be confirmed. Remove KORLIX access in your Google account permissions.';
+      final client = FixtureClient(connected: true)
+        ..disconnectMessage = message;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LiveStudioScreen(
+            client: client,
+            ensureConsent: () async => true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final disconnect = find.byKey(
+        const ValueKey('live-studio-disconnect-youtube'),
+      );
+      await tester.ensureVisible(disconnect);
+      await tester.tap(disconnect);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Disconnect channel'));
+      await tester.pumpAndSettle();
+      expect(client.disconnections, 1);
+      expect(find.text(message), findsOneWidget);
+      expect(find.text('No YouTube channel connected.'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets('an expired allowance still allows ending a running show', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 1700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final client = FixtureClient(saved: true, connected: true)
+      ..enabled = false
+      ..state = 'live';
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LiveStudioScreen(client: client, ensureConsent: () async => true),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byType(ListTile).first);
+    await tester.tap(find.byType(ListTile).first);
+    await tester.pump();
+    final end = find.widgetWithText(OutlinedButton, 'End show');
+    await tester.ensureVisible(end);
+    expect(tester.widget<OutlinedButton>(end).onPressed, isNotNull);
+    await tester.tap(end);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.widgetWithText(FilledButton, 'End show'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(client.ends, 1);
+    await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets(
+    'broadcast remains bound to the channel reviewed before a polling update',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 1700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final client = FixtureClient(saved: true, connected: true);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LiveStudioScreen(
+            client: client,
+            ensureConsent: () async => true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byType(ListTile).first);
+      await tester.tap(find.byType(ListTile).first);
+      await tester.pumpAndSettle();
+      final live = find.widgetWithText(OutlinedButton, 'Go live · unlisted');
+      await tester.ensureVisible(live);
+      await tester.tap(live);
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('on Customer Channel (UC-customer-channel)'),
+        findsOneWidget,
+      );
+      client.connectionRevision = 2;
+      client.channelTitle = 'Different Channel';
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Confirm broadcast'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(client.starts, 1);
+      expect(
+        client.startedConnectionId,
+        '6aa0fc74-df5b-4b3d-953c-9b49a40c1fc3',
+      );
+      expect(client.startedConnectionRevision, 1);
+      await tester.pumpWidget(const SizedBox());
     },
   );
   testWidgets('capture desktop studio for visual review', (tester) async {
