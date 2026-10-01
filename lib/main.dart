@@ -54,6 +54,8 @@ import 'ai_visibility/visibility_client.dart';
 import 'ai_visibility/visibility_screen.dart';
 import 'pod/pod_client.dart';
 import 'pod/pod_screen.dart';
+import 'live_studio/live_studio_client.dart';
+import 'live_studio/live_studio_screen.dart';
 import 'seo_agent/seo_client.dart';
 import 'seo_agent/seo_screen.dart';
 import 'funnel_studio/funnel_client.dart';
@@ -5161,6 +5163,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     'AI Visibility',
     'SEO Agent',
     'The Pod and You',
+    'Live Studio',
     'Contract Radar',
     'Virtual Closet',
     'Bookkeeping 2027',
@@ -8963,6 +8966,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       unawaited(_openAiVisibility());
       return;
     }
+    if (action.label == 'Live Studio') { unawaited(_openLiveStudio()); return; }
     if (action.label == 'The Pod and You') { unawaited(_openPod()); return; }
     if (action.label == 'SEO Agent') {
       unawaited(_openSeoAgent());
@@ -9649,6 +9653,14 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     )));
   }
 
+  Future<void> _openLiveStudio() async {
+    final client=LiveStudioClient(backendBaseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>LiveStudioScreen(client:client,
+      ensureConsent:()=>ensureKorlixThirdPartyAiConsent(context:context,featureName:'KORLIX Live Studio',
+        providers:const {KorlixThirdPartyAiProvider.openAi},
+        dataCategories:const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts})),));
+  }
+
   Future<void> _openPod() async {
     final client = PodClient(backendBaseUrl: kKorlixBackendBaseUrl,
       headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision);
@@ -9728,6 +9740,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       unawaited(_openAiVisibility());
       return;
     }
+    if (tool == 'Live Studio') { unawaited(_openLiveStudio()); return; }
     if (tool == 'The Pod and You') { unawaited(_openPod()); return; }
     if (tool == 'SEO Agent') {
       unawaited(_openSeoAgent());
@@ -11867,6 +11880,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       if (tool == 'BabyBlend') return 'Imagine a fictional child portrait from two adult photos with KORLIX';
       if (tool == 'FieldProof') return 'Job photos, evidence checklists and customer handoffs with KORLIX';
       if (tool == 'AI Visibility') return 'See sampled AI answers, improve your website content and track progress';
+      if (tool == 'Live Studio') return 'Create an AI-hosted show with private rehearsals and broadcast controls';
       if (tool == 'The Pod and You') return 'A podcast that listens back. Private AI conversations, up to 15 minutes';
       if (tool == 'SEO Agent') return 'Audit your website, prepare SEO drafts and monitor improvements weekly';
       if (tool == 'Virtual Closet') return 'Your private wardrobe, AI try-on, saved looks and KORLIX styling';
@@ -14390,7 +14404,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                           ? '${_socialNotifications.countLabel} unread messages'
                           : 'People, messages & forums'),
                     ),
-                    for (final tool in ['The Pod and You', 'Tax Prep', 'BabyBlend', 'Virtual Closet', 'Cybersecurity Defender']) toolTile(tool),
+                    for (final tool in ['Live Studio', 'The Pod and You', 'Tax Prep', 'BabyBlend', 'Virtual Closet', 'Cybersecurity Defender']) toolTile(tool),
                     for (final action in quickActions.where((a) => !businessAction(a))) _buildSafeUiQuickActionChip(action, tile: true),
                     tile('Music Studio', Icons.library_music_rounded, _loading ? null : _showMusicStudio),
                     tile('Locator', Icons.location_on_outlined, _loading ? null : _showLocatorOptions),
