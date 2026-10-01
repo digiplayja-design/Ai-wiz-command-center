@@ -89,7 +89,7 @@ export function bookkeepingVoiceSessionGuard({ database, requireUser }) {
       let user;
       try { user = await requireUser(req); } catch { fail('Sign in to use Bookkeeping.', 401, 'BOOKKEEPING_AUTH_REQUIRED'); }
       if (!user?.id) fail('Sign in to use Bookkeeping.', 401, 'BOOKKEEPING_AUTH_REQUIRED');
-      if (['inventory', 'scheduling', 'scheduling_tools'].some(k => req.query?.[k] === '1')) fail('Open one voice workspace at a time.');
+      if (['inventory', 'scheduling', 'scheduling_tools', 'music'].some(k => req.query?.[k] === '1')) fail('Open one voice workspace at a time.');
       req.korlixBookkeepingVoice = await loadBookkeepingVoiceContext(database, user.id, req.query.bookkeeping_business_id, req.query.bookkeeping_month);
       return next();
     } catch (error) {

@@ -1,4 +1,5 @@
 import {MusicError,fail,uuid,settings,entitlement,createProvider,publicJob,downloadAudio} from './core.mjs';
+import {registerMusicVoiceRoutes} from './voice.mjs';
 export function registerMusicStudio(app,{database,requireUser,provider=createProvider(),access=entitlement,fetchAudio=downloadAudio,logger=console}={}){
  const base='/api/music',active=new Set();
  const call=async(actor,action,id=null,data={})=>{
@@ -12,6 +13,7 @@ export function registerMusicStudio(app,{database,requireUser,provider=createPro
   catch(e){r.status(e instanceof MusicError?e.status:503).json({error:e instanceof MusicError?e.message:'Music Studio could not finish this request. Refresh before retrying.'});}
  };
  const addon=async u=>{const a=access(u),usage=await call(u.id,'usage');return {...a,providerReady:provider.ready(),usage:{...usage,monthlyLimit:a.plan?.monthlyGenerations??0,remainingThisCycle:Math.max(0,(a.plan?.monthlyGenerations??0)-usage.allocated)},version:2};};
+ registerMusicVoiceRoutes(app,{route});
  const list=async(u,q={})=>{
   const data=await call(u.id,'list',q.before?uuid(q.before):null,{query:String(q.query??'').slice(0,80),favorites:q.favorites==='true'});
   const jobs=data.jobs.slice(0,30);return {jobs:jobs.map(publicJob),hasMore:data.jobs.length>30,nextBefore:jobs.at(-1)?.id??null};
