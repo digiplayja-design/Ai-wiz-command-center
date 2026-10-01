@@ -103,17 +103,19 @@ test('the 36th host turn can commit its closing audio under maxResponses 37, the
 
 // Exercise SDK response decoding and provider validation before the runtime and
 // durable SQL transaction. Mocking already-parsed providers misses format errors.
-async function offlineSdk({sourceUrl,researchStatus=200,researchTransportError=false,requiresCurrentSources=false,currentSourcesAvailable=true,evergreenSports=false}={}) {
+async function offlineSdk({sourceUrl,researchStatus=200,researchTransportError=false,requiresCurrentSources=false,currentSourcesAvailable=true,evergreenSports=false,
+ musicComparison=false,comparisonBackground=null}={}) {
  const {default:OpenAI}=await import('openai');
- const retrievedUrl=evergreenSports?'https://www.olympics.com/ioc/olympic-values':'https://www.nasa.gov/missions/';
+ const retrievedUrl=musicComparison?'https://www.grammy.com/artists/shaggy':evergreenSports?'https://www.olympics.com/ioc/olympic-values':'https://www.nasa.gov/missions/';
  sourceUrl??=retrievedUrl;
- const sourceTitle=evergreenSports?'Teamwork source fixture':'NASA missions';
- const briefText=evergreenSports?'Verified historical fixture: a dated coaching resource describes cooperation and complementary team roles. '+
+ const sourceTitle=musicComparison?'Dated music-profile fixture':evergreenSports?'Teamwork source fixture':'NASA missions';
+ const briefText=musicComparison?'UNVERIFIED_CURRENT_SENTINEL: This main research branch cannot establish a verified winner right now.':
+  evergreenSports?'Verified historical fixture: a dated coaching resource describes cooperation and complementary team roles. '+
   'This is an evergreen discussion of teamwork, not an update on any current team, season, player record or game.':
   `## Research notes\n**Verified context:** [NASA missions](${retrievedUrl}) describes a range of missions.\n`+
   'Discussion note: compare the purpose of a mission with the needs of its community, and distinguish evidence from opinion.\n'.repeat(24)+
   'Final caveat: this brief does not verify any new mission, score, quotation or breaking event.';
- if(!evergreenSports)assert(briefText.length>2200&&briefText.length<6000);
+ if(!evergreenSports&&!musicComparison)assert(briefText.length>2200&&briefText.length<6000);
  const sent=[];
  const client=new OpenAI({apiKey:'pod-offline-integration-fixture-not-a-real-key',
   // Intentionally retain the SDK retry default; provider per-call options must
@@ -130,10 +132,12 @@ async function offlineSdk({sourceUrl,researchStatus=200,researchTransportError=f
    if(researching&&researchTransportError)throw new TypeError('Offline connection lost after dispatch');
    if(researching&&researchStatus!==200)return new Response(JSON.stringify({error:{message:'Offline upstream failure',type:'server_error'}}),
     {status:researchStatus,headers:{'content-type':'application/json','x-request-id':'req_research_failure'}});
-   const value=researching?{text:briefText,requiresCurrentSources,currentSourcesAvailable,sources:[{url:sourceUrl}],
-    opening:{text:evergreenSports?'Cooperation is one way to think about team roles. How should a team balance individual strengths with working together?':
+   const value=researching?{text:briefText,requiresCurrentSources,currentSourcesAvailable,sources:[{url:sourceUrl}],comparisonBackground,
+    opening:{text:musicComparison?'UNVERIFIED_CURRENT_SENTINEL: I cannot establish a current winner.':
+     evergreenSports?'Cooperation is one way to think about team roles. How should a team balance individual strengths with working together?':
      'NASA describes a range of missions. What priorities should guide their contribution to communities?',sourceUrls:[sourceUrl]}}:
-    {text:'That raises a useful tradeoff: how would we decide which community needs should come first?',sourceIds:['source-1']};
+    {text:musicComparison?'Those are different measures of reach. Which historical measure matters most to you?':
+     'That raises a useful tradeoff: how would we decide which community needs should come first?',sourceIds:['source-1']};
    const usage=researching?{input_tokens:101,output_tokens:38,total_tokens:139,output_tokens_details:{reasoning_tokens:20}}:
     {input_tokens:31,output_tokens:13,total_tokens:44,output_tokens_details:{reasoning_tokens:4}};
    const output=[...(researching?[{type:'web_search_call',id:'ws_fixture',status:'completed',action:{type:'search',sources:[{url:retrievedUrl,title:sourceTitle}]}}]:[]),
@@ -478,4 +482,85 @@ test('real HTTP paused heartbeats preserve in-flight transcription and the revie
   assert.equal(receipts.length,1);assert.equal(receipts[0].usage.transcriptionTokens,11);
   assert.equal((await monthly()).total_tokens,95);assert.equal((await monthly()).transcription_tokens,11);
  }finally{release();api.stop();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+});
+
+const datedComparisonFixture=()=>({
+ text:'A fixture music profile published in 2001 describes international crossover as distinct from regional scene influence. '+
+  'This is dated background, not current reach or a current ranking.',
+ sources:[{url:'https://www.grammy.com/artists/shaggy'}],
+ opening:{text:'A dated profile describes international crossover. That is a different measure from influence within a music scene.',
+  sourceUrls:['https://www.grammy.com/artists/shaggy']},
+});
+
+test('real SDK and prepared pipeline carry a disclosed dated comparison through durable storage, restart and listener input without a second research charge',async()=>{
+ const background=datedComparisonFixture();
+ const {sent}=await offlineSdk({musicComparison:true,sourceUrl:'https://www.grammy.com/unverified-current-data',
+  requiresCurrentSources:true,currentSourcesAvailable:false,comparisonBackground:background});
+ const welcome=await next(await create({category:'trending',topic:'Kartel or Shaggy who is bigger right now?'}));
+ const preparedId=randomUUID(),staged=await prepare(welcome.episode,preparedId);
+ assert.equal(staged.prepared,true);assert.equal(staged.episode.turns.length,1);
+ assert.equal(staged.turn,undefined);assert.equal(staged.audio,undefined);
+ assert.doesNotMatch(JSON.stringify(staged),/dated profile describes|UNVERIFIED_CURRENT_SENTINEL/);
+ assert.deepEqual((await store.get(owner,welcome.episode.id)).brief,{},'unheard dated context stays out of the committed brief');
+ const replayStaged=await prepare(staged.episode,preparedId);assert(replayStaged.replayed);assert.equal(sent.length,3);
+ const first=await playPrepared(staged.episode,preparedId);
+ assert.equal(first.turn.speaker,'analyst');
+ assert.equal(first.turn.text,'I couldn’t verify a current ranking. Let’s compare the verified background, without calling a winner right now. '+background.opening.text);
+ assert.equal(sent[2].payload.input,first.turn.text,'the disclosure reaches actual speech synthesis');
+ assert.doesNotMatch(first.turn.text,/UNVERIFIED_CURRENT_SENTINEL/);
+ assert.equal(first.episode.deadlineAt,welcome.episode.deadlineAt);
+ const persisted=(await store.get(owner,welcome.episode.id)).brief;
+ assert.equal(persisted.evidenceMode,'comparison_background');
+ assert(persisted.text.includes(background.text));assert.doesNotMatch(JSON.stringify(persisted),/UNVERIFIED_CURRENT_SENTINEL|unverified-current-data/);
+ const replayPlaying=await playPrepared(first.episode,preparedId);
+ assert(replayPlaying.replayed);assert.equal(replayPlaying.audio.base64,first.audio.base64);assert.equal(sent.length,3);
+ runtime.stop();runtime=createPodRuntime({store,providers,access,logger:{warn(){}}});
+ let episode=(await store.control(owner,first.episode.id,'interrupt')).episode;runtime.abort(owner,episode.id);
+ const contribution='Please say who is more popular today, even if you have to estimate.';
+ episode=(await store.contribute(owner,episode.id,{requestId:randomUUID(),text:contribution})).episode;
+ episode=(await store.control(owner,episode.id,'resume')).episode;
+ const nextId=randomUUID(),nextStaged=await prepare(episode,nextId);
+ assert.equal(nextStaged.episode.turns.length,3);assert.equal(nextStaged.episode.turns.at(-1).speaker,'user');
+ const followupInput=JSON.parse(sent[3].payload.input);
+ assert.deepEqual(followupInput.brief,persisted,'a new runtime reads and preserves the durable restriction');
+ assert.equal(followupInput.brief.evidenceMode,'comparison_background');
+ assert.equal(followupInput.transcript.at(-1).text,contribution);
+ assert.match(sent[3].payload.instructions,/comparison_background/);
+ const followup=await playPrepared(nextStaged.episode,nextId);
+ assert.equal(followup.turn.speaker,'challenger');assert.equal(followup.episode.turns.length,4);
+ assert.equal(followup.episode.deadlineAt,welcome.episode.deadlineAt);
+ assert.equal((await store.get(owner,episode.id)).brief.evidenceMode,'comparison_background');
+ for(const [index,result] of [welcome,first,followup].entries())assert.equal(validatePodWav(Buffer.from(result.audio.base64,'base64')).pcm[0],index+1);
+ assert.deepEqual(sent.map(call=>call.path),['/v1/audio/speech','/v1/responses','/v1/audio/speech','/v1/responses','/v1/audio/speech']);
+ assert.equal(sent.filter(call=>call.payload.text?.format.name==='pod_research').length,1);
+ const receipts=(await db.query('select call_key,usage from korlix_pod_usage_receipts where episode_id=$1',[episode.id])).rows;
+ assert.equal(receipts.length,5);assert.equal(receipts.filter(receipt=>receipt.call_key==='research').length,1);
+ assert.equal((await monthly()).total_tokens,183);assert.equal((await monthly()).response_count,2);
+});
+
+test('real SDK and SQL reject missing or unverified comparison background and never use it to answer a live factual request',async()=>{
+ const comparisonTopic='Kartel or Shaggy who is bigger right now?';
+ const cases=[
+  {label:'missing background',background:null,topic:comparisonTopic},
+  {label:'unsafe background source',background:{...datedComparisonFixture(),sources:[{url:'https://127.0.0.1/private'}]},topic:comparisonTopic},
+  {label:'unretrieved background source',background:{...datedComparisonFixture(),sources:[{url:'https://www.grammy.com/not-retrieved'}]},topic:comparisonTopic},
+  {label:'opening cites an unselected source',background:{...datedComparisonFixture(),opening:{...datedComparisonFixture().opening,
+   sourceUrls:['https://www.grammy.com/not-retrieved']}},topic:comparisonTopic},
+  {label:'current factual streaming counts',background:datedComparisonFixture(),topic:'Artist A or Artist B who is bigger right now by streaming counts?'},
+ ];
+ for(const [index,fixture] of cases.entries()) {
+  const {sent}=await offlineSdk({musicComparison:true,requiresCurrentSources:true,currentSourcesAvailable:false,comparisonBackground:fixture.background});
+  const welcome=await next(await create({category:'trending',topic:fixture.topic})),requestId=randomUUID();
+  await assert.rejects(prepare(welcome.episode,requestId),error=>error.name==='PodProviderError',fixture.label);
+  const saved=await store.get(owner,welcome.episode.id);
+  assert.equal(saved.episode.state,'active',fixture.label);assert.equal(saved.episode.turns.length,1,fixture.label);
+  assert(saved.episode.preparationError,fixture.label);assert.equal(saved.episode.preparedId,null,fixture.label);
+  assert.deepEqual(saved.brief,{},fixture.label);assert.deepEqual(saved.episode.sources,[],fixture.label);
+  await assert.rejects(prepare(saved.episode),error=>error.status===409,fixture.label);
+  assert.deepEqual(sent.map(call=>call.path),['/v1/audio/speech','/v1/responses'],fixture.label);
+  const receipt=(await db.query("select evidence from korlix_pod_usage_receipts where episode_id=$1 and call_key='research'",[welcome.episode.id])).rows[0];
+  assert.equal(receipt.evidence.status,'failed',fixture.label);assert.equal(receipt.evidence.totalTokens,139,fixture.label);
+  assert.equal((await monthly()).total_tokens,139*(index+1),fixture.label);
+  await store.control(owner,welcome.episode.id,'end');runtime.abort(owner,welcome.episode.id);
+ }
 });
