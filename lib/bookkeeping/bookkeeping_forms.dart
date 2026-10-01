@@ -202,6 +202,7 @@ class BookkeepingEntryDialog extends StatefulWidget {
     this.onSaveAttempt,
     this.receipt,
     this.suggestions,
+    this.initialDraft,
     this.cashAccounts = const [],
   });
   final BookkeepingClient client;
@@ -209,6 +210,10 @@ class BookkeepingEntryDialog extends StatefulWidget {
   final void Function(String date)? onSaveAttempt;
   final List<Map<String, dynamic>> categories, cashAccounts;
   final Map<String, dynamic>? original, receipt, suggestions;
+
+  /// A voice-prepared suggestion only. Existing review and confirmation are
+  /// still required before any ledger write.
+  final Map<String, dynamic>? initialDraft;
   @override
   State<BookkeepingEntryDialog> createState() => _BookkeepingEntryDialogState();
 }
@@ -223,8 +228,9 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
     text: bookkeepingDate(DateTime.now()),
   );
   String? _category, _error;
-  String _cashAccount = '1000';
-  List<Map<String, dynamic>> get _cashAccounts => widget.cashAccounts.isEmpty
+  String? _cashAccount = '1000';
+  List<Map<String, dynamic>> get _cashAccounts =>
+      widget.cashAccounts.isEmpty && widget.initialDraft == null
       ? const [
           {'code': '1000', 'name': 'Recorded cash control'},
         ]
@@ -240,6 +246,28 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
     _category = _categories.isEmpty
         ? null
         : _categories.first['code'] as String;
+    final draft = widget.initialDraft;
+    if (draft != null && !_reversing && widget.receipt == null) {
+      String text(String key, int maximum) {
+        final value = draft[key];
+        return value is String && value.length <= maximum ? value : '';
+      }
+
+      final amount = text('amount', 13);
+      _amount.text = validateBookkeepingAmount(amount) == null ? amount : '';
+      final date = text('entry_date', 10);
+      _date.text = validateBookkeepingDate(date) == null ? date : '';
+      _party.text = text('counterparty', 160);
+      _purpose.text = text('purpose', 500);
+      _reference.text = text('receipt_reference', 160);
+      _category = _categories.any((c) => c['code'] == draft['category'])
+          ? draft['category'] as String
+          : null;
+      _cashAccount =
+          _cashAccounts.any((a) => a['code'] == draft['cash_account'])
+          ? draft['cash_account'] as String
+          : null;
+    }
     final data = widget.suggestions;
     if (data != null) {
       if (data['currency'] == 'USD' &&
@@ -411,6 +439,16 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
                         Text(widget.original!['purpose'] as String),
                         const SizedBox(height: 16),
                       ] else ...[
+                        if (widget.initialDraft != null) ...[
+                          const Text(
+                            'Prepared with K-Nova. Check each detail, choose any missing fields, then review the entry. Nothing has been saved.',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xff087e98),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                         const Text(
                           'Record money actually received or paid for business operations. Use Accounts & journals for loans, owner funding, transfers and asset purchases. Choose the cash account that received or paid the money. Add named accounts in Accounts & journals.',
                           style: TextStyle(

@@ -85,7 +85,9 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
                 ),
               ),
               Text(
-                'LIVE VOICE',
+                widget.bookkeepingMode
+                    ? 'BOOKKEEPING · LIVE VOICE'
+                    : 'LIVE VOICE',
                 style: TextStyle(
                   color: _secondary,
                   fontSize: 10,
@@ -96,7 +98,9 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
             ],
           ),
         ),
-        if (widget.inventoryResults == null && !widget.schedulingMode)
+        if (widget.inventoryResults == null &&
+            !widget.schedulingMode &&
+            !widget.bookkeepingMode)
           Tooltip(
             message: widget.paused
                 ? 'Resume Live Convo to open Agent Studio'
@@ -505,7 +509,9 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
             ),
           ),
           subtitle: Text(
-            widget.inventoryResults != null ? 'Voice & accent' : 'Voice, agent, files & documents',
+            widget.inventoryResults != null || widget.bookkeepingMode
+                ? 'Voice & accent'
+                : 'Voice, agent, files & documents',
             style: TextStyle(color: _secondary, fontSize: 12),
           ),
           children: [
@@ -516,43 +522,45 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
                   '${widget.selectedVoicePresentation} · ${widget.selectedAccentName}',
               action: widget.onOpenVoiceSelector,
             ),
-            if (widget.inventoryResults == null && !widget.schedulingMode) ...[
-            _settingsTile(
-              icon: _activeAgentIcon,
-              title: 'Agent Studio',
-              subtitle:
-                  '$_activeAgentName · Memory, training & workflows\n'
-                  '$_activeAgentDescription\nVersion $_activeAgentVersion · '
-                  '${widget.activeAgentMemoryEnabled ? 'Memory on' : 'Memory off'}',
-              action: widget.onOpenAgentHub,
-            ),
-            Divider(color: _border),
-            _settingsTile(
-              icon: Icons.attach_file_rounded,
-              title: 'Files & attachments',
-              subtitle: widget.liveDocsAttachments.isEmpty
-                  ? 'Add context to your document'
-                  : '${widget.liveDocsAttachments.length} files selected',
-              action: widget.liveDocsFileSubmissionState.isSubmitting
-                  ? null
-                  : widget.onPickLiveDocsAttachments,
-            ),
-            _settingsTile(
-              icon: Icons.description_outlined,
-              title: widget.liveDocsGenerationState.isBusy
-                  ? 'Preparing document…'
-                  : widget.liveDocsGenerationResult != null
-                  ? 'Document ready'
-                  : widget.liveDocsBriefReady
-                  ? 'Generate document'
-                  : 'Create a document',
-              subtitle: widget.liveDocsCaptureActive
-                  ? '${widget.liveDocsCapturedTurnCount} conversation turns captured'
-                  : 'Turn this conversation into something useful',
-              action: widget.liveDocsGenerationState.isBusy
-                  ? null
-                  : widget.onCreateDocument,
-            ),
+            if (widget.inventoryResults == null &&
+                !widget.schedulingMode &&
+                !widget.bookkeepingMode) ...[
+              _settingsTile(
+                icon: _activeAgentIcon,
+                title: 'Agent Studio',
+                subtitle:
+                    '$_activeAgentName · Memory, training & workflows\n'
+                    '$_activeAgentDescription\nVersion $_activeAgentVersion · '
+                    '${widget.activeAgentMemoryEnabled ? 'Memory on' : 'Memory off'}',
+                action: widget.onOpenAgentHub,
+              ),
+              Divider(color: _border),
+              _settingsTile(
+                icon: Icons.attach_file_rounded,
+                title: 'Files & attachments',
+                subtitle: widget.liveDocsAttachments.isEmpty
+                    ? 'Add context to your document'
+                    : '${widget.liveDocsAttachments.length} files selected',
+                action: widget.liveDocsFileSubmissionState.isSubmitting
+                    ? null
+                    : widget.onPickLiveDocsAttachments,
+              ),
+              _settingsTile(
+                icon: Icons.description_outlined,
+                title: widget.liveDocsGenerationState.isBusy
+                    ? 'Preparing document…'
+                    : widget.liveDocsGenerationResult != null
+                    ? 'Document ready'
+                    : widget.liveDocsBriefReady
+                    ? 'Generate document'
+                    : 'Create a document',
+                subtitle: widget.liveDocsCaptureActive
+                    ? '${widget.liveDocsCapturedTurnCount} conversation turns captured'
+                    : 'Turn this conversation into something useful',
+                action: widget.liveDocsGenerationState.isBusy
+                    ? null
+                    : widget.onCreateDocument,
+              ),
             ],
             Align(
               alignment: Alignment.centerLeft,
@@ -755,8 +763,20 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
                           24,
                         ),
                         children: [
-                          if (widget.schedulingPanel != null) ...[widget.schedulingPanel!, const SizedBox(height: 16)],
-                          if (widget.inventoryResults != null) ...[widget.inventoryResults!(_closeInventoryView), const SizedBox(height: 16)],
+                          if (widget.bookkeepingPanelBuilder != null) ...[
+                            widget.bookkeepingPanelBuilder!(
+                              _finishBookkeepingReview,
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                          if (widget.schedulingPanel != null) ...[
+                            widget.schedulingPanel!,
+                            const SizedBox(height: 16),
+                          ],
+                          if (widget.inventoryResults != null) ...[
+                            widget.inventoryResults!(_closeInventoryView),
+                            const SizedBox(height: 16),
+                          ],
                           if (constraints.maxWidth >= 850)
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,

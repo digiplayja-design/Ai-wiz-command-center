@@ -24,10 +24,17 @@ class BookkeepingScreen extends StatefulWidget {
     required this.client,
     this.disposeClient = false,
     this.onExport,
+    this.openVoice,
   });
   final BookkeepingClient client;
   final bool disposeClient;
   final Future<void> Function(String csv, String filename)? onExport;
+  final Future<Map<String, dynamic>?> Function(
+    String businessId,
+    String businessName,
+    String month,
+  )?
+  openVoice;
   @override
   State<BookkeepingScreen> createState() => _BookkeepingScreenState();
 }
@@ -38,6 +45,7 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
   String _month = bookkeepingDate(DateTime.now()).substring(0, 7);
   int _offset = 0, _operation = 0;
   bool _busy = false, _denied = false;
+  bool _voiceOpening = false;
   String? _error;
   final _dialogs = <DialogRoute<dynamic>>{};
   final _exportKey = GlobalKey(), _feedbackKey = GlobalKey();
@@ -72,7 +80,9 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
     final ownRoute = ModalRoute.of(context);
     final obsolete = _dialogs.toList();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (ownRoute != null && ownRoute.isActive && obsolete.isNotEmpty) {
+      if (ownRoute != null &&
+          ownRoute.isActive &&
+          (obsolete.isNotEmpty || _voiceOpening)) {
         ownRoute.navigator?.popUntil((route) => route == ownRoute);
       }
       for (final r in obsolete) {
@@ -192,6 +202,65 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
     if (date != null) _month = date.substring(0, 7);
     _offset = 0;
     await _load(list: false);
+  }
+
+  Future<void> _openVoice() async {
+    final open = widget.openVoice;
+    if (open == null ||
+        _busy ||
+        _voiceOpening ||
+        _business == null ||
+        _overview == null ||
+        _denied)
+      return;
+    final operation = _operation;
+    final businessId = _business!['id'] as String;
+    final businessName = _business!['name'] as String;
+    final month = _month;
+    setState(() => _voiceOpening = true);
+    try {
+      final draft = await open(businessId, businessName, month);
+      if (!_current(operation) || _business?['id'] != businessId) return;
+      await _load(list: false);
+      if (!mounted ||
+          _denied ||
+          _business?['id'] != businessId ||
+          _overview == null ||
+          draft == null)
+        return;
+      if (draft['business_id'] != businessId ||
+          !const ['income', 'expense'].contains(draft['kind'])) {
+        setState(
+          () => _error =
+              'This voice draft does not match the selected business. Ask K-Nova to prepare it again.',
+        );
+        return;
+      }
+      final currentOperation = _operation;
+      String? attemptedDate;
+      final saved = await _dialog<Map<String, dynamic>>(
+        BookkeepingEntryDialog(
+          client: widget.client,
+          businessId: businessId,
+          categories: bookkeepingRows(_overview!['categories']),
+          cashAccounts: bookkeepingRows(_overview!['cash_accounts']),
+          kind: draft['kind'] as String,
+          initialDraft: Map<String, dynamic>.unmodifiable(draft),
+          onSaveAttempt: (date) => attemptedDate = date,
+        ),
+      );
+      if (!_current(currentOperation) || _business?['id'] != businessId) return;
+      final date = saved?['entry_date'] as String? ?? attemptedDate;
+      if (date != null) _month = date.substring(0, 7);
+      _offset = 0;
+      await _load(list: false);
+    } catch (error) {
+      if (mounted && !_denied && _business?['id'] == businessId) {
+        setState(() => _error = error.toString());
+      }
+    } finally {
+      if (mounted) setState(() => _voiceOpening = false);
+    }
   }
 
   Future<void> _openLedger() async {
@@ -430,6 +499,11 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
                                   _header(),
                                   const SizedBox(height: 22),
                                   _toolbar(),
+                                  if (widget.openVoice != null &&
+                                      _business != null) ...[
+                                    const SizedBox(height: 18),
+                                    _voiceCard(),
+                                  ],
                                   if (_overview != null) ...[
                                     const SizedBox(height: 14),
                                     _statementGuide(),
@@ -506,11 +580,13 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
                   size: 20,
                 ),
                 SizedBox(width: 12),
-                Text(
-                  'Dashboard',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
+                Expanded(
+                  child: Text(
+                    'Dashboard',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
@@ -686,6 +762,79 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
           ),
         ),
     ],
+  );
+  Widget _voiceCard() => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(22),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xff10253f), Color(0xff16485b)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: const Color(0xff38697a)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(
+          Icons.graphic_eq_rounded,
+          color: Color(0xff7fe6f3),
+          size: 30,
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'LIVE VOICE · K-Nova',
+          style: TextStyle(
+            color: Color(0xff7fe6f3),
+            fontWeight: FontWeight.w800,
+            fontSize: 12,
+            letterSpacing: 1,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Talk through your books.',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            height: 1.25,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          '${_business?['name']} · $_month',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 10),
+        const Text(
+          'Ask about monthly income and expenses, understand recorded totals, or prepare an entry by speaking.',
+          style: TextStyle(color: Color(0xffd2e4ed), height: 1.5),
+        ),
+        const SizedBox(height: 18),
+        FilledButton.icon(
+          onPressed: _busy || _voiceOpening || _overview == null
+              ? null
+              : _openVoice,
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xff7fe6f3),
+            foregroundColor: _navy,
+          ),
+          icon: const Icon(Icons.mic_none_rounded),
+          label: Text(_voiceOpening ? 'Opening K-Nova…' : 'Talk to K-Nova'),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Uses records for this business to answer. You review entries before saving.',
+          style: TextStyle(color: Color(0xffb3ccd7), fontSize: 12, height: 1.5),
+        ),
+      ],
+    ),
   );
   Widget _toolbar() => Wrap(
     spacing: 10,

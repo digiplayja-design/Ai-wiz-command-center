@@ -34,6 +34,7 @@ export 'theme/korlix_theme.dart';
 import 'chat/chat_request.dart';
 import 'bookkeeping/bookkeeping_client.dart';
 import 'bookkeeping/bookkeeping_screen.dart';
+import 'bookkeeping/bookkeeping_voice.dart';
 import 'payroll/payroll_client.dart';
 import 'payroll/payroll_screen.dart';
 import 'scheduling/scheduling_client.dart';
@@ -9547,7 +9548,41 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     final client = BookkeepingClient(backendBaseUrl: kKorlixBackendBaseUrl,
       headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision);
     await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
-      BookkeepingScreen(client: client, disposeClient: true)));
+      BookkeepingScreen(client: client, disposeClient: true,
+        openVoice: (businessId, businessName, month) async {
+          final revision = kKorlixAuthRevision.value;
+          final consent = await ensureKorlixThirdPartyAiConsent(
+            context: context,
+            featureName: 'Bookkeeping and K-Nova',
+            providers: const {KorlixThirdPartyAiProvider.openAi},
+            dataCategories: const {
+              KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
+              KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,
+              KorlixThirdPartyAiDataCategory.bookkeepingRecords,
+            },
+          );
+          if (!consent || !mounted || client.sessionChanged ||
+              revision != kKorlixAuthRevision.value) return null;
+          final voice = BookkeepingVoiceController(client: client,
+            businessId: businessId, businessName: businessName, month: month);
+          try {
+            return await Navigator.of(context).push<Map<String, dynamic>>(
+              MaterialPageRoute<Map<String, dynamic>>(
+                builder: (_) => KorlixLiveConvoTestScreen(
+                  bookkeepingVoice: voice,
+                  sessionChanges: kKorlixAuthRevision,
+                  backendBaseUrl: kKorlixBackendBaseUrl,
+                  headersBuilder: _authHeaders,
+                  characterId: normalizeKorlixCharacterId(kKorlixSelectedCharacterNotifier.value),
+                  language: _t.label,
+                ),
+              ),
+            );
+          } finally {
+            voice.dispose();
+          }
+        },
+      )));
   }
 
   Future<void> _openVirtualCloset() async {

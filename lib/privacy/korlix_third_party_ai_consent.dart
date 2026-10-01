@@ -25,6 +25,7 @@ enum KorlixThirdPartyAiDataCategory {
   filesAndDocuments,
   voiceAudioAndTranscripts,
   agentTrainingAndMemory,
+  bookkeepingRecords,
 }
 
 extension KorlixThirdPartyAiDataCategoryLabel
@@ -41,6 +42,8 @@ extension KorlixThirdPartyAiDataCategoryLabel
         return 'Voice, audio, and transcripts';
       case KorlixThirdPartyAiDataCategory.agentTrainingAndMemory:
         return 'Agent training and approved memory';
+      case KorlixThirdPartyAiDataCategory.bookkeepingRecords:
+        return 'Selected business bookkeeping records';
     }
   }
 }
