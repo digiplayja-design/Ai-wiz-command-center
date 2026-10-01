@@ -4,7 +4,7 @@ import {createLiveRuntime} from './runtime.mjs';
 import {createLiveConnections} from './connections.mjs';
 
 export function registerLiveStudio(app,{database,storage,requireUser,access=async()=>({allowed:false}),providers,env=process.env,store:createStore,
-  connections:createConnections,startWorker=true,runtimeFactory=createLiveRuntime}={}){
+  connections:createConnections,startWorker=true,startMaintenance=startWorker,runtimeFactory=createLiveRuntime}={}){
   const store=createStore||createLiveStore(database);
   const connections=createConnections||createLiveConnections({database,env,
     publicRoot:env.LIVE_STUDIO_PUBLIC_ORIGIN||'https://chee-chai-chee-backend.onrender.com'});
@@ -102,5 +102,6 @@ export function registerLiveStudio(app,{database,storage,requireUser,access=asyn
     r.json(await store.call(u.id,'delete',id));
   }));
   if(startWorker)runtime?.start();
-  return {runtime,store,connections,stop:()=>runtime?.stop()};
+  if(startMaintenance)connections.startMaintenance?.();
+  return {runtime,store,connections,stop:()=>Promise.all([runtime?.stop(),connections.stopMaintenance?.()])};
 }

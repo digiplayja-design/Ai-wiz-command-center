@@ -34,7 +34,7 @@ async function user({grant=true,limits={}}={}){
 }
 async function connection(owner,channel='UC'+randomUUID().replaceAll('-','').slice(0,22)){
  const id=randomUUID();
- await db.query("insert into korlix_live_studio_connections(id,owner_id,channel_id,channel_title,state,revision,sealed_grant,config_hash) values($1,$2,$3,'Customer channel','connected',1,'encrypted fixture',repeat('a',64))",[id,owner,channel]);
+ await db.query("insert into korlix_live_studio_connections(id,owner_id,channel_id,channel_title,state,revision,sealed_grant,config_hash,last_verified_at) values($1,$2,$3,'Customer channel','connected',1,'encrypted fixture',repeat('a',64),now())",[id,owner,channel]);
  return {id,channel};
 }
 async function worker(){const id=randomUUID();await rpc(null,'announce',id,{mode:'youtube'});return id;}
@@ -47,7 +47,7 @@ test.before(async()=>{
  grant usage on schema auth to service_role;
  create table storage.buckets(id text primary key,name text,public bool,file_size_limit bigint,allowed_mime_types text[]);`);
  const dir=new URL('../../supabase/migrations/',import.meta.url),files=await readdir(dir);
- for(const suffix of ['_live_studio_pilot.sql','_live_studio_customer_workspaces.sql','_live_studio_connections.sql']){
+ for(const suffix of ['_live_studio_pilot.sql','_live_studio_customer_workspaces.sql','_live_studio_connections.sql','_live_studio_connection_retention.sql']){
   await db.exec(await readFile(new URL(files.find(f=>f.endsWith(suffix)),dir),'utf8'));
  }
 

@@ -1,5 +1,6 @@
 # Paid worker approved October 1, 2026 at 12:40 Eastern; app OAuth setup is required.
-# Existing website/API services are intentionally not managed by this Blueprint.
+# Existing website/API services are not managed by this Blueprint.
+# Configure application secrets on the existing API first; the worker references them.
 services:
   - type: worker
     name: korlix-live-studio-worker
@@ -18,18 +19,36 @@ services:
       - key: NODE_ENV
         value: production
       - key: SUPABASE_URL
-        sync: false
+        fromService:
+          name: chee-chai-chee-backend
+          type: web
+          envVarKey: SUPABASE_URL
       - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
+        fromService:
+          name: chee-chai-chee-backend
+          type: web
+          envVarKey: SUPABASE_SERVICE_ROLE_KEY
       - key: OPENAI_API_KEY
-        sync: false
+        fromService:
+          name: chee-chai-chee-backend
+          type: web
+          envVarKey: OPENAI_API_KEY
       - key: LIVE_STUDIO_PUBLIC_ORIGIN
         value: https://chee-chai-chee-backend.onrender.com
       - key: LIVE_STUDIO_YOUTUBE_ENABLED
         value: 'true'
       - key: LIVE_STUDIO_YOUTUBE_CLIENT_ID
-        sync: false
+        fromService:
+          name: chee-chai-chee-backend
+          type: web
+          envVarKey: LIVE_STUDIO_YOUTUBE_CLIENT_ID
       - key: LIVE_STUDIO_YOUTUBE_CLIENT_SECRET
-        sync: false
+        fromService:
+          name: chee-chai-chee-backend
+          type: web
+          envVarKey: LIVE_STUDIO_YOUTUBE_CLIENT_SECRET
       - key: LIVE_STUDIO_TOKEN_KEY
-        sync: false
+        fromService:
+          name: chee-chai-chee-backend
+          type: web
+          envVarKey: LIVE_STUDIO_TOKEN_KEY

@@ -28,7 +28,9 @@ Reservation records survive show deletion. Workers recheck account availability,
 
 Google credentials are application-wide; authorization grants belong to individual customers. Grants use AES-256-GCM with a separate 32-byte key and versioned ciphertext bound to owner, connection ID and channel ID. Secrets, leases and storage paths are excluded from customer responses. Refresh writes use their own fenced lease, and a disconnect or changed connection invalidates a refresh result before it can be used.
 
-Disconnect removes stored authorization credentials, cancels queued shows and requests active streams stop. Channel identity/history and durable usage records remain until account deletion. Google revocation is attempted after the local disconnect; if it cannot be confirmed, the UI explains how to remove access in Google Account permissions. Existing YouTube videos are not removed by deleting a KORLIX show or connection.
+Disconnect removes stored authorization credentials and YouTube-derived channel metadata/history, cancels queued shows and requests active streams stop. Internal usage receipts and independently entered show settings remain. A temporary non-public channel hash keeps a stopping encoder's slot fenced until it finishes or its lease expires; stale worker writes cannot restore purged metadata. Google revocation is attempted after the local disconnect; if it cannot be confirmed, the UI explains how to remove access in Google Account permissions. Existing YouTube videos are not removed by deleting a KORLIX show or connection.
+
+API maintenance verifies idle grants and refreshes channel metadata daily under a durable lease. Temporary provider failures back off without extending the last successful metadata check. Known invalid grants are purged; connections not verified for 28 days are purged by a credential-independent sweep, including when Google setup is unavailable. Expired OAuth attempts also lose their secrets and metadata without requiring further customer activity. These controls support the disclosed retention deadlines; real Google revocation and outage acceptance remain required before broad release.
 
 All Live Studio tables have RLS enabled and no grants to anonymous or authenticated clients. Exposed RPCs are SECURITY INVOKER and executable only by service_role. Supabase's service role does not have SELECT on auth.users. A narrow SECURITY DEFINER boolean helper in the unexposed `korlix_live_private` schema checks only account existence and ban expiry; it has an empty search path, fully qualified object names and no client execution grants. It grants no access to auth records.
 
@@ -44,11 +46,11 @@ End aborts pending operations and stops the encoder. A run-local cached token pe
 
 ## Deployment and application configuration
 
-Apply the customer workspace migration before the connection migration, then deploy the backend and frontend release branches. The v1 RPC delegates to v2 during deployment overlap, so old clients cannot bypass customer allowances.
+Apply the customer workspace, connection and connection-retention migrations in order, then deploy the backend and frontend release branches. The v1 RPC delegates to v2 during deployment overlap, so old clients cannot bypass customer allowances.
 
 The approved worker Blueprint is `deploy/live-studio-worker.render.yaml`: one Docker background worker in Ohio on Render's 1c-2g plan. The user approved the proposed US$25/month worker and YouTube setup on October 1, 2026 at 12:40 Eastern and subsequently authorized Render dashboard use. That approval remains recorded. No new worker was created before the customer architecture correction.
 
-Configure these values on both the existing API and the dedicated worker:
+Configure these values on the existing API. The worker Blueprint references the API's three Live Studio secret settings with `fromService.envVarKey`, so the encryption key and OAuth application cannot diverge during initial setup:
 
 | Setting | Purpose |
 | --- | --- |
@@ -58,7 +60,7 @@ Configure these values on both the existing API and the dedicated worker:
 | `LIVE_STUDIO_PUBLIC_ORIGIN` | `https://chee-chai-chee-backend.onrender.com` |
 | `LIVE_STUDIO_YOUTUBE_ENABLED` | `true` after application setup |
 
-The worker also needs the existing Supabase URL, service-role key and OpenAI API key. There is no `LIVE_STUDIO_BROADCAST_OWNER_ID` or global YouTube refresh token in the new design. Use secret settings, never source control or chat, for credentials. Do not generate a different encryption key for each instance.
+The worker also references the API's existing Supabase URL, service-role key and OpenAI API key. The referenced API remains outside the worker Blueprint and is not recreated or managed by it. There is no `LIVE_STUDIO_BROADCAST_OWNER_ID` or global YouTube refresh token in the new design. Use secret settings, never source control or chat, for credentials. Generate the canonical 32-byte base64 encryption key only once; replacing an existing key would make its stored grants unreadable. Coordinate any later credential changes across service deployments while streams are idle.
 
 Use a dedicated Live Studio Google OAuth client, enable YouTube Data API v3, configure the consent screen and register this exact authorized redirect URI:
 
@@ -67,6 +69,8 @@ Use a dedicated Live Studio Google OAuth client, enable YouTube Data API v3, con
 The application requests `https://www.googleapis.com/auth/youtube.force-ssl` for the necessary broadcast and live-chat operations. Google may require verification before broad customer access. Each customer's channel must independently qualify for live streaming. App authorization, API quotas, actual unlisted behavior and channel eligibility must be checked with Google before sales claims.
 
 Import the updated Blueprint only after app secrets are configured. It is independent of the existing API/static services, uses no persistent disk or Redis, and keeps auto-deploy off so deployments can be performed while streams are idle. Initial CPU/memory sizing must be validated during a full-duration broadcast.
+
+The step-by-step operator handoff is [LIVE_STUDIO_GOOGLE_SETUP.md](LIVE_STUDIO_GOOGLE_SETUP.md). On October 1 the assisted browser could not load Google Cloud Console after one recovery attempt. The API encryption key and public origin are installed, with YouTube disabled while its dedicated OAuth client ID and secret are missing. No worker or broadcast has been started.
 
 ## Validation and remaining release work
 

@@ -57,7 +57,12 @@ async function providerRequest(fetcher,url,options={},signal){
     try{for(;;){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>1024*1024)throw Error();chunks.push(Buffer.from(part.value));}}finally{await reader.cancel().catch(()=>{});}
     const raw=Buffer.concat(chunks).toString('utf8');data=raw?JSON.parse(raw):{};
   }catch{throw new ConnectionProviderError('YouTube did not confirm the connection request. Try again later.');}
-  if(!response.ok){const reconnect=response.status===401||data.error==='invalid_grant';throw new ConnectionProviderError(reconnect?'Reconnect YouTube to restore channel access.':'YouTube could not complete this connection request.',reconnect?409:503,reconnect);}
+  if(!response.ok){
+    const denied=new Set(['insufficientPermissions','authenticatedUserAccountClosed','authenticatedUserAccountSuspended','authenticatedUserNotChannel','channelClosed','channelNotFound','channelSuspended','youtubeSignupRequired','authorizationRequired','forbidden']);
+    const reasons=Array.isArray(data.error?.errors)?data.error.errors.map(e=>e?.reason):[];
+    const reconnect=response.status===401||data.error==='invalid_grant'||reasons.some(reason=>denied.has(reason));
+    throw new ConnectionProviderError(reconnect?'Reconnect YouTube to restore channel access.':'YouTube could not complete this connection request.',reconnect?409:503,reconnect);
+  }
   return data;
 }
 function checkedGrant(data,previous,now){
@@ -69,7 +74,7 @@ function checkedGrant(data,previous,now){
   if(!Number.isFinite(Number(data.expires_in))||Number(data.expires_in)<60||Number(data.expires_in)>86400)throw new ConnectionProviderError('YouTube returned an invalid connection lifetime.',409,true);
   return {access_token:data.access_token,refresh_token:refreshToken,expires_at:new Date(now()+Number(data.expires_in)*1000).toISOString(),scopes};
 }
-const publicConnection=c=>c?{id:c.id,channelId:c.channel_id,channelTitle:c.channel_title,state:c.state,revision:c.revision,connectedAt:c.connected_at}:null;
+const publicConnection=c=>c?{id:c.id,channelId:c.channel_id,channelTitle:c.channel_title||(c.state==='reconnect_required'?'Reconnect YouTube':'YouTube channel'),state:c.state,revision:c.revision,connectedAt:c.connected_at}:null;
 const html='<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KORLIX Live Studio connection</title><body><main><h1>YouTube channel verified</h1><p>Return to KORLIX Live Studio, review the channel shown in Connections, then confirm it.</p><p>You can close this tab.</p></main></body></html>';
 
 export function createLiveConnections({database,env=process.env,publicRoot,fetcher=fetch,now=Date.now}={}){
@@ -83,11 +88,13 @@ export function createLiveConnections({database,env=process.env,publicRoot,fetch
   const configured=()=>{if(!settings.configured)fail('YouTube connections need administrator setup before customers can connect.',503);};
   const checkConfig=c=>{configured();if(c.config_hash!==settings.fingerprint)fail('YouTube connection settings changed. Reconnect your channel.',409);};
   const exchange=async(code,verifier)=>checkedGrant(await providerRequest(fetcher,'https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:settings.id,client_secret:settings.clientSecret,redirect_uri:settings.callback,grant_type:'authorization_code',code,code_verifier:verifier})}),null,now);
-  const identity=async(grant)=>{
-    const result=await providerRequest(fetcher,'https://www.googleapis.com/youtube/v3/channels?part=id%2Csnippet&mine=true&maxResults=2',{headers:{Authorization:'Bearer '+grant.access_token}});
-    if(!Array.isArray(result.items)||result.items.length!==1||result.nextPageToken)fail('Choose one YouTube channel with your Google account, then connect again.',409);
+  const refreshGrant=async(grant,signal)=>checkedGrant(await providerRequest(fetcher,'https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:settings.id,client_secret:settings.clientSecret,grant_type:'refresh_token',refresh_token:grant.refresh_token})},signal),grant,now);
+  const openGrant=c=>{try{return cipher.open(c.sealed_grant,grantBinding(c));}catch{throw new ConnectionProviderError('Reconnect YouTube to restore secure channel access.',409,true);}};
+  const identity=async(grant,signal)=>{
+    const result=await providerRequest(fetcher,'https://www.googleapis.com/youtube/v3/channels?part=id%2Csnippet&mine=true&maxResults=2',{headers:{Authorization:'Bearer '+grant.access_token}},signal);
+    if(!Array.isArray(result.items)||result.items.length!==1||result.nextPageToken)throw new ConnectionProviderError('Choose one YouTube channel with your Google account, then connect again.',409,true);
     const item=result.items[0];
-    if(typeof item.id!=='string'||!/^UC[A-Za-z0-9_-]{22}$/.test(item.id))fail('YouTube did not return a usable channel. Create or choose a channel first.',409);
+    if(typeof item.id!=='string'||!/^UC[A-Za-z0-9_-]{22}$/.test(item.id))throw new ConnectionProviderError('YouTube did not return a usable channel. Create or choose a channel first.',409,true);
     return {channel_id:item.id,channel_title:typeof item.snippet?.title==='string'?item.snippet.title.replace(/[\u0000-\u001f\u007f]/g,' ').slice(0,150):'YouTube channel'};
   };
   const summary=async(owner)=>{
@@ -106,9 +113,11 @@ export function createLiveConnections({database,env=process.env,publicRoot,fetch
     configured();uuid(owner);uuid(id);if(confirmed!==true)fail('Review and confirm this YouTube channel.');
     const a=await call(owner,'ready',id);checkConfig(a);
     if(a.state==='confirmed')return summary(owner);
-    const grant=cipher.open(a.sealed_grant,grantBinding(a)),channel=await identity(grant);
-    if(channel.channel_id!==a.channel_id)fail('The YouTube channel changed. Start again.',409);
-    await call(owner,'confirm',id,{config_hash:settings.fingerprint});
+    try{
+      const grant=openGrant(a),channel=await identity(grant);
+      if(channel.channel_id!==a.channel_id)throw new ConnectionProviderError('The YouTube channel changed. Start again.',409,true);
+      await call(owner,'confirm',id,{config_hash:settings.fingerprint});
+    }catch(error){if(error.reconnect)await call(owner,'fail',id).catch(()=>{});throw error;}
     return summary(owner);
   };
   const disconnect=async(owner,{confirmed}={})=>{
@@ -154,10 +163,10 @@ export function createLiveConnections({database,env=process.env,publicRoot,fetch
       inFlight=(async()=>{
         const lease=randomUUID(),c=await call(owner,'token_claim',id,{...pinned,lease});
         try{
-          checkConfig(c);let grant;try{grant=cipher.open(c.sealed_grant,grantBinding(c));}catch{throw new ConnectionProviderError('Reconnect YouTube to restore secure channel access.',409,true);}
+          checkConfig(c);let grant=openGrant(c);
           if(!Number.isFinite(Date.parse(grant.expires_at)))throw new ConnectionProviderError('Reconnect YouTube to restore channel access.',409,true);
           if(Date.parse(grant.expires_at)<now()+60000){
-            grant=checkedGrant(await providerRequest(fetcher,'https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:settings.id,client_secret:settings.clientSecret,grant_type:'refresh_token',refresh_token:grant.refresh_token})},signal),grant,now);
+            grant=await refreshGrant(grant,signal);
             await call(owner,'token_store',id,{...pinned,lease,sealed_grant:cipher.seal(grant,grantBinding(c))});
           }
           // A disconnect or lost show lease during a provider call must fence the result too.
@@ -168,5 +177,51 @@ export function createLiveConnections({database,env=process.env,publicRoot,fetch
       })().finally(()=>{inFlight=null;});return inFlight;
     };
   }
-  return {configured:settings.configured,fingerprint:settings.fingerprint,summary,start,confirm,disconnect,registerPublic,forShow};
+  let maintenanceTimer=null,maintenanceFlight=null,maintenanceAbort=null,maintenanceStopped=false;
+  // Every API instance may run this loop. SQL leases serialize work, while the
+  // credential-independent sweep bounds retention even during setup or outages.
+  function maintenanceTick(){
+    if(maintenanceStopped)return Promise.resolve({stopped:true});
+    if(maintenanceFlight)return maintenanceFlight;
+    const controller=new AbortController();maintenanceAbort=controller;
+    maintenanceFlight=(async()=>{
+      const swept=await call(null,'retention_sweep'),counts={ownersProcessed:Number(swept?.ownersProcessed)||0,verified:0,deferred:0,revoked:0};
+      if(!settings.configured)return counts;
+      for(let i=0;i<5&&!controller.signal.aborted;i++){
+        const lease=randomUUID(),c=await call(null,'maintenance_claim',null,{lease,config_hash:settings.fingerprint});
+        if(!c?.id)break;
+        const fence={lease,revision:c.revision,config_hash:settings.fingerprint};let rotatedGrant;
+        try{
+          checkConfig(c);let grant=openGrant(c);
+          if(!Number.isFinite(Date.parse(grant.expires_at)))throw new ConnectionProviderError('Reconnect YouTube to restore channel access.',409,true);
+          if(Date.parse(grant.expires_at)<now()+60000){grant=await refreshGrant(grant,controller.signal);rotatedGrant=cipher.seal(grant,grantBinding(c));}
+          const channel=await identity(grant,controller.signal);
+          if(channel.channel_id!==c.channel_id)throw new ConnectionProviderError('The connected YouTube channel changed. Reconnect it.',409,true);
+          await call(c.owner_id,'maintenance_store',c.id,{...fence,...channel,sealed_grant:rotatedGrant||cipher.seal(grant,grantBinding(c))});
+          counts.verified++;
+        }catch(error){
+          const revoked=error.reconnect===true;
+          // A stale lease or disconnect must never repersist a returned token.
+          // Transient metadata failure can preserve token rotation, but SQL does
+          // not advance the verification/retention deadline on this path.
+          let recorded=false;
+          try{await call(c.owner_id,'maintenance_fail',c.id,{...fence,revoked,...(!revoked&&rotatedGrant?{sealed_grant:rotatedGrant}:{})});recorded=true;}catch{}
+          counts[revoked&&recorded?'revoked':'deferred']++;
+        }
+      }
+      return counts;
+    })().finally(()=>{maintenanceFlight=null;maintenanceAbort=null;});
+    return maintenanceFlight;
+  }
+  function startMaintenance(){
+    if(maintenanceTimer)return;
+    maintenanceStopped=false;
+    const run=()=>{void maintenanceTick().catch(()=>console.error('Live Studio connection maintenance could not complete. It will retry.'));};
+    maintenanceTimer=setInterval(run,60000);maintenanceTimer.unref?.();run();
+  }
+  async function stopMaintenance(){
+    maintenanceStopped=true;if(maintenanceTimer)clearInterval(maintenanceTimer);maintenanceTimer=null;
+    maintenanceAbort?.abort();await maintenanceFlight?.catch(()=>{});
+  }
+  return {configured:settings.configured,fingerprint:settings.fingerprint,summary,start,confirm,disconnect,registerPublic,forShow,maintenanceTick,startMaintenance,stopMaintenance};
 }
