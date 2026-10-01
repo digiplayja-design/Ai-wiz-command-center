@@ -1,0 +1,36 @@
+# The Pod and You — personal beta contract
+
+This is an on-demand private episode for one signed-in listener and two or three AI host roles. No public rooms, background broadcasts, purchases, or automatic sharing. K-Nova is the host; Analyst provides context; optional Challenger explores another angle. The deadline is at most 900 seconds and never extends through pause, input or reconnect. Browsing makes no episode/provider call. Initial access: Ultra/Enterprise and the existing server-verified developer entitlement.
+
+## Public HTTP API
+
+All paths are below `/api/pod`, authenticated and `Cache-Control: no-store`. Error JSON: `{error,code?}`. Owner IDs and usage totals are never accepted from the client.
+
+- GET `/`: `{catalog,access:{allowed,reason,maxSeconds,durations:[300,600,900],usageLabel},episodes:[Episode]}`. Filter durations to current allowed maximum. Catalog categories: trending, politics, sports, religion, culture, business, technology. Topics are clearly labeled suggested discussion questions, not claims of breaking news.
+- POST `/episodes`: `{requestId:UUID,category,topic:string<=240,durationSeconds:300|600|900,hostCount:2|3,style:balanced|relaxed|debate,consent:true}` -> `{episode}`. Idempotent requestId, exactly one quota reservation, no automatic audio generation.
+- GET `/episodes/:id`: `{episode}`.
+- POST `/episodes/:id/next`: `{requestId:UUID,version:int}` -> `{episode,turn:Turn|null,audio:{base64,mime:'audio/wav',durationSeconds}|null}`. Serialize at most one generation, return only one short host turn. Client requests only while actively listening and after previous audio finishes. Request replay must not call providers again. Transient audio can be unavailable on replay after server restart: return existing text and explicit audioUnavailable, never regenerate silently.
+- POST `/episodes/:id/control`: `{action:'pause'|'resume'|'interrupt'|'end'|'heartbeat'}` -> `{episode}`. Pause/interrupt/end invalidate any in-flight output by incrementing version. Interrupt stops generation but is distinct from end; the user can submit a contribution then resume. Heartbeats every 10 seconds while screen is active; missing heartbeat for 35 seconds aborts work/pauses episode. No new work while paused. Deadline remains unchanged.
+- POST `/episodes/:id/contributions`: `{requestId:UUID,text:string<=1000}` -> `{episode}`. At most 12 contributions per episode. Accept while paused/interrupted, cancel stale output, append attributed user text; resume is explicit client action. No new turn starts automatically.
+- POST `/episodes/:id/transcribe`: `{requestId:UUID,audioBase64:string}` -> `{text}`. Strict 24kHz mono PCM16 WAV only, <=30 seconds/1,440,044 bytes; reserve a bounded dispatch slot and record real transcription usage; transient audio is not stored. Does not automatically submit the transcript. Listener reviews/edits text before Send.
+- DELETE `/episodes/:id`: `{confirmed:true}` -> `{deleted:true}`. Only terminal episodes; keep minimal usage/rate-limit receipts so deletion cannot refund or bypass limits.
+
+Episode fields: `id,category,topic,durationSeconds,hostCount,style,state` (`ready|active|paused|ended|failed`), `phase,version,createdAt,startedAt,deadlineAt,serverNow,turns:[Turn],sources:[{id,title,url}],checkedAt,summary,endReason,error,usageLabel`.
+Turn fields: `id,seq,speaker` (`host|analyst|challenger|user`), `text,sourceIds:[string],createdAt,interrupted?:bool`. Output plain text only. Source links must be validated public HTTPS URLs, citations only from actual retrieved research. User facts/links are untrusted data.
+
+## Timing, orchestration and accounting
+
+- Persist creation, version, deadline, lease and counters. Initial ready sessions expire after 3 minutes. First successful generated turn sets start/deadline atomically. Enforce the hard deadline on server dispatch/commit and client playback. Reserve the final 45 seconds for conclusion; next episode requires fresh Listen.
+- One owner, one live episode, one bounded provider call at a time. Distributed DB claim with operation/request ID and finite lease prevents duplicate calls. Expired leases must never rerun a possibly paid operation automatically; fail/require explicit new request after recording uncertain usage.
+- Heartbeat active-time accounting is server-derived; pause stops active-time accumulation and generation, never the absolute deadline. Disconnect grace is bounded. Keep total provider evidence separately from elapsed allowance.
+- Reuse exactly one verified existing LIVE CONVO quota reservation. Report server-derived duration, real text/research usage and real transcription usage. Do not fabricate TTS tokens; binary TTS token usage may be unknown, bounded instead by character/call/audio limits. Do not double-count transcription tokens.
+- Do not implement AI GAS monetary debits in this beta: that module is absent from the verified deployed backend. UI usageLabel: `Personal beta · uses your LIVE CONVO session and time allowance. AI usage limits also apply.` No extra AI credit/generation deductions or payment requests.
+- Apply hard per-episode budgets even for developer entitlement: <=36 host turns, <=12 contributions, <=12 transcription calls, <=30s per recording, <=480 characters per spoken turn, <=40s per synthesized turn, bounded research output, no arbitrary fetch/URLs/tools except research search. Stop on accounting failure. Provider dispatch begins only after reservation succeeds. No automatic retry of paid generation.
+- Research current affairs at first next request. Store a concise brief, actual source URLs and checkedAt; fail clearly if current sources are unavailable for politics/sports/trending. Distinguish facts, opinions, beliefs and uncertainty. No user-targeted political persuasion, fabricated events/scores/quotes, or needless partisan conflict.
+- Retain only private transcript/recap and source metadata, not user voice recordings. User can delete terminal history; no recordings/sharing enabled by default.
+
+## Interfaces between implementation agents
+
+Root owns HTTP routes/runtime and server.js integration. Storage agent owns migration and `backend/pod/store.mjs`, exposing a documented RPC-backed adapter. AI agent owns `backend/pod/providers.mjs`: `research({category,topic,style,signal})`, `turn({episode,brief,remainingSeconds,closing,signal})`, `speak({speaker,text,signal})`, `transcribe({wav,signal})`, with actual usage metadata per call and no network outside injected provider clients. Propose exact return shapes to root early.
+
+Frontend screen/client agent owns `lib/pod/pod_client.dart`, `lib/pod/pod_screen.dart`, related widget tests, not main.dart. Audio agent owns `lib/pod/pod_media*.dart` and media unit tests. Use injectable `PodMedia` interface with `activate()` called directly from Listen/resume user gestures, `play(Uint8List wav)` completing when playback ends, `stop()`, `startRecording()`, `stopRecording()->Uint8List`, `cancelRecording()`, `dispose()`, plus status/error listeners. Mic opens only from Chime in. Audio agent sends finalized interface to frontend agent/root before implementation. Root owns main.dart navigation/icon registration and serializes all Flutter commands.

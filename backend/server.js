@@ -29,6 +29,8 @@ import { registerFieldProof } from './fieldproof/routes.mjs';
 import { reviewEvidence, CREDIT_COST as FIELDPROOF_CREDIT_COST } from './fieldproof/model.mjs';
 import { registerAiVisibility } from './ai_visibility/routes.mjs';
 import { scanVisibility, CREDIT_COST as VISIBILITY_CREDIT_COST } from './ai_visibility/ai.mjs';
+import { registerPod } from './pod/routes.mjs';
+import { createPodProviders } from './pod/providers.mjs';
 import { registerSeoAgent } from './seo_agent/routes.mjs';
 import { scanSeo } from './seo_agent/ai.mjs';
 import { CREDIT_COST as SEO_CREDIT_COST } from './seo_agent/core.mjs';
@@ -9347,6 +9349,11 @@ app.post("/api/live-convo/usage", async (req, res) => {
       });
     }
 
+    // Pod allowances are metered by the server; client cumulative reports cannot alter them.
+    if (await podRegistration.store.isQuotaSession(user.id, sessionId)) {
+      return res.status(403).json({ok:false,code:'pod_server_metered',error:'Pod usage is managed by the server.'});
+    }
+
     let usage;
     if (entitlement.unlimited) {
       usage = await korlixLiveConvoBuild131ReportUnlimitedUsage({
@@ -12678,6 +12685,38 @@ registerAiVisibility(app, {database: supabaseAdmin, requireUser,
     return {...check,status:429,usageId:usageCounter.id};
   },
   scan: data => scanVisibility({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
+});
+// Pod RPCs have bounded I/O, including their watchdog and usage receipts.
+const podDatabase = supabaseUrl && supabaseServiceRoleKey ? createClient(supabaseUrl, supabaseServiceRoleKey, {
+  auth:{persistSession:false,autoRefreshToken:false},
+  global:{fetch:(input, init={})=>fetch(input,{...init,signal:init.signal
+    ? AbortSignal.any([init.signal,AbortSignal.timeout(12000)]) : AbortSignal.timeout(12000)})},
+}) : null;
+const podRegistration = registerPod(app,{database:podDatabase,requireUser,
+  providers:process.env.OPENAI_API_KEY ? createPodProviders({client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}) : null,
+  access:async user=>{
+    if(!process.env.OPENAI_API_KEY||!podDatabase)return {allowed:false,status:503,reason:'The pod studio is temporarily unavailable.'};
+    const entitlement=korlixLiveConvoBuild131EntitlementForUser(user);
+    const {data:profile,error}=await podDatabase.from('user_profiles').select('tier').eq('id',user.id).maybeSingle();
+    if(error)throw error;
+    const tier=String(profile?.tier||'basic').trim().toLowerCase();
+    if(!entitlement.unlimited&&!['ultra','enterprise'].includes(tier))return {allowed:false,status:403,reason:'The personal beta is available on Ultra Premium and Enterprise.'};
+    const base=korlixLiveConvoBuild131LimitsForEntitlement(profile,entitlement);
+    const limits={...base,maxSessionSeconds:900,maxResponses:37}; // 36 Pod claims; leave room to deliver the final receipted turn.
+    if(entitlement.unlimited)return {allowed:true,limits,unlimited:true,remainingSeconds:900};
+    const {data,error:usageError}=await podDatabase.rpc('korlix_live_convo_get_usage',{
+      p_user_id:user.id,p_tier:limits.tier,p_monthly_session_limit:limits.monthlySessions,
+      p_monthly_duration_limit:limits.monthlySeconds,p_monthly_token_limit:limits.monthlyTokens,
+    });
+    if(usageError)throw usageError;
+    const usage=korlixLiveConvoBuild129RpcValue(data);
+    // Session count is checked atomically only at creation. Existing episodes may use their last reservation.
+    const remainingSeconds=Math.max(0,Number(usage?.remainingSeconds)||0);
+    const remainingTokens=Math.max(0,Number(usage?.remainingTokens)||0);
+    return {allowed:remainingSeconds>0&&remainingTokens>0,status:429,
+      reason:remainingSeconds>0&&remainingTokens>0?null:'Your LIVE CONVO time or AI usage allowance is used up for this month.',
+      limits,remainingSeconds};
+  },
 });
 registerSeoAgent(app, {database: supabaseAdmin, requireUser, autoStartScheduler: true,
   aiAccess: async (user, {reserved = false} = {}) => {
