@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import chatQuality from '../chat_quality.cjs';
 import {createPodProviders, PodProviderError, POD_VOICES, podWelcomeTurn, safePodSourceUrl, validatePodWav} from '../pod/providers.mjs';
 
 const now = () => new Date('2026-10-01T12:00:00.000Z');
@@ -36,7 +37,7 @@ function mock({response = researchResult(), speechResponse, transcriptionRespons
   return {calls, client, providers: createPodProviders({client, now})};
 }
 
-test('research uses configured Astra xhigh, private bounded web search, actual source metadata and exact usage', async () => {
+test('research uses Pod-local low reasoning without changing main chat, bounded search, verified sources and exact usage', async () => {
   const fixture = mock();
   assert.equal(fixture.calls.length, 0);
   const result = await fixture.providers.research(episode);
@@ -53,17 +54,22 @@ test('research uses configured Astra xhigh, private bounded web search, actual s
   assert.equal(fixture.calls.length, 1);
   const {payload, options} = fixture.calls[0];
   assert.equal(payload.model, 'gpt-6-astra');
-  assert.deepEqual(payload.reasoning, {effort: 'xhigh'});
+  assert.deepEqual(payload.reasoning, {effort: 'low'});
+  assert.equal(chatQuality.CHAT_EFFORT, 'xhigh', 'global chat and image reasoning stays unchanged');
   assert.equal(payload.store, false);
-  assert.equal(payload.max_output_tokens, 8192);
+  assert.equal(payload.max_output_tokens, 4096);
   assert.equal(payload.max_tool_calls, 2);
   assert.deepEqual(payload.tools, [{type: 'web_search', search_context_size: 'medium'}]);
   assert.equal(payload.tool_choice, 'required');
   assert.deepEqual(payload.include, ['web_search_call.action.sources']);
   assert.equal(payload.text.format.strict, true);
+  assert.equal(payload.text.format.schema.properties.text.maxLength, 2200);
+  assert.equal(payload.text.format.schema.properties.opening.properties.text.maxLength, 320);
   assert.match(payload.instructions, /untrusted data/);
   assert.equal(options.maxRetries, 0);
-  assert.equal(options.timeout, 150000);
+  assert.equal(options.timeout, 60000);
+  assert(Number.isSafeInteger(result.usage.elapsedMs));
+  assert(result.usage.elapsedMs >= 0);
   assert(options.signal instanceof AbortSignal);
 });
 
@@ -129,9 +135,9 @@ test('research rejects unsupported, absent or duplicate opening sources and malf
   }
 });
 
-test('new research brief remains concise and rejects an opening citation absent from its selected sources', async () => {
+test('research retains a hard brief bound and rejects an opening citation absent from its selected sources', async () => {
   for (const change of [
-    body => ({...body, text: 'x'.repeat(2201)}),
+    body => ({...body, text: 'x'.repeat(6001)}),
     body => ({...body, opening: {...opening, sourceUrls: ['https://www.nasa.gov/about/']}}),
   ]) {
     const response = researchResult();
@@ -141,6 +147,109 @@ test('new research brief remains concise and rejects an opening citation absent 
     await assert.rejects(fixture.providers.research(episode), error => error.usage.totalTokens === 139);
     assert.equal(fixture.calls.length, 1);
   }
+});
+
+test('a valid source-backed Markdown brief above the target is normalized without truncating facts and works for the next turn', async () => {
+  const facts = 'The estimate is -5, not +5. Keep 2 * 3, metric_name, and `raw_identifier` intact. ';
+  const researchText = `# Research notes\n**Verified context:** [NASA missions](${sourceUrl})\n` + facts.repeat(45) + '\nFinal uncertainty must remain.';
+  assert(researchText.length > 2200 && researchText.length < 6000);
+  const response = researchResult();
+  response.output_text = JSON.stringify({...JSON.parse(response.output_text), text: researchText});
+  const fixture = mock({response});
+  const result = await fixture.providers.research(episode);
+  assert.equal(result.usage.totalTokens, 139);
+  assert.equal(result.usage.status, 'completed');
+  assert(result.brief.text.length > 2200);
+  assert(!result.brief.text.includes('# Research notes'));
+  assert(!result.brief.text.includes('**Verified context:**'));
+  assert(!result.brief.text.includes('[NASA missions]'));
+  assert(result.brief.text.includes(`NASA missions (${sourceUrl})`));
+  assert.equal(result.brief.text.match(/The estimate is -5, not \+5\./g).length, 45);
+  assert.equal(result.brief.text.match(/Keep 2 \* 3, metric_name, and raw_identifier intact\./g).length, 45);
+  assert(result.brief.text.endsWith('Final uncertainty must remain.'));
+  const followup = mock({response: turnResult('Let’s explore that uncertainty.', ['source-1'])});
+  await followup.providers.turn(turnArgs({brief: result.brief}));
+  assert.equal(JSON.parse(followup.calls[0].payload.input).brief.text, result.brief.text, 'the same normalized brief remains valid on later turns');
+  assert.equal(fixture.calls.length, 1, 'format normalization must not trigger another paid call');
+});
+
+test('brief formatting normalization preserves words and trusts only selected source destinations', async () => {
+  const response = researchResult();
+  const text = `<p>First fact.</p><p><strong>Second fact.</strong><br>Keep -5 and 2 * 3.</p>\n` +
+    `[NASA [missions]](${sourceUrl} "Mission overview") and [unverified reference](https://unselected.example.net/path).\n` +
+    '```text\nA factual note in a code block.\n```';
+  response.output_text = JSON.stringify({...JSON.parse(response.output_text), text});
+  const fixture = mock({response});
+  const result = await fixture.providers.research(episode);
+  assert.match(result.brief.text, /First fact\.\n\nSecond fact\.\nKeep -5 and 2 \* 3\./);
+  assert(result.brief.text.includes(`NASA [missions] (${sourceUrl})`));
+  assert(result.brief.text.includes('unverified reference'));
+  assert(!result.brief.text.includes('unselected.example.net'));
+  assert(result.brief.text.includes('A factual note in a code block.'));
+  assert(!result.brief.text.includes('```'));
+  assert.deepEqual(result.brief.sources, brief.sources);
+});
+
+test('unsafe or oversized briefs fail with usage and content-free diagnostic metadata', async () => {
+  const secret = 'PRIVATE_FIXTURE_CONTEXT';
+  for (const [text, reason] of [[secret + 'x'.repeat(6001), 'length'], [secret + '<script>untrusted()</script>', 'active_html'],
+    [secret + '\u0000', 'control_characters'], ['', 'empty']]) {
+    const response = researchResult();
+    response.output_text = JSON.stringify({...JSON.parse(response.output_text), text});
+    const fixture = mock({response});
+    await assert.rejects(fixture.providers.research(episode), error => {
+      assert.equal(error.code, 'POD_INVALID_BRIEF');
+      assert.equal(error.usage.totalTokens, 139);
+      assert.deepEqual(error.usage.diagnostic, {stage: 'research_brief', reason, characters: text.length, limit: 6000});
+      assert(!JSON.stringify(error.usage).includes(secret));
+      assert(!JSON.stringify(error.usage).includes(sourceUrl));
+      assert(!error.message.includes(secret));
+      assert.match(error.message, /Start a new pod/);
+      assert(!error.message.includes('characters'));
+      return true;
+    });
+    assert.equal(fixture.calls.length, 1);
+  }
+});
+
+test('brief text and source metadata together remain within the durable UTF-8 storage budget', async () => {
+  const response = researchResult();
+  const text = '漢'.repeat(5500);
+  response.output_text = JSON.stringify({...JSON.parse(response.output_text), text});
+  const fixture = mock({response});
+  await assert.rejects(fixture.providers.research(episode), error => {
+    assert.equal(error.code, 'POD_INVALID_BRIEF');
+    assert.equal(error.usage.totalTokens, 139);
+    assert.equal(error.usage.diagnostic.reason, 'byte_length');
+    assert.equal(error.usage.diagnostic.limitBytes, 16000);
+    assert(error.usage.diagnostic.bytes > 16000);
+    assert(!JSON.stringify(error.usage).includes('漢'));
+    assert.match(error.message, /Start a new pod/);
+    return true;
+  });
+  const followup = mock({response: turnResult()});
+  await assert.rejects(followup.providers.turn(turnArgs({brief: {...brief, text}})), error => error.code === 'POD_INVALID_BRIEF' && !error.usage);
+  assert.equal(followup.calls.length, 0, 'persisted briefs use the same UTF-8 bound before the next paid turn');
+  const acceptable = researchResult();
+  acceptable.output_text = JSON.stringify({...JSON.parse(acceptable.output_text), text: '漢'.repeat(4500)});
+  const valid = await mock({response: acceptable}).providers.research(episode);
+  assert(Buffer.byteLength(JSON.stringify(valid.brief), 'utf8') <= 16000);
+  assert.equal(valid.brief.text.length, 4500, 'safe multibyte factual text is preserved');
+});
+
+test('malformed response JSON preserves real usage and exposes only parse metadata', async () => {
+  const secret = 'PRIVATE_JSON_FIXTURE';
+  const response = {...researchResult(), output_text: secret + ' {not JSON'};
+  const fixture = mock({response});
+  await assert.rejects(fixture.providers.research(episode), error => {
+    assert.equal(error.code, 'POD_INVALID_RESPONSE');
+    assert.deepEqual(error.usage.diagnostic, {stage: 'response_json', reason: 'json_parse', characters: response.output_text.length});
+    assert.equal(error.usage.totalTokens, 139);
+    assert(!JSON.stringify(error.usage).includes(secret));
+    assert(Number.isSafeInteger(error.usage.elapsedMs));
+    return true;
+  });
+  assert.equal(fixture.calls.length, 1);
 });
 
 test('research includes bounded listener contributions as unverified context without granting instructions', async () => {
@@ -222,11 +331,13 @@ test('turn alternates two or three distinct AI roles and selects host for closin
   assert.equal((await fixture.providers.turn(turnArgs({episode: {...episode, turns: [host]}, remainingSeconds: 40}))).speaker, 'host');
   const {payload, options} = fixture.calls.at(-1);
   assert.equal(payload.model, 'gpt-6-astra');
-  assert.equal(payload.reasoning.effort, 'xhigh');
-  assert.equal(payload.max_output_tokens, 8192);
+  assert.equal(payload.reasoning.effort, 'low');
+  assert.equal(payload.max_output_tokens, 2048);
+  assert.equal(payload.text.format.schema.properties.text.maxLength, 400);
   assert.equal(payload.tools, undefined);
   assert.equal(payload.store, false);
   assert.equal(options.maxRetries, 0);
+  assert.equal(options.timeout, 30000);
   assert.equal(JSON.parse(payload.input).closing, true);
   assert.match(payload.instructions, /no persuasion targeted to the listener/);
   assert.match(payload.instructions, /no voting instructions/);

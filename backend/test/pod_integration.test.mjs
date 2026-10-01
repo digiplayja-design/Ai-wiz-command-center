@@ -6,6 +6,7 @@ import {PGlite} from '@electric-sql/pglite';
 import express from 'express';
 import {createPodStore} from '../pod/store.mjs';
 import {createPodRuntime} from '../pod/runtime.mjs';
+import {createPodProviders,validatePodWav} from '../pod/providers.mjs';
 import {registerPod} from '../pod/routes.mjs';
 
 let db,store,runtime,owner,calls,turnInputs,providers;
@@ -94,4 +95,104 @@ test('the 36th host turn can commit its closing audio under maxResponses 37, the
   const body=await response.json();assert.equal(response.status,200,JSON.stringify(body));assert.equal(body.episode.state,'ended');assert.equal(body.turn,null);assert.equal(body.audio,null);
   assert.deepEqual(calls,{research:1,turn:34,speak:36,transcribe:0});assert.equal((await monthly()).session_count,1);
  }finally{api.stop();server.closeAllConnections();await new Promise(r=>server.close(r));}
+});
+
+// Exercise SDK response decoding and provider validation before the runtime and
+// durable SQL transaction. Mocking already-parsed providers misses format errors.
+async function offlineSdk({sourceUrl='https://www.nasa.gov/missions/',researchStatus=200}={}) {
+ const {default:OpenAI}=await import('openai');
+ const retrievedUrl='https://www.nasa.gov/missions/';
+ const briefText=`## Research notes\n**Verified context:** [NASA missions](${retrievedUrl}) describes a range of missions.\n`+
+  'Discussion note: compare the purpose of a mission with the needs of its community, and distinguish evidence from opinion.\n'.repeat(24)+
+  'Final caveat: this brief does not verify any new mission, score, quotation or breaking event.';
+ assert(briefText.length>2200&&briefText.length<6000);
+ const sent=[];
+ const client=new OpenAI({apiKey:'pod-offline-integration-fixture-not-a-real-key',
+  // Intentionally retain the SDK retry default; provider per-call options must
+  // disable it, including when the transport returns a retryable server error.
+  fetch:async(url,options)=>{
+   const path=new URL(String(url)).pathname,payload=JSON.parse(options.body);
+   sent.push({path,payload});
+   if(path==='/v1/audio/speech') {
+    const speechNumber=sent.filter(call=>call.path==='/v1/audio/speech').length;
+    return new Response(Buffer.alloc(48000,speechNumber),{headers:{'content-type':'audio/pcm','x-request-id':`req_speech_${speechNumber}`}});
+   }
+   assert.equal(path,'/v1/responses','the offline transport never fetches a source URL');
+   const researching=payload.text.format.name==='pod_research';
+   if(researching&&researchStatus!==200)return new Response(JSON.stringify({error:{message:'Offline upstream failure',type:'server_error'}}),
+    {status:researchStatus,headers:{'content-type':'application/json','x-request-id':'req_research_failure'}});
+   const value=researching?{text:briefText,currentSourcesAvailable:true,sources:[{url:sourceUrl}],
+    opening:{text:'NASA describes a range of missions. What priorities should guide their contribution to communities?',sourceUrls:[sourceUrl]}}:
+    {text:'That raises a useful tradeoff: how would we decide which community needs should come first?',sourceIds:['source-1']};
+   const usage=researching?{input_tokens:101,output_tokens:38,total_tokens:139,output_tokens_details:{reasoning_tokens:20}}:
+    {input_tokens:31,output_tokens:13,total_tokens:44,output_tokens_details:{reasoning_tokens:4}};
+   const output=[...(researching?[{type:'web_search_call',id:'ws_fixture',status:'completed',action:{type:'search',sources:[{url:retrievedUrl,title:'NASA missions'}]}}]:[]),
+    {type:'message',id:'msg_fixture',status:'completed',role:'assistant',content:[{type:'output_text',text:JSON.stringify(value),annotations:[]}]}];
+   return new Response(JSON.stringify({id:researching?'resp_research':'resp_turn',object:'response',status:'completed',output,usage}),
+    {headers:{'content-type':'application/json','x-request-id':researching?'req_research':'req_turn'}});
+  }});
+ runtime.stop();providers=createPodProviders({client});runtime=createPodRuntime({store,providers,access,logger:{warn(){}}});
+ return {sent,briefText};
+}
+
+test('real SDK and providers persist a longer Markdown research brief and deliver three successive voiced turns without research retries',async()=>{
+ const {sent}=await offlineSdk();
+ const first=await next(await create());
+ assert.equal(first.turn.speaker,'host');assert.equal(first.episode.turns.length,1);
+ assert.deepEqual(sent.map(call=>call.path),['/v1/audio/speech']);
+ const secondRequest=randomUUID(),second=await next(first.episode,secondRequest);
+ assert.equal(second.turn.speaker,'analyst');assert.equal(second.episode.state,'active');
+ const persisted=(await store.get(owner,first.episode.id)).brief;
+ assert(persisted.text.length>2200);assert.doesNotMatch(persisted.text,/##|\*\*|\]\(/);
+ assert.match(persisted.text,/Final caveat: this brief does not verify any new mission, score, quotation or breaking event\.$/);
+ assert.deepEqual(persisted.sources,[{id:'source-1',title:'NASA missions',url:'https://www.nasa.gov/missions/'}]);
+ const replay=await next(first.episode,secondRequest);
+ assert(replay.replayed);assert.equal(replay.audio.base64,second.audio.base64);assert.equal(sent.length,3);
+ const third=await next(second.episode);
+ assert.equal(third.turn.speaker,'challenger');assert.equal(third.episode.turns.length,3);assert.equal(third.episode.state,'active');
+ assert.equal(third.episode.error,null);assert.equal(third.episode.deadlineAt,first.episode.deadlineAt);
+ for(const [index,result] of [first,second,third].entries()) {
+  const parsed=validatePodWav(Buffer.from(result.audio.base64,'base64'));
+  assert.equal(parsed.durationSeconds,1);assert.equal(parsed.pcm[0],index+1,'each committed turn returns its own decoded audio');
+ }
+ assert.deepEqual(sent.map(call=>call.path),['/v1/audio/speech','/v1/responses','/v1/audio/speech','/v1/responses','/v1/audio/speech']);
+ assert.deepEqual(sent.filter(call=>call.path==='/v1/audio/speech').map(call=>call.payload.voice),['marin','cedar','coral']);
+ assert.deepEqual(JSON.parse(sent[3].payload.input).brief,persisted,'the next host consumes the complete normalized durable brief');
+ const receipts=(await db.query('select call_key,usage,evidence from korlix_pod_usage_receipts where episode_id=$1',[first.episode.id])).rows;
+ assert.equal(receipts.length,5);assert.equal(receipts.filter(receipt=>receipt.call_key==='speak').length,3);
+ for(const [kind,tokens,request] of [['research',139,'req_research'],['turn',44,'req_turn']]) {
+  const receipt=receipts.find(receipt=>receipt.call_key===kind);
+  assert.equal(receipt.usage.totalTokens,tokens);assert.equal(receipt.evidence.totalTokens,tokens);
+  assert.equal(receipt.evidence.providerRequestId,request);assert.equal(receipt.evidence.status,'completed');
+ }
+ assert.equal((await monthly()).total_tokens,183);assert.equal((await monthly()).response_count,2);
+});
+
+test('real provider validation rejects an invented source after the welcome, persists actual paid usage and never speaks a fallback or retries',async()=>{
+ const {sent}=await offlineSdk({sourceUrl:'https://www.nasa.gov/not-retrieved'});
+ const first=await next(await create()),requestId=randomUUID();
+ await assert.rejects(next(first.episode,requestId),error=>error.code==='POD_SOURCES_UNAVAILABLE');
+ const saved=await store.get(owner,first.episode.id);
+ assert.equal(saved.episode.state,'failed');assert.equal(saved.episode.turns.length,1);
+ assert.match(saved.episode.error,/could not be verified/);assert.deepEqual(saved.brief,{});assert.deepEqual(saved.episode.sources,[]);
+ assert.deepEqual(sent.map(call=>call.path),['/v1/audio/speech','/v1/responses']);
+ const receipt=(await db.query("select usage,evidence from korlix_pod_usage_receipts where episode_id=$1 and call_key='research'",[first.episode.id])).rows[0];
+ assert.equal(receipt.usage.totalTokens,139);assert.equal(receipt.evidence.status,'failed');assert.equal(receipt.evidence.usageKnown,true);
+ assert.equal((await monthly()).total_tokens,139);
+ const replay=await next(first.episode,requestId);
+ assert(replay.replayed);assert.equal(replay.audio,null);assert.equal(replay.turn,null);
+ await assert.rejects(next(saved.episode),/This pod has ended/);
+ assert.equal(sent.length,2,'neither replay nor a new request can repeat failed paid research');
+});
+
+test('a retryable research transport failure makes exactly one SDK request and ends the episode visibly',async()=>{
+ const {sent}=await offlineSdk({researchStatus:503});
+ const first=await next(await create());
+ await assert.rejects(next(first.episode),error=>error.code==='POD_PROVIDER_FAILED');
+ const saved=await store.get(owner,first.episode.id);
+ assert.equal(saved.episode.state,'failed');assert.match(saved.episode.error,/could not complete/);assert.equal(saved.episode.turns.length,1);
+ assert.deepEqual(sent.map(call=>call.path),['/v1/audio/speech','/v1/responses']);
+ const receipt=(await db.query("select evidence from korlix_pod_usage_receipts where episode_id=$1 and call_key='research'",[first.episode.id])).rows[0];
+ assert.equal(receipt.evidence.status,'failed');assert.equal(receipt.evidence.usageKnown,false);assert.equal(receipt.evidence.totalTokens,null);
+ assert.equal((await monthly()).total_tokens,0,'unknown tokens must not be invented');
 });
