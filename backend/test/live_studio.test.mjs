@@ -39,7 +39,8 @@ test('validated show inputs and schedules reject invalid durations, hidden modes
  for(const change of [{durationSeconds:86400},{hostCount:9},{title:'a\ncommand'},{category:'private-data'}])assert.throws(()=>showInput({...config,...change}));
  assert.throws(()=>queueInput({mode:'youtube',consent:true,requestId:randomUUID()}));
  assert.throws(()=>queueInput({mode:'youtube',consent:true,confirmed:true,requestId:randomUUID(),scheduledAt:'2020-01-01'}));
- assert.equal(queueInput({mode:'youtube',consent:true,confirmed:true,requestId:randomUUID()}).mode,'youtube');
+ assert.equal(queueInput({mode:'youtube',consent:true,confirmed:true,requestId:randomUUID(),connectionId:randomUUID(),connectionRevision:1}).mode,'youtube');
+ assert.throws(()=>queueInput({mode:'youtube',consent:true,confirmed:true,requestId:randomUUID()}));
 });
 test('save retry, list and get are owner scoped; public projection removes leases and storage paths',async()=>{
  const s=await save();assert.equal((await save(owner,s.id)).id,s.id);
@@ -139,15 +140,16 @@ test('uncertain provider failure is recorded once, never automatically reissued'
  await runtime.tick();await runtime.tick();assert.equal(count,1);
  const show=(await store.call(owner,'list')).shows[0];assert.equal(show.state,'failed');assert(!show.error.includes('secret'));
 });
-test('HTTP auth, creator entitlement and unconfigured YouTube gates run before dispatch',async()=>{
+test('HTTP auth and unconfigured YouTube gates run before dispatch',async()=>{
  const app=express();app.use(express.json());
- registerLiveStudio(app,{store,requireUser:async q=>q.headers.authorization?{id:owner}:null,
-  access:async()=>({allowed:true}),startWorker:false,providers:null,storage:null});
+ const modernStore={call:(actor,action,id,data)=>action==='workspace'?Promise.resolve({entitlement:{enabled:true,maxDailyStarts:3},usage:{dailyStarts:0},workerReady:false}):store.call(actor,action,id,data)};
+ registerLiveStudio(app,{store:modernStore,requireUser:async q=>q.headers.authorization?{id:owner}:null,
+  access:async()=>({allowed:false}),connections:{registerPublic(){},summary:async()=>({connectionConfigured:false,connection:null,pendingConnections:[]})},startWorker:false,providers:null,storage:null});
  const server=app.listen(0);await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port+'/api/live-studio';
  try{
   assert.equal((await fetch(base)).status,401);
   const s=await save();
-  const response=await fetch(base+'/shows/'+s.id+'/start',{method:'POST',headers:{authorization:'fixture','content-type':'application/json'},body:JSON.stringify({mode:'youtube',consent:true,confirmed:true,requestId:randomUUID()})});
+  const response=await fetch(base+'/shows/'+s.id+'/start',{method:'POST',headers:{authorization:'fixture','content-type':'application/json'},body:JSON.stringify({mode:'youtube',consent:true,confirmed:true,requestId:randomUUID(),connectionId:randomUUID(),connectionRevision:1})});
   assert.equal(response.status,409);assert.equal((await store.call(owner,'get',s.id)).state,'draft');
   const status=await(await fetch(base,{headers:{authorization:'fixture'}})).json();assert.equal(status.access.youtubeReady,false);
  }finally{await new Promise(r=>server.close(r));}
@@ -188,7 +190,7 @@ test('YouTube adapter forces unlisted, AI disclosure, secure ingest and confirms
  const fetcher=async(url,options={})=>{
   const body=options.body instanceof URLSearchParams?Object.fromEntries(options.body):options.body?JSON.parse(options.body):null;
   calls.push({url,method:options.method,body});let value={};
-  if(url.includes('oauth2'))value={access_token:'fake-access-token',expires_in:3600};
+  if(url.includes('channels?'))value={items:[{id:'fixture-channel'}]};
   else if(url.includes('liveBroadcasts?part=snippet'))value={id:'broadcast1',snippet:{liveChatId:'chat1'}};
   else if(url.includes('liveStreams?part=snippet'))value={id:'stream1',cdn:{ingestionInfo:{rtmpsIngestionAddress:'rtmps://a.rtmps.youtube.com/live2',streamName:'fixture-key'}}};
   else if(url.includes('liveStreams?part=status'))value={items:[{status:{streamStatus:'active'}}]};
@@ -196,10 +198,68 @@ test('YouTube adapter forces unlisted, AI disclosure, secure ingest and confirms
   else if(url.includes('liveBroadcasts?part=status'))value={items:[{status:{lifeCycleStatus:++livePoll>0?'live':'liveStarting'}}]};
   return new Response(JSON.stringify(value),{status:200});
  };
- const api=createYouTube({enabled:true,ownerId:owner,clientId:'fixture',clientSecret:'fixture',refreshToken:'fixture'},{fetcher});
+ const api=createYouTube({channelId:'fixture-channel',accessToken:async()=>'fake-access-token'},{fetcher});
  const session=await api.setup({config});assert.equal(session.watchUrl,'https://www.youtube.com/watch?v=broadcast1');
  assert.equal(await api.start(session),false);assert.equal(await api.start(session),true);
  assert.equal(calls.find(c=>c.url.includes('liveBroadcasts?part=snippet')).body.status.privacyStatus,'unlisted');
  assert.equal(calls.find(c=>c.url.includes('videos?part=status')).body.status.containsSyntheticMedia,true);
- assert.equal(calls.filter(c=>c.url.includes('oauth2')).length,1);
+ assert.equal(calls.filter(c=>c.url.includes('oauth2')).length,0);
+});
+
+test('an encoder that exits unsuccessfully or cannot drain is never reported complete',async()=>{
+ for(const outcome of ['failure','timeout']){
+  const child=new EventEmitter();child.exitCode=null;child.stderr=new PassThrough();
+  child.stdin=new Writable({write(_chunk,_encoding,done){done();}});
+  child.kill=()=>{child.exitCode=1;child.emit('close',1);};
+  if(outcome==='failure')child.stdin.once('finish',()=>{child.exitCode=1;child.emit('close',1);});
+  const sink=broadcastSink('rtmps://a.rtmps.youtube.com/live2/fixture',{spawnProcess:()=>child,closeTimeoutMs:10});
+  await assert.rejects(sink.close(),/final segment/);
+ }
+});
+
+test('end completes only this adapter’s created broadcast using its last run token without reopening a grant',async()=>{
+ let stopped=false,tokenReads=0;const writes=[];
+ const api=createYouTube({channelId:'fixture',accessToken:async()=>{tokenReads++;if(stopped)throw Error('revoked');return 'fixture';}},{fetcher:async(url,options={})=>{
+  let data={};
+  if(options.method==='POST'||options.method==='DELETE')writes.push(url);
+  if(url.includes('channels?'))data={items:[{id:'fixture'}]};
+  else if(url.includes('liveBroadcasts?part=snippet'))data={id:'own-broadcast',snippet:{}};
+  else if(url.includes('liveStreams?part=snippet'))data={id:'own-stream',cdn:{ingestionInfo:{rtmpsIngestionAddress:'rtmps://a.rtmps.youtube.com/live2',streamName:'fixture'}}};
+  else if(url.includes('liveBroadcasts?part=status'))data={items:[{status:{lifeCycleStatus:'live'}}]};
+  return new Response(JSON.stringify(data));
+ }});
+ const session=await api.setup({config}),count=tokenReads;stopped=true;
+ await api.finish(session);assert.equal(tokenReads,count);
+ assert(writes.some(url=>url.includes('broadcastStatus=complete')));
+ const writeCount=writes.length;
+ await assert.rejects(api.finish({...session,id:'another-broadcast'}),/different broadcast/);
+ await assert.rejects(api.finish({id:'another-broadcast'}),/different broadcast/);
+ assert.equal(writes.length,writeCount);
+});
+
+test('expired access still allows status, emergency end and disconnect; a final-start retry stays idempotent',async()=>{
+ const showId=randomUUID(),requestId=randomUUID(),state={id:showId,run_id:requestId,state:'queued',owner_id:owner};
+ let ended=false,disconnected=false;
+ const app=express();app.use(express.json());
+ const fixtureStore={call:async(actor,action,id,data)=>{
+  if(['sweep','grant_developer'].includes(action))return {};
+  assert.equal(actor,owner);
+  if(action==='list')return {shows:[state]};
+  if(action==='workspace')return {entitlement:{enabled:false,maxDailyStarts:1},usage:{dailyStarts:1},workerReady:false};
+  if(action==='get')return state;
+  if(action==='queue'){assert.equal(data.requestId,requestId);return state;}
+  if(action==='control'){ended=true;return {...state,state:'cancelled'};}
+  throw Error(action);
+ }};
+ registerLiveStudio(app,{store:fixtureStore,requireUser:async()=>({id:owner}),access:async()=>({allowed:false}),startWorker:false,
+  connections:{registerPublic(){},summary:async()=>({connectionConfigured:false,connection:null}),disconnect:async(actor)=>{assert.equal(actor,owner);disconnected=true;return {disconnected:true};}}});
+ const server=app.listen(0);await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port+'/api/live-studio';
+ const request=(url,method,body)=>fetch(base+url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ try{
+  const status=await(await fetch(base)).json();assert.equal(status.access.canStart,false);assert.equal(status.shows.length,1);
+  assert.equal((await request('/shows/'+showId+'/start','POST',{mode:'rehearsal',consent:true,requestId})).status,200);
+  assert.equal((await request('/shows/'+showId+'/start','POST',{mode:'rehearsal',consent:true,requestId:randomUUID()})).status,403);
+  assert.equal((await request('/shows/'+showId+'/control','POST',{action:'end',confirmed:true,requestId:randomUUID()})).status,200);assert(ended);
+  assert.equal((await request('/connections/youtube','DELETE',{confirmed:true})).status,200);assert(disconnected);
+ }finally{await new Promise(r=>server.close(r));}
 });

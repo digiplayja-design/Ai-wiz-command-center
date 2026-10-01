@@ -1,4 +1,4 @@
-# Paid worker approved October 1, 2026 at 12:40 Eastern; channel setup still required.
+# Paid worker approved October 1, 2026 at 12:40 Eastern; app OAuth setup is required.
 # Existing website/API services are intentionally not managed by this Blueprint.
 services:
   - type: worker
@@ -23,13 +23,13 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
-      - key: LIVE_STUDIO_BROADCAST_OWNER_ID
-        sync: false
+      - key: LIVE_STUDIO_PUBLIC_ORIGIN
+        value: https://chee-chai-chee-backend.onrender.com
       - key: LIVE_STUDIO_YOUTUBE_ENABLED
         value: 'true'
       - key: LIVE_STUDIO_YOUTUBE_CLIENT_ID
         sync: false
       - key: LIVE_STUDIO_YOUTUBE_CLIENT_SECRET
         sync: false
-      - key: LIVE_STUDIO_YOUTUBE_REFRESH_TOKEN
+      - key: LIVE_STUDIO_TOKEN_KEY
         sync: false

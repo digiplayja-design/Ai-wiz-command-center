@@ -3701,7 +3701,7 @@ app.get("/api/health", (req, res) => {
     studyStudio: {version:1,savedProgress:true,flashcards:true,practiceQuiz:true},
     appStudio: {version:1,interactivePreview:true,savedProjects:true,versionHistory:true,webExport:true},
     musicStudio: {version:2,savedLibrary:true,savedDrafts:true,provider:'musicapi.ai',providerConfigured:Boolean(process.env.MUSICAPI_KEY||process.env.MUSICAPI_API_KEY||process.env.MUSICAPI_AI_KEY)},
-    liveStudio: {version:1,pilot:true,privateRehearsals:true,youtubeVisibility:'unlisted',publicBroadcasts:false},
+    liveStudio: {version:2,customerWorkspaces:true,privateRehearsals:true,youtubeVisibility:'unlisted',publicBroadcasts:false},
     taxPrep: {version:1,country:'US',bookkeepingLinked:true,filingEnabled:false,automaticTaxCalculation:false},
     babyBlend: {version: 1, privateStorage: true, analysisModel: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, creditCost: 1, ...pictureModelSettings()},
     virtualCloset: {version: 1, privateStorage: true, analysisModel: CHAT_MODEL, ...pictureModelSettings()},
@@ -12730,7 +12730,7 @@ const podRegistration = registerPod(app,{database:podDatabase,requireUser,
 const liveStudioRegistration=registerLiveStudio(app,{database:podDatabase,storage:bookkeepingStorage?.storage,requireUser,
   providers:process.env.OPENAI_API_KEY?createLiveProviders(new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})):null,
   access:async user=>({allowed:korlixLiveConvoBuild131EntitlementForUser(user).unlimited===true,
-    reason:'Live Studio is currently a developer pilot. Creator access will follow the broadcast test.'}),
+    reason:'Activate a Live Studio allowance to generate rehearsals and broadcasts.'}),
 });
 process.once('SIGTERM',()=>liveStudioRegistration.stop());
 registerSeoAgent(app, {database: supabaseAdmin, requireUser, autoStartScheduler: true,

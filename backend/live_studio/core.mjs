@@ -23,7 +23,7 @@ export function showInput(value) {
     category: value.category, durationSeconds: value.durationSeconds, hostCount: value.hostCount};
 }
 export function queueInput(value, now = Date.now()) {
-  if (!['rehearsal', 'youtube'].includes(value?.mode)) fail('Choose a private rehearsal or YouTube pilot.');
+  if (!['rehearsal', 'youtube'].includes(value?.mode)) fail('Choose a private rehearsal or YouTube broadcast.');
   if (value.consent !== true) fail('Confirm AI processing and the generation limits before starting.');
   if (value.mode === 'youtube' && value.confirmed !== true) fail('Confirm the unlisted YouTube broadcast.');
   let scheduledAt = null;
@@ -33,7 +33,9 @@ export function queueInput(value, now = Date.now()) {
     if (value.mode !== 'youtube') fail('Rehearsals start immediately.');
     scheduledAt = new Date(time).toISOString();
   }
-  return {mode: value.mode, scheduledAt, requestId: uuid(value.requestId)};
+  const connection=value.mode==='youtube'?{connectionId:uuid(value.connectionId),connectionRevision:value.connectionRevision}:{};
+  if(value.mode==='youtube'&&(!Number.isSafeInteger(connection.connectionRevision)||connection.connectionRevision<1))fail('Refresh and confirm your connected YouTube channel before starting.');
+  return {mode: value.mode, scheduledAt, requestId: uuid(value.requestId),...connection};
 }
 export function publicShow(show) {
   if (!show) return null;
@@ -41,10 +43,4 @@ export function publicShow(show) {
     'started_at', 'deadline_at', 'progress', 'error', 'watch_url', 'has_replay', 'command'];
   return Object.fromEntries(keys.filter(key => show[key] !== undefined).map(key => [key, show[key]]));
 }
-export function channelConfig(env = process.env) {
-  return {ownerId: env.LIVE_STUDIO_BROADCAST_OWNER_ID || '', clientId: env.LIVE_STUDIO_YOUTUBE_CLIENT_ID || '',
-    clientSecret: env.LIVE_STUDIO_YOUTUBE_CLIENT_SECRET || '', refreshToken: env.LIVE_STUDIO_YOUTUBE_REFRESH_TOKEN || '',
-    enabled: env.LIVE_STUDIO_YOUTUBE_ENABLED === 'true'};
-}
-export const channelConfigured = c => Boolean(c.enabled && c.ownerId && c.clientId && c.clientSecret && c.refreshToken);
 export const workerToken = () => randomUUID();

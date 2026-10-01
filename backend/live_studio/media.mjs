@@ -1,6 +1,5 @@
 import {spawn} from 'node:child_process';
 import {writeFile, readFile} from 'node:fs/promises';
-import {once} from 'node:events';
 import path from 'node:path';
 import sharp from 'sharp';
 import {LiveStudioError} from './core.mjs';
@@ -84,14 +83,17 @@ export async function makeReplay(files,output,{signal}={}) {
   await writeFile(all,Buffer.concat(buffers));
   await runFfmpeg(['-fflags','+genpts','-i',all,'-c','copy','-movflags','+faststart',output],{signal});
 }
-export function broadcastSink(url,{signal,spawnProcess=spawn}={}) {
+export function broadcastSink(url,{signal,spawnProcess=spawn,closeTimeoutMs=45000}={}) {
   const parsed=new URL(url);
   if(parsed.protocol!=='rtmps:'||!['a.rtmps.youtube.com','b.rtmps.youtube.com'].includes(parsed.hostname)||parsed.username||parsed.password||!parsed.pathname.startsWith('/live2/')) throw new LiveStudioError('YouTube returned an unsupported broadcast destination.');
   const child=spawnProcess('ffmpeg',['-hide_banner','-nostdin','-loglevel','error','-re','-fflags','+genpts',
     '-f','mpegts','-i','pipe:0','-map','0:v:0','-map','0:a:0','-c','copy','-f','flv',url],{stdio:['pipe','ignore','pipe']});
   // Never log stderr: encoders can include the private stream key in errors.
   child.stderr.resume();child.stdin.on('error',()=>{});
-  let failed=false;child.on('error',()=>{failed=true;});child.on('close',code=>{if(code!==0)failed=true;});
+  let failed=false,settle;
+  const closed=new Promise(resolve=>{settle=resolve;});
+  child.on('error',()=>{failed=true;settle();});
+  child.on('close',code=>{if(code!==0)failed=true;settle();});
   const stop=()=>child.kill('SIGKILL');signal?.addEventListener('abort',stop,{once:true});
   return {async write(file){signal?.throwIfAborted();if(failed||child.exitCode!==null)throw new LiveStudioError('The stream connection was lost.',503);
     const data=await readFile(file);
@@ -103,5 +105,16 @@ export function broadcastSink(url,{signal,spawnProcess=spawn}={}) {
       child.stdin.once('drain',drained);child.stdin.once('error',lost);child.once('close',lost);child.once('error',lost);
       if(failed||child.exitCode!==null)lost();
     });
-  },async close(){child.stdin.end();if(child.exitCode===null){const timer=setTimeout(stop,5000);await once(child,'close');clearTimeout(timer);}signal?.removeEventListener('abort',stop);},stop};
+  },async close(){
+    let timer;
+    try{
+      if(child.exitCode===null&&!failed){
+        child.stdin.end();
+        timer=setTimeout(()=>{failed=true;stop();settle();},closeTimeoutMs);
+        await closed;
+      }
+      if(failed||child.exitCode!==0)throw new LiveStudioError('The stream stopped before its final segment finished.',503);
+      signal?.throwIfAborted();
+    }finally{clearTimeout(timer);signal?.removeEventListener('abort',stop);}
+  },stop};
 }

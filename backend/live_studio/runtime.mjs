@@ -8,7 +8,7 @@ import {renderSegment,makeReplay,musicWav,broadcastSink} from './media.mjs';
 const safeQuestion = value => typeof value==='string' && value.length>=6 && value.length<=400 &&
   !/[\u0000-\u001f\u007f]|https?:\/\/|www\.|@|```/.test(value) && value.includes('?');
 
-export function createLiveRuntime({store,providers,storage,youtube,mode='rehearsal',ownerId=null,
+export function createLiveRuntime({store,providers,storage,youtube:defaultYouTube,youtubeFactory,mode='rehearsal',ownerId=null,workerId=null,
   logger=console,render=renderSegment,replay=makeReplay,sinkFactory=broadcastSink,now=Date.now,pollMs=3000}={}) {
   let busy=false,timer,activeController,stopped=false;
   async function run(show) {
@@ -16,7 +16,7 @@ export function createLiveRuntime({store,providers,storage,youtube,mode='rehears
     const signal=controller.signal,dir=await mkdtemp(path.join(tmpdir(),'korlix-live-'));
     const call=(action,data={})=>store.call(show.owner_id,action,show.id,{...data,token});
     const event=(kind,data)=>call('event',{eventId:randomUUID(),kind,data});
-    let heartbeating=false,heartbeat,current=show,sink,session,streamLive=false,errorMessage=null,replayPath=null;
+    let heartbeating=false,heartbeat,current=show,sink,session,streamLive=false,errorMessage=null,replayPath=null,youtube=defaultYouTube;
     let index=0,offset=0,history=[],brief,staged=null,generating=null,callCount=0,seenCommand=0,ended=false,generationEpoch=0;
     let questionQueue=[],seenQuestions=new Set(),pageToken,chatNext=0,chatInitialized=false;
     const files=[];
@@ -59,35 +59,37 @@ export function createLiveRuntime({store,providers,storage,youtube,mode='rehears
     const speak=turn=>paid('speech',()=>providers.speak({...turn,signal}));
     const generate=async(closing=false)=>{
       // Keep server-selected roles and source-backed facts from the existing provider.
-      let recent=history.slice(-24);
+      let recent=history.slice(-24),segmentBrief=brief;
       let question=questionQueue.shift();
       if(question){try{if(!providers.moderate||!await providers.moderate(question,signal))question=null;}catch{question=null;}}
       if(question){
         // Research checks factual premises before the public host responds.
         const refreshed=await paid('research',()=>providers.research({...show.config,style:'balanced',contributions:[question],signal}));
-        brief=refreshed.brief;recent=[...recent,{speaker:'user',text:question}];
+        segmentBrief=refreshed.brief;recent=[...recent,{speaker:'user',text:question}];
       }
       const turn=await paid('turn',()=>providers.turn({episode:{...show.config,hostCount:2,style:'balanced',turns:recent},
-        brief,remainingSeconds:Math.min(900,Math.max(1,show.config.durationSeconds-offset)),closing,signal}));
+        brief:segmentBrief,remainingSeconds:Math.min(900,Math.max(1,show.config.durationSeconds-offset)),closing,signal}));
       if(show.config.hostCount===1)turn.speaker='host';
       const audio=await speak(turn);
-      return {turn,audio,brief};
+      return {turn,audio,brief:segmentBrief};
     };
-    const segment=async(turn,audio,{paused=false}={})=>{
+    const segment=async(turn,audio,{paused=false,segmentBrief=brief}={})=>{
       signal.throwIfAborted();
       const seconds=Math.min(audio.durationSeconds,(mode==='rehearsal'?60:show.config.durationSeconds)-offset);
       if(seconds<=0)return;
       const result=await render({dir,index:index++,show,turn,wav:audio.wav,offset,seconds,signal,
-        width:mode==='rehearsal'?640:1280,rehearsal:mode==='rehearsal',paused,sources:brief?.sources||[]});
+        width:mode==='rehearsal'?640:1280,rehearsal:mode==='rehearsal',paused,sources:segmentBrief?.sources||[]});
       files.push(result.file);
       if(sink)await sink.write(result.file);
       offset+=result.duration;
       if(!paused){history.push(turn);await event('segment',{speaker:turn.speaker,text:turn.text,sourceIds:turn.sourceIds||[],seconds:result.duration});}
       await call('progress',{started:streamLive,watchUrl:session?.watchUrl,progress:{seconds:Math.round(offset),
         stage:mode==='rehearsal'?'Rendering private rehearsal':streamLive?'Broadcasting':'Connecting to YouTube',
-        speaker:turn.speaker,caption:turn.text,sources:brief?.sources||[],checkedAt:brief?.checkedAt,providerCalls:callCount}});
+        speaker:turn.speaker,caption:turn.text,sources:segmentBrief?.sources||[],checkedAt:segmentBrief?.checkedAt,providerCalls:callCount}});
     };
     try{
+      if(mode==='youtube'&&youtubeFactory)youtube=await youtubeFactory(show);
+      if(mode==='youtube'&&!youtube)throw new LiveStudioError('The channel connection is unavailable.',503);
       const researched=await paid('research',()=>providers.research({...show.config,style:'balanced',signal}));brief=researched.brief;
       const welcome={speaker:'host',sourceIds:[],text:`Welcome to KORLIX Live Studio. I’m K-Nova, your AI host${show.config.hostCount===2?', joined by our AI Analyst':''}. This is ${show.config.title}. We’ll separate verified facts from opinions and show our sources.`};
       // The provider enforces the 480-character speech bound.
@@ -110,7 +112,7 @@ export function createLiveRuntime({store,providers,storage,youtube,mode='rehears
       await segment(welcome,welcomeAudio);
       await segment(opening,openingAudio);
       if(mode==='rehearsal'){
-        if(offset<55){const next=await generate(true);await segment(next.turn,next.audio);}
+        if(offset<55){const next=await generate(true);await segment(next.turn,next.audio,{segmentBrief:next.brief});}
         const output=path.join(dir,'rehearsal.mp4');await replay(files,output,{signal});
         const bytes=await readFile(output);signal.throwIfAborted();
         if(bytes.length>50*1024*1024)throw new LiveStudioError('The rehearsal video exceeded its size limit.');
@@ -136,7 +138,8 @@ export function createLiveRuntime({store,providers,storage,youtube,mode='rehears
             if(!paused)prepare();
           }else{
             const next=staged;staged=null;if(next.error)throw next.error;
-            history.push(next.turn);prepare();history.pop();await segment(next.turn,next.audio);
+            brief=next.brief;
+            history.push(next.turn);prepare();history.pop();await segment(next.turn,next.audio,{segmentBrief:next.brief});
           }
         }
         await sink.close();sink=null;
@@ -147,8 +150,10 @@ export function createLiveRuntime({store,providers,storage,youtube,mode='rehears
       if(!ended)logger.warn?.('Live Studio run stopped',{code:error?.name||'unavailable',showId:show.id});
     }finally{
       clearInterval(heartbeat);controller.abort();sink?.stop();
-      if(session&&!streamLive)await youtube.finish(session).catch(()=>{});
-      else if(session&&(errorMessage||ended))await youtube.finish(session).catch(()=>{});
+      if(session&&(!streamLive||errorMessage||ended)){
+        try{await youtube.finish(session);}
+        catch{errorMessage=errorMessage||'The encoder stopped, but YouTube did not confirm that the broadcast ended. Check the show in YouTube Studio.';}
+      }
       if(generating)await generating.catch(()=>{});
       const saved=await call('finish',{error:errorMessage,replayPath:errorMessage?null:replayPath}).catch(()=>null);
       if(saved&&!errorMessage&&replayPath&&show.replay_path&&show.replay_path!==replayPath)await storage.from('korlix-live-studio').remove([show.replay_path]).catch(()=>{});
@@ -158,7 +163,7 @@ export function createLiveRuntime({store,providers,storage,youtube,mode='rehears
   }
   async function tick(){
     if(stopped||busy)return;busy=true;
-    try{const show=await store.call(ownerId,'claim',null,{token:workerToken(),mode});if(show?.id)await run(show);}
+    try{const show=await store.call(ownerId,'claim',null,{token:workerToken(),mode,...(workerId?{workerId}:{})});if(show?.id)await run(show);}
     catch(error){logger.warn?.('Live Studio worker unavailable',{code:error?.name||'unavailable'});}
     finally{busy=false;}
   }

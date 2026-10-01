@@ -1,83 +1,90 @@
-# KORLIX Live Studio pilot
+# KORLIX Live Studio customer foundation
 
-Live Studio adds server-run AI shows to the existing KORLIX application. K-Nova hosts; the optional Analyst uses a second voice. The first release enables saved shows and private rehearsals for the existing developer entitlement. It includes a separate YouTube worker implementation, but broadcasting remains disabled until that worker and the owner's channel are configured.
+Live Studio is a service for customers to create AI-hosted shows on their own YouTube channels. K-Nova hosts, with an optional Analyst voice. The application owner's personal channel is not part of the product configuration. An authorized test channel is still needed for real broadcast acceptance.
 
-## Current scope
+## Implemented scope
 
-- Save a title, topic, category, one or two hosts, and a maximum 15- or 30-minute broadcast length.
-- Explicitly start a private rehearsal: up to 60 seconds and three spoken segments, captions and source labels, saved as a private MP4. Closing the iPad screen does not cancel the server job.
-- Three starts per account per rolling 24 hours; deleting a show does not reset this allowance. One queued or running job globally, including future schedules, during the pilot.
-- Rehearsals run on the existing API service. They use the existing OpenAI and Supabase configuration and do not require a new hosting service. Speech and research incur the existing provider usage charges.
-- Rehearsal playback uses an owner-checked five-minute signed URL. Removing a saved show removes its current private replay. A later successful rehearsal replaces that replay.
-- YouTube controls stay disabled until the owner-specific worker heartbeat is present. The adapter requests unlisted broadcasts, applies AI disclosure, and waits for YouTube to confirm the actual live state.
+- Every authenticated customer can manage their own saved shows and channel connection. Generation requires an explicit server-managed Live Studio allowance.
+- Each customer reviews and confirms their own YouTube channel after Google authorization. Start confirmation names that channel and pins its connection ID and revision; changing the connection during confirmation causes the start to fail safely.
+- Rehearsals generate a private MP4 of up to 60 seconds. Broadcasts are explicitly confirmed, unlisted, and bounded to 15 or 30 minutes. A requested start can be scheduled one minute to seven days ahead, within the current allowance period.
+- Durable run receipts reserve rehearsal count, broadcast seconds and generation capacity atomically. Rehearsals reserve 10 generation calls and broadcasts 200. Cancellation before a worker claims a run releases period reservations; the daily-start receipt remains. After claim, capacity remains reserved conservatively, including failures and uncertain provider outcomes. These are allowance reservations, not a payment ledger or a claim of actual dollar cost.
+- One customer can have one executing show. A future queued show does not occupy an execution slot. Different worker instances can claim different customers independently. The approved initial worker has one encoder slot; simultaneous broadcasts require separately approved additional capacity.
+- Read, replay, end, disconnect and deletion do not depend on an active generation allowance. A customer must wait for a cancelled worker to stop before deleting its show or occupying the same execution slot.
+- YouTube setup can remain unconfigured while customers prepare shows. The UI reports this accurately and disables broadcast starts.
 
-The current visual is a branded graphic stage with captions and an active speaker. Photorealistic avatars, lip sync, multi-channel streaming, public broadcasts, automatic recurring schedules and 24/7 operation are not part of this pilot.
+The current visual is a branded graphic stage with captions, sources and an active speaker. Photorealistic avatars, lip sync, public broadcasts, recurring schedules and 24/7 operation remain outside this release. No commercial prices or checkout have been invented.
 
-## Components
+## Access and allowances
 
-| Component | Location | Responsibility |
-| --- | --- | --- |
-| Flutter client | `lib/live_studio/` on the frontend release branch | Saved shows, private replay, status and producer controls |
-| API | `backend/live_studio/routes.mjs` | Verified account access; explicit starts; owner-scoped controls |
-| Database | `supabase/migrations/*_live_studio_pilot.sql` | Durable jobs, idempotency, usage receipts, worker leases and readiness |
-| Rehearsal/stream engine | `backend/live_studio/runtime.mjs` | Research, speech, source-backed turns, moderation, bounded generation |
-| Renderer | `backend/live_studio/media.mjs` | SVG graphics, H264/AAC segments, private MP4 and RTMPS transport |
-| YouTube adapter | `backend/live_studio/youtube.mjs` | OAuth refresh, unlisted event setup, ingest checks, live chat, completion |
-| Dedicated worker | `backend/live_studio/worker.mjs` | Independent cloud process for scheduled/live broadcasts |
+`korlix_live_studio_grants` is service-only. It contains an explicit enabled flag, period bounds, daily-start cap, rehearsal count, broadcast seconds and generation capacity. A billing integration must write verified entitlements here; user-editable metadata and generic tier names never grant Live Studio usage. The existing appointment-payment integration is not subscription billing for this product.
 
-Database tables and the RPC are service-only. RLS is enabled; anonymous and authenticated clients have no grants. User IDs always come from verified authentication at the API. Worker tokens, storage paths and stream keys are omitted from browser responses. Encoder stderr is suppressed because it can contain stream keys.
+For continuity, the existing server-verified developer ID allowlist can seed one bounded development grant: 30 days, three starts per rolling 24 hours, 30 rehearsals, 90 broadcast minutes and 5,000 reserved generation calls. This grant is created only if absent. Reading the workspace never renews an expired grant or re-enables a revoked one. These are internal testing limits, not advertised customer plans.
 
-The worker records dispatch before a paid provider call and records its receipt or uncertain outcome afterward. It does not retry uncertain generation or resume a crashed show automatically. A 45-second lease fences an expired worker; the next poll marks abandoned jobs failed. Owner stop aborts pending operations, kills the encoder and attempts to complete the YouTube event. A hard restart can leave the channel displaying a disconnected event until YouTube auto-stop completes it; verify this in the acceptance test.
+Reservation records survive show deletion. Workers recheck account availability, allowance validity and the exact channel connection before claiming scheduled work and before further paid calls. Dispatch is recorded before a provider call and completion or uncertainty afterward. No uncertain paid generation is automatically retried.
 
-The stream prepares one segment ahead. Pauses and generation gaps use an original synthesized musical interlude. Pause/skip applies at segment boundaries, with a five-second control poll and additional platform playback latency. End attempts an immediate encoder stop after the control poll. Pauses count toward the maximum duration. A broadcast has a 200-generation-call ceiling; a rehearsal has a 10-call ceiling. Audience questions are filtered and moderated; accepted questions are researched before a host response. Initial pre-show chat history is ignored.
+## Connections and security
 
-## Deployment
+`connections.mjs` implements authenticated initiation, a single-use hashed launch ticket, a secure HttpOnly SameSite=Lax browser cookie, hashed state, S256 PKCE, server-side code exchange and owner-authenticated confirmation. The callback and launch origins are fixed application configuration; the client validates the exact HTTPS launch origin and path.
 
-1. Apply the checked migration to the existing Supabase project, then verify grants/RLS.
-2. Publish the backend release branch and deploy the existing Render API. The Docker image includes FFmpeg and DejaVu fonts.
-3. Publish the frontend release branch and deploy the existing static service. Open Tools → Live Studio with the existing developer account, save a show, and explicitly create a private rehearsal.
-4. Review the resulting spoken content, captions, source labels and iPad playback before channel activation.
+Google credentials are application-wide; authorization grants belong to individual customers. Grants use AES-256-GCM with a separate 32-byte key and versioned ciphertext bound to owner, connection ID and channel ID. Secrets, leases and storage paths are excluded from customer responses. Refresh writes use their own fenced lease, and a disconnect or changed connection invalidates a refresh result before it can be used.
 
-No new paid service is created by committing these files or deploying the existing services.
+Disconnect removes stored authorization credentials, cancels queued shows and requests active streams stop. Channel identity/history and durable usage records remain until account deletion. Google revocation is attempted after the local disconnect; if it cannot be confirmed, the UI explains how to remove access in Google Account permissions. Existing YouTube videos are not removed by deleting a KORLIX show or connection.
 
-## Proposed YouTube worker activation
+All Live Studio tables have RLS enabled and no grants to anonymous or authenticated clients. Exposed RPCs are SECURITY INVOKER and executable only by service_role. Supabase's service role does not have SELECT on auth.users. A narrow SECURITY DEFINER boolean helper in the unexposed `korlix_live_private` schema checks only account existence and ban expiry; it has an empty search path, fully qualified object names and no client execution grants. It grants no access to auth records.
 
-The reviewable configuration is `deploy/live-studio-worker.render.yaml`. It creates one Docker background worker in Ohio on Render's `1c-2g` plan: 1 CPU and 2 GB RAM, listed at **US$25/month** on October 1, 2026, plus provider usage and applicable bandwidth/workspace charges. This is an initial sizing recommendation; a full-duration test must establish whether encoding keeps up. No Redis or persistent worker disk is required. State is in Supabase and disposable media is removed after the run.
+Workers use a 45-second show lease, a five-second control heartbeat and a distinct worker UUID for each encoder slot. Readiness expires after 35 seconds. Cancelled jobs retain their slot until the worker finishes or its lease expires, preventing overlapping encoders. Account deletion and expired leases release orphaned worker slots. Queue timestamps are refreshed on every run, so a newly started old draft does not expire based on its creation date.
 
-The owner approved proceeding with the proposed $25/month worker and YouTube setup on October 1, 2026 at 12:40 Eastern. This approval is recorded; it does not need to be requested again. At this checkpoint no new worker or channel broadcast has been activated. The current Render connector cannot create background workers, and a Render API key is not configured in this workspace. Dashboard access and the owner's channel authorization remain necessary to complete setup.
+## Media and cleanup
 
-In Render's secret settings, provide the existing Supabase URL/service role and OpenAI API key plus:
+The stream prepares one segment ahead. Each segment retains the research brief that produced its speech, even if another audience question is researched concurrently. Questions are filtered and moderated, then researched before a host response. Pauses and generation gaps use original synthesized music; pause time counts toward the configured duration.
 
-| Secret/setting | Required value |
+The adapter verifies the token identifies the reserved YouTube channel before creating any event, forces unlisted visibility and marks synthetic media. Encoder failures and an incomplete final drain are reported as failures. Encoder stderr is suppressed because it can include stream keys.
+
+End aborts pending operations and stops the encoder. A run-local cached token permits only the adapter's own created broadcast to be read and completed during cleanup, without reopening a revoked grant. Revocation can still make Google reject cleanup. The show reports unconfirmed YouTube completion rather than claiming success; YouTube auto-stop is also enabled. Real-platform timing remains an acceptance requirement.
+
+## Deployment and application configuration
+
+Apply the customer workspace migration before the connection migration, then deploy the backend and frontend release branches. The v1 RPC delegates to v2 during deployment overlap, so old clients cannot bypass customer allowances.
+
+The approved worker Blueprint is `deploy/live-studio-worker.render.yaml`: one Docker background worker in Ohio on Render's 1c-2g plan. The user approved the proposed US$25/month worker and YouTube setup on October 1, 2026 at 12:40 Eastern and subsequently authorized Render dashboard use. That approval remains recorded. No new worker was created before the customer architecture correction.
+
+Configure these values on both the existing API and the dedicated worker:
+
+| Setting | Purpose |
 | --- | --- |
-| `LIVE_STUDIO_BROADCAST_OWNER_ID` | The verified Supabase UUID of the channel owner with pilot access |
-| `LIVE_STUDIO_YOUTUBE_CLIENT_ID` | Google OAuth client for the approved channel integration |
-| `LIVE_STUDIO_YOUTUBE_CLIENT_SECRET` | Its client secret |
-| `LIVE_STUDIO_YOUTUBE_REFRESH_TOKEN` | Owner-authorized offline token with YouTube access |
-| `LIVE_STUDIO_YOUTUBE_ENABLED` | `true`, only when channel activation is approved |
+| `LIVE_STUDIO_YOUTUBE_CLIENT_ID` | Web OAuth client for the Live Studio application |
+| `LIVE_STUDIO_YOUTUBE_CLIENT_SECRET` | That client's secret |
+| `LIVE_STUDIO_TOKEN_KEY` | Canonical base64 encoding of 32 cryptographically random bytes, identical on API and worker |
+| `LIVE_STUDIO_PUBLIC_ORIGIN` | `https://chee-chai-chee-backend.onrender.com` |
+| `LIVE_STUDIO_YOUTUBE_ENABLED` | `true` after application setup |
 
-Use the Google account's authorization flow; do not paste tokens into chat or commit them. Enable the YouTube Data API and use the documented `https://www.googleapis.com/auth/youtube` OAuth scope. The channel must be eligible and enabled for live streaming. The pilot does not yet provide a self-service OAuth connection screen. Unverified API-project restrictions and channel eligibility can prevent a requested unlisted stream; keep broadcasting disabled until the actual account passes the test.
+The worker also needs the existing Supabase URL, service-role key and OpenAI API key. There is no `LIVE_STUDIO_BROADCAST_OWNER_ID` or global YouTube refresh token in the new design. Use secret settings, never source control or chat, for credentials. Do not generate a different encryption key for each instance.
 
-Import the approved Blueprint from the backend release branch with its custom file path. Enter secrets in Render. The worker announces readiness every ten seconds; it expires after 35 seconds without a heartbeat. It is restricted to its configured owner. The app can then start or schedule an explicitly confirmed unlisted show, one minute to seven days ahead. Auto-deploy is off to avoid interrupting an active broadcast; deploy while idle.
+Use a dedicated Live Studio Google OAuth client, enable YouTube Data API v3, configure the consent screen and register this exact authorized redirect URI:
 
-## Remaining live acceptance
+`https://chee-chai-chee-backend.onrender.com/api/live-studio/connect/youtube/callback`
 
-These require the approved real channel and worker; mocked tests do not prove them:
+The application requests `https://www.googleapis.com/auth/youtube.force-ssl` for the necessary broadcast and live-chat operations. Google may require verification before broad customer access. Each customer's channel must independently qualify for live streaming. App authorization, API quotas, actual unlisted behavior and channel eligibility must be checked with Google before sales claims.
 
-- A complete 15-minute unlisted broadcast, followed by a 30-minute test, with sustained CPU/memory and ingest health recorded.
-- Close the iPad screen, reopen it, verify state, pause/resume/skip, submit a question, and end the show.
-- Confirm real YouTube visibility, AI disclosure, captions/audio timing, replay behavior and moderation under selected audience questions.
-- Exercise provider timeout, worker termination and network loss. Confirm the encoder stops and uncertain paid operations are not automatically repeated.
-- Confirm cleanup and budget receipts, then decide whether to broaden pilot access or add public/recurring broadcasts.
+Import the updated Blueprint only after app secrets are configured. It is independent of the existing API/static services, uses no persistent disk or Redis, and keeps auto-deploy off so deployments can be performed while streams are idle. Initial CPU/memory sizing must be validated during a full-duration broadcast.
 
-Automated checks use fixture providers and an in-memory PostgreSQL-compatible database, plus real local FFmpeg encoding. They never obtain a user token, call a paid generation provider or start a real YouTube broadcast.
+## Validation and remaining release work
+
+Automated checks exercise actual migrations in PGlite, OAuth provider fixtures, owner and channel isolation, reservations, revocation during token refresh, worker fencing, source binding, failed encoder drains, emergency controls after allowance expiry and real local FFmpeg output. Flutter checks cover trusted launch URLs, exact channel confirmation, dynamic allowances and narrow layouts. These checks do not call paid generation providers or start YouTube broadcasts.
+
+Before customer-ready release:
+
+1. Complete Google application setup/verification and install shared secrets; activate the already-approved Render worker.
+2. Use a dedicated authorized test channel for 15- and 30-minute unlisted streams. Verify actual visibility, AI disclosure, audio/caption/source timing, iPad reopen, pause/skip/questions/end, provider timeout, disconnect and worker/network failure.
+3. Implement verified subscription billing, customer plan limits, renewal/revocation and reservation reconciliation. Establish prices from observed compute, provider and quota costs.
+4. Validate sustained CPU/memory, channel/API quotas, operational monitoring and the number of simultaneous customers supported by purchased capacity.
+
+Estimated remaining: roughly **2–4 development weeks for a customer-ready MVP**, plus external approval time. The earlier 2–4 day estimate covered only a single-channel pilot and does not apply to this SaaS goal.
 
 ## References
 
-- [Render compute pricing](https://render.com/pricing)
-- [Render Blueprint specification](https://render.com/docs/blueprint-spec)
-- [YouTube Live API](https://developers.google.com/youtube/v3/live/getting-started)
-- [YouTube live streaming eligibility](https://support.google.com/youtube/answer/2474026)
-- [OpenAI moderation](https://developers.openai.com/api/docs/guides/moderation)
-
-Estimated remaining work after this foundation: about 2–4 development days for channel setup and live acceptance; provider approval/eligibility delays can extend elapsed time.
+- https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps
+- https://developers.google.com/youtube/v3/docs/channels/list
+- https://developers.google.com/youtube/v3/live/docs/liveBroadcasts/insert
+- https://render.com/docs/blueprint-spec
+- https://render.com/pricing
