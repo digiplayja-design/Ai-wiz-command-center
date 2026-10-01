@@ -8,13 +8,16 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'pod_client.dart';
 import 'pod_media.dart';
+import 'pod_artwork.dart';
 
-const _navy = Color(0xFF071B27);
-const _panel = Color(0xFF102B3A);
-const _cyan = Color(0xFF6CE5E8);
-const _gold = Color(0xFFFFD18D);
-const _violet = Color(0xFFC3A7FF);
-const _muted = Color(0xFFA7BFCB);
+const _navy = Color(0xFF080D20);
+const _panel = Color(0xFF11192E);
+const _cyan = Color(0xFF73EFE1);
+const _gold = Color(0xFFF4CC84);
+const _violet = Color(0xFFB6A2FF);
+const _muted = Color(0xFFADB9D2);
+const _coral = Color(0xFFFF9B88);
+const _line = Color(0xFF29344E);
 const _usage =
     'Personal beta · uses your LIVE CONVO session and time allowance. AI usage limits also apply.';
 
@@ -1000,8 +1003,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       chipTheme: ChipThemeData(
         color: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
-              ? const Color(0xFF1D4655)
-              : const Color(0xFF09222F),
+              ? const Color(0xFF24404A)
+              : const Color(0xFF0C1326),
         ),
         labelStyle: Theme.of(
           context,
@@ -1011,18 +1014,18 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         ).textTheme.labelLarge?.copyWith(color: Colors.white),
         checkmarkColor: _cyan,
         iconTheme: const IconThemeData(color: _cyan),
-        side: const BorderSide(color: Color(0xFF315462)),
+        side: const BorderSide(color: Color(0xFF34405A)),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFF09222F),
+        fillColor: const Color(0xFF0C1326),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFF294957)),
+          borderSide: const BorderSide(color: Color(0xFF34405A)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFF294957)),
+          borderSide: const BorderSide(color: Color(0xFF34405A)),
         ),
         hintStyle: const TextStyle(color: _muted),
       ),
@@ -1033,6 +1036,9 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         appBar: AppBar(
           backgroundColor: _navy,
           foregroundColor: Colors.white,
+          centerTitle: false,
+          elevation: 0,
+          toolbarHeight: 64,
           title: const Text(
             'THE POD AND YOU',
             style: TextStyle(
@@ -1061,10 +1067,10 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
               )
             : SingleChildScrollView(
                 controller: _scroll,
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 40),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1180),
+                    constraints: const BoxConstraints(maxWidth: 1280),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1105,6 +1111,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
                             Icons.chat_bubble_outline_rounded,
                             _cyan,
                           ),
+                        _topics(),
+                        const SizedBox(height: 24),
                         LayoutBuilder(
                           builder: (context, constraints) {
                             final setup = _setup();
@@ -1124,9 +1132,9 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
                             return Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(flex: 5, child: setup),
+                                Expanded(flex: 6, child: setup),
                                 const SizedBox(width: 22),
-                                Expanded(flex: 7, child: studio),
+                                Expanded(flex: 5, child: studio),
                               ],
                             );
                           },
@@ -1153,87 +1161,118 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
 
   Widget _hero() => Container(
     width: double.infinity,
-    padding: const EdgeInsets.all(26),
+    clipBehavior: Clip.antiAlias,
     decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(26),
+      borderRadius: BorderRadius.circular(30),
       gradient: const LinearGradient(
-        colors: [Color(0xFF143847), Color(0xFF172A43), Color(0xFF202B43)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF192645), Color(0xFF131B33), Color(0xFF231D3D)],
       ),
-      border: Border.all(color: const Color(0xFF375667)),
+      border: Border.all(color: const Color(0xFF364467)),
     ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.graphic_eq_rounded, color: _cyan, size: 23),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Text(
-                'YOUR PRIVATE AI PODCAST',
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 760;
+        final copy = Padding(
+          padding: EdgeInsets.fromLTRB(wide ? 38 : 24, 30, wide ? 12 : 24, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _pill(
+                    'YOUR PRIVATE AI PODCAST',
+                    _cyan,
+                    icon: Icons.graphic_eq_rounded,
+                  ),
+                  _pill('PERSONAL BETA', _gold),
+                ],
+              ),
+              const SizedBox(height: 26),
+              Text(
+                'The Pod\nand You.',
+                style: TextStyle(
+                  fontSize: wide ? 62 : 46,
+                  height: .98,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -2.4,
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'A podcast that listens back.',
                 style: TextStyle(
                   color: _cyan,
-                  letterSpacing: 1.7,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 11,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w500,
+                  height: 1.3,
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: _gold.withValues(alpha: .12),
-                borderRadius: BorderRadius.circular(7),
+              const SizedBox(height: 12),
+              const Text(
+                'Big ideas. Different perspectives. Your voice at the table.',
+                style: TextStyle(color: _muted, fontSize: 14, height: 1.6),
               ),
-              child: const Text(
-                'BETA',
-                style: TextStyle(
-                  color: _gold,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.5,
-                ),
+              const SizedBox(height: 26),
+              Wrap(
+                spacing: 18,
+                runSpacing: 12,
+                children: [
+                  _detail(Icons.headphones_rounded, 'Made when you listen'),
+                  _detail(Icons.timer_outlined, '5–15 minutes'),
+                  _detail(Icons.lock_outline_rounded, 'Just for you'),
+                ],
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 21),
-        const Text(
-          'The Pod and You',
-          style: TextStyle(
-            fontSize: 34,
-            height: 1.15,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -1.2,
+            ],
           ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'A podcast that listens back.',
-          style: TextStyle(
-            color: _cyan,
-            fontSize: 19,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          'Pick a question. Meet your hosts. Chime in whenever a thought strikes.',
-          style: TextStyle(color: _muted, height: 1.6),
-        ),
-        const SizedBox(height: 19),
-        Wrap(
-          spacing: 16,
-          runSpacing: 10,
-          children: [
-            _detail(
-              Icons.headphones_rounded,
-              'One listener. Your conversation.',
+        );
+        final artwork = Padding(
+          padding: EdgeInsets.fromLTRB(wide ? 0 : 10, wide ? 18 : 0, 10, 10),
+          child: PodStudioArtwork(height: wide ? 350 : 245),
+        );
+        return wide
+            ? Row(
+                children: [
+                  Expanded(flex: 6, child: copy),
+                  Expanded(flex: 5, child: artwork),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [copy, artwork],
+              );
+      },
+    ),
+  );
+
+  Widget _pill(String text, Color color, {IconData? icon}) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .09),
+      borderRadius: BorderRadius.circular(30),
+      border: Border.all(color: color.withValues(alpha: .24)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (icon != null) ...[
+          Icon(icon, color: color, size: 14),
+          const SizedBox(width: 6),
+        ],
+        Flexible(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              letterSpacing: .8,
+              fontWeight: FontWeight.w700,
             ),
-            _detail(Icons.timer_outlined, '5–15 minutes'),
-            _detail(Icons.lock_outline_rounded, 'Private transcript'),
-          ],
+          ),
         ),
       ],
     ),
@@ -1242,96 +1281,319 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
   Widget _detail(IconData icon, String text) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Icon(icon, size: 14, color: _gold),
+      Icon(icon, size: 15, color: _cyan),
       const SizedBox(width: 6),
       Flexible(
         child: Text(text, style: const TextStyle(color: _muted, fontSize: 11)),
       ),
     ],
   );
+
   Widget _card({required Widget child}) => Container(
     width: double.infinity,
     padding: const EdgeInsets.all(22),
     decoration: BoxDecoration(
-      color: _panel,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: const Color(0xFF254452)),
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF141D34), Color(0xFF10172B)],
+      ),
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: _line),
     ),
     child: Material(type: MaterialType.transparency, child: child),
   );
+
   Widget _label(String text) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
     child: Text(
       text,
       style: const TextStyle(
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: FontWeight.w700,
         color: _muted,
-        letterSpacing: 1.1,
+        letterSpacing: 1.2,
       ),
     ),
   );
 
-  Widget _setup() {
-    final enabled = !_live && !_busy && !_creating && !_loading && _allowed;
+  Widget _sectionTitle(String number, String title, String subtitle) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Container(
+        width: 32,
+        height: 32,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _cyan.withValues(alpha: .08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: _cyan.withValues(alpha: .2)),
+        ),
+        child: Text(
+          number,
+          style: const TextStyle(
+            color: _cyan,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 21,
+                letterSpacing: -.4,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              subtitle,
+              style: const TextStyle(color: _muted, fontSize: 12, height: 1.5),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+
+  bool get _setupEnabled =>
+      !_live && !_busy && !_creating && !_loading && _allowed;
+
+  Widget _topics() {
     const categories = [
-      ('trending', 'Trending', Icons.trending_up_rounded),
-      ('politics', 'Politics', Icons.account_balance_outlined),
-      ('sports', 'Sports', Icons.sports_basketball_outlined),
-      ('religion', 'Religion', Icons.auto_awesome_outlined),
-      ('culture', 'Culture', Icons.palette_outlined),
-      ('business', 'Business', Icons.work_outline_rounded),
-      ('technology', 'Technology', Icons.memory_rounded),
+      ('trending', 'Trending', 'The moment, explored', _coral),
+      ('politics', 'Politics', 'Beyond the headlines', _violet),
+      ('sports', 'Sports', 'More than the score', _gold),
+      ('religion', 'Religion', 'Belief & meaning', _cyan),
+      ('culture', 'Culture', 'Ideas that move us', _coral),
+      ('business', 'Business', 'Build a bigger picture', _gold),
+      ('technology', 'Technology', 'What comes next', _violet),
     ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle(
+          '01',
+          'Find your frequency',
+          'Seven worlds of conversation. Where will yours begin?',
+        ),
+        const SizedBox(height: 18),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth >= 1080
+                ? 7
+                : constraints.maxWidth >= 680
+                ? 4
+                : 2;
+            final width = (constraints.maxWidth - (columns - 1) * 12) / columns;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: categories.map((c) {
+                final selected = _category == c.$1;
+                return SizedBox(
+                  width: width,
+                  child: Semantics(
+                    selected: selected,
+                    button: true,
+                    enabled: _setupEnabled,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        key: Key('pod-category-${c.$1}'),
+                        borderRadius: BorderRadius.circular(19),
+                        onTap: _setupEnabled
+                            ? () => setState(() {
+                                _category = c.$1;
+                                _topic.clear();
+                                _createRequestId = null;
+                              })
+                            : null,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? c.$4.withValues(alpha: .12)
+                                : _panel,
+                            borderRadius: BorderRadius.circular(19),
+                            border: Border.all(
+                              color: selected ? c.$4 : _line,
+                              width: selected ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                height: columns == 2 ? 73 : 86,
+                                child: Stack(
+                                  children: [
+                                    Positioned.fill(
+                                      child: PodTopicArtwork(category: c.$1),
+                                    ),
+                                    Positioned(
+                                      top: 0,
+                                      right: 0,
+                                      child: Icon(
+                                        selected
+                                            ? Icons.check_circle_rounded
+                                            : Icons.circle_outlined,
+                                        color: selected
+                                            ? c.$4
+                                            : _muted.withValues(alpha: .4),
+                                        size: 18,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                c.$2,
+                                style: TextStyle(
+                                  color: selected ? c.$4 : Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                c.$3,
+                                style: const TextStyle(
+                                  color: _muted,
+                                  fontSize: 10,
+                                  height: 1.45,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _option({
+    Key? key,
+    required String title,
+    required String subtitle,
+    required bool selected,
+    required VoidCallback? onTap,
+    Color color = _cyan,
+    IconData? icon,
+    Widget? leading,
+  }) => Semantics(
+    selected: selected,
+    button: true,
+    enabled: onTap != null,
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: key,
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(15),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 14),
+          decoration: BoxDecoration(
+            color: selected
+                ? color.withValues(alpha: .10)
+                : _navy.withValues(alpha: .48),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(
+              color: selected ? color.withValues(alpha: .7) : _line,
+            ),
+          ),
+          child: Opacity(
+            opacity: onTap == null && !_live ? .55 : 1,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (leading != null) ...[leading, const SizedBox(height: 12)],
+                if (icon != null) ...[
+                  Icon(icon, color: selected ? color : _muted, size: 22),
+                  const SizedBox(height: 10),
+                ],
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: selected ? color : Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: _muted,
+                    fontSize: 10,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _optionRow(List<Widget> children, {int minWidth = 98}) =>
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final columns =
+              constraints.maxWidth >=
+                  children.length * minWidth + (children.length - 1) * 9
+              ? children.length
+              : constraints.maxWidth >= 230
+              ? 2
+              : 1;
+          final width = (constraints.maxWidth - (columns - 1) * 9) / columns;
+          return Wrap(
+            spacing: 9,
+            runSpacing: 9,
+            children: children
+                .map((child) => SizedBox(width: width, child: child))
+                .toList(),
+          );
+        },
+      );
+
+  Widget _setup() {
+    final enabled = _setupEnabled;
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          _sectionTitle(
+            '02',
             'Make it your episode',
-            style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 7),
-          const Text(
             'Choose the question. We’ll bring the perspectives.',
-            style: TextStyle(color: _muted, height: 1.5),
           ),
-          const SizedBox(height: 24),
-          _label('01  PICK YOUR TOPIC'),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: categories
-                .map(
-                  (c) => ChoiceChip(
-                    label: Text(c.$2),
-                    avatar: Icon(c.$3, size: 16),
-                    selected: _category == c.$1,
-                    selectedColor: _cyan.withValues(alpha: .20),
-                    onSelected: enabled
-                        ? (_) => setState(() {
-                            _category = c.$1;
-                            _topic.clear();
-                            _createRequestId = null;
-                          })
-                        : null,
-                  ),
-                )
-                .toList(),
-          ),
-          const SizedBox(height: 15),
-          const Text(
-            'Suggested discussion questions',
-            style: TextStyle(color: _muted, fontSize: 11),
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 23),
+          _label('START WITH A LITTLE CURIOSITY'),
           ..._suggestions
               .take(3)
               .map(
                 (question) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.only(bottom: 8),
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                     onTap: enabled
                         ? () => setState(() {
                             _topic.text = question;
@@ -1340,28 +1602,38 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
                         : null,
                     child: Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 13,
+                      ),
                       decoration: BoxDecoration(
-                        color: _navy.withValues(alpha: .65),
-                        borderRadius: BorderRadius.circular(10),
+                        color: _navy.withValues(alpha: .50),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _line),
                       ),
                       child: Row(
                         children: [
                           const Icon(
-                            Icons.north_east_rounded,
-                            color: _cyan,
-                            size: 15,
+                            Icons.auto_awesome_outlined,
+                            color: _violet,
+                            size: 17,
                           ),
-                          const SizedBox(width: 9),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               question,
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: _muted,
-                                height: 1.4,
+                                height: 1.5,
                               ),
                             ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.north_east_rounded,
+                            color: _muted,
+                            size: 16,
                           ),
                         ],
                       ),
@@ -1369,7 +1641,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
                   ),
                 ),
               ),
-          const SizedBox(height: 7),
+          const SizedBox(height: 12),
           TextField(
             key: const Key('pod-topic'),
             controller: _topic,
@@ -1384,18 +1656,27 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
               hintText: 'What would you like to explore?',
             ),
           ),
-          const SizedBox(height: 16),
-          _label('02  SET THE PACE'),
-          Wrap(
-            spacing: 8,
-            children: [300, 600, 900]
+          const SizedBox(height: 20),
+          _label('SET YOUR PACE'),
+          _optionRow(
+            [300, 600, 900]
                 .map(
-                  (seconds) => ChoiceChip(
-                    label: Text('${seconds ~/ 60} min'),
+                  (seconds) => _option(
+                    key: Key('pod-duration-$seconds'),
+                    title: '${seconds ~/ 60} min',
+                    subtitle: switch (seconds) {
+                      300 => 'A quick spark',
+                      600 => 'Room to explore',
+                      _ => 'Go a little deeper',
+                    },
                     selected: _duration == seconds,
-                    selectedColor: _cyan.withValues(alpha: .20),
-                    onSelected: enabled && _durations.contains(seconds)
-                        ? (_) => setState(() {
+                    icon: switch (seconds) {
+                      300 => Icons.bolt_rounded,
+                      600 => Icons.headphones_rounded,
+                      _ => Icons.explore_outlined,
+                    },
+                    onTap: enabled && _durations.contains(seconds)
+                        ? () => setState(() {
                             _duration = seconds;
                             _createRequestId = null;
                           })
@@ -1404,17 +1685,31 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
                 )
                 .toList(),
           ),
-          const SizedBox(height: 17),
-          Wrap(
-            spacing: 8,
-            children: [2, 3]
+          const SizedBox(height: 24),
+          _label('BRING YOUR HOSTS TO THE TABLE'),
+          _optionRow(
+            [2, 3]
                 .map(
-                  (count) => ChoiceChip(
-                    label: Text('$count AI hosts'),
+                  (count) => _option(
+                    key: Key('pod-hosts-$count'),
+                    title: '$count AI hosts',
+                    subtitle: count == 2
+                        ? 'Host + Analyst'
+                        : 'Add a Challenger',
+                    color: _gold,
                     selected: _hosts == count,
-                    selectedColor: _gold.withValues(alpha: .20),
-                    onSelected: enabled
-                        ? (_) => setState(() {
+                    leading: Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: [
+                        const PodHostPortrait(role: 'host', size: 32),
+                        const PodHostPortrait(role: 'analyst', size: 32),
+                        if (count == 3)
+                          const PodHostPortrait(role: 'challenger', size: 32),
+                      ],
+                    ),
+                    onTap: enabled
+                        ? () => setState(() {
                             _hosts = count;
                             _createRequestId = null;
                           })
@@ -1423,19 +1718,28 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
                 )
                 .toList(),
           ),
-          const SizedBox(height: 17),
-          Wrap(
-            spacing: 8,
-            children: ['balanced', 'relaxed', 'debate']
+          const SizedBox(height: 24),
+          _label('CHOOSE THE ENERGY'),
+          _optionRow(
+            ['balanced', 'relaxed', 'debate']
                 .map(
-                  (style) => ChoiceChip(
-                    label: Text(
-                      '${style[0].toUpperCase()}${style.substring(1)}',
-                    ),
+                  (style) => _option(
+                    key: Key('pod-style-$style'),
+                    title: '${style[0].toUpperCase()}${style.substring(1)}',
+                    subtitle: switch (style) {
+                      'balanced' => 'Every angle',
+                      'relaxed' => 'Easy conversation',
+                      _ => 'Ideas, challenged',
+                    },
+                    icon: switch (style) {
+                      'balanced' => Icons.balance_rounded,
+                      'relaxed' => Icons.coffee_outlined,
+                      _ => Icons.forum_outlined,
+                    },
+                    color: _violet,
                     selected: _style == style,
-                    selectedColor: _violet.withValues(alpha: .20),
-                    onSelected: enabled
-                        ? (_) => setState(() {
+                    onTap: enabled
+                        ? () => setState(() {
                             _style = style;
                             _createRequestId = null;
                           })
@@ -1444,14 +1748,25 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
                 )
                 .toList(),
           ),
-          const SizedBox(height: 24),
-          SizedBox(
+          const SizedBox(height: 28),
+          Container(
             width: double.infinity,
-            height: 54,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: enabled
+                  ? [
+                      BoxShadow(
+                        color: _cyan.withValues(alpha: .12),
+                        blurRadius: 24,
+                        offset: const Offset(0, 8),
+                      ),
+                    ]
+                  : null,
+            ),
             child: FilledButton.icon(
               key: const Key('pod-listen'),
               onPressed: enabled && _durations.isNotEmpty ? _listen : null,
-              icon: const Icon(Icons.play_arrow_rounded),
+              icon: const Icon(Icons.play_arrow_rounded, size: 27),
               label: Text(
                 _busy && !_live
                     ? 'Getting ready…'
@@ -1462,14 +1777,22 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
               style: FilledButton.styleFrom(
                 backgroundColor: _cyan,
                 foregroundColor: _navy,
-                textStyle: const TextStyle(
+                minimumSize: const Size(0, 60),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 16,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(17),
+                ),
+                textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
                   fontWeight: FontWeight.w800,
-                  fontSize: 16,
+                  fontSize: 17,
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 13),
           Text(
             _s(_access['usageLabel']).isEmpty
                 ? _usage
@@ -1519,40 +1842,70 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         children: [
           Row(
             children: [
-              Container(
-                width: 7,
-                height: 7,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _listening || _recording ? _cyan : _gold,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
+              const Icon(Icons.headphones_rounded, color: _violet, size: 21),
+              const SizedBox(width: 9),
+              const Expanded(
                 child: Text(
-                  status,
-                  key: const Key('pod-playback-status'),
-                  style: const TextStyle(
-                    color: _cyan,
+                  'Your private studio',
+                  style: TextStyle(
+                    fontSize: 20,
+                    letterSpacing: -.4,
                     fontWeight: FontWeight.w700,
-                    fontSize: 10,
-                    letterSpacing: 1.1,
                   ),
                 ),
               ),
-              if (_remaining != null)
-                Text(
-                  '${_remaining! ~/ 60}:${(_remaining! % 60).toString().padLeft(2, '0')}',
-                  key: const Key('pod-remaining'),
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
-                ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 7),
+          const Text(
+            'Different minds. One conversation.',
+            style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            decoration: BoxDecoration(
+              color: _navy.withValues(alpha: .6),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _line),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _listening || _recording ? _cyan : _gold,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    status,
+                    key: const Key('pod-playback-status'),
+                    style: const TextStyle(
+                      color: _cyan,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 10,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                ),
+                if (_remaining != null)
+                  Text(
+                    '${_remaining! ~/ 60}:${(_remaining! % 60).toString().padLeft(2, '0')}',
+                    key: const Key('pod-remaining'),
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: [FontFeature.tabularFigures()],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 26),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -1576,6 +1929,61 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
             ),
           ),
           const SizedBox(height: 14),
+          if (!_hasEpisode) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _gold.withValues(alpha: .06),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _gold.withValues(alpha: .22)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _gold.withValues(alpha: .10),
+                      border: Border.all(color: _gold.withValues(alpha: .4)),
+                    ),
+                    child: const Icon(
+                      Icons.mic_none_rounded,
+                      color: _gold,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'And you.',
+                          style: TextStyle(
+                            color: _gold,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Your seat is always open. Chime in with a thought or a question.',
+                          style: TextStyle(
+                            color: _muted,
+                            fontSize: 11,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 22),
+          ],
           Text(
             _hasEpisode
                 ? _s(_episode['topic'])
@@ -1646,8 +2054,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
             Row(
               children: [
                 Expanded(
-                  child: SizedBox(
-                    height: 58,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 58),
                     child: FilledButton.icon(
                       key: const Key('pod-chime'),
                       onPressed: _transcribing || (_busy && !_listening)
@@ -1658,6 +2066,14 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
                       style: FilledButton.styleFrom(
                         backgroundColor: _gold,
                         foregroundColor: _navy,
+                        minimumSize: const Size(0, 58),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 15,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                       ),
                       icon: Icon(
                         _recording ? Icons.stop_rounded : Icons.mic_rounded,
@@ -1762,6 +2178,9 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
                   onPressed: _transcribing || _busy ? null : _sendContribution,
                   icon: const Icon(Icons.arrow_upward_rounded, size: 18),
                   label: const Text('Send'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(80, 46),
+                  ),
                 ),
               ),
             ],
@@ -1815,34 +2234,34 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _host(String role, String name, String description) => Flexible(
-    child: Column(
-      children: [
-        Semantics(
-          label: '$name, $description${_speaking == role ? ', speaking' : ''}',
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.all(5),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: _speaking == role
-                  ? _speakerColor(role).withValues(alpha: .16)
-                  : Colors.transparent,
-            ),
-            child: CustomPaint(
-              size: const Size(78, 78),
-              painter: _HostPainter(color: _speakerColor(role), role: role),
+  Widget _host(String role, String name, String description) => Expanded(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 3),
+      child: Column(
+        children: [
+          Semantics(
+            label:
+                '$name, $description${_speaking == role ? ', speaking' : ''}',
+            child: PodHostPortrait(
+              role: role,
+              size: 80,
+              active: _speaking == role,
             ),
           ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          name,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-        ),
-        const SizedBox(height: 3),
-        Text(description, style: const TextStyle(color: _muted, fontSize: 10)),
-      ],
+          const SizedBox(height: 12),
+          Text(
+            name,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            description,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: _muted, fontSize: 10, height: 1.4),
+          ),
+        ],
+      ),
     ),
   );
 
@@ -1999,7 +2418,15 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
           ...items.map(
             (e) => ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.headphones_rounded, color: _gold),
+              leading: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: _violet.withValues(alpha: .08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: PodTopicArtwork(category: _s(e['category'])),
+              ),
               title: Text(
                 _s(e['topic']),
                 maxLines: 2,
@@ -2026,86 +2453,6 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       ),
     );
   }
-}
-
-class _HostPainter extends CustomPainter {
-  const _HostPainter({required this.color, required this.role});
-  final Color color;
-  final String role;
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final path = Path();
-    for (var i = 0; i < 8; i++) {
-      final angle = math.pi / 8 + i * math.pi / 4;
-      final point =
-          center +
-          Offset(math.cos(angle), math.sin(angle)) * (size.width * .47);
-      if (i == 0) {
-        path.moveTo(point.dx, point.dy);
-      } else {
-        path.lineTo(point.dx, point.dy);
-      }
-    }
-    path.close();
-    canvas.drawPath(path, Paint()..color = color.withValues(alpha: .10));
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = color.withValues(alpha: .7)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.6,
-    );
-    final line = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
-    if (role == 'host') {
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(
-            center: center.translate(0, -4),
-            width: 15,
-            height: 25,
-          ),
-          const Radius.circular(8),
-        ),
-        line,
-      );
-      canvas.drawArc(
-        Rect.fromCenter(center: center.translate(0, -2), width: 28, height: 31),
-        0,
-        math.pi,
-        false,
-        line,
-      );
-      canvas.drawLine(center.translate(0, 13), center.translate(0, 20), line);
-      canvas.drawLine(center.translate(-8, 20), center.translate(8, 20), line);
-    } else if (role == 'analyst') {
-      for (var i = 0; i < 3; i++) {
-        canvas.drawLine(
-          center.translate(-13 + i * 13, 16),
-          center.translate(-13 + i * 13, 2 - i * 10),
-          line..strokeWidth = 6,
-        );
-      }
-    } else {
-      final diamond = Path()
-        ..moveTo(center.dx, center.dy - 19)
-        ..lineTo(center.dx + 16, center.dy)
-        ..lineTo(center.dx, center.dy + 19)
-        ..lineTo(center.dx - 16, center.dy)
-        ..close();
-      canvas.drawPath(diamond, line);
-      canvas.drawLine(center.translate(0, -8), center.translate(0, 5), line);
-      canvas.drawCircle(center.translate(0, 11), 1, line);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_HostPainter oldDelegate) =>
-      oldDelegate.color != color || oldDelegate.role != role;
 }
 
 class _WavePainter extends CustomPainter {

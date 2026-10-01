@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Keep build diagnostics local; deployment does not need analytics reporting.
+export FLUTTER_SUPPRESS_ANALYTICS=true
+export DART_SUPPRESS_ANALYTICS=true
+
 echo "============================================================"
 echo "KORLIX Render Option A Build"
 echo "Publishing existing website at /"
