@@ -1,6 +1,6 @@
 FROM node:24.14.0-trixie-slim@sha256:8c8f12cedb96c3b59642cf30d713943c2b223990c9919b96a141681f62e6e292 AS base
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates ffmpeg \
+    && apt-get install -y --no-install-recommends ca-certificates ffmpeg fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 

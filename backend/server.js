@@ -32,6 +32,8 @@ import { reviewEvidence, CREDIT_COST as FIELDPROOF_CREDIT_COST } from './fieldpr
 import { registerAiVisibility } from './ai_visibility/routes.mjs';
 import { scanVisibility, CREDIT_COST as VISIBILITY_CREDIT_COST } from './ai_visibility/ai.mjs';
 import { registerPod } from './pod/routes.mjs';
+import { registerLiveStudio } from './live_studio/routes.mjs';
+import { createLiveProviders } from './live_studio/providers.mjs';
 import { createPodProviders } from './pod/providers.mjs';
 import { registerSeoAgent } from './seo_agent/routes.mjs';
 import { scanSeo } from './seo_agent/ai.mjs';
@@ -3699,6 +3701,7 @@ app.get("/api/health", (req, res) => {
     studyStudio: {version:1,savedProgress:true,flashcards:true,practiceQuiz:true},
     appStudio: {version:1,interactivePreview:true,savedProjects:true,versionHistory:true,webExport:true},
     musicStudio: {version:2,savedLibrary:true,savedDrafts:true,provider:'musicapi.ai',providerConfigured:Boolean(process.env.MUSICAPI_KEY||process.env.MUSICAPI_API_KEY||process.env.MUSICAPI_AI_KEY)},
+    liveStudio: {version:1,pilot:true,privateRehearsals:true,youtubeVisibility:'unlisted',publicBroadcasts:false},
     taxPrep: {version:1,country:'US',bookkeepingLinked:true,filingEnabled:false,automaticTaxCalculation:false},
     babyBlend: {version: 1, privateStorage: true, analysisModel: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, creditCost: 1, ...pictureModelSettings()},
     virtualCloset: {version: 1, privateStorage: true, analysisModel: CHAT_MODEL, ...pictureModelSettings()},
@@ -12724,6 +12727,12 @@ const podRegistration = registerPod(app,{database:podDatabase,requireUser,
       limits,remainingSeconds};
   },
 });
+const liveStudioRegistration=registerLiveStudio(app,{database:podDatabase,storage:bookkeepingStorage?.storage,requireUser,
+  providers:process.env.OPENAI_API_KEY?createLiveProviders(new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})):null,
+  access:async user=>({allowed:korlixLiveConvoBuild131EntitlementForUser(user).unlimited===true,
+    reason:'Live Studio is currently a developer pilot. Creator access will follow the broadcast test.'}),
+});
+process.once('SIGTERM',()=>liveStudioRegistration.stop());
 registerSeoAgent(app, {database: supabaseAdmin, requireUser, autoStartScheduler: true,
   aiAccess: async (user, {reserved = false} = {}) => {
     if (!process.env.OPENAI_API_KEY) return {allowed:false,status:503,reason:'KORLIX SEO analysis is temporarily unavailable.'};

@@ -1,0 +1,35 @@
+# Paid worker approved October 1, 2026 at 12:40 Eastern; channel setup still required.
+# Existing website/API services are intentionally not managed by this Blueprint.
+services:
+  - type: worker
+    name: korlix-live-studio-worker
+    runtime: docker
+    repo: https://github.com/digiplayja-design/Ai-wiz-command-center
+    branch: release/k135z-backend-render-20260919
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: node live_studio/worker.mjs
+    region: ohio
+    plan: 1c-2g
+    numInstances: 1
+    autoDeployTrigger: 'off'
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: LIVE_STUDIO_BROADCAST_OWNER_ID
+        sync: false
+      - key: LIVE_STUDIO_YOUTUBE_ENABLED
+        value: 'true'
+      - key: LIVE_STUDIO_YOUTUBE_CLIENT_ID
+        sync: false
+      - key: LIVE_STUDIO_YOUTUBE_CLIENT_SECRET
+        sync: false
+      - key: LIVE_STUDIO_YOUTUBE_REFRESH_TOKEN
+        sync: false
