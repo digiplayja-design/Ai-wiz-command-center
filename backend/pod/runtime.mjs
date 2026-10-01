@@ -102,6 +102,10 @@ export function createPodRuntime({store,providers,access,logger=console,now=Date
     try {
       const claim=await store.claim(user.id,id,{requestId,version,kind});
       if(!claim.dispatch) {
+        if(kind==='transcribe'&&(claim.operation?.state!=='completed'||typeof claim.result?.text!=='string')) {
+          if(claim.operation?.state==='claimed')throw new PodError('This recording is still being transcribed. Keep the recording and retry shortly.',409,'pod_request_active');
+          throw new PodError('The earlier transcription could not be recovered. Keep your recording or type your comment, and check the pod status before recording again.',409,'pod_transcription_unavailable');
+        }
         if(kind==='prepare') {
           if(claim.operation?.state!=='prepared')throw new PodError(claim.episode?.preparationError||claim.episode?.error||'This preparation has already finished or was interrupted. Refresh before continuing.',409,claim.operation?.state==='claimed'?'pod_request_active':'pod_preparation_unavailable');
           return {episode:claim.episode,prepared:true,preparedId:requestId,replayed:true,audioUnavailable:!cachedAudio(k,requestId)};

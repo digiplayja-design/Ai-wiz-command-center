@@ -45,7 +45,7 @@ function fixture(options = {}) {
       note('claim', {actor, id, ...input});
       if (f.hooks.claim) return f.hooks.claim(actor, id, input);
       const old = f.results.get(input.requestId);
-      return old ? {dispatch: false, episode: copy(f.episode), result: copy(old)} :
+      return old ? {dispatch: false, episode: copy(f.episode), result: copy(old), operation:{state:'completed'}} :
         {dispatch: true, episode: copy(f.episode), brief: copy(f.brief)};
     },
     async authorizeDispatch(actor, id, requestId, callKey) {
@@ -637,4 +637,27 @@ test('a lost consumed response with expired audio returns its existing transcrip
   assert.equal(recovered.audio,null);assert.equal(recovered.audioUnavailable,true);assert.equal(recovered.replayed,true);
   assert.deepEqual(recovered.turn,played.turn);assert.equal(recovered.episode.turns.length,2);
   assert.equal(f.providerCalls().length,2);
+});
+
+test('transcription replay never disguises pending, failed or interrupted work as empty successful speech',async t=>{
+  for(const state of ['claimed','failed','interrupted','expired']) {
+    const f=fixture({hooks:{claim:async()=>({dispatch:false,episode:{state:'paused'},operation:{state},result:{}})}});
+    t.after(()=>f.runtime.stop());
+    await assert.rejects(f.run({kind:'transcribe',wav:Buffer.from('retained recording')}),
+      error=>error.status===409&&error.code===(state==='claimed'?'pod_request_active':'pod_transcription_unavailable'));
+    assert.equal(f.providerCalls().length,0);assert.equal(f.receipts.length,0);assert.equal(f.finishes.length,0);
+  }
+});
+
+test('transcription replay returns only completed review text, including an actually silent completed recording',async t=>{
+  for(const text of ['My contribution for review.','']) {
+    const f=fixture({hooks:{claim:async()=>({dispatch:false,episode:{state:'paused'},operation:{state:'completed'},result:{text}})}});
+    t.after(()=>f.runtime.stop());
+    const recovered=await f.run({kind:'transcribe',wav:Buffer.from('retained recording')});
+    assert.equal(recovered.text,text);assert.equal(recovered.replayed,true);assert.equal(f.providerCalls().length,0);
+  }
+  const malformed=fixture({hooks:{claim:async()=>({dispatch:false,episode:{state:'paused'},operation:{state:'completed'},result:{}})}});
+  t.after(()=>malformed.runtime.stop());
+  await assert.rejects(malformed.run({kind:'transcribe'}),error=>error.code==='pod_transcription_unavailable');
+  assert.equal(malformed.providerCalls().length,0);
 });
