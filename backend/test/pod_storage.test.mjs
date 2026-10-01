@@ -8,6 +8,7 @@ import {createPodStore} from '../pod/store.mjs';
 let db,store,owner,other;
 const limits={tier:'ultra',monthlySessions:20,monthlySeconds:10800,monthlyTokens:4000000,maxSessionSeconds:1200,maxResponses:80};
 const input={category:'technology',topic:'What makes technology useful?',durationSeconds:900,hostCount:3,style:'balanced'};
+const welcomeTurn=hostCount=>({speaker:'host',sourceIds:[],text:`Hey, I’m K-Nova. Welcome to The Pod and You, with ${hostCount===3?'our AI Analyst and Challenger':'our AI Analyst'}. Next, we’ll check sources before discussing the facts. That check can take a little time. You can pause us, or use Chime in to add your take.`});
 const raw=async(actor,action,id=null,data={})=>(await db.query('select public.korlix_pod_v1($1,$2,$3,$4) r',[actor,action,id,data])).rows[0].r;
 const create=async(extra={})=>store.create(owner,{requestId:randomUUID(),input,limits,...extra});
 const row=async(id)=>(await db.query('select * from public.korlix_pod_sessions where id=$1',[id])).rows[0];
@@ -31,6 +32,8 @@ test.before(async()=>{
  await db.exec(await readFile(new URL('202607120001_live_convo_limits_build129.sql',dir),'utf8'));
  const name=(await readdir(dir)).find(n=>n.endsWith('_pod_personal_beta.sql'));
  await db.exec(await readFile(new URL(name,dir),'utf8'));
+ const welcomeMigration=(await readdir(dir)).find(n=>n.endsWith('_pod_prompt_welcome_audio.sql'));
+ await db.exec(await readFile(new URL(welcomeMigration,dir),'utf8'));
  store=createPodStore({database:{rpc:async(_name,p)=>{try{return {data:await raw(p.p_actor,p.p_action,p.p_id,p.p_data)};}catch(error){if(process.env.POD_DEBUG)console.error(error.message,error.where);return {error};}}},logger:{warn(){}}});
 });
 test.beforeEach(async()=>{await db.exec('reset role');owner=randomUUID();other=randomUUID();await db.query('insert into auth.users values($1),($2)',[owner,other]);await db.exec('set role service_role');});
@@ -75,6 +78,41 @@ test('real usage is cumulative exactly once; unknown binary TTS stays explicit e
  const s=await row(episode.id),m=await monthly();assert.equal(s.total_tokens,12);assert.equal(m.total_tokens,12);assert.equal(s.output_audio_tokens,0);
  const evidence=(await db.query("select evidence from korlix_pod_usage_receipts where episode_id=$1 and call_key='speak'",[episode.id])).rows[0].evidence;assert.equal(evidence.usageKnown,false);
  await assert.rejects(store.recordUsage(owner,episode.id,c.requestId,{callKey:'research',usage:{totalTokens:1}}),e=>e.status===400);
+});
+test('fixed first welcome commits with speech receipt alone and no fabricated text usage, sources or brief',async()=>{
+ const {episode}=await create(),c=await claim(episode);await paid(episode.id,c.requestId,'speak');
+ const done=await store.finish(owner,episode.id,c.requestId,{welcome:true,turn:welcomeTurn(3)});assert(done.committed);assert.equal(done.episode.state,'active');
+ assert.equal(done.episode.turns.length,1);assert.deepEqual(done.episode.sources,[]);assert.equal(done.episode.checkedAt,null);assert.deepEqual((await store.get(owner,episode.id)).brief,{});
+ const m=await monthly();assert.equal(m.response_count,0);assert.equal(m.total_tokens,0);assert.equal(m.output_audio_tokens,0);assert.equal(m.session_count,1);
+ assert.equal(Date.parse(done.episode.deadlineAt)-Date.parse(done.episode.startedAt),900000);
+ const nextClaim=await claim(done.episode);await paid(episode.id,nextClaim.requestId,'speak');
+ await assert.rejects(store.finish(owner,episode.id,nextClaim.requestId,{welcome:true,turn:welcomeTurn(3)}),e=>e.status===400);
+});
+test('welcome guard rejects improvised text and fake source metadata but supports two-host copy',async()=>{
+ const {episode}=await create({input:{...input,hostCount:2}}),c=await claim(episode);await paid(episode.id,c.requestId,'speak');
+ await assert.rejects(store.finish(owner,episode.id,c.requestId,{welcome:true,turn:{...welcomeTurn(2),text:'A fabricated factual opening.'}}),e=>e.status===400);
+ await assert.rejects(store.finish(owner,episode.id,c.requestId,{welcome:true,turn:welcomeTurn(2),brief:{text:'Pretend research'}}),e=>e.status===400);
+ const done=await store.finish(owner,episode.id,c.requestId,{welcome:true,turn:welcomeTurn(2)});assert(done.committed);
+});
+test('research can commit its sourced initial Analyst turn with one real text receipt and no second text dispatch',async()=>{
+ const {episode}=await create(),welcome=await claim(episode);await paid(episode.id,welcome.requestId,'speak');
+ const opening=await store.finish(owner,episode.id,welcome.requestId,{welcome:true,turn:welcomeTurn(3)}),c=await claim(opening.episode);
+ await paid(episode.id,c.requestId,'research',{inputTokens:15,outputTokens:30,totalTokens:45});await paid(episode.id,c.requestId,'speak');
+ const sources=[{id:'s1',title:'Fixture source',url:'https://www.nasa.gov/'}],brief={text:'A sourced factual fixture.',sources,checkedAt:new Date().toISOString()};
+ await assert.rejects(store.finish(owner,episode.id,c.requestId,{turn:{speaker:'analyst',text:'The first grounded thought.',sourceIds:['fake']},brief,sources,checkedAt:brief.checkedAt}),e=>e.status===400);
+ const done=await store.finish(owner,episode.id,c.requestId,{turn:{speaker:'analyst',text:'The first grounded thought.',sourceIds:['s1']},brief,sources,checkedAt:brief.checkedAt});
+ assert(done.committed);assert.equal(done.episode.turns.length,2);assert.equal(done.episode.deadlineAt,opening.episode.deadlineAt);assert.equal((await monthly()).response_count,1);assert.equal((await monthly()).total_tokens,45);
+ const dispatch=(await db.query('select dispatched from korlix_pod_operations where episode_id=$1 and request_id=$2',[episode.id,c.requestId])).rows[0].dispatched;
+ assert.deepEqual(Object.keys(dispatch).sort(),['research','speak']);
+});
+test('215-second claim lease remains bounded by ready expiry and by the immutable playback deadline',async()=>{
+ const {episode}=await create(),welcome=await claim(episode);
+ assert(Date.parse(welcome.operation.leaseUntil)<=Date.parse(episode.createdAt)+180000);
+ await paid(episode.id,welcome.requestId,'speak');const opening=await store.finish(owner,episode.id,welcome.requestId,{welcome:true,turn:welcomeTurn(3)});
+ const c=await claim(opening.episode),delta=Date.parse(c.operation.leaseUntil)-Date.parse(c.episode.serverNow);assert(delta>213000&&delta<=215000);
+ await store.control(owner,episode.id,'interrupt');await store.fail(owner,episode.id,c.requestId);await store.control(owner,episode.id,'resume');
+ await db.query("update korlix_pod_sessions set started_at=now()-interval '870 seconds',deadline_at=now()+interval '30 seconds' where id=$1",[episode.id]);
+ const updated=(await store.get(owner,episode.id)).episode,near=await claim(updated);assert.equal(Date.parse(near.operation.leaseUntil),Date.parse(updated.deadlineAt));
 });
 test('first successful turn starts the immutable 900-second deadline; completed replay does not generate',async()=>{
  const {episode,requestId}=await firstTurn();assert.equal(episode.state,'active');

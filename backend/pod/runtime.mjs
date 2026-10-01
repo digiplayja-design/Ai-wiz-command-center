@@ -1,8 +1,9 @@
 import {PodError,podUsage} from './core.mjs';
+import {podWelcomeTurn} from './providers.mjs';
 
 /** Paid work is always client-driven, owner-scoped, leased, and separately receipted. */
 export function createPodRuntime({store,providers,access,logger=console,now=Date.now,
-  operationTimeoutMs=165000,watchdogMs=5000,maxConcurrent=8}={}) {
+  operationTimeoutMs=210000,watchdogMs=5000,maxConcurrent=8}={}) {
   const pending = new Map(), audioCache = new Map();
   let cacheBytes=0,closed=false;
   const key=(actor,id)=>`${actor}:${id}`;
@@ -71,7 +72,8 @@ export function createPodRuntime({store,providers,access,logger=console,now=Date
       claimed=true;
       entry.version=claim.episode?.version??version;
       onStart?.(controller);
-      timer=setTimeout(()=>controller.abort(new PodError('This turn took too long. Refresh the episode before trying again.',504,'pod_timeout')),operationTimeoutMs);timer.unref?.();
+      const remainingDeadline=claim.episode?.deadlineAt?Math.max(0,Date.parse(claim.episode.deadlineAt)-now()):operationTimeoutMs;
+      timer=setTimeout(()=>controller.abort(new PodError('This turn took too long or reached the episode limit. Refresh before trying again.',504,'pod_timeout')),Math.min(operationTimeoutMs,remainingDeadline));timer.unref?.();
       watchdog=setInterval(async()=>{
         if(checking||controller.signal.aborted)return;checking=true;
         try {
@@ -89,21 +91,32 @@ export function createPodRuntime({store,providers,access,logger=console,now=Date
         signal.throwIfAborted();
         return {episode:done.episode,text:done.text??value.text};
       }
-      let brief=claim.brief;
-      if(!brief?.text) {
-        const result=await paid({user,id,requestId,callKey:'research',method:'research',
-          args:{category:claim.episode.category,topic:claim.episode.topic,style:claim.episode.style},signal});
-        brief=result.brief;
-      }
+      let brief=claim.brief,turn;
+      const hostTurns=(claim.episode.turns||[]).filter(t=>t.speaker!=='user').length;
+      const welcome=hostTurns===0&&!brief?.text;
       const seconds=claim.episode.deadlineAt?Math.max(0,(Date.parse(claim.episode.deadlineAt)-now())/1000):claim.episode.durationSeconds;
       if(seconds<=0)throw new PodError('This episode has reached its time limit.',409,'pod_ended');
-      const hostTurns=(claim.episode.turns||[]).filter(t=>t.speaker!=='user').length;
-      const closing=seconds<=60||hostTurns>=35;
-      const turn=await paid({user,id,requestId,callKey:'turn',method:'turn',
-        args:{episode:claim.episode,brief,remainingSeconds:seconds,closing},signal});
+      const closing=!welcome&&(seconds<=60||hostTurns>=35);
+      if(welcome) {
+        // A factual-claim-free introduction reaches the listener before slow research.
+        // It uses only a real speech receipt; no language-model usage is fabricated.
+        turn=podWelcomeTurn(claim.episode);
+      } else if(!brief?.text) {
+        // Research supplies the first sourced Analyst turn in the same response.
+        // Avoid a second full reasoning request before the discussion can begin.
+        const researched=await paid({user,id,requestId,callKey:'research',method:'research',
+          args:{category:claim.episode.category,topic:claim.episode.topic,style:claim.episode.style,
+            contributions:(claim.episode.turns||[]).filter(t=>t.speaker==='user').map(t=>t.text)},signal});
+        brief=researched.brief;turn=researched.initialTurn;
+        if(!turn)throw new PodError('The research did not include a usable opening. Please start a new episode.',502,'pod_opening_unavailable');
+      } else {
+        turn=await paid({user,id,requestId,callKey:'turn',method:'turn',
+          args:{episode:claim.episode,brief,remainingSeconds:seconds,closing},signal});
+      }
       const speech=await paid({user,id,requestId,callKey:'speak',method:'speak',args:{speaker:turn.speaker,text:turn.text},signal});
-      const result={turn:{speaker:turn.speaker,text:turn.text,sourceIds:turn.sourceIds||[]},brief,
-        sources:brief.sources||[],checkedAt:brief.checkedAt,...(closing?{summary:turn.text}:{})};
+      const result={turn:{speaker:turn.speaker,text:turn.text,sourceIds:turn.sourceIds||[]},
+        ...(welcome?{welcome:true}:{brief,sources:brief.sources||[],checkedAt:brief.checkedAt}),
+        ...(closing?{summary:turn.text}:{})};
       const done=await store.finish(user.id,id,requestId,result);
       if(!done.committed)throw new PodError('The episode changed before this turn could play. Refresh to continue.',409,'pod_interrupted');
       signal.throwIfAborted();

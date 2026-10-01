@@ -37,6 +37,7 @@ function fixture(options = {}) {
     brief: options.brief === undefined ? BRIEF : options.brief,
     hooks: options.hooks || {},
   };
+  if(options.afterWelcome) f.episode.turns=[{speaker:'host',text:'Welcome to The Pod and You.',sourceIds:[]}];
   const note = (name, data) => {f.events.push({name, data});};
   const copy = value => structuredClone(value);
   f.store = {
@@ -90,7 +91,7 @@ function fixture(options = {}) {
     },
   };
   const defaults = {
-    research: {brief: BRIEF, usage: evidence('research', 20, 10)},
+    research: {brief: BRIEF, initialTurn: {...TURN,speaker:'analyst'}, usage: evidence('research', 20, 10)},
     turn: {...TURN, usage: evidence('turn', 80, 20)},
     speak: {wav: AUDIO, durationSeconds: 2, mime: 'audio/wav', usage: {...evidence('speech', null, null), inputCharacters: TURN.text.length, audioSeconds: 2}},
     transcribe: {text: 'What about the cost?', usage: {...evidence('transcription', 40, 10), inputAudioTokens: 35, audioSeconds: 3}},
@@ -126,12 +127,12 @@ test('construction and replay perform no paid calls, access checks, or new dispa
   assert.equal(f.runtime.activeCount, 0);
 });
 
-test('each research, turn and speech call requires its own entitlement check and durable authorization before dispatch', async t => {
-  const f = fixture({brief: null}); t.after(() => f.runtime.stop());
+test('combined research opening and speech each require entitlement and durable authorization before dispatch', async t => {
+  const f = fixture({brief: null,afterWelcome:true}); t.after(() => f.runtime.stop());
   const result = await f.run();
   assert.deepEqual(f.names(), ['claim', 'access', 'authorize:research', 'provider:research', 'receipt:research',
-    'access', 'authorize:turn', 'provider:turn', 'receipt:turn', 'access', 'authorize:speak', 'provider:speak', 'receipt:speak', 'finish']);
-  assert.equal(f.accessCalls, 3);
+    'access', 'authorize:speak', 'provider:speak', 'receipt:speak', 'finish']);
+  assert.equal(f.accessCalls, 2);
   assert.equal(result.turn.text, TURN.text);
   assert.equal(result.audio.base64, AUDIO.toString('base64'));
   assert.equal(result.audio.durationSeconds, 2);
@@ -142,9 +143,9 @@ test('each research, turn and speech call requires its own entitlement check and
     assert.equal(event.data.id, ID);
     assert.equal(event.data.requestId, REQUEST);
   }
-  assert.deepEqual(f.receipts.map(receipt => receipt.usage.totalTokens), [30, 100, 0]);
-  assert.equal(f.receipts[2].evidence.usageKnown, false);
-  assert.equal(f.receipts[2].evidence.totalTokens, null);
+  assert.deepEqual(f.receipts.map(receipt => receipt.usage.totalTokens), [30, 0]);
+  assert.equal(f.receipts[1].evidence.usageKnown, false);
+  assert.equal(f.receipts[1].evidence.totalTokens, null);
 });
 
 test('completed request replay reuses transient audio without a second provider call; missing cache never regenerates audio', async t => {
@@ -189,8 +190,8 @@ test('revoked entitlement between steps prevents speech and preserves already-pa
 });
 
 test('durable dispatch denial blocks that provider call and all subsequent paid work', async t => {
-  const f = fixture({brief: null, hooks: {authorize: async callKey => {
-    if (callKey === 'turn') throw new PodError('The episode allowance ended.', 429, 'pod_budget');
+  const f = fixture({brief: null, afterWelcome:true,hooks: {authorize: async callKey => {
+    if (callKey === 'speak') throw new PodError('The episode allowance ended.', 429, 'pod_budget');
   }}});
   t.after(() => f.runtime.stop());
   await assert.rejects(f.run(), error => error.code === 'pod_budget');
@@ -225,7 +226,7 @@ test('successful research, turn and transcription with missing or invalid token 
   const invalid = [undefined, null, -1, NaN, Infinity, 1.5, '50', Number.MAX_SAFE_INTEGER + 1];
   for (const method of ['research', 'turn', 'transcribe']) {
     for (const totalTokens of invalid) {
-      const f = fixture({brief: method === 'research' ? null : BRIEF, hooks: {
+      const f = fixture({brief: method === 'research' ? null : BRIEF, afterWelcome:method==='research',hooks: {
         [method]: async (_args, result) => ({...result, usage: {...result.usage, totalTokens, usageKnown: true}}),
       }});
       t.after(() => f.runtime.stop());
@@ -243,7 +244,7 @@ test('successful research, turn and transcription with missing or invalid token 
       assert(f.names().indexOf('receipt:' + method) < f.names().indexOf('fail'));
       assert.equal(f.runtime.activeCount, 0);
     }
-    const f = fixture({brief: method === 'research' ? null : BRIEF, hooks: {
+    const f = fixture({brief: method === 'research' ? null : BRIEF, afterWelcome:method==='research',hooks: {
       [method]: async (_args, result) => {const {usage: _usage, ...withoutUsage} = result; return withoutUsage;},
     }});
     t.after(() => f.runtime.stop());
@@ -495,4 +496,30 @@ test('shutdown aborts active work, retains its late receipt, rejects future runs
   assert.equal(f.receipts[0].usage.totalTokens, 100);
   assert.equal(f.finishes.length, 0);
   assert.equal(f.runtime.activeCount, 0);
+});
+
+
+test('a new episode returns welcome audio before any research or language-model call', async t => {
+  const f=fixture({brief:null});t.after(()=>f.runtime.stop());
+  const first=await f.run();
+  assert.deepEqual(f.providerCalls().map(c=>c.name),['provider:speak']);
+  assert.equal(first.turn.speaker,'host');assert.match(first.turn.text,/K-Nova/);
+  assert.deepEqual(first.turn.sourceIds,[]);assert(first.audio.base64);
+  assert.deepEqual(f.receipts.map(r=>r.callKey),['speak']);
+  assert.equal(f.finishes[0].welcome,true);assert.equal(f.finishes[0].brief,undefined);
+  const second=await f.run({requestId:SECOND});
+  assert.equal(second.turn.speaker,'analyst');
+  assert.deepEqual(f.providerCalls().map(c=>c.name),['provider:speak','provider:research','provider:speak']);
+  assert.deepEqual(f.receipts.map(r=>r.callKey),['speak','research','speak']);
+});
+
+
+test('the exact episode deadline aborts speech before the slower watchdog tick',async t=>{
+  const started=deferred(),f=fixture({runtimeOptions:{watchdogMs:100000,operationTimeoutMs:1000},hooks:{
+    speak:async({signal})=>{started.resolve();return new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));}
+  }});t.after(()=>f.runtime.stop());
+  f.episode.deadlineAt=new Date(NOW+20).toISOString();
+  const run=f.run();await started.promise;
+  await assert.rejects(within(run,500),e=>e.code==='pod_timeout');
+  assert.equal(f.finishes.length,0);assert.equal(f.runtime.activeCount,0);
 });
