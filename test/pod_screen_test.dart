@@ -273,6 +273,107 @@ void _foreground(WidgetTester tester) {
 
 void main() {
   testWidgets(
+    'Listen reveals preparation on a phone and errors remain visible',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events);
+      final media = _FakeMedia(events);
+      await _mount(tester, client, media, events);
+      tester.view.physicalSize = const Size(390, 844);
+      await tester.pumpAndSettle();
+      await _listen(tester);
+      final status = find.byKey(const Key('pod-playback-status'));
+      expect(find.text('PREPARING YOUR EPISODE'), findsOneWidget);
+      expect(tester.getRect(status).top, greaterThanOrEqualTo(0));
+      expect(tester.getRect(status).bottom, lessThan(844));
+      expect(media.plays, 0);
+      client.pending.single.completeError(
+        const PodException('The research request timed out.'),
+      );
+      await tester.pumpAndSettle();
+      final error = find.text('The research request timed out.');
+      expect(error, findsOneWidget);
+      expect(tester.getRect(error).top, greaterThanOrEqualTo(0));
+      expect(tester.getRect(error).bottom, lessThan(844));
+      expect(client.pending.length, 1);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'research wait keeps heartbeats alive and does not subtract its time twice',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events);
+      final media = _FakeMedia(events);
+      var now = _time;
+      await _mount(tester, client, media, events, now: () => now);
+      await _listen(tester);
+      client.complete(0, _turnResponse());
+      await tester.pumpAndSettle();
+      media.finish();
+      await tester.pumpAndSettle();
+      expect(find.text('CHECKING SOURCES'), findsOneWidget);
+      expect(client.pending.length, 2);
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
+      expect(client.actions, contains('heartbeat'));
+      now = _time.add(const Duration(seconds: 150));
+      final response = _turnResponse();
+      response['episode'] = {
+        ...(response['episode'] as Map),
+        'serverNow': now.toIso8601String(),
+        '_responseElapsedMs': 150000,
+        'checkedAt': now.toIso8601String(),
+      };
+      client.complete(1, response);
+      await tester.pumpAndSettle();
+      expect(media.plays, 2);
+      expect(find.text('2:30'), findsOneWidget);
+      expect(client.actions, isNot(contains('end')));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'next transport allows bounded research beyond the old 180-second timeout',
+    (tester) async {
+      final pending = Completer<http.Response>();
+      final transport = MockClient((_) => pending.future);
+      final client = PodClient(
+        backendBaseUrl: 'https://pod.test',
+        headersBuilder: () => {},
+        client: transport,
+      );
+      Object? failure;
+      Map<String, dynamic>? response;
+      final request = client
+          .next('private-episode', requestId: 'request-one', version: 0)
+          .then<void>(
+            (value) {
+              response = value;
+            },
+            onError: (Object error) {
+              failure = error;
+            },
+          );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 210));
+      expect(failure, isNull);
+      expect(response, isNull);
+      pending.complete(http.Response(jsonEncode(_turnResponse()), 200));
+      await tester.pumpAndSettle();
+      await request;
+      expect(failure, isNull);
+      expect(response, isNotNull);
+      client.dispose();
+      transport.close();
+    },
+  );
+
+  testWidgets(
     'browsing is silent; Listen activates audio before consent and creation',
     (tester) async {
       final events = <String>[];

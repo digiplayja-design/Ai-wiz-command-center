@@ -63,6 +63,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
   final _topic = TextEditingController();
   final _contribution = TextEditingController();
   final _scroll = ScrollController();
+  final _studioAnchor = GlobalKey(debugLabel: 'pod-studio-anchor');
+  final _errorAnchor = GlobalKey(debugLabel: 'pod-error-anchor');
   List<Map<String, dynamic>> _history = [], _catalog = [];
   Map<String, dynamic> _access = {}, _episode = {};
   bool _loading = true, _busy = false, _listening = false, _locked = false;
@@ -77,7 +79,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
   int _duration = 300, _hosts = 2, _epoch = 0;
   String? _error, _notice, _speaking, _createRequestId;
   String? _contributionRequestId, _submittedText;
-  DateTime? _deadlineLocal;
+  DateTime? _deadlineLocal, _serverDeadline, _preparingSince;
   Uint8List? _pendingWav;
   String? _pendingSpeaker;
   Timer? _clockTimer, _deadlineTimer, _heartbeatTimer, _recordingTimer;
@@ -103,6 +105,21 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
   }
 
   bool _current(int epoch) => mounted && !_locked && epoch == _epoch;
+  void _reveal(GlobalKey anchor) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _locked) return;
+      final target = anchor.currentContext;
+      if (target == null) return;
+      unawaited(
+        Scrollable.ensureVisible(
+          target,
+          duration: const Duration(milliseconds: 240),
+          alignment: .02,
+        ),
+      );
+    });
+  }
+
   bool _alive() {
     if (!mounted || _locked) return false;
     try {
@@ -130,6 +147,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         } else {
           setState(() {});
         }
+      } else if (mounted && _listening && _busy) {
+        setState(() {});
       }
     });
     _heartbeatTimer = Timer.periodic(
@@ -303,6 +322,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     }
     if (!same) {
       _deadlineLocal = null;
+      _serverDeadline = null;
       _pendingWav = null;
     }
     final deadline = DateTime.tryParse(_s(next['deadlineAt']));
@@ -311,12 +331,21 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       final elapsed = Duration(
         milliseconds: (next['_responseElapsedMs'] as num?)?.toInt() ?? 0,
       );
-      final adjusted = _now.add(
-        deadline.difference(serverNow ?? _now) - elapsed,
-      );
-      // A slow/stale response may shorten but can never extend the countdown.
-      if (_deadlineLocal == null || adjusted.isBefore(_deadlineLocal!)) {
-        _deadlineLocal = adjusted;
+      if (_deadlineLocal == null) {
+        // Establish a conservative local anchor once. serverNow is sampled at
+        // response completion, so deducting a later generation's full request
+        // time again would count its research time twice and end audio early.
+        _deadlineLocal = _now.add(
+          deadline.difference(serverNow ?? _now) - elapsed,
+        );
+        _serverDeadline = deadline;
+      } else if (_serverDeadline != null &&
+          deadline.isBefore(_serverDeadline!)) {
+        // The server may shorten a deadline, but no response may extend it.
+        _deadlineLocal = _deadlineLocal!.subtract(
+          _serverDeadline!.difference(deadline),
+        );
+        _serverDeadline = deadline;
       }
     }
     setState(() {
@@ -330,12 +359,16 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         _transcribing = false;
         _startingRecording = false;
         if (_terminal(next)) _pendingWav = null;
+        if (_terminal(next) && _s(next['error']).isNotEmpty) {
+          _error = _s(next['error']);
+        }
         if (unexpectedPause) {
           _notice =
               'The server paused this episode. Check your connection and choose Resume when you are ready.';
         }
       }
     });
+    if (_terminal(next) && _s(next['error']).isNotEmpty) _reveal(_errorAnchor);
     _deadlineTimer?.cancel();
     if (_live && _deadlineLocal != null) {
       final remaining = _deadlineLocal!.difference(_now);
@@ -383,6 +416,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     }
     // Preserve the browser's user gesture: activate is the first asynchronous call.
     final activation = _media.activate();
+    FocusScope.of(context).unfocus();
     final epoch = ++_epoch;
     var beganCreation = false;
     setState(() {
@@ -434,12 +468,14 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         _composing = false;
       });
       unawaited(_next(epoch));
+      _reveal(_studioAnchor);
     } catch (e) {
       if (_current(epoch)) {
         setState(() {
           _error = e.toString();
           _listening = false;
         });
+        _reveal(_errorAnchor);
       }
     } finally {
       if (beganCreation) {
@@ -465,6 +501,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     setState(() {
       _busy = true;
       _speaking = null;
+      _preparingSince = _now;
     });
     try {
       final result = await widget.client.next(
@@ -553,6 +590,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       if (message != null) _notice = message;
       if (error != null) _error = error;
     });
+    if (error != null) _reveal(_errorAnchor);
     // Revoke both local operations immediately. A system permission prompt may
     // keep capture cleanup pending; it must not delay the server control call.
     unawaited(_media.stop());
@@ -566,6 +604,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         setState(() {
           _error = error ?? e.toString();
         });
+        _reveal(_errorAnchor);
       }
     } finally {
       if (_current(epoch) && !_listening) {
@@ -587,6 +626,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       return;
     }
     final activation = _media.activate();
+    FocusScope.of(context).unfocus();
     final epoch = ++_epoch;
     setState(() {
       _busy = true;
@@ -618,6 +658,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         _busy = false;
         _composing = false;
       });
+      _reveal(_studioAnchor);
       if (_pendingWav != null) {
         try {
           await _playPending(epoch);
@@ -638,6 +679,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         setState(() {
           _error = e.toString();
         });
+        _reveal(_errorAnchor);
       }
     } finally {
       if (_current(epoch) && !_listening) {
@@ -1045,13 +1087,16 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
                             _gold,
                           ),
                         if (_error != null)
-                          _noticeCard(
-                            _error!,
-                            Icons.info_outline,
-                            const Color(0xFFFFB3A5),
-                            action: TextButton(
-                              onPressed: _checkStatus,
-                              child: const Text('Check status'),
+                          KeyedSubtree(
+                            key: _errorAnchor,
+                            child: _noticeCard(
+                              _error!,
+                              Icons.info_outline,
+                              const Color(0xFFFFB3A5),
+                              action: TextButton(
+                                onPressed: _checkStatus,
+                                child: const Text('Check status'),
+                              ),
                             ),
                           ),
                         if (_notice != null)
@@ -1063,7 +1108,10 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
                         LayoutBuilder(
                           builder: (context, constraints) {
                             final setup = _setup();
-                            final studio = _studio();
+                            final studio = KeyedSubtree(
+                              key: _studioAnchor,
+                              child: _studio(),
+                            );
                             if (constraints.maxWidth < 880) {
                               return Column(
                                 children: [
@@ -1120,16 +1168,18 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
           children: [
             const Icon(Icons.graphic_eq_rounded, color: _cyan, size: 23),
             const SizedBox(width: 10),
-            const Text(
-              'YOUR PRIVATE AI PODCAST',
-              style: TextStyle(
-                color: _cyan,
-                letterSpacing: 1.7,
-                fontWeight: FontWeight.w700,
-                fontSize: 11,
+            const Expanded(
+              child: Text(
+                'YOUR PRIVATE AI PODCAST',
+                style: TextStyle(
+                  color: _cyan,
+                  letterSpacing: 1.7,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                ),
               ),
             ),
-            const Spacer(),
+            const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
@@ -1194,7 +1244,9 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     children: [
       Icon(icon, size: 14, color: _gold),
       const SizedBox(width: 6),
-      Text(text, style: const TextStyle(color: _muted, fontSize: 11)),
+      Flexible(
+        child: Text(text, style: const TextStyle(color: _muted, fontSize: 11)),
+      ),
     ],
   );
   Widget _card({required Widget child}) => Container(
@@ -1430,21 +1482,36 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
   }
 
   Widget _studio() {
+    final turns = _maps(_episode['turns']);
+    final hostTurns = turns.where((turn) => turn['speaker'] != 'user').length;
+    final preparing = _listening && _busy;
+    final checkingSources =
+        preparing && hostTurns == 1 && _episode['checkedAt'] == null;
+    final preparationSeconds = _preparingSince == null
+        ? 0
+        : math.max(0, _now.difference(_preparingSince!).inSeconds);
     final count = _hasEpisode
         ? (_episode['hostCount'] as num?)?.toInt() ?? _hosts
         : _hosts;
     final status = !_hasEpisode
         ? 'THE TABLE IS YOURS'
         : _terminal(_episode)
-        ? 'EPISODE COMPLETE'
+        ? (_episode['state'] == 'failed'
+              ? (hostTurns == 0 ? 'EPISODE COULD NOT START' : 'EPISODE STOPPED')
+              : 'EPISODE ENDED')
         : _recording
         ? 'YOUR MIC IS ON'
         : _transcribing
         ? 'PREPARING YOUR WORDS'
         : _listening
-        ? (_busy ? 'PREPARING THE NEXT TURN' : 'ON AIR · JUST FOR YOU')
+        ? (_busy
+              ? (hostTurns == 0
+                    ? 'PREPARING YOUR EPISODE'
+                    : checkingSources
+                    ? 'CHECKING SOURCES'
+                    : 'PREPARING THE NEXT TURN')
+              : 'ON AIR · JUST FOR YOU')
         : 'PAUSED · YOUR PACE';
-    final turns = _maps(_episode['turns']);
     final summary = _episode['summary'];
     return _card(
       child: Column(
@@ -1464,6 +1531,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
               Expanded(
                 child: Text(
                   status,
+                  key: const Key('pod-playback-status'),
                   style: const TextStyle(
                     color: _cyan,
                     fontWeight: FontWeight.w700,
@@ -1524,13 +1592,55 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
                 ? (_speaking != null
                       ? '${_speaker(_speaking!)} is speaking'
                       : _busy && _listening
-                      ? 'Checking context and preparing a short host turn…'
+                      ? (hostTurns == 0
+                            ? 'Preparing your host’s welcome. Audio will begin when the first turn is ready.'
+                            : checkingSources
+                            ? 'Checking sources for your topic before the hosts discuss the facts. Keep this screen open.'
+                            : 'Creating the next host’s audio. Playback will continue when it is ready.')
                       : _terminal(_episode)
-                      ? 'Revisit your transcript, sources and recap below.'
+                      ? (hostTurns == 0
+                            ? 'No host audio was generated for this episode. You can start a new episode when you are ready.'
+                            : 'Revisit your transcript, sources and recap below.')
                       : 'Resume when you are ready. Pausing does not extend the episode deadline.')
                 : 'Two or three AI perspectives, a question worth exploring, and a seat at the table for you.',
             style: const TextStyle(color: _muted, height: 1.6),
           ),
+          if (preparing) ...[
+            const SizedBox(height: 14),
+            Container(
+              key: const Key('pod-preparation-status'),
+              width: double.infinity,
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: _cyan.withValues(alpha: .07),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.hourglass_top_rounded,
+                    color: _cyan,
+                    size: 19,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      checkingSources
+                          ? 'Checking sources · ${preparationSeconds}s\nThe hosts are waiting for source context. No audio is playing during this step.'
+                          : hostTurns == 0
+                          ? 'Preparing welcome audio · ${preparationSeconds}s\nYour episode clock starts when the first turn is ready.'
+                          : 'Preparing audio · ${preparationSeconds}s',
+                      style: const TextStyle(
+                        color: _cyan,
+                        fontSize: 12,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (_live) ...[
             const SizedBox(height: 22),
             Row(
@@ -1580,19 +1690,20 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
             ),
             Row(
               children: [
-                TextButton.icon(
-                  key: const Key('pod-type'),
-                  onPressed:
-                      _recording ||
-                          _startingRecording ||
-                          _transcribing ||
-                          (_busy && !_listening)
-                      ? null
-                      : () => _chime(voice: false),
-                  icon: const Icon(Icons.keyboard_alt_outlined, size: 17),
-                  label: const Text('Type a contribution'),
+                Expanded(
+                  child: TextButton.icon(
+                    key: const Key('pod-type'),
+                    onPressed:
+                        _recording ||
+                            _startingRecording ||
+                            _transcribing ||
+                            (_busy && !_listening)
+                        ? null
+                        : () => _chime(voice: false),
+                    icon: const Icon(Icons.keyboard_alt_outlined, size: 17),
+                    label: const Text('Type a contribution'),
+                  ),
                 ),
-                const Spacer(),
                 TextButton(
                   key: const Key('pod-end'),
                   onPressed: () => _end(),
@@ -1869,11 +1980,13 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
             children: [
               const Icon(Icons.history_rounded, color: _cyan, size: 20),
               const SizedBox(width: 9),
-              const Text(
-                'Your listening shelf',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              const Expanded(
+                child: Text(
+                  'Your listening shelf',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               Text('${items.length}', style: const TextStyle(color: _muted)),
             ],
           ),

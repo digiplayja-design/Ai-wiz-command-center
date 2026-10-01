@@ -143,8 +143,8 @@ class PodClient {
           data['code']?.toString(),
         );
       }
-      // Conservative receive-time adjustment: the screen subtracts all request
-      // elapsed time, so network transit can never extend a server deadline.
+      // Conservative bound for establishing a first local deadline. A screen
+      // that already has an anchor must not subtract provider processing again.
       final elapsed = watch.elapsedMilliseconds;
       final episode = data['episode'];
       if (episode is Map) {
@@ -213,7 +213,7 @@ class PodClient {
       'POST',
       '/episodes/${Uri.encodeComponent(id)}/next',
       {'requestId': requestId, 'version': version},
-      const Duration(seconds: 180),
+      const Duration(seconds: 225),
     );
     result['episode'] = _episode(result['episode']);
     return result;
