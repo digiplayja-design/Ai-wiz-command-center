@@ -97,11 +97,13 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       _composing = false,
       _heartbeatBusy = false;
   bool _startingRecording = false;
+  bool _sendingContribution = false;
   bool _musicEnabled = true;
   String _category = 'technology', _style = 'balanced';
   int _duration = 300, _hosts = 2, _epoch = 0;
   String? _error, _notice, _speaking, _createRequestId;
-  String? _contributionRequestId, _submittedText;
+  String? _contributionRequestId, _submittedText, _transcriptionRequestId;
+  Uint8List? _recordedContributionWav;
   DateTime? _deadlineLocal, _serverDeadline, _preparingSince;
   Uint8List? _pendingWav;
   String? _pendingSpeaker, _pendingTurnId;
@@ -246,6 +248,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
             !_recording &&
             !_transcribing &&
             _musicEnabled,
+        remaining: _remaining == null ? null : Duration(seconds: _remaining!),
       ),
     );
   }
@@ -306,6 +309,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       _busy = false;
       _recording = false;
       _transcribing = false;
+      _sendingContribution = false;
       _startingRecording = false;
       _episode = {};
       _history = [];
@@ -314,6 +318,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       _speaking = null;
       _topic.clear();
       _contribution.clear();
+      _recordedContributionWav = null;
+      _transcriptionRequestId = null;
     });
     _syncWakeLock();
   }
@@ -426,6 +432,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     }
     if (!same) {
       _discardPreparation();
+      _recordedContributionWav = null;
+      _transcriptionRequestId = null;
       _unheardPreparedId = null;
       _deadlineLocal = null;
       _serverDeadline = null;
@@ -465,8 +473,11 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         _speaking = null;
         _recording = false;
         _transcribing = false;
+        _sendingContribution = false;
         _startingRecording = false;
         if (_terminal(next)) {
+          _recordedContributionWav = null;
+          _transcriptionRequestId = null;
           _unheardPreparedId = null;
           _pendingWav = null;
           _pendingTurnId = null;
@@ -898,6 +909,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       _busy = true;
       _recording = false;
       _transcribing = false;
+      _sendingContribution = false;
       _startingRecording = false;
       _speaking = null;
       if (message != null) _notice = message;
@@ -929,7 +941,43 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _resume() async {
+  Future<void> _waitForInterruptedWork(
+    int epoch, {
+    Duration timeout = const Duration(seconds: 8),
+    bool contribution = false,
+  }) async {
+    final interrupted = <Future<void>>[?_nextSettled, ?_cancelledPreparation];
+    if (interrupted.isEmpty) return;
+    setState(() {
+      _notice = contribution
+          ? 'Finishing the interrupted response before using your contribution…'
+          : 'Recovering the interrupted turn. Checking for saved audio before continuing…';
+    });
+    try {
+      final budget = Duration(
+        seconds: math.max(
+          1,
+          math.min(timeout.inSeconds, _remaining ?? timeout.inSeconds),
+        ),
+      );
+      await Future.wait(interrupted).timeout(budget);
+    } on TimeoutException {
+      throw PodException(
+        contribution
+            ? 'The previous response is still stopping. Your contribution is kept here. Try again in a moment; nothing was retried automatically.'
+            : 'The interrupted request is still settling. Tap Resume again in a moment. No extra audio has been generated.',
+      );
+    }
+    if (_current(epoch)) {
+      _backgroundNextEpoch = null;
+      _cancelledPreparation = null;
+    }
+  }
+
+  Future<void> _resume({
+    Future<void>? activated,
+    bool afterContribution = false,
+  }) async {
     if (!_alive() ||
         !_foreground ||
         !_live ||
@@ -939,8 +987,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         _remaining == 0) {
       return;
     }
-    final activation = _media.activate();
-    if (_musicEnabled) unawaited(_transition.activate());
+    final activation = activated ?? _media.activate();
+    if (activated == null && _musicEnabled) unawaited(_transition.activate());
     FocusScope.of(context).unfocus();
     final epoch = ++_epoch;
     setState(() {
@@ -960,29 +1008,14 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
           !_current(epoch)) {
         return;
       }
-      // Do not overlap a paid generation with the request that was in flight
-      // when the screen locked. It may already have committed reusable audio.
-      final pausedRequest = _backgroundNextEpoch == null ? null : _nextSettled;
-      final interrupted = <Future<void>>[
-        ?pausedRequest,
-        ?_cancelledPreparation,
-      ];
-      if (interrupted.isNotEmpty) {
-        setState(() {
-          _notice =
-              'Recovering the interrupted turn. Checking for saved audio before continuing…';
-        });
-        try {
-          await Future.wait(interrupted).timeout(const Duration(seconds: 8));
-        } on TimeoutException {
-          throw const PodException(
-            'The interrupted request is still settling. Tap Resume again in a moment. No extra audio has been generated.',
-          );
-        }
-      }
+      // A confirmed contribution may resume automatically from its Send tap.
+      // This only waits for already-started work; it never retries provider calls.
+      await _waitForInterruptedWork(
+        epoch,
+        timeout: Duration(seconds: afterContribution ? 30 : 8),
+        contribution: afterContribution,
+      );
       if (!_current(epoch) || !_foreground || !_live || _remaining == 0) return;
-      _backgroundNextEpoch = null;
-      _cancelledPreparation = null;
       final checked = await widget.client.episode(_s(_episode['id']));
       if (!_current(epoch)) return;
       _acceptEpisode(checked);
@@ -1041,6 +1074,10 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       if (_current(epoch)) {
         setState(() {
           _error = e.toString();
+          if (afterContribution) {
+            _notice =
+                'Your contribution is saved. Tap Resume when you are ready to continue.';
+          }
         });
         _reveal(_errorAnchor);
       }
@@ -1057,6 +1094,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     if (!_alive() || !_live) return;
     final id = _s(_episode['id']);
     final epoch = ++_epoch;
+    _recordedContributionWav = null;
+    _transcriptionRequestId = null;
     _discardPreparation();
     unawaited(_transition.stop());
     _pendingWav = null;
@@ -1071,6 +1110,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       _busy = false;
       _recording = false;
       _transcribing = false;
+      _sendingContribution = false;
       _startingRecording = false;
       _speaking = null;
       _episode = {
@@ -1125,6 +1165,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     }
     setState(() {
       _composing = true;
+      _recordedContributionWav = null;
+      _transcriptionRequestId = null;
     });
     if (!voice) return;
     final epoch = _epoch;
@@ -1176,34 +1218,95 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     try {
       final wav = await _media.stopRecording();
       if (!_current(epoch) || !_live || _remaining == 0) return;
-      final text = await widget.client.transcribe(
-        _s(_episode['id']),
-        wav,
-        requestId: podRequestId(),
-      );
-      if (!_current(epoch) || !_live || _remaining == 0) return;
-      setState(() {
-        _contribution.text = text;
-        _notice =
-            'Review or edit your words. Nothing is sent to the hosts until you choose Send.';
-      });
-    } catch (e) {
+      _recordedContributionWav = wav;
+      _transcriptionRequestId = podRequestId();
+      await _transcribeContribution(epoch);
+    } catch (error) {
       if (_current(epoch)) {
         setState(() {
-          _error = '${e.toString()} You can type your contribution instead.';
+          _error =
+              '${error.toString()} Your recording has not been sent to the hosts. You can type your contribution instead.';
         });
+        _reveal(_errorAnchor);
       }
     } finally {
+      if (_current(epoch)) setState(() => _transcribing = false);
+    }
+  }
+
+  Future<void> _retryTranscription() async {
+    if (!_alive() ||
+        !_foreground ||
+        !_live ||
+        _busy ||
+        _recording ||
+        _transcribing ||
+        _recordedContributionWav == null ||
+        _transcriptionRequestId == null ||
+        _remaining == 0) {
+      return;
+    }
+    final epoch = _epoch;
+    setState(() {
+      _transcribing = true;
+      _error = null;
+    });
+    try {
+      await _transcribeContribution(epoch);
+    } catch (error) {
       if (_current(epoch)) {
         setState(() {
-          _transcribing = false;
+          _error =
+              error is PodException &&
+                  error.code == 'pod_transcription_unavailable'
+              ? '${error.toString()} You can type below or choose Chime in to record again.'
+              : '${error.toString()} Your recording is kept here; retry when ready or type your contribution.';
         });
+        _reveal(_errorAnchor);
       }
+    } finally {
+      if (_current(epoch)) setState(() => _transcribing = false);
     }
+  }
+
+  Future<void> _transcribeContribution(int epoch) async {
+    final wav = _recordedContributionWav;
+    if (wav == null) return;
+    await _waitForInterruptedWork(
+      epoch,
+      timeout: const Duration(seconds: 30),
+      contribution: true,
+    );
+    if (!_current(epoch) || !_foreground || !_live || _remaining == 0) return;
+    setState(() => _notice = 'Transcribing your recording for review…');
+    String text;
+    try {
+      text = await widget.client.transcribe(
+        _s(_episode['id']),
+        wav,
+        requestId: _transcriptionRequestId!,
+      );
+    } on PodException catch (error) {
+      if (_current(epoch) && error.code == 'pod_transcription_unavailable') {
+        // This specific operation cannot be replayed. Keep its recording until
+        // the user chooses a new one, but never issue a fresh paid request here.
+        setState(() => _transcriptionRequestId = null);
+      }
+      rethrow;
+    }
+    if (!_current(epoch) || !_foreground || !_live || _remaining == 0) return;
+    setState(() {
+      _contribution.text = text;
+      _recordedContributionWav = null;
+      _transcriptionRequestId = null;
+      _notice =
+          'Review or edit your words, then choose Send & continue to hear the hosts respond.';
+    });
   }
 
   Future<void> _sendContribution() async {
     if (!_alive() ||
+        !_foreground ||
         !_live ||
         _busy ||
         _recording ||
@@ -1213,6 +1316,11 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     }
     final text = _contribution.text.trim();
     if (text.isEmpty) return;
+    // Keep this synchronous with Send. iPad browsers cannot unlock sound after
+    // a network await, even though that await was originally started by a tap.
+    final activation = _media.activate();
+    if (_musicEnabled) unawaited(_transition.activate());
+    FocusScope.of(context).unfocus();
     if (_submittedText != text) {
       _submittedText = text;
       _contributionRequestId = podRequestId();
@@ -1221,34 +1329,62 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     final epoch = _epoch;
     setState(() {
       _busy = true;
+      _sendingContribution = true;
       _error = null;
+      _notice = 'Sending your contribution…';
     });
     try {
+      await activation;
+      if (_media.error != null || _media.blocked) {
+        throw PodException(
+          _media.error ??
+              'Sound is blocked. Tap Send & continue again to enable it.',
+        );
+      }
+      if (!_current(epoch) || !_foreground || !_live || _remaining == 0) return;
+      await _waitForInterruptedWork(
+        epoch,
+        timeout: const Duration(seconds: 30),
+        contribution: true,
+      );
+      if (!_current(epoch) || !_foreground || !_live || _remaining == 0) return;
       final result = await widget.client.contribute(
         _s(_episode['id']),
         text,
         requestId: _contributionRequestId!,
       );
-      if (!_current(epoch)) return;
+      if (!_current(epoch) || !_foreground) return;
       _acceptEpisode(result);
+      if (!_current(epoch) || !_live || _remaining == 0) return;
       setState(() {
         _contribution.clear();
         _contributionRequestId = null;
         _submittedText = null;
-        _notice =
-            'Your contribution is in the conversation. Choose Resume to hear the hosts respond.';
+        _recordedContributionWav = null;
+        _transcriptionRequestId = null;
         _composing = false;
+        _sendingContribution = false;
+        _busy = false;
+        _notice =
+            'Your contribution is in the conversation. Bringing the hosts back…';
       });
-    } catch (e) {
+      // Only a confirmed save continues. Unknown outcomes keep the draft and
+      // original request ID for an explicit, idempotent Send retry.
+      await _resume(activated: activation, afterContribution: true);
+    } catch (error) {
       if (_current(epoch)) {
         setState(() {
-          _error = e.toString();
+          _error = error.toString();
+          _notice =
+              'Your words are kept here. Choose Send & continue to retry when you are ready.';
         });
+        _reveal(_errorAnchor);
       }
     } finally {
       if (_current(epoch)) {
         setState(() {
           _busy = false;
+          _sendingContribution = false;
         });
       }
     }
@@ -2192,6 +2328,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         ? 'YOUR MIC IS ON'
         : _transcribing
         ? 'PREPARING YOUR WORDS'
+        : _sendingContribution
+        ? 'ADDING YOUR CONTRIBUTION'
         : _listening
         ? (_busy
               ? (hostTurns == 0
@@ -2252,6 +2390,19 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
               ),
             ],
           ),
+          if (_musicEnabled && _transition.waiting && _transition.blocked) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Your browser needs a tap to enable transition music.',
+              style: TextStyle(color: _gold, fontSize: 11, height: 1.5),
+            ),
+            TextButton.icon(
+              key: const Key('pod-enable-transition-music'),
+              onPressed: () => unawaited(_transition.activate()),
+              icon: const Icon(Icons.music_note_rounded, size: 17),
+              label: const Text('Enable transition music'),
+            ),
+          ],
           const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
@@ -2589,6 +2740,15 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
               ),
             if (_composing && !_recording) ...[
               const SizedBox(height: 12),
+              if (_recordedContributionWav != null &&
+                  _transcriptionRequestId != null &&
+                  !_transcribing)
+                TextButton.icon(
+                  key: const Key('pod-retry-transcription'),
+                  onPressed: _busy ? null : _retryTranscription,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('Retry transcription'),
+                ),
               TextField(
                 key: const Key('pod-contribution'),
                 controller: _contribution,
@@ -2607,7 +2767,9 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
                   key: const Key('pod-send'),
                   onPressed: _transcribing || _busy ? null : _sendContribution,
                   icon: const Icon(Icons.arrow_upward_rounded, size: 18),
-                  label: const Text('Send'),
+                  label: Text(
+                    _sendingContribution ? 'Sending…' : 'Send & continue',
+                  ),
                   style: FilledButton.styleFrom(
                     minimumSize: const Size(80, 46),
                   ),

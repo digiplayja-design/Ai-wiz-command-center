@@ -60,7 +60,7 @@ class _FakePod extends PodClient {
   _FakePod(this.events)
     : super(backendBaseUrl: 'https://pod.test', headersBuilder: () => {});
   final List<String> events;
-  bool allowed = true;
+  bool allowed = true, cancelPreparing = true;
   Map<String, dynamic> current = _episode();
   final pending = <Completer<Map<String, dynamic>>>[];
   final actions = <String>[];
@@ -69,7 +69,13 @@ class _FakePod extends PodClient {
   final playedPrepared = <String>[];
   Map<String, dynamic>? preparedPlaybackResponse;
   Completer<Map<String, dynamic>>? consuming;
-  Object? consumeFailure;
+  Object? consumeFailure,
+      contributionFailure,
+      transcriptionFailure,
+      resumeFailure;
+  final contributionIds = <String>[];
+  final transcriptionIds = <String>[];
+  Completer<Map<String, dynamic>>? contributing;
   Completer<Map<String, dynamic>>? creating, interrupting;
   int creates = 0, transcriptions = 0, contributions = 0;
   @override
@@ -177,15 +183,22 @@ class _FakePod extends PodClient {
   Future<Map<String, dynamic>> control(String id, String action) async {
     actions.add(action);
     if (['pause', 'interrupt', 'end'].contains(action)) {
-      for (final pending in preparing) {
-        if (!pending.isCompleted) {
-          pending.completeError(const PodException('Preparation cancelled.'));
+      if (cancelPreparing) {
+        for (final pending in preparing) {
+          if (!pending.isCompleted) {
+            pending.completeError(const PodException('Preparation cancelled.'));
+          }
         }
       }
       if (action != 'pause') current = {...current, 'preparedId': null};
     }
     if (action == 'interrupt' && interrupting != null) {
       return interrupting!.future;
+    }
+    if (action == 'resume' && resumeFailure != null) {
+      final failure = resumeFailure!;
+      resumeFailure = null;
+      throw failure;
     }
     if (action != 'heartbeat') {
       current = {
@@ -208,6 +221,13 @@ class _FakePod extends PodClient {
     required String requestId,
   }) async {
     transcriptions++;
+    transcriptionIds.add(requestId);
+    events.add('transcribe');
+    if (transcriptionFailure != null) {
+      final failure = transcriptionFailure!;
+      transcriptionFailure = null;
+      throw failure;
+    }
     return 'My reviewed thought';
   }
 
@@ -218,6 +238,14 @@ class _FakePod extends PodClient {
     required String requestId,
   }) async {
     contributions++;
+    contributionIds.add(requestId);
+    events.add('contribute');
+    if (contributionFailure != null) {
+      final failure = contributionFailure!;
+      contributionFailure = null;
+      throw failure;
+    }
+    if (contributing != null) return contributing!.future;
     return current;
   }
 }
@@ -834,15 +862,254 @@ void main() {
       await tester.tap(find.byKey(const Key('pod-send')));
       await tester.pumpAndSettle();
       expect(client.contributions, 1);
-      await tester.ensureVisible(find.byKey(const Key('pod-pause-resume')));
-      await tester.tap(find.byKey(const Key('pod-pause-resume')));
-      await tester.pumpAndSettle();
+      expect(client.actions, contains('resume'));
       expect(client.pending.length, 2);
+      expect(
+        events.lastIndexOf('activate'),
+        lessThan(events.lastIndexOf('contribute')),
+      );
       expect(client.playedPrepared, isEmpty);
       expect(
         find.text('The next perspective stays private until playback.'),
         findsNothing,
       );
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'voice contribution is reviewed before Send and then returns to the pod',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events);
+      final media = _FakeMedia(events);
+      await _mount(tester, client, media, events, now: () => _time);
+      await _listen(tester);
+      client.complete(0, _turnResponse());
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('pod-chime')));
+      await tester.tap(find.byKey(const Key('pod-chime')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('pod-chime')));
+      await tester.pumpAndSettle();
+      expect(client.transcriptions, 1);
+      expect(client.contributions, 0);
+      expect(client.actions, isNot(contains('resume')));
+      expect(find.text('My reviewed thought'), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const Key('pod-send')));
+      await tester.tap(find.byKey(const Key('pod-send')));
+      await tester.pumpAndSettle();
+      expect(client.contributions, 1);
+      expect(client.actions, contains('resume'));
+      expect(client.pending.length, 2);
+      expect(media.activations, 2);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'uncertain Send outcome keeps draft and request ID for explicit retry',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events);
+      final media = _FakeMedia(events);
+      await _mount(tester, client, media, events, now: () => _time);
+      await _listen(tester);
+      client.complete(0, _turnResponse());
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('pod-type')));
+      await tester.tap(find.byKey(const Key('pod-type')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('pod-contribution')),
+        'Keep this thought.',
+      );
+      await tester.pumpAndSettle();
+      client.contributionFailure = const PodException(
+        'Server did not confirm the save.',
+        503,
+      );
+      await tester.ensureVisible(find.byKey(const Key('pod-send')));
+      await tester.tap(find.byKey(const Key('pod-send')));
+      await tester.pumpAndSettle();
+      expect(client.contributions, 1);
+      expect(client.actions, isNot(contains('resume')));
+      expect(client.pending.length, 1);
+      expect(find.text('Keep this thought.'), findsOneWidget);
+      expect(find.text('Server did not confirm the save.'), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const Key('pod-send')));
+      await tester.tap(find.byKey(const Key('pod-send')));
+      await tester.pumpAndSettle();
+      expect(client.contributions, 2);
+      expect(client.contributionIds.first, client.contributionIds.last);
+      expect(client.actions.where((action) => action == 'resume').length, 1);
+      expect(client.pending.length, 2);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'stopping preparation waits before transcription and retains WAV for explicit retry',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events)..cancelPreparing = false;
+      final media = _FakeMedia(events);
+      await _mount(tester, client, media, events, now: () => _time);
+      await _listen(tester);
+      client.complete(0, _turnResponse());
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('pod-chime')));
+      await tester.tap(find.byKey(const Key('pod-chime')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('pod-chime')));
+      await tester.pumpAndSettle();
+      expect(client.transcriptions, 0);
+      expect(
+        find.textContaining('Finishing the interrupted response'),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(seconds: 31));
+      await tester.pumpAndSettle();
+      expect(client.transcriptions, 0);
+      expect(find.byKey(const Key('pod-retry-transcription')), findsOneWidget);
+      client.preparing.single.completeError(
+        const PodException('Preparation cancelled.'),
+      );
+      await tester.pumpAndSettle();
+      expect(client.transcriptions, 0);
+      await tester.ensureVisible(
+        find.byKey(const Key('pod-retry-transcription')),
+      );
+      await tester.tap(find.byKey(const Key('pod-retry-transcription')));
+      await tester.pumpAndSettle();
+      expect(client.transcriptions, 1);
+      expect(media.recordings, 1);
+      expect(client.contributions, 0);
+      expect(find.text('My reviewed thought'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'transcription retry keeps its ID and definitive unavailability never becomes blank success',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events);
+      final media = _FakeMedia(events);
+      await _mount(tester, client, media, events, now: () => _time);
+      await _listen(tester);
+      client.complete(0, _turnResponse());
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('pod-chime')));
+      await tester.tap(find.byKey(const Key('pod-chime')));
+      await tester.pumpAndSettle();
+      client.transcriptionFailure = const PodException(
+        'Response not confirmed.',
+        503,
+      );
+      await tester.tap(find.byKey(const Key('pod-chime')));
+      await tester.pumpAndSettle();
+      expect(client.transcriptions, 1);
+      expect(find.byKey(const Key('pod-retry-transcription')), findsOneWidget);
+      client.transcriptionFailure = const PodException(
+        'This transcription cannot be recovered.',
+        409,
+        'pod_transcription_unavailable',
+      );
+      await tester.ensureVisible(
+        find.byKey(const Key('pod-retry-transcription')),
+      );
+      await tester.tap(find.byKey(const Key('pod-retry-transcription')));
+      await tester.pumpAndSettle();
+      expect(client.transcriptions, 2);
+      expect(client.transcriptionIds.first, client.transcriptionIds.last);
+      expect(find.byKey(const Key('pod-retry-transcription')), findsNothing);
+      expect(
+        find.textContaining('This transcription cannot be recovered.'),
+        findsOneWidget,
+      );
+      expect(find.text('My reviewed thought'), findsNothing);
+      expect(client.contributions, 0);
+      expect(client.actions, isNot(contains('resume')));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'backgrounding while old preparation settles never sends late transcription',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events)..cancelPreparing = false;
+      final media = _FakeMedia(events);
+      await _mount(tester, client, media, events, now: () => _time);
+      await _listen(tester);
+      client.complete(0, _turnResponse());
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('pod-chime')));
+      await tester.tap(find.byKey(const Key('pod-chime')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('pod-chime')));
+      await tester.pumpAndSettle();
+      _background(tester);
+      await tester.pumpAndSettle();
+      client.preparing.single.completeError(
+        const PodException('Preparation cancelled.'),
+      );
+      await tester.pumpAndSettle();
+      _foreground(tester);
+      await tester.pumpAndSettle();
+      expect(client.transcriptions, 0);
+      expect(client.contributions, 0);
+      expect(client.actions, isNot(contains('resume')));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'saved contribution with resume failure shows a recoverable Resume action',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events);
+      final media = _FakeMedia(events);
+      await _mount(tester, client, media, events, now: () => _time);
+      await _listen(tester);
+      client.complete(0, _turnResponse());
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('pod-type')));
+      await tester.tap(find.byKey(const Key('pod-type')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('pod-contribution')),
+        'A confirmed contribution.',
+      );
+      await tester.pumpAndSettle();
+      client.resumeFailure = const PodException('Connection interrupted.');
+      await tester.ensureVisible(find.byKey(const Key('pod-send')));
+      await tester.tap(find.byKey(const Key('pod-send')));
+      await tester.pumpAndSettle();
+      expect(client.contributions, 1);
+      expect(client.pending.length, 1);
+      expect(
+        find.textContaining('Your contribution is saved. Tap Resume'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('pod-pause-resume')))
+            .onPressed,
+        isNotNull,
+      );
+      await tester.ensureVisible(find.byKey(const Key('pod-pause-resume')));
+      await tester.tap(find.byKey(const Key('pod-pause-resume')));
+      await tester.pumpAndSettle();
+      expect(client.contributions, 1);
+      expect(client.pending.length, 2);
       await tester.pumpWidget(const SizedBox());
       await tester.pump();
     },

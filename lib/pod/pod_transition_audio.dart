@@ -14,8 +14,9 @@ PodTransitionAudio createPodTransitionAudio() =>
 abstract class PodTransitionBackend {
   bool get supported;
 
-  /// Called synchronously in the Listen / Resume gesture. Creates no audible
-  /// sound. A refused browser gesture returns false or throws.
+  /// First called synchronously in a Listen / Resume gesture, then reused to
+  /// resume that context before each new gap. Creates no audible sound.
+  /// A refused browser gesture or interruption returns false or throws.
   Future<bool> activate();
 
   /// Starts a quiet original pad and schedules its own audio-clock cutoff.
@@ -38,16 +39,21 @@ class PodTransitionAudio extends ChangeNotifier {
   PodTransitionAudio({
     required this.backend,
     this.startDelay = const Duration(milliseconds: 600),
-    this.maximumDuration = const Duration(seconds: 15),
+    this.maximumDuration = const Duration(seconds: 225),
+    DateTime Function()? now,
   }) : assert(startDelay >= Duration.zero),
        assert(maximumDuration > Duration.zero),
-       assert(maximumDuration <= const Duration(seconds: 15));
+       assert(maximumDuration <= const Duration(seconds: 225)),
+       _now = now ?? DateTime.now;
 
   final PodTransitionBackend backend;
   final Duration startDelay, maximumDuration;
+  final DateTime Function() _now;
   bool _closed = false;
   bool _ready = false, _waiting = false, _active = false;
+  bool _gestureRequested = false, _blocked = false;
   bool _delayElapsed = false, _startedThisGap = false;
+  DateTime? _gapEndsAt;
   int _activationRevision = 0, _gapRevision = 0;
   Timer? _delayTimer, _limitTimer;
 
@@ -55,6 +61,7 @@ class PodTransitionAudio extends ChangeNotifier {
   bool get ready => _ready;
   bool get waiting => _waiting;
   bool get active => _active;
+  bool get blocked => _blocked;
 
   void _changed() {
     if (!_closed) notifyListeners();
@@ -64,11 +71,24 @@ class PodTransitionAudio extends ChangeNotifier {
   /// Music failure is deliberately independent from the voice player.
   Future<void> activate() {
     if (_closed || !supported) return Future<void>.value();
+    _gestureRequested = true;
+    if (_blocked &&
+        _waiting &&
+        !_active &&
+        _gapEndsAt?.isAfter(_now()) == true) {
+      _startedThisGap = false;
+    }
+    return _resumeContext();
+  }
+
+  Future<void> _resumeContext() {
     final revision = ++_activationRevision;
+    _ready = false;
+    _blocked = false;
     try {
       return _finishActivation(backend.activate(), revision);
     } catch (_) {
-      if (!_closed && revision == _activationRevision) _ready = false;
+      if (!_closed && revision == _activationRevision) _blocked = true;
       _changed();
       return Future<void>.value();
     }
@@ -83,15 +103,21 @@ class PodTransitionAudio extends ChangeNotifier {
     }
     if (_closed || revision != _activationRevision) return;
     _ready = ready;
+    _blocked = !ready;
     _tryStart();
     _changed();
   }
 
-  Future<void> setWaiting(bool waiting) {
+  Future<void> setWaiting(bool waiting, {Duration? remaining}) {
     if (_closed) return Future<void>.value();
     if (!waiting) return _endWaiting(immediate: false);
     if (_waiting) return Future<void>.value();
+    final gapRemaining = remaining == null || remaining > maximumDuration
+        ? maximumDuration
+        : remaining;
+    if (gapRemaining <= startDelay) return Future<void>.value();
     _waiting = true;
+    _gapEndsAt = _now().add(gapRemaining);
     _delayElapsed = false;
     _startedThisGap = false;
     final revision = ++_gapRevision;
@@ -101,6 +127,20 @@ class PodTransitionAudio extends ChangeNotifier {
       _delayElapsed = true;
       _tryStart();
     });
+    _limitTimer?.cancel();
+    _limitTimer = Timer(gapRemaining, () {
+      if (_closed || revision != _gapRevision) return;
+      _startedThisGap = true;
+      _active = false;
+      _blocked = false;
+      unawaited(_stopBackend(immediate: true));
+      _changed();
+    });
+    // Mobile browsers may suspend or interrupt an already-unlocked context
+    // between speech clips. Recheck once per gap; never create audio without
+    // a prior Listen/Resume tap, never retry endlessly, and never await this
+    // optional operation in the panelist's speech path.
+    if (_gestureRequested && supported) unawaited(_resumeContext());
     _changed();
     return Future<void>.value();
   }
@@ -116,22 +156,20 @@ class PodTransitionAudio extends ChangeNotifier {
     }
     // A repeated waiting notification never restarts an expired sound bed.
     _startedThisGap = true;
+    // Activation time counts against the same budget. The audio clock and a
+    // separate wall-clock timer both stop the bed at the episode/request limit.
+    final duration = _gapEndsAt?.difference(_now()) ?? Duration.zero;
+    if (duration <= Duration.zero) return;
     try {
-      _active = backend.start(maximumDuration);
-      if (!_active) _ready = false;
+      _active = backend.start(duration);
+      if (!_active) {
+        _ready = false;
+        _blocked = true;
+      }
     } catch (_) {
       _ready = _active = false;
+      _blocked = true;
       unawaited(_stopBackend(immediate: true));
-    }
-    if (_active) {
-      final revision = _gapRevision;
-      _limitTimer?.cancel();
-      _limitTimer = Timer(maximumDuration, () {
-        if (_closed || revision != _gapRevision) return;
-        _active = false;
-        unawaited(_stopBackend(immediate: true));
-        _changed();
-      });
     }
     _changed();
   }
@@ -142,6 +180,8 @@ class PodTransitionAudio extends ChangeNotifier {
     if (_closed) return Future<void>.value();
     ++_activationRevision;
     _ready = false;
+    _gestureRequested = false;
+    _blocked = false;
     return _endWaiting(immediate: immediate);
   }
 
@@ -150,6 +190,7 @@ class PodTransitionAudio extends ChangeNotifier {
     _waiting = false;
     _active = false;
     _delayElapsed = false;
+    _gapEndsAt = null;
     _delayTimer?.cancel();
     _limitTimer?.cancel();
     _delayTimer = _limitTimer = null;
