@@ -37,7 +37,9 @@ abstract class PodMedia extends ChangeNotifier {
   /// Completes at the end of this turn, or when explicitly stopped. A failure
   /// throws [PodMediaException]. Keep the turn bytes for an explicit retry;
   /// blocked sound must not cause another paid generation request.
-  Future<void> play(Uint8List wav);
+  /// [onStarted] runs only after the device accepts speech playback, so callers
+  /// can prepare the following turn without spending usage on blocked sound.
+  Future<void> play(Uint8List wav, {VoidCallback? onStarted});
   Future<void> stop();
   Future<void> startRecording();
 
@@ -49,7 +51,7 @@ abstract class PodMedia extends ChangeNotifier {
 /// Injectable device boundaries. Neither constructor may request permissions.
 abstract class PodPlaybackBackend {
   Future<void> activate();
-  Future<void> play(Uint8List wav);
+  Future<void> play(Uint8List wav, {VoidCallback? onStarted});
   Future<void> stop();
   Future<void> dispose();
 }
@@ -159,7 +161,7 @@ class PodMediaController extends PodMedia {
   }
 
   @override
-  Future<void> play(Uint8List wav) async {
+  Future<void> play(Uint8List wav, {VoidCallback? onStarted}) async {
     if (_closed) return;
     if (recording || _starting) {
       throw const PodMediaException('Finish recording before resuming sound.');
@@ -167,13 +169,23 @@ class PodMediaController extends PodMedia {
     final revision = ++_playRevision;
     _playCancelled?.complete();
     final cancelled = _playCancelled = Completer<void>();
-    playing = true;
+    playing = false;
     blocked = false;
     error = null;
     _changed();
     try {
       await Future.any<void>([
-        playback.play(wav).timeout(const Duration(seconds: 45)),
+        playback
+            .play(
+              wav,
+              onStarted: () {
+                if (_closed || revision != _playRevision || playing) return;
+                playing = true;
+                _changed();
+                onStarted?.call();
+              },
+            )
+            .timeout(const Duration(seconds: 45)),
         cancelled.future,
       ]);
     } catch (e) {

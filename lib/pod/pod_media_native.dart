@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 
 import 'pod_media.dart';
 import 'pod_media_recorder.dart';
@@ -36,7 +36,7 @@ class NativePodPlayback implements PodPlaybackBackend {
   Future<void> activate() async {}
 
   @override
-  Future<void> play(Uint8List wav) {
+  Future<void> play(Uint8List wav, {VoidCallback? onStarted}) {
     if (_closed) return Future<void>.value();
     final revision = ++_revision;
     _finish();
@@ -55,7 +55,11 @@ class NativePodPlayback implements PodPlaybackBackend {
             if (!_closed && revision == _revision) _finish();
           });
           await _player.play(BytesSource(wav, mimeType: 'audio/wav'));
-          if (_closed || revision != _revision) await _player.stop();
+          if (_closed || revision != _revision) {
+            await _player.stop();
+          } else {
+            onStarted?.call();
+          }
         } catch (_) {
           if (!_closed && revision == _revision && !ended.isCompleted) {
             ended.completeError(

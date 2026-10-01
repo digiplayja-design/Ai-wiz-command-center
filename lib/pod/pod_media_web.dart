@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:js_interop';
-import 'dart:typed_data';
 
 import 'package:web/web.dart' as web;
+import 'package:flutter/foundation.dart';
 
 import 'pod_media.dart';
 import 'pod_media_recorder.dart';
@@ -59,7 +59,7 @@ class WebPodPlayback implements PodPlaybackBackend {
   }
 
   @override
-  Future<void> play(Uint8List wav) {
+  Future<void> play(Uint8List wav, {VoidCallback? onStarted}) {
     if (_closed) return Future<void>.value();
     _reset();
     final revision = _revision;
@@ -90,7 +90,9 @@ class WebPodPlayback implements PodPlaybackBackend {
           .toDart
           .timeout(const Duration(seconds: 5))
           .then<void>(
-            (_) {},
+            (_) {
+              if (!_closed && revision == _revision) onStarted?.call();
+            },
             onError: (Object _, StackTrace _) {
               if (_closed || revision != _revision) return;
               _fail(

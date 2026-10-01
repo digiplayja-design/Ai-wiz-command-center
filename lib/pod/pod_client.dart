@@ -219,6 +219,39 @@ class PodClient {
     return result;
   }
 
+  /// Prepares at most one future turn without publishing it to the transcript.
+  /// The request ID also identifies that prepared turn for playback.
+  Future<Map<String, dynamic>> prepare(
+    String id, {
+    required String requestId,
+    required int version,
+  }) async {
+    final result = await _request(
+      'POST',
+      '/episodes/${Uri.encodeComponent(id)}/prepare',
+      {'requestId': requestId, 'version': version},
+      const Duration(seconds: 225),
+    );
+    result['episode'] = _episode(result['episode']);
+    return result;
+  }
+
+  /// Claims already generated audio. A missing cache entry never regenerates
+  /// speech and this transport never retries either endpoint automatically.
+  Future<Map<String, dynamic>> playPrepared(
+    String id, {
+    required String requestId,
+    required int version,
+  }) async {
+    final result = await _request(
+      'POST',
+      '/episodes/${Uri.encodeComponent(id)}/play-prepared',
+      {'requestId': requestId, 'version': version},
+    );
+    result['episode'] = _episode(result['episode']);
+    return result;
+  }
+
   Future<Map<String, dynamic>> control(String id, String action) async =>
       _episode(
         (await _request(

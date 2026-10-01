@@ -10,6 +10,7 @@ import 'pod_client.dart';
 import 'pod_media.dart';
 import 'pod_artwork.dart';
 import 'pod_wake_lock.dart';
+import 'pod_transition_audio.dart';
 
 const _navy = Color(0xFF080D20);
 const _panel = Color(0xFF11192E);
@@ -42,6 +43,17 @@ Color _speakerColor(String value) => switch (value) {
   _ => _cyan,
 };
 
+/// One buffered turn only. Preparing it never exposes unheard transcript text.
+class _PreparedPodTurn {
+  _PreparedPodTurn(this.requestId);
+  _PreparedPodTurn.ready(this.requestId) {
+    settled.complete();
+  }
+  final String requestId;
+  final settled = Completer<void>();
+  Object? error;
+}
+
 class PodScreen extends StatefulWidget {
   const PodScreen({
     super.key,
@@ -49,6 +61,7 @@ class PodScreen extends StatefulWidget {
     required this.ensureConsent,
     this.media,
     this.wakeLock,
+    this.transitionAudio,
     this.disposeClient = true,
     this.openLink,
     this.now,
@@ -57,6 +70,7 @@ class PodScreen extends StatefulWidget {
   final Future<bool> Function() ensureConsent;
   final PodMedia? media;
   final PodWakeLock? wakeLock;
+  final PodTransitionAudio? transitionAudio;
   final bool disposeClient;
   final Future<bool> Function(Uri)? openLink;
   final DateTime Function()? now;
@@ -67,6 +81,7 @@ class PodScreen extends StatefulWidget {
 class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
   late final PodMedia _media;
   late final PodWakeLock _wakeLock;
+  late final PodTransitionAudio _transition;
   final _topic = TextEditingController();
   final _contribution = TextEditingController();
   final _scroll = ScrollController();
@@ -82,6 +97,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       _composing = false,
       _heartbeatBusy = false;
   bool _startingRecording = false;
+  bool _musicEnabled = true;
   String _category = 'technology', _style = 'balanced';
   int _duration = 300, _hosts = 2, _epoch = 0;
   String? _error, _notice, _speaking, _createRequestId;
@@ -91,6 +107,9 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
   String? _pendingSpeaker, _pendingTurnId;
   int? _backgroundNextEpoch;
   Future<void>? _nextSettled;
+  _PreparedPodTurn? _preparedTurn;
+  Future<void>? _cancelledPreparation;
+  String? _unheardPreparedId;
   Timer? _clockTimer, _deadlineTimer, _heartbeatTimer, _recordingTimer;
 
   DateTime get _now => widget.now?.call() ?? DateTime.now();
@@ -150,6 +169,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     _media.addListener(_mediaChanged);
     _wakeLock = widget.wakeLock ?? createPodWakeLock();
     _wakeLock.addListener(_wakeLockChanged);
+    _transition = widget.transitionAudio ?? createPodTransitionAudio();
+    _transition.addListener(_transitionChanged);
     widget.client.onAccessDenied = _lock;
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && _live && _deadlineLocal != null) {
@@ -209,6 +230,46 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     if (mounted && !_locked) setState(() {});
   }
 
+  void _transitionChanged() {
+    if (mounted && !_locked) setState(() {});
+  }
+
+  void _syncTransition() {
+    unawaited(
+      _transition.setWaiting(
+        mounted &&
+            !_locked &&
+            _foreground &&
+            _live &&
+            _listening &&
+            _busy &&
+            !_recording &&
+            !_transcribing &&
+            _musicEnabled,
+      ),
+    );
+  }
+
+  void _setMusicEnabled(bool enabled) {
+    if (!_alive()) return;
+    // Unlocking the independent music sink also requires this real user tap.
+    if (enabled) unawaited(_transition.activate());
+    setState(() => _musicEnabled = enabled);
+    if (enabled) {
+      _syncTransition();
+    } else {
+      unawaited(_transition.stop());
+    }
+  }
+
+  void _discardPreparation() {
+    final prepared = _preparedTurn;
+    if (prepared != null && !prepared.settled.isCompleted) {
+      _cancelledPreparation = prepared.settled.future;
+    }
+    _preparedTurn = null;
+  }
+
   void _syncWakeLock({bool retry = false}) {
     unawaited(
       _wakeLock.setRequested(
@@ -229,9 +290,12 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
   void _lock() {
     if (!mounted || _locked) return;
     _epoch++;
+    _discardPreparation();
+    unawaited(_transition.stop());
     _pendingWav = null;
     _pendingTurnId = null;
     _backgroundNextEpoch = null;
+    _unheardPreparedId = null;
     _deadlineTimer?.cancel();
     _recordingTimer?.cancel();
     unawaited(_media.stop());
@@ -258,6 +322,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _epoch++;
+    _discardPreparation();
     _clockTimer?.cancel();
     _heartbeatTimer?.cancel();
     _deadlineTimer?.cancel();
@@ -267,6 +332,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     _media.dispose();
     _wakeLock.removeListener(_wakeLockChanged);
     _wakeLock.dispose();
+    _transition.removeListener(_transitionChanged);
+    _transition.dispose();
     // Give the authenticated end request a chance to complete before closing its
     // transport. Server deadline/heartbeat leases also bound a lost connection.
     final id = _live ? _s(_episode['id']) : null;
@@ -351,11 +418,15 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     final stopped = _terminal(next) || unexpectedPause;
     if (stopped) {
       _epoch++;
+      _discardPreparation();
+      unawaited(_transition.stop());
       _recordingTimer?.cancel();
       unawaited(_media.stop());
       unawaited(_media.cancelRecording());
     }
     if (!same) {
+      _discardPreparation();
+      _unheardPreparedId = null;
       _deadlineLocal = null;
       _serverDeadline = null;
       _pendingWav = null;
@@ -396,6 +467,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         _transcribing = false;
         _startingRecording = false;
         if (_terminal(next)) {
+          _unheardPreparedId = null;
           _pendingWav = null;
           _pendingTurnId = null;
           _backgroundNextEpoch = null;
@@ -458,6 +530,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     }
     // Preserve the browser's user gesture: activate is the first asynchronous call.
     final activation = _media.activate();
+    if (_musicEnabled) unawaited(_transition.activate());
     FocusScope.of(context).unfocus();
     final epoch = ++_epoch;
     var beganCreation = false;
@@ -546,6 +619,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       _speaking = null;
       _preparingSince = _now;
     });
+    _syncTransition();
     final settled = Completer<void>();
     _nextSettled = settled.future;
     try {
@@ -558,26 +632,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         _retainBackgroundAudio(result, epoch);
         return;
       }
-      _acceptEpisode(_map(result['episode']));
-      if (!_current(epoch) || !_listening || !_live || _remaining == 0) return;
-      final audio = _map(result['audio']);
-      final turn = _map(result['turn']);
-      if (result['audioUnavailable'] == true || audio['base64'] is! String) {
-        await _pause(
-          message:
-              'This turn is available in the transcript. Audio is unavailable; choose Resume to continue with the next turn.',
-        );
-        return;
-      }
-      if (audio['mime'] != 'audio/wav') {
-        throw const PodException(
-          'This audio format is unavailable. Your transcript is saved.',
-        );
-      }
-      _pendingWav = base64Decode(audio['base64'] as String);
-      _pendingSpeaker = _s(turn['speaker']);
-      _pendingTurnId = _s(turn['id']);
-      await _playPending(epoch);
+      await _playResult(result, epoch);
     } catch (e) {
       if (_current(epoch)) {
         await _pause(
@@ -616,8 +671,144 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       _pendingWav = base64Decode(audio['base64'] as String);
       _pendingSpeaker = _s(turn['speaker']);
       _pendingTurnId = turnId;
+      _unheardPreparedId = null;
     } catch (_) {
       // A malformed or unavailable response remains transcript-only.
+    }
+  }
+
+  Future<void> _playResult(Map<String, dynamic> result, int epoch) async {
+    _acceptEpisode(_map(result['episode']));
+    if (!_current(epoch) || !_listening || !_live || _remaining == 0) return;
+    final audio = _map(result['audio']);
+    final turn = _map(result['turn']);
+    if (result['audioUnavailable'] == true || audio['base64'] is! String) {
+      _unheardPreparedId = null;
+      await _pause(
+        message:
+            'This turn is available in the transcript. Audio is unavailable; choose Resume to continue with the next turn.',
+      );
+      return;
+    }
+    if (audio['mime'] != 'audio/wav') {
+      throw const PodException(
+        'This audio format is unavailable. Your transcript is saved.',
+      );
+    }
+    _pendingWav = base64Decode(audio['base64'] as String);
+    _pendingSpeaker = _s(turn['speaker']);
+    _pendingTurnId = _s(turn['id']);
+    _unheardPreparedId = null;
+    await _playPending(epoch);
+  }
+
+  void _prepareAhead(int epoch) {
+    if (!_current(epoch) ||
+        !_foreground ||
+        !_listening ||
+        !_live ||
+        _remaining == 0 ||
+        _preparedTurn != null ||
+        _episode['summary'] != null) {
+      return;
+    }
+    final prepared = _PreparedPodTurn(podRequestId());
+    _preparedTurn = prepared;
+    final episodeId = _s(_episode['id']);
+    final version = (_episode['version'] as num).toInt();
+    unawaited(() async {
+      try {
+        final result = await widget.client.prepare(
+          episodeId,
+          requestId: prepared.requestId,
+          version: version,
+        );
+        if (result['prepared'] != true ||
+            result['preparedId'] != prepared.requestId ||
+            result['audioUnavailable'] == true) {
+          throw const PodException(
+            'The next voice could not be prepared. Pause and resume when you are ready to try again.',
+          );
+        }
+        // Do not accept its episode or reveal its speaker/text here. A prepared
+        // turn enters the transcript only when play-prepared claims it.
+      } catch (error) {
+        prepared.error = error;
+      } finally {
+        prepared.settled.complete();
+      }
+    }());
+  }
+
+  Future<void> _handoffPrepared(int epoch) async {
+    if (!_current(epoch) ||
+        !_foreground ||
+        !_listening ||
+        !_live ||
+        _remaining == 0) {
+      return;
+    }
+    final prepared = _preparedTurn;
+    setState(() {
+      _busy = true;
+      _speaking = null;
+      _preparingSince = _now;
+    });
+    _syncTransition();
+    try {
+      if (prepared == null) {
+        throw const PodException(
+          'The next voice is not ready. Pause and resume to continue.',
+        );
+      }
+      await prepared.settled.future;
+      if (!_current(epoch) ||
+          !_foreground ||
+          !_listening ||
+          !_live ||
+          _remaining == 0 ||
+          !identical(_preparedTurn, prepared)) {
+        return;
+      }
+      if (prepared.error != null) throw prepared.error!;
+      _preparedTurn = null;
+      await _playPrepared(epoch, prepared.requestId);
+    } catch (error) {
+      if (_current(epoch)) {
+        await _pause(
+          error: error.toString(),
+          message: 'Playback paused. Nothing is retried automatically.',
+        );
+      }
+    }
+  }
+
+  Future<void> _playPrepared(int epoch, String requestId) async {
+    if (_preparedTurn?.requestId == requestId) _preparedTurn = null;
+    // Retain this ID until audio reaches this screen. If a response is lost after
+    // commit, explicit Resume recovers the SAME turn without generating again.
+    _unheardPreparedId = requestId;
+    final settled = Completer<void>();
+    _nextSettled = settled.future;
+    try {
+      final result = await widget.client.playPrepared(
+        _s(_episode['id']),
+        requestId: requestId,
+        version: (_episode['version'] as num).toInt(),
+      );
+      if (!_current(epoch) || !_foreground || !_listening) {
+        _retainBackgroundAudio(result, epoch);
+        return;
+      }
+      await _playResult(result, epoch);
+    } on PodException catch (error) {
+      if (_current(epoch) && error.code == 'pod_prepared_audio_unavailable') {
+        _unheardPreparedId = null;
+      }
+      rethrow;
+    } finally {
+      settled.complete();
+      if (identical(_nextSettled, settled.future)) _nextSettled = null;
     }
   }
 
@@ -631,11 +822,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         _remaining == 0) {
       return;
     }
-    setState(() {
-      _busy = false;
-      _speaking = _pendingSpeaker;
-    });
-    await _media.play(wav);
+    // The transition fades completely before speech; it never masks a panelist.
+    await _transition.setWaiting(false);
     if (!_current(epoch) ||
         !_foreground ||
         !_listening ||
@@ -643,11 +831,44 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         _remaining == 0) {
       return;
     }
+    var started = false;
+    await _media.play(
+      wav,
+      onStarted: () {
+        if (!_current(epoch) ||
+            !_foreground ||
+            !_listening ||
+            !_live ||
+            _remaining == 0) {
+          return;
+        }
+        started = true;
+        setState(() {
+          _busy = false;
+          _speaking = _pendingSpeaker;
+        });
+        _prepareAhead(epoch);
+      },
+    );
+    if (!_current(epoch) ||
+        !_foreground ||
+        !_listening ||
+        !_live ||
+        _remaining == 0) {
+      return;
+    }
+    if (!started) {
+      throw const PodException('Sound did not start. Tap Resume to try again.');
+    }
     _pendingWav = null;
     _pendingSpeaker = null;
     _pendingTurnId = null;
-    // Exactly one next request, only after the preceding clip really ended.
-    unawaited(_next(epoch));
+    // The prepared turn is consumed only after the preceding clip really ended.
+    if (_episode['summary'] != null) {
+      unawaited(_next(epoch));
+    } else {
+      unawaited(_handoffPrepared(epoch));
+    }
   }
 
   Future<void> _pause({
@@ -663,7 +884,10 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         ? _epoch
         : null;
     final epoch = ++_epoch;
+    _discardPreparation();
+    unawaited(_transition.stop());
     if (action == 'interrupt') {
+      _unheardPreparedId = null;
       _pendingWav = null;
       _pendingSpeaker = null;
       _pendingTurnId = null;
@@ -716,6 +940,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       return;
     }
     final activation = _media.activate();
+    if (_musicEnabled) unawaited(_transition.activate());
     FocusScope.of(context).unfocus();
     final epoch = ++_epoch;
     setState(() {
@@ -738,13 +963,17 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       // Do not overlap a paid generation with the request that was in flight
       // when the screen locked. It may already have committed reusable audio.
       final pausedRequest = _backgroundNextEpoch == null ? null : _nextSettled;
-      if (pausedRequest != null) {
+      final interrupted = <Future<void>>[
+        ?pausedRequest,
+        ?_cancelledPreparation,
+      ];
+      if (interrupted.isNotEmpty) {
         setState(() {
           _notice =
               'Recovering the interrupted turn. Checking for saved audio before continuing…';
         });
         try {
-          await pausedRequest.timeout(const Duration(seconds: 8));
+          await Future.wait(interrupted).timeout(const Duration(seconds: 8));
         } on TimeoutException {
           throw const PodException(
             'The interrupted request is still settling. Tap Resume again in a moment. No extra audio has been generated.',
@@ -753,6 +982,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       }
       if (!_current(epoch) || !_foreground || !_live || _remaining == 0) return;
       _backgroundNextEpoch = null;
+      _cancelledPreparation = null;
       final checked = await widget.client.episode(_s(_episode['id']));
       if (!_current(epoch)) return;
       _acceptEpisode(checked);
@@ -761,6 +991,10 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       if (!_current(epoch)) return;
       _acceptEpisode(result);
       if (!_live || _remaining == 0) return;
+      final preparedId = _s(_episode['preparedId']);
+      if (preparedId.isNotEmpty) {
+        _preparedTurn = _PreparedPodTurn.ready(preparedId);
+      }
       // Resume returns the authoritative state after its version change. A
       // different tab may have advanced the conversation since the GET above.
       if (_pendingTurnId != null &&
@@ -777,9 +1011,18 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       });
       _syncWakeLock();
       _reveal(_studioAnchor);
-      if (_pendingWav != null) {
+      if (_pendingWav != null || _unheardPreparedId != null) {
         try {
-          await _playPending(epoch);
+          if (_pendingWav != null) {
+            await _playPending(epoch);
+          } else {
+            setState(() {
+              _busy = true;
+              _preparingSince = _now;
+            });
+            _syncTransition();
+            await _playPrepared(epoch, _unheardPreparedId!);
+          }
         } catch (e) {
           if (_current(epoch)) {
             await _pause(
@@ -789,6 +1032,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
             );
           }
         }
+      } else if (_preparedTurn != null) {
+        unawaited(_handoffPrepared(epoch));
       } else {
         unawaited(_next(epoch));
       }
@@ -812,10 +1057,13 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     if (!_alive() || !_live) return;
     final id = _s(_episode['id']);
     final epoch = ++_epoch;
+    _discardPreparation();
+    unawaited(_transition.stop());
     _pendingWav = null;
     _pendingSpeaker = null;
     _pendingTurnId = null;
     _backgroundNextEpoch = null;
+    _unheardPreparedId = null;
     _deadlineTimer?.cancel();
     _recordingTimer?.cancel();
     setState(() {
@@ -1979,6 +2227,31 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
             'Different minds. One conversation.',
             style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
           ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.music_note_rounded, color: _violet, size: 19),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  _transition.supported
+                      ? 'Studio transitions · soft music between voices'
+                      : 'Studio transitions are unavailable on this device',
+                  style: const TextStyle(
+                    color: _muted,
+                    fontSize: 11,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+              Switch.adaptive(
+                key: const Key('pod-transition-music'),
+                value: _musicEnabled && _transition.supported,
+                onChanged: _transition.supported ? _setMusicEnabled : null,
+                activeThumbColor: _cyan,
+              ),
+            ],
+          ),
           const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
@@ -2191,7 +2464,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
                   Expanded(
                     child: Text(
                       checkingSources
-                          ? 'Checking sources · ${preparationSeconds}s\nThe hosts are waiting for source context. No audio is playing during this step.'
+                          ? 'Checking sources · ${preparationSeconds}s\nThe hosts are reviewing source context before the discussion begins.'
                           : hostTurns == 0
                           ? 'Preparing welcome audio · ${preparationSeconds}s\nYour episode clock starts when the first turn is ready.'
                           : 'Preparing audio · ${preparationSeconds}s',

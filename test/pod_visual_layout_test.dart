@@ -85,7 +85,7 @@ class _SilentMedia extends PodMedia {
   @override
   Future<void> cancelRecording() async {}
   @override
-  Future<void> play(Uint8List wav) async =>
+  Future<void> play(Uint8List wav, {VoidCallback? onStarted}) async =>
       throw StateError('Setup must not play audio.');
   @override
   Future<void> startRecording() async =>

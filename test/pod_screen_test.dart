@@ -6,6 +6,7 @@ import 'package:ai_wiz_command_center/pod/pod_client.dart';
 import 'package:ai_wiz_command_center/pod/pod_media.dart';
 import 'package:ai_wiz_command_center/pod/pod_screen.dart';
 import 'package:ai_wiz_command_center/pod/pod_wake_lock.dart';
+import 'package:ai_wiz_command_center/pod/pod_transition_audio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -63,6 +64,12 @@ class _FakePod extends PodClient {
   Map<String, dynamic> current = _episode();
   final pending = <Completer<Map<String, dynamic>>>[];
   final actions = <String>[];
+  final preparing = <Completer<Map<String, dynamic>>>[];
+  final prepareIds = <String>[];
+  final playedPrepared = <String>[];
+  Map<String, dynamic>? preparedPlaybackResponse;
+  Completer<Map<String, dynamic>>? consuming;
+  Object? consumeFailure;
   Completer<Map<String, dynamic>>? creating, interrupting;
   int creates = 0, transcriptions = 0, contributions = 0;
   @override
@@ -101,6 +108,64 @@ class _FakePod extends PodClient {
     return result.future;
   }
 
+  @override
+  Future<Map<String, dynamic>> prepare(
+    String id, {
+    required String requestId,
+    required int version,
+  }) {
+    events.add('prepare');
+    final result = Completer<Map<String, dynamic>>();
+    preparing.add(result);
+    prepareIds.add(requestId);
+    return result.future;
+  }
+
+  void completePreparation(int index) {
+    current = {...current, 'preparedId': prepareIds[index]};
+    preparing[index].complete({
+      'episode': current,
+      'prepared': true,
+      'preparedId': prepareIds[index],
+    });
+  }
+
+  @override
+  Future<Map<String, dynamic>> playPrepared(
+    String id, {
+    required String requestId,
+    required int version,
+  }) async {
+    events.add('play-prepared');
+    playedPrepared.add(requestId);
+    if (consumeFailure != null) {
+      final failure = consumeFailure!;
+      consumeFailure = null;
+      throw failure;
+    }
+    if (consuming != null) return consuming!.future;
+    final turn = {
+      'id': 'turn-${playedPrepared.length + 1}',
+      'seq': playedPrepared.length + 1,
+      'speaker': 'analyst',
+      'text': 'The next perspective stays private until playback.',
+      'sourceIds': <String>[],
+    };
+    final response =
+        preparedPlaybackResponse ??
+        {
+          ..._turnResponse(),
+          'turn': turn,
+          'episode': {
+            ...current,
+            'preparedId': null,
+            'turns': [...current['turns'] as List, turn],
+          },
+        };
+    current = Map<String, dynamic>.from(response['episode']);
+    return response;
+  }
+
   void complete(int index, Map<String, dynamic> response) {
     current = Map<String, dynamic>.from(response['episode']);
     pending[index].complete(response);
@@ -111,6 +176,14 @@ class _FakePod extends PodClient {
   @override
   Future<Map<String, dynamic>> control(String id, String action) async {
     actions.add(action);
+    if (['pause', 'interrupt', 'end'].contains(action)) {
+      for (final pending in preparing) {
+        if (!pending.isCompleted) {
+          pending.completeError(const PodException('Preparation cancelled.'));
+        }
+      }
+      if (action != 'pause') current = {...current, 'preparedId': null};
+    }
     if (action == 'interrupt' && interrupting != null) {
       return interrupting!.future;
     }
@@ -153,7 +226,8 @@ class _FakeMedia extends PodMedia {
   _FakeMedia(this.events);
   final List<String> events;
   int activations = 0, plays = 0, stops = 0, recordings = 0, cancellations = 0;
-  bool failPlay = false;
+  bool failPlay = false, autoStart = true;
+  VoidCallback? playbackStarted;
   Completer<void>? playback;
   Completer<void>? microphonePermission;
   @override
@@ -177,7 +251,7 @@ class _FakeMedia extends PodMedia {
   }
 
   @override
-  Future<void> play(Uint8List wav) async {
+  Future<void> play(Uint8List wav, {VoidCallback? onStarted}) async {
     plays++;
     if (failPlay) {
       failPlay = false;
@@ -186,10 +260,17 @@ class _FakeMedia extends PodMedia {
         blocked: true,
       );
     }
-    playing = true;
+    playbackStarted = onStarted;
+    if (autoStart) begin();
     playback = Completer<void>();
     await playback!.future;
     playing = false;
+  }
+
+  void begin() {
+    playing = true;
+    playbackStarted?.call();
+    playbackStarted = null;
   }
 
   void finish() {
@@ -248,6 +329,31 @@ class _WakeBackend implements PodWakeLockBackend {
   }
 }
 
+class _TransitionBackend implements PodTransitionBackend {
+  final events = <String>[];
+  @override
+  bool get supported => true;
+  @override
+  Future<bool> activate() async {
+    events.add('activate');
+    return true;
+  }
+
+  @override
+  bool start(Duration maximumDuration) {
+    events.add('start');
+    return true;
+  }
+
+  @override
+  Future<void> stop({required bool immediate}) async {
+    events.add(immediate ? 'stop' : 'fade');
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
+
 Future<void> _mount(
   WidgetTester tester,
   _FakePod client,
@@ -255,6 +361,7 @@ Future<void> _mount(
   List<String> events, {
   DateTime Function()? now,
   PodWakeLock? wakeLock,
+  PodTransitionAudio? transitionAudio,
 }) async {
   tester.view.physicalSize = const Size(1200, 1600);
   tester.view.devicePixelRatio = 1;
@@ -266,6 +373,7 @@ Future<void> _mount(
         client: client,
         media: media,
         wakeLock: wakeLock,
+        transitionAudio: transitionAudio,
         now: now,
         ensureConsent: () async {
           events.add('consent');
@@ -484,7 +592,8 @@ void main() {
       media.finish();
       await tester.pumpAndSettle();
       expect(find.text('CHECKING SOURCES'), findsOneWidget);
-      expect(client.pending.length, 2);
+      expect(client.pending.length, 1);
+      expect(client.preparing.length, 1);
       await tester.pump(const Duration(seconds: 10));
       await tester.pumpAndSettle();
       expect(client.actions, contains('heartbeat'));
@@ -496,7 +605,8 @@ void main() {
         '_responseElapsedMs': 150000,
         'checkedAt': now.toIso8601String(),
       };
-      client.complete(1, response);
+      client.preparedPlaybackResponse = response;
+      client.completePreparation(0);
       await tester.pumpAndSettle();
       expect(media.plays, 2);
       expect(find.text('2:30'), findsOneWidget);
@@ -581,24 +691,326 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('next turn is requested only after the preceding audio ends', (
+  testWidgets(
+    'one next voice prepares during speech and stays unheard until handoff',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events);
+      final media = _FakeMedia(events);
+      await _mount(tester, client, media, events, now: () => _time);
+      await _listen(tester);
+      expect(client.preparing, isEmpty);
+      client.complete(0, _turnResponse());
+      await tester.pumpAndSettle();
+      expect(media.plays, 1);
+      expect(client.pending.length, 1);
+      expect(client.preparing.length, 1);
+      client.completePreparation(0);
+      await tester.pumpAndSettle();
+      expect(client.playedPrepared, isEmpty);
+      expect(find.text('K-Nova is speaking'), findsOneWidget);
+      expect(
+        find.text('The next perspective stays private until playback.'),
+        findsNothing,
+      );
+      media.finish();
+      await tester.pumpAndSettle();
+      expect(client.pending.length, 1);
+      expect(client.playedPrepared, [client.prepareIds.first]);
+      expect(media.plays, 2);
+      expect(find.text('Analyst is speaking'), findsOneWidget);
+      expect(
+        find.text('The next perspective stays private until playback.'),
+        findsOneWidget,
+      );
+      expect(client.preparing.length, 2);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
+  testWidgets('preparation waits for actual device playback start', (
     tester,
   ) async {
     final events = <String>[];
     final client = _FakePod(events);
-    final media = _FakeMedia(events);
+    final media = _FakeMedia(events)..autoStart = false;
     await _mount(tester, client, media, events, now: () => _time);
     await _listen(tester);
     client.complete(0, _turnResponse());
     await tester.pumpAndSettle();
-    expect(media.plays, 1);
-    expect(client.pending.length, 1);
-    media.finish();
+    expect(client.preparing, isEmpty);
+    media.begin();
     await tester.pumpAndSettle();
-    expect(client.pending.length, 2);
+    expect(client.preparing.length, 1);
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
   });
+
+  testWidgets(
+    'prepare failure lets current voice finish and never retries itself',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events);
+      final media = _FakeMedia(events);
+      await _mount(tester, client, media, events, now: () => _time);
+      await _listen(tester);
+      client.complete(0, _turnResponse());
+      await tester.pumpAndSettle();
+      client.preparing.single.completeError(
+        const PodException('Sources are unavailable.'),
+      );
+      await tester.pumpAndSettle();
+      expect(media.playing, isTrue);
+      expect(client.actions, isNot(contains('pause')));
+      expect(find.text('Sources are unavailable.'), findsNothing);
+      media.finish();
+      await tester.pumpAndSettle();
+      expect(client.actions, contains('pause'));
+      expect(find.text('Sources are unavailable.'), findsOneWidget);
+      expect(client.preparing.length, 1);
+      expect(client.pending.length, 1);
+      expect(client.playedPrepared, isEmpty);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'screen lock preserves ready next voice while replaying interrupted audio',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events);
+      final media = _FakeMedia(events);
+      await _mount(tester, client, media, events, now: () => _time);
+      await _listen(tester);
+      client.complete(0, _turnResponse());
+      await tester.pumpAndSettle();
+      client.completePreparation(0);
+      await tester.pumpAndSettle();
+      _background(tester);
+      await tester.pumpAndSettle();
+      _foreground(tester);
+      await tester.ensureVisible(find.byKey(const Key('pod-pause-resume')));
+      await tester.tap(find.byKey(const Key('pod-pause-resume')));
+      await tester.pumpAndSettle();
+      expect(media.plays, 2);
+      expect(client.preparing.length, 1);
+      expect(client.playedPrepared, isEmpty);
+      media.finish();
+      await tester.pumpAndSettle();
+      expect(media.plays, 3);
+      expect(client.playedPrepared, [client.prepareIds.first]);
+      expect(client.preparing.length, 2);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'Chime discards a ready voice and resumes with the new contribution',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events);
+      final media = _FakeMedia(events);
+      await _mount(tester, client, media, events, now: () => _time);
+      await _listen(tester);
+      client.complete(0, _turnResponse());
+      await tester.pumpAndSettle();
+      client.completePreparation(0);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('pod-type')));
+      await tester.tap(find.byKey(const Key('pod-type')));
+      await tester.pumpAndSettle();
+      expect(client.actions, contains('interrupt'));
+      expect(media.playing, isFalse);
+      expect(client.playedPrepared, isEmpty);
+      await tester.enterText(
+        find.byKey(const Key('pod-contribution')),
+        'How does this affect small businesses?',
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('pod-send')));
+      await tester.tap(find.byKey(const Key('pod-send')));
+      await tester.pumpAndSettle();
+      expect(client.contributions, 1);
+      await tester.ensureVisible(find.byKey(const Key('pod-pause-resume')));
+      await tester.tap(find.byKey(const Key('pod-pause-resume')));
+      await tester.pumpAndSettle();
+      expect(client.pending.length, 2);
+      expect(client.playedPrepared, isEmpty);
+      expect(
+        find.text('The next perspective stays private until playback.'),
+        findsNothing,
+      );
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'lost consume response keeps its ID for explicit Resume recovery',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events);
+      final media = _FakeMedia(events);
+      await _mount(tester, client, media, events, now: () => _time);
+      await _listen(tester);
+      client.complete(0, _turnResponse());
+      await tester.pumpAndSettle();
+      client.completePreparation(0);
+      client.consumeFailure = const PodException('Connection interrupted.');
+      media.finish();
+      await tester.pumpAndSettle();
+      expect(client.actions, contains('pause'));
+      expect(client.playedPrepared.length, 1);
+      expect(client.pending.length, 1);
+      await tester.ensureVisible(find.byKey(const Key('pod-pause-resume')));
+      await tester.tap(find.byKey(const Key('pod-pause-resume')));
+      await tester.pumpAndSettle();
+      expect(client.playedPrepared, [
+        client.prepareIds.first,
+        client.prepareIds.first,
+      ]);
+      expect(media.plays, 2);
+      expect(client.preparing.length, 2);
+      expect(client.pending.length, 1);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'expired buffered audio requires explicit Resume before new generation',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events);
+      final media = _FakeMedia(events);
+      await _mount(tester, client, media, events, now: () => _time);
+      await _listen(tester);
+      client.complete(0, _turnResponse());
+      await tester.pumpAndSettle();
+      client.completePreparation(0);
+      client.current = {...client.current, 'preparedId': null};
+      client.consumeFailure = const PodException(
+        'The prepared audio expired.',
+        409,
+        'pod_prepared_audio_unavailable',
+      );
+      media.finish();
+      await tester.pumpAndSettle();
+      expect(client.pending.length, 1);
+      expect(client.playedPrepared.length, 1);
+      await tester.ensureVisible(find.byKey(const Key('pod-pause-resume')));
+      await tester.tap(find.byKey(const Key('pod-pause-resume')));
+      await tester.pumpAndSettle();
+      expect(client.pending.length, 2);
+      expect(client.playedPrepared.length, 1);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'committed replay with unavailable audio clears recovery ID and pauses once',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events);
+      final media = _FakeMedia(events);
+      await _mount(tester, client, media, events, now: () => _time);
+      await _listen(tester);
+      client.complete(0, _turnResponse());
+      await tester.pumpAndSettle();
+      client.completePreparation(0);
+      client.consumeFailure = const PodException('Response lost.');
+      media.finish();
+      await tester.pumpAndSettle();
+      // The original claim committed on the server, but its HTTP response was
+      // lost and the transient WAV expired before the listener chose Resume.
+      final committed = {
+        'id': 'committed-analyst',
+        'seq': 2,
+        'speaker': 'analyst',
+        'text': 'This already committed turn has no cached audio.',
+        'sourceIds': <String>[],
+      };
+      client.current = {
+        ...client.current,
+        'preparedId': null,
+        'turns': [...client.current['turns'] as List, committed],
+      };
+      client.preparedPlaybackResponse = {
+        'episode': {...client.current, 'state': 'active', 'version': 2},
+        'turn': committed,
+        'audio': null,
+        'audioUnavailable': true,
+        'replayed': true,
+      };
+      await tester.ensureVisible(find.byKey(const Key('pod-pause-resume')));
+      await tester.tap(find.byKey(const Key('pod-pause-resume')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Audio is unavailable'), findsOneWidget);
+      expect(client.playedPrepared.length, 2);
+      expect(client.pending.length, 1);
+      expect(media.plays, 1);
+      await tester.ensureVisible(find.byKey(const Key('pod-pause-resume')));
+      await tester.tap(find.byKey(const Key('pod-pause-resume')));
+      await tester.pumpAndSettle();
+      expect(client.playedPrepared.length, 2);
+      expect(client.pending.length, 2);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'transition music fills only waiting gaps and toggle or Chime silences it',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events);
+      final media = _FakeMedia(events);
+      final backend = _TransitionBackend();
+      final transition = PodTransitionAudio(backend: backend);
+      await _mount(
+        tester,
+        client,
+        media,
+        events,
+        now: () => _time,
+        transitionAudio: transition,
+      );
+      expect(backend.events, isEmpty);
+      await _listen(tester);
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pumpAndSettle();
+      expect(transition.active, isTrue);
+      client.complete(0, _turnResponse());
+      await tester.pumpAndSettle();
+      expect(transition.active, isFalse);
+      expect(backend.events.last, 'fade');
+      media.finish();
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pumpAndSettle();
+      expect(transition.active, isTrue);
+      await tester.ensureVisible(find.byKey(const Key('pod-transition-music')));
+      await tester.tap(find.byKey(const Key('pod-transition-music')));
+      await tester.pumpAndSettle();
+      expect(transition.active, isFalse);
+      expect(backend.events.last, 'stop');
+      await tester.tap(find.byKey(const Key('pod-transition-music')));
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pumpAndSettle();
+      expect(transition.active, isTrue);
+      await tester.ensureVisible(find.byKey(const Key('pod-chime')));
+      await tester.tap(find.byKey(const Key('pod-chime')));
+      await tester.pumpAndSettle();
+      expect(transition.active, isFalse);
+      expect(backend.events.last, 'stop');
+      expect(media.recording, isTrue);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
 
   testWidgets(
     'Chime in cancels stale generation and opens mic only on explicit tap',
@@ -884,6 +1296,55 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pump();
       revision.dispose();
+    },
+  );
+
+  test(
+    'prepare and playback transport preserve the same ID without hidden retries',
+    () async {
+      final requests = <http.Request>[];
+      final transport = MockClient((request) async {
+        requests.add(request);
+        if (request.url.path.endsWith('/prepare')) {
+          return http.Response(
+            jsonEncode({
+              'episode': _episode(state: 'active', version: 4),
+              'prepared': true,
+              'preparedId': 'buffered-request',
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode(_turnResponse()), 200);
+      });
+      final client = PodClient(
+        backendBaseUrl: 'https://pod.test',
+        headersBuilder: () => {},
+        client: transport,
+      );
+      final prepared = await client.prepare(
+        'private-episode',
+        requestId: 'buffered-request',
+        version: 4,
+      );
+      expect(prepared['turn'], isNull);
+      expect(prepared['preparedId'], 'buffered-request');
+      await client.playPrepared(
+        'private-episode',
+        requestId: 'buffered-request',
+        version: 6,
+      );
+      expect(requests.length, 2);
+      expect(requests.map((request) => request.url.path), [
+        '/api/pod/episodes/private-episode/prepare',
+        '/api/pod/episodes/private-episode/play-prepared',
+      ]);
+      expect(jsonDecode(requests.last.body), {
+        'requestId': 'buffered-request',
+        'version': 6,
+      });
+      client.dispose();
+      transport.close();
     },
   );
 

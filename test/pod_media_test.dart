@@ -1,15 +1,16 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 // Supplied by the existing flutter_test dependency; no new dependency needed.
 // ignore: depend_on_referenced_packages
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/foundation.dart';
 import 'package:ai_wiz_command_center/pod/pod_media.dart';
 
 class FakePlayback implements PodPlaybackBackend {
   int activations = 0, plays = 0, stops = 0;
-  bool disposed = false;
+  bool disposed = false, autoStart = true;
+  VoidCallback? startCallback;
   Completer<void>? activation, pending;
   PodMediaException? failure;
 
@@ -20,9 +21,11 @@ class FakePlayback implements PodPlaybackBackend {
   }
 
   @override
-  Future<void> play(Uint8List wav) {
+  Future<void> play(Uint8List wav, {VoidCallback? onStarted}) {
     plays++;
     if (failure != null) return Future<void>.error(failure!);
+    startCallback = onStarted;
+    if (autoStart) onStarted?.call();
     pending = Completer<void>();
     return pending!.future;
   }
@@ -130,6 +133,37 @@ void main() {
     await second;
     expect(media.playing, false);
     expect(media.error, isNull);
+  });
+
+  test(
+    'playback-start callback waits for backend confirmation and ignores late starts',
+    () async {
+      playback.autoStart = false;
+      var starts = 0;
+      final playing = media.play(Uint8List(4), onStarted: () => starts++);
+      expect(media.playing, isFalse);
+      expect(starts, 0);
+      playback.startCallback!();
+      expect(media.playing, isTrue);
+      expect(starts, 1);
+      playback.startCallback!();
+      expect(starts, 1);
+      await media.stop();
+      await playing;
+      playback.startCallback!();
+      expect(starts, 1);
+      expect(media.playing, isFalse);
+    },
+  );
+
+  test('blocked playback never announces a successful start', () async {
+    playback.failure = const PodMediaException('Sound blocked.', blocked: true);
+    var starts = 0;
+    await expectLater(
+      media.play(Uint8List(4), onStarted: () => starts++),
+      throwsA(isA<PodMediaException>()),
+    );
+    expect(starts, 0);
   });
 
   test('blocked playback is explicit and never opens microphone', () async {
