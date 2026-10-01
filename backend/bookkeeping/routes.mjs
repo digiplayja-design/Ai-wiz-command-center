@@ -1,6 +1,7 @@
 import {registerTaxPrepRoutes} from '../tax_prep/routes.mjs';
 import {registerReportRoutes} from './reports.mjs';
 import {registerStatementPreviewRoutes} from './statement_preview.mjs';
+import {registerBookkeepingVoiceRoutes} from './voice.mjs';
 import {registerLedgerRoutes} from './ledger.mjs';
 import {registerMileageRoutes} from './mileage.mjs';
 import {registerReceiptRoutes} from './receipt_routes.mjs';
@@ -35,6 +36,7 @@ export function registerBookkeeping(app,{database,requireUser,receiptOptions={}}
  registerReportRoutes(app,{route,database});
  registerTaxPrepRoutes(app,{route,database});
  registerStatementPreviewRoutes(app,{route,database});
+ registerBookkeepingVoiceRoutes(app,{route,database});
  const base='/api/bookkeeping/businesses';
  app.get(base,route(async(_q,r,u)=>r.json(await call(u,'list'))));
  app.post(base,route(async(q,r,u)=>r.status(201).json(await call(u,'create_business',null,profile(q.body)))));
