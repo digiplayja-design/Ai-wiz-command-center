@@ -4,28 +4,64 @@ import {podWelcomeTurn} from './providers.mjs';
 /** Paid work is always client-driven, owner-scoped, leased, and separately receipted. */
 export function createPodRuntime({store,providers,access,logger=console,now=Date.now,
   operationTimeoutMs=210000,watchdogMs=5000,maxConcurrent=8}={}) {
-  const pending = new Map(), audioCache = new Map();
+  const pending = new Map(), audioCache = new Map(), deliveries = new Map();
   let cacheBytes=0,closed=false;
   const key=(actor,id)=>`${actor}:${id}`;
   function discardAudio(k) {
     const old=audioCache.get(k);if(old)cacheBytes-=old.bytes;audioCache.delete(k);
   }
-  function cacheAudio(k,requestId,audio) {
-    discardAudio(k);
+  const audioKey=(k,requestId)=>`${k}:${requestId}`;
+  function discardEpisodeAudio(k,{preservePrepared=false}={}) {
+    // Ordinary pause retains the prepared clip and the last acknowledged clip so a
+    // lost playback acknowledgment can be replayed without another paid request.
+    if(preservePrepared)return;
+    for(const [entryKey,entry] of audioCache)if(entry.episodeKey===k)discardAudio(entryKey);
+  }
+  function cacheAudio(k,requestId,audio,{prepared=false}={}) {
+    const entryKey=audioKey(k,requestId);
+    discardAudio(entryKey);
+    // At most the current audible turn and one prepared turn are retained per episode.
+    for(const [oldKey,old] of audioCache)if(old.episodeKey===k&&old.prepared===prepared)discardAudio(oldKey);
     if(!audio)return;
     const bytes=audio.base64.length;
     while(audioCache.size>=24 || cacheBytes+bytes>48*1024*1024) {
       const first=audioCache.keys().next().value;if(!first)break;discardAudio(first);
     }
-    audioCache.set(k,{requestId,audio,bytes,expires:now()+120000});cacheBytes+=bytes;
+    audioCache.set(entryKey,{episodeKey:k,requestId,audio,bytes,prepared,expires:now()+120000});cacheBytes+=bytes;
   }
   function cachedAudio(k,requestId) {
-    const cached=audioCache.get(k);
-    if(cached?.expires<=now()){discardAudio(k);return null;}
+    const entryKey=audioKey(k,requestId),cached=audioCache.get(entryKey);
+    if(cached?.expires<=now()){discardAudio(entryKey);return null;}
     return cached?.requestId===requestId?cached.audio:null;
   }
-  function abort(actor,id,reason='Episode playback changed.') {
-    const k=key(actor,id);pending.get(k)?.controller.abort(new PodError(reason,409,'pod_interrupted'));discardAudio(k);
+  function abort(actor,id,reason='Episode playback changed.',{preservePrepared=false}={}) {
+    const k=key(actor,id);pending.get(k)?.controller.abort(new PodError(reason,409,'pod_interrupted'));
+    for(const delivery of deliveries.get(k)||[])delivery.aborted=true;
+    discardEpisodeAudio(k,{preservePrepared});
+  }
+  async function playPrepared({user,id,requestId,version}) {
+    if(closed)throw new PodError('The pod service is restarting. Please reopen your pod.',503);
+    const k=key(user.id,id),audio=cachedAudio(k,requestId);
+    // A cache miss must not append unheard text or authorize another paid generation.
+    if(!audio) {
+      const discarded=await store.discardPrepared(user.id,id,{requestId,version});
+      if(discarded?.alreadyPlayed)return {episode:discarded.episode,turn:discarded.turn,audio:null,audioUnavailable:true,replayed:true};
+      throw new PodError('The prepared audio expired. Pause and resume to prepare it again.',409,'pod_prepared_audio_unavailable');
+    }
+    const delivery={aborted:false},active=deliveries.get(k)||new Set();
+    active.add(delivery);deliveries.set(k,active);
+    try {
+      const done=await store.playPrepared(user.id,id,{requestId,version});
+      if(!done.committed||closed||delivery.aborted)throw new PodError('The episode changed before this panelist could speak. Refresh to continue.',409,'pod_interrupted');
+      // This WAV was present before the atomic commit. TTL expiry or cache eviction
+      // during that RPC cannot make an acknowledged turn become inaudible.
+      const cached=audioCache.get(audioKey(k,requestId));
+      if(cached?.audio===audio)cached.prepared=false;
+      for(const [oldKey,old] of audioCache)if(old.episodeKey===k&&!old.prepared&&old.requestId!==requestId)discardAudio(oldKey);
+      return {episode:done.episode,turn:done.turn||done.episode?.turns?.at(-1),audio,...(done.replayed?{replayed:true}:{})};
+    } finally {
+      active.delete(delivery);if(!active.size&&deliveries.get(k)===active)deliveries.delete(k);
+    }
   }
   async function paid({user,id,requestId,callKey,method,args,signal}) {
     signal.throwIfAborted();
@@ -66,6 +102,10 @@ export function createPodRuntime({store,providers,access,logger=console,now=Date
     try {
       const claim=await store.claim(user.id,id,{requestId,version,kind});
       if(!claim.dispatch) {
+        if(kind==='prepare') {
+          if(claim.operation?.state!=='prepared')throw new PodError(claim.episode?.preparationError||claim.episode?.error||'This preparation has already finished or was interrupted. Refresh before continuing.',409,claim.operation?.state==='claimed'?'pod_request_active':'pod_preparation_unavailable');
+          return {episode:claim.episode,prepared:true,preparedId:requestId,replayed:true,audioUnavailable:!cachedAudio(k,requestId)};
+        }
         const old=claim.result||{},audio=kind==='next'?cachedAudio(k,requestId):null;
         return {episode:claim.episode,turn:old.turn||null,...(kind==='transcribe'?{text:old.text||''}:{audio,audioUnavailable:!!old.turn&&!audio}),replayed:true};
       }
@@ -79,7 +119,7 @@ export function createPodRuntime({store,providers,access,logger=console,now=Date
         try {
           const current=await store.get(user.id,id),e=current.episode;
           if(!e||['ended','failed'].includes(e.state)||e.version!==entry.version||
-            (kind==='next'&&e.state==='paused')||
+            (kind!=='transcribe'&&e.state==='paused')||
             (e.deadlineAt&&Date.parse(e.deadlineAt)<=now()))controller.abort(new PodError('This episode paused, ended or changed. Refresh to continue.',409,'pod_interrupted'));
         }catch(error){controller.abort(error);}finally{checking=false;}
       },watchdogMs);watchdog.unref?.();
@@ -121,7 +161,8 @@ export function createPodRuntime({store,providers,access,logger=console,now=Date
       if(!done.committed)throw new PodError('The episode changed before this turn could play. Refresh to continue.',409,'pod_interrupted');
       signal.throwIfAborted();
       const audio={base64:Buffer.from(speech.wav).toString('base64'),mime:'audio/wav',durationSeconds:speech.durationSeconds};
-      cacheAudio(k,requestId,audio);
+      cacheAudio(k,requestId,audio,{prepared:kind==='prepare'});
+      if(kind==='prepare')return {episode:done.episode,prepared:true,preparedId:requestId};
       return {episode:done.episode,turn:done.turn||done.episode.turns?.at(-1),audio};
     } catch(error) {
       if(claimed) {
@@ -136,8 +177,8 @@ export function createPodRuntime({store,providers,access,logger=console,now=Date
     }
   }
   return {
-    run,abort,
-    stop(){closed=true;for(const p of pending.values())p.controller.abort(new PodError('Pod service is restarting.',503));for(const k of audioCache.keys())discardAudio(k);},
+    run,playPrepared,abort,
+    stop(){closed=true;for(const active of deliveries.values())for(const delivery of active)delivery.aborted=true;for(const p of pending.values())p.controller.abort(new PodError('Pod service is restarting.',503));for(const k of audioCache.keys())discardAudio(k);},
     get activeCount(){return pending.size;},
   };
 }

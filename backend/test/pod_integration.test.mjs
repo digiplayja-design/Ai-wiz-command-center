@@ -15,6 +15,8 @@ const input={category:'technology',topic:'How can technology help a community?',
 const access=async()=>({allowed:true,limits});
 const create=async(overrides={})=>(await store.create(owner,{requestId:randomUUID(),input:{...input,...overrides},limits})).episode;
 const next=(episode,requestId=randomUUID())=>runtime.run({user:{id:owner},id:episode.id,version:episode.version,requestId,kind:'next'});
+const prepare=(episode,requestId=randomUUID())=>runtime.run({user:{id:owner},id:episode.id,version:episode.version,requestId,kind:'prepare'});
+const playPrepared=(episode,requestId)=>runtime.playPrepared({user:{id:owner},id:episode.id,version:episode.version,requestId});
 const monthly=async()=>(await db.query('select * from korlix_live_convo_monthly_usage where user_id=$1',[owner])).rows[0];
 const wav=()=>{
  const b=Buffer.alloc(48044);b.write('RIFF');b.writeUInt32LE(b.length-8,4);b.write('WAVE',8);b.write('fmt ',12);
@@ -27,6 +29,8 @@ test.before(async()=>{
  await db.exec(await readFile(new URL('202607120001_live_convo_limits_build129.sql',dir),'utf8'));
  const name=(await readdir(dir)).find(n=>n.endsWith('_pod_personal_beta.sql'));await db.exec(await readFile(new URL(name,dir),'utf8'));
  const welcomeMigration=(await readdir(dir)).find(n=>n.endsWith('_pod_prompt_welcome_audio.sql'));await db.exec(await readFile(new URL(welcomeMigration,dir),'utf8'));
+ const preparedMigration=(await readdir(dir)).find(n=>n.endsWith('_pod_prepared_turn_buffer.sql'));assert(preparedMigration,'prepared-turn migration is required');
+ await db.exec(await readFile(new URL(preparedMigration,dir),'utf8'));
  store=createPodStore({database:{rpc:async(_name,p)=>{
   try{return {data:(await db.query('select public.korlix_pod_v1($1,$2,$3,$4) r',[p.p_actor,p.p_action,p.p_id,p.p_data])).rows[0].r};}
   catch(error){return {error};}
@@ -99,7 +103,7 @@ test('the 36th host turn can commit its closing audio under maxResponses 37, the
 
 // Exercise SDK response decoding and provider validation before the runtime and
 // durable SQL transaction. Mocking already-parsed providers misses format errors.
-async function offlineSdk({sourceUrl,researchStatus=200,requiresCurrentSources=false,currentSourcesAvailable=true,evergreenSports=false}={}) {
+async function offlineSdk({sourceUrl,researchStatus=200,researchTransportError=false,requiresCurrentSources=false,currentSourcesAvailable=true,evergreenSports=false}={}) {
  const {default:OpenAI}=await import('openai');
  const retrievedUrl=evergreenSports?'https://www.olympics.com/ioc/olympic-values':'https://www.nasa.gov/missions/';
  sourceUrl??=retrievedUrl;
@@ -123,6 +127,7 @@ async function offlineSdk({sourceUrl,researchStatus=200,requiresCurrentSources=f
    }
    assert.equal(path,'/v1/responses','the offline transport never fetches a source URL');
    const researching=payload.text.format.name==='pod_research';
+   if(researching&&researchTransportError)throw new TypeError('Offline connection lost after dispatch');
    if(researching&&researchStatus!==200)return new Response(JSON.stringify({error:{message:'Offline upstream failure',type:'server_error'}}),
     {status:researchStatus,headers:{'content-type':'application/json','x-request-id':'req_research_failure'}});
    const value=researching?{text:briefText,requiresCurrentSources,currentSourcesAvailable,sources:[{url:sourceUrl}],
@@ -238,4 +243,189 @@ test('a retryable research transport failure makes exactly one SDK request and e
  const receipt=(await db.query("select evidence from korlix_pod_usage_receipts where episode_id=$1 and call_key='research'",[first.episode.id])).rows[0];
  assert.equal(receipt.evidence.status,'failed');assert.equal(receipt.evidence.usageKnown,false);assert.equal(receipt.evidence.totalTokens,null);
  assert.equal((await monthly()).total_tokens,0,'unknown tokens must not be invented');
+});
+
+test('real SDK, providers and SQL prepare one panelist privately, charge actual usage, and consume the cached speech exactly once',async()=>{
+ const {sent}=await offlineSdk();
+ const welcome=await next(await create()),requestId=randomUUID();
+ const staged=await prepare(welcome.episode,requestId);
+ assert.equal(staged.prepared,true);assert.equal(staged.preparedId,requestId);
+ assert.equal(staged.audio,undefined);assert.equal(staged.turn,undefined);
+ assert.equal(staged.episode.state,'active');assert.equal(staged.episode.turns.length,1);
+ assert.equal(staged.episode.preparedId,requestId);assert.equal(staged.episode.deadlineAt,welcome.episode.deadlineAt);
+ const saved=await store.get(owner,welcome.episode.id);
+ assert.deepEqual(saved.brief,{});assert.deepEqual(saved.episode.sources,[]);
+ assert.equal(saved.episode.turns[0].speaker,'host','an unheard panelist is absent from the transcript');
+ assert.equal((await monthly()).total_tokens,139);assert.equal((await monthly()).response_count,1);
+ assert.deepEqual(sent.map(call=>call.path),['/v1/audio/speech','/v1/responses','/v1/audio/speech']);
+ const replay=await prepare(staged.episode,requestId);
+ assert(replay.replayed);assert.equal(replay.preparedId,requestId);assert.equal(replay.audioUnavailable,false);
+ await assert.rejects(prepare(staged.episode),error=>error.status===409);
+ await assert.rejects(next(staged.episode),error=>error.status===409);
+ assert.equal(sent.length,3,'another request cannot bypass the one-prepared-turn limit');
+ const playing=await playPrepared(staged.episode,requestId);
+ assert.equal(playing.turn.speaker,'analyst');assert.equal(playing.turn.seq,2);
+ assert.equal(playing.episode.turns.length,2);assert.equal(playing.episode.preparedId,null);
+ assert.equal(validatePodWav(Buffer.from(playing.audio.base64,'base64')).pcm[0],2);
+ const replayPlaying=await playPrepared(playing.episode,requestId);
+ assert(replayPlaying.replayed);assert.equal(replayPlaying.turn.seq,2);assert.equal(replayPlaying.episode.turns.length,2);
+ assert.equal(replayPlaying.audio.base64,playing.audio.base64);assert.equal(sent.length,3);
+ const thirdId=randomUUID(),thirdPrepared=await prepare(playing.episode,thirdId);
+ assert.equal(thirdPrepared.episode.turns.length,2);
+ const third=await playPrepared(thirdPrepared.episode,thirdId);
+ assert.equal(third.turn.speaker,'challenger');assert.equal(third.turn.seq,3);
+ assert.equal(validatePodWav(Buffer.from(third.audio.base64,'base64')).pcm[0],3);
+ assert.equal(third.episode.deadlineAt,welcome.episode.deadlineAt);
+ const persisted=(await store.get(owner,welcome.episode.id)).brief;
+ assert.deepEqual(JSON.parse(sent[3].payload.input).brief,persisted,'the prepared next voice consumes the durable, verified brief');
+ assert.deepEqual(sent.filter(call=>call.path==='/v1/audio/speech').map(call=>call.payload.voice),['marin','cedar','coral']);
+ const receipts=(await db.query('select call_key,evidence from korlix_pod_usage_receipts where episode_id=$1',[welcome.episode.id])).rows;
+ assert.equal(receipts.length,5);assert.equal(receipts.filter(receipt=>receipt.call_key==='speak').length,3);
+ assert.equal((await monthly()).total_tokens,183);assert.equal((await monthly()).response_count,2);
+});
+
+test('prepared speech survives an ordinary pause and resumes with the current version without another SDK call',async()=>{
+ const {sent}=await offlineSdk();
+ const welcome=await next(await create()),requestId=randomUUID(),staged=await prepare(welcome.episode,requestId);
+ let episode=(await store.control(owner,welcome.episode.id,'pause')).episode;
+ runtime.abort(owner,episode.id,'Episode playback changed.',{preservePrepared:true});
+ assert.equal(episode.state,'paused');assert.equal(episode.preparedId,requestId);
+ await assert.rejects(playPrepared(episode,requestId),error=>error.status===409);
+ episode=(await store.control(owner,episode.id,'resume')).episode;
+ assert.notEqual(episode.version,staged.episode.version);
+ await assert.rejects(playPrepared(staged.episode,requestId),error=>error.status===409);
+ const playing=await playPrepared(episode,requestId);
+ assert.equal(playing.turn.seq,2);assert.equal(playing.turn.speaker,'analyst');
+ assert.equal(playing.episode.deadlineAt,welcome.episode.deadlineAt);
+ assert.equal(validatePodWav(Buffer.from(playing.audio.base64,'base64')).pcm[0],2);
+ assert.equal(sent.length,3);assert.equal((await monthly()).total_tokens,139);
+});
+
+test('another owner cannot consume prepared speech, and process cache loss cannot commit unheard text or repeat paid generation',async()=>{
+ const {sent}=await offlineSdk();
+ const welcome=await next(await create()),requestId=randomUUID(),staged=await prepare(welcome.episode,requestId);
+ const otherOwner=randomUUID();
+ await assert.rejects(runtime.playPrepared({user:{id:otherOwner},id:welcome.episode.id,version:staged.episode.version,requestId}));
+ await assert.rejects(store.playPrepared(otherOwner,welcome.episode.id,{version:staged.episode.version,requestId}),error=>error.status===404);
+ assert.equal((await store.get(owner,welcome.episode.id)).episode.turns.length,1);
+ runtime.stop();runtime=createPodRuntime({store,providers,access,logger:{warn(){}}});
+ const replay=await prepare(staged.episode,requestId);
+ assert(replay.replayed);assert.equal(replay.audioUnavailable,true);
+ await assert.rejects(playPrepared(staged.episode,requestId),error=>error.code==='pod_prepared_audio_unavailable');
+ await assert.rejects(prepare(staged.episode,requestId),error=>error.code==='pod_preparation_unavailable');
+ await assert.rejects(prepare(staged.episode),error=>error.status===409);
+ const saved=await store.get(owner,welcome.episode.id);
+ assert.equal(saved.episode.turns.length,1);assert.equal(saved.episode.preparedId,null);
+ assert.match(saved.episode.preparationError,/audio expired/);
+ assert.deepEqual(saved.brief,{});assert.equal(sent.length,3);
+ assert.equal((await monthly()).total_tokens,139,'already incurred research usage remains accounted after cache loss');
+});
+
+test('chiming in discards the prepared reply and supplies the contribution to the next sourced response',async()=>{
+ const {sent}=await offlineSdk();
+ const welcome=await next(await create()),oldId=randomUUID();await prepare(welcome.episode,oldId);
+ let episode=(await store.control(owner,welcome.episode.id,'interrupt')).episode;runtime.abort(owner,episode.id);
+ assert.equal(episode.preparedId,null);assert.equal(episode.turns.length,1);
+ const contribution='How can a mission serve communities with limited internet access?';
+ episode=(await store.contribute(owner,episode.id,{requestId:randomUUID(),text:contribution})).episode;runtime.abort(owner,episode.id);
+ episode=(await store.control(owner,episode.id,'resume')).episode;
+ await assert.rejects(playPrepared(episode,oldId),error=>error.status===409);
+ const newId=randomUUID(),staged=await prepare(episode,newId);
+ assert.deepEqual(JSON.parse(sent[3].payload.input).contributions,[contribution]);
+ assert.equal(staged.episode.turns.length,2);assert.equal(staged.episode.turns.at(-1).speaker,'user');
+ const playing=await playPrepared(staged.episode,newId);
+ assert.deepEqual(playing.episode.turns.map(turn=>turn.speaker),['host','user','analyst']);
+ assert.equal(validatePodWav(Buffer.from(playing.audio.base64,'base64')).pcm[0],3,'only the new prepared speech can be delivered');
+ assert.equal((await monthly()).total_tokens,278,'discarded, actually generated research still counts');
+ assert.equal((await monthly()).response_count,2);
+ assert.equal(sent.length,5);
+});
+
+test('a sourced preparation failure leaves the current panelist intact and durably blocks automatic paid retries',async()=>{
+ const {sent}=await offlineSdk({sourceUrl:'https://www.nasa.gov/not-retrieved'});
+ const welcomeId=randomUUID(),welcome=await next(await create(),welcomeId),requestId=randomUUID();
+ await assert.rejects(prepare(welcome.episode,requestId),error=>error.code==='POD_SOURCES_UNAVAILABLE');
+ let episode=(await store.get(owner,welcome.episode.id)).episode;
+ assert.equal(episode.state,'active');assert.equal(episode.version,welcome.episode.version);
+ assert.equal(episode.turns.length,1);assert.equal(episode.preparedId,null);
+ assert.match(episode.preparationError,/could not be verified/);
+ assert.equal(episode.deadlineAt,welcome.episode.deadlineAt);
+ await assert.rejects(prepare(episode,requestId),error=>error.code==='pod_preparation_unavailable');
+ await assert.rejects(prepare(episode),error=>error.status===409);
+ await assert.rejects(next(episode),error=>error.status===409);
+ assert.deepEqual(sent.map(call=>call.path),['/v1/audio/speech','/v1/responses']);
+ const replayWelcome=await next(episode,welcomeId);
+ assert(replayWelcome.replayed);assert.equal(replayWelcome.audio.base64,welcome.audio.base64);
+ assert.equal(sent.length,2,'the current committed speech can replay without another dispatch');
+ const receipt=(await db.query("select evidence from korlix_pod_usage_receipts where episode_id=$1 and call_key='research'",[episode.id])).rows[0];
+ assert.equal(receipt.evidence.totalTokens,139);assert.equal(receipt.evidence.status,'failed');
+ assert.equal((await monthly()).total_tokens,139);
+ episode=(await store.control(owner,episode.id,'pause')).episode;runtime.abort(owner,episode.id,'Episode playback changed.',{preservePrepared:true});
+ episode=(await store.control(owner,episode.id,'resume')).episode;
+ assert.equal(episode.preparationError,null);
+ await assert.rejects(prepare(episode),error=>error.code==='POD_SOURCES_UNAVAILABLE');
+ assert.equal(sent.length,3,'only explicit pause/resume recovery permits a fresh paid attempt');
+ assert.equal((await monthly()).total_tokens,278);
+});
+
+test('uncertain transport usage during preparation cannot be retried by resume or a fresh request',async()=>{
+ const {sent}=await offlineSdk({researchTransportError:true});
+ const welcome=await next(await create()),requestId=randomUUID();
+ await assert.rejects(prepare(welcome.episode,requestId),error=>error.code==='POD_PROVIDER_FAILED');
+ let episode=(await store.get(owner,welcome.episode.id)).episode;
+ assert.equal(episode.turns.length,1);assert(episode.preparationError);
+ await assert.rejects(prepare(episode),error=>error.status===409);
+ episode=(await store.control(owner,episode.id,'pause')).episode;runtime.abort(owner,episode.id,'Episode playback changed.',{preservePrepared:true});
+ await assert.rejects(store.control(owner,episode.id,'resume'));
+ assert.deepEqual(sent.map(call=>call.path),['/v1/audio/speech','/v1/responses']);
+ const receipt=(await db.query("select evidence from korlix_pod_usage_receipts where episode_id=$1 and call_key='research'",[episode.id])).rows[0];
+ assert.equal(receipt.evidence.usageKnown,false);assert.equal(receipt.evidence.totalTokens,null);assert.equal(receipt.evidence.status,'uncertain');
+ assert.equal((await monthly()).total_tokens,0,'unknown usage is never replaced with an invented estimate');
+});
+
+test('a late preparation response after pause is receipted but cannot append or cache stale speech',async()=>{
+ const welcome=await next(await create()),opening=await next(welcome.episode);
+ let release,started;const entered=new Promise(resolve=>{started=resolve;});
+ const originalTurn=providers.turn;
+ providers.turn=async args=>{const value=await originalTurn(args);started();await new Promise(resolve=>{release=resolve;});return value;};
+ const requestId=randomUUID(),preparing=prepare(opening.episode,requestId);
+ await entered;
+ let episode=(await store.control(owner,opening.episode.id,'pause')).episode;
+ runtime.abort(owner,episode.id,'Episode playback changed.',{preservePrepared:true});release();
+ await assert.rejects(preparing);
+ const saved=await store.get(owner,episode.id);
+ assert.equal(saved.episode.state,'paused');assert.equal(saved.episode.turns.length,2);assert.equal(saved.episode.preparedId,null);
+ assert.deepEqual(calls,{research:1,turn:1,speak:2,transcribe:0});
+ const receipt=(await db.query("select usage,evidence from korlix_pod_usage_receipts where episode_id=$1 and request_id=$2 and call_key='turn'",[episode.id,requestId])).rows[0];
+ assert.equal(receipt.usage.totalTokens,65);assert.equal((await monthly()).total_tokens,95);
+ await assert.rejects(playPrepared(saved.episode,requestId),error=>error.status===409);
+});
+
+test('real HTTP prepare exposes only safe metadata and play-prepared delivers the matching cached WAV once',async()=>{
+ const {sent}=await offlineSdk(),created=await create();
+ const app=express();app.use(express.json());
+ const api=registerPod(app,{store,providers,access,requireUser:async()=>({id:owner}),logger:{warn(){}},startSweep:false});
+ const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
+ const baseUrl=`http://127.0.0.1:${server.address().port}/api/pod/episodes/${created.id}`;
+ const request=async(path,body)=>{
+  const response=await fetch(`${baseUrl}${path}`,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const value=await response.json();assert.equal(response.status,200,JSON.stringify(value));
+  assert.equal(response.headers.get('cache-control'),'no-store');return value;
+ };
+ try {
+  const welcome=await request('/next',{requestId:randomUUID(),version:created.version});
+  const preparedId=randomUUID(),prepared=await request('/prepare',{requestId:preparedId,version:welcome.episode.version});
+  assert.deepEqual(Object.keys(prepared).sort(),['episode','prepared','preparedId']);
+  assert.equal(prepared.preparedId,preparedId);assert.equal(prepared.episode.preparedId,preparedId);
+  assert.equal(prepared.episode.turns.length,1);assert.deepEqual(prepared.episode.sources,[]);
+  assert.doesNotMatch(JSON.stringify(prepared),/research notes|Final caveat|NASA describes a range|providerRequestId|resp_research/);
+  const read=await request('');assert.equal(read.episode.turns.length,1);assert.equal(read.episode.brief,undefined);
+  const played=await request('/play-prepared',{requestId:preparedId,version:prepared.episode.version});
+  assert.equal(played.turn.speaker,'analyst');assert.equal(played.turn.seq,2);assert.equal(played.episode.preparedId,null);
+  assert.equal(validatePodWav(Buffer.from(played.audio.base64,'base64')).pcm[0],2);
+  const replay=await request('/play-prepared',{requestId:preparedId,version:played.episode.version});
+  assert.equal(replay.replayed,true);assert.equal(replay.audio.base64,played.audio.base64);
+  assert.equal(replay.episode.turns.length,2);assert.equal(sent.length,3);
+  assert.equal((await monthly()).total_tokens,139);
+ }finally{api.stop();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });

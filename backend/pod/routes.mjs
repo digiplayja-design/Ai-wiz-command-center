@@ -28,7 +28,9 @@ export function registerPod(app,{database,requireUser,access,providers,store:pro
     ...(data.audio!==undefined?{audio:data.audio}:{}),
     ...(typeof data.text==='string'?{text:data.text}:{}),
     ...(data.replayed===true?{replayed:true}:{}),
-    ...(data.audioUnavailable===true?{audioUnavailable:true}:{})});
+    ...(data.audioUnavailable===true?{audioUnavailable:true}:{}),
+    ...(typeof data.prepared==='boolean'?{prepared:data.prepared}:{}),
+    ...(typeof data.preparedId==='string'?{preparedId:data.preparedId}:{})});
   app.get(base,route(async(_q,r,u)=>{
     const [a,list]=await Promise.all([access(u),store.list(u.id)]);
     const maxSeconds=a?.allowed?Math.min(900,a.limits?.maxSessionSeconds||900,a.remainingSeconds??900):0;
@@ -46,7 +48,9 @@ export function registerPod(app,{database,requireUser,access,providers,store:pro
     if(!['pause','resume','interrupt','end','heartbeat'].includes(action))throw new PodError('Choose a valid episode control.');
     if(action==='resume')await allowed(u);
     const data=await store.control(u.id,id,action);
-    if(['pause','interrupt','end'].includes(action)||['ended','failed'].includes(data.episode?.state))runtime.abort(u.id,id);
+    if(['pause','interrupt','end'].includes(action)||['ended','failed'].includes(data.episode?.state)||data.episode?.state==='paused') {
+      runtime.abort(u.id,id,'Episode playback changed.',{preservePrepared:!['interrupt','end'].includes(action)&&data.episode?.state==='paused'});
+    }
     reply(r,{episode:data.episode});
   }));
   app.post(base+'/episodes/:id/contributions',route(async(q,r,u)=>{
@@ -66,6 +70,7 @@ export function registerPod(app,{database,requireUser,access,providers,store:pro
       version=podVersion(q.body?.version);
       const current=(await store.get(u.id,id)).episode;
       if(current.summary&&current.state==='active') {
+        if(kind==='prepare')return reply(r,{episode:current,prepared:false});
         const ended=await store.control(u.id,id,'end');return reply(r,{episode:ended.episode,turn:null,audio:null});
       }
     }
@@ -76,6 +81,12 @@ export function registerPod(app,{database,requireUser,access,providers,store:pro
     reply(r,result);
   });
   app.post(base+'/episodes/:id/next',generation('next'));
+  app.post(base+'/episodes/:id/prepare',generation('prepare'));
+  app.post(base+'/episodes/:id/play-prepared',route(async(q,r,u)=>{
+    const id=podUuid(q.params.id),requestId=podUuid(q.body?.requestId),version=podVersion(q.body?.version);
+    await allowed(u);
+    reply(r,await runtime.playPrepared({user:u,id,requestId,version}));
+  }));
   app.post(base+'/episodes/:id/transcribe',generation('transcribe'));
   app.delete(base+'/episodes/:id',route(async(q,r,u)=>{
     if(q.body?.confirmed!==true)throw new PodError('Confirm before deleting this episode.');

@@ -38,6 +38,8 @@ export function createPodStore({database, logger = console} = {}) {
     claim: (actor, id, {requestId, version, kind}) => call(actor, 'claim', id, {requestId, version, kind}),
     authorizeDispatch: (actor, id, requestId, callKey) => call(actor, 'dispatch', id, {requestId, callKey}),
     recordUsage: (actor, id, requestId, {callKey, usage = {}, evidence = {}}) => call(actor, 'receipt', id, {requestId, callKey, usage, evidence}),
+    discardPrepared: (actor, id, {requestId, version}) => call(actor, 'discard_prepared', id, {requestId, version}),
+    playPrepared: (actor, id, {requestId, version}) => call(actor, 'play_prepared', id, {requestId, version}),
     finish: (actor, id, requestId, result) => call(actor, 'finish', id, {requestId, result}),
     fail: (actor, id, requestId, {error = 'This turn could not finish. Try a new request.', uncertain = false} = {}) => call(actor, 'fail', id, {requestId, error, uncertain}),
     control: (actor, id, action) => call(actor, 'control', id, {action}),

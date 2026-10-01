@@ -92,6 +92,8 @@ const endpoints=[
   ['POST','/api/pod/episodes/:id/control',{action:'resume'}],
   ['POST','/api/pod/episodes/:id/contributions',{requestId:REQUEST,text:'My contribution.'}],
   ['POST','/api/pod/episodes/:id/next',{requestId:REQUEST,version:1}],
+  ['POST','/api/pod/episodes/:id/prepare',{requestId:REQUEST,version:1}],
+  ['POST','/api/pod/episodes/:id/play-prepared',{requestId:REQUEST,version:1}],
   ['POST','/api/pod/episodes/:id/transcribe',{requestId:REQUEST,audioBase64:wav().toString('base64')}],
   ['DELETE','/api/pod/episodes/:id',{confirmed:true}],
 ];
@@ -294,4 +296,43 @@ test('delete requires explicit confirmation and always uses the verified actor',
   assert.deepEqual(deleted.body,{deleted:true});
   assert.deepEqual(h.calls[0],{method:'remove',args:[ACTOR,EPISODE,{confirmed:true}]});
   assert.equal(h.providerCalls.length,0);
+});
+
+test('prepare exposes only a safe handle until authenticated playback commits its transcript',async t=>{
+  let staged;
+  const state=episode({turns:[{...turn,id:'welcome',sourceIds:[]}]}),h=harness(t,{state,store:{
+    finish:async(_actor,_id,_request,result)=>{staged=result;return {committed:true,prepared:true,preparedId:REQUEST,
+      episode:{...state,preparedId:REQUEST,preparedResult:SECRET},privateReceipt:SECRET};},
+    playPrepared:async(_actor,_id,{requestId,version})=>{
+      assert.equal(requestId,REQUEST);assert.equal(version,1);
+      return {committed:true,episode:{...state,turns:[...state.turns,staged.turn]},turn:{...staged.turn,privateReceipt:SECRET}};
+    },
+  }});
+  const prepared=await h.invoke('POST','/api/pod/episodes/:id/prepare',{body:{requestId:REQUEST,version:1,actor:OTHER}});
+  assert.equal(prepared.statusCode,200);assert.equal(prepared.body.prepared,true);assert.equal(prepared.body.preparedId,REQUEST);
+  assert.equal(prepared.body.audio,undefined);assert.equal(prepared.body.turn,undefined);
+  assert.equal(prepared.body.episode.turns.length,1);assert.ok(!JSON.stringify(prepared.body).includes(SECRET));
+  const providerCount=h.providerCalls.length;
+  const played=await h.invoke('POST','/api/pod/episodes/:id/play-prepared',{body:{requestId:REQUEST,version:1,actor:OTHER}});
+  assert.equal(played.statusCode,200);assert.equal(played.body.episode.turns.length,2);
+  assert.ok(played.body.audio.base64);assert.ok(!JSON.stringify(played.body).includes(SECRET));
+  assert.equal(h.providerCalls.length,providerCount);
+  assert.ok(h.calls.every(call=>call.args[0]===ACTOR));
+});
+
+test('prepared playback validates identifiers and versions before any cache or storage mutation',async t=>{
+  const h=harness(t);
+  for(const body of [{requestId:'invalid',version:1},{requestId:REQUEST,version:-1},{requestId:REQUEST,version:'1'}]) {
+    const reply=await h.invoke('POST','/api/pod/episodes/:id/play-prepared',{body});assert.equal(reply.statusCode,400);
+  }
+  assert.equal(h.calls.length,0);assert.equal(h.providerCalls.length,0);
+});
+
+test('preparing during the final recap neither ends that speaking turn nor dispatches paid work',async t=>{
+  const h=harness(t,{state:episode({summary:'The final recap.'})});
+  const prepared=await h.invoke('POST','/api/pod/episodes/:id/prepare',{body:{requestId:REQUEST,version:1}});
+  assert.equal(prepared.statusCode,200);assert.equal(prepared.body.prepared,false);assert.equal(prepared.body.episode.state,'active');
+  assert.equal(h.providerCalls.length,0);assert.equal(h.calls.filter(c=>c.method==='control').length,0);
+  const ended=await h.invoke('POST','/api/pod/episodes/:id/next',{body:{requestId:REQUEST,version:1}});
+  assert.equal(ended.body.episode.state,'ended');assert.equal(h.providerCalls.length,0);
 });

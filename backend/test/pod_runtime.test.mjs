@@ -523,3 +523,118 @@ test('the exact episode deadline aborts speech before the slower watchdog tick',
   await assert.rejects(within(run,500),e=>e.code==='pod_timeout');
   assert.equal(f.finishes.length,0);assert.equal(f.runtime.activeCount,0);
 });
+
+function bufferedFixture(options={}) {
+  const f=fixture({afterWelcome:true,...options}),operations=new Map();
+  f.episode={...f.episode,state:'active',startedAt:new Date(f.time).toISOString(),deadlineAt:new Date(f.time+300000).toISOString()};
+  const legacyClaim=f.store.claim,legacyFinish=f.store.finish;
+  f.store.claim=async(actor,id,input)=>{
+    if(input.kind!=='prepare')return legacyClaim(actor,id,input);
+    f.events.push({name:'claim',data:{actor,id,...input}});
+    const old=operations.get(input.requestId);
+    if(old)return {dispatch:false,episode:structuredClone(f.episode),operation:{state:old.state},result:old.result};
+    if([...operations.values()].some(o=>o.state==='prepared'))throw new PodError('One panelist is already prepared.',409,'pod_request_active');
+    operations.set(input.requestId,{state:'claimed'});
+    return {dispatch:true,episode:structuredClone(f.episode),brief:structuredClone(f.brief)};
+  };
+  f.store.finish=async(actor,id,requestId,result)=>{
+    const op=operations.get(requestId);
+    if(!op)return legacyFinish(actor,id,requestId,result);
+    f.events.push({name:'finish',data:{actor,id,requestId}});f.finishes.push(structuredClone(result));
+    op.state='prepared';op.result=structuredClone(result);
+    f.episode.preparedId=requestId;
+    return {committed:true,prepared:true,preparedId:requestId,episode:structuredClone(f.episode)};
+  };
+  f.store.playPrepared=async(actor,id,{requestId,version})=>{
+    f.events.push({name:'playPrepared',data:{actor,id,requestId,version}});
+    if(f.hooks.playPrepared)return f.hooks.playPrepared({actor,id,requestId,version});
+    const op=operations.get(requestId);
+    assert.equal(actor,OWNER);assert.equal(id,ID);assert.equal(version,f.episode.version);
+    if(op.state==='completed')return {committed:true,replayed:true,episode:structuredClone(f.episode),turn:op.turn};
+    op.turn={...op.result.turn,id:'prepared-turn',seq:f.episode.turns.length};
+    op.state='completed';f.episode.turns.push(op.turn);delete f.episode.preparedId;
+    return {committed:true,episode:structuredClone(f.episode),turn:op.turn};
+  };
+  f.store.discardPrepared=async(actor,id,input)=>{f.events.push({name:'discardPrepared',data:{actor,id,...input}});};
+  f.prepare=(extra={})=>f.run({kind:'prepare',...extra});
+  f.play=(extra={})=>f.runtime.playPrepared({user:{id:OWNER},id:ID,requestId:REQUEST,version:f.episode.version,...extra});
+  return f;
+}
+
+test('one prepared panelist remains private until playback acknowledgment and is consumed only once',async t=>{
+  const f=bufferedFixture();t.after(()=>f.runtime.stop());
+  const oldTurns=structuredClone(f.episode.turns),prepared=await f.prepare();
+  assert.equal(prepared.prepared,true);assert.equal(prepared.preparedId,REQUEST);
+  assert.equal(prepared.turn,undefined);assert.equal(prepared.audio,undefined);
+  assert.deepEqual(prepared.episode.turns,oldTurns);
+  assert.deepEqual(f.providerCalls().map(c=>c.name),['provider:turn','provider:speak']);
+  await assert.rejects(f.prepare({requestId:SECOND}),e=>e.code==='pod_request_active');
+  const replay=await f.prepare();assert.equal(replay.replayed,true);assert.equal(replay.audioUnavailable,false);
+  assert.equal(f.providerCalls().length,2);
+  const played=await f.play();assert.equal(played.audio.base64,AUDIO.toString('base64'));
+  assert.equal(played.episode.turns.length,oldTurns.length+1);
+  const playedAgain=await f.play();assert.equal(playedAgain.replayed,true);
+  assert.deepEqual(playedAgain.turn,played.turn);assert.equal(f.episode.turns.length,oldTurns.length+1);
+  assert.equal(f.providerCalls().length,2);
+});
+
+test('completed buffered audio and lost acknowledgments survive ordinary pause without another paid call',async t=>{
+  const f=bufferedFixture();t.after(()=>f.runtime.stop());await f.prepare();
+  f.runtime.abort(OWNER,ID,'Paused.',{preservePrepared:true});f.episode.version+=2;
+  const played=await f.play();assert.equal(played.audio.base64,AUDIO.toString('base64'));
+  f.runtime.abort(OWNER,ID,'Paused.',{preservePrepared:true});f.episode.version+=2;
+  const recovered=await f.play();assert.equal(recovered.replayed,true);assert.deepEqual(recovered.audio,played.audio);
+  assert.equal(f.providerCalls().length,2);
+});
+
+test('expired prepared audio is discarded before transcript commit and never regenerated',async t=>{
+  const f=bufferedFixture();t.after(()=>f.runtime.stop());await f.prepare();
+  f.time+=120001;
+  await assert.rejects(f.play(),e=>e.code==='pod_prepared_audio_unavailable');
+  assert.equal(f.names().filter(n=>n==='playPrepared').length,0);
+  assert.equal(f.names().filter(n=>n==='discardPrepared').length,1);
+  assert.equal(f.episode.turns.length,1);assert.equal(f.providerCalls().length,2);
+});
+
+test('an already held WAV survives TTL expiry during its atomic playback acknowledgment',async t=>{
+  const f=bufferedFixture();t.after(()=>f.runtime.stop());await f.prepare();
+  f.time+=119999;
+  f.hooks.playPrepared=async()=>{f.time+=10;return {committed:true,episode:f.episode,turn:TURN};};
+  const played=await f.play();assert.equal(played.audio.base64,AUDIO.toString('base64'));
+  assert.equal(f.providerCalls().length,2);
+});
+
+test('interrupt discards buffered speech; interrupt racing with commit cannot deliver stale audio',async t=>{
+  for(const duringCommit of [false,true]) {
+    const f=bufferedFixture();t.after(()=>f.runtime.stop());await f.prepare();
+    if(duringCommit)f.hooks.playPrepared=async()=>{f.runtime.abort(OWNER,ID);return {committed:true,episode:f.episode,turn:TURN};};
+    else f.runtime.abort(OWNER,ID);
+    await assert.rejects(f.play(),e=>e.code===(duringCommit?'pod_interrupted':'pod_prepared_audio_unavailable'));
+    assert.equal(f.providerCalls().length,2);
+  }
+});
+
+test('prepared audio is owner scoped and cache loss never invokes another provider',async t=>{
+  const f=bufferedFixture();t.after(()=>f.runtime.stop());await f.prepare();
+  await assert.rejects(f.play({user:{id:OTHER}}),e=>e.code==='pod_prepared_audio_unavailable');
+  assert.equal(f.names().filter(n=>n==='playPrepared').length,0);
+  assert.equal(f.providerCalls().length,2);
+  const played=await f.play();assert.equal(played.audio.base64,AUDIO.toString('base64'));
+});
+
+test('a failed prepared operation replays its failure without any automatic paid retry',async t=>{
+  const f=bufferedFixture();t.after(()=>f.runtime.stop());
+  f.store.claim=async()=>({dispatch:false,episode:{...f.episode,preparationError:'The next panelist could not be prepared.'},operation:{state:'failed'},result:{}});
+  await assert.rejects(f.prepare(),e=>e.code==='pod_preparation_unavailable');
+  assert.equal(f.providerCalls().length,0);assert.equal(f.receipts.length,0);
+});
+
+test('a lost consumed response with expired audio returns its existing transcript and never regenerates or erases it',async t=>{
+  const f=bufferedFixture();t.after(()=>f.runtime.stop());await f.prepare();
+  const played=await f.play();f.time+=120001;
+  f.store.discardPrepared=async()=>({alreadyPlayed:true,episode:f.episode,turn:played.turn});
+  const recovered=await f.play();
+  assert.equal(recovered.audio,null);assert.equal(recovered.audioUnavailable,true);assert.equal(recovered.replayed,true);
+  assert.deepEqual(recovered.turn,played.turn);assert.equal(recovered.episode.turns.length,2);
+  assert.equal(f.providerCalls().length,2);
+});

@@ -34,6 +34,8 @@ test.before(async()=>{
  await db.exec(await readFile(new URL(name,dir),'utf8'));
  const welcomeMigration=(await readdir(dir)).find(n=>n.endsWith('_pod_prompt_welcome_audio.sql'));
  await db.exec(await readFile(new URL(welcomeMigration,dir),'utf8'));
+ const preparedMigration=(await readdir(dir)).find(n=>n.endsWith('_pod_prepared_turn_buffer.sql'));
+ await db.exec(await readFile(new URL(preparedMigration,dir),'utf8'));
  store=createPodStore({database:{rpc:async(_name,p)=>{try{return {data:await raw(p.p_actor,p.p_action,p.p_id,p.p_data)};}catch(error){if(process.env.POD_DEBUG)console.error(error.message,error.where);return {error};}}},logger:{warn(){}}});
 });
 test.beforeEach(async()=>{await db.exec('reset role');owner=randomUUID();other=randomUUID();await db.query('insert into auth.users values($1),($2)',[owner,other]);await db.exec('set role service_role');});
@@ -233,4 +235,128 @@ test('service-only tables/functions enforce RLS and deny direct client accountin
   await assert.rejects(db.query("select public.korlix_pod_v1(null,'sweep')"),/permission denied/);
   await db.exec('reset role');
  }
+});
+
+async function prepareTurn(episode, extra={}) {
+ const c=await claim(episode,'prepare');
+ await paid(episode.id,c.requestId,'turn',{inputTokens:5,outputTokens:5,totalTokens:10});
+ await paid(episode.id,c.requestId,'speak');
+ const result={turn:{speaker:'analyst',text:'A prepared second perspective.',sourceIds:[]},...extra};
+ return {...await store.finish(owner,episode.id,c.requestId,result),requestId:c.requestId};
+}
+test('one prepared turn stays private until atomic handoff and retries never append twice',async()=>{
+ const {episode}=await firstTurn(),ready=await prepareTurn(episode);
+ assert(ready.prepared);assert(ready.committed);assert.equal(ready.preparedId,ready.requestId);assert(!('turn' in ready));
+ assert.equal(ready.episode.preparedId,ready.requestId);assert.equal(ready.episode.turns.length,1);assert.equal(ready.episode.phase,'listening');
+ const privateOp=(await db.query('select * from korlix_pod_operations where episode_id=$1 and request_id=$2',[episode.id,ready.requestId])).rows[0];
+ assert.equal(privateOp.state,'prepared');assert.equal(privateOp.result.turn.text,'A prepared second perspective.');
+ await assert.rejects(claim(ready.episode,'prepare'),e=>e.status===409);
+ await assert.rejects(claim(ready.episode,'next'),e=>e.status===409);
+ const same=await store.claim(owner,episode.id,{requestId:ready.requestId,version:episode.version,kind:'prepare'});
+ assert.equal(same.dispatch,false);assert.deepEqual(same.result,{});
+ const finishedAgain=await store.finish(owner,episode.id,ready.requestId,{});assert(finishedAgain.prepared);assert(!('turn' in finishedAgain));
+ const played=await store.playPrepared(owner,episode.id,{requestId:ready.requestId,version:ready.episode.version});
+ assert(played.committed);assert.equal(played.episode.turns.length,2);assert.equal(played.turn.id,ready.requestId);assert.equal(played.episode.preparedId,null);
+ const repeated=await store.playPrepared(owner,episode.id,{requestId:ready.requestId,version:played.episode.version});assert(repeated.replayed);assert.equal(repeated.episode.turns.length,2);
+ assert.equal((await monthly()).total_tokens,30);assert.equal(played.episode.deadlineAt,episode.deadlineAt);
+});
+test('prepared research does not expose brief, sources, summary or heard transcript before consume',async()=>{
+ const {episode}=await create(),welcome=await claim(episode);await paid(episode.id,welcome.requestId,'speak');
+ const opening=await store.finish(owner,episode.id,welcome.requestId,{welcome:true,turn:welcomeTurn(3)}),c=await claim(opening.episode,'prepare');
+ await paid(episode.id,c.requestId,'research',{inputTokens:4,outputTokens:6,totalTokens:10});await paid(episode.id,c.requestId,'speak');
+ const sources=[{id:'s1',title:'Fixture',url:'https://www.nasa.gov/'}],brief={text:'Checked facts.',sources,checkedAt:new Date().toISOString()};
+ const ready=await store.finish(owner,episode.id,c.requestId,{turn:{speaker:'analyst',text:'A grounded opening.',sourceIds:['s1']},brief,sources,checkedAt:brief.checkedAt});
+ assert.equal(ready.episode.turns.length,1);assert.deepEqual(ready.episode.sources,[]);assert.deepEqual((await store.get(owner,episode.id)).brief,{});
+ const played=await store.playPrepared(owner,episode.id,{requestId:c.requestId,version:ready.episode.version});
+ assert.equal(played.episode.turns.length,2);assert.deepEqual(played.episode.sources,sources);assert.equal((await store.get(owner,episode.id)).brief.text,'Checked facts.');
+});
+test('ordinary pause and lost heartbeat preserve a completed preparation without extending its deadline',async()=>{
+ const {episode}=await firstTurn(),ready=await prepareTurn(episode),paused=await store.control(owner,episode.id,'pause');
+ assert.equal(paused.episode.preparedId,ready.requestId);assert(paused.episode.version>ready.episode.version);
+ await assert.rejects(store.playPrepared(owner,episode.id,{requestId:ready.requestId,version:paused.episode.version}),e=>e.status===409);
+ const resumed=await store.control(owner,episode.id,'resume');
+ await assert.rejects(store.playPrepared(owner,episode.id,{requestId:ready.requestId,version:ready.episode.version}),e=>e.status===409);
+ await db.query("update korlix_pod_sessions set last_heartbeat_at=clock_timestamp()-interval '36 seconds' where id=$1",[episode.id]);
+ const lost=await store.get(owner,episode.id);assert.equal(lost.episode.state,'paused');assert.equal(lost.episode.preparedId,ready.requestId);
+ const again=await store.control(owner,episode.id,'resume'),played=await store.playPrepared(owner,episode.id,{requestId:ready.requestId,version:again.episode.version});
+ assert(played.committed);assert.equal(played.episode.deadlineAt,resumed.episode.deadlineAt);assert.equal((await monthly()).total_tokens,30);
+ const secondPause=await store.control(owner,episode.id,'pause'),secondResume=await store.control(owner,episode.id,'resume');
+ const lostResponseReplay=await store.playPrepared(owner,episode.id,{requestId:ready.requestId,version:secondResume.episode.version});
+ assert(lostResponseReplay.replayed);assert.equal(lostResponseReplay.episode.turns.length,2);assert.equal(secondPause.episode.preparedId,null);
+});
+test('Chime in discards staged words while keeping actual receipts; old preparation cannot be consumed',async()=>{
+ const {episode}=await firstTurn(),ready=await prepareTurn(episode),interrupted=await store.control(owner,episode.id,'interrupt');
+ assert.equal(interrupted.episode.preparedId,null);
+ await store.contribute(owner,episode.id,{requestId:randomUUID(),text:'Please address my different perspective.'});
+ const resumed=await store.control(owner,episode.id,'resume');
+ await assert.rejects(store.playPrepared(owner,episode.id,{requestId:ready.requestId,version:resumed.episode.version}),e=>e.status===409);
+ assert.equal(resumed.episode.turns.length,2);assert.equal(resumed.episode.turns.at(-1).speaker,'user');assert.equal((await monthly()).total_tokens,30);
+ const op=(await db.query('select state,result from korlix_pod_operations where episode_id=$1 and request_id=$2',[episode.id,ready.requestId])).rows[0];assert.equal(op.state,'interrupted');assert.deepEqual(op.result,{});
+});
+test('prepared handoff rejects owner mismatch and changed transcript context',async()=>{
+ const {episode}=await firstTurn(),ready=await prepareTurn(episode);
+ await assert.rejects(store.playPrepared(other,episode.id,{requestId:ready.requestId,version:episode.version}),e=>e.status===404);
+ await db.query("update korlix_pod_sessions set turns=turns||$2::jsonb where id=$1",[episode.id,JSON.stringify([{id:randomUUID(),speaker:'user',text:'Changed',seq:2}])]);
+ await assert.rejects(store.playPrepared(owner,episode.id,{requestId:ready.requestId,version:episode.version}),e=>e.status===409);
+ assert.equal((await row(episode.id)).turns.length,2);
+});
+test('end and absolute deadline discard staged output without altering billing evidence',async()=>{
+ const {episode}=await firstTurn(),ready=await prepareTurn(episode),ended=await store.control(owner,episode.id,'end');assert.equal(ended.episode.preparedId,null);
+ await assert.rejects(store.playPrepared(owner,episode.id,{requestId:ready.requestId,version:ended.episode.version}),e=>e.status===409);
+ assert.equal((await monthly()).total_tokens,30);
+ const next=await firstTurn(),nextReady=await prepareTurn(next.episode);
+ await db.query("update korlix_pod_sessions set started_at=clock_timestamp()-interval '901 seconds',deadline_at=clock_timestamp()-interval '1 second' where id=$1",[next.episode.id]);
+ const expired=await store.get(owner,next.episode.id);assert.equal(expired.episode.state,'ended');assert.equal(expired.episode.preparedId,null);
+ assert.equal((await db.query('select state from korlix_pod_operations where episode_id=$1 and request_id=$2',[next.episode.id,nextReady.requestId])).rows[0].state,'interrupted');
+});
+test('prepare cannot start an episode or create a second closing after the closing was consumed',async()=>{
+ const {episode}=await create();await assert.rejects(claim(episode,'prepare'),e=>e.status===409);assert.equal((await monthly()).total_tokens,0);
+ const c=await claim(episode);await paid(episode.id,c.requestId,'speak');
+ const welcome=await store.finish(owner,episode.id,c.requestId,{welcome:true,turn:welcomeTurn(3)});
+ const closing=await prepareTurn(welcome.episode,{summary:'Thanks for listening.'});assert.equal(closing.episode.summary,null);
+ const played=await store.playPrepared(owner,episode.id,{requestId:closing.requestId,version:closing.episode.version});assert.equal(played.episode.summary,'Thanks for listening.');
+ await assert.rejects(claim(played.episode,'prepare'),e=>e.status===409);
+});
+test('known prefetch failure leaves current audio active and requires an explicit pause/resume before retry',async()=>{
+ const {episode}=await firstTurn(),c=await claim(episode,'prepare');await paid(episode.id,c.requestId,'turn',{inputTokens:5,outputTokens:5,totalTokens:10});
+ const failed=await store.fail(owner,episode.id,c.requestId,{error:'The next voice could not prepare.'});
+ assert.equal(failed.episode.state,'active');assert.equal(failed.episode.version,episode.version);assert.equal(failed.episode.turns.length,1);assert.equal(failed.episode.preparationError,'The next voice could not prepare.');
+ await assert.rejects(claim(failed.episode,'prepare'),e=>e.status===409);await assert.rejects(claim(failed.episode,'next'),e=>e.status===409);await assert.rejects(store.control(owner,episode.id,'resume'),e=>e.status===409);
+ await store.control(owner,episode.id,'pause');const resumed=await store.control(owner,episode.id,'resume');assert.equal(resumed.episode.preparationError,null);
+ const retry=await claim(resumed.episode,'prepare');assert(retry.dispatch);assert.equal((await monthly()).total_tokens,30);
+});
+test('uncertain prefetch usage remains receipted and cannot restart paid work by pause/resume',async()=>{
+ const {episode}=await firstTurn(),c=await claim(episode,'prepare');await store.authorizeDispatch(owner,episode.id,c.requestId,'turn');
+ await store.recordUsage(owner,episode.id,c.requestId,{callKey:'turn',usage:{},evidence:{status:'uncertain',usageKnown:false}});
+ const failed=await store.fail(owner,episode.id,c.requestId,{error:'AI usage is unknown.'});assert.equal(failed.episode.state,'active');
+ await store.control(owner,episode.id,'pause');await assert.rejects(store.control(owner,episode.id,'resume'),e=>e.status===409);
+ const receipts=(await db.query('select count(*)::int n from korlix_pod_usage_receipts where episode_id=$1',[episode.id])).rows[0].n;assert.equal(receipts,3);
+});
+test('cache loss discards only prepared output and requires explicit retry without appending unheard words',async()=>{
+ const {episode}=await firstTurn(),ready=await prepareTurn(episode);
+ const discarded=await store.discardPrepared(owner,episode.id,{requestId:ready.requestId,version:episode.version});assert(discarded.discarded);assert.equal(discarded.episode.preparedId,null);assert.equal(discarded.episode.turns.length,1);assert(discarded.episode.preparationError.includes('expired'));
+ await assert.rejects(claim(discarded.episode,'prepare'),e=>e.status===409);
+ await store.control(owner,episode.id,'pause');const resumed=await store.control(owner,episode.id,'resume');const retry=await claim(resumed.episode,'prepare');assert(retry.dispatch);assert.equal((await monthly()).total_tokens,30);
+});
+test('pause during paid preparation rejects late output but retains its measured usage',async()=>{
+ const {episode}=await firstTurn(),c=await claim(episode,'prepare');await store.authorizeDispatch(owner,episode.id,c.requestId,'turn');await store.control(owner,episode.id,'pause');
+ const receipt=await store.recordUsage(owner,episode.id,c.requestId,{callKey:'turn',usage:{inputTokens:5,outputTokens:6,totalTokens:11},evidence:{usageKnown:true}});assert.equal(receipt.allowed,false);
+ const late=await store.finish(owner,episode.id,c.requestId,{turn:{speaker:'analyst',text:'This must never become heard.'}});assert.equal(late.committed,false);assert.equal(late.episode.turns.length,1);assert.equal(late.episode.preparedId,null);assert.equal((await monthly()).total_tokens,31);
+ const resumed=await store.control(owner,episode.id,'resume');assert.equal(resumed.episode.state,'active');
+});
+test('expired preparation lease preserves current playback and does not automatically repeat a dispatched call',async()=>{
+ const {episode}=await firstTurn(),c=await claim(episode,'prepare');await store.authorizeDispatch(owner,episode.id,c.requestId,'turn');
+ await db.query("update korlix_pod_operations set lease_until=clock_timestamp()-interval '1 second' where episode_id=$1 and request_id=$2",[episode.id,c.requestId]);
+ const current=await store.get(owner,episode.id);assert.equal(current.episode.state,'active');assert.equal(current.episode.version,episode.version);assert.equal(current.episode.turns.length,1);assert(current.episode.preparationError);
+ await assert.rejects(claim(current.episode,'prepare'),e=>e.status===409);assert.equal((await store.authorizeDispatch(owner,episode.id,c.requestId,'speak')).allowed,false);
+ await store.control(owner,episode.id,'pause');await assert.rejects(store.control(owner,episode.id,'resume'),e=>e.status===409);
+ const op=(await db.query('select state,uncertain from korlix_pod_operations where episode_id=$1 and request_id=$2',[episode.id,c.requestId])).rows[0];assert.equal(op.state,'expired');assert(op.uncertain);
+});
+test('expired cache after a lost consume response reports already-played without deleting or regenerating transcript',async()=>{
+ const {episode}=await firstTurn(),ready=await prepareTurn(episode),played=await store.playPrepared(owner,episode.id,{requestId:ready.requestId,version:episode.version});
+ await store.control(owner,episode.id,'pause');const resumed=await store.control(owner,episode.id,'resume');
+ const missing=await store.discardPrepared(owner,episode.id,{requestId:ready.requestId,version:resumed.episode.version});
+ assert(missing.alreadyPlayed);assert.equal(missing.episode.turns.length,2);assert.equal(missing.turn.id,played.turn.id);assert.equal(missing.episode.preparationError,null);assert.equal((await monthly()).total_tokens,30);
+ await store.control(owner,episode.id,'interrupt');await store.contribute(owner,episode.id,{requestId:randomUUID(),text:'Another thought'});const changed=await store.control(owner,episode.id,'resume');
+ await assert.rejects(store.discardPrepared(owner,episode.id,{requestId:ready.requestId,version:changed.episode.version}),e=>e.status===409);
 });

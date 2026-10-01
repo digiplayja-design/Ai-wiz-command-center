@@ -55,7 +55,8 @@ export function podAudioBody(value) {
 }
 
 const episodeKeys = ['id','category','topic','durationSeconds','hostCount','style','state','phase','version',
-  'createdAt','startedAt','deadlineAt','serverNow','turns','sources','checkedAt','summary','endReason','error','usageLabel'];
+  'createdAt','startedAt','deadlineAt','serverNow','turns','sources','checkedAt','summary','endReason','error','usageLabel',
+  'preparedId','preparationError'];
 const pick = (value, keys) => value && typeof value === 'object'
   ? Object.fromEntries(keys.filter(k=>value[k]!==undefined).map(k=>[k,value[k]])) : null;
 export const publicPodTurn = turn => pick(turn,['id','seq','speaker','text','sourceIds','createdAt','interrupted']);
