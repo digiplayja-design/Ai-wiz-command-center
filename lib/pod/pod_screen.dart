@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'pod_client.dart';
 import 'pod_media.dart';
 import 'pod_artwork.dart';
+import 'pod_wake_lock.dart';
 
 const _navy = Color(0xFF080D20);
 const _panel = Color(0xFF11192E);
@@ -47,6 +48,7 @@ class PodScreen extends StatefulWidget {
     required this.client,
     required this.ensureConsent,
     this.media,
+    this.wakeLock,
     this.disposeClient = true,
     this.openLink,
     this.now,
@@ -54,6 +56,7 @@ class PodScreen extends StatefulWidget {
   final PodClient client;
   final Future<bool> Function() ensureConsent;
   final PodMedia? media;
+  final PodWakeLock? wakeLock;
   final bool disposeClient;
   final Future<bool> Function(Uri)? openLink;
   final DateTime Function()? now;
@@ -63,6 +66,7 @@ class PodScreen extends StatefulWidget {
 
 class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
   late final PodMedia _media;
+  late final PodWakeLock _wakeLock;
   final _topic = TextEditingController();
   final _contribution = TextEditingController();
   final _scroll = ScrollController();
@@ -84,7 +88,9 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
   String? _contributionRequestId, _submittedText;
   DateTime? _deadlineLocal, _serverDeadline, _preparingSince;
   Uint8List? _pendingWav;
-  String? _pendingSpeaker;
+  String? _pendingSpeaker, _pendingTurnId;
+  int? _backgroundNextEpoch;
+  Future<void>? _nextSettled;
   Timer? _clockTimer, _deadlineTimer, _heartbeatTimer, _recordingTimer;
 
   DateTime get _now => widget.now?.call() ?? DateTime.now();
@@ -142,6 +148,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     _foreground = lifecycle == null || lifecycle == AppLifecycleState.resumed;
     _media = widget.media ?? createPodMedia();
     _media.addListener(_mediaChanged);
+    _wakeLock = widget.wakeLock ?? createPodWakeLock();
+    _wakeLock.addListener(_wakeLockChanged);
     widget.client.onAccessDenied = _lock;
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && _live && _deadlineLocal != null) {
@@ -166,13 +174,19 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     // A native microphone permission dialog temporarily makes the app inactive.
     // Real background transitions still arrive as hidden/paused/detached.
     if (state == AppLifecycleState.inactive && _startingRecording) return;
+    final wasForeground = _foreground;
     _foreground = state == AppLifecycleState.resumed;
+    _syncWakeLock();
+    // iOS reports several lifecycle states for one screen lock. Send a single
+    // pause so those requests cannot race each other or a later Resume.
+    if (wasForeground == _foreground) return;
     if (!_foreground) {
       if (_live) {
         unawaited(
           _pause(
+            preserveBackgroundAudio: true,
             message:
-                'Paused while the app is in the background. The episode clock keeps running.',
+                'Screen locked or app hidden. Tap Resume after returning to continue; saved audio is reused. The episode clock keeps running.',
           ),
         );
       } else {
@@ -191,6 +205,19 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     }
   }
 
+  void _wakeLockChanged() {
+    if (mounted && !_locked) setState(() {});
+  }
+
+  void _syncWakeLock({bool retry = false}) {
+    unawaited(
+      _wakeLock.setRequested(
+        mounted && !_locked && _foreground && _live && _listening,
+        retry: retry,
+      ),
+    );
+  }
+
   void _mediaChanged() {
     if (!mounted || _locked) return;
     setState(() {});
@@ -203,6 +230,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     if (!mounted || _locked) return;
     _epoch++;
     _pendingWav = null;
+    _pendingTurnId = null;
+    _backgroundNextEpoch = null;
     _deadlineTimer?.cancel();
     _recordingTimer?.cancel();
     unawaited(_media.stop());
@@ -222,6 +251,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       _topic.clear();
       _contribution.clear();
     });
+    _syncWakeLock();
   }
 
   @override
@@ -235,6 +265,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     widget.client.onAccessDenied = null;
     _media.removeListener(_mediaChanged);
     _media.dispose();
+    _wakeLock.removeListener(_wakeLockChanged);
+    _wakeLock.dispose();
     // Give the authenticated end request a chance to complete before closing its
     // transport. Server deadline/heartbeat leases also bound a lost connection.
     final id = _live ? _s(_episode['id']) : null;
@@ -327,6 +359,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       _deadlineLocal = null;
       _serverDeadline = null;
       _pendingWav = null;
+      _pendingTurnId = null;
+      _backgroundNextEpoch = null;
     }
     final deadline = DateTime.tryParse(_s(next['deadlineAt']));
     final serverNow = DateTime.tryParse(_s(next['serverNow']));
@@ -361,7 +395,11 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         _recording = false;
         _transcribing = false;
         _startingRecording = false;
-        if (_terminal(next)) _pendingWav = null;
+        if (_terminal(next)) {
+          _pendingWav = null;
+          _pendingTurnId = null;
+          _backgroundNextEpoch = null;
+        }
         if (_terminal(next) && _s(next['error']).isNotEmpty) {
           _error = _s(next['error']);
         }
@@ -371,6 +409,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         }
       }
     });
+    _syncWakeLock();
     if (_terminal(next) && _s(next['error']).isNotEmpty) _reveal(_errorAnchor);
     _deadlineTimer?.cancel();
     if (_live && _deadlineLocal != null) {
@@ -470,6 +509,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         _busy = false;
         _composing = false;
       });
+      _syncWakeLock();
       unawaited(_next(epoch));
       _reveal(_studioAnchor);
     } catch (e) {
@@ -506,13 +546,18 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       _speaking = null;
       _preparingSince = _now;
     });
+    final settled = Completer<void>();
+    _nextSettled = settled.future;
     try {
       final result = await widget.client.next(
         _s(_episode['id']),
         requestId: podRequestId(),
         version: (_episode['version'] as num).toInt(),
       );
-      if (!_current(epoch) || !_foreground || !_listening) return;
+      if (!_current(epoch) || !_foreground || !_listening) {
+        _retainBackgroundAudio(result, epoch);
+        return;
+      }
       _acceptEpisode(_map(result['episode']));
       if (!_current(epoch) || !_listening || !_live || _remaining == 0) return;
       final audio = _map(result['audio']);
@@ -531,6 +576,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       }
       _pendingWav = base64Decode(audio['base64'] as String);
       _pendingSpeaker = _s(turn['speaker']);
+      _pendingTurnId = _s(turn['id']);
       await _playPending(epoch);
     } catch (e) {
       if (_current(epoch)) {
@@ -539,6 +585,39 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
           message: 'Playback paused. Nothing is retried automatically.',
         );
       }
+    } finally {
+      settled.complete();
+      if (identical(_nextSettled, settled.future)) _nextSettled = null;
+    }
+  }
+
+  void _retainBackgroundAudio(Map<String, dynamic> result, int epoch) {
+    // Only a background pause may preserve a late response. Chime in, End,
+    // sign-out and a different episode revoke this permission immediately.
+    if (!_alive() ||
+        !_live ||
+        _remaining == 0 ||
+        _backgroundNextEpoch != epoch) {
+      return;
+    }
+    final episode = _map(result['episode']);
+    final turn = _map(result['turn']);
+    final audio = _map(result['audio']);
+    final turnId = _s(turn['id']);
+    if (episode['id'] != _episode['id'] ||
+        turnId.isEmpty ||
+        _maps(episode['turns']).lastOrNull?['id'] != turnId ||
+        result['audioUnavailable'] == true ||
+        audio['mime'] != 'audio/wav' ||
+        audio['base64'] is! String) {
+      return;
+    }
+    try {
+      _pendingWav = base64Decode(audio['base64'] as String);
+      _pendingSpeaker = _s(turn['speaker']);
+      _pendingTurnId = turnId;
+    } catch (_) {
+      // A malformed or unavailable response remains transcript-only.
     }
   }
 
@@ -566,6 +645,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     }
     _pendingWav = null;
     _pendingSpeaker = null;
+    _pendingTurnId = null;
     // Exactly one next request, only after the preceding clip really ended.
     unawaited(_next(epoch));
   }
@@ -574,13 +654,19 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     String? message,
     String? error,
     String action = 'pause',
+    bool preserveBackgroundAudio = false,
   }) async {
     if (!_alive() || !_live) return;
     final id = _s(_episode['id']);
+    _backgroundNextEpoch =
+        preserveBackgroundAudio && _listening && _busy && _nextSettled != null
+        ? _epoch
+        : null;
     final epoch = ++_epoch;
     if (action == 'interrupt') {
       _pendingWav = null;
       _pendingSpeaker = null;
+      _pendingTurnId = null;
     }
     _recordingTimer?.cancel();
     setState(() {
@@ -593,6 +679,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       if (message != null) _notice = message;
       if (error != null) _error = error;
     });
+    _syncWakeLock();
     if (error != null) _reveal(_errorAnchor);
     // Revoke both local operations immediately. A system permission prompt may
     // keep capture cleanup pending; it must not delay the server control call.
@@ -648,6 +735,24 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
           !_current(epoch)) {
         return;
       }
+      // Do not overlap a paid generation with the request that was in flight
+      // when the screen locked. It may already have committed reusable audio.
+      final pausedRequest = _backgroundNextEpoch == null ? null : _nextSettled;
+      if (pausedRequest != null) {
+        setState(() {
+          _notice =
+              'Recovering the interrupted turn. Checking for saved audio before continuing…';
+        });
+        try {
+          await pausedRequest.timeout(const Duration(seconds: 8));
+        } on TimeoutException {
+          throw const PodException(
+            'The interrupted request is still settling. Tap Resume again in a moment. No extra audio has been generated.',
+          );
+        }
+      }
+      if (!_current(epoch) || !_foreground || !_live || _remaining == 0) return;
+      _backgroundNextEpoch = null;
       final checked = await widget.client.episode(_s(_episode['id']));
       if (!_current(epoch)) return;
       _acceptEpisode(checked);
@@ -656,11 +761,21 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       if (!_current(epoch)) return;
       _acceptEpisode(result);
       if (!_live || _remaining == 0) return;
+      // Resume returns the authoritative state after its version change. A
+      // different tab may have advanced the conversation since the GET above.
+      if (_pendingTurnId != null &&
+          _maps(_episode['turns']).lastOrNull?['id'] != _pendingTurnId) {
+        _pendingWav = null;
+        _pendingSpeaker = null;
+        _pendingTurnId = null;
+      }
       setState(() {
         _listening = true;
         _busy = false;
         _composing = false;
+        _notice = null;
       });
+      _syncWakeLock();
       _reveal(_studioAnchor);
       if (_pendingWav != null) {
         try {
@@ -699,6 +814,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     final epoch = ++_epoch;
     _pendingWav = null;
     _pendingSpeaker = null;
+    _pendingTurnId = null;
+    _backgroundNextEpoch = null;
     _deadlineTimer?.cancel();
     _recordingTimer?.cancel();
     setState(() {
@@ -718,6 +835,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
           ? 'Your episode time is complete. Audio and recording have stopped.'
           : 'Episode ended. Your private transcript is saved.';
     });
+    _syncWakeLock();
     unawaited(_media.stop());
     unawaited(_media.cancelRecording());
     try {
@@ -1905,6 +2023,45 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
               ],
             ),
           ),
+          if (_live && _listening) ...[
+            const SizedBox(height: 12),
+            Row(
+              key: const Key('pod-screen-awake'),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  _wakeLock.active
+                      ? Icons.screen_lock_portrait_rounded
+                      : Icons.info_outline_rounded,
+                  color: _wakeLock.active ? _cyan : _gold,
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _wakeLock.active
+                        ? 'Screen-awake protection is on while you listen.'
+                        : _wakeLock.pending
+                        ? 'Turning on screen-awake protection…'
+                        : 'Screen-awake protection is unavailable. After unlocking, tap Resume to continue.',
+                    style: const TextStyle(
+                      color: _muted,
+                      fontSize: 11,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+                if (_wakeLock.supported &&
+                    !_wakeLock.active &&
+                    !_wakeLock.pending)
+                  TextButton(
+                    key: const Key('pod-screen-awake-retry'),
+                    onPressed: () => _syncWakeLock(retry: true),
+                    child: const Text('Retry'),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 26),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,

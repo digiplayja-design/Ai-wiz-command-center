@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:ai_wiz_command_center/pod/pod_client.dart';
 import 'package:ai_wiz_command_center/pod/pod_media.dart';
 import 'package:ai_wiz_command_center/pod/pod_screen.dart';
+import 'package:ai_wiz_command_center/pod/pod_wake_lock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -222,12 +223,38 @@ class _FakeMedia extends PodMedia {
   }
 }
 
+class _WakeLease implements PodWakeLockLease {
+  @override
+  bool released = false;
+  VoidCallback? callback;
+  @override
+  void onRelease(VoidCallback? value) => callback = value;
+  @override
+  Future<void> release() async {
+    released = true;
+    callback?.call();
+  }
+}
+
+class _WakeBackend implements PodWakeLockBackend {
+  @override
+  bool get supported => true;
+  final leases = <_WakeLease>[];
+  @override
+  Future<PodWakeLockLease> acquire() async {
+    final lease = _WakeLease();
+    leases.add(lease);
+    return lease;
+  }
+}
+
 Future<void> _mount(
   WidgetTester tester,
   _FakePod client,
   _FakeMedia media,
   List<String> events, {
   DateTime Function()? now,
+  PodWakeLock? wakeLock,
 }) async {
   tester.view.physicalSize = const Size(1200, 1600);
   tester.view.devicePixelRatio = 1;
@@ -238,6 +265,7 @@ Future<void> _mount(
       home: PodScreen(
         client: client,
         media: media,
+        wakeLock: wakeLock,
         now: now,
         ensureConsent: () async {
           events.add('consent');
@@ -272,6 +300,147 @@ void _foreground(WidgetTester tester) {
 }
 
 void main() {
+  testWidgets('screen lock pauses once and Resume reuses interrupted audio', (
+    tester,
+  ) async {
+    final events = <String>[];
+    final client = _FakePod(events);
+    final media = _FakeMedia(events);
+    final backend = _WakeBackend();
+    final wakeLock = PodWakeLock(backend: backend);
+    await _mount(
+      tester,
+      client,
+      media,
+      events,
+      now: () => _time,
+      wakeLock: wakeLock,
+    );
+    await _listen(tester);
+    expect(wakeLock.active, isTrue);
+    expect(
+      find.text('Screen-awake protection is on while you listen.'),
+      findsOneWidget,
+    );
+    client.complete(0, _turnResponse());
+    await tester.pumpAndSettle();
+    expect(media.plays, 1);
+    _background(tester);
+    await tester.pumpAndSettle();
+    expect(client.actions.where((action) => action == 'pause').length, 1);
+    expect(backend.leases.single.released, isTrue);
+    expect(media.playing, isFalse);
+    _foreground(tester);
+    await tester.pumpAndSettle();
+    expect(media.plays, 1);
+    expect(wakeLock.active, isFalse);
+    await tester.ensureVisible(find.byKey(const Key('pod-pause-resume')));
+    await tester.tap(find.byKey(const Key('pod-pause-resume')));
+    await tester.pumpAndSettle();
+    expect(media.plays, 2);
+    expect(client.pending.length, 1);
+    expect(wakeLock.active, isTrue);
+    await tester.ensureVisible(find.byKey(const Key('pod-end')));
+    await tester.tap(find.byKey(const Key('pod-end')));
+    await tester.pumpAndSettle();
+    expect(wakeLock.active, isFalse);
+    expect(backend.leases.last.released, isTrue);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
+  testWidgets(
+    'late committed audio after screen lock is reused before any next request',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events);
+      final media = _FakeMedia(events);
+      await _mount(tester, client, media, events, now: () => _time);
+      await _listen(tester);
+      _background(tester);
+      await tester.pumpAndSettle();
+      _foreground(tester);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('pod-pause-resume')));
+      await tester.tap(find.byKey(const Key('pod-pause-resume')));
+      await tester.pumpAndSettle();
+      expect(client.pending.length, 1);
+      expect(
+        find.textContaining('Recovering the interrupted turn'),
+        findsOneWidget,
+      );
+      final response = _turnResponse();
+      client.current = {
+        ...Map<String, dynamic>.from(response['episode']),
+        'state': 'paused',
+        'version': 1,
+      };
+      client.pending.single.complete(response);
+      await tester.pumpAndSettle();
+      expect(media.plays, 1);
+      expect(client.pending.length, 1);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
+  testWidgets('screen lock recovery has a bounded wait without paid retries', (
+    tester,
+  ) async {
+    final events = <String>[];
+    final client = _FakePod(events);
+    final media = _FakeMedia(events);
+    await _mount(tester, client, media, events, now: () => _time);
+    await _listen(tester);
+    _background(tester);
+    await tester.pumpAndSettle();
+    _foreground(tester);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('pod-pause-resume')));
+    await tester.tap(find.byKey(const Key('pod-pause-resume')));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 9));
+    await tester.pumpAndSettle();
+    expect(client.pending.length, 1);
+    expect(media.plays, 0);
+    expect(
+      find.textContaining('The interrupted request is still settling'),
+      findsOneWidget,
+    );
+    final resume = tester.widget<IconButton>(
+      find.byKey(const Key('pod-pause-resume')),
+    );
+    expect(resume.onPressed, isNotNull);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
+  testWidgets('unlock after the deadline never plays retained or late audio', (
+    tester,
+  ) async {
+    final events = <String>[];
+    final client = _FakePod(events);
+    final media = _FakeMedia(events);
+    var now = _time;
+    await _mount(tester, client, media, events, now: () => now);
+    await _listen(tester);
+    client.complete(0, _turnResponse(remaining: 2));
+    await tester.pumpAndSettle();
+    _background(tester);
+    await tester.pumpAndSettle();
+    now = now.add(const Duration(seconds: 3));
+    _foreground(tester);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    expect(media.plays, 1);
+    expect(media.playing, isFalse);
+    expect(client.pending.length, 1);
+    expect(client.actions, contains('end'));
+    expect(find.byKey(const Key('pod-pause-resume')), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
   testWidgets(
     'Listen reveals preparation on a phone and errors remain visible',
     (tester) async {
