@@ -31,7 +31,7 @@ AI sharing permission explicitly covers authorized company/team/task/schedule/wo
 
 ## Storage and rollout
 
-The additive `workforce_business_workspace` migration adds profile columns, private task storage and `korlix_workforce_workspace_v2`. The original attendance function stays unchanged for rollback. Both tables and functions are unavailable to browser roles; service-role execution requires the backend's verified actor, fresh membership and owner plan. Task foreign keys bind creators and assignees to the same organization; mutation locks match the original workspace lock, and optimistic versions protect edits. Existing records are preserved.
+The applied migration `20261002135317_workforce_business_workspace.sql` adds profile columns, private task storage and `korlix_workforce_workspace_v2`. The original attendance function stays unchanged for rollback. Both tables and functions are unavailable to browser roles; service-role execution requires the backend's verified actor, fresh membership and owner plan. Task foreign keys bind creators and assignees to the same organization; mutation locks match the original workspace lock, and optimistic versions protect edits. Existing records are preserved.
 
 Apply the additive migration, deploy the existing backend release branch, verify `/api/health` reports Workforce version 2 and anonymous Workforce requests return 401, then deploy the frontend release branch. No new Render service, paid resource, provider key, invitation, automation rule or outbound communication is created. Email follow-ups retain the existing approved owner/agent binding and delivery controls; this release does not make outbound email or calling generally available to every business.
 
@@ -42,5 +42,5 @@ Rollback: redeploy the previous backend/frontend revisions. Keep the additive sc
 - Backend Workforce, automations, voice and FieldProof voice regression suites: 28 tests passed against isolated PostgreSQL and HTTP fixtures.
 - Flutter Workforce, new business/task/review flows, Workforce voice and FieldProof voice lifecycle suites: 37 tests passed. Coverage includes responsive 390/768/1440-pixel screens, unsaved drafts, editable save handoff, replay rejection, microphone cleanup failure, account changes, tenant/role boundaries and stale membership.
 - Workforce module and tests: analyzer clean. Shared main/voice files retain pre-existing informational style/deprecation findings, without analysis errors or warnings.
-- Release web build and public deployment checks are required before rollout is marked complete.
+- Release web build passed. Production migration verification confirms task RLS, service-only table/RPC access, preserved organization count and unchanged attendance RPC body (`fb0029a12a3532360a6eb7f3e3c1e768`). Public deployment checks complete the rollout.
 - A real microphone conversation and device permissions still need the user's device acceptance check; mocked transport tests do not replace it.
