@@ -1,3 +1,4 @@
+import 'workforce/workforce_voice.dart';
 import 'fieldproof/fieldproof_voice.dart';
 import 'chat/chat_memory_client.dart';
 import 'chat/chat_memory_screen.dart';
@@ -9740,9 +9741,17 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   Future<void> _openWorkforce() async {
-    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
-      WorkforceScreen(client: WorkforceClient(backendBaseUrl: kKorlixBackendBaseUrl,
-        headersBuilder: _authHeaders))));
+    final client=WorkforceClient(backendBaseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>WorkforceScreen(client:client,openVoice:(snapshot)async{
+      final revision=kKorlixAuthRevision.value;
+      final consent=await ensureKorlixThirdPartyAiConsent(context:context,featureName:'Workforce and K-Nova',providers:const {KorlixThirdPartyAiProvider.openAi},dataCategories:const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,KorlixThirdPartyAiDataCategory.workforceRecords});
+      if(!consent||!mounted||client.sessionChanged||revision!=kKorlixAuthRevision.value)return null;
+      final voice=WorkforceVoiceController(client:client,organizationId:snapshot['organization']['id'] as String,memberId:snapshot['member']['user_id'] as String,memberVersion:snapshot['member']['version'] as int);
+      try{
+        final route=MaterialPageRoute<Map<String,dynamic>>(builder:(_)=>KorlixLiveConvoTestScreen(workforceVoice:voice,sessionChanges:kKorlixAuthRevision,backendBaseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,characterId:normalizeKorlixCharacterId(kKorlixSelectedCharacterNotifier.value),language:_t.label));
+        final result=await Navigator.of(context).push<Map<String,dynamic>>(route);await route.completed;return result;
+      }finally{voice.dispose();}
+    })));
   }
 
   void _selectUtilityTool(String tool) {
@@ -11908,7 +11917,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       if (tool == 'Funnel Studio') return 'Enterprise pages, lead capture and campaign links';
       if (tool == 'Payroll') return 'Enterprise US payroll, employee onboarding and payroll tax workflows';
       if (tool == 'KORLIX 2MEETU' || tool == 'Scheduling') return 'AI scheduling, booking pages, group sessions and appointments';
-      if (tool == 'Workforce') return 'Enterprise attendance, work updates and employee access';
+      if (tool == 'Workforce') return 'Your business, team tasks, shifts and K-Nova voice assistance';
       if (tool == 'Contacts CRM') return 'Enterprise contacts, imports and KORLIX connections';
       if (tool == 'Voice-scribe') {
         return 'Transcribe speech into saved voice boxes';

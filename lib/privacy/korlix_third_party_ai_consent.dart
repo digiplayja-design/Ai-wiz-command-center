@@ -28,6 +28,7 @@ enum KorlixThirdPartyAiDataCategory {
   bookkeepingRecords,
   musicDraftsAndLibrary,
   fieldProofRecords,
+  workforceRecords,
 }
 
 extension KorlixThirdPartyAiDataCategoryLabel
@@ -46,6 +47,8 @@ extension KorlixThirdPartyAiDataCategoryLabel
         return 'Agent training and approved memory';
       case KorlixThirdPartyAiDataCategory.bookkeepingRecords:
         return 'Selected business bookkeeping records';
+      case KorlixThirdPartyAiDataCategory.workforceRecords:
+        return 'Authorized company, team, assignment, schedule and work-update records';
       case KorlixThirdPartyAiDataCategory.fieldProofRecords:
         return 'Private field-job details, readings, checklists, and evidence notes';
       case KorlixThirdPartyAiDataCategory.musicDraftsAndLibrary:

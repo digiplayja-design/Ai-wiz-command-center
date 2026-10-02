@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 typedef WfJson = Map<String, dynamic>;
+WfJson wfClone(WfJson value) =>
+    Map<String, dynamic>.from(jsonDecode(jsonEncode(value)) as Map);
 List<WfJson> wfRows(dynamic value) => (value as List? ?? [])
     .map((e) => Map<String, dynamic>.from(e as Map))
     .toList();
@@ -32,14 +34,85 @@ class WorkforceClient {
     required this.backendBaseUrl,
     required this.headersBuilder,
     http.Client? client,
+    this.sessionChanges,
   }) : _http = client ?? http.Client(),
-       _ownsClient = client == null;
+       _ownsClient = client == null {
+    _scope = _readScope();
+    sessionChanges?.addListener(_checkSession);
+  }
   final String backendBaseUrl;
   final Map<String, String> Function() headersBuilder;
   final http.Client _http;
   final bool _ownsClient;
   void Function()? onSignedOut;
+  final Listenable? sessionChanges;
+  String? _scope;
+  bool _closed = false, _changed = false;
+  final Set<VoidCallback> _accessListeners = {};
+  bool get sessionChanged => _closed || _changed;
+  void addAccessDeniedListener(VoidCallback listener) =>
+      _accessListeners.add(listener);
+  void removeAccessDeniedListener(VoidCallback listener) =>
+      _accessListeners.remove(listener);
+  void _deny() {
+    onSignedOut?.call();
+    for (final listener in List<VoidCallback>.from(_accessListeners)) {
+      listener();
+    }
+  }
+
+  String? _readScope([Map<String, String>? headers]) {
+    try {
+      final value = (headers ?? headersBuilder()).entries
+          .firstWhere((e) => e.key.toLowerCase() == 'authorization')
+          .value;
+      final payload = value.split(' ').last.split('.')[1];
+      final c = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(payload))),
+      );
+      final scope = [c['iss'], c['sub'], c['session_id']];
+      if (scope.any((v) => v is! String || v.isEmpty)) return null;
+      return jsonEncode(scope);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _checkSession() {
+    if (!_closed &&
+        !_changed &&
+        sessionChanges != null &&
+        (_scope == null || _scope != _readScope())) {
+      _changed = true;
+      _deny();
+    }
+  }
+
+  void _guard([Map<String, String>? headers]) {
+    if (_closed) {
+      throw const WorkforceException('Reopen Workforce to continue.');
+    }
+    _checkSession();
+    if (!_changed &&
+        sessionChanges != null &&
+        headers != null &&
+        _scope != _readScope(headers)) {
+      _changed = true;
+      _deny();
+    }
+    if (_changed) {
+      throw const WorkforceException(
+        'Sign in again and reopen Workforce.',
+        401,
+      );
+    }
+  }
+
   void dispose() {
+    if (_closed) return;
+    _closed = true;
+    sessionChanges?.removeListener(_checkSession);
+    _accessListeners.clear();
     if (_ownsClient) _http.close();
   }
 
@@ -59,12 +132,17 @@ class WorkforceClient {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         });
+      _guard(req.headers);
       if (body != null) req.body = jsonEncode(body);
       final res = await (() async => http.Response.fromStream(
         await _http.send(req),
       ))().timeout(const Duration(seconds: 40));
+      _guard();
       if (res.statusCode < 200 || res.statusCode >= 300) {
-        if (res.statusCode == 401) onSignedOut?.call();
+        if (res.statusCode == 401) {
+          _changed = true;
+          _deny();
+        }
         String message =
             'Workforce could not complete this request. Please try again.';
         try {
@@ -75,10 +153,12 @@ class WorkforceClient {
       }
       return res;
     } on TimeoutException {
+      _guard();
       throw const WorkforceException(
         'Connection timed out. Refresh to check whether your action was saved before trying again.',
       );
     } on http.ClientException {
+      _guard();
       throw const WorkforceException(
         'Check your connection, then refresh your shift.',
       );

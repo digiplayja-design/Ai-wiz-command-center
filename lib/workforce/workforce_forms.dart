@@ -136,7 +136,8 @@ class _WorkforceFormState extends State<WorkforceForm> {
           _values[f.keyName] = switch (f.type) {
             'int' => int.parse(v),
             'number' => v.isEmpty ? null : double.parse(v),
-            'datetime' => DateTime.parse(v).toUtc().toIso8601String(),
+            'datetime' =>
+              v.isEmpty ? null : DateTime.parse(v).toUtc().toIso8601String(),
             _ => v,
           };
         }
@@ -249,7 +250,7 @@ class _WorkforceFormState extends State<WorkforceForm> {
                           controller: _controllers[f.keyName],
                           enabled: !_saving,
                           maxLines: f.lines,
-                          maxLength: f.keyName == 'summary'
+                          maxLength: ['summary', 'details'].contains(f.keyName)
                               ? 2000
                               : f.lines > 1
                               ? 1000
@@ -284,6 +285,7 @@ class _WorkforceFormState extends State<WorkforceForm> {
                               return 'Enter a number.';
                             }
                             if (f.type == 'datetime' &&
+                                (s.isNotEmpty || f.required) &&
                                 DateTime.tryParse(s) == null) {
                               return 'Choose a date and time.';
                             }
@@ -535,7 +537,7 @@ class _WorkforcePunchDialogState extends State<WorkforcePunchDialog> {
                 ),
               ],
               const Text(
-                'Photo evidence for your employer. No facial identification or matching.',
+                'Photo evidence for your workspace. No facial identification or matching.',
                 style: TextStyle(color: WfStyle.muted, fontSize: 12),
               ),
               const SizedBox(height: 16),

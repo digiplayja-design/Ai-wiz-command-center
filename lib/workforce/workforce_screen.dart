@@ -6,9 +6,11 @@ import 'workforce_client.dart';
 import 'workforce_forms.dart';
 import 'workforce_style.dart';
 import 'workforce_automations.dart';
+import 'workforce_workspace.dart';
 
 class WorkforceScreen extends StatefulWidget {
-  const WorkforceScreen({super.key, required this.client});
+  const WorkforceScreen({super.key, required this.client, this.openVoice});
+  final Future<WfJson?> Function(WfJson snapshot)? openVoice;
   final WorkforceClient client;
   @override
   State<WorkforceScreen> createState() => _WorkforceScreenState();
@@ -16,6 +18,7 @@ class WorkforceScreen extends StatefulWidget {
 
 class _WorkforceScreenState extends State<WorkforceScreen>
     with WidgetsBindingObserver {
+  bool _voiceBusy = false;
   WfJson? _data;
   List<WfJson> _workspaces = [];
   String? _org, _error;
@@ -227,10 +230,28 @@ class _WorkforceScreenState extends State<WorkforceScreen>
   Future<void> _create() async {
     await _form(
       'Create your workspace',
-      'Your Enterprise plan covers this employer workspace and invited team members.',
+      'For any business, agency, nonprofit or independent team. Your Enterprise plan covers the workspace and invited members. Industry presets choose a starting output unit; you can adjust it under Policies.',
       [
         const WfField('name', 'Company or team name'),
         const WfField('display_name', 'Your name'),
+        const WfField(
+          'industry',
+          'Industry',
+          value: 'general',
+          choices: wfIndustries,
+        ),
+        const WfField(
+          'work_mode',
+          'How your team works',
+          value: 'hybrid',
+          choices: wfWorkModes,
+        ),
+        const WfField(
+          'description',
+          'What your team does',
+          required: false,
+          lines: 3,
+        ),
         const WfField(
           'timezone',
           'Workspace timezone (IANA)',
@@ -241,7 +262,16 @@ class _WorkforceScreenState extends State<WorkforceScreen>
         final result = await widget.client.request(
           'POST',
           '/workspaces',
-          body: p,
+          body: {
+            'name': p['name'],
+            'display_name': p['display_name'],
+            'timezone': p['timezone'],
+            'profile': {
+              'industry': p['industry'],
+              'work_mode': p['work_mode'],
+              'description': p['description'],
+            },
+          },
         );
         _org = result['id'];
         await _loadWorkspaces();
@@ -252,8 +282,8 @@ class _WorkforceScreenState extends State<WorkforceScreen>
 
   Future<void> _join() async {
     await _form(
-      'Join your employer',
-      'Sign in with the verified email address your employer invited. Invitation codes expire after seven days.',
+      'Join a workspace',
+      'Sign in with the verified email address your workspace owner invited. Invitation codes expire after seven days.',
       [const WfField('token', 'Invitation code')],
       (p) async {
         final r = await widget.client.request(
@@ -277,11 +307,23 @@ class _WorkforceScreenState extends State<WorkforceScreen>
         const WfField('display_name', 'Full name'),
         const WfField('email', 'Email address'),
         const WfField(
+          'member_kind',
+          'Team member type',
+          value: 'employee',
+          choices: wfMemberKinds,
+        ),
+        const WfField('job_title', 'Job title or specialty', required: false),
+        const WfField(
+          'worksite',
+          'Usual site or remote location',
+          required: false,
+        ),
+        const WfField(
           'role',
           'Access',
           value: 'employee',
           choices: {
-            'employee': 'Employee — own workday',
+            'employee': 'Member — own work and tasks',
             'manager': 'Manager — team and approvals',
           },
         ),
@@ -294,7 +336,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
     if (code != null && mounted) {
       await _showText(
         'Invitation ready',
-        'Share this code with the employee. They can open Utility to Workforce to Join workspace.\n\n$code\n\nThis invitation has not been emailed automatically.',
+        'Share this code with the invited person. They can open Utility to Workforce to Join workspace.\n\n$code\n\nThis invitation has not been emailed automatically.',
       );
     }
   }
@@ -342,23 +384,44 @@ class _WorkforceScreenState extends State<WorkforceScreen>
     }
   }
 
-  Future<void> _update() async {
-    final s =
-        _active ??
-        _rows('shifts').where((s) => s['user_id'] == _uid).firstOrNull;
+  Future<void> _update({WfJson? draft, int? memberVersion}) async {
+    final s = draft != null
+        ? _rows('shifts')
+              .where(
+                (s) => s['id'] == draft['shift_id'] && s['user_id'] == _uid,
+              )
+              .firstOrNull
+        : _active ??
+              _rows('shifts').where((s) => s['user_id'] == _uid).firstOrNull;
     if (s == null) return;
     final unit = wfMap(s['policy_snapshot'])['output_unit'] ?? 'tasks',
         request = wfId();
     await _form(
-      'Your work update',
+      draft == null ? 'Your work update' : 'Review K-Nova work update',
       'Record what you completed since your last update. Only add new completed units; do not repeat the day’s total.',
       [
-        const WfField('summary', 'What did you accomplish?', lines: 3),
-        WfField('quantity', 'New $unit completed', type: 'int', value: 0),
-        const WfField('project', 'Project or customer', required: false),
-        const WfField(
+        WfField(
+          'summary',
+          'What did you accomplish?',
+          lines: 3,
+          value: draft?['summary'] ?? '',
+        ),
+        WfField(
+          'quantity',
+          'New $unit completed',
+          type: 'int',
+          value: draft?['quantity'] ?? 0,
+        ),
+        WfField(
+          'project',
+          'Project or customer',
+          required: false,
+          value: draft?['project'] ?? '',
+        ),
+        WfField(
           'blockers',
           'Blockers or support needed',
+          value: draft?['blockers'] ?? '',
           lines: 2,
           required: false,
         ),
@@ -368,6 +431,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
           ...p,
           'request_id': request,
           'shift_id': s['id'],
+          'expected_member_version': ?memberVersion,
         });
       },
       button: 'Save work update',
@@ -447,7 +511,10 @@ class _WorkforceScreenState extends State<WorkforceScreen>
           'role',
           'Role',
           value: m['role'],
-          choices: const {'employee': 'Employee', 'manager': 'Manager'},
+          choices: const {
+            'employee': 'Member — own records',
+            'manager': 'Manager',
+          },
         ),
         WfField('team', 'Team', value: m['team'], required: false),
         WfField(
@@ -556,7 +623,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
     );
   }
 
-  Future<void> _schedule() async {
+  Future<void> _schedule({WfJson? draft, int? memberVersion}) async {
     final people = {
       for (final m in _rows('members').where((m) => m['active'] == true))
         m['user_id'].toString(): m['display_name'].toString(),
@@ -564,42 +631,59 @@ class _WorkforceScreenState extends State<WorkforceScreen>
     if (people.isEmpty) return;
     final tomorrow = DateTime.now().add(const Duration(days: 1));
     await _form(
-      'Schedule a shift',
-      'Assign a shift up to 24 hours. Dates below use this device’s local time; employees see them in their local time.',
+      draft == null ? 'Schedule a shift' : 'Review K-Nova schedule',
+      'Assign a shift up to 24 hours. Dates below use this device’s local time; team members see them in their local time.',
       [
         WfField(
           'user_id',
           'Team member',
-          value: people.keys.first,
+          value: draft?['user_id'] ?? people.keys.first,
           choices: people,
         ),
         WfField(
           'starts_at',
           'Starts',
           type: 'datetime',
-          value: DateTime(
-            tomorrow.year,
-            tomorrow.month,
-            tomorrow.day,
-            9,
-          ).toIso8601String().substring(0, 16),
+          value: draft != null
+              ? wfLocalInput(draft['starts_at'])
+              : DateTime(
+                  tomorrow.year,
+                  tomorrow.month,
+                  tomorrow.day,
+                  9,
+                ).toIso8601String().substring(0, 16),
         ),
         WfField(
           'ends_at',
           'Ends',
           type: 'datetime',
-          value: DateTime(
-            tomorrow.year,
-            tomorrow.month,
-            tomorrow.day,
-            17,
-          ).toIso8601String().substring(0, 16),
+          value: draft != null
+              ? wfLocalInput(draft['ends_at'])
+              : DateTime(
+                  tomorrow.year,
+                  tomorrow.month,
+                  tomorrow.day,
+                  17,
+                ).toIso8601String().substring(0, 16),
         ),
-        WfField('worksite', 'Worksite', value: _policy['worksite']),
-        const WfField('notes', 'Shift notes', lines: 2, required: false),
+        WfField(
+          'worksite',
+          'Worksite',
+          value: draft?['worksite'] ?? _policy['worksite'],
+        ),
+        WfField(
+          'notes',
+          'Shift notes',
+          lines: 2,
+          required: false,
+          value: draft?['notes'] ?? '',
+        ),
       ],
       (p) async {
-        await _command('schedule', p);
+        await _command('schedule', {
+          ...p,
+          'expected_member_version': ?memberVersion,
+        });
       },
       button: 'Schedule shift',
     );
@@ -868,6 +952,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
     ('Schedule', Icons.calendar_month_outlined),
     ('Policies', Icons.tune),
     ('Automations', Icons.auto_awesome_outlined),
+    ('Work board', Icons.view_kanban_outlined),
   ];
   Widget _nav(bool rail) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1138,14 +1223,16 @@ class _WorkforceScreenState extends State<WorkforceScreen>
                                           ),
                                           child: _card(
                                             const Text(
-                                              'The employer’s Enterprise plan is inactive. You can view history, request corrections and clock out. Ask the owner to renew access.',
+                                              'The workspace owner’s Enterprise plan is inactive. You can view history, request corrections and clock out. Ask the owner to renew access.',
                                               style: TextStyle(
                                                 color: WfStyle.gold,
                                               ),
                                             ),
                                           ),
                                         ),
+                                      _businessBanner(),
                                       switch (_tab) {
+                                        7 => _tasksView(),
                                         0 => _overview(),
                                         1 => _myDay(),
                                         2 => _workLog(),
@@ -1382,10 +1469,10 @@ class _WorkforceScreenState extends State<WorkforceScreen>
           ),
         ),
         const SizedBox(height: 24),
-        const WfBadge('KORLIX ENTERPRISE'),
+        const WfBadge('FOR YOUR BUSINESS & TEAM'),
         const SizedBox(height: 20),
         const Text(
-          'Every workday.\nClearly connected.',
+          'Your business.\nYour workforce.',
           style: TextStyle(
             fontSize: 38,
             fontWeight: FontWeight.w700,
@@ -1395,7 +1482,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
         ),
         const SizedBox(height: 16),
         const Text(
-          'Bring attendance, daily progress and team accountability into one shared workspace.',
+          'A private workspace for companies, agencies, field crews, remote teams and nonprofits. Plan assignments, coordinate shifts, track progress and talk to K-Nova.',
           style: TextStyle(color: WfStyle.muted, fontSize: 16, height: 1.6),
         ),
         const SizedBox(height: 28),
@@ -1405,13 +1492,13 @@ class _WorkforceScreenState extends State<WorkforceScreen>
           children: [
             if (_canCreate)
               _button(
-                'Create employer workspace',
+                'Create business workspace',
                 Icons.add,
                 _create,
                 primary: true,
               ),
             _button(
-              'Join your employer',
+              'Join a workspace',
               Icons.group_add_outlined,
               _join,
               primary: !_canCreate,
@@ -1422,7 +1509,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
           const Padding(
             padding: EdgeInsets.only(top: 18),
             child: Text(
-              'Employers need Enterprise. Invited employees can join using their existing KORLIX account.',
+              'Any business owner with Enterprise can create a workspace. Invited members join with their existing KORLIX account.',
               style: TextStyle(color: WfStyle.muted),
             ),
           ),
@@ -1433,6 +1520,9 @@ class _WorkforceScreenState extends State<WorkforceScreen>
           children: [
             WfBadge('Clock in & out'),
             WfBadge('Optional attendance evidence'),
+            WfBadge('Projects & work board'),
+            WfBadge('Contractors & volunteers'),
+            WfBadge('K-Nova voice assistance'),
             WfBadge('Hourly work updates'),
             WfBadge('Manager approvals'),
           ],
@@ -1529,7 +1619,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
         'Your team, in rhythm.',
         'Attendance and progress at a glance.',
         trailing: _owner
-            ? _button('Invite employee', Icons.add, _invite, primary: true)
+            ? _button('Invite team member', Icons.add, _invite, primary: true)
             : null,
       ),
       _metrics(),
@@ -1671,7 +1761,12 @@ class _WorkforceScreenState extends State<WorkforceScreen>
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                   Text(
-                    m['team'] == '' ? wfLabel(m['role']) : m['team'],
+                    [
+                      if (m['team'] != '') m['team'],
+                      wfMemberKinds[m['member_kind']] ?? 'Employee',
+                      if ('${m['job_title'] ?? ''}'.isNotEmpty) m['job_title'],
+                      if ('${m['worksite'] ?? ''}'.isNotEmpty) m['worksite'],
+                    ].join(' · '),
                     style: const TextStyle(color: WfStyle.muted, fontSize: 12),
                   ),
                 ],
@@ -1679,10 +1774,17 @@ class _WorkforceScreenState extends State<WorkforceScreen>
             ),
             if (_owner && m['role'] != 'owner')
               PopupMenuButton<String>(
-                tooltip: 'Manage employee',
-                onSelected: (v) =>
-                    v == 'access' ? _editMember(m) : _policyForm(member: m),
+                tooltip: 'Manage member',
+                onSelected: (v) => v == 'access'
+                    ? _editMember(m)
+                    : v == 'profile'
+                    ? _teamProfile(m)
+                    : _policyForm(member: m),
                 itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: 'profile',
+                    child: Text('Team profile'),
+                  ),
                   const PopupMenuItem(
                     value: 'access',
                     child: Text('Role and access'),
@@ -1744,7 +1846,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
             SizedBox(width: 10),
             Expanded(
               child: Text(
-                'KORLIX team brief',
+                'Workspace brief',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
               ),
             ),
@@ -2232,7 +2334,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
           child: Text(
-            'Work quantities are employee-reported. They are not an automatic performance rating.',
+            'Work quantities are self-reported. They are not an automatic performance rating.',
             style: TextStyle(color: WfStyle.muted, fontSize: 12),
           ),
         ),
@@ -2574,7 +2676,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
             ),
             const SizedBox(height: 14),
             const Text(
-              'Owners can give individual employees a different policy from their Team activity menu.',
+              'Owners can give individual team members a different policy from their Team activity menu.',
               style: TextStyle(color: WfStyle.muted, fontSize: 12),
             ),
           ],
@@ -2653,4 +2755,312 @@ class _WorkforceScreenState extends State<WorkforceScreen>
       ),
     ],
   );
+  Future<void> _business() async {
+    final org = wfMap(_data?['organization']),
+        profile = wfMap(org['business_profile']);
+    await _form(
+      'Business profile',
+      'Make Workforce your company’s workspace. Industry presets set the output unit only when creating a workspace; existing attendance policies stay under Policies.',
+      [
+        WfField('name', 'Business or team name', value: org['name']),
+        WfField(
+          'industry',
+          'Industry',
+          value: profile['industry'] ?? 'general',
+          choices: wfIndustries,
+        ),
+        WfField(
+          'work_mode',
+          'How your team works',
+          value: profile['work_mode'] ?? 'hybrid',
+          choices: wfWorkModes,
+        ),
+        WfField(
+          'description',
+          'What your team does',
+          value: profile['description'] ?? '',
+          lines: 3,
+          required: false,
+        ),
+      ],
+      (p) async {
+        await _command('business', {
+          'version': org['version'],
+          'name': p.remove('name'),
+          'profile': p,
+        });
+        await _loadWorkspaces();
+      },
+    );
+  }
+
+  Future<void> _teamProfile(WfJson m) async {
+    await _form(
+      'Team profile · ${m['display_name']}',
+      'These labels describe your team. Access is controlled separately by the member or manager role.',
+      [
+        WfField(
+          'member_kind',
+          'Team member type',
+          value: m['member_kind'] ?? 'employee',
+          choices: wfMemberKinds,
+        ),
+        WfField(
+          'job_title',
+          'Job title or specialty',
+          value: m['job_title'] ?? '',
+          required: false,
+        ),
+        WfField(
+          'worksite',
+          'Usual site or remote location',
+          value: m['worksite'] ?? '',
+          required: false,
+        ),
+      ],
+      (p) async {
+        await _command('team_profile', {
+          ...p,
+          'user_id': m['user_id'],
+          'version': m['version'],
+        });
+      },
+    );
+  }
+
+  Future<void> _taskForm({
+    WfJson? task,
+    WfJson? draft,
+    int? memberVersion,
+  }) async {
+    final values = draft ?? task ?? <String, dynamic>{};
+    final people = {
+      for (final m in _rows(
+        'members',
+      ).where((m) => m['active'] == true && (_admin || m['user_id'] == _uid)))
+        m['user_id'].toString(): m['display_name'].toString(),
+    };
+    if (people.isEmpty) return;
+    final assignee = values['assignee_id'] ?? _uid;
+    if (!people.containsKey(assignee)) {
+      _toast('This team member is no longer available. Refresh the workspace.');
+      return;
+    }
+    final request = wfId();
+    await _form(
+      draft != null
+          ? 'Review K-Nova task'
+          : task == null
+          ? 'Plan a task'
+          : 'Edit assignment',
+      'Review the assignment before saving. Tasks can be used by employees, contractors and volunteers without clocking in.',
+      [
+        WfField('title', 'Task title', value: values['title'] ?? ''),
+        WfField('assignee_id', 'Assigned to', value: assignee, choices: people),
+        WfField(
+          'priority',
+          'Priority',
+          value: values['priority'] ?? 'normal',
+          choices: wfTaskPriorities,
+        ),
+        WfField(
+          'project',
+          'Project or customer',
+          value: values['project'] ?? '',
+          required: false,
+        ),
+        WfField(
+          'worksite',
+          'Site or remote location',
+          value: values['worksite'] ?? '',
+          required: false,
+        ),
+        WfField(
+          'due_at',
+          'Due date and time (device local, optional)',
+          value: wfLocalInput(values['due_at']),
+          type: 'datetime',
+          required: false,
+        ),
+        WfField(
+          'details',
+          'Instructions or expected result',
+          value: values['details'] ?? '',
+          lines: 4,
+          required: false,
+        ),
+      ],
+      (p) async {
+        await _command(task == null ? 'task_create' : 'task_edit', {
+          ...p,
+          if (task == null) 'request_id': request,
+          if (task != null) 'id': task['id'],
+          if (task != null) 'version': task['version'],
+          'expected_member_version': ?memberVersion,
+        });
+      },
+      button: task == null ? 'Save task' : 'Save assignment',
+    );
+  }
+
+  Future<void> _taskProgress(WfJson task) async {
+    await _form(
+      'Update task progress',
+      '${task['title']}\nRecord actual progress. This does not add completed units to a shift or approve time.',
+      [
+        WfField(
+          'status',
+          'Status',
+          value: task['status'],
+          choices: {
+            for (final e in wfTaskStates.entries)
+              if (_admin || e.key != 'cancelled') e.key: e.value,
+          },
+        ),
+        WfField(
+          'progress_note',
+          'Progress or blocker',
+          value: task['progress_note'] ?? '',
+          required: false,
+          lines: 3,
+        ),
+      ],
+      (p) async {
+        await _command('task_status', {
+          ...p,
+          'id': task['id'],
+          'version': task['version'],
+        });
+      },
+    );
+  }
+
+  Widget _tasksView() => WorkforceTaskBoard(
+    key: ValueKey(_org),
+    tasks: _rows('tasks'),
+    members: _rows('members'),
+    userId: _uid,
+    canManage: _admin,
+    canWrite: _data?['active_plan'] == true && !_busy,
+    truncated: _data?['tasks_truncated'] == true,
+    onCreate: () => _taskForm(),
+    onEdit: (t) => _taskForm(task: t),
+    onProgress: _taskProgress,
+  );
+  Widget _businessBanner() {
+    final org = wfMap(_data?['organization']),
+        p = wfMap(org['business_profile']);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: _card(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${org['name'] ?? 'Your workspace'}',
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                WfBadge(wfIndustries[p['industry']] ?? 'General business'),
+                WfBadge(wfWorkModes[p['work_mode']] ?? 'Hybrid'),
+                const WfBadge('Your business · your team'),
+              ],
+            ),
+            if ('${p['description'] ?? ''}'.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(p['description']),
+              ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                if (widget.openVoice != null)
+                  FilledButton.icon(
+                    onPressed:
+                        _voiceBusy || _busy || _data?['active_plan'] != true
+                        ? null
+                        : _talkToNova,
+                    icon: const Icon(Icons.graphic_eq),
+                    label: Text(
+                      _voiceBusy ? 'Opening K-Nova…' : 'Talk to K-Nova',
+                    ),
+                  ),
+                if (_owner)
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : _business,
+                    icon: const Icon(Icons.business_outlined),
+                    label: const Text('Business profile'),
+                  ),
+              ],
+            ),
+            if (widget.openVoice != null)
+              const Padding(
+                padding: EdgeInsets.only(top: 10),
+                child: Text(
+                  'Ask about your work, find assignments or prepare a task, schedule or work update. Review drafts here before saving.',
+                  style: TextStyle(color: WfStyle.muted, fontSize: 12),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _talkToNova() async {
+    if (_data == null || widget.openVoice == null || _voiceBusy) return;
+    final org = _org, uid = _uid, version = _member['version'];
+    setState(() => _voiceBusy = true);
+    _dialogs++;
+    try {
+      final result = await widget.openVoice!(wfClone(_data!));
+      if (!mounted ||
+          _signedOut ||
+          widget.client.sessionChanged ||
+          _org != org) {
+        return;
+      }
+      await _refresh(quiet: true);
+      if (result == null) return;
+      if (_error != null ||
+          _data == null ||
+          _member['version'] != version ||
+          _uid != uid ||
+          result['organization_id'] != org ||
+          result['member_id'] != uid ||
+          result['member_version'] != version ||
+          result['saved'] != false ||
+          result['reviewRequired'] != true) {
+        _toast(
+          'Your workspace changed. Reopen K-Nova to prepare a fresh draft.',
+        );
+        return;
+      }
+      final draft = wfMap(result['draft']);
+      switch (result['action']) {
+        case 'task_create':
+          await _taskForm(draft: draft, memberVersion: version as int);
+          break;
+        case 'schedule':
+          if (_admin) {
+            await _schedule(draft: draft, memberVersion: version as int);
+          }
+          break;
+        case 'update':
+          await _update(draft: draft, memberVersion: version as int);
+          break;
+      }
+    } catch (e) {
+      _toast(e.toString());
+    } finally {
+      _dialogs--;
+      if (mounted) setState(() => _voiceBusy = false);
+    }
+  }
 }

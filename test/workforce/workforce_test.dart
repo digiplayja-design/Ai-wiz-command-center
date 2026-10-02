@@ -313,9 +313,9 @@ void main() {
           expect(t.takeException(), isNull);
           if (worker) {
             expect(find.text('Clock out'), findsOneWidget);
-            expect(find.text('Invite employee'), findsNothing);
+            expect(find.text('Invite team member'), findsNothing);
           } else {
-            expect(find.text('Invite employee'), findsOneWidget);
+            expect(find.text('Invite team member'), findsOneWidget);
           }
           if (Platform.environment['KORLIX_WORKFORCE_SCREENSHOTS'] == '1' &&
               (size.width == 1440 && !worker || size.width == 390 && worker)) {

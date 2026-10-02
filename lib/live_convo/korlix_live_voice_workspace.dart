@@ -85,7 +85,7 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
                 ),
               ),
               Text(
-                widget.fieldProofMode ? 'FIELDPROOF LIVE VOICE' : widget.musicMode
+                widget.workforceMode ? 'WORKFORCE LIVE VOICE' : widget.fieldProofMode ? 'FIELDPROOF LIVE VOICE' : widget.musicMode
                     ? 'MUSIC STUDIO · LIVE PRODUCER'
                     : widget.bookkeepingMode
                     ? 'BOOKKEEPING · LIVE VOICE'
@@ -102,7 +102,7 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
         ),
         if (widget.inventoryResults == null &&
             !widget.schedulingMode &&
-            !widget.bookkeepingMode && !widget.musicMode && !widget.fieldProofMode)
+            !widget.bookkeepingMode && !widget.musicMode && !widget.fieldProofMode && !widget.workforceMode)
           Tooltip(
             message: widget.paused
                 ? 'Resume Live Convo to open Agent Studio'
@@ -511,7 +511,7 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
             ),
           ),
           subtitle: Text(
-            widget.inventoryResults != null || widget.bookkeepingMode || widget.musicMode || widget.fieldProofMode
+            widget.inventoryResults != null || widget.bookkeepingMode || widget.musicMode || widget.fieldProofMode || widget.workforceMode
                 ? 'Voice & accent'
                 : 'Voice, agent, files & documents',
             style: TextStyle(color: _secondary, fontSize: 12),
@@ -526,7 +526,7 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
             ),
             if (widget.inventoryResults == null &&
                 !widget.schedulingMode &&
-                !widget.bookkeepingMode && !widget.musicMode && !widget.fieldProofMode) ...[
+                !widget.bookkeepingMode && !widget.musicMode && !widget.fieldProofMode && !widget.workforceMode) ...[
               _settingsTile(
                 icon: _activeAgentIcon,
                 title: 'Agent Studio',
@@ -765,6 +765,10 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
                           24,
                         ),
                         children: [
+                          if (widget.workforcePanelBuilder != null) ...[
+                            widget.workforcePanelBuilder!(_finishWorkforceAction),
+                            const SizedBox(height: 14),
+                          ],
                           if (widget.fieldProofPanelBuilder != null) ...[
                             widget.fieldProofPanelBuilder!(_finishFieldProofAction),
                             const SizedBox(height: 14),
