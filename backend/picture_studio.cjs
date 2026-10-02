@@ -16,22 +16,44 @@ const STRENGTHS = Object.freeze({
   balanced: 'Apply a polished, natural professional finish. Keep texture and believable lighting.',
   creative: 'Allow a more expressive interpretation of the requested style and setting, without disregarding preservation constraints.',
 });
+const LOOKS = Object.freeze({
+  original: '',
+  vivid: 'Color look: add lively but controlled color and tonal separation. Protect skin tones, highlight detail and true product or brand colors; avoid neon saturation.',
+  warm: 'Color look: use a gentle warm palette with inviting highlights. Keep skin tones believable and retain accurate product or brand colors.',
+  cool: 'Color look: use a clean, subtly cool palette. Avoid blue or gray skin and retain accurate product or brand colors.',
+  cinematic: 'Color look: use cinematic tonal depth, controlled contrast and a cohesive color grade. Retain visible shadow detail, natural skin texture and accurate product or brand colors.',
+  mono: 'Color look: create a deliberate black-and-white image with rich tonal separation and natural texture. Preserve the subject, geometry and readable lettering.',
+});
+const LIGHTING = Object.freeze({
+  original: '',
+  brighten: 'Lighting: gently lift underexposure and deep shadows while protecting bright areas and preserving the visible light direction.',
+  soft: 'Lighting: soften harsh light and shadows into believable, flattering light while retaining natural texture and dimensional detail.',
+  golden: 'Lighting: add warm golden-hour illumination with coherent highlights and shadows. Keep skin and product materials believable; do not invent a sun or change the setting.',
+  studio: 'Lighting: use controlled professional studio illumination with coherent highlights, reflections and shadows. Keep the existing setting unless the treatment or user requests a different one.',
+});
 const SIZES = new Set(['auto','1024x1024','1024x1536','1536x1024','1536x1536','1536x2304','2304x1536']);
+const MAX_OUTPUT_BYTES = 64*1024*1024;
 function invalid(message) {return Object.assign(new Error(message), {statusCode:400});}
+function invalidOutput(message = 'The image editor returned an unreadable picture. Please try again.') {return Object.assign(new Error(message), {statusCode:502});}
 
 function pictureOptions(body = {}) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw invalid('Picture options must be an object.');
   const preset = body.preset ?? 'enhance';
   const strength = body.strength ?? 'balanced';
+  const look = body.look ?? 'original';
+  const lighting = body.lighting ?? 'original';
   const size = body.imageSize ?? 'auto';
   const lock = body.preserveIdentity ?? true;
   if (typeof preset !== 'string' || !Object.hasOwn(PRESETS,preset)) throw invalid('Choose a supported picture treatment.');
   if (typeof strength !== 'string' || !Object.hasOwn(STRENGTHS,strength)) throw invalid('Choose a supported edit strength.');
+  if (typeof look !== 'string' || !Object.hasOwn(LOOKS,look)) throw invalid('Choose a supported color look.');
+  if (typeof lighting !== 'string' || !Object.hasOwn(LIGHTING,lighting)) throw invalid('Choose a supported lighting option.');
   if (!SIZES.has(size)) throw invalid('Choose one of the available image sizes.');
   if (![true,false,'true','false'].includes(lock)) throw invalid('Invalid preservation setting.');
   if (body.prompt != null && typeof body.prompt !== 'string') throw invalid('Picture instructions must be text.');
   const prompt = (body.prompt || '').trim();
   if (prompt.length > 12000) throw invalid('Keep picture instructions under 12,000 characters.');
-  return {preset,strength,size,preserveIdentity:lock===true||lock==='true',prompt};
+  return {preset,strength,look,lighting,size,preserveIdentity:lock===true||lock==='true',prompt};
 }
 
 function pictureModelSettings() {
@@ -43,13 +65,16 @@ function pictureInstructions(options, plan = '') {
   return [
     'Edit the supplied source image. Produce one finished image, not a collage or a before/after comparison.',
     PRESETS[options.preset], STRENGTHS[options.strength],
+    LOOKS[options.look], LIGHTING[options.lighting],
+    (options.look && options.look !== 'original') || (options.lighting && options.lighting !== 'original')
+      ? 'Apply the selected color look and lighting to the existing subject without changing identity, geometry, logos or lettering. Preserve fine texture and avoid clipping highlights or shadows. These controls do not request new objects, a different background, or a loss of transparency. Keep a monochrome restoration monochrome unless colorization is explicitly requested.' : '',
     options.preserveIdentity
       ? 'Preserve identity and defining details: facial structure, skin tone, age, hairline, body proportions, product geometry, logos and readable existing text. Do not beautify by changing who a person is. Apply explicit changes to pose, clothing or surroundings without changing identity.'
       : 'Follow the requested transformation. Preserve all unrelated details; this setting does not request an identity change by itself.',
     'Avoid plastic skin, halos, over-sharpening, invented lettering, watermarks and accidental anatomical changes. Match lighting and shadows coherently.',
     'Preserve existing transparency unless a different background is explicitly requested. Do not add unrequested objects or text.',
     options.size === 'auto' ? 'Retain the source framing and aspect ratio as closely as possible.' : 'Use the requested output shape. Do not crop out key subjects; extend the scene naturally when needed.',
-    'User instructions (the explicit requested edit takes priority over generic treatment):\n'+(options.prompt||'Apply the selected treatment.'),
+    'User instructions (the explicit requested edit takes priority over generic treatment, color look and lighting):\n'+(options.prompt||'Apply the selected treatment and controls.'),
     plan ? 'Image-specific execution notes, subordinate to the user instructions and preservation constraints:\n'+plan : '',
   ].filter(Boolean).join('\n\n');
 }
@@ -58,7 +83,7 @@ async function preparePicture(file) {
   if (!Buffer.isBuffer(file?.buffer) || !file.buffer.length) throw invalid('Please upload an image first.');
   if (file.buffer.length > 15*1024*1024) throw invalid('Choose an image under 15 MB.');
   try {
-    const source = sharp(file.buffer,{limitInputPixels:45000000,animated:false});
+    const source = sharp(file.buffer,{limitInputPixels:45000000,animated:false,failOn:'warning'});
     const metadata = await source.metadata();
     if (!['jpeg','png','webp'].includes(metadata.format) || (metadata.pages||1)>1) throw invalid('Use a still JPG, PNG, or WEBP image.');
     const hasTransparency = Boolean(metadata.hasAlpha) && !(await source.clone().stats()).isOpaque;
@@ -71,10 +96,35 @@ async function preparePicture(file) {
 }
 
 function responseText(response) {
-  if (response.status !== 'completed') throw Object.assign(new Error('Photo analysis did not finish. Please try again.'),{statusCode:502});
-  const content = (response.output||[]).flatMap(item=>item.content||[]);
+  if (response?.status !== 'completed') throw Object.assign(new Error('Photo analysis did not finish. Please try again.'),{statusCode:502});
+  const content = (Array.isArray(response.output)?response.output:[]).flatMap(item=>Array.isArray(item?.content)?item.content:[]).filter(Boolean);
   if (content.some(item=>item.type==='refusal')) throw Object.assign(new Error('This photo edit could not be completed. Please adjust your instructions.'),{statusCode:422});
-  return response.output_text || content.filter(x=>x.type==='output_text').map(x=>x.text).join('\n');
+  return typeof response.output_text==='string' ? response.output_text : content.filter(x=>x.type==='output_text'&&typeof x.text==='string').map(x=>x.text).join('\n');
+}
+
+async function readPictureOutput(b64, background) {
+  if (typeof b64!=='string'||!b64.length) throw invalidOutput('The image editor returned no picture. Please try again.');
+  // Bound the allocation before decoding provider data, then require canonical
+  // base64. Buffer.from alone silently discards invalid characters and padding.
+  if (b64.length>4*Math.ceil(MAX_OUTPUT_BYTES/3)) throw invalidOutput('The image editor returned a picture that is too large. Please try again.');
+  if (b64.length%4!==0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(b64)) throw invalidOutput();
+  const bytes=Buffer.from(b64,'base64');
+  if (bytes.length>MAX_OUTPUT_BYTES) throw invalidOutput('The image editor returned a picture that is too large. Please try again.');
+  if (bytes.toString('base64')!==b64) throw invalidOutput();
+  try {
+    const source=sharp(bytes,{limitInputPixels:45000000,animated:false,failOn:'warning'});
+    const output=await source.metadata();
+    if (output.format!=='png'||(output.pages||1)>1||!output.width||!output.height) throw invalidOutput();
+    // Metadata can be readable even when the pixel stream is truncated. Decode
+    // every PNG, including RGB files without alpha, before history or charging.
+    const stats=await source.stats();
+    const transparentOutput=Boolean(output.hasAlpha)&&!stats.isOpaque;
+    if (background==='transparent'&&!transparentOutput) throw invalidOutput('The image editor could not deliver the requested transparency. Please try again.');
+    return {output,transparentOutput};
+  } catch(error) {
+    if (error.statusCode) throw error;
+    throw invalidOutput();
+  }
 }
 
 async function improvePicture({client,toFile,file,options}) {
@@ -102,14 +152,8 @@ async function improvePicture({client,toFile,file,options}) {
   const imageFile = await toFile(file.buffer,'source.'+prepared.metadata.format,{type:prepared.mime});
   const result=await client.images.edit({model:settings.model,image:imageFile,prompt:pictureInstructions(options,plan.editPrompt),n:1,size:options.size,quality:settings.quality,output_format:'png',background}, {timeout:280000,maxRetries:0});
   const b64=result?.data?.[0]?.b64_json;
-  if (typeof b64!=='string'||!b64.length) throw Object.assign(new Error('The image editor returned no picture. Please try again.'),{statusCode:502});
-  let output;
-  try {output=await sharp(Buffer.from(b64,'base64'),{limitInputPixels:45000000}).metadata();} catch (_) {
-    throw Object.assign(new Error('The image editor returned an unreadable picture. Please try again.'),{statusCode:502});
-  }
-  const transparentOutput = output.hasAlpha && !(await sharp(Buffer.from(b64,'base64'),{limitInputPixels:45000000}).stats()).isOpaque;
-  if(output.format!=='png'||(background==='transparent'&&!transparentOutput)) throw Object.assign(new Error('The image editor could not deliver the requested PNG format or transparency. Please try again.'),{statusCode:502});
-  return {imageDataUrl:'data:image/png;base64,'+b64,imageUrl:null,model:settings.model,imageQuality:settings.quality,imageSize:result.size||`${output.width}x${output.height}`,analysisModel:CHAT_MODEL,reasoningEffort:CHAT_EFFORT,editSummary:plan.summary,background:result.background||background};
+  const {output,transparentOutput}=await readPictureOutput(b64,background);
+  return {imageDataUrl:'data:image/png;base64,'+b64,imageUrl:null,model:settings.model,imageQuality:settings.quality,imageSize:`${output.width}x${output.height}`,analysisModel:CHAT_MODEL,reasoningEffort:CHAT_EFFORT,editSummary:plan.summary,background:transparentOutput?'transparent':'opaque'};
 }
 
 module.exports={pictureOptions,pictureModelSettings,pictureInstructions,preparePicture,improvePicture};
