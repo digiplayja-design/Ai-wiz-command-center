@@ -364,14 +364,16 @@ class _RecordDialogState extends State<_RecordDialog> {
                     decoration: InputDecoration(labelText: entry.value),
                     validator: (v) {
                       final s = v?.trim() ?? '';
-                      if (['label', 'value'].contains(entry.key) && s.isEmpty)
+                      if (['label', 'value'].contains(entry.key) && s.isEmpty) {
                         return 'Enter ${entry.value.toLowerCase()}.';
+                      }
                       if (entry.key == 'dueOn' &&
                           s.isNotEmpty &&
                           (DateTime.tryParse(s)?.toString().substring(0, 10) !=
                                   s ||
-                              !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(s)))
+                              !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(s))) {
                         return 'Use a valid YYYY-MM-DD date.';
+                      }
                       return null;
                     },
                   ),

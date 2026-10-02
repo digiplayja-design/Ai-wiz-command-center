@@ -287,10 +287,11 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
         snapshot = await widget.client.job(id);
         if (!mounted || _locked) return;
         if (fpMap(snapshot['job'])['version'] != result['version'] ||
-            fpMap(snapshot['job'])['state'] != 'active')
+            fpMap(snapshot['job'])['state'] != 'active') {
           throw const FieldProofException(
             'This job changed during voice. Reopen it before drafting again.',
           );
+        }
       }
       setState(() {
         _snapshot = snapshot;
@@ -311,8 +312,9 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
   }
 
   Future<void> _repeat() async {
-    if (_working || _locked || !_hasJob || !await _discard() || !mounted)
+    if (_working || _locked || !_hasJob || !await _discard() || !mounted) {
       return;
+    }
     final draft = fpRepeatDraft(_data);
     _timer?.cancel();
     setState(() {
@@ -340,11 +342,12 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
           remaining: _photoLimit - _photos.length,
           pick: widget.pickBatch ?? pickFieldProofBatch,
           upload: (row, photo) async {
-            if (_locked || !mounted)
+            if (_locked || !mounted) {
               throw const FieldProofException(
                 'Sign in again to continue.',
                 401,
               );
+            }
             final saved = await widget.client.upload(
               fpText(_job['id']),
               _job['version'] as int,

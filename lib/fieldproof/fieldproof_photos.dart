@@ -24,10 +24,12 @@ Future<List<FieldProofQueuedPhoto>> pickFieldProofBatch(int remaining) async {
   );
   if (result == null) return [];
   final limit = remaining < 12 ? remaining : 12;
-  if (result.files.length > limit)
+  if (result.files.length > limit) {
     throw FieldProofException('Choose up to $limit photos for this upload.');
-  if (result.files.any((x) => x.size > 10 * 1024 * 1024))
+  }
+  if (result.files.any((x) => x.size > 10 * 1024 * 1024)) {
     throw const FieldProofException('Each photo must be under 10 MB.');
+  }
   return result.files
       .map(
         (file) => FieldProofQueuedPhoto(
@@ -35,17 +37,20 @@ Future<List<FieldProofQueuedPhoto>> pickFieldProofBatch(int remaining) async {
               ? file.name.substring(0, 100)
               : file.name,
           load: () async {
-            if (file.bytes != null)
+            if (file.bytes != null) {
               return FieldProofPhoto(file.name, file.bytes!);
+            }
             final stream = file.readStream;
-            if (stream == null)
+            if (stream == null) {
               throw const FieldProofException('Select this photo again.');
+            }
             final builder = BytesBuilder(copy: false);
             await for (final chunk in stream) {
-              if (builder.length + chunk.length > 10 * 1024 * 1024)
+              if (builder.length + chunk.length > 10 * 1024 * 1024) {
                 throw const FieldProofException(
                   'Each photo must be under 10 MB.',
                 );
+              }
               builder.add(chunk);
             }
             return FieldProofPhoto(file.name, builder.takeBytes());
@@ -78,10 +83,11 @@ class _FieldProofBatchDialogState extends State<FieldProofBatchDialog> {
     try {
       final rows = await widget.pick(widget.remaining);
       if (!mounted) return;
-      if (rows.length > widget.remaining || rows.length > 12)
+      if (rows.length > widget.remaining || rows.length > 12) {
         throw const FieldProofException(
           'Choose no more than 12 photos and keep within the job limit.',
         );
+      }
       setState(() {
         _photos = rows;
         _error = null;

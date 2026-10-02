@@ -77,8 +77,9 @@ final fieldProofVoiceTools = <Map<String, dynamic>>[
 List<Map<String, dynamic>> fieldProofVoiceCalls(dynamic response) {
   if (response is! Map ||
       response['status'] != 'completed' ||
-      response['output'] is! List)
+      response['output'] is! List) {
     return [];
+  }
   final names = fieldProofVoiceTools.map((x) => x['name']).toSet();
   return (response['output'] as List)
       .whereType<Map>()
@@ -167,30 +168,35 @@ class FieldProofVoiceController extends ChangeNotifier {
 
   Map<String, dynamic> _arguments(String name, dynamic raw) {
     final encoded = raw is String ? raw : jsonEncode(raw);
-    if (encoded.length > 16000)
+    if (encoded.length > 16000) {
       throw const FieldProofException('Shorten this voice request.');
+    }
     final decoded = jsonDecode(encoded);
-    if (decoded is! Map)
+    if (decoded is! Map) {
       throw const FieldProofException('Use clear FieldProof request fields.');
+    }
     final args = Map<String, dynamic>.from(decoded);
     final schema = fieldProofVoiceTools
         .where((x) => x['name'] == name)
         .firstOrNull;
-    if (schema == null)
+    if (schema == null) {
       throw const FieldProofException(
         'That FieldProof voice tool is unavailable.',
       );
+    }
     final fields = fpMap(fpMap(schema['parameters'])['properties']);
     if (args.length != fields.length ||
-        args.keys.any((x) => !fields.containsKey(x)))
+        args.keys.any((x) => !fields.containsKey(x))) {
       throw const FieldProofException('Use only the supported request fields.');
+    }
     for (final entry in fields.entries) {
       final spec = fpMap(entry.value), v = args[entry.key];
       if (spec['type'] == 'boolean') {
-        if (v is! bool)
+        if (v is! bool) {
           throw const FieldProofException(
             'Choose whether this follow-up blocks closeout.',
           );
+        }
       } else if (v is! String ||
           v.length > (spec['maxLength'] as int? ?? 4000) ||
           (spec['enum'] is List && !(spec['enum'] as List).contains(v))) {
@@ -198,18 +204,22 @@ class FieldProofVoiceController extends ChangeNotifier {
       }
     }
     if (!['get_fieldproof_context', 'search_fieldproof_jobs'].contains(name) &&
-        _context.isEmpty)
+        _context.isEmpty) {
       throw const FieldProofException('Read get_fieldproof_context first.');
-    if (name == 'read_fieldproof_job' && !_known.containsKey(args['job_id']))
+    }
+    if (name == 'read_fieldproof_job' && !_known.containsKey(args['job_id'])) {
       throw const FieldProofException(
         'Choose a real job returned by context or search.',
       );
+    }
     if (name == 'start_fieldproof_draft' &&
-        !_templates.containsKey(args['template']))
+        !_templates.containsKey(args['template'])) {
       throw const FieldProofException('Choose a template returned by context.');
+    }
     if (name == 'update_fieldproof_field' &&
-        (args['value'] as String).length > fpVoiceFields[args['field']]!)
+        (args['value'] as String).length > fpVoiceFields[args['field']]!) {
       throw const FieldProofException('Shorten the field value.');
+    }
     return args;
   }
 
@@ -219,13 +229,14 @@ class FieldProofVoiceController extends ChangeNotifier {
     String callId,
   ) {
     try {
-      if (!available || _retired.contains(callId))
+      if (!available || _retired.contains(callId)) {
         return Future.value(_discarded());
+      }
       final args = _arguments(name, raw), keys = args.keys.toList()..sort();
       final fingerprint =
           '$name:${jsonEncode({for (final k in keys) k: args[k]})}';
       final prior = _calls[callId];
-      if (prior != null)
+      if (prior != null) {
         return prior.epoch != _epoch
             ? Future.value(_discarded())
             : prior.fingerprint == fingerprint
@@ -237,14 +248,17 @@ class FieldProofVoiceController extends ChangeNotifier {
                   ),
                 ),
               );
-      if (callId.trim().isEmpty || callId.length > 200 || _count >= 64)
+      }
+      if (callId.trim().isEmpty || callId.length > 200 || _count >= 64) {
         throw const FieldProofException(
           'Close voice and reopen it from FieldProof before another request.',
         );
-      if (_busy)
+      }
+      if (_busy) {
         throw const FieldProofException(
           'Wait for the current FieldProof request to finish.',
         );
+      }
       _count++;
       final epoch = _epoch;
       final future = _execute(name, args, epoch);
@@ -314,19 +328,21 @@ class FieldProofVoiceController extends ChangeNotifier {
           name == 'search_fieldproof_jobs') {
         final response = await client.load();
         if (!_current(epoch)) return _discarded();
-        if (response['jobs'] is! List || response['templates'] is! Map)
+        if (response['jobs'] is! List || response['templates'] is! Map) {
           throw const FieldProofException(
             'Refresh FieldProof before another voice request.',
           );
+        }
         _templates = fpMap(response['templates']);
         _known.clear();
         for (final job in fpRows(response['jobs'])) {
           if (job['id'] is! String ||
               job['data'] is! Map ||
-              job['version'] is! int)
+              job['version'] is! int) {
             throw const FieldProofException(
               'The job list could not be verified.',
             );
+          }
           _known[job['id'] as String] = job;
         }
         if (name == 'get_fieldproof_context' && _job.isNotEmpty) {
@@ -387,44 +403,53 @@ class FieldProofVoiceController extends ChangeNotifier {
         };
       } else {
         Map<String, dynamic> draft;
-        if (name == 'start_fieldproof_draft') {
+        final starting = name == 'start_fieldproof_draft';
+        if (starting) {
           draft = fpNewDraft(
             args['template'],
             fpMap(_templates[args['template']]),
           );
-          _selected = {};
-          _pendingOpen = null;
         } else {
-          if (_draft == null && _job.isEmpty)
+          if (_draft == null && _job.isEmpty) {
             throw const FieldProofException(
               'Start a draft or read a saved job first.',
             );
+          }
           draft = fpClone(_draft ?? fpMap(_job['data']));
         }
         _pendingDraft = null;
-        if (name == 'update_fieldproof_field')
+        if (name == 'update_fieldproof_field') {
           draft[args['field']] = args['value'];
-        if (name == 'add_fieldproof_reading')
+        }
+        if (name == 'add_fieldproof_reading') {
           draft['readings'] = [
             ...fpRows(draft['readings']),
             {'id': fieldProofRequestKey(), ...args},
           ];
-        if (name == 'add_fieldproof_issue')
+        }
+        if (name == 'add_fieldproof_issue') {
           draft['issues'] = [
             ...fpRows(draft['issues']),
             {'id': fieldProofRequestKey(), ...args, 'resolved': false},
           ];
-        final id = _job['id'] as String?, revision = _job['version'] as int?;
+        }
+        final id = starting ? null : _job['id'] as String?,
+            revision = starting ? null : _job['version'] as int?;
         final response = await client.prepareVoiceDraft(id, revision, draft);
         if (!_current(epoch)) return _discarded();
         if (response['saved'] != false ||
             response['reviewRequired'] != true ||
             response['draft'] is! Map ||
             response['jobId'] != id ||
-            response['version'] != revision)
+            response['version'] != revision) {
           throw const FieldProofException(
             'The draft could not be verified. Review the job in FieldProof.',
           );
+        }
+        if (starting) {
+          _selected = {};
+          _pendingOpen = null;
+        }
         _draft = fpClone(fpMap(response['draft']));
         _pendingDraft = {
           'action': 'draft',
