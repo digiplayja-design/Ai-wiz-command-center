@@ -561,10 +561,14 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
       ),
     );
     if (!mounted || !_valid || yes != true) return;
-    await _writes;
-    if (!mounted || !_valid) return;
+    // Add entries before taking any later autosave snapshots, then commit the
+    // import after earlier writes. Retry IDs are stable, so failures cannot duplicate.
+    widget.store.prepareLegacy(_boxes);
+    final snapshot = _boxes.map((b) => SavedBox.fromJson(b.toJson())).toList();
+    final operation = _writes.then((_) => widget.store.importLegacy(snapshot));
+    _writes = operation.catchError((Object _) {});
     try {
-      await widget.store.importLegacy(_boxes);
+      await operation;
       if (_valid) {
         setState(() {
           if (_selected == null && _boxes.isNotEmpty) _select(_boxes.first);

@@ -96,13 +96,26 @@ class BoxStore {
           .toList() ??
       [];
   bool get imported => preferences.getBool('$key.imported') ?? false;
+  void prepareLegacy(List<SavedBox> boxes) {
+    if (imported) return;
+    for (final entry in legacy.indexed) {
+      final id = '$legacyKey:${entry.$1}';
+      if (!boxes.any((b) => b.id == id)) {
+        boxes.add(
+          SavedBox(
+            id: id,
+            title: 'Imported box ${entry.$1 + 1}',
+            text: entry.$2,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> importLegacy(List<SavedBox> boxes) async {
     if (imported) return;
-    final additions = legacy.indexed
-        .map((e) => SavedBox(title: 'Imported box ${e.$1 + 1}', text: e.$2))
-        .toList();
-    await save([...boxes, ...additions]);
-    boxes.addAll(additions);
+    prepareLegacy(boxes);
+    await save(boxes);
     await preferences.setBool('$key.imported', true);
   }
 }

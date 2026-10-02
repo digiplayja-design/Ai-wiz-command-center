@@ -82,6 +82,22 @@ void main() {
       expect(prefs.getStringList(store.legacyKey), ['old', '', 'another']);
     },
   );
+  test(
+    'prepared imports are present in subsequent snapshots and retries do not duplicate',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final store = BoxStore(prefs, 'a', false);
+      await prefs.setStringList(store.legacyKey, ['legacy']);
+      final boxes = [SavedBox(text: 'existing')];
+      store.prepareLegacy(boxes);
+      final snapshot = boxes.map((b) => SavedBox.fromJson(b.toJson())).toList();
+      expect(snapshot.map((b) => b.text), ['existing', 'legacy']);
+      store.prepareLegacy(boxes);
+      expect(boxes.length, 2);
+      await store.importLegacy(boxes);
+      expect(store.load().length, 2);
+    },
+  );
   test('corrupt storage is surfaced instead of resetting user data', () async {
     final prefs = await SharedPreferences.getInstance();
     final store = BoxStore(prefs, 'a', false);
