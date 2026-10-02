@@ -241,10 +241,17 @@ class SocialCallMedia extends ChangeNotifier {
         };
       }
       final sender = await peer.addTrack(track, stream);
-      if (track == _microphoneTrack) _audioSender = sender;
+      // Web getTracks() wraps the same JS track in a NEW Dart object each time.
+      // Object equality leaves the audio sender unset and makes recovery a no-op.
+      if (track.kind == 'audio' && track.id == _microphoneTrack?.id) {
+        _audioSender = sender;
+      }
     }
     if (_closed) return;
     await io.configure();
+    if (video && audio.canRouteSpeaker && !_closed) {
+      await audio.routeSpeaker(true);
+    }
     if (_closed) return;
     ready = true;
     notifyListeners();
@@ -262,7 +269,15 @@ class SocialCallMedia extends ChangeNotifier {
       track.onUnMute = () {
         if (!_closed) unawaited(audio.resume());
       };
-      await audio.attach(stream);
+      // A blocked audio play promise must not hold the video track queue.
+      unawaited(
+        audio.attach(stream).catchError((Object _) {
+          if (!_closed) {
+            audio.issue = 'Tap Resume sound to start incoming audio.';
+            audio.changed();
+          }
+        }),
+      );
     } else if (track.kind == 'video') {
       remote.srcObject = stream;
     }
@@ -492,6 +507,7 @@ class SocialCallController extends ChangeNotifier {
   final SocialCallMedia media;
   String state, status = '', error = '';
   bool busy = false, ended = false, connected = false, relay = false;
+  String relayStatus = '';
   bool _disposed = false,
       _polling = false,
       _offered = false,
@@ -540,14 +556,16 @@ class SocialCallController extends ChangeNotifier {
           end(
             relay
                 ? 'The call could not connect. Try again or switch networks.'
-                : 'This network could not connect the call. Try another Wi-Fi or mobile network.',
+                : 'The call could not connect. KORLIX needs its call relay enabled for this network.',
           ),
         );
       } else if (_disconnectedAt != null &&
           DateTime.now().difference(_disconnectedAt!).inSeconds > 15) {
         unawaited(end('The connection was interrupted. Please call again.'));
       }
-      if (connected && elapsed.inSeconds.isEven) unawaited(media.checkAudio());
+      if (media.ready && DateTime.now().second.isEven) {
+        unawaited(media.checkAudio());
+      }
       _notify();
     });
     if (incoming) {
@@ -585,9 +603,23 @@ class SocialCallController extends ChangeNotifier {
     }
   }
 
-  String _friendly(Object e) => e is SocialException
-      ? '$e'
-      : 'Camera or microphone unavailable. Allow access in your browser or device settings, then try again.';
+  String _friendly(Object e) {
+    if (e is SocialException) return '$e';
+    final detail = '$e';
+    if (detail.contains('NotAllowedError') ||
+        detail.contains('PermissionDenied')) {
+      return 'Microphone${video ? ' or camera' : ''} access was denied. Allow it for KORLIX in browser or device settings, then call again.';
+    }
+    if (detail.contains('NotReadableError') ||
+        detail.contains('TrackStartError')) {
+      return 'Another app or tab may be using your microphone or camera. Close it and call again.';
+    }
+    if (detail.contains('NotFoundError')) {
+      return 'No microphone${video ? ' or camera' : ''} was found on this device.';
+    }
+    return 'Camera or microphone unavailable. Allow access in your browser or device settings, then try again.';
+  }
+
   Future<void> _openMedia() async {
     final config = await client.get('call_config');
     if (ended) return;
@@ -597,6 +629,8 @@ class SocialCallController extends ChangeNotifier {
       );
     }
     relay = config['relay'] == true;
+    relayStatus =
+        '${config['relayStatus'] ?? (relay ? 'ready' : 'not-configured')}';
     await media.open(video, config['iceServers'] as List? ?? []);
   }
 

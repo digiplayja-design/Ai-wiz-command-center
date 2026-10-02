@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
+
 import '../theme/korlix_action_button.dart';
 import 'social_client.dart';
 import 'social_design.dart';
+import 'social_albums.dart';
 
 class SocialProfileForm extends StatefulWidget {
   const SocialProfileForm({
@@ -285,9 +287,8 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
                     helperText: '3–24 letters, numbers or underscores',
                   ),
                   validator: (v) =>
-                      RegExp(
-                        r'^[a-z0-9_]{3,24}$',
-                      ).hasMatch((v ?? '').trim().toLowerCase())
+                      RegExp(r'^[a-z0-9_]{3,24}$')
+                          .hasMatch((v ?? '').trim().toLowerCase())
                       ? null
                       : 'Use 3–24 letters, numbers or underscores',
                 ),
@@ -419,6 +420,23 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
                       ),
                     ),
                   ),
+                if (widget.profile != null)
+                  OutlinedButton.icon(
+                    onPressed: _saving || !widget.client.available
+                        ? null
+                        : () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SocialAlbumsScreen(
+                                client: widget.client,
+                                profile: widget.profile!,
+                                owned: true,
+                              ),
+                            ),
+                          ),
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: const Text('My photo albums'),
+                  ),
                 const SizedBox(height: 16),
                 KorlixActionButton(
                   label: widget.profile == null
@@ -500,13 +518,15 @@ class _SocialComposeTopicState extends State<SocialComposeTopic> {
       _error = null;
     });
     try {
-      await widget.client
-          .post(widget.topic == null ? 'create_topic' : 'edit_topic', {
-            'id': _id,
-            'category': _category,
-            'title': _title.text.trim(),
-            'body': _body.text.trim(),
-          });
+      await widget.client.post(
+        widget.topic == null ? 'create_topic' : 'edit_topic',
+        {
+          'id': _id,
+          'category': _category,
+          'title': _title.text.trim(),
+          'body': _body.text.trim(),
+        },
+      );
       if (mounted) Navigator.pop(context, _id);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');

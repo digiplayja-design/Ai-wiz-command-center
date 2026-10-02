@@ -247,6 +247,15 @@ class Io extends SocialCallIo {
   Future<void> clear() async {}
 }
 
+// Browser getTracks wraps an underlying JS track anew on each enumeration.
+class RewrappedStream extends Stream {
+  RewrappedStream() : super('rewrapped');
+  @override
+  List<rtc.MediaStreamTrack> getAudioTracks() => [Track('same-mic', 'audio')];
+  @override
+  List<rtc.MediaStreamTrack> getTracks() => [Track('same-mic', 'audio')];
+}
+
 class PendingAudioClose extends Audio {
   final gate = Completer<void>();
   @override
@@ -259,6 +268,21 @@ class PendingAudioClose extends Audio {
 Future<void> settleTrack() => Future<void>.delayed(Duration.zero);
 
 void main() {
+  test(
+    'microphone recovery finds sender by track ID across browser wrappers',
+    () async {
+      final io = Io()..nextCaptures.add(RewrappedStream());
+      final media = SocialCallMedia(io: io, audio: Audio());
+      await media.open(false, []);
+      final replacement = Track('replacement', 'audio');
+      io.nextCaptures.add(Stream('new', [replacement]));
+      await media.restartMicrophone();
+      expect(io.connection.recordedSenders.single.current, same(replacement));
+      expect(io.captureModes, [false, false]);
+      await media.close();
+    },
+  );
+
   setUpAll(() async {
     await (FontLoader(
       'Roboto',

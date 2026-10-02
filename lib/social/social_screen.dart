@@ -9,6 +9,7 @@ import 'social_design.dart';
 import 'social_forms.dart';
 import 'social_threads.dart';
 import 'social_call_screen.dart';
+import 'social_albums.dart';
 import 'social_call_controller.dart';
 import 'social_groups.dart';
 import 'social_invite_screen.dart';
@@ -287,6 +288,16 @@ class _SocialScreenState extends State<SocialScreen>
     });
     if (_scroll.hasClients) _scroll.jumpTo(0);
     unawaited(_load());
+  }
+
+  Future<void> _albums(SocialMap member, {bool owned = false}) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            SocialAlbumsScreen(client: client, profile: member, owned: owned),
+      ),
+    );
   }
 
   Future<void> _editProfile() async {
@@ -697,6 +708,12 @@ class _SocialScreenState extends State<SocialScreen>
             ),
           ),
           const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: () => _albums(p),
+            icon: const Icon(Icons.photo_library_outlined, size: 18),
+            label: const Text('View photo albums'),
+          ),
+          const SizedBox(height: 8),
           if (accepted)
             KorlixActionButton(
               label: (p['unread'] ?? 0) > 0
@@ -825,15 +842,18 @@ class _SocialScreenState extends State<SocialScreen>
                                   borderRadius: BorderRadius.circular(14),
                                   gradient: LinearGradient(
                                     colors: [
-                                      socialColor(category['color'])
-                                          .withValues(alpha: .3),
-                                      socialColor(category['color'])
-                                          .withValues(alpha: .07),
+                                      socialColor(
+                                        category['color'],
+                                      ).withValues(alpha: .3),
+                                      socialColor(
+                                        category['color'],
+                                      ).withValues(alpha: .07),
                                     ],
                                   ),
                                   border: Border.all(
-                                    color: socialColor(category['color'])
-                                        .withValues(alpha: .4),
+                                    color: socialColor(
+                                      category['color'],
+                                    ).withValues(alpha: .4),
                                   ),
                                 ),
                                 child: Icon(
@@ -989,11 +1009,19 @@ class _SocialScreenState extends State<SocialScreen>
         if (_profile != null)
           PopupMenuButton<String>(
             tooltip: 'Social settings',
-            onSelected: (v) => v == 'profile' ? _editProfile() : _manage(v),
+            onSelected: (v) => v == 'profile'
+                ? _editProfile()
+                : v == 'albums'
+                ? _albums(_profile!, owned: true)
+                : _manage(v),
             itemBuilder: (_) => [
               const PopupMenuItem(
                 value: 'profile',
                 child: Text('My Social profile'),
+              ),
+              const PopupMenuItem(
+                value: 'albums',
+                child: Text('My photo albums'),
               ),
               const PopupMenuItem(
                 value: 'blocks',
@@ -1052,7 +1080,8 @@ class _SocialScreenState extends State<SocialScreen>
                   const SocialEmpty(
                     icon: Icons.lock_outline_rounded,
                     title: 'Sign in to join the conversation.',
-                    body: 'Sign in to your KORLIX account, then reopen Social. Your previous account’s content has been cleared.',
+                    body:
+                        'Sign in to your KORLIX account, then reopen Social. Your previous account’s content has been cleared.',
                   )
                 else if (_profile == null) ...[
                   const Center(child: SocialOrbit(size: 210)),
@@ -1169,6 +1198,15 @@ class _SocialScreenState extends State<SocialScreen>
                                       : 'Change profile photo',
                                 ),
                               ),
+                              TextButton.icon(
+                                onPressed: () =>
+                                    _albums(_profile!, owned: true),
+                                icon: const Icon(
+                                  Icons.photo_library_outlined,
+                                  size: 18,
+                                ),
+                                label: const Text('My photo albums'),
+                              ),
                             ],
                           ),
                         ),
@@ -1266,7 +1304,8 @@ class _SocialScreenState extends State<SocialScreen>
                       const SocialEmpty(
                         icon: Icons.groups_outlined,
                         title: 'Make space for your circle.',
-                        body: 'Create a group or accept an invitation here to start chatting together.',
+                        body:
+                            'Create a group or accept an invitation here to start chatting together.',
                       ),
                     _grid([
                       for (final g in _items)

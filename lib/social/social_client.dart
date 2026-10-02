@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+
 import '../live_convo/agent_studio_client.dart'
     show agentAccountScope, agentStudioKey;
 
@@ -110,6 +112,32 @@ class SocialClient extends ChangeNotifier {
       http.MultipartFile.fromBytes('photo', bytes, filename: 'profile-photo'),
     );
     return _send(request);
+  }
+
+  Future<SocialMap> uploadAlbumPhoto({
+    required String album,
+    required String id,
+    required Uint8List bytes,
+  }) async {
+    _guard();
+    if (bytes.isEmpty || bytes.length > 8 * 1024 * 1024) {
+      throw const SocialException('Choose a photo smaller than 8 MB.');
+    }
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse(
+        '${baseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/social/album_upload',
+      ).replace(queryParameters: {'album': album, 'photo': id}),
+    );
+    request.headers.addEntries(
+      headersBuilder().entries.where(
+        (e) => e.key.toLowerCase() != 'content-type',
+      ),
+    );
+    request.files.add(
+      http.MultipartFile.fromBytes('photo', bytes, filename: 'album-photo'),
+    );
+    return _send(request, timeout: const Duration(seconds: 120));
   }
 
   Future<SocialMap> uploadAttachment({
