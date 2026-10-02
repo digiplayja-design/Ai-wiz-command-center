@@ -36,6 +36,8 @@ before(async()=>{
  await db.exec(await readFile(new URL(groups,folder),'utf8'));
  const attachments=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_attachments.sql'));
  await db.exec(await readFile(new URL(attachments,folder),'utf8'));
+ const albums=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_albums.sql'));
+ await db.exec(await readFile(new URL(albums,folder),'utf8'));
  const app=express();app.use(express.json({limit:'250kb'}));registerSocial(app,{database:rpc,requireUser:async q=>{if(!users.includes(q.headers.authorization))throw Error();return {id:q.headers.authorization,email_confirmed_at:'2026-01-01'};},logger:{warn(){}}});
  server=app.listen(0);await new Promise(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}/api/social/`;
 });
@@ -396,4 +398,54 @@ test('cleanup acknowledges database rows only after storage deletion succeeds',a
  const {registerSocialAttachments}=await import('../social/attachments.mjs');let fail=true;const calls=[];const item={id:randomUUID(),path:'fixture/path'};
  const database={rpc:async(_,params)=>{calls.push(params);return {data:params.p_ids?[]:[item]};},storage:{from:()=>({remove:async paths=>{assert.deepEqual(paths,[item.path]);return fail?{error:{message:'retry'}}:{data:[]};}})}};
  const {cleanup}=registerSocialAttachments(express(),{database,authenticate:async()=>null,maintenance:false});await cleanup();assert.equal(calls.length,1);fail=false;await cleanup();assert.equal(calls.length,3);assert.deepEqual(calls[2],{p_ids:[item.id]});
+});
+
+const albumCall=async(who,action,data)=>{const r=await rpc.rpc('korlix_social_albums_v1',{p_actor:users[who],p_action:action,p_data:data});if(r.error)throw Error(r.error.message);return r.data;};
+const newAlbum=async(visibility='connections')=>{const id=randomUUID();return (await albumCall(0,'album_create',{album:id,title:'Family moments',visibility})).album;};
+const addAlbumPhoto=async(album,photo=randomUUID(),who=0)=>{
+ const form=new FormData();form.append('photo',new Blob([await sharp({create:{width:90,height:120,channels:3,background:'#2244bb'}}).withMetadata({exif:{IFD0:{Artist:'private'}}}).png().toBuffer()]),'family.png');
+ const r=await fetch(base+`album_upload?album=${album}&photo=${photo}`,{method:'POST',headers:{Authorization:users[who]},body:form});return {status:r.status,data:await r.json(),photo};
+};
+test('albums default to connections; private/member visibility and hidden profiles are enforced',async()=>{
+ const album=await newAlbum();assert.equal(album.visibility,'connections');
+ assert.equal((await albumCall(1,'albums',{peer:a.id})).items.length,0);
+ await assert.rejects(albumCall(1,'album',{album:album.id}),/not available/);
+ await connect();assert.equal((await albumCall(1,'albums',{peer:a.id})).items.length,1);
+ await albumCall(0,'album_save',{album:album.id,title:'Family',visibility:'private'});
+ await assert.rejects(albumCall(1,'album',{album:album.id}),/not available/);
+ await albumCall(0,'album_save',{album:album.id,title:'Family',visibility:'members'});
+ assert.equal((await albumCall(2,'album',{album:album.id})).owned,false);
+ await call(users[0],'save_profile',profile('alice',{discoverable:false}));
+ await assert.rejects(albumCall(2,'albums',{peer:a.id}),/unavailable/);
+ await call(users[1],'block',{peer:a.id});
+ await assert.rejects(albumCall(1,'album',{album:album.id}),/unavailable/);
+});
+test('several album photos upload, preserve aspect ratio, remove metadata and retry without duplicates',async()=>{
+ stored.clear();const album=await newAlbum();const first=await addAlbumPhoto(album.id);assert.equal(first.status,200,JSON.stringify(first));
+ assert(first.data.photo.photo_url);assert.equal(first.data.photo.photo_path,undefined);
+ assert.equal((await addAlbumPhoto(album.id,first.photo)).status,200);assert.equal(stored.size,1);
+ const second=await addAlbumPhoto(album.id);assert.equal(second.status,200);
+ const meta=await sharp([...stored.values()][0].buffer).metadata();assert.equal(meta.width,90);assert.equal(meta.height,120);assert.equal(meta.exif,undefined);
+ let details=await api('album',{album:album.id},users[0],'GET');assert.equal(details.items.length,2);assert.equal(details.album.photo_count,2);
+ await api('album_cover',{album:album.id,photo:second.photo});details=await api('album',{album:album.id},users[0],'GET');assert.equal(details.album.cover.id,second.photo);
+ await api('album_photo_delete',{album:album.id,photo:second.photo});assert.equal(stored.size,1);
+ await api('album_delete',{album:album.id});assert.equal(stored.size,0);assert.equal((await albumCall(0,'albums',{})).items.length,0);
+ await api('album_delete',{album:album.id});
+});
+test('album writes cannot cross owners or albums; removed connections lose album access',async()=>{
+ const album=await newAlbum();await connect();const photo=await addAlbumPhoto(album.id);
+ for(const action of ['album_save','album_delete','album_cover','album_upload_begin','album_photo_delete'])await assert.rejects(albumCall(1,action,{album:album.id,photo:photo.photo,title:'Hijack'}),/Only the album owner/);
+ assert.equal((await addAlbumPhoto(album.id,randomUUID(),1)).status,403);
+ const other=await newAlbum();await assert.rejects(albumCall(0,'album_cover',{album:other.id,photo:photo.photo}),/not found/);
+ await call(users[0],'remove',{peer:b.id});await assert.rejects(albumCall(1,'album',{album:album.id}),/not available/);
+ await db.query('update korlix_social_profiles set suspended=true where id=$1',[a.id]);await assert.rejects(albumCall(0,'albums',{}),/active Social profile/);
+});
+test('album image route rejects invalid data; quota, RLS, RPC and bucket access remain bounded',async()=>{
+ const album=await newAlbum();const f=new FormData();f.append('photo',new Blob(['<svg>bad</svg>']),'bad.svg');
+ assert.equal((await fetch(base+`album_upload?album=${album.id}&photo=${randomUUID()}`,{method:'POST',headers:{Authorization:users[0]},body:f})).status,400);
+ for(let i=0;i<19;i++)await newAlbum();await assert.rejects(newAlbum(),/20 albums/);
+ const row=(await db.query("select has_table_privilege('authenticated','korlix_social_albums','select') as table_access,has_function_privilege('anon','korlix_social_albums_v1(uuid,text,jsonb)','execute') as rpc_access,(select relrowsecurity from pg_class where oid='korlix_social_album_photos'::regclass) as rls,(select prosecdef from pg_proc where proname='korlix_social_albums_v1') as definer")).rows[0];assert.deepEqual(row,{table_access:false,rpc_access:false,rls:true,definer:false});
+ await db.query("insert into storage.objects(id,bucket_id,name) values($1,'korlix-social-albums','hidden.jpg')",[randomUUID()]);
+ await db.exec('set role authenticated');try{assert.equal((await db.query("select * from storage.objects where bucket_id='korlix-social-albums'")).rows.length,0);}finally{await db.exec('reset role');}
+ await db.exec('set role service_role');try{assert.equal((await albumCall(0,'albums',{})).items.length,20);}finally{await db.exec('reset role');}
 });

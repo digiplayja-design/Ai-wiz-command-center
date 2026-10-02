@@ -1,10 +1,13 @@
 // All social data access goes through a service-only, transactional RPC. Never
 // accept an actor ID, moderation role, or email address from a request body.
 import { registerSocialPhotos, socialPhotos } from './media.mjs';
-import { socialCallConfig } from './calls.mjs';
+import { createSocialCallConfig, socialRelayReadiness } from './calls.mjs';
 import { registerDomino } from './domino.mjs';
 import { registerSocialAttachments, socialAttachments } from './attachments.mjs';
+import { registerSocialAlbums } from './albums.mjs';
 export function registerSocial(app, { database, requireUser, logger = console, env = process.env } = {}) {
+  const callConfig = createSocialCallConfig({env,logger});
+  logger.info?.('Social calling relay readiness', socialRelayReadiness(env));
   const actions = new Set(['bootstrap', 'members', 'connections', 'messages', 'message', 'topics', 'topic', 'blocks', 'reports',
     'save_profile', 'presence', 'request', 'accept', 'decline', 'remove', 'block', 'unblock', 'send', 'read',
     'delete_message', 'create_topic', 'edit_topic', 'delete_topic', 'reply', 'edit_reply', 'delete_reply', 'report', 'moderate']);
@@ -24,6 +27,7 @@ export function registerSocial(app, { database, requireUser, logger = console, e
     return user;
   };
   registerSocialPhotos(app, { database, authenticate, logger });
+  registerSocialAlbums(app, { database, authenticate, logger });
   registerDomino(app, { database, authenticate, env, logger });
   registerSocialAttachments(app, { database, authenticate, logger });
   const route = async (req, res) => {
@@ -38,7 +42,7 @@ export function registerSocial(app, { database, requireUser, logger = console, e
       if (action === 'call_config') {
         const bootstrap = await database.rpc('korlix_social_v1', { p_actor: user.id, p_action: 'bootstrap', p_data: {} });
         if (bootstrap.error || !bootstrap.data?.profile) return res.status(403).json({ error: 'Create an active Social profile before calling.' });
-        return res.json(socialCallConfig(env));
+        return res.json(await callConfig(user.id));
       }
       if (['call_start', 'call_accept'].includes(action) && env.SOCIAL_CALLS_ENABLED === 'false') return res.status(503).json({ error: 'Calling is temporarily unavailable. You can still send a message.' });
       // p_actor is derived exclusively from a Supabase-verified identity.
