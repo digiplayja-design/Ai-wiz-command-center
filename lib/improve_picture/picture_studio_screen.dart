@@ -74,14 +74,15 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
   late final TextEditingController _prompt;
   final ScrollController _scroll = ScrollController();
   PlatformFile? _original, _source;
-  PictureEditResult? _result;
+  final List<_PictureVersion> _versions = [];
+  _PictureVersion? _selectedVersion;
+  PictureEditResult? get _result => _selectedVersion?.result;
   String _preset = 'enhance', _strength = 'balanced', _size = 'auto';
+  String _look = 'original', _lighting = 'original';
+  String _sourceLabel = 'Original photo', _previewMode = 'after';
+  int _nextVersion = 1;
   String? _error;
-  bool _preserve = true,
-      _busy = false,
-      _picking = false,
-      _saving = false,
-      _showBefore = false;
+  bool _preserve = true, _busy = false, _picking = false, _saving = false;
   int _elapsed = 0;
   Timer? _timer;
 
@@ -142,15 +143,19 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
       }
       setState(() {
         _original = _source = file;
-        _result = null;
-        _showBefore = false;
+        _selectedVersion = null;
+        _versions.clear();
+        _nextVersion = 1;
+        _sourceLabel = 'Original photo';
+        _previewMode = 'after';
       });
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _error =
               'Could not open that photo. Try Choose photo or check camera permissions.',
         );
+      }
     } finally {
       if (mounted) setState(() => _picking = false);
     }
@@ -165,9 +170,12 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
       return;
     }
     final source = _source!;
+    final sourceLabel = _sourceLabel;
     final options = PictureEditOptions(
       preset: _preset,
       strength: _strength,
+      look: _look,
+      lighting: _lighting,
       size: _size,
       preserveIdentity: _preserve,
       prompt: _prompt.text.trim(),
@@ -186,8 +194,17 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
       final result = await widget.onImprove(source, options);
       if (!mounted) return;
       setState(() {
-        _result = result;
-        _showBefore = false;
+        final version = _PictureVersion(
+          number: _nextVersion++,
+          source: source,
+          sourceLabel: sourceLabel,
+          result: result,
+          options: options,
+        );
+        _versions.add(version);
+        _trimHistory();
+        _selectedVersion = version;
+        _previewMode = 'after';
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _scroll.hasClients) {
@@ -199,13 +216,14 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
         }
       });
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _error = error.toString().replaceFirst(
             RegExp(r'^Exception: '),
             '',
           ),
         );
+      }
     } finally {
       _timer?.cancel();
       if (mounted) setState(() => _busy = false);
@@ -226,44 +244,110 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
           mimeType: 'image/png',
         );
       }
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Your PNG is ready to save or share.')),
         );
+      }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _error =
               'Could not save this picture. Keep this screen open and try Save PNG again.',
         );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
+  void _trimHistory() {
+    int retainedBytes() {
+      final buffers = <Uint8List>{
+        ?_original?.bytes,
+        for (final version in _versions) ...[
+          ?version.source.bytes,
+          version.result.bytes,
+        ],
+      };
+      return buffers.fold(0, (total, bytes) => total + bytes.length);
+    }
+
+    while (_versions.length > 1 &&
+        (_versions.length > 6 || retainedBytes() > 64 * 1024 * 1024)) {
+      _versions.removeAt(0);
+    }
+  }
+
   void _refine() {
-    if (_result == null || _busy) return;
+    final version = _selectedVersion;
+    if (version == null || _busy) return;
     setState(() {
       _source = PlatformFile(
         name: 'korlix_refinement.png',
-        size: _result!.bytes.length,
-        bytes: _result!.bytes,
+        size: version.result.bytes.length,
+        bytes: version.result.bytes,
       );
-      _result = null;
+      _sourceLabel = 'Version ${version.number}';
+      _selectedVersion = null;
       _preset = 'custom';
+      _look = _lighting = 'original';
       _prompt.clear();
-      _showBefore = false;
+      _previewMode = 'after';
       _error = null;
     });
+  }
+
+  void _selectVersion(_PictureVersion version) {
+    if (_busy) return;
+    setState(() {
+      _selectedVersion = version;
+      _source = version.source;
+      _sourceLabel = version.sourceLabel;
+      _preset = version.options.preset;
+      _strength = version.options.strength;
+      _look = version.options.look;
+      _lighting = version.options.lighting;
+      _size = version.options.size;
+      _preserve = version.options.preserveIdentity;
+      _prompt.text = version.options.prompt;
+      _previewMode = 'after';
+      _error = null;
+    });
+  }
+
+  void _startFromOriginal() {
+    if (_busy || _original == null) return;
+    setState(() {
+      _source = _original;
+      _sourceLabel = 'Original photo';
+      _selectedVersion = null;
+      _preset = 'enhance';
+      _look = _lighting = 'original';
+      _previewMode = 'after';
+      _error = null;
+    });
+  }
+
+  void _suggest(String hint) {
+    if (_busy) return;
+    final text = _prompt.text.trim();
+    if (text.contains(hint)) return;
+    final combined = text.isEmpty ? hint : '$text\n$hint';
+    if (combined.length > 12000) return;
+    _prompt.value = TextEditingValue(
+      text: combined,
+      selection: TextSelection.collapsed(offset: combined.length),
+    );
   }
 
   Widget _card(Widget child) => Material(
     color: _skin.panel,
     shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(24),
       side: BorderSide(color: _skin.border.withValues(alpha: .35)),
     ),
-    child: Padding(padding: const EdgeInsets.all(20), child: child),
+    child: Padding(padding: const EdgeInsets.all(18), child: child),
   );
 
   Widget _label(String text) => Padding(
@@ -274,114 +358,242 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
     ),
   );
 
+  Widget _step(String number, String title, Color color) => Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: Row(
+      children: [
+        Container(
+          width: 30,
+          height: 30,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: .12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            number,
+            style: TextStyle(color: _skin.text, fontWeight: FontWeight.w800),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _photoView(Uint8List bytes, {String? label, Key? imageKey}) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      if (label != null)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _skin.mutedText, fontSize: 12),
+          ),
+        ),
+      Expanded(
+        child: InteractiveViewer(
+          key: ValueKey('${identityHashCode(bytes)}-$label'),
+          minScale: 1,
+          maxScale: 5,
+          child: Image.memory(
+            bytes,
+            key: imageKey,
+            fit: BoxFit.contain,
+            cacheWidth: 1600,
+            errorBuilder: (_, _, _) => const Center(
+              child: Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  'This photo could not be previewed. Choose another.',
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
+
+  Widget _emptyPhotoPicker() => ColoredBox(
+    color: _skin.panelSoft,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 30),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.add_photo_alternate_outlined,
+            size: 46,
+            color: _skin.secondary,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Start with a photo you love',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'JPG, PNG or WEBP · Up to 15 MB',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _skin.mutedText, fontSize: 12),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: _busy || _picking ? null : _pick,
+            icon: const Icon(Icons.upload_outlined),
+            label: Text(_picking ? 'Opening…' : 'Choose photo'),
+          ),
+        ],
+      ),
+    ),
+  );
+
   Widget _preview() {
-    final bytes = _result != null && !_showBefore
-        ? _result!.bytes
-        : _source?.bytes;
+    final version = _selectedVersion;
+    final before = version?.source.bytes ?? _source?.bytes;
+    final bytes = switch (_previewMode) {
+      'original' => _original?.bytes,
+      'before' => before,
+      _ => _result?.bytes ?? _source?.bytes,
+    };
     return _card(
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: _label(
-                  _result == null ? 'Your photo' : 'Compare your edit',
-                ),
-              ),
-              if (_result != null)
-                Icon(Icons.check_circle_outline, color: accent),
-            ],
+          _step(
+            '1',
+            version == null ? 'Your photo' : 'Compare your edit',
+            _skin.secondary,
           ),
-          if (_result != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Wrap(
-                spacing: 8,
+          if (_versions.isNotEmpty) ...[
+            const Text(
+              'Your versions',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
                 children: [
-                  ChoiceChip(
-                    label: const Text('Before'),
-                    selected: _showBefore,
-                    onSelected: (_) => setState(() => _showBefore = true),
+                  ActionChip(
+                    key: const Key('picture-original'),
+                    avatar: const Icon(Icons.photo_outlined, size: 17),
+                    label: const Text('Original'),
+                    onPressed: _busy ? null : _startFromOriginal,
                   ),
-                  ChoiceChip(
-                    label: const Text('After'),
-                    selected: !_showBefore,
-                    onSelected: (_) => setState(() => _showBefore = false),
+                  ..._versions.map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: ChoiceChip(
+                        key: ValueKey('picture-version-${item.number}'),
+                        label: Text('Version ${item.number}'),
+                        selected: identical(item, version),
+                        onSelected: _busy ? null : (_) => _selectVersion(item),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: SizedBox(
-              height: 340,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  CustomPaint(
-                    painter: _TransparencyPainter(
-                      _skin.panelDeep,
-                      _skin.panelSoft,
-                    ),
+            const SizedBox(height: 12),
+          ],
+          if (version != null) ...[
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final entry in const {
+                  'before': 'Before',
+                  'after': 'After',
+                  'side': 'Side by side',
+                  'original': 'View original',
+                }.entries)
+                  ChoiceChip(
+                    key: ValueKey('picture-compare-${entry.key}'),
+                    label: Text(entry.value),
+                    selected: _previewMode == entry.key,
+                    onSelected: (_) => setState(() => _previewMode = entry.key),
                   ),
-                  if (bytes != null)
-                    InteractiveViewer(
-                      key: ValueKey(bytes),
-                      minScale: 1,
-                      maxScale: 5,
-                      child: Image.memory(
-                        bytes,
-                        fit: BoxFit.contain,
-                        cacheWidth: 1600,
-                        errorBuilder: (_, _, _) => const Center(
-                          child: Text(
-                            'This photo could not be previewed. Choose another.',
-                          ),
-                        ),
-                      ),
-                    )
-                  else
-                    Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: bytes == null
+                ? _emptyPhotoPicker()
+                : LayoutBuilder(
+                    builder: (context, constraints) => SizedBox(
+                      height: constraints.maxWidth < 400 ? 285 : 365,
+                      child: Stack(
+                        fit: StackFit.expand,
                         children: [
-                          Icon(
-                            Icons.add_photo_alternate_outlined,
-                            size: 54,
-                            color: accent,
+                          CustomPaint(
+                            painter: _TransparencyPainter(
+                              _skin.panelDeep,
+                              _skin.panelSoft,
+                            ),
                           ),
-                          const SizedBox(height: 14),
-                          const Text(
-                            'Start with a photo you love',
-                            style: TextStyle(fontSize: 17),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'JPG, PNG or WEBP · Up to 15 MB',
-                            style: TextStyle(color: _skin.mutedText),
-                          ),
-                          const SizedBox(height: 20),
-                          FilledButton.icon(
-                            onPressed: _busy || _picking ? null : _pick,
-                            icon: const Icon(Icons.upload_outlined),
-                            label: Text(_picking ? 'Opening…' : 'Choose photo'),
-                          ),
+                          if (version != null && _previewMode == 'side')
+                            Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(
+                                    child: _photoView(
+                                      version.source.bytes!,
+                                      label: version.sourceLabel,
+                                      imageKey: const Key(
+                                        'picture-before-image',
+                                      ),
+                                    ),
+                                  ),
+                                  VerticalDivider(
+                                    width: 14,
+                                    color: _skin.border.withValues(alpha: .6),
+                                  ),
+                                  Expanded(
+                                    child: _photoView(
+                                      version.result.bytes,
+                                      label: 'Version ${version.number}',
+                                      imageKey: const Key(
+                                        'picture-after-image',
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else
+                            _photoView(
+                              bytes,
+                              imageKey: const Key('picture-preview-image'),
+                            ),
                         ],
                       ),
                     ),
-                ],
-              ),
-            ),
+                  ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Text(
-            bytes == null
+            version != null && _previewMode == 'before'
+                ? 'Before = ${version.sourceLabel.toLowerCase()}, the source for this edit.'
+                : bytes == null
                 ? 'Your original stays available while you experiment.'
                 : 'Pinch or scroll to zoom. Drag to inspect details.',
             style: TextStyle(color: _skin.mutedText, fontSize: 12),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -399,39 +611,20 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
               ),
               if (_source != null && !identical(_source, _original))
                 TextButton(
-                  onPressed: _busy
-                      ? null
-                      : () {
-                          setState(() {
-                            _source = _original;
-                            _result = null;
-                            _showBefore = false;
-                            _error = null;
-                          });
-                        },
+                  onPressed: _busy ? null : _startFromOriginal,
                   child: const Text('Start from original'),
                 ),
             ],
           ),
-          if (_result != null) ...[
-            const Divider(height: 30),
-            if (_result!.summary.isNotEmpty) ...[
-              const Text(
-                'Edit direction',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 6),
+          if (version != null) ...[
+            const Divider(height: 26),
+            if (version.result.summary.isNotEmpty) ...[
               Text(
-                _result!.summary,
+                version.result.summary,
                 style: TextStyle(color: _skin.mutedText, height: 1.45),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
             ],
-            Text(
-              '${_result!.quality == 'max' ? 'Maximum' : _result!.quality} quality · PNG · ${_result!.size}',
-              style: TextStyle(color: accent, fontSize: 12),
-            ),
-            const SizedBox(height: 14),
             Wrap(
               spacing: 10,
               runSpacing: 8,
@@ -448,10 +641,16 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+          ],
+          if (_versions.isNotEmpty) ...[
+            const SizedBox(height: 12),
             Text(
-              'Save your favorite before leaving. Edits stay in this open workspace.',
-              style: TextStyle(color: _skin.mutedText, fontSize: 12),
+              'Up to 6 recent edits stay here until you leave or change photos. Older edits make room for new ones. Save your favorites.',
+              style: TextStyle(
+                color: _skin.mutedText,
+                fontSize: 12,
+                height: 1.4,
+              ),
             ),
           ],
         ],
@@ -459,33 +658,201 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
     );
   }
 
+  Color _presetColor(String id) => switch (id) {
+    'restore' => const Color(0xfff5ac64),
+    'headshot' => const Color(0xffb49aff),
+    'product' => const Color(0xff58cbb8),
+    'cutout' => const Color(0xff72b7fa),
+    'custom' => const Color(0xfff390ba),
+    _ => const Color(0xffb8cf63),
+  };
+
+  Widget _presetChoices() => LayoutBuilder(
+    builder: (context, constraints) {
+      final columns =
+          constraints.maxWidth >= 290 &&
+              MediaQuery.textScalerOf(context).scale(1) < 1.5
+          ? 2
+          : 1;
+      final width = (constraints.maxWidth - (columns - 1) * 10) / columns;
+      return Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: presets.entries.map((entry) {
+          final selected = _preset == entry.key;
+          final tint = _presetColor(entry.key);
+          return SizedBox(
+            width: width,
+            child: Semantics(
+              selected: selected,
+              button: true,
+              child: Material(
+                color: Color.alphaBlend(
+                  tint.withValues(alpha: selected ? .19 : .08),
+                  _skin.panel,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  key: ValueKey('picture-preset-${entry.key}'),
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: _busy
+                      ? null
+                      : () => setState(() => _preset = entry.key),
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 90),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: selected
+                            ? accent
+                            : _skin.border.withValues(alpha: .35),
+                        width: selected ? 2 : 1,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(entry.value.$2, color: _skin.text, size: 22),
+                            const Spacer(),
+                            if (selected)
+                              Icon(Icons.check_circle, color: accent, size: 18)
+                            else
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: tint,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          entry.value.$1,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      );
+    },
+  );
+
+  Widget _lookAndLight() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _label('Color look'),
+      Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          for (final entry in const <String, (String, Color)>{
+            'original': ('Original colors', Color(0xffaab5c4)),
+            'vivid': ('Vivid', Color(0xffd877df)),
+            'warm': ('Warm', Color(0xffefb15a)),
+            'cool': ('Cool', Color(0xff78bde9)),
+            'cinematic': ('Cinematic', Color(0xffa396dc)),
+            'mono': ('Black & white', Color(0xff9da6b6)),
+          }.entries)
+            ChoiceChip(
+              key: ValueKey('picture-look-${entry.key}'),
+              avatar: Container(
+                width: 15,
+                height: 15,
+                decoration: BoxDecoration(
+                  color: entry.value.$2,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _skin.border),
+                ),
+              ),
+              label: Text(entry.value.$1),
+              selected: _look == entry.key,
+              onSelected: _busy
+                  ? null
+                  : (_) => setState(() => _look = entry.key),
+            ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      DropdownButtonFormField<String>(
+        key: ValueKey('picture-lighting-$_lighting'),
+        initialValue: _lighting,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Lighting',
+          prefixIcon: Icon(Icons.wb_sunny_outlined),
+        ),
+        items: const [
+          DropdownMenuItem(
+            value: 'original',
+            child: Text('Keep original lighting'),
+          ),
+          DropdownMenuItem(value: 'brighten', child: Text('Bright & clear')),
+          DropdownMenuItem(value: 'soft', child: Text('Soft & flattering')),
+          DropdownMenuItem(value: 'golden', child: Text('Golden hour')),
+          DropdownMenuItem(value: 'studio', child: Text('Studio lighting')),
+        ],
+        onChanged: _busy
+            ? null
+            : (value) => setState(() => _lighting = value ?? 'original'),
+      ),
+    ],
+  );
+
   Widget _controls() => _card(
     Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _label('What would you like to improve?'),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: presets.entries
-              .map(
-                (entry) => ChoiceChip(
-                  avatar: Icon(entry.value.$2, size: 17),
-                  label: Text(entry.value.$1),
-                  selected: _preset == entry.key,
-                  onSelected: _busy
-                      ? null
-                      : (_) => setState(() => _preset = entry.key),
-                ),
-              )
-              .toList(),
-        ),
+        _step('2', 'Choose your treatment', _skin.tertiary),
+        _presetChoices(),
         const SizedBox(height: 12),
         Text(
           presets[_preset]!.$3,
           style: TextStyle(color: _skin.mutedText, height: 1.4),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 12),
+        ExpansionTile(
+          key: const Key('picture-color-lighting'),
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.only(bottom: 16),
+          leading: Icon(Icons.palette_outlined, color: _skin.secondary),
+          title: const Text(
+            'Color & lighting',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: const Text(
+            'Set the mood with a look and light',
+            style: TextStyle(fontSize: 12),
+          ),
+          children: [_lookAndLight()],
+        ),
+        const SizedBox(height: 18),
+        _step('3', 'Make it yours', _skin.primary),
+        if (_source != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
+              children: [
+                Icon(Icons.edit_outlined, size: 16, color: _skin.mutedText),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Editing: $_sourceLabel',
+                    style: TextStyle(color: _skin.mutedText, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
         TextField(
           controller: _prompt,
           enabled: !_busy,
@@ -496,11 +863,33 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
             labelText: _preset == 'custom'
                 ? 'Describe your edit'
                 : 'Your instructions (optional)',
-            hintText:
-                'For example: brighten the lighting, keep my face and hairline, and use a warm studio background.',
+            hintText: 'Tell us what should change and what should stay.',
             alignLabelWithHint: true,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
           ),
+        ),
+        Text(
+          'Add a suggestion, then edit it your way:',
+          style: TextStyle(color: _skin.mutedText, fontSize: 12),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final entry in const {
+              'Natural skin':
+                  'Keep natural skin texture; avoid an airbrushed look.',
+              'Clean background':
+                  'Remove background distractions while keeping the subject unchanged.',
+              'Keep details':
+                  'Keep faces, text, logos and small details faithful to the original.',
+            }.entries)
+              ActionChip(
+                label: Text(entry.key),
+                onPressed: _busy ? null : () => _suggest(entry.value),
+              ),
+          ],
         ),
         const SizedBox(height: 10),
         SwitchListTile.adaptive(
@@ -518,60 +907,84 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
             style: TextStyle(fontSize: 12),
           ),
         ),
-        const SizedBox(height: 12),
-        _label('Finish'),
-        Wrap(
-          spacing: 8,
-          children: ['subtle', 'balanced', 'creative']
-              .map(
-                (value) => ChoiceChip(
-                  label: Text(value[0].toUpperCase() + value.substring(1)),
-                  selected: _strength == value,
-                  onSelected: _busy
-                      ? null
-                      : (_) => setState(() => _strength = value),
-                ),
-              )
-              .toList(),
-        ),
-        const SizedBox(height: 20),
-        DropdownButtonFormField<String>(
-          initialValue: _size,
-          isExpanded: true,
-          decoration: const InputDecoration(
-            labelText: 'Output shape',
-            border: OutlineInputBorder(),
+        ExpansionTile(
+          key: const Key('picture-finish-options'),
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.only(bottom: 16),
+          title: const Text(
+            'Finish & output shape',
+            style: TextStyle(fontWeight: FontWeight.w600),
           ),
-          items: const [
-            DropdownMenuItem(value: 'auto', child: Text('Match my photo')),
-            DropdownMenuItem(
-              value: '1024x1024',
-              child: Text('Square · 1024 × 1024'),
-            ),
-            DropdownMenuItem(
-              value: '1024x1536',
-              child: Text('Portrait · 1024 × 1536'),
-            ),
-            DropdownMenuItem(
-              value: '1536x1024',
-              child: Text('Landscape · 1536 × 1024'),
-            ),
-            DropdownMenuItem(
-              value: '1536x1536',
-              child: Text('Detailed square · 1536 × 1536'),
-            ),
-            DropdownMenuItem(
-              value: '1536x2304',
-              child: Text('Detailed portrait · 1536 × 2304'),
-            ),
-            DropdownMenuItem(
-              value: '2304x1536',
-              child: Text('Detailed landscape · 2304 × 1536'),
+          subtitle: const Text(
+            'Adjust the amount of change and framing',
+            style: TextStyle(fontSize: 12),
+          ),
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 8),
+                _label('How much should change?'),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: ['subtle', 'balanced', 'creative']
+                      .map(
+                        (value) => ChoiceChip(
+                          label: Text(
+                            value[0].toUpperCase() + value.substring(1),
+                          ),
+                          selected: _strength == value,
+                          onSelected: _busy
+                              ? null
+                              : (_) => setState(() => _strength = value),
+                        ),
+                      )
+                      .toList(),
+                ),
+                const SizedBox(height: 18),
+                DropdownButtonFormField<String>(
+                  key: ValueKey('picture-size-$_size'),
+                  initialValue: _size,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Output shape'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'auto',
+                      child: Text('Match my photo'),
+                    ),
+                    DropdownMenuItem(
+                      value: '1024x1024',
+                      child: Text('Square · 1024 × 1024'),
+                    ),
+                    DropdownMenuItem(
+                      value: '1024x1536',
+                      child: Text('Portrait · 1024 × 1536'),
+                    ),
+                    DropdownMenuItem(
+                      value: '1536x1024',
+                      child: Text('Landscape · 1536 × 1024'),
+                    ),
+                    DropdownMenuItem(
+                      value: '1536x1536',
+                      child: Text('Detailed square · 1536 × 1536'),
+                    ),
+                    DropdownMenuItem(
+                      value: '1536x2304',
+                      child: Text('Detailed portrait · 1536 × 2304'),
+                    ),
+                    DropdownMenuItem(
+                      value: '2304x1536',
+                      child: Text('Detailed landscape · 2304 × 1536'),
+                    ),
+                  ],
+                  onChanged: _busy
+                      ? null
+                      : (value) => setState(() => _size = value ?? 'auto'),
+                ),
+              ],
             ),
           ],
-          onChanged: _busy
-              ? null
-              : (value) => setState(() => _size = value ?? 'auto'),
         ),
         const SizedBox(height: 20),
         if (_error != null)
@@ -595,7 +1008,7 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
                   const Text('Studying your photo and creating your edit…'),
                   const SizedBox(height: 6),
                   Text(
-                    'Maximum quality can take several minutes. Keep this screen open. ${_elapsed}s elapsed.',
+                    'A careful edit can take several minutes. Keep this screen open. ${_elapsed}s elapsed.',
                     style: TextStyle(color: _skin.mutedText, fontSize: 12),
                   ),
                 ],
@@ -606,22 +1019,91 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
           key: const Key('improve-picture-submit'),
           onPressed: _busy || _picking || _source == null ? null : _improve,
           style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 18),
+            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 18),
           ),
           icon: const Icon(Icons.auto_awesome),
-          label: Text(_busy ? 'Creating your edit…' : 'Improve my picture'),
+          label: Text(
+            _busy ? 'Creating your edit…' : 'Improve my picture',
+            textAlign: TextAlign.center,
+          ),
         ),
         const SizedBox(height: 10),
         Text(
-          'Astra · Extra-high reasoning\nSunburst · Maximum image quality',
+          'Compare the result before saving. Your original stays untouched.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: accent, height: 1.5, fontSize: 12),
+          style: TextStyle(color: _skin.mutedText, height: 1.4, fontSize: 12),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         TextButton.icon(
           onPressed: _busy ? null : widget.onOpenTemplates,
           icon: const Icon(Icons.collections_outlined),
           label: const Text('Explore portrait templates'),
+        ),
+      ],
+    ),
+  );
+
+  Widget _hero() => Container(
+    padding: const EdgeInsets.all(24),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(26),
+      border: Border.all(color: _skin.border.withValues(alpha: .3)),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color.alphaBlend(_skin.secondary.withValues(alpha: .15), _skin.panel),
+          Color.alphaBlend(_skin.tertiary.withValues(alpha: .14), _skin.panel),
+          Color.alphaBlend(
+            const Color(0xfff390ba).withValues(alpha: .12),
+            _skin.panel,
+          ),
+        ],
+      ),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.auto_awesome, color: _skin.text, size: 18),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'KORLIX PHOTO STUDIO',
+                style: TextStyle(
+                  fontSize: 11,
+                  letterSpacing: 1.8,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            for (final color in const [
+              Color(0xffb49aff),
+              Color(0xff58cbb8),
+              Color(0xfff390ba),
+            ])
+              Container(
+                margin: const EdgeInsets.only(left: 5),
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        const Text(
+          'Your photo. Your kind of brilliant.',
+          style: TextStyle(
+            fontSize: 28,
+            height: 1.16,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Restore a memory, polish a portrait or make your product shine. Play with color, compare every edit, and keep your favorite.',
+          style: TextStyle(color: _skin.text, height: 1.5),
         ),
       ],
     ),
@@ -643,29 +1125,19 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
           body: SafeArea(
             child: SingleChildScrollView(
               controller: _scroll,
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(16),
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1140),
+                  constraints: const BoxConstraints(maxWidth: 1160),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
-                        'Your photo. A remarkable finish.',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Choose a treatment, tell us what matters, and compare the result.',
-                        style: TextStyle(color: _skin.mutedText, height: 1.5),
-                      ),
-                      const SizedBox(height: 24),
+                      _hero(),
+                      const SizedBox(height: 20),
                       LayoutBuilder(
                         builder: (context, constraints) =>
-                            constraints.maxWidth >= 840
+                            constraints.maxWidth >= 840 &&
+                                MediaQuery.textScalerOf(context).scale(1) < 1.5
                             ? Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -692,6 +1164,21 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
       ),
     );
   }
+}
+
+class _PictureVersion {
+  const _PictureVersion({
+    required this.number,
+    required this.source,
+    required this.sourceLabel,
+    required this.result,
+    required this.options,
+  });
+  final int number;
+  final PlatformFile source;
+  final String sourceLabel;
+  final PictureEditResult result;
+  final PictureEditOptions options;
 }
 
 class _TransparencyPainter extends CustomPainter {

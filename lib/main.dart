@@ -103,6 +103,8 @@ import 'korlix_cyber_widgets.dart';
 import 'improve_picture/screens/portrait_studio_home.dart';
 import 'improve_picture/picture_studio_client.dart';
 import 'improve_picture/picture_studio_screen.dart';
+import 'improve_picture/picture_studio_session.dart';
+import 'improve_picture/picture_artwork.dart';
 import 'imagine_studio/imagine_catalog.dart';
 import 'imagine_studio/imagine_client.dart';
 import 'imagine_studio/imagine_screen.dart';
@@ -5130,6 +5132,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   String _chatImageStyle = 'auto';
   ImagineClient? _imagineStudio;
   bool _imagineStudioOpening = false;
+  bool _improvePictureStudioOpening = false;
   bool _logoStudioOpening = false;
   bool _emailEnhancerOpening = false;
   String _pendingChatPrompt = '';
@@ -8728,9 +8731,9 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     return KorlixActionButton(
       tile: tile,
       label: label,
-      subtitle: isEmailAction ? 'Polish, draft & reply' : isImagineAction ? 'Styles, scenes & art' : null,
+      subtitle: isImproveAction ? 'Restore, relight & refine' : isEmailAction ? 'Polish, draft & reply' : isImagineAction ? 'Styles, scenes & art' : null,
       leading: isImagineAction ? ClipRRect(borderRadius: BorderRadius.circular(11),
-        child: const SizedBox(width: 38, height: 38, child: ImagineArtwork())) : isEmailAction ? const SizedBox(width: 38, height: 38, child: EmailArtwork()) : null,
+        child: const SizedBox(width: 38, height: 38, child: ImagineArtwork())) : isImproveAction ? const SizedBox(width: 38, height: 38, child: PictureArtwork()) : isEmailAction ? const SizedBox(width: 38, height: 38, child: EmailArtwork()) : null,
       icon: icon ?? korlixToolIcon(label),
       onPressed: _loading ? null : () => _useQuickAction(action),
       selected: isHighlighted ? true : null,
@@ -8778,11 +8781,15 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         client: studio, language: _selectedLanguage, ensureConsent: consent, allowVoice: _hasVoiceAccess,
         onRefine: (result) async {
           if (!studio.available) return;
+          final owner = PictureStudioSession(headersBuilder: _authHeaders,
+            sessionChanges: kKorlixAuthRevision);
           final editor = PictureStudioClient(backendBaseUrl: kKorlixBackendBaseUrl,
-            headersBuilder: korlixAuthenticatedBackendHeaders);
+            headersBuilder: _authHeaders,
+            isSessionCurrent: () => studio.available && owner.isCurrent);
           try {
             await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => AnimatedBuilder(
-              animation: studio, builder: (context, _) => !studio.available
+              animation: Listenable.merge([studio, owner]),
+              builder: (context, _) => !studio.available || !owner.isCurrent
                 ? Scaffold(appBar: AppBar(title: const Text('Picture Studio')),
                     body: const Center(child: Text('Your session changed. Sign in again.')))
                 : PictureStudioScreen(
@@ -8790,9 +8797,9 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                       size: result.bytes.length, bytes: result.bytes),
                     language: _selectedLanguage,
                     onImprove: (file, options) async {
-                      if (!studio.available) throw const ImagineException('Your session changed.');
+                      if (!studio.available || !owner.isCurrent) throw const ImagineException('Your session changed.');
                       final edited = await editor.improve(file, options);
-                      if (!studio.available) throw const ImagineException('Your session changed.');
+                      if (!studio.available || !owner.isCurrent) throw const ImagineException('Your session changed.');
                       return edited;
                     },
                     ensureConsent: () => ensureKorlixThirdPartyAiConsent(
@@ -8802,7 +8809,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                         KorlixThirdPartyAiDataCategory.imagesAndPhotos}),
                     onOpenTemplates: () => unawaited(_openPortraitTemplateGallery()),
                   ))));
-          } finally { editor.dispose(); }
+          } finally { editor.dispose(); owner.dispose(); }
         },
       )));
     } finally { _imagineStudioOpening = false; }
@@ -8858,22 +8865,39 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   Future<void> _openImprovePictureStudio() async {
-    if (_loading) return;
-    final client = PictureStudioClient(backendBaseUrl: kKorlixBackendBaseUrl,
-      headersBuilder: korlixAuthenticatedBackendHeaders);
+    if (_loading || _improvePictureStudioOpening) return;
+    _improvePictureStudioOpening = true;
+    final owner = PictureStudioSession(headersBuilder: _authHeaders,
+      sessionChanges: kKorlixAuthRevision);
+    PictureStudioClient? client;
     try {
-      await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => PictureStudioScreen(
-        initialFile: _activeUploadFiles.length == 1 ? _activeUploadFiles.first : null,
-        initialPrompt: _controller.text.trim(), language: _selectedLanguage,
-        onImprove: client.improve,
-        ensureConsent: () => ensureKorlixThirdPartyAiConsent(
-          context: context, featureName: 'Improve My Picture',
-          providers: const {KorlixThirdPartyAiProvider.openAi},
-          dataCategories: const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
-            KorlixThirdPartyAiDataCategory.imagesAndPhotos}),
-        onOpenTemplates: () => unawaited(_openPortraitTemplateGallery()),
+      await _stopAiCharacterTalkingForQuery();
+      if (!mounted) return;
+      final editor = PictureStudioClient(backendBaseUrl: kKorlixBackendBaseUrl,
+        headersBuilder: _authHeaders, isSessionCurrent: () => owner.isCurrent);
+      client = editor;
+      await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => AnimatedBuilder(
+        animation: owner,
+        builder: (context, _) => !owner.isCurrent
+          ? Scaffold(appBar: AppBar(title: const Text('Picture Studio')),
+              body: const Center(child: Text('Sign in again to open Picture Studio.')))
+          : PictureStudioScreen(
+              initialFile: _activeUploadFiles.length == 1 ? _activeUploadFiles.first : null,
+              initialPrompt: _controller.text.trim(), language: _selectedLanguage,
+              onImprove: editor.improve,
+              ensureConsent: () => ensureKorlixThirdPartyAiConsent(
+                context: context, featureName: 'Improve My Picture',
+                providers: const {KorlixThirdPartyAiProvider.openAi},
+                dataCategories: const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
+                  KorlixThirdPartyAiDataCategory.imagesAndPhotos}),
+              onOpenTemplates: () => unawaited(_openPortraitTemplateGallery()),
+            ),
       )));
-    } finally {client.dispose();}
+    } finally {
+      client?.dispose();
+      owner.dispose();
+      _improvePictureStudioOpening = false;
+    }
   }
 
   Future<void> _openPortraitTemplateGallery() async {

@@ -16,8 +16,10 @@ class PictureEditOptions {
     this.preserveIdentity = true,
     this.prompt = '',
     this.language = 'en',
+    this.look = 'original',
+    this.lighting = 'original',
   });
-  final String preset, strength, size, prompt, language;
+  final String preset, strength, size, prompt, language, look, lighting;
   final bool preserveIdentity;
   Map<String, String> get fields => {
     'preset': preset,
@@ -26,6 +28,8 @@ class PictureEditOptions {
     'preserveIdentity': '$preserveIdentity',
     'prompt': prompt,
     'language': language,
+    'look': look,
+    'lighting': lighting,
   };
 }
 
@@ -41,13 +45,16 @@ class PictureEditResult {
 }
 
 String? pictureFileError(PlatformFile file) {
-  if (file.bytes == null || file.bytes!.isEmpty)
+  if (file.bytes == null || file.bytes!.isEmpty) {
     return 'This photo could not be read. Choose it again.';
-  if (file.bytes!.length > 15 * 1024 * 1024)
+  }
+  if (file.bytes!.length > 15 * 1024 * 1024) {
     return 'Choose a photo under 15 MB.';
+  }
   final ext = file.name.split('.').last.toLowerCase();
-  if (!['jpg', 'jpeg', 'png', 'webp'].contains(ext))
+  if (!['jpg', 'jpeg', 'png', 'webp'].contains(ext)) {
     return 'Choose a JPG, PNG, or WEBP photo.';
+  }
   return null;
 }
 
@@ -55,16 +62,32 @@ class PictureStudioClient {
   PictureStudioClient({
     required this.backendBaseUrl,
     required this.headersBuilder,
+    this.isSessionCurrent,
     http.Client? client,
   }) : _client = client ?? http.Client();
   final String backendBaseUrl;
   final KorlixPreviewHeadersBuilder headersBuilder;
+  final bool Function()? isSessionCurrent;
   final http.Client _client;
+  bool _closed = false, _sessionChanged = false;
+
+  void _guard() {
+    if (_closed) {
+      throw Exception('Reopen Picture Studio to continue.');
+    }
+    if (isSessionCurrent?.call() == false) _sessionChanged = true;
+    if (_sessionChanged) {
+      throw Exception(
+        'Your session changed. Sign in again and reopen Picture Studio.',
+      );
+    }
+  }
 
   Future<PictureEditResult> improve(
     PlatformFile file,
     PictureEditOptions options,
   ) async {
+    _guard();
     final problem = pictureFileError(file);
     if (problem != null) throw Exception(problem);
     final request = http.MultipartRequest(
@@ -73,8 +96,15 @@ class PictureStudioClient {
         '${backendBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/image/improve',
       ),
     );
-    final headers = Map<String, String>.from(await headersBuilder())
-      ..removeWhere((name, _) => name.toLowerCase() == 'content-type');
+    final Map<String, String> headers;
+    try {
+      headers = Map<String, String>.from(await headersBuilder())
+        ..removeWhere((name, _) => name.toLowerCase() == 'content-type');
+    } catch (_) {
+      _guard();
+      rethrow;
+    }
+    _guard();
     request.headers.addAll(headers);
     request.fields.addAll(options.fields);
     final ext = file.name.split('.').last.toLowerCase();
@@ -93,25 +123,49 @@ class PictureStudioClient {
           .then(http.Response.fromStream)
           .timeout(const Duration(seconds: 430));
     } on TimeoutException {
+      _guard();
       throw Exception(
         'This edit took longer than expected. Keep your original and try again shortly.',
       );
-    }
-    Map<String, dynamic> data;
-    try {
-      data = jsonDecode(response.body) as Map<String, dynamic>;
-    } catch (_) {
+    } on http.ClientException {
+      _guard();
       throw Exception(
-        'The photo service did not return a valid result. Please try again.',
+        'The photo service connection was interrupted. Check your connection and try again.',
       );
+    } catch (_) {
+      _guard();
+      rethrow;
     }
-    if (response.statusCode == 401)
+    _guard();
+    if ([401, 419, 440].contains(response.statusCode)) {
+      _sessionChanged = true;
       throw Exception(
         'Your session expired. Sign in again to improve your picture.',
       );
+    }
+    Map<String, dynamic>? data;
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) data = decoded;
+    } catch (_) {}
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      String? message;
+      for (final value in [data?['details'], data?['error']]) {
+        if (value is String && value.trim().isNotEmpty) {
+          message = value;
+          break;
+        }
+      }
       throw Exception(
-        data['details'] ?? data['error'] ?? 'The edit could not be completed.',
+        message ??
+            (response.statusCode == 429
+                ? 'The photo service is busy. Please wait a moment and try again.'
+                : 'The edit could not be completed. Please try again.'),
+      );
+    }
+    if (data == null) {
+      throw Exception(
+        'The photo service did not return a valid result. Please try again.',
       );
     }
     final url = data['imageDataUrl'];
@@ -128,11 +182,11 @@ class PictureStudioClient {
         'The returned picture could not be read. Please try again.',
       );
     }
-    if (bytes.length < 8 ||
-        bytes[0] != 137 ||
-        bytes[1] != 80 ||
-        bytes[2] != 78 ||
-        bytes[3] != 71) {
+    const pngSignature = [137, 80, 78, 71, 13, 10, 26, 10];
+    if (bytes.length < pngSignature.length ||
+        !Iterable<int>.generate(
+          pngSignature.length,
+        ).every((index) => bytes[index] == pngSignature[index])) {
       throw Exception(
         'The returned picture could not be read. Please try again.',
       );
@@ -145,5 +199,9 @@ class PictureStudioClient {
     );
   }
 
-  void dispose() => _client.close();
+  void dispose() {
+    if (_closed) return;
+    _closed = true;
+    _client.close();
+  }
 }

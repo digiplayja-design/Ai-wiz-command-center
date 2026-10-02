@@ -107,13 +107,21 @@ void main() {
     required PictureEditCallback edit,
     Future<bool> Function()? consent,
     Future<void> Function(Uint8List)? save,
+    Size viewport = const Size(390, 844),
+    double textScale = 1,
   }) async {
-    tester.view.physicalSize = const Size(390, 844);
+    tester.view.physicalSize = viewport;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
         home: PictureStudioScreen(
           initialFile: file,
           onImprove: edit,
@@ -300,4 +308,179 @@ void main() {
     );
     expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
   });
+  Uint8List previewBytes(WidgetTester tester, Key key) {
+    final image = tester.widget<Image>(find.byKey(key));
+    return ((image.image as ResizeImage).imageProvider as MemoryImage).bytes;
+  }
+
+  testWidgets(
+    'guided looks and light reach the edit while suggestions preserve the draft',
+    (tester) async {
+      PictureEditOptions? options;
+      await screen(
+        tester,
+        file: await photo(),
+        edit: (_, value) async {
+          options = value;
+          return PictureEditResult(bytes: await png(Colors.green));
+        },
+      );
+      await tester.enterText(find.byType(TextField), 'Keep the red jacket.');
+      await tester.ensureVisible(find.text('Natural skin'));
+      await tester.tap(find.text('Natural skin'));
+      await tester.tap(find.text('Natural skin'));
+      final draft = tester
+          .widget<TextField>(find.byType(TextField))
+          .controller!
+          .text;
+      expect(
+        draft,
+        'Keep the red jacket.\nKeep natural skin texture; avoid an airbrushed look.',
+      );
+      await tester.ensureVisible(
+        find.byKey(const Key('picture-color-lighting')),
+      );
+      await tester.tap(find.text('Color & lighting'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('picture-look-warm')));
+      await tester.tap(find.byKey(const Key('picture-look-warm')));
+      await tester.ensureVisible(find.text('Keep original lighting'));
+      await tester.tap(find.text('Keep original lighting'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Golden hour').last);
+      await tester.pumpAndSettle();
+      final submit = find.byKey(const Key('improve-picture-submit'));
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(options!.look, 'warm');
+      expect(options!.lighting, 'golden');
+      expect(options!.prompt, draft);
+      expect(options!.preserveIdentity, isTrue);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'each version keeps its source for comparison and earlier versions remain saveable',
+    (tester) async {
+      final original = await photo();
+      final first = await png(Colors.green);
+      final second = await png(Colors.blue);
+      var count = 0;
+      Uint8List? saved;
+      await screen(
+        tester,
+        file: original,
+        save: (bytes) async => saved = bytes,
+        edit: (source, _) async {
+          if (count == 1) expect(source.bytes, first);
+          return PictureEditResult(bytes: count++ == 0 ? first : second);
+        },
+      );
+      final submit = find.byKey(const Key('improve-picture-submit'));
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Refine this image'));
+      await tester.tap(find.text('Refine this image'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('picture-version-1')), findsOneWidget);
+      expect(find.text('Editing: Version 1'), findsOneWidget);
+      await tester.enterText(
+        find.byType(TextField),
+        'Make the background softer.',
+      );
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Side by side'));
+      await tester.tap(find.text('Side by side'));
+      await tester.pumpAndSettle();
+      expect(previewBytes(tester, const Key('picture-before-image')), first);
+      expect(previewBytes(tester, const Key('picture-after-image')), second);
+      await tester.tap(find.text('View original'));
+      await tester.pump();
+      expect(
+        previewBytes(tester, const Key('picture-preview-image')),
+        original.bytes,
+      );
+      await tester.ensureVisible(find.byKey(const Key('picture-version-1')));
+      await tester.tap(find.byKey(const Key('picture-version-1')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Before'));
+      await tester.tap(find.text('Before'));
+      await tester.pump();
+      expect(
+        previewBytes(tester, const Key('picture-preview-image')),
+        original.bytes,
+      );
+      await tester.ensureVisible(find.text('Save PNG'));
+      await tester.tap(find.text('Save PNG'));
+      await tester.pumpAndSettle();
+      expect(saved, first);
+      expect(find.byKey(const Key('picture-version-2')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'history retains at most six versions and a failed edit keeps the last result',
+    (tester) async {
+      var calls = 0;
+      final bytes = await png(Colors.green);
+      await screen(
+        tester,
+        file: await photo(),
+        edit: (_, _) async {
+          calls++;
+          if (calls == 8) throw Exception('Temporary problem.');
+          return PictureEditResult(bytes: bytes);
+        },
+      );
+      final submit = find.byKey(const Key('improve-picture-submit'));
+      for (var i = 0; i < 7; i++) {
+        await tester.ensureVisible(submit);
+        await tester.tap(submit);
+        await tester.pumpAndSettle();
+      }
+      expect(find.byKey(const Key('picture-version-1')), findsNothing);
+      expect(find.byKey(const Key('picture-version-2')), findsOneWidget);
+      expect(find.byKey(const Key('picture-version-7')), findsOneWidget);
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(find.text('Temporary problem.'), findsOneWidget);
+      expect(find.byKey(const Key('picture-version-7')), findsOneWidget);
+      expect(find.text('Save PNG'), findsOneWidget);
+      expect(previewBytes(tester, const Key('picture-preview-image')), bytes);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final viewport in [const Size(390, 844), const Size(1200, 900)]) {
+    testWidgets(
+      'workspace supports large text at ${viewport.width.toInt()}px without overflow',
+      (tester) async {
+        await screen(
+          tester,
+          viewport: viewport,
+          textScale: 2,
+          edit: (_, _) async => throw StateError('No photo'),
+        );
+        expect(tester.takeException(), isNull);
+        await tester.ensureVisible(find.text('Color & lighting'));
+        await tester.tap(find.text('Color & lighting'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        await tester.ensureVisible(find.text('Finish & output shape'));
+        await tester.tap(find.text('Finish & output shape'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(
+          find.byKey(const Key('improve-picture-submit')),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }
