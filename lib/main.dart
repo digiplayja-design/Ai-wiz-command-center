@@ -1,3 +1,5 @@
+import 'directory/directory_client.dart';
+import 'directory/directory_screen.dart';
 import 'text_workspace/box_workspace.dart';
 import 'text_workspace/box_store.dart';
 import 'workforce/workforce_voice.dart';
@@ -5175,6 +5177,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     'Payroll',
     'KORLIX 2MEETU',
     'Contacts CRM',
+    'Business Directory',
     'Workforce',
     'Voice-scribe',
     'Copy Box',
@@ -9726,6 +9729,15 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       PayrollScreen(client: client, openBookkeeping: _openBookkeeping, openWorkforce: _openWorkforce)));
   }
 
+  Future<void> _openBusinessDirectory() async {
+    final client = DirectoryClient(backendBaseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
+    try {
+      final route = MaterialPageRoute<void>(builder: (_) => DirectoryScreen(client:client));
+      await Navigator.of(context).push(route);
+      await route.completed;
+    } finally { client.dispose(); }
+  }
+
   Future<void> _openWorkforce() async {
     final client=WorkforceClient(backendBaseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
     await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>WorkforceScreen(client:client,openVoice:(snapshot)async{
@@ -9781,6 +9793,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     if (tool == 'Payroll') { unawaited(_openPayroll()); return; }
     if (tool == 'KORLIX 2MEETU' || tool == 'Scheduling') { unawaited(_openScheduling()); return; }
 
+    if (tool == 'Business Directory') { unawaited(_openBusinessDirectory()); return; }
     if (tool == 'Workforce') {
       unawaited(_openWorkforce());
       return;
@@ -10870,6 +10883,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       if (tool == 'Funnel Studio') return 'Enterprise pages, lead capture and campaign links';
       if (tool == 'Payroll') return 'Enterprise US payroll, employee onboarding and payroll tax workflows';
       if (tool == 'KORLIX 2MEETU' || tool == 'Scheduling') return 'AI scheduling, booking pages, group sessions and appointments';
+      if (tool == 'Business Directory') return 'Free business listings, public discovery and optional verification';
       if (tool == 'Workforce') return 'Your business, team tasks, shifts and K-Nova voice assistance';
       if (tool == 'Contacts CRM') return 'Enterprise contacts, imports and KORLIX connections';
       if (tool == 'Voice-scribe') {
@@ -13363,7 +13377,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                   title: 'For business', description: 'Manage operations, grow your reach, and get work done.',
                   icon: Icons.business_center_outlined,
                   children: [
-                    for (final tool in ['Logo Studio', 'Inventory Studio', 'Bookkeeping 2027', 'KORLIX 2MEETU', 'FieldProof', 'SEO Agent', 'AI Visibility', 'Contract Radar', 'Workforce']) toolTile(tool),
+                    for (final tool in ['Logo Studio', 'Inventory Studio', 'Bookkeeping 2027', 'KORLIX 2MEETU', 'FieldProof', 'SEO Agent', 'AI Visibility', 'Contract Radar', 'Workforce', 'Business Directory']) toolTile(tool),
                     if (_currentTier.trim().toLowerCase() == 'enterprise') ...[
                       toolTile('Contacts CRM'), toolTile('Funnel Studio'), toolTile('Payroll'),
                     ],
