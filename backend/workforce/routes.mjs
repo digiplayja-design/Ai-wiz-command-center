@@ -13,6 +13,8 @@ import {
   dailyBrief,
   tokenHash,
 } from "./core.mjs";
+import {workspacePayload,businessProfile,teamProfile,presetPolicy,INDUSTRIES} from './workspace.mjs';
+import {workforceVoiceContext,prepareWorkforceVoiceDraft} from './voice.mjs';
 import { createWorkforceStore } from "./store.mjs";
 import {
   createKorlixAgentEmailDraftService,
@@ -27,6 +29,8 @@ const timestamp = (v) => {
   return new Date(n).toISOString();
 };
 function payload(action, p = {}) {
+  if(!p||typeof p!=="object"||Array.isArray(p))fail("Use valid action fields.");
+  const expanded=workspacePayload(action,p); if(expanded)return expanded;
   switch (action) {
     case "policy":
       return {
@@ -36,13 +40,14 @@ function payload(action, p = {}) {
     case "invite": {
       const email = text(p.email, 254, true).toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-        fail("Enter the employee’s email address.");
+        fail("Enter the team member’s email address.");
       if (!["manager", "employee"].includes(p.role))
-        fail("Choose employee or manager.");
+        fail("Choose member or manager access.");
       return {
         email,
         display_name: text(p.display_name, 100, true),
         role: p.role,
+        ...teamProfile(p),
       };
     }
     case "member":
@@ -209,7 +214,7 @@ export function registerWorkforce(
     res.json(await automationReady().resolve(u.id, id(req.params.org), req.body?.job_id))));
   app.get(
     base + "/workspaces",
-    wrap(async (req, res, u) => res.json(await run(u, "workspaces", null, {}))),
+    wrap(async (req, res, u) => res.json({...await run(u, "workspaces", null, {}),industries:INDUSTRIES})),
   );
   app.post(
     base + "/workspaces",
@@ -221,6 +226,8 @@ export function registerWorkforce(
             name: text(req.body?.name, 100, true),
             display_name: text(req.body?.display_name, 100, true),
             timezone: text(req.body?.timezone, 80, true),
+            profile: businessProfile(req.body?.profile),
+            initial_policy: presetPolicy(businessProfile(req.body?.profile).industry),
           }),
         ),
     ),
@@ -246,6 +253,14 @@ export function registerWorkforce(
       res.json(await snapshot(u, id(req.params.org), req.query)),
     ),
   );
+  app.get(base + '/:org/voice/context',wrap(async(req,res,u)=>{
+    const data=await snapshot(u,id(req.params.org));
+    res.json(workforceVoiceContext(data,{category:req.query.category||'overview',query:req.query.query||''}));
+  }));
+  app.post(base + '/:org/voice/draft',wrap(async(req,res,u)=>{
+    const data=await snapshot(u,id(req.params.org));
+    res.json(prepareWorkforceVoiceDraft(data,req.body));
+  }));
   app.get(
     base + "/:org/audit",
     wrap(async (req, res, u) =>
@@ -258,6 +273,7 @@ export function registerWorkforce(
       const action = req.body?.action,
         p = payload(action, req.body?.payload),
         org = id(req.params.org);
+      if(req.body?.payload?.expected_member_version!=null)p.expected_member_version=integer(req.body.payload.expected_member_version,1,2147483646);
       let token;
       if (action === "invite") {
         token = randomBytes(32).toString("base64url");

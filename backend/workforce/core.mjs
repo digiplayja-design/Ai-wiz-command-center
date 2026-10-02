@@ -224,7 +224,7 @@ export function timesheetCsv(data) {
   );
   return [
     [
-      "Employee",
+      "Team member",
       "Clock in (UTC)",
       "Clock out (UTC)",
       "Worked hours",
@@ -255,5 +255,5 @@ export function dailyBrief(data) {
   const names = new Map(
     (data.members || []).map((m) => [m.user_id, m.display_name]),
   );
-  return `${data.organization.name} — Workforce report\n${data.from} to ${data.to} (${data.organization.timezone})\n\n${(data.report_shifts || data.shifts).length} shifts • ${(data.metrics.worked_seconds / 3600).toFixed(1)} shift hours (full shifts overlapping report dates)\n${data.metrics.updates_due} hourly updates due\n\nRecorded work\n${(data.period_updates || data.updates).map((u) => `${names.get(u.user_id) || "Team member"}: ${u.quantity} ${u.output_unit}. ${u.summary}${u.blockers ? " Blocker: " + u.blockers : ""}`).join("\n") || "No work updates recorded."}\n\n${data.corrections.filter((c) => c.status === "pending").length} correction requests pending.\nWork quantities are employee-reported. Timesheets require manager review.`;
+  return `${data.organization.name} — Workforce report\n${data.from} to ${data.to} (${data.organization.timezone})\n\n${(data.report_shifts || data.shifts).length} shifts • ${(data.metrics.worked_seconds / 3600).toFixed(1)} shift hours (full shifts overlapping report dates)\n${data.metrics.updates_due} hourly updates due\n\nRecorded work\n${(data.period_updates || data.updates).map((u) => `${names.get(u.user_id) || "Team member"}: ${u.quantity} ${u.output_unit}. ${u.summary}${u.blockers ? " Blocker: " + u.blockers : ""}`).join("\n") || "No work updates recorded."}\n\n${data.corrections.filter((c) => c.status === "pending").length} correction requests pending.\nWork quantities are self-reported. Timesheets require manager review.`;
 }

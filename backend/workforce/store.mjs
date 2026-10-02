@@ -2,7 +2,7 @@ import { fail } from "./core.mjs";
 export function createWorkforceStore(db) {
   return {
     async command(actor, email, action, org, payload = {}) {
-      const { data, error } = await db.rpc("korlix_workforce_command_v1", {
+      const { data, error } = await db.rpc("korlix_workforce_workspace_v2", {
         p_actor: actor,
         p_email: email,
         p_action: action,

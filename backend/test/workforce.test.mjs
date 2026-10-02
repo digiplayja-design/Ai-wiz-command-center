@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
 import express from "express";
@@ -27,7 +27,7 @@ const call = async (
   email = `${actor}@example.com`,
 ) => {
   const r = await db.query(
-    "select public.korlix_workforce_command_v1($1,$2,$3,$4,$5::jsonb) as value",
+    "select public.korlix_workforce_workspace_v2($1,$2,$3,$4,$5::jsonb) as value",
     [actor, email, action, o, JSON.stringify(p)],
   );
   return r.rows[0].value;
@@ -76,6 +76,7 @@ test.before(async () => {
       "utf8",
     ),
   );
+  for(const f of await readdir(new URL('../../supabase/migrations/',import.meta.url))) if(f.endsWith('_workforce_business_workspace.sql')) await db.exec(await readFile(new URL('../../supabase/migrations/'+f,import.meta.url),'utf8'));
   await db.exec("set role service_role");
 });
 test.after(async () => {
@@ -488,4 +489,79 @@ test("HTTP uses verified identity, enforces email verification and never sends a
   const r = await req("/" + org);
   assert.equal(r.headers.get("cache-control"), "no-store");
   assert.equal((await r.json()).member.user_id, worker);
+});
+
+test('Business profiles and member types support independent companies and preserve roles',async()=>{
+ const {businessProfile,presetPolicy}=await import('../workforce/workspace.mjs');
+ const created=await call(otherOwner,'create',{name:'Independent Delivery Co',display_name:'Owner',timezone:'UTC',profile:businessProfile({industry:'logistics',work_mode:'field'}),initial_policy:presetPolicy('logistics')},null);
+ assert.equal(created.business_profile.industry,'logistics');assert.equal(created.policy.output_unit,'deliveries');assert.equal(created.policy.require_location,false);
+ await assert.rejects(call(worker,'business',{name:'Spoof',version:1,profile:{}},created.id),/access/);
+ const current=await call(owner,'snapshot');
+ await call(owner,'business',{name:'Independent Services',version:current.organization.version,profile:businessProfile({industry:'professional',work_mode:'remote',description:'Client projects'})});
+ await assert.rejects(call(manager,'business',{name:'Bad',version:1,profile:{}}),/Owner/);
+ const member=current.members.find(m=>m.user_id===worker);
+ await call(owner,'team_profile',{user_id:worker,version:member.version,member_kind:'contractor',job_title:'Installer',worksite:'Client sites'});
+ const fresh=(await call(worker,'snapshot')).member;assert.equal(fresh.role,'employee');assert.equal(fresh.member_kind,'contractor');
+ await assert.rejects(call(owner,'team_profile',{user_id:worker,version:member.version,member_kind:'partner',job_title:'',worksite:''}),/changed/);
+ const token=tokenHash(randomUUID());
+ await call(owner,'invite',{email:`${outsider}@example.com`,display_name:'Volunteer',role:'employee',token_hash:token,member_kind:'volunteer',job_title:'Coordinator',worksite:'Remote'});
+ await call(outsider,'accept',{token_hash:token},null);
+ assert.equal((await call(outsider,'snapshot')).member.member_kind,'volunteer');
+});
+test('Work board enforces assignments, tenant isolation, current access and retry/version checks',async()=>{
+ const task={request_id:randomUUID(),title:'Prepare client visit',details:'Checklist at the site',assignee_id:worker,priority:'high',project:'Client A',worksite:'East',due_at:new Date(Date.now()+86400000).toISOString()};
+ const result=await call(manager,'task_create',task);assert.equal(result.status,'todo');
+ assert.equal((await call(manager,'task_create',task)).id,result.id);
+ await assert.rejects(call(manager,'task_create',{...task,title:'Changed'}),/request changed/);
+ assert.equal((await call(worker,'snapshot')).tasks.length,1);
+ assert.equal((await call(outsider,'snapshot')).tasks.length,0);
+ await assert.rejects(call(outsider,'task_status',{id:result.id,version:1,status:'done',progress_note:''}),/access/);
+ await assert.rejects(call(worker,'task_create',{...task,request_id:randomUUID(),assignee_id:manager}),/Managers/);
+ await assert.rejects(call(manager,'task_create',{...task,request_id:randomUUID(),assignee_id:otherOwner}),/active member/);
+ await assert.rejects(call(otherOwner,'task_status',{id:result.id,version:1,status:'done',progress_note:''}),/access/);
+ const updated=await call(worker,'task_status',{id:result.id,version:1,status:'blocked',progress_note:'Waiting for parts'});assert.equal(updated.version,2);
+ await assert.rejects(call(manager,'task_edit',{...task,id:result.id,version:1}),/changed/);
+ await assert.rejects(call(worker,'task_edit',{...task,id:result.id,version:2}),/Managers/);
+ const edited=await call(manager,'task_edit',{...task,id:result.id,version:2,assignee_id:outsider});assert.equal(edited.version,3);
+ assert.equal((await call(worker,'snapshot')).tasks.length,0);
+ await assert.rejects(call(worker,'task_status',{id:result.id,version:3,status:'done',progress_note:''}),/access/);
+ const self=await call(worker,'task_create',{...task,request_id:randomUUID()});assert.equal(self.assignee_id,worker); // no open shift needed
+ const mv=(await call(worker,'snapshot')).member.version;
+ await assert.rejects(call(worker,'task_create',{...task,request_id:randomUUID(),expected_member_version:mv-1}),/access changed/);
+ const done=await call(worker,'task_status',{id:self.id,version:1,status:'done',progress_note:'Ready'});assert(done.completed_at);
+ const reopen=await call(worker,'task_status',{id:self.id,version:2,status:'in_progress',progress_note:'More work'});assert.equal(reopen.completed_at,null);
+ await assert.rejects(call(worker,'task_status',{id:self.id,version:3,status:'cancelled',progress_note:''}),/manager/);
+ for(const role of ['anon','authenticated']) {await db.exec(`reset role;set role ${role}`);await assert.rejects(db.query('select * from korlix_workforce_tasks'),/permission denied/);await assert.rejects(call(owner,'snapshot'),/permission denied/);}
+ await db.exec('reset role;set role service_role');
+});
+test('K-Nova context excludes evidence and invitations; drafts cannot write or broaden employee access',async()=>{
+ const {workforceVoiceContext,prepareWorkforceVoiceDraft}=await import('../workforce/voice.mjs');
+ const data=enrichSnapshot(await call(worker,'snapshot'));
+ const context=workforceVoiceContext(data);assert.equal(context.members.length,1);assert.equal(context.members[0].email,undefined);assert.equal(context.events,undefined);assert.equal(context.invites,undefined);assert.equal(context.policy,undefined);
+ assert.equal(context.capabilities.draft_schedule,false);
+ const payload={title:'New task',assignee_id:worker,priority:'normal',due_at:null};
+ const r=prepareWorkforceVoiceDraft(data,{action:'task_create',member_version:data.member.version,payload});assert.equal(r.saved,false);assert.equal(r.reviewRequired,true);
+ assert.equal((await call(worker,'snapshot')).tasks.length,data.tasks.length);
+ assert.throws(()=>prepareWorkforceVoiceDraft(data,{action:'task_create',member_version:data.member.version,payload:{...payload,assignee_id:manager}}),/yourself/);
+ assert.throws(()=>prepareWorkforceVoiceDraft(data,{action:'task_create',member_version:data.member.version,payload:{...payload,status:'done'}}),/supported/);
+ assert.throws(()=>prepareWorkforceVoiceDraft(data,{action:'policy',member_version:data.member.version,payload:{}}),/prepare/);
+ assert.throws(()=>prepareWorkforceVoiceDraft(data,{action:'schedule',member_version:data.member.version,payload:{}}),/Manager/);
+ assert.throws(()=>prepareWorkforceVoiceDraft(data,{action:'update',member_version:data.member.version,payload:{shift_id:randomUUID(),summary:'Done',quantity:1}}),/shift/);
+ assert.throws(()=>prepareWorkforceVoiceDraft(data,{action:'task_create',member_version:999,payload}),/access changed/);
+ assert.throws(()=>prepareWorkforceVoiceDraft({...data,active_plan:false},{action:'task_create',member_version:data.member.version,payload}),/Enterprise/);
+});
+test('Workforce voice HTTP uses fresh membership and only prepares validated drafts',async()=>{
+ const req=(path,body,user=worker)=>fetch(api+path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','x-user':user},body:body?JSON.stringify(body):undefined});
+ const ctx=await(await req(`/${org}/voice/context`)).json();assert.equal(ctx.member.user_id,worker);
+ const body={action:'task_create',member_version:ctx.member.version,payload:{title:'Voice note task',assignee_id:worker,priority:'normal',details:'Review me'}};
+ const before=(await call(worker,'snapshot')).tasks.length;
+ const res=await req(`/${org}/voice/draft`,body);assert.equal(res.status,200);assert.equal((await res.json()).saved,false);
+ assert.equal((await call(worker,'snapshot')).tasks.length,before);
+ assert.equal((await req(`/${org}/voice/draft`,{...body,payload:{...body.payload,assignee_id:otherOwner}})).status,403);
+ assert.equal((await req(`/${randomUUID()}/voice/context`)).status,403);
+ await db.exec('reset role');await db.query("update user_profiles set tier='basic' where id=$1",[owner]);await db.exec('set role service_role');
+ assert.equal((await req(`/${org}/voice/draft`,body)).status,403);
+ await assert.rejects(call(worker,'task_create',{...body.payload,request_id:randomUUID()}),/Enterprise/);
+ assert.equal((await call(worker,'snapshot')).tasks.length,before);
+ await db.exec('reset role');await db.query("update user_profiles set tier='enterprise' where id=$1",[owner]);await db.exec('set role service_role');
 });

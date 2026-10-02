@@ -28,7 +28,7 @@ export function fieldProofVoiceSessionGuard({requireUser}){
   res.set('Cache-Control','no-store');
   try{
    let user;try{user=await requireUser(req);}catch{fail('Sign in to use FieldProof.',401);}if(!user?.id)fail('Sign in to use FieldProof.',401);
-   if(mode!=='1'||['music','bookkeeping','inventory','scheduling','scheduling_tools'].some(k=>req.query?.[k]==='1'||Array.isArray(req.query?.[k])&&req.query[k].includes('1')))fail('Open one voice workspace at a time.');
+   if(mode!=='1'||['workforce','music','bookkeeping','inventory','scheduling','scheduling_tools'].some(k=>req.query?.[k]==='1'||Array.isArray(req.query?.[k])&&req.query[k].includes('1')))fail('Open one voice workspace at a time.');
    req.korlixFieldProofVoice=Object.freeze({enabled:true});return next();
   }catch(e){const known=e instanceof FieldProofError;return res.status(known?e.status:503).json({ok:false,error:known?e.message:'FieldProof voice is temporarily unavailable.',code:known&&e.status===401?'FIELDPROOF_VOICE_AUTH_REQUIRED':'FIELDPROOF_VOICE_UNAVAILABLE'});}
  };

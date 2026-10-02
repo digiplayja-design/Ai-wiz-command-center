@@ -1,6 +1,6 @@
 # KORLIX Workforce — first release
 
-Status: implemented and locally verified; production migration and deployment are pending. This is the attendance and work-progress release. No real employees have been invited, photographed or contacted during development.
+Historical first-release notes. See [Workforce business workspaces and K-Nova](WORKFORCE_BUSINESS_KNOVA.md) for the October 2026 expansion and current verification. This is the attendance and work-progress release. No real employees have been invited, photographed or contacted during development.
 
 ## Experience
 

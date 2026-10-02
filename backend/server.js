@@ -18,6 +18,7 @@ import { registerFunnels } from './funnels/routes.mjs'; // K139_FUNNEL_STUDIO
 import { registerPayroll } from './payroll/routes.mjs';
 import { registerScheduling } from './scheduling/routes.mjs';
 import { generateSchedulingAI } from './scheduling/ai.mjs';
+import { workforceVoiceInstructions, workforceVoiceSessionGuard } from './workforce/voice.mjs';
 import { registerWorkforce } from './workforce/routes.mjs'; // K138_WORKFORCE
 import { registerContactsCrm } from './contacts_crm/routes.mjs'; // K137_ENTERPRISE_CONTACTS
 import { registerBookkeeping } from './bookkeeping/routes.mjs';
@@ -3707,6 +3708,7 @@ app.get("/api/health", (req, res) => {
     babyBlend: {version: 1, privateStorage: true, analysisModel: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, creditCost: 1, ...pictureModelSettings()},
     virtualCloset: {version: 1, privateStorage: true, analysisModel: CHAT_MODEL, ...pictureModelSettings()},
     contractRadar: {version: 1, model: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, discovery: 'official_source_web_search', automaticSubmission: false},
+    workforce: {version:2,voice:true,businessProfiles:true,industryTemplates:12,teamTypes:5,taskBoard:true},
     fieldProof: {version:2,model:CHAT_MODEL,reasoningEffort:CHAT_EFFORT,creditCost:FIELDPROOF_CREDIT_COST,maxPhotos:24,originalEvidence:true,voice:true,industryTemplates:14,readings:true,punchList:true,batchPhotos:true},
     aiVisibility: {version: 1, model: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, method: 'openai_web_samples_v1', sampleCount: 3, creditCost: VISIBILITY_CREDIT_COST},
   });
@@ -8522,7 +8524,8 @@ function korlixLiveConvoSessionConfigV1(req) {
   return {
     type: "realtime",
     model: korlixLiveConvoModelV1(),
-    instructions: req.korlixFieldProofVoice ? fieldProofVoiceInstructions({ language: korlixLiveConvoEnvStringV1('KORLIX_LIVE_CONVO_LANGUAGE', String(req.headers?.['x-korlix-language'] || 'English')) }) + '\n' + korlixLiveConvoAccentInstructionV1(req)
+    instructions: req.korlixWorkforceVoice ? workforceVoiceInstructions({ language: korlixLiveConvoEnvStringV1('KORLIX_LIVE_CONVO_LANGUAGE', String(req.headers?.['x-korlix-language'] || 'English')) }) + '\n' + korlixLiveConvoAccentInstructionV1(req)
+      : req.korlixFieldProofVoice ? fieldProofVoiceInstructions({ language: korlixLiveConvoEnvStringV1('KORLIX_LIVE_CONVO_LANGUAGE', String(req.headers?.['x-korlix-language'] || 'English')) }) + '\n' + korlixLiveConvoAccentInstructionV1(req)
       : req.korlixBookkeepingVoice ? bookkeepingVoiceInstructions(req.korlixBookkeepingVoice, { language: korlixLiveConvoEnvStringV1('KORLIX_LIVE_CONVO_LANGUAGE', String(req.headers?.['x-korlix-language'] || 'English')) }) + '\n' + korlixLiveConvoAccentInstructionV1(req)
       : req.korlixMusicVoice ? musicVoiceInstructions({ language: korlixLiveConvoEnvStringV1('KORLIX_LIVE_CONVO_LANGUAGE', String(req.headers?.['x-korlix-language'] || 'English')) }) + '\n' + korlixLiveConvoAccentInstructionV1(req)
       : korlixLiveConvoAgentInstructionsV1(req) + '\nThe voice experience is branded K-Nova. When introducing the voice assistant, say K-Nova (pronounced kay nova), never Nova alone.' +
@@ -9430,6 +9433,7 @@ app.post("/api/live-convo/usage", async (req, res) => {
   }
 });
 
+app.use("/api/live-convo/session", workforceVoiceSessionGuard({ requireUser, database: supabaseAdmin }));
 app.use("/api/live-convo/session", fieldProofVoiceSessionGuard({ requireUser }));
 app.use("/api/live-convo/session", musicVoiceSessionGuard({ requireUser }));
 app.use("/api/live-convo/session", bookkeepingVoiceSessionGuard({ database: supabaseAdmin, requireUser }));
@@ -9580,7 +9584,7 @@ app.post(
         });
       }
 
-      if (!req.korlixFieldProofVoice && !req.korlixBookkeepingVoice && !req.korlixMusicVoice) await korlixLiveConvoAttachAgentSessionV1({ req, user });
+      if (!req.korlixWorkforceVoice && !req.korlixFieldProofVoice && !req.korlixBookkeepingVoice && !req.korlixMusicVoice) await korlixLiveConvoAttachAgentSessionV1({ req, user });
 
       // KORLIX_LIVE_CONVO_SDP_CRLF_FIX_V1
       // Preserve the complete SDP offer, including its final CRLF.
