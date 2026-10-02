@@ -179,5 +179,5 @@ test('real session configuration preserves language, accent and ordinary/bookkee
   const guard = source.indexOf('app.use("/api/live-convo/session", musicVoiceSessionGuard');
   const reservation = source.indexOf('app.use("/api/live-convo/session", async');
   assert(guard > 0 && guard < reservation);
-  assert(source.includes('if (!req.korlixBookkeepingVoice && !req.korlixMusicVoice) await korlixLiveConvoAttachAgentSessionV1'));
+  assert(source.includes('if (!req.korlixFieldProofVoice && !req.korlixBookkeepingVoice && !req.korlixMusicVoice) await korlixLiveConvoAttachAgentSessionV1'));
 });

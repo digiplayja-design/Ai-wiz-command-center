@@ -21,6 +21,7 @@ async function completeData(d){return api('/jobs/'+d.job.id,{version:d.job.versi
 test.before(async()=>{
  db=new PGlite();await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id text primary key,bucket_id text);alter table storage.objects enable row level security;create policy broad_legacy on storage.objects for all to anon,authenticated using(true) with check(true);grant usage on schema public,storage to anon,authenticated,service_role;grant all on storage.objects to anon,authenticated;create table public.usage_counters(id uuid primary key,user_id uuid references auth.users,credits_used int default 0,standard_generations int default 0,updated_at timestamptz);grant all on usage_counters to service_role;`);
  const dir=new URL('../../supabase/migrations/',import.meta.url);await db.exec(await readFile(new URL((await readdir(dir)).find(x=>x.endsWith('_fieldproof.sql')),dir),'utf8'));
+ await db.exec(await readFile(new URL((await readdir(dir)).find(x=>x.endsWith('_fieldproof_workspace_upgrade.sql')),dir),'utf8'));
  bytes=await sharp({create:{width:60,height:80,channels:3,background:'#abc'}}).png().withMetadata().toBuffer();
  const database={rpc:async(_name,p)=>{try{return {data:await rpc(p.p_action,p.p_id,p.p_data,p.p_actor)};}catch(error){if(process.env.FIELDPROOF_DEBUG)console.error(error.message,error.code,error.where);return {error};}}};
  const storage={storage:{from(name){assert.equal(name,'korlix-fieldproof');return {
@@ -81,7 +82,7 @@ test('restarted reviews expire without provider dispatch or debit',async()=>{
  const d=await upload((await create()).job),id=randomUUID();await rpc('review_begin',id,{job_id:d.job.id,version:d.job.version,usage_id:usage});await db.query("update korlix_fieldproof_reviews set created_at=now()-interval '9 minutes' where id=$1",[id]);assert.equal((await api('/reviews/'+id)).review.state,'failed');await rpc('review_finish',id,{result:{}});assert.equal(await credits(),0);assert.equal(calls,0);
 });
 test('photo quota and original-integrity verification are enforced',async()=>{
- let d=await create();for(let i=0;i<8;i++)d=await upload(d.job);await upload(d.job,{status:429});const a=await rpc('asset_get',d.evidence[0].id);objects.set(a.path,Buffer.from('corrupt'));await api('/photos/'+a.id+'/file',null,'GET',owner,503);
+ let d=await create();for(let i=0;i<24;i++)d=await upload(d.job);await upload(d.job,{status:429});const a=await rpc('asset_get',d.evidence[0].id);objects.set(a.path,Buffer.from('corrupt'));await api('/photos/'+a.id+'/file',null,'GET',owner,503);
  objects.set(a.preview_path,Buffer.from('corrupt'));assert.equal((await done((await start(d.job)).id)).state,'failed');assert.equal(await credits(),0);
 });
 test('confirmed whole-job deletion retries storage cleanup before removing private records',async()=>{

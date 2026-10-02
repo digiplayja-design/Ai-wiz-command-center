@@ -47,7 +47,7 @@ export function musicVoiceSessionGuard({ requireUser }) {
       catch { fail('Sign in to use Music Studio.', 401); }
       if (!user?.id) fail('Sign in to use Music Studio.', 401);
       if (mode !== '1') fail('Open one voice workspace at a time.');
-      if (['bookkeeping', 'inventory', 'scheduling', 'scheduling_tools'].some(key => {
+      if (['fieldproof', 'bookkeeping', 'inventory', 'scheduling', 'scheduling_tools'].some(key => {
         const value = req.query?.[key];
         return value === '1' || Array.isArray(value) && value.includes('1');
       })) fail('Open one voice workspace at a time.');

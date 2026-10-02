@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 import sharp from 'sharp';
 import chatQuality from '../chat_quality.cjs';
 const {CHAT_MODEL,CHAT_EFFORT}=chatQuality;
-export const CREDIT_COST=1,BUCKET='korlix-fieldproof';
+export const CREDIT_COST=1,BUCKET='korlix-fieldproof',MAX_PHOTOS=24;
 export class FieldProofError extends Error {constructor(message,status=400){super(message);this.status=status;}}
 export const fail=(message,status=400)=>{throw new FieldProofError(message,status);};
 export function text(v,max,label,optional=false){if(v==null&&optional)return '';if(typeof v!=='string'||v.trim().length>max||(!optional&&!v.trim()))fail(`${label} must contain ${optional?'0':'1'}–${max} characters.`);return v.trim();}
@@ -15,24 +15,42 @@ export const TEMPLATES={
  installation:template('Installation',['before','after','serial'],['Installed equipment identified','Functional test result recorded','Customer handover documented'],true),
  maintenance:template('Maintenance',['before','after'],['Reported issue documented','Work performed documented','Follow-up or test result recorded'],false),
  general:template('General field work',['after'],['Completed work described','Outstanding items documented'],false),
+ hvac:template('HVAC / refrigeration',['before','after','serial','test'],['Equipment and symptoms identified','Work and parts documented','Operating readings recorded'],true),
+ plumbing:template('Plumbing',['before','after','test'],['Reported issue documented','Repair and materials documented','Leak or flow test recorded'],true),
+ electrical:template('Electrical',['before','after','test'],['Equipment and circuit identified','Work and materials documented','Technician test results recorded'],true),
+ property:template('Property inspection',['site','before'],['Rooms and areas identified','Condition and exceptions documented','Follow-up items recorded'],false),
+ roofing:template('Roofing',['before','after','site'],['Work areas and condition documented','Materials and work documented','Remaining defects recorded'],true),
+ cleaning:template('Cleaning',['before','after'],['Agreed areas documented','Work and products recorded','Remaining items recorded'],true),
+ delivery:template('Delivery / handover',['after','serial'],['Items and quantities recorded','Condition documented','Handover recorded'],true),
+ equipment:template('Equipment service',['before','after','serial','test'],['Equipment identified','Service and parts documented','Operating test recorded'],false),
+ construction:template('Construction',['before','after','site'],['Area and scope identified','Progress and quantities documented','Punch list recorded'],false),
+ landscaping:template('Landscaping',['before','after','site'],['Areas and work documented','Materials and quantities recorded','Care and follow-up recorded'],true),
 };
-export function jobData(v={}){
- const type=v.template??'general',t=TEMPLATES[type];if(!t)fail('Choose a FieldProof template.');
- const d={template:type,title:text(v.title,120,'Job title'),customer:text(v.customer,160,'Customer / company'),site:text(v.site,350,'Site / location'),
+export const PRIORITIES=['low','normal','high','urgent'],STAGES=['planned','in_progress','blocked','ready'];
+export function dateOnly(v,label){const d=text(v,10,label,true);if(d&&(!/^\d{4}-\d{2}-\d{2}$/.test(d)||Number.isNaN(Date.parse(d))||new Date(d).toISOString().slice(0,10)!==d))fail(`Enter a valid ${label.toLowerCase()} as YYYY-MM-DD.`);return d;}
+function choice(v,allowed,fallback,label){const value=v??fallback;if(!allowed.includes(value))fail(`Choose a valid ${label}.`);return value;}
+function records(v,max,label,normalize){if(v==null)return [];if(!Array.isArray(v)||v.length>max||v.some(x=>!x||typeof x!=='object'||Array.isArray(x)))fail(`Use up to ${max} ${label}.`);const r=v.map(normalize);if(new Set(r.map(x=>x.id)).size!==r.length)fail(`${label} must have different identifiers.`);return r;}
+export function jobData(v={}, {draft=false}={}){
+ if(!v||typeof v!=='object'||Array.isArray(v))fail('Enter valid job details.');
+ const type=v.template??'general';if(!Object.hasOwn(TEMPLATES,type))fail('Choose a FieldProof template.');const t=TEMPLATES[type];
+ const d={template:type,title:text(v.title,120,'Job title',draft),customer:text(v.customer,160,'Customer / company',draft),site:text(v.site,350,'Site / location',draft),
   workOrder:text(v.workOrder,100,'Work order',true),technician:text(v.technician,120,'Technician',true),performedOn:text(v.performedOn,10,'Work date',true),
   assetId:text(v.assetId,120,'Asset / new serial',true),oldAssetId:text(v.oldAssetId,120,'Previous serial',true),summary:text(v.summary,4000,'Work completed',true),
   exceptions:text(v.exceptions,2000,'Outstanding items',true),materials:text(v.materials,2000,'Materials / quantities',true),billingNotes:text(v.billingNotes,2000,'Invoice handoff notes',true)};
- if(d.performedOn&&(!/^\d{4}-\d{2}-\d{2}$/.test(d.performedOn)||Number.isNaN(Date.parse(d.performedOn))||new Date(d.performedOn).toISOString().slice(0,10)!==d.performedOn))fail('Enter a valid work date as YYYY-MM-DD.');
+ d.performedOn=dateOnly(d.performedOn,'Work date');d.dueOn=dateOnly(v.dueOn,'Due date');
+ d.priority=choice(v.priority,PRIORITIES,'normal','priority');d.stage=choice(v.stage,STAGES,'planned','work stage');
+ d.readings=records(v.readings,20,'readings',x=>({id:uuid(x.id),label:text(x.label,100,'Reading label'),value:text(x.value,160,'Reading value'),unit:text(x.unit,40,'Unit',true),note:text(x.note,350,'Reading note',true)}));
+ d.issues=records(v.issues,16,'punch-list items',x=>{if(typeof x.blocking!=='boolean'||typeof x.resolved!=='boolean')fail('Choose the punch-list status.');return {id:uuid(x.id),label:text(x.label,200,'Punch-list item'),assignee:text(x.assignee,100,'Responsible person',true),dueOn:dateOnly(x.dueOn,'Follow-up date'),priority:choice(x.priority,PRIORITIES,'normal','priority'),blocking:x.blocking,resolved:x.resolved};});
  d.hours=v.hours==null||v.hours===''?null:Number(v.hours);if(d.hours!==null&&(!Number.isFinite(d.hours)||d.hours<0||d.hours>1000||Math.abs(Math.round(d.hours*100)-d.hours*100)>1e-7))fail('Enter work hours between 0 and 1000, with up to two decimal places.');
  if(v.requiresApproval!=null&&typeof v.requiresApproval!=='boolean')fail('Choose whether customer approval is required.');
  d.requiresApproval=v.requiresApproval??t.requiresApproval;
- const supplied=v.checks??[];if(!Array.isArray(supplied)||supplied.length>16||supplied.some(c=>!c||typeof c.id!=='string'||typeof c.done!=='boolean'))fail('Use up to 16 checklist items.');
+ const supplied=v.checks??[];if(!Array.isArray(supplied)||supplied.length>32||supplied.some(c=>!c||typeof c.id!=='string'||typeof c.done!=='boolean'))fail('Use up to 32 checklist items.');
  if(new Set(supplied.map(c=>c.id)).size!==supplied.length)fail('Checklist items must be different.');
  d.checks=t.checks.map(c=>({...c,done:supplied.find(x=>x.id===c.id)?.done===true}));
  for(const c of supplied.filter(c=>!c.id.startsWith('required-'))){if(!/^custom-[a-z0-9-]{1,60}$/.test(c.id)||typeof c.required!=='boolean')fail('Refresh your custom checklist.');d.checks.push({id:c.id,label:text(c.label,180,'Checklist item'),required:c.required,done:c.done});}
- if(d.checks.length>16)fail('Use up to 16 checklist items.');
+ if(d.checks.length>32)fail('Use up to 32 checklist items.');
  const tags=v.requiredTags??t.requiredTags;if(!Array.isArray(tags)||tags.some(x=>!Object.hasOwn(TAGS,x)))fail('Choose valid required photo categories.');d.requiredTags=[...new Set([...t.requiredTags,...tags])];
- return d;
+ if(Buffer.byteLength(JSON.stringify(d))>36000)fail('Shorten the job notes before saving.');return d;
 }
 export function readiness(job,evidence){
  const d=job.data,ready=evidence.filter(a=>a.state==='ready'),missing=[];
@@ -40,9 +58,11 @@ export function readiness(job,evidence){
  if(['utility','installation'].includes(d.template)&&!d.assetId)missing.push('Asset / serial number');
  for(const tag of d.requiredTags)if(!ready.some(a=>a.tag===tag))missing.push(`${TAGS[tag]} photo`);
  for(const c of d.checks)if(c.required&&!c.done)missing.push(c.label);
+ for(const item of d.issues||[])if(item.blocking&&!item.resolved)missing.push(`Resolve: ${item.label}`);
+ if(d.stage==='blocked')missing.push('Update the blocked work stage before closeout');
  if(evidence.some(a=>a.state!=='ready'))missing.push('Finish or remove incomplete photo uploads');
  if(d.requiresApproval&&job.approval?.version!==job.version)missing.push('Customer approval recorded for this job revision');
- return {ready:missing.length===0,missing,photoCount:ready.length,checked:d.checks.filter(c=>c.done).length,totalChecks:d.checks.length,
+ return {ready:missing.length===0,missing,photoCount:ready.length,checked:d.checks.filter(c=>c.done).length,totalChecks:d.checks.length,openIssues:(d.issues||[]).filter(x=>!x.resolved).length,
   label:missing.length?'Evidence needs attention':'Required records present',limits:'Completeness of supplied records only. Photos, dates, work quality, safety and customer identity are not independently verified.'};
 }
 export async function prepareEvidence(file){
