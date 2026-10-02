@@ -1,3 +1,4 @@
+import { registerDirectory } from './directory/routes.mjs';
 import { registerChatMemory, prepareChatMemory } from './chat_memory/memory.mjs';
 import { resumeTextPolicy } from './resume_studio/policy.mjs';
 import { registerEmailEnhancer, enhanceEmail } from './email_enhancer/enhancer.mjs';
@@ -207,6 +208,7 @@ app.use(express.json({
     if (url.startsWith("/api/agent-email/resend/webhook")) {
       req.korlixAgentEmailRawBody = Buffer.from(buffer);
     }
+    if (url.split("?",1)[0] === "/api/directory/billing/webhook") req.korlixDirectoryRawBody = Buffer.from(buffer);
     if (url.split("?",1)[0] === "/api/scheduling/payments/webhook") req.korlixSchedulingRawBody = Buffer.from(buffer);
     // K135Z_GATE6H_ZOOM_RAW_BODY_BEGIN
     const zoomPath = url.split("?", 1)[0];
@@ -12827,6 +12829,7 @@ registerBookkeeping(app, { database: supabaseAdmin, requireUser, receiptOptions:
   },
 } });
 registerContactsCrm(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }); // K137_ENTERPRISE_CONTACTS
+registerDirectory(app, {database: supabaseAdmin, requireUser});
 registerWorkforce(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }); // K138_WORKFORCE
 registerFunnels(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1, autoStartScheduler: true }); // K141_FUNNEL_SCHEDULING
 
