@@ -106,3 +106,25 @@ test('KORLIX vision reviews have grounded photo IDs, strict drafts and no automa
  await assert.rejects(reviewEvidence({client:{responses:{create:async()=>({status:'incomplete'})}},job,evidence}),/No credit/);
  assert.notEqual(reportFingerprint({...job,id:'job',state:'active'},evidence,null),reportFingerprint({...job,id:'job',version:5,state:'active'},evidence,null));
 });
+test('voice drafts require owner and current revision; never write job data or debit credits',async()=>{
+ const d=await create(),before=await rpc('job_get',d.job.id),body={jobId:d.job.id,version:d.job.version,draft:{...d.job.data,summary:'Reported new work'}};
+ await api('/voice/draft',body,'POST','',401);await api('/voice/draft',body,'POST',other,404);await api('/voice/draft',{...body,version:99},'POST',owner,409);
+ const result=await api('/voice/draft',body);assert.equal(result.saved,false);assert.equal(result.reviewRequired,true);assert.equal(result.draft.summary,'Reported new work');assert.deepEqual(await rpc('job_get',d.job.id),before);assert.equal(await credits(),0);assert.equal(calls,0);
+ await api('/voice/draft',{...body,owner_id:other},'POST',owner,400);
+ for(const change of [{checks:d.job.data.checks.map(x=>({...x,done:true}))},{requiresApproval:true},{template:'utility'},{user_id:other}])await api('/voice/draft',{...body,draft:{...body.draft,...change}},'POST',owner,400);
+});
+test('readings retain exact values and punch-list blockers prevent closeout',async()=>{
+ const reading={id:randomUUID(),label:'Meter',value:'00123.40',unit:'kWh',note:'Reported by technician'},issue={id:randomUUID(),label:'Replace seal',assignee:'Crew lead',dueOn:'2026-11-01',priority:'high',blocking:true,resolved:false};
+ let d=await completeData(await upload((await create({readings:[reading],issues:[issue],priority:'urgent',dueOn:'2026-11-01',stage:'in_progress'})).job));
+ assert.equal(d.job.data.readings[0].value,'00123.40');assert.equal(d.readiness.openIssues,1);assert(d.readiness.missing.includes('Resolve: Replace seal'));await api('/jobs/'+d.job.id+'/complete',{version:d.job.version,confirmed:true},'POST',owner,409);
+ const body={jobId:d.job.id,version:d.job.version,draft:d.job.data};
+ for(const change of [{readings:[]},{issues:[]},{issues:[{...issue,resolved:true}]},{readings:[{...reading,value:'123'}]}])await api('/voice/draft',{...body,draft:{...d.job.data,...change}},'POST',owner,400);
+ const appended={...issue,id:randomUUID(),label:'Check next visit',blocking:false};assert.equal((await api('/voice/draft',{...body,draft:{...d.job.data,issues:[issue,appended]}})).draft.issues.length,2);
+ d=await api('/jobs/'+d.job.id,{version:d.job.version,data:{...d.job.data,issues:[{...issue,resolved:true}],stage:'blocked'}},'PUT');assert(d.readiness.missing.some(x=>x.includes('blocked work stage')));
+ d=await api('/jobs/'+d.job.id,{version:d.job.version,data:{...d.job.data,stage:'ready'}},'PUT');assert.equal(d.readiness.ready,true);
+});
+test('all 14 templates retain required records and reject malformed or oversized structured values',()=>{
+ assert.equal(Object.keys(TEMPLATES).length,14);for(const template of Object.keys(TEMPLATES)){const d=data({template,requiredTags:[],checks:[]});assert.deepEqual(d.requiredTags,TEMPLATES[template].requiredTags);assert.deepEqual(d.checks,TEMPLATES[template].checks);}
+ const reading={id:randomUUID(),label:'Pressure',value:'08.50',unit:'bar',note:''};
+ for(const extra of [{template:'constructor'},{priority:'danger'},{stage:'complete'},{dueOn:'2026-02-31'},{readings:[reading,reading]},{readings:Array.from({length:21},()=>({...reading,id:randomUUID()}))},{issues:[{id:randomUUID(),label:'Fix',blocking:'true',resolved:false}]}])assert.throws(()=>data(extra));
+});
