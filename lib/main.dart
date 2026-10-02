@@ -1,3 +1,4 @@
+import 'fieldproof/fieldproof_voice.dart';
 import 'chat/chat_memory_client.dart';
 import 'chat/chat_memory_screen.dart';
 import 'resume_studio/resume_client.dart';
@@ -9636,6 +9637,24 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
     await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>FieldProofScreen(
       client:client,
+      openVoice:(snapshot) async {
+        final revision=kKorlixAuthRevision.value;
+        final consent=await ensureKorlixThirdPartyAiConsent(context:context,
+          featureName:'FieldProof and K-Nova',providers:const {KorlixThirdPartyAiProvider.openAi},
+          dataCategories:const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
+            KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,
+            KorlixThirdPartyAiDataCategory.fieldProofRecords});
+        if(!consent||!mounted||client.sessionChanged||revision!=kKorlixAuthRevision.value)return null;
+        final voice=FieldProofVoiceController(client:client,snapshot:snapshot);
+        try {
+          final route=MaterialPageRoute<Map<String,dynamic>>(builder:(_)=>KorlixLiveConvoTestScreen(
+            fieldProofVoice:voice,sessionChanges:kKorlixAuthRevision,backendBaseUrl:kKorlixBackendBaseUrl,
+            headersBuilder:_authHeaders,characterId:normalizeKorlixCharacterId(kKorlixSelectedCharacterNotifier.value),language:_t.label));
+          final result=await Navigator.of(context).push<Map<String,dynamic>>(route);
+          await route.completed;
+          return result;
+        }finally{voice.dispose();}
+      },
       ensureConsent:()=>ensureKorlixThirdPartyAiConsent(context:context,
         featureName:'FieldProof photo review',providers:const {KorlixThirdPartyAiProvider.openAi},
         dataCategories:const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.imagesAndPhotos}),

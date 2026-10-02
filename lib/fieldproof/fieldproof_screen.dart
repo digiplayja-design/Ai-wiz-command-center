@@ -7,6 +7,8 @@ import 'package:image_picker/image_picker.dart' as ip;
 import 'fieldproof_client.dart';
 import 'fieldproof_report.dart';
 import 'fieldproof_saver.dart';
+import 'fieldproof_workspace.dart';
+import 'fieldproof_photos.dart';
 
 const _ink = Color(0xFF102F43),
     _teal = Color(0xFF087D91),
@@ -19,10 +21,15 @@ class FieldProofScreen extends StatefulWidget {
     required this.client,
     required this.ensureConsent,
     this.pickPhoto,
+    this.pickBatch,
+    this.openVoice,
     this.saveFile,
     this.copyText,
     this.renderPdf,
   });
+  final Future<Map<String, dynamic>?> Function(Map<String, dynamic>? snapshot)?
+  openVoice;
+  final Future<List<FieldProofQueuedPhoto>> Function(int remaining)? pickBatch;
   final FieldProofClient client;
   final Future<bool> Function() ensureConsent;
   final Future<FieldProofPhoto?> Function(bool camera)? pickPhoto;
@@ -43,7 +50,9 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
   List<Map<String, dynamic>> _jobs = [];
   Map<String, dynamic> _templates = {}, _snapshot = {};
   String? _error, _notice, _createKey, _reviewKey;
-  String _search = '', _filter = 'all';
+  String _search = '', _filter = 'all', _sort = 'recent';
+  Map<String, dynamic>? _editorDraft;
+  int _editorGeneration = 0, _photoLimit = 24;
   bool _loading = true,
       _busy = false,
       _locked = false,
@@ -87,6 +96,7 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
       _jobs = [];
       _error = _notice = _createKey = _reviewKey = null;
       _editing = _dirty = false;
+      _editorDraft = null;
     });
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
   }
@@ -111,6 +121,7 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
       setState(() {
         _jobs = fpRows(r['jobs']);
         _templates = fpMap(r['templates']);
+        _photoLimit = (fpMap(r['limits'])['photosPerJob'] as int?) ?? 24;
         _loading = false;
         _error = null;
       });
@@ -218,6 +229,7 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
       _timer?.cancel();
       setState(() {
         _editing = _dirty = false;
+        _editorDraft = null;
         _tab = 0;
         _notice = _reviewKey = null;
       });
@@ -236,6 +248,7 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
     setState(() {
       _snapshot = {};
       _editing = _dirty = false;
+      _editorDraft = null;
       _error = _notice = _reviewKey = _createKey = null;
     });
     _top();
@@ -249,11 +262,168 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
       _snapshot = {};
       _editing = true;
       _dirty = false;
+      _editorDraft = null;
+      _editorGeneration++;
       _createKey = fieldProofRequestKey();
       _error = _notice = null;
     });
     _top();
   }
+
+  Future<void> _voice() async {
+    if (widget.openVoice == null || _working || _dirty || _locked) return;
+    _timer?.cancel();
+    try {
+      final result = await widget.openVoice!(_hasJob ? _snapshot : null);
+      if (!mounted || _locked || result == null) return;
+      final id = result['jobId'];
+      if (result['action'] == 'open' && id is String) {
+        await _open(id);
+        return;
+      }
+      if (result['action'] != 'draft' || result['draft'] is! Map) return;
+      Map<String, dynamic> snapshot = {};
+      if (id is String) {
+        snapshot = await widget.client.job(id);
+        if (!mounted || _locked) return;
+        if (fpMap(snapshot['job'])['version'] != result['version'] ||
+            fpMap(snapshot['job'])['state'] != 'active')
+          throw const FieldProofException(
+            'This job changed during voice. Reopen it before drafting again.',
+          );
+      }
+      setState(() {
+        _snapshot = snapshot;
+        _editorDraft = fpClone(fpMap(result['draft']));
+        _editing = true;
+        _dirty = true;
+        _editorGeneration++;
+        _createKey = id == null ? fieldProofRequestKey() : null;
+        _notice =
+            'K-Nova prepared an unsaved draft. Review every entry, then save the job.';
+      });
+      _top();
+    } catch (e) {
+      if (mounted && !_locked) setState(() => _error = '$e');
+    } finally {
+      _schedule();
+    }
+  }
+
+  Future<void> _repeat() async {
+    if (_working || _locked || !_hasJob || !await _discard() || !mounted)
+      return;
+    final draft = fpRepeatDraft(_data);
+    _timer?.cancel();
+    setState(() {
+      _snapshot = {};
+      _editorDraft = draft;
+      _editorGeneration++;
+      _createKey = fieldProofRequestKey();
+      _editing = true;
+      _dirty = true;
+      _notice =
+          'Follow-up draft prepared. Work notes, readings, completed checks, photos and approval start fresh.';
+    });
+    _top();
+  }
+
+  Future<void> _batchPhotos() async {
+    if (!_editable || _photos.length >= _photoLimit) return;
+    _dialogOpen = true;
+    _timer?.cancel();
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => FieldProofBatchDialog(
+          remaining: _photoLimit - _photos.length,
+          pick: widget.pickBatch ?? pickFieldProofBatch,
+          upload: (row, photo) async {
+            if (_locked || !mounted)
+              throw const FieldProofException(
+                'Sign in again to continue.',
+                401,
+              );
+            final saved = await widget.client.upload(
+              fpText(_job['id']),
+              _job['version'] as int,
+              photo,
+              key: row.key,
+              tag: row.tag,
+              name: row.name.trim(),
+              note: row.note.trim(),
+            );
+            if (!mounted || _locked) return;
+            _accept(saved);
+          },
+        ),
+      );
+    } finally {
+      _dialogOpen = false;
+      if (mounted && !_locked) await _refresh();
+    }
+  }
+
+  Future<void> _comparePhotos() async {
+    if (_working || _locked) return;
+    await _refresh();
+    if (!mounted || _locked) return;
+    final rows = _photos.where((p) => p['state'] == 'ready').toList();
+    if (rows.length < 2) return;
+    _dialogOpen = true;
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => FieldProofCompareDialog(photos: rows),
+      );
+    } finally {
+      _dialogOpen = false;
+    }
+  }
+
+  Widget _voiceCard() => Padding(
+    padding: const EdgeInsets.only(bottom: 18),
+    child: Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(colors: [_ink, _teal]),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.graphic_eq, color: Colors.white),
+          const SizedBox(height: 10),
+          const Text(
+            'K-Nova · Your field assistant',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Talk through job notes, capture readings, find records and prepare follow-ups.',
+            style: TextStyle(color: Colors.white),
+          ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            key: const Key('fp-voice'),
+            onPressed: _working || _dirty ? null : _voice,
+            icon: const Icon(Icons.mic_none),
+            label: const Text('Talk to K-Nova'),
+          ),
+          if (_dirty)
+            const Text(
+              'Save your edits before opening voice.',
+              style: TextStyle(color: Colors.white70),
+            ),
+        ],
+      ),
+    ),
+  );
 
   Future<bool> _action(
     Future<Map<String, dynamic>> Function() work, {
@@ -294,6 +464,7 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
     if (ok && mounted && !_locked) {
       setState(() {
         _editing = _dirty = false;
+        _editorDraft = null;
         _tab = 0;
         _reviewKey = null;
       });
@@ -613,10 +784,29 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
     final shown = _jobs
         .where(
           (j) =>
-              (_filter == 'all' || j['state'] == _filter) &&
+              (_filter == 'all' ||
+                  j['state'] == _filter ||
+                  (_filter == 'attention' && fpNeedsAttention(j)) ||
+                  (_filter == 'overdue' && fpOverdue(j))) &&
               fpText(j['data']).toLowerCase().contains(_search.toLowerCase()),
         )
         .toList();
+    shown.sort((a, b) {
+      final ad = fpMap(a['data']), bd = fpMap(b['data']);
+      if (_sort == 'due') {
+        final x = fpText(ad['dueOn']), y = fpText(bd['dueOn']);
+        return (x.isEmpty ? '9999-12-31' : x).compareTo(
+          y.isEmpty ? '9999-12-31' : y,
+        );
+      }
+      if (_sort == 'priority') {
+        final order = fpPriorities.keys.toList();
+        return order
+            .indexOf(fpText(bd['priority']))
+            .compareTo(order.indexOf(fpText(ad['priority'])));
+      }
+      return fpText(b['updatedAt']).compareTo(fpText(a['updatedAt']));
+    });
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -650,7 +840,7 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Choose a utility, installation, maintenance or general template. Private job records and manual reports are available when signed in.',
+                'Choose from 14 templates covering trades, inspections, service, deliveries and general field work. Private job records and manual reports are available when signed in.',
                 style: TextStyle(color: _muted, height: 1.5),
               ),
             ],
@@ -673,6 +863,8 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
               ('all', 'All jobs'),
               ('active', 'Active'),
               ('completed', 'Closed'),
+              ('attention', 'Needs attention'),
+              ('overdue', 'Overdue'),
             ])
               ChoiceChip(
                 label: Text(item.$2),
@@ -680,6 +872,19 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
                 onSelected: (_) => setState(() => _filter = item.$1),
               ),
           ],
+        ),
+        const SizedBox(height: 18),
+        DropdownButtonFormField<String>(
+          key: const Key('fp-sort'),
+          initialValue: _sort,
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Sort jobs'),
+          items: const [
+            DropdownMenuItem(value: 'recent', child: Text('Recently updated')),
+            DropdownMenuItem(value: 'due', child: Text('Due date')),
+            DropdownMenuItem(value: 'priority', child: Text('Priority')),
+          ],
+          onChanged: (v) => setState(() => _sort = v ?? 'recent'),
         ),
         const SizedBox(height: 18),
         if (shown.isEmpty)
@@ -706,6 +911,15 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
                             ? 'Removal incomplete'
                             : 'Active',
                       ),
+                      _pill(fpStages[fpMap(j['data'])['stage']] ?? 'Planned'),
+                      _pill(
+                        fpPriorities[fpMap(j['data'])['priority']] ?? 'Normal',
+                      ),
+                      if (fpText(fpMap(j['data'])['dueOn']).isNotEmpty)
+                        _pill(
+                          'Due ${fpMap(j['data'])['dueOn']}',
+                          color: fpOverdue(j) ? Colors.deepOrange : _teal,
+                        ),
                       if (j['runningReview'] != null)
                         _pill('KORLIX is reviewing'),
                     ],
@@ -774,10 +988,19 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
                     icon: const Icon(Icons.edit_outlined),
                     label: const Text('Edit job'),
                   ),
+                  OutlinedButton.icon(
+                    key: const Key('fp-repeat'),
+                    onPressed: _working ? null : _repeat,
+                    icon: const Icon(Icons.copy_outlined),
+                    label: const Text('Create follow-up job'),
+                  ),
                 ],
               ),
               const SizedBox(height: 18),
               for (final e in {
+                'priority': 'Priority',
+                'stage': 'Work stage',
+                'dueOn': 'Due date',
                 'workOrder': 'Work order',
                 'customer': 'Customer / company',
                 'site': 'Site / location',
@@ -851,13 +1074,40 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
           children: [
             FilledButton.icon(
               key: const Key('fp-add-photo'),
-              onPressed: _editable && _photos.length < 8 ? _addPhoto : null,
+              onPressed: _editable && _photos.length < _photoLimit
+                  ? _addPhoto
+                  : null,
               icon: const Icon(Icons.add_a_photo_outlined),
               label: const Text('Add photo'),
             ),
+            Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  key: const Key('fp-batch'),
+                  onPressed: _editable && _photos.length < _photoLimit
+                      ? _batchPhotos
+                      : null,
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: const Text('Add several photos'),
+                ),
+                OutlinedButton.icon(
+                  key: const Key('fp-compare'),
+                  onPressed:
+                      !_working &&
+                          _photos.where((p) => p['state'] == 'ready').length >=
+                              2
+                      ? _comparePhotos
+                      : null,
+                  icon: const Icon(Icons.compare_outlined),
+                  label: const Text('Compare before & after'),
+                ),
+              ],
+            ),
             const SizedBox(height: 10),
             Text(
-              '${_photos.length} / 8 photos · JPG, PNG or WEBP · 10 MB each',
+              '${_photos.length} / $_photoLimit photos · JPG, PNG or WEBP · 10 MB each',
               style: const TextStyle(color: _muted),
             ),
             const SizedBox(height: 8),
@@ -1079,7 +1329,7 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
                         }),
                 ),
               TextButton.icon(
-                onPressed: _editable && fpRows(_data['checks']).length < 16
+                onPressed: _editable && fpRows(_data['checks']).length < 32
                     ? _customCheck
                     : null,
                 icon: const Icon(Icons.add),
@@ -1500,13 +1750,16 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
                                         ),
                                       ),
                                     ),
+                                  if (widget.openVoice != null) _voiceCard(),
                                   if (_editing)
                                     _card(
                                       _JobEditor(
                                         key: ValueKey(
-                                          'editor-${_job['id'] ?? 'new'}',
+                                          'editor-${_job['id'] ?? 'new'}-$_editorGeneration',
                                         ),
-                                        initial: _data,
+                                        initial: _editorDraft ?? _data,
+                                        onDialogChanged: (open) =>
+                                            _dialogOpen = open,
                                         templates: _templates,
                                         onDirty: () =>
                                             setState(() => _dirty = true),
@@ -1569,6 +1822,7 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
                                             (1, 'Photos'),
                                             (2, 'Checklist'),
                                             (3, 'Report'),
+                                            (4, 'Readings & punch list'),
                                           ])
                                             ChoiceChip(
                                               key: Key('fp-tab-${t.$1}'),
@@ -1584,6 +1838,31 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
                                         0 => _details(),
                                         1 => _evidence(),
                                         2 => _checklist(),
+                                        4 => _card(
+                                          FieldProofRecordsEditor(
+                                            readings: fpRows(_data['readings']),
+                                            issues: fpRows(_data['issues']),
+                                            enabled: _editable,
+                                            onDialogChanged: (open) =>
+                                                _dialogOpen = open,
+                                            onChanged:
+                                                (readings, issues) async {
+                                                  await _action(
+                                                    () => widget.client.save(
+                                                      fpText(_job['id']),
+                                                      _job['version'] as int,
+                                                      {
+                                                        ..._data,
+                                                        'readings': readings,
+                                                        'issues': issues,
+                                                      },
+                                                    ),
+                                                    notice:
+                                                        'Job records saved.',
+                                                  );
+                                                },
+                                          ),
+                                        ),
                                         _ => _report(),
                                       },
                                       const SizedBox(height: 22),
@@ -1639,6 +1918,7 @@ const _fields = {
   'workOrder': 'Work order / reference',
   'technician': 'Technician name',
   'performedOn': 'Work date (YYYY-MM-DD)',
+  'dueOn': 'Due date (YYYY-MM-DD)',
   'assetId': 'Asset / new serial number',
   'oldAssetId': 'Previous serial (if relevant)',
   'summary': 'Describe the completed work',
@@ -1655,7 +1935,9 @@ class _JobEditor extends StatefulWidget {
     required this.templates,
     required this.onDirty,
     required this.save,
+    this.onDialogChanged,
   });
+  final ValueChanged<bool>? onDialogChanged;
   final Map<String, dynamic> initial, templates;
   final VoidCallback onDirty;
   final Future<String?> Function(Map<String, dynamic>) save;
@@ -1666,6 +1948,8 @@ class _JobEditor extends StatefulWidget {
 class _JobEditorState extends State<_JobEditor> {
   late final Map<String, TextEditingController> _c;
   late String _template;
+  late String _priority, _stage;
+  late List<Map<String, dynamic>> _readings, _issues;
   late bool _approval;
   final _anchors = {
         for (final k in ['title', 'customer', 'site']) k: GlobalKey(),
@@ -1683,6 +1967,12 @@ class _JobEditorState extends State<_JobEditor> {
       for (final k in _fields.keys)
         k: TextEditingController(text: fpText(widget.initial[k])),
     };
+    _priority = fpText(widget.initial['priority']);
+    if (!fpPriorities.containsKey(_priority)) _priority = 'normal';
+    _stage = fpText(widget.initial['stage']);
+    if (!fpStages.containsKey(_stage)) _stage = 'planned';
+    _readings = fpRows(widget.initial['readings']);
+    _issues = fpRows(widget.initial['issues']);
     _template = fpText(widget.initial['template']);
     if (!widget.templates.containsKey(_template)) _template = 'utility';
     _approval =
@@ -1736,6 +2026,10 @@ class _JobEditorState extends State<_JobEditor> {
     final data = <String, dynamic>{
       ...widget.initial,
       ...{for (final e in _c.entries) e.key: e.value.text.trim()},
+      'priority': _priority,
+      'stage': _stage,
+      'readings': _readings,
+      'issues': _issues,
       'template': _template,
       'requiresApproval': _approval,
       'checks': same ? widget.initial['checks'] : defaults['checks'],
@@ -1810,6 +2104,38 @@ class _JobEditorState extends State<_JobEditor> {
               },
       ),
       const SizedBox(height: 18),
+      DropdownButtonFormField<String>(
+        key: const Key('fp-priority'),
+        initialValue: _priority,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Priority'),
+        items: fpPriorities.entries
+            .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+            .toList(),
+        onChanged: _saving
+            ? null
+            : (v) {
+                setState(() => _priority = v ?? 'normal');
+                widget.onDirty();
+              },
+      ),
+      const SizedBox(height: 16),
+      DropdownButtonFormField<String>(
+        key: const Key('fp-stage'),
+        initialValue: _stage,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Work stage'),
+        items: fpStages.entries
+            .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+            .toList(),
+        onChanged: _saving
+            ? null
+            : (v) {
+                setState(() => _stage = v ?? 'planned');
+                widget.onDirty();
+              },
+      ),
+      const SizedBox(height: 16),
       for (final e in _fields.entries)
         Padding(
           key: _anchors[e.key],
@@ -1842,7 +2168,7 @@ class _JobEditorState extends State<_JobEditor> {
               'customer' => 160,
               'site' => 350,
               'workOrder' => 100,
-              'performedOn' => 10,
+              'performedOn' || 'dueOn' => 10,
               'hours' => 8,
               'summary' => 4000,
               _ => 2000,
@@ -1864,6 +2190,20 @@ class _JobEditorState extends State<_JobEditor> {
             ),
           ),
         ),
+      FieldProofRecordsEditor(
+        readings: _readings,
+        issues: _issues,
+        enabled: !_saving,
+        onDialogChanged: widget.onDialogChanged,
+        onChanged: (readings, issues) async {
+          setState(() {
+            _readings = readings;
+            _issues = issues;
+          });
+          widget.onDirty();
+        },
+      ),
+      const SizedBox(height: 18),
       CheckboxListTile(
         contentPadding: EdgeInsets.zero,
         controlAffinity: ListTileControlAffinity.leading,

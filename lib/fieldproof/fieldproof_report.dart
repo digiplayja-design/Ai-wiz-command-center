@@ -50,6 +50,9 @@ String fpReportText(Map<String, dynamic> snapshot) {
         )
         ..writeln('${d['title']} | Revision ${j['version']}')
         ..writeln('Job ID: ${j['id']}')
+        ..writeln(
+          'Priority: ${d['priority'] ?? 'normal'} | Stage: ${d['stage'] ?? 'planned'} | Due: ${d['dueOn'] ?? ''}',
+        )
         ..writeln('Snapshot: ${snapshot['snapshotAt']}')
         ..writeln(
           'Customer: ${d['customer']}\nSite: ${d['site']}\nWork order: ${d['workOrder']}\nTechnician: ${d['technician']}\nWork date (entered): ${d['performedOn']}',
@@ -67,6 +70,18 @@ String fpReportText(Map<String, dynamic> snapshot) {
   for (final c in fpRows(d['checks'])) {
     out.writeln(
       '${c['done'] == true ? '[x]' : '[ ]'} ${c['label']}${c['required'] == true ? ' (required)' : ''}',
+    );
+  }
+  out.writeln('\nREADINGS & MEASUREMENTS');
+  for (final row in fpRows(d['readings'])) {
+    out.writeln(
+      '${row['label']}: ${row['value']} ${row['unit'] ?? ''}\n${row['note'] ?? ''}',
+    );
+  }
+  out.writeln('\nPUNCH LIST & FOLLOW-UP');
+  for (final row in fpRows(d['issues'])) {
+    out.writeln(
+      '${row['resolved'] == true ? '[x]' : '[ ]'} ${row['label']} | ${row['priority']} | Owner: ${row['assignee'] ?? ''} | Due: ${row['dueOn'] ?? ''}${row['blocking'] == true ? ' | Blocks closeout' : ''}',
     );
   }
   out.writeln('\nCUSTOMER APPROVAL RECORD');

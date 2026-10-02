@@ -40,6 +40,19 @@ class FieldProofClient {
   String? _scope;
   bool _closed = false, _changed = false;
   VoidCallback? onAccessDenied;
+  final Set<VoidCallback> _accessListeners = {};
+  bool get sessionChanged => _closed || _changed;
+  void addAccessDeniedListener(VoidCallback listener) =>
+      _accessListeners.add(listener);
+  void removeAccessDeniedListener(VoidCallback listener) =>
+      _accessListeners.remove(listener);
+  void _deny() {
+    onAccessDenied?.call();
+    for (final listener in List<VoidCallback>.from(_accessListeners)) {
+      listener();
+    }
+  }
+
   String? _readScope([Map<String, String>? headers]) {
     try {
       final value = (headers ?? headersBuilder()).entries
@@ -63,7 +76,7 @@ class FieldProofClient {
         sessionChanges != null &&
         (_scope == null || _scope != _readScope())) {
       _changed = true;
-      onAccessDenied?.call();
+      _deny();
     }
   }
 
@@ -77,7 +90,7 @@ class FieldProofClient {
         headers != null &&
         _scope != _readScope(headers)) {
       _changed = true;
-      onAccessDenied?.call();
+      _deny();
     }
     if (_changed) {
       throw const FieldProofException(
@@ -101,7 +114,7 @@ class FieldProofClient {
       if (response.statusCode < 200 || response.statusCode >= 300) {
         if (response.statusCode == 401) {
           _changed = true;
-          onAccessDenied?.call();
+          _deny();
         }
         String? error;
         try {
@@ -188,6 +201,16 @@ class FieldProofClient {
     }
     return result;
   }
+
+  Future<Map<String, dynamic>> prepareVoiceDraft(
+    String? id,
+    int? revision,
+    Map<String, dynamic> draft,
+  ) => _request('POST', '/voice/draft', {
+    'jobId': id,
+    'version': revision,
+    'draft': draft,
+  });
 
   Future<Map<String, dynamic>> load() => _request('GET', '');
   Future<Map<String, dynamic>> job(String id) => _request('GET', '/jobs/$id');
@@ -286,6 +309,7 @@ class FieldProofClient {
     _closed = true;
     sessionChanges?.removeListener(_checkSession);
     onAccessDenied = null;
+    _accessListeners.clear();
     if (_ownsClient) _http.close();
   }
 }

@@ -43,6 +43,8 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
     this.schedulingMode = false,
     this.bookkeepingMode = false,
     this.bookkeepingPanelBuilder,
+    this.fieldProofMode = false,
+    this.fieldProofPanelBuilder,
     this.musicMode = false,
     this.musicPanelBuilder,
     this.paused = false,
@@ -99,6 +101,8 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
   final Widget Function(Future<bool> Function())? inventoryResults;
   final Widget? schedulingPanel;
   final bool schedulingMode;
+  final bool fieldProofMode;
+  final Widget Function(Future<void> Function(Map<String, dynamic>))? fieldProofPanelBuilder;
   final bool musicMode;
   final Widget Function(Future<void> Function(Map<String, dynamic>))?
   musicPanelBuilder;
@@ -465,6 +469,16 @@ class _KorlixLiveConvoCharacterStageState
 
     return '${minutes.toString().padLeft(2, '0')}:'
         '${seconds.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _finishFieldProofAction(Map<String, dynamic> result) async {
+    if (_closing || !mounted || !widget.fieldProofMode || widget.connected ||
+        widget.connecting || !widget.paused || widget.microphoneActive == true)
+      return;
+    _closing = true;
+    setState(() => _allowClose = true);
+    await WidgetsBinding.instance.endOfFrame;
+    if (mounted) Navigator.of(context).pop<Map<String, dynamic>>(result);
   }
 
   Future<void> _finishMusicAction(Map<String, dynamic> result) async {
