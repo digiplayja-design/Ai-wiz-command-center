@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'radar_client.dart';
+import 'radar_results.dart';
 
 const _navy = Color(0xFF082C41),
     _cyan = Color(0xFF007BA8),
@@ -10,8 +11,8 @@ const _navy = Color(0xFF082C41),
     _line = Color(0xFFDCE7EC);
 const _profileLabels = {
   'businessName': 'Business name',
-  'services': 'Services or products',
-  'location': 'Service area',
+  'services': 'What work do you do?',
+  'location': 'Where can you work?',
   'capacity': 'Team, capacity and experience',
   'certifications': 'Credentials you currently hold',
   'naics': 'NAICS codes, if known',
@@ -64,6 +65,11 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
   final _profileSaveFeedbackAnchor = GlobalKey();
   final _focus = TextEditingController(), _filter = TextEditingController();
   final _scroll = ScrollController();
+  final _searchProfileExpansion = ExpansibleController();
+  final _resultFilter = TextEditingController();
+  RadarNoticeFilter _noticeFilter = RadarNoticeFilter.all;
+  RadarResultSort _resultSort = RadarResultSort.relevance;
+  bool _hidePastDeadlines = false;
   Map<String, dynamic>? _profile, _job, _search;
   Map<String, dynamic>? _editorDraft;
   String? _editorDraftFor;
@@ -103,6 +109,8 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
     _focus.dispose();
     _filter.dispose();
     _scroll.dispose();
+    _searchProfileExpansion.dispose();
+    _resultFilter.dispose();
     widget.client.onAccessDenied = null;
     if (widget.disposeClient) widget.client.dispose();
     super.dispose();
@@ -137,6 +145,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
       }
       _focus.clear();
       _filter.clear();
+      _resetResultFilters();
     });
   }
 
@@ -160,15 +169,17 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
             e.value.text = _s(p[e.key]);
           }
           _loadedProfile = true;
-          if (_profile == null) _tab = 2;
+          if (_profile == null) _tab = 0;
         }
         final jobs = _rows(d['jobs']);
         _job =
             jobs.where((j) => j['state'] == 'running').firstOrNull ??
             jobs.firstOrNull;
+        final previousSearchId = _search?['id'];
         _search = jobs
             .where((j) => j['kind'] == 'discover' && j['state'] == 'completed')
             .firstOrNull;
+        if (_search?['id'] != previousSearchId) _resetResultFilters();
         if (_selected == null) _selectedId = null;
         _loading = false;
         _error = null;
@@ -250,8 +261,8 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
     }
   }
 
-  Future<void> _saveProfile() async {
-    if (_working || _locked) return;
+  Future<bool> _saveProfile({bool forSearch = false}) async {
+    if (_working || _locked) return false;
     final p = {for (final e in _editors.entries) e.key: e.value.text.trim()};
     final missing = _requiredProfileErrors.keys
         .where((k) => p[k]!.isEmpty)
@@ -262,10 +273,11 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
         _error = null;
         _profileSaveError = 'Complete the required fields marked above.';
       });
+      if (_tab == 0 && _profile != null) _searchProfileExpansion.expand();
       _profileFeedback('Please complete the highlighted field.');
       _profileFocus[missing]!.requestFocus();
       await WidgetsBinding.instance.endOfFrame;
-      if (!mounted || _locked) return;
+      if (!mounted || _locked) return false;
       final field = _profileAnchors[missing]?.currentContext;
       if (field != null && field.mounted) {
         await Scrollable.ensureVisible(
@@ -274,7 +286,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
           duration: const Duration(milliseconds: 250),
         );
       }
-      return;
+      return false;
     }
     FocusScope.of(context).unfocus();
     setState(() {
@@ -286,22 +298,27 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
     });
     try {
       final saved = await widget.client.saveProfile(p);
-      if (!mounted || _locked) return;
+      if (!mounted || _locked) return false;
       setState(() {
         _profile = saved;
         _loadedProfile = true;
         _profileDirty = false;
         _profileAttempted = false;
+        _requestKey = null;
+        _signature = null;
         _notice = 'Business profile saved. Your radar is ready.';
       });
       _go(0);
-      _profileFeedback('Business profile saved. Your radar is ready.');
+      if (!forSearch) {
+        _profileFeedback('Business profile saved. Your radar is ready.');
+      }
+      return true;
     } catch (e) {
-      if (!mounted || _locked) return;
+      if (!mounted || _locked) return false;
       setState(() => _profileSaveError = e.toString());
       _profileFeedback(e.toString());
       await WidgetsBinding.instance.endOfFrame;
-      if (!mounted || _locked) return;
+      if (!mounted || _locked) return false;
       final feedback = _profileSaveFeedbackAnchor.currentContext;
       if (feedback != null && feedback.mounted) {
         await Scrollable.ensureVisible(
@@ -310,6 +327,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
           duration: const Duration(milliseconds: 250),
         );
       }
+      return false;
     } finally {
       if (mounted) {
         setState(() {
@@ -318,6 +336,21 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
         });
       }
     }
+  }
+
+  Future<void> _findContracts() async {
+    if (_working || _locked) return;
+    if (_profile == null || _profileDirty) {
+      if (!await _saveProfile(forSearch: true)) return;
+    }
+    if (mounted && !_locked) await _start('discover');
+  }
+
+  void _resetResultFilters() {
+    _resultFilter.clear();
+    _noticeFilter = RadarNoticeFilter.all;
+    _resultSort = RadarResultSort.relevance;
+    _hidePastDeadlines = false;
   }
 
   void _profileFeedback(String message) {
@@ -331,7 +364,9 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
   Future<void> _start(String kind, {String? opportunityId}) async {
     if (_working || _locked) return;
     if (_profile == null || _profileDirty) {
-      setState(() => _error = 'Save your business profile before asking KORLIX.');
+      setState(
+        () => _error = 'Save your business profile before asking KORLIX.',
+      );
       _go(2);
       return;
     }
@@ -379,7 +414,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
         'index': index,
       });
       if (mounted && !_locked) setState(() => _selectedId = _s(o['id']));
-    }, success: 'Opportunity saved to your pipeline.');
+    }, success: 'Contract saved. Find it in Saved.');
   }
 
   Future<bool> _confirm(String title, String body) async =>
@@ -431,6 +466,13 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
           _profileDirty = false;
           _profileAttempted = false;
           _profileSaveError = null;
+          _requestKey = null;
+          _signature = null;
+          _focus.clear();
+          _filter.clear();
+          _stageFilter = 'all';
+          _resetResultFilters();
+          _searchProfileExpansion.collapse();
         }
       }, success: 'Your Contract Radar records have been removed.');
     }
@@ -539,15 +581,17 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
     }
   }
 
-  Widget _card(Widget child, {Color color = Colors.white}) => Container(
+  Widget _card(Widget child, {Color color = Colors.white}) => SizedBox(
     width: double.infinity,
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
+    child: Material(
       color: color,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: _line),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: _line),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(padding: const EdgeInsets.all(20), child: child),
     ),
-    child: child,
   );
   Widget _heading(String title, {String? subtitle}) => Padding(
     padding: const EdgeInsets.only(bottom: 16),
@@ -585,8 +629,8 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
     ),
   );
   String _type(dynamic v) => switch (v) {
-    'sources_sought' => 'Market research',
-    'presolicitation' => 'Upcoming solicitation',
+    'sources_sought' => 'Early lead · market research',
+    'presolicitation' => 'Early lead · upcoming notice',
     'solicitation' => 'Solicitation',
     _ => 'Imported RFP',
   };
@@ -635,14 +679,14 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
           const SizedBox(height: 10),
           Text(
             _s(d['summary']),
-            maxLines: saved == null ? 5 : 3,
+            maxLines: 3,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(height: 1.5),
           ),
           if (_s(d['matchReason']).isNotEmpty) ...[
             const SizedBox(height: 10),
             Text(
-              'Why it surfaced: ${d['matchReason']}',
+              'Why it may fit: ${d['matchReason']}',
               style: const TextStyle(color: _cyan),
             ),
           ],
@@ -667,10 +711,15 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
                 OutlinedButton.icon(
                   onPressed: () => _open(_s(d['sourceUrl'])),
                   icon: const Icon(Icons.open_in_new, size: 17),
-                  label: const Text('Open source'),
+                  label: Text(
+                    resultIndex != null
+                        ? 'View official notice'
+                        : 'Open source',
+                  ),
                 ),
               if (resultIndex != null)
                 FilledButton.icon(
+                  key: ValueKey('radar-save-result-$resultIndex'),
                   onPressed: _working || alreadySaved
                       ? null
                       : () => _saveFound(resultIndex),
@@ -680,7 +729,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
                         : Icons.bookmark_add_outlined,
                     size: 18,
                   ),
-                  label: Text(alreadySaved ? 'Saved' : 'Save opportunity'),
+                  label: Text(alreadySaved ? 'Saved' : 'Save contract'),
                 ),
               if (saved != null)
                 FilledButton(
@@ -695,25 +744,134 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
     );
   }
 
-  Widget _discover() => Column(
+  Widget _profileField(String name) => Padding(
+    key: _profileAnchors[name],
+    padding: const EdgeInsets.only(bottom: 14),
+    child: TextField(
+      key: Key('radar-profile-$name'),
+      controller: _editors[name],
+      focusNode: _profileFocus[name],
+      enabled: !_working,
+      onChanged: (_) => setState(() => _profileDirty = true),
+      maxLength: switch (name) {
+        'businessName' => 120,
+        'services' => 2400,
+        'location' => 200,
+        'naics' => 150,
+        _ => 1000,
+      },
+      minLines: 1,
+      maxLines: ['services', 'capacity', 'certifications'].contains(name)
+          ? 5
+          : 2,
+      decoration: InputDecoration(
+        labelText:
+            '${_profileLabels[name]}${_requiredProfileErrors.containsKey(name) ? ' *' : ' (optional)'}',
+        counterText: '',
+        errorText: _profileAttempted && _editors[name]!.text.trim().isEmpty
+            ? _requiredProfileErrors[name]
+            : null,
+        errorMaxLines: 3,
+        alignLabelWithHint: true,
+        hintText: switch (name) {
+          'businessName' => 'Your business or trading name',
+          'services' => 'For example: cleaning, construction or IT support',
+          'location' => 'City, state, country, or nationwide',
+          'certifications' => 'Only list credentials you actually hold',
+          _ => null,
+        },
+      ),
+    ),
+  );
+
+  Widget _businessFields() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      _card(
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _heading(
-              'Find your next opportunity',
-              subtitle: _profile == null
-                  ? 'Start with a short business profile so KORLIX knows what to look for.'
-                  : 'Searching for ${_s(_map(_profile?['data'])['businessName'])} · ${_s(_map(_profile?['data'])['location'])}',
+      ..._requiredProfileErrors.keys.map(_profileField),
+      ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        title: const Text('More business details (optional)'),
+        children: [
+          ...['capacity', 'certifications', 'naics'].map(_profileField),
+          const Padding(
+            padding: EdgeInsets.only(bottom: 14),
+            child: Text(
+              'NAICS codes can refine your search. Capacity and credentials help with bid reviews. Only add credentials you hold.',
+              style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
             ),
-            if (_profile == null)
-              FilledButton(
-                onPressed: () => _go(2),
-                child: const Text('Set up my business'),
-              )
-            else ...[
+          ),
+        ],
+      ),
+    ],
+  );
+
+  Widget _profileError() => _profileSaveError == null
+      ? const SizedBox.shrink()
+      : Padding(
+          key: _profileSaveFeedbackAnchor,
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(
+            _profileSaveError!,
+            key: const Key('radar-profile-save-error'),
+            style: const TextStyle(color: Color(0xFFB3261E), height: 1.4),
+          ),
+        );
+
+  Widget _saveProfileButton() => OutlinedButton.icon(
+    key: const Key('radar-save-profile'),
+    onPressed: _working ? null : () => _saveProfile(),
+    icon: const Icon(Icons.check, size: 18),
+    label: Text(
+      _savingProfile
+          ? 'Saving profile…'
+          : _profileDirty
+          ? 'Save profile changes'
+          : 'Save business profile',
+    ),
+  );
+
+  Widget _discover() {
+    final profile = _map(_profile?['data']);
+    final results = _rows(_map(_search?['result'])['opportunities']);
+    final visible = filterRadarResults(
+      results,
+      query: _resultFilter.text,
+      noticeFilter: _noticeFilter,
+      sort: _resultSort,
+      hidePastDeadlines: _hidePastDeadlines,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _card(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _heading(
+                'Find contracts for your business',
+                subtitle: _profile == null
+                    ? 'Tell us three things to get started. We’ll remember them for your next search.'
+                    : '${_s(profile['businessName'])} · ${_s(profile['location'])}',
+              ),
+              if (_profile == null) ...[
+                _businessFields(),
+                const SizedBox(height: 16),
+              ] else ...[
+                Text(
+                  'Your services: ${_s(profile['services'])}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: _muted),
+                ),
+                ExpansionTile(
+                  key: const Key('radar-search-profile'),
+                  controller: _searchProfileExpansion,
+                  tilePadding: EdgeInsets.zero,
+                  title: const Text('Change business or service area'),
+                  children: [_businessFields()],
+                ),
+                const SizedBox(height: 16),
+              ],
               TextField(
                 key: const Key('radar-search-focus'),
                 controller: _focus,
@@ -722,88 +880,235 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
                 minLines: 1,
                 maxLines: 3,
                 decoration: const InputDecoration(
-                  labelText: 'Optional search focus',
-                  hintText:
-                      'For example: school cleaning contracts or meter installation',
+                  labelText: 'Search focus (optional)',
+                  hintText: 'For example: school cleaning contracts',
+                  helperText:
+                      'Leave blank to search using your services and service area.',
+                  helperMaxLines: 3,
+                  counterText: '',
+                  prefixIcon: Icon(Icons.search),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
+              _profileError(),
               Wrap(
                 spacing: 10,
                 runSpacing: 10,
                 children: [
                   FilledButton.icon(
                     key: const Key('radar-discover'),
-                    onPressed: _working ? null : () => _start('discover'),
-                    icon: const Icon(Icons.radar),
-                    label: const Text('Find opportunities'),
+                    onPressed: _working ? null : _findContracts,
+                    icon: const Icon(Icons.search),
+                    label: Text(
+                      _savingProfile
+                          ? 'Please wait…'
+                          : _running
+                          ? 'Searching…'
+                          : _profile == null || _profileDirty
+                          ? 'Save & find contracts'
+                          : 'Find contracts',
+                    ),
                   ),
-                  OutlinedButton.icon(
-                    onPressed: _working ? null : () => _editOpportunity(),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Paste an RFP'),
+                  if (_profile == null || _profileDirty) _saveProfileButton(),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Searches SAM.gov (U.S. federal) and NYC City Record. Coverage is selective.',
+                style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                '1 credit per successful search · Ultra Premium / Enterprise. No results or a failed search = no credit charged.',
+                style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
+              ),
+              const SizedBox(height: 6),
+              TextButton.icon(
+                onPressed: _working ? null : () => _editOpportunity(),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Paste an RFP'),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        if (_search != null) ...[
+          _heading(
+            'Latest completed search',
+            subtitle:
+                'Open the official notice to check requirements, deadlines and amendments.',
+          ),
+          Text(
+            'Searched: ${_s(_map(_search?['result'])['searchedAt']).replaceFirst('T', ' ')}',
+            style: const TextStyle(color: _muted, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          if (results.isNotEmpty) ...[
+            _card(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 16,
+                    runSpacing: 8,
+                    children: [
+                      Text(
+                        '${visible.length} of ${results.length} notices',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      TextButton(
+                        onPressed: () => setState(_resetResultFilters),
+                        child: const Text('Clear filters'),
+                      ),
+                    ],
+                  ),
+                  ExpansionTile(
+                    key: const Key('radar-result-controls'),
+                    tilePadding: EdgeInsets.zero,
+                    title: const Text('Filter & sort'),
+                    children: [
+                      TextField(
+                        key: const Key('radar-result-filter'),
+                        controller: _resultFilter,
+                        onChanged: (_) => setState(() {}),
+                        decoration: const InputDecoration(
+                          labelText: 'Filter these results',
+                          hintText: 'Title, buyer, location or keyword',
+                          prefixIcon: Icon(Icons.filter_list),
+                          helperText: 'Filters are instant and use no credits.',
+                          helperMaxLines: 2,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final filter in RadarNoticeFilter.values)
+                            ChoiceChip(
+                              key: Key('radar-filter-${filter.name}'),
+                              label: Text(switch (filter) {
+                                RadarNoticeFilter.all => 'All notices',
+                                RadarNoticeFilter.solicitations =>
+                                  'Solicitations',
+                                RadarNoticeFilter.earlyLeads => 'Early leads',
+                              }),
+                              selected: _noticeFilter == filter,
+                              onSelected: (_) =>
+                                  setState(() => _noticeFilter = filter),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<RadarResultSort>(
+                        key: ValueKey('radar-result-sort'),
+                        initialValue: _resultSort,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Sort results',
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: RadarResultSort.relevance,
+                            child: Text('Search order'),
+                          ),
+                          DropdownMenuItem(
+                            value: RadarResultSort.deadline,
+                            child: Text('Deadline: soonest first'),
+                          ),
+                        ],
+                        onChanged: (v) => setState(
+                          () => _resultSort = v ?? RadarResultSort.relevance,
+                        ),
+                      ),
+                      CheckboxListTile(
+                        key: const Key('radar-hide-past'),
+                        value: _hidePastDeadlines,
+                        onChanged: (v) =>
+                            setState(() => _hidePastDeadlines = v ?? false),
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: const Text('Hide past deadlines'),
+                      ),
+                      const Text(
+                        'Early leads may be market research or advance notices, not requests for bids yet.',
+                        style: TextStyle(
+                          color: _muted,
+                          fontSize: 12,
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
             const SizedBox(height: 14),
-            const Text(
-              'Official-source web search: SAM.gov and NYC City Record. Coverage is selective; always check the original notice. Corporate and other RFPs can be pasted for review.',
-              style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
+            ...visible.map(
+              (result) => Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: _opportunityCard(
+                  result.data,
+                  resultIndex: result.sourceIndex,
+                ),
+              ),
             ),
-            const SizedBox(height: 6),
-            const Text(
-              '1 credit per successful search or review · Ultra Premium / Enterprise. Searches with no confirmed results use no credit.',
-              style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
+            if (visible.isEmpty)
+              _card(
+                const Text(
+                  'No notices match these filters. Clear filters to see all results from this search.',
+                ),
+              ),
+          ] else
+            _card(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _heading(
+                    'No matching notices this time',
+                    subtitle:
+                        'No credit was charged. Try a broader description or expand where you can work.',
+                  ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton(
+                        onPressed: _working
+                            ? null
+                            : () {
+                                setState(() => _focus.clear());
+                                _go(0);
+                              },
+                        child: const Text('Clear search focus'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          _searchProfileExpansion.expand();
+                          _go(0);
+                        },
+                        child: const Text('Change services or area'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
-      ),
-      const SizedBox(height: 20),
-      if (_search != null) ...[
-        _heading(
-          'Your latest search',
-          subtitle: _s(_map(_search?['result'])['message']),
-        ),
-        Text(
-          'Searched: ${_s(_map(_search?['result'])['searchedAt']).replaceFirst('T', ' ')}',
-          style: const TextStyle(color: _muted, fontSize: 12),
-        ),
-        const SizedBox(height: 12),
-        ..._rows(_map(_search?['result'])['opportunities']).asMap().entries.map(
-          (e) => Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: _opportunityCard(e.value, resultIndex: e.key),
-          ),
-        ),
-        if (_rows(_map(_search?['result'])['opportunities']).isEmpty)
+        ] else
           _card(
             const Text(
-              'Try a broader service description or another service area. You can also paste a notice you already found.',
+              'Find a notice → Check the official source → Save it for later. Your saved contracts and bid reviews stay together in Saved.',
+              style: TextStyle(color: _muted, height: 1.5),
             ),
           ),
-      ] else
-        _card(
-          const Column(
-            children: [
-              Icon(Icons.travel_explore, size: 48, color: _cyan),
-              SizedBox(height: 12),
-              Text(
-                'Real sources. A clearer next step.',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'KORLIX surfaces relevant notices, explains why they may fit, and helps you prepare. Your saved pipeline begins with your first opportunity.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: _muted, height: 1.5),
-              ),
-            ],
-          ),
-        ),
-    ],
-  );
+      ],
+    );
+  }
+
   Widget _profileForm() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       _card(
         Column(
@@ -812,83 +1117,12 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
             _heading(
               'Your business profile',
               subtitle:
-                  'Complete the three required fields (*). Everything else is optional.',
+                  'Only three fields are required. Update these whenever your services or service area change.',
             ),
-            ..._editors.entries.map(
-              (e) => Padding(
-                key: _profileAnchors[e.key],
-                padding: const EdgeInsets.only(bottom: 14),
-                child: TextField(
-                  key: Key('radar-profile-${e.key}'),
-                  controller: e.value,
-                  focusNode: _profileFocus[e.key],
-                  enabled: !_working,
-                  onChanged: (_) => setState(() => _profileDirty = true),
-                  maxLength: switch (e.key) {
-                    'businessName' => 120,
-                    'services' => 2400,
-                    'location' => 200,
-                    'naics' => 150,
-                    _ => 1000,
-                  },
-                  minLines: e.key == 'services' ? 3 : 1,
-                  maxLines:
-                      ['services', 'capacity', 'certifications'].contains(e.key)
-                      ? 5
-                      : 2,
-                  decoration: InputDecoration(
-                    labelText:
-                        '${_profileLabels[e.key]}${_requiredProfileErrors.containsKey(e.key) ? ' *' : ' (optional)'}',
-                    errorText: _profileAttempted && e.value.text.trim().isEmpty
-                        ? _requiredProfileErrors[e.key]
-                        : null,
-                    errorMaxLines: 3,
-                    alignLabelWithHint: true,
-                    hintText: switch (e.key) {
-                      'location' => 'City, state, country, or nationwide',
-                      'services' => 'Describe the work you want to win',
-                      'certifications' =>
-                        'Only list credentials you actually hold',
-                      _ => null,
-                    },
-                  ),
-                ),
-              ),
-            ),
-            const Text(
-              'Credentials are self-reported. KORLIX cannot certify eligibility. Search uses your services, service area, NAICS codes and search focus; bid reviews also use the rest of this profile and your RFP text.',
-              style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
-            ),
+            _businessFields(),
             const SizedBox(height: 16),
-            if (_profileSaveError != null) ...[
-              Container(
-                key: _profileSaveFeedbackAnchor,
-                child: Text(
-                  _profileSaveError!,
-                  key: const Key('radar-profile-save-error'),
-                  style: const TextStyle(color: Color(0xFFB3261E), height: 1.4),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-            FilledButton.icon(
-              key: const Key('radar-save-profile'),
-              onPressed: _working ? null : _saveProfile,
-              icon: _savingProfile
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.check),
-              label: Text(
-                _savingProfile
-                    ? 'Saving profile…'
-                    : _profileDirty
-                    ? 'Save profile changes'
-                    : 'Save business profile',
-              ),
-            ),
+            _profileError(),
+            _saveProfileButton(),
           ],
         ),
       ),
@@ -906,7 +1140,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       _heading(
-        'Your opportunity pipeline',
+        'Your saved contracts',
         subtitle: '${_saved.length}/100 saved · stages are updated by you',
       ),
       Wrap(
@@ -1297,11 +1531,11 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
                     destinations: const [
                       NavigationDestination(
                         icon: Icon(Icons.radar),
-                        label: 'Discover',
+                        label: 'Find',
                       ),
                       NavigationDestination(
                         icon: Icon(Icons.bookmarks_outlined),
-                        label: 'Pipeline',
+                        label: 'Saved',
                       ),
                       NavigationDestination(
                         icon: Icon(Icons.business_outlined),
@@ -1348,8 +1582,8 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
                                   ),
                                   const SizedBox(height: 32),
                                   ...[
-                                    (Icons.radar, 'Discover', 0),
-                                    (Icons.bookmarks_outlined, 'Pipeline', 1),
+                                    (Icons.search, 'Find', 0),
+                                    (Icons.bookmarks_outlined, 'Saved', 1),
                                     (Icons.business_outlined, 'Business', 2),
                                   ].map(
                                     (v) => Padding(
@@ -1409,22 +1643,6 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      'Your next contract starts here.',
-                                      style: TextStyle(
-                                        fontSize: desktop ? 30 : 25,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    const Text(
-                                      'Find relevant opportunities. Understand the requirements. Build a stronger response.',
-                                      style: TextStyle(
-                                        color: _muted,
-                                        height: 1.5,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 24),
                                     if (_error != null) ...[
                                       _card(
                                         Text(
@@ -1445,7 +1663,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
                                       ),
                                       const SizedBox(height: 14),
                                     ],
-                                    if (_profileDirty && _tab != 2) ...[
+                                    if (_profileDirty && _tab == 1) ...[
                                       _card(
                                         Row(
                                           children: [

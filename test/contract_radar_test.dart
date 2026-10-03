@@ -57,6 +57,7 @@ class FakeRadar extends RadarClient {
   };
   List<Map<String, dynamic>> saved = [], jobs = [];
   List<Map<String, dynamic>> starts = [];
+  final List<Map<String, dynamic>> saveRequests = [];
   int saves = 0, removes = 0, polls = 0, clears = 0;
   int profileSaves = 0, loads = 0;
   bool failProfile = false;
@@ -86,6 +87,7 @@ class FakeRadar extends RadarClient {
   Future<Map<String, dynamic>> saveOpportunity(
     Map<String, dynamic> data,
   ) async {
+    saveRequests.add(Map<String, dynamic>.from(data));
     if (failSave) {
       throw const RadarException(
         'Connection interrupted. Reopen the editor to retry.',
@@ -95,6 +97,11 @@ class FakeRadar extends RadarClient {
     final o = opportunity();
     if (data['job_id'] == null) {
       o['data'] = {...data, 'source': 'import', 'summary': 'Imported by you.'};
+    } else {
+      final job = jobs.firstWhere((j) => j['id'] == data['job_id']);
+      o['data'] = Map<String, dynamic>.from(
+        (job['result']['opportunities'] as List)[data['index'] as int] as Map,
+      );
     }
     saved = [o];
     return o;
@@ -180,6 +187,33 @@ Future<void> tap(WidgetTester t, Finder f) async {
   await t.tap(f);
   await t.pumpAndSettle();
 }
+
+Future<void> fillBusiness(WidgetTester t) async {
+  for (final e in {
+    'businessName': 'New business',
+    'services': 'Office cleaning',
+    'location': 'Ohio',
+  }.entries) {
+    await t.enterText(find.byKey(Key('radar-profile-${e.key}')), e.value);
+  }
+}
+
+Map<String, dynamic> resultsJob() => jobData('completed')
+  ..['result'] = {
+    'opportunities': [
+      {...notice(), 'title': 'Office cleaning bid', 'deadline': '2099-12-01'},
+      {
+        ...notice(),
+        'title': 'Roof repair market research',
+        'noticeType': 'sources_sought',
+        'deadline': '2099-11-01',
+        'sourceUrl':
+            'https://sam.gov/opp/abcdef1234567890abcdef1234567890/view',
+      },
+    ],
+    'message': 'Review the official source.',
+    'searchedAt': '2026-09-27T16:00:00Z',
+  };
 
 void main() {
   test('profile PUT requires a confirmed saved profile response', () async {
@@ -296,10 +330,10 @@ void main() {
       await t.ensureVisible(find.byKey(const Key('radar-save-profile')));
       await t.tap(find.byKey(const Key('radar-save-profile')));
       await t.pump();
-      expect(find.text('Saving profile…'), findsOneWidget);
+      expect(find.text('Saving profile…'), findsWidgets);
       expect(
         t
-            .widget<FilledButton>(find.byKey(const Key('radar-save-profile')))
+            .widget<OutlinedButton>(find.byKey(const Key('radar-save-profile')))
             .onPressed,
         isNull,
       );
@@ -366,7 +400,8 @@ void main() {
       for (final width in [390.0, 1500.0]) {
         final c = FakeRadar()..profileRow = null;
         await show(t, c, width: width, scale: 1.4);
-        expect(find.text('Your business profile'), findsOneWidget);
+        expect(find.byKey(const Key('radar-discover')), findsOneWidget);
+        expect(find.text('Save & find contracts'), findsOneWidget);
         for (final e in {
           'businessName': 'New business',
           'services': 'Meter installation',
@@ -389,6 +424,93 @@ void main() {
     expect(c.starts, isEmpty);
     await t.pumpWidget(const SizedBox());
   });
+  testWidgets(
+    'first search saves the three required fields and asks consent once',
+    (t) async {
+      final c = FakeRadar()..profileRow = null;
+      var consentCalls = 0;
+      await show(
+        t,
+        c,
+        width: 390,
+        consent: () async {
+          consentCalls++;
+          return true;
+        },
+      );
+      await fillBusiness(t);
+      await t.enterText(
+        find.byKey(const Key('radar-search-focus')),
+        'Schools and offices',
+      );
+      await t.ensureVisible(find.byKey(const Key('radar-discover')));
+      await t.tap(find.byKey(const Key('radar-discover')));
+      await t.pump();
+      await t.pump();
+      expect(c.profileSaves, 1);
+      expect(c.profileRow!['data']['businessName'], 'New business');
+      expect(c.profileRow!['data']['certifications'], '');
+      expect(consentCalls, 1);
+      expect(c.starts, hasLength(1));
+      expect(c.starts.single['query'], 'Schools and offices');
+      expect(c.starts.single['consent'], isTrue);
+      expect(
+        t
+            .widget<FilledButton>(find.byKey(const Key('radar-discover')))
+            .onPressed,
+        isNull,
+      );
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'failed first search save keeps fields and never starts a paid search',
+    (t) async {
+      final c = FakeRadar()
+        ..profileRow = null
+        ..failProfile = true;
+      var consentCalls = 0;
+      await show(
+        t,
+        c,
+        consent: () async {
+          consentCalls++;
+          return true;
+        },
+      );
+      await fillBusiness(t);
+      await tap(t, find.byKey(const Key('radar-discover')));
+      expect(c.profileSaves, 1);
+      expect(c.starts, isEmpty);
+      expect(consentCalls, 0);
+      expect(c.profileRow, isNull);
+      expect(
+        t
+            .widget<TextField>(find.byKey(const Key('radar-profile-services')))
+            .controller!
+            .text,
+        'Office cleaning',
+      );
+      expect(find.byKey(const Key('radar-profile-save-error')), findsOneWidget);
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'declining consent after first profile save never starts discovery',
+    (t) async {
+      final c = FakeRadar()..profileRow = null;
+      await show(t, c, consent: () async => false);
+      await fillBusiness(t);
+      await tap(t, find.byKey(const Key('radar-discover')));
+      expect(c.profileSaves, 1);
+      expect(c.profileRow, isNotNull);
+      expect(c.starts, isEmpty);
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+    },
+  );
   testWidgets(
     'discovery starts once and reopened jobs poll without redispatch',
     (t) async {
@@ -434,12 +556,12 @@ void main() {
           return true;
         },
       );
-      await tap(t, find.text('Open source'));
+      await tap(t, find.text('View official notice'));
       expect(opened.toString(), sourceUrl);
-      await tap(t, find.text('Save opportunity'));
+      await tap(t, find.byKey(const Key('radar-save-result-0')));
       expect(c.saves, 1);
-      expect(find.text('Saved'), findsOneWidget);
-      await tap(t, find.text('Pipeline').first);
+      expect(find.text('Saved'), findsWidgets);
+      await tap(t, find.text('Saved').first);
       expect(find.byKey(const Key('radar-review')), findsOneWidget);
       expect(find.textContaining('does not submit bids'), findsOneWidget);
       await t.pumpWidget(const SizedBox());
@@ -454,6 +576,163 @@ void main() {
       await tap(t, find.byKey(const Key('radar-discover')));
       expect(c.starts.length, 2);
       expect(c.starts[0]['request_key'], c.starts[1]['request_key']);
+      await t.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets('editing the saved service area creates a new search identity', (
+    t,
+  ) async {
+    final c = FakeRadar()..failStart = true;
+    await show(t, c);
+    await tap(t, find.byKey(const Key('radar-discover')));
+    await tap(t, find.byKey(const Key('radar-search-profile')));
+    await t.enterText(
+      find.byKey(const Key('radar-profile-location')),
+      'New York',
+    );
+    await tap(t, find.byKey(const Key('radar-discover')));
+    expect(c.profileSaves, 1);
+    expect(c.profileRow!['data']['location'], 'New York');
+    expect(c.starts, hasLength(2));
+    expect(c.starts[0]['request_key'], isNot(c.starts[1]['request_key']));
+    expect(t.takeException(), isNull);
+    await t.pumpWidget(const SizedBox());
+  });
+  testWidgets(
+    'filtering results is local and saving keeps the server result index',
+    (t) async {
+      final c = FakeRadar()..jobs = [resultsJob()];
+      await show(t, c);
+      await tap(t, find.byKey(const Key('radar-result-controls')));
+      await tap(t, find.byKey(const Key('radar-filter-earlyLeads')));
+      await t.enterText(find.byKey(const Key('radar-result-filter')), 'Roof');
+      await t.pumpAndSettle();
+      expect(find.text('Office cleaning bid'), findsNothing);
+      expect(find.text('Roof repair market research'), findsOneWidget);
+      expect(c.starts, isEmpty);
+      expect(c.profileSaves, 0);
+      await tap(t, find.byKey(const Key('radar-save-result-1')));
+      expect(c.saveRequests, hasLength(1));
+      expect(c.saveRequests.single['job_id'], 'job');
+      expect(c.saveRequests.single['index'], 1);
+      expect(c.saved.single['data']['title'], 'Roof repair market research');
+      expect(c.starts, isEmpty);
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'deadline sorting changes order without changing saved result identity',
+    (t) async {
+      final c = FakeRadar()..jobs = [resultsJob()];
+      await show(t, c);
+      await tap(t, find.byKey(const Key('radar-result-controls')));
+      await tap(t, find.byKey(const Key('radar-result-sort')));
+      await tap(t, find.text('Deadline: soonest first').last);
+      expect(
+        t.getTopLeft(find.text('Roof repair market research')).dy,
+        lessThan(t.getTopLeft(find.text('Office cleaning bid')).dy),
+      );
+      await tap(t, find.byKey(const Key('radar-save-result-1')));
+      expect(c.saveRequests.single['index'], 1);
+      expect(c.starts, isEmpty);
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'clear filters restores all downloaded results without a new search',
+    (t) async {
+      final c = FakeRadar()..jobs = [resultsJob()];
+      await show(t, c);
+      await tap(t, find.byKey(const Key('radar-result-controls')));
+      await tap(t, find.byKey(const Key('radar-result-sort')));
+      await tap(t, find.text('Deadline: soonest first').last);
+      await tap(t, find.byKey(const Key('radar-filter-solicitations')));
+      await t.enterText(
+        find.byKey(const Key('radar-result-filter')),
+        'Not found',
+      );
+      await t.pumpAndSettle();
+      expect(find.text('Office cleaning bid'), findsNothing);
+      expect(find.text('Roof repair market research'), findsNothing);
+      await tap(t, find.text('Clear filters'));
+      expect(find.text('Office cleaning bid'), findsOneWidget);
+      expect(find.text('Roof repair market research'), findsOneWidget);
+      expect(
+        t.getTopLeft(find.text('Office cleaning bid')).dy,
+        lessThan(t.getTopLeft(find.text('Roof repair market research')).dy),
+      );
+      expect(
+        find
+            .descendant(
+              of: find.byKey(const Key('radar-result-sort')),
+              matching: find.text('Search order'),
+            )
+            .hitTestable(),
+        findsOneWidget,
+      );
+      expect(
+        t
+            .widget<TextField>(find.byKey(const Key('radar-result-filter')))
+            .controller!
+            .text,
+        isEmpty,
+      );
+      expect(c.starts, isEmpty);
+      expect(c.loads, 1);
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'hiding past deadlines retains notices with an unknown deadline',
+    (t) async {
+      final results = resultsJob();
+      results['result']['opportunities'][0]['deadline'] = '2000-01-01';
+      results['result']['opportunities'][1]['deadline'] = null;
+      final c = FakeRadar()..jobs = [results];
+      await show(t, c);
+      expect(find.text('Office cleaning bid'), findsOneWidget);
+      await tap(t, find.byKey(const Key('radar-result-controls')));
+      await tap(t, find.byKey(const Key('radar-hide-past')));
+      expect(find.text('Office cleaning bid'), findsNothing);
+      expect(find.text('Roof repair market research'), findsOneWidget);
+      expect(c.starts, isEmpty);
+      await tap(t, find.text('Clear filters'));
+      expect(find.text('Office cleaning bid'), findsOneWidget);
+      expect(
+        t
+            .widget<CheckboxListTile>(find.byKey(const Key('radar-hide-past')))
+            .value,
+        isFalse,
+      );
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'search and result controls fit a 320px phone at double text size',
+    (t) async {
+      final fresh = FakeRadar()..profileRow = null;
+      await show(t, fresh, width: 320, height: 800, scale: 2);
+      expect(t.takeException(), isNull);
+      await tap(t, find.text('More business details (optional)'));
+      expect(
+        find.byKey(const Key('radar-profile-certifications')),
+        findsOneWidget,
+      );
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+      final returning = FakeRadar()..jobs = [resultsJob()];
+      await show(t, returning, width: 320, height: 800, scale: 2);
+      expect(t.takeException(), isNull);
+      await tap(t, find.byKey(const Key('radar-result-controls')));
+      expect(t.takeException(), isNull);
+      await tap(t, find.byKey(const Key('radar-filter-earlyLeads')));
+      await t.ensureVisible(find.byKey(const Key('radar-save-result-1')));
+      await t.pumpAndSettle();
+      expect(t.takeException(), isNull);
       await t.pumpWidget(const SizedBox());
     },
   );
@@ -538,7 +817,7 @@ void main() {
           copied = s;
         },
       );
-      await tap(t, find.text('Pipeline').last);
+      await tap(t, find.text('Saved').last);
       await tap(t, find.text('Open workspace'));
       expect(find.textContaining('Summary-only review'), findsOneWidget);
       await tap(t, find.byKey(const Key('radar-copy-draft')));
@@ -552,7 +831,11 @@ void main() {
   testWidgets('removal and clearing need explicit confirmation', (t) async {
     final c = FakeRadar()..saved = [opportunity()];
     await show(t, c);
-    await tap(t, find.text('Pipeline').first);
+    await t.enterText(
+      find.byKey(const Key('radar-search-focus')),
+      'School cleaning in Ohio',
+    );
+    await tap(t, find.text('Saved').first);
     await tap(t, find.text('Open workspace'));
     await tap(t, find.byTooltip('Remove opportunity'));
     await tap(t, find.text('Keep'));
@@ -564,6 +847,18 @@ void main() {
     await tap(t, find.text('Clear my Contract Radar data'));
     await tap(t, find.text('Keep'));
     expect(c.clears, 0);
+    await tap(t, find.text('Clear my Contract Radar data'));
+    await tap(t, find.text('Remove'));
+    expect(c.clears, 1);
+    await tap(t, find.text('Find').first);
+    expect(
+      t
+          .widget<TextField>(find.byKey(const Key('radar-search-focus')))
+          .controller!
+          .text,
+      isEmpty,
+    );
+    expect(t.takeException(), isNull);
     await t.pumpWidget(const SizedBox());
   });
 }
