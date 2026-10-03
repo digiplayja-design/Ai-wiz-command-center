@@ -31,6 +31,7 @@ import 'theme/korlix_action_button.dart';
 import 'theme/korlix_action_grid.dart';
 import 'auth/korlix_welcome_confirmation.dart';
 import 'auth/korlix_october_welcome.dart';
+import 'auth/korlix_login_preferences.dart';
 import 'input_tools/upload_studio.dart';
 import 'input_tools/voice_composer.dart';
 import 'locator/locator_screen.dart';
@@ -850,6 +851,13 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final FocusNode _passwordFocus = FocusNode();
+  late final Future<void> _preferencesLoaded;
+  bool _preferencesReady = false;
+  bool _rememberEmail = false;
+  bool _offerPasswordSave = true;
+  bool _emailEdited = false;
+  String? _preferenceMessage;
 
   bool _isSignUp = false;
   bool _obscurePassword = true;
@@ -861,7 +869,40 @@ class _AuthScreenState extends State<AuthScreen> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _preferencesLoaded = _restoreLoginPreferences();
+  }
+
+  Future<void> _restoreLoginPreferences() async {
+    final preferences = await KorlixLoginPreferences.load();
+    if (!mounted) return;
+    setState(() {
+      _rememberEmail = preferences.rememberEmail;
+      _offerPasswordSave = preferences.offerPasswordSave;
+      if (!_emailEdited && _emailController.text.isEmpty && _rememberEmail) {
+        _emailController.text = preferences.email;
+      }
+      _preferencesReady = true;
+    });
+  }
+
+  Future<void> _saveLoginPreferences() async {
+    final saved = await KorlixLoginPreferences(
+      rememberEmail: _rememberEmail,
+      email: _emailController.text.trim(),
+      offerPasswordSave: _offerPasswordSave,
+    ).save();
+    if (!mounted) return;
+    final message = saved ? null : 'Your device could not save these preferences. You can still sign in.';
+    if (message != _preferenceMessage) {
+      setState(() => _preferenceMessage = message);
+    }
+  }
+
+  @override
   void dispose() {
+    _passwordFocus.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -940,9 +981,11 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Future<void> _submit() async {
     if (_loading || _resetLoading) return;
+    await _preferencesLoaded;
+    if (!mounted || _loading || _resetLoading) return;
     final signingUp = _isSignUp;
     final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
+    final password = _passwordController.text;
 
     if (email.isEmpty || password.isEmpty) {
       setState(() {
@@ -992,6 +1035,9 @@ class _AuthScreenState extends State<AuthScreen> {
 
       if (session == null || session['access_token'] == null) {
         if (!signingUp) throw Exception('Sign-in did not return a session. Please try again.');
+        await _saveLoginPreferences();
+        if (!mounted) return;
+        TextInput.finishAutofillContext(shouldSave: _offerPasswordSave);
         _passwordController.clear();
         setState(() {
           _confirmationEmail = email;
@@ -1001,6 +1047,12 @@ class _AuthScreenState extends State<AuthScreen> {
         return;
       }
 
+      if (session['access_token'].toString().trim().isEmpty) {
+        throw Exception('Sign-in did not return a session. Please try again.');
+      }
+      await _saveLoginPreferences();
+      if (!mounted) return;
+      TextInput.finishAutofillContext(shouldSave: _offerPasswordSave);
       await widget.onSignedIn(
         KorlixAuthSession(
           accessToken: session['access_token'].toString(),
@@ -1073,7 +1125,12 @@ class _AuthScreenState extends State<AuthScreen> {
                         onSignIn: () => setState(() { _confirmationEmail = null; _isSignUp = false; }),
                         onChangeEmail: () => setState(() { _confirmationEmail = null; _isSignUp = true; _emailController.clear(); _passwordController.clear(); }),
                       )
-                    : Column(
+                    : AutofillGroup(
+                    key: ValueKey('auth-autofill-$_isSignUp'),
+                    onDisposeAction: AutofillContextAction.cancel,
+                    child: Material(
+                    color: Colors.transparent,
+                    child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (october) ...[
@@ -1107,7 +1164,18 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                       const SizedBox(height: 24),
                       TextField(
+                        key: const Key('auth-email'),
                         controller: _emailController,
+                        autofillHints: const [AutofillHints.username, AutofillHints.email],
+                        enabled: !_loading && !_resetLoading,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        textInputAction: TextInputAction.next,
+                        onSubmitted: (_) => _passwordFocus.requestFocus(),
+                        onChanged: (_) {
+                          _emailEdited = true;
+                          if (_preferencesReady && _rememberEmail) unawaited(_saveLoginPreferences());
+                        },
                         keyboardType: TextInputType.emailAddress,
                         style: TextStyle(color: skin.text),
                         decoration: InputDecoration(
@@ -1122,7 +1190,13 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                       const SizedBox(height: 14),
                       TextField(
+                        key: const Key('auth-password'),
                         controller: _passwordController,
+                        focusNode: _passwordFocus,
+                        autofillHints: [_isSignUp ? AutofillHints.newPassword : AutofillHints.password],
+                        enabled: !_loading && !_resetLoading,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _submit(),
                         obscureText: _obscurePassword,
                         keyboardType: TextInputType.visiblePassword,
                         autocorrect: false,
@@ -1154,6 +1228,36 @@ class _AuthScreenState extends State<AuthScreen> {
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      CheckboxListTile(
+                        key: const Key('remember-email'),
+                        value: _rememberEmail,
+                        onChanged: !_preferencesReady || _loading || _resetLoading ? null : (value) {
+                          setState(() => _rememberEmail = value ?? false);
+                          unawaited(_saveLoginPreferences());
+                        },
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text('Remember my email', style: TextStyle(color: skin.text, fontSize: 14)),
+                      ),
+                      CheckboxListTile(
+                        key: const Key('offer-password-save'),
+                        value: _offerPasswordSave,
+                        onChanged: !_preferencesReady || _loading || _resetLoading ? null : (value) {
+                          setState(() => _offerPasswordSave = value ?? false);
+                          unawaited(_saveLoginPreferences());
+                        },
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text('Offer to save password', style: TextStyle(color: skin.text, fontSize: 14)),
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _preferenceMessage ?? 'Your browser or password manager can save and autofill your password.',
+                          style: TextStyle(color: skin.mutedText, fontSize: 12, height: 1.35),
                         ),
                       ),
                       if (_error != null) ...[
@@ -1234,6 +1338,8 @@ class _AuthScreenState extends State<AuthScreen> {
                         onPressed: _loading
                             ? null
                             : () {
+                                TextInput.finishAutofillContext(shouldSave: false);
+                                _passwordController.clear();
                                 setState(() {
                                   _isSignUp = !_isSignUp;
                                   _obscurePassword = true;
@@ -1250,6 +1356,8 @@ class _AuthScreenState extends State<AuthScreen> {
                         ),
                       ),
                     ],
+                  ),
+                  ),
                   ),
                 ),
               ),

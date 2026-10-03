@@ -9,7 +9,9 @@ import 'package:ai_wiz_command_center/auth/korlix_welcome_confirmation.dart';
 import 'package:ai_wiz_command_center/theme/korlix_theme.dart';
 
 Future<void> credentials(WidgetTester tester) async {
+  await tester.ensureVisible(find.byType(TextField).first);
   await tester.enterText(find.byType(TextField).first, 'member@example.test');
+  await tester.ensureVisible(find.byType(TextField).last);
   await tester.enterText(find.byType(TextField).last, 'test-password');
 }
 
@@ -42,6 +44,7 @@ void main() {
           ),
         ),
       );
+      await tester.ensureVisible(find.text('New here? Create account'));
       await tester.tap(find.text('New here? Create account'));
       await tester.pumpAndSettle();
       await credentials(tester);
@@ -84,6 +87,7 @@ void main() {
         ),
       );
       await credentials(tester);
+      await tester.ensureVisible(find.text('Sign in'));
       await tester.tap(find.text('Sign in'));
       await tester.pumpAndSettle();
       expect(find.byType(KorlixWelcomeConfirmation), findsNothing);
@@ -111,6 +115,7 @@ void main() {
         ),
       );
       await credentials(tester);
+      await tester.ensureVisible(find.text('Sign in'));
       await tester.tap(find.text('Sign in'));
       await tester.pumpAndSettle();
       expect(find.byType(KorlixWelcomeConfirmation), findsOneWidget);

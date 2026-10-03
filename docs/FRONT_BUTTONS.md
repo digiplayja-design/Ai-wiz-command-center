@@ -68,6 +68,31 @@ the real sign-in/signup form with mocked HTTP, password visibility, small
 screens, keyboard insets and increased text size. Set `KORLIX_AUTH_REVIEW` and
 `KORLIX_FLUTTER_ROOT` to render its real-form phone/tablet screenshots.
 
+## Remembered login and password-manager support
+
+The login form has separate `Remember my email` and `Offer to save password`
+choices. Email remembrance is opt-in; disabling it removes the email from the
+device-local `korlix_login_preferences_v1` record. Only the email and these
+boolean preferences are stored there, independently of the authenticated
+session. Ordered writes prevent rapid checkbox changes from restoring an
+opted-out email. Storage failures do not prevent sign-in, and delayed loading
+cannot overwrite an email the user has already typed or autofilled.
+
+One cancellable `AutofillGroup` groups username/email with password (or
+`newPassword` during signup). A successful sign-in or accepted signup requests
+the OS/browser save flow before navigation or clearing the form, according to
+the user's preference. Failed attempts and abandoning the form never request
+a save. Turning the save offer off still permits existing credentials to
+autofill. Passwords are never saved by KORLIX in preferences; prompts and saved
+credentials are managed by the user's password manager. Native iOS automatic
+credential saving additionally requires associated-domain configuration and
+device validation; this web release does not claim that native setup.
+
+`test/login_preferences_test.dart` covers storage, opt-out, ordered writes and
+failure handling. `test/auth_remember_login_test.dart` covers actual login-form
+restoration, independent choices, autofill hints, successful/failed/cancelled
+flows and user-input preservation using mocked HTTP and platform messages.
+
 ## Verification
 
 Run `flutter test test/korlix_button_colors_test.dart test/korlix_action_button_test.dart test/chat_workspace_test.dart
