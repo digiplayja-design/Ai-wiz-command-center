@@ -8,13 +8,13 @@ import { registerSocialAlbums } from './albums.mjs';
 export function registerSocial(app, { database, requireUser, logger = console, env = process.env } = {}) {
   const callConfig = createSocialCallConfig({env,logger});
   logger.info?.('Social calling relay readiness', socialRelayReadiness(env));
-  const actions = new Set(['bootstrap', 'members', 'connections', 'messages', 'message', 'topics', 'topic', 'blocks', 'reports',
+  const actions = new Set(['bootstrap', 'members', 'member', 'wall', 'connections', 'messages', 'message', 'topics', 'topic', 'blocks', 'reports',
     'save_profile', 'presence', 'request', 'accept', 'decline', 'remove', 'block', 'unblock', 'send', 'read',
     'delete_message', 'create_topic', 'edit_topic', 'delete_topic', 'reply', 'edit_reply', 'delete_reply', 'report', 'moderate']);
   const chatActions = new Set(['messages', 'message', 'send']);
   const groupActions = new Set(['groups','group_create','group_details','group_invite','group_accept','group_decline','group_rename','group_remove','group_leave','group_messages','group_message','group_send','group_read','group_delete_message']);
   for (const action of groupActions) actions.add(action);
-  const reads = new Set(['bootstrap', 'members', 'connections', 'messages', 'message', 'topics', 'topic', 'blocks', 'reports']);
+  const reads = new Set(['bootstrap', 'members', 'member', 'wall', 'connections', 'messages', 'message', 'topics', 'topic', 'blocks', 'reports']);
   for (const action of ['groups','group_details','group_messages','group_message']) reads.add(action);
   const callActions = new Set(['call_config', 'call_inbox', 'call_start', 'call_accept', 'call_end', 'call_poll', 'call_signal']);
   for (const action of callActions) actions.add(action);
