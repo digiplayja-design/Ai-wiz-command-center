@@ -363,6 +363,41 @@ void main() {
       s.dispose();
     },
   );
+  test(
+    'background and stale tables cannot send moves or open a camera',
+    () async {
+      final s = Store(), io = MeshIo();
+      final c = DominoController(
+        client: s.client,
+        initial: s.table,
+        polling: false,
+        mediaFactory: () => DominoMedia(
+          io: io,
+          outputs: List.generate(4, (_) => media.Audio()),
+        ),
+      );
+      await c.initialize();
+      expect(c.myTurn, isTrue);
+      final requests = s.calls.length;
+      c.background();
+      expect(c.fresh, isFalse);
+      expect(c.myTurn, isFalse);
+      await c.move('play', tile: '0-3', side: 'left');
+      await c.startVideo();
+      expect(s.calls.length, requests);
+      expect(io.captureModes, isEmpty);
+      c.resume();
+      expect(c.fresh, isFalse);
+      await media.settleTrack();
+      expect(c.myTurn, isTrue);
+      c.updated = DateTime.now().subtract(const Duration(seconds: 15));
+      final refreshedRequests = s.calls.length;
+      await c.move('play', tile: '0-3', side: 'left');
+      expect(s.calls.length, refreshedRequests);
+      c.dispose();
+      s.dispose();
+    },
+  );
   for (final config in [
     (390.0, 844.0, 1.0, 4),
     (360.0, 640.0, 2.0, 4),

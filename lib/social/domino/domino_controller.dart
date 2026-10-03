@@ -34,7 +34,10 @@ class DominoController extends ChangeNotifier {
   String get me => '${table['me']}';
   bool get available => !closed && client.available;
   bool get fresh =>
-      updated != null && DateTime.now().difference(updated!).inSeconds < 12;
+      available &&
+      foreground &&
+      updated != null &&
+      DateTime.now().difference(updated!).inSeconds < 12;
   bool get myTurn =>
       table['phase'] == 'playing' && table['turn'] == me && fresh;
   List<SocialMap> get players => socialItems(table['players']);
@@ -69,7 +72,7 @@ class DominoController extends ChangeNotifier {
         (next['revision'] as num? ?? 0) >= (table['revision'] as num? ?? 0)) {
       table = next;
     }
-    updated = DateTime.now();
+    updated = foreground ? DateTime.now() : null;
     if (result['videoConfig'] != null) {
       videoConfig = socialMap(result['videoConfig']);
     }
@@ -137,7 +140,7 @@ class DominoController extends ChangeNotifier {
     String? side,
     bool? ready,
   }) async {
-    if (!available || busy) return;
+    if (!available || !fresh || busy) return;
     busy = true;
     error = null;
     _notify();
@@ -174,6 +177,7 @@ class DominoController extends ChangeNotifier {
 
   Future<void> startVideo() async {
     if (!available ||
+        !foreground ||
         connectingVideo ||
         media != null ||
         table['phase'] == 'closed') {
@@ -320,12 +324,15 @@ class DominoController extends ChangeNotifier {
 
   void background() {
     foreground = false;
+    updated = null;
     unawaited(stopVideo());
     _notify();
   }
 
   void resume() {
     foreground = true;
+    updated = null;
+    _notify();
     unawaited(sync());
   }
 

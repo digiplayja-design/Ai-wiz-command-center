@@ -7,6 +7,7 @@ import '../../theme/korlix_action_button.dart';
 import '../social_client.dart';
 import '../social_design.dart';
 import 'domino_controller.dart';
+import 'domino_solo.dart';
 import 'domino_tiles.dart';
 
 class DominoLobby extends StatefulWidget {
@@ -71,6 +72,138 @@ class _DominoLobbyState extends State<DominoLobby> {
       ),
     );
     if (mounted) await load();
+  }
+
+  Future<void> playComputer() async {
+    var difficulty = DominoDifficulty.standard;
+    final start = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => AlertDialog(
+          title: const Text('You vs. Computer'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'A seat is always ready. Choose your challenge and start a free practice game.',
+                ),
+                const SizedBox(height: 18),
+                for (final level in DominoDifficulty.values)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Semantics(
+                      button: true,
+                      selected: difficulty == level,
+                      inMutuallyExclusiveGroup: true,
+                      label: '${level.label} difficulty',
+                      child: InkWell(
+                        key: Key('domino-difficulty-${level.name}'),
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () => set(() => difficulty = level),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(13),
+                          decoration: BoxDecoration(
+                            color: difficulty == level
+                                ? korlixSkinOf(
+                                    ctx,
+                                  ).secondary.withValues(alpha: .14)
+                                : korlixSkinOf(ctx).panelSoft,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: difficulty == level
+                                  ? korlixSkinOf(ctx).secondary
+                                  : korlixSkinOf(ctx).border,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                difficulty == level
+                                    ? Icons.radio_button_checked_rounded
+                                    : Icons.radio_button_unchecked_rounded,
+                                size: 21,
+                                color: korlixSkinOf(ctx).secondary,
+                              ),
+                              const SizedBox(width: 11),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      level.label,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    Text(
+                                      switch (level) {
+                                        DominoDifficulty.easy =>
+                                          'Relaxed play while you learn the rules.',
+                                        DominoDifficulty.standard =>
+                                          'A balanced challenge for everyday play.',
+                                        DominoDifficulty.hard =>
+                                          'More strategic choices. Plan your next move.',
+                                      },
+                                      style: TextStyle(
+                                        color: korlixSkinOf(ctx).mutedText,
+                                        fontSize: 12,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 6),
+                Text(
+                  'Seven tiles each · No drawing · Free to play\nThis practice game stays on this device until you leave.',
+                  style: TextStyle(
+                    color: korlixSkinOf(ctx).mutedText,
+                    fontSize: 12,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const Key('domino-start-solo'),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Start playing'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (start != true || !mounted || !widget.client.available) return;
+    final controller = DominoSoloController(
+      client: widget.client,
+      playerName: '${widget.profile['name'] ?? 'You'}',
+      difficulty: difficulty,
+    );
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => DominoTableScreen(
+          client: widget.client,
+          initial: controller.table,
+          controller: controller,
+        ),
+      ),
+    );
   }
 
   Future<void> create() async {
@@ -198,7 +331,7 @@ class _DominoLobbyState extends State<DominoLobby> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'KORLIX SOCIAL  /  PLAY TOGETHER',
+                        'KORLIX SOCIAL  /  DOMINO CLUB',
                         style: TextStyle(
                           color: skin.secondary,
                           fontSize: 10,
@@ -217,7 +350,7 @@ class _DominoLobbyState extends State<DominoLobby> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Real friends. Live faces. One good game of dominoes.',
+                        'Your next good game starts here. Challenge the computer or bring your friends to the table.',
                         style: TextStyle(
                           color: skin.mutedText,
                           height: 1.5,
@@ -227,19 +360,43 @@ class _DominoLobbyState extends State<DominoLobby> {
                       const SizedBox(height: 20),
                       const DominoBoard(tiles: []),
                       const SizedBox(height: 20),
-                      KorlixActionButton(
-                        key: const Key('domino-create'),
-                        label: 'Create a table',
-                        icon: Icons.add_rounded,
-                        onPressed: busy || !widget.client.available
-                            ? null
-                            : create,
-                        expand: true,
-                        accent: skin.secondary,
+                      LayoutBuilder(
+                        builder: (_, box) {
+                          final together = box.maxWidth >= 600;
+                          Widget mode(bool solo) => SizedBox(
+                            width: together
+                                ? (box.maxWidth - 12) / 2
+                                : box.maxWidth,
+                            child: KorlixActionButton(
+                              key: Key(
+                                solo ? 'domino-play-computer' : 'domino-create',
+                              ),
+                              label: solo ? 'Play computer' : 'Create a table',
+                              subtitle: solo
+                                  ? '1 player · 3 difficulty levels'
+                                  : '2 or 4 players · Private invitations',
+                              icon: solo
+                                  ? Icons.smart_toy_rounded
+                                  : Icons.groups_rounded,
+                              onPressed: busy || !widget.client.available
+                                  ? null
+                                  : solo
+                                  ? playComputer
+                                  : create,
+                              expand: true,
+                              accent: solo ? skin.primary : skin.secondary,
+                            ),
+                          );
+                          return Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [mode(true), mode(false)],
+                          );
+                        },
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 14),
                       Text(
-                        '2 or 4 players · Live video & audio · Always free play',
+                        'Practice at your pace or play with live video & audio. Always free play.',
                         style: TextStyle(
                           color: skin.mutedText,
                           fontSize: 12,
@@ -362,10 +519,27 @@ class _DominoTableScreenState extends State<DominoTableScreen>
       widget.controller ??
       DominoController(client: widget.client, initial: widget.initial);
   String? tile;
+  bool sortByPips = false;
+  String? hintText;
   bool leaving = false, pop = false, inviting = false;
   KorlixSkinPalette get skin => korlixSkinOf(context);
-  List<String> get hand =>
-      (c.table['hand'] as List? ?? []).map((x) => '$x').toList();
+  bool get solo => c is DominoSoloController;
+  DominoSoloController? get soloController =>
+      solo ? c as DominoSoloController : null;
+  List<String> get hand {
+    final values = (c.table['hand'] as List? ?? []).map((x) => '$x').toList();
+    if (sortByPips) {
+      values.sort((a, b) {
+        final difference = _pips(b) - _pips(a);
+        return difference == 0 ? b.compareTo(a) : difference;
+      });
+    }
+    return values;
+  }
+
+  int _pips(String value) =>
+      value.split('-').fold(0, (n, v) => n + (int.tryParse(v) ?? 0));
+
   @override
   void initState() {
     super.initState();
@@ -377,7 +551,11 @@ class _DominoTableScreenState extends State<DominoTableScreen>
   void _changed() {
     if (mounted) {
       setState(() {
-        if (!hand.contains(tile)) tile = null;
+        if (!hand.contains(tile)) {
+          tile = null;
+          hintText = null;
+        }
+        if (!c.myTurn) hintText = null;
       });
     }
   }
@@ -411,9 +589,13 @@ class _DominoTableScreenState extends State<DominoTableScreen>
         await showDialog<bool>(
               context: context,
               builder: (ctx) => AlertDialog(
-                title: const Text('Leave this table?'),
+                title: Text(
+                  solo ? 'Leave this practice game?' : 'Leave this table?',
+                ),
                 content: Text(
-                  c.table['phase'] == 'playing'
+                  solo
+                      ? 'Your practice score and round will end. You can start another game any time.'
+                      : c.table['phase'] == 'playing'
                       ? 'Leaving ends this round for everyone. Your camera and microphone will stop.'
                       : 'Your camera and microphone will stop. If you are the host, this closes the table.',
                 ),
@@ -480,9 +662,9 @@ class _DominoTableScreenState extends State<DominoTableScreen>
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('Block dominoes'),
-      content: const SingleChildScrollView(
+      content: SingleChildScrollView(
         child: Text(
-          'Each player gets seven double-six tiles. With two players, unused tiles stay out of the round; there is no drawing.\n\nThe highest dealt double opens. If no double was dealt, the highest total tile opens. Play proceeds through the numbered seats.\n\nMatch a tile to either open end. Pass only when you have no legal move.\n\nFour-player teams use opposite seats: 1 + 3 versus 2 + 4. The first player out wins for their team. If everyone passes, the lowest combined remaining pip total wins; an equal total is a draw.\n\nThe winner earns the opponents’ remaining pip total. Wins and points stay at this table and have no cash value.\n\nEveryone selects Ready before the host deals each round. Cameras are optional. Leaving an active round closes the table.',
+          'Each player gets seven double-six tiles. With two players, unused tiles stay out of the round; there is no drawing.\n\nThe highest dealt double opens. If no double was dealt, the highest total tile opens. Play proceeds through the numbered seats.\n\nMatch a tile to either open end. Pass only when you have no legal move.\n\nFour-player teams use opposite seats: 1 + 3 versus 2 + 4. The first player out wins for their team. If everyone passes, the lowest combined remaining pip total wins; an equal total is a draw.\n\nThe winner earns the opponents’ remaining pip total. Wins and points stay at this table and have no cash value.\n\n${solo ? 'You are playing the computer on ${soloController!.difficulty.label}. The computer chooses from its own hand and public moves; it cannot see your hand. Hints suggest a legal move, not a guaranteed best move. Tap Next round to keep playing. Practice scores last until you leave.' : 'Everyone selects Ready before the host deals each round. Cameras are optional. Leaving an active round closes the table.'}',
         ),
       ),
       actions: [
@@ -797,35 +979,114 @@ class _DominoTableScreenState extends State<DominoTableScreen>
     final teams = (c.table['capacity'] as num?) == 4;
     final wins = socialMap(c.table['wins']),
         points = socialMap(c.table['points']);
-    return Wrap(
-      spacing: 10,
-      runSpacing: 8,
-      children: [
-        for (final key
-            in teams
-                ? ['team0', 'team1']
-                : c.players
-                      .where((p) => p['state'] == 'joined')
-                      .map((p) => '${p['id']}'))
-          Chip(
-            label: Text(
-              '${teams ? (key == 'team0' ? 'Seats 1 + 3' : 'Seats 2 + 4') : name(key)} · ${wins[key] ?? 0} wins · ${points[key] ?? 0} pts',
-              style: const TextStyle(fontSize: 11),
-            ),
-          ),
-      ],
+    final keys = teams
+        ? ['team0', 'team1']
+        : c.players
+              .where((p) => p['state'] == 'joined')
+              .map((p) => '${p['id']}')
+              .toList();
+    return LayoutBuilder(
+      builder: (_, box) {
+        final stacked =
+            box.maxWidth < 270 ||
+            MediaQuery.textScalerOf(context).scale(1) > 1.6;
+        return Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          children: [
+            for (var i = 0; i < keys.length; i++)
+              SizedBox(
+                width: stacked ? box.maxWidth : (box.maxWidth - 10) / 2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    gradient: LinearGradient(
+                      colors: [
+                        (i == 0
+                                ? const Color(0xFF198D8B)
+                                : const Color(0xFF885DD2))
+                            .withValues(alpha: skin.isLight ? .13 : .23),
+                        skin.panel,
+                      ],
+                    ),
+                    border: Border.all(color: skin.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        teams
+                            ? (keys[i] == 'team0'
+                                  ? 'Seats 1 + 3'
+                                  : 'Seats 2 + 4')
+                            : keys[i] == c.me
+                            ? 'You'
+                            : name(keys[i]),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        '${points[keys[i]] ?? 0} points',
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        '${wins[keys[i]] ?? 0} rounds won',
+                        style: TextStyle(color: skin.mutedText, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 
-  Widget game() {
+  Widget endChip(String label, Object? value, {required bool left}) =>
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: skin.panelSoft,
+          border: Border.all(color: skin.border),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              left ? Icons.west_rounded : Icons.east_rounded,
+              size: 16,
+              color: skin.secondary,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '$label: $value',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+      );
+
+  Widget game({bool includeScores = true}) {
     final board = socialItems(c.table['board']),
         result = socialMap(c.table['result']);
     final winner = result['winner'];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        scoreboard(),
-        const SizedBox(height: 12),
         if (c.table['phase'] == 'finished')
           Padding(
             padding: const EdgeInsets.only(bottom: 18),
@@ -841,6 +1102,8 @@ class _DominoTableScreenState extends State<DominoTableScreen>
                         ? 'Seats 1 + 3 win!'
                         : winner == 'team1'
                         ? 'Seats 2 + 4 win!'
+                        : winner == c.me
+                        ? 'You win!'
                         : '${name(winner)} wins!',
                     style: const TextStyle(
                       fontSize: 24,
@@ -851,45 +1114,136 @@ class _DominoTableScreenState extends State<DominoTableScreen>
                   Text(
                     '${result['reason'] == 'blocked' ? 'The table was blocked.' : 'All tiles played.'} ${result['points'] ?? 0} points this round.',
                   ),
+                  if (socialMap(result['totals']).isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'Pips remaining',
+                      style: TextStyle(
+                        color: skin.mutedText,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 5,
+                      children: [
+                        for (final entry in socialMap(result['totals']).entries)
+                          Text(
+                            '${entry.key == c.me
+                                ? 'You'
+                                : entry.key == 'team0'
+                                ? 'Seats 1 + 3'
+                                : entry.key == 'team1'
+                                ? 'Seats 2 + 4'
+                                : name(entry.key)}: ${entry.value}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 7),
                   Text(
-                    'Select Ready for another round.',
+                    solo
+                        ? 'Ready for a rematch? Your score carries into the next round.'
+                        : 'Select Ready for another round.',
                     style: TextStyle(color: skin.mutedText),
                   ),
                 ],
               ),
             ),
           ),
-        Text(
-          'ROUND ${c.table['round']}  /  ${c.table['phase'] == 'finished'
-              ? 'COMPLETE'
-              : c.myTurn
-              ? 'YOUR TURN'
-              : '${name(c.table['turn'])}’S TURN'}',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.3,
-            color: c.myTurn ? skin.success : skin.secondary,
-          ),
-        ),
-        const SizedBox(height: 12),
-        DominoBoard(tiles: board),
-        const SizedBox(height: 12),
-        if (board.isNotEmpty)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Left end: ${board.first['a']}',
-                style: TextStyle(color: skin.mutedText),
+        Container(
+          key: const Key('domino-turn-status'),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: (c.myTurn ? skin.success : skin.secondary).withValues(
+              alpha: .13,
+            ),
+            borderRadius: BorderRadius.circular(17),
+            border: Border.all(
+              color: (c.myTurn ? skin.success : skin.secondary).withValues(
+                alpha: .35,
               ),
-              Text(
-                'Right end: ${board.last['b']}',
-                style: TextStyle(color: skin.mutedText),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                c.table['phase'] == 'finished'
+                    ? Icons.emoji_events_rounded
+                    : c.myTurn
+                    ? Icons.touch_app_rounded
+                    : Icons.hourglass_top_rounded,
+                color: c.myTurn ? skin.success : skin.secondary,
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'ROUND ${c.table['round']}${solo ? ' · ${soloController!.difficulty.label.toUpperCase()}' : ''}',
+                      style: TextStyle(
+                        color: skin.mutedText,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      c.table['phase'] == 'finished'
+                          ? 'Round complete'
+                          : c.myTurn
+                          ? 'Your turn'
+                          : soloController?.thinking == true
+                          ? 'Computer is thinking…'
+                          : '${name(c.table['turn'])}’s turn',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (c.myTurn &&
+                        MediaQuery.textScalerOf(context).scale(1) <= 1.4 &&
+                        MediaQuery.sizeOf(context).height >= 700)
+                      Text(
+                        socialItems(c.table['legal']).isEmpty
+                            ? 'No matching tiles. Tap Pass below.'
+                            : board.isEmpty
+                            ? 'Play the highlighted opening tile.'
+                            : 'Tap a highlighted tile, then choose an end.',
+                        style: TextStyle(
+                          color: skin.mutedText,
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ],
           ),
+        ),
+        const SizedBox(height: 12),
+        DominoBoard(key: const Key('domino-board'), tiles: board),
+        const SizedBox(height: 12),
+        if (board.isNotEmpty)
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              endChip('Left end', board.first['a'], left: true),
+              endChip('Right end', board.last['b'], left: false),
+            ],
+          ),
+        if (includeScores) ...[const SizedBox(height: 12), scoreboard()],
         const SizedBox(height: 12),
         Semantics(
           liveRegion: true,
@@ -898,6 +1252,32 @@ class _DominoTableScreenState extends State<DominoTableScreen>
             style: TextStyle(color: skin.mutedText, fontSize: 13),
           ),
         ),
+        if (solo && (c.table['history'] as List? ?? []).length > 1)
+          Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              key: const Key('domino-recent-moves'),
+              tilePadding: EdgeInsets.zero,
+              dense: true,
+              title: const Text(
+                'Recent moves',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              ),
+              children: [
+                for (final move in (c.table['history'] as List).reversed)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '$move',
+                        style: TextStyle(color: skin.mutedText, fontSize: 12),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         const SizedBox(height: 10),
         Wrap(
           spacing: 10,
@@ -916,6 +1296,25 @@ class _DominoTableScreenState extends State<DominoTableScreen>
     );
   }
 
+  void hint() {
+    final legal = socialItems(c.table['legal']);
+    if (!c.myTurn || c.busy) return;
+    if (legal.isEmpty) {
+      setState(() => hintText = 'No legal move. Pass to the next player.');
+      return;
+    }
+    legal.sort((a, b) => _pips('${b['tile']}') - _pips('${a['tile']}'));
+    final suggestion = legal.first;
+    final value = '${suggestion['tile']}';
+    final side = '${suggestion['side']}';
+    setState(() {
+      tile = value;
+      hintText = socialItems(c.table['board']).isEmpty
+          ? 'Open with $value. This is the required starting tile.'
+          : 'Try $value on the $side. This legal move sheds ${_pips(value)} pips.';
+    });
+  }
+
   Widget handBar() {
     final phase = c.table['phase'],
         legal = socialItems(c.table['legal']),
@@ -931,7 +1330,17 @@ class _DominoTableScreenState extends State<DominoTableScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (phase == 'waiting' || phase == 'finished')
+            if (solo && (phase == 'waiting' || phase == 'finished'))
+              KorlixActionButton(
+                key: const Key('domino-next-round'),
+                label: 'Next round',
+                icon: Icons.replay_rounded,
+                onPressed: c.busy || !c.available
+                    ? null
+                    : () => c.move('start'),
+                expand: true,
+              )
+            else if (phase == 'waiting' || phase == 'finished')
               Wrap(
                 spacing: 12,
                 runSpacing: 10,
@@ -980,13 +1389,39 @@ class _DominoTableScreenState extends State<DominoTableScreen>
                 children: [
                   Expanded(
                     child: Text(
-                      active ? 'YOUR HAND · TAP A GLOWING TILE' : 'YOUR HAND',
+                      'YOUR HAND · ${hand.length} TILES · ${hand.fold<int>(0, (n, value) => n + _pips(value))} PIPS',
                       style: TextStyle(
                         color: active ? skin.success : skin.mutedText,
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 1,
                       ),
+                    ),
+                  ),
+                  IconButton(
+                    key: const Key('domino-hint'),
+                    tooltip: 'Show a legal move',
+                    onPressed: active ? hint : null,
+                    icon: const Icon(Icons.lightbulb_outline_rounded, size: 20),
+                    constraints: const BoxConstraints(
+                      minWidth: 44,
+                      minHeight: 44,
+                    ),
+                  ),
+                  IconButton(
+                    key: const Key('domino-sort'),
+                    tooltip: sortByPips
+                        ? 'Use dealt order'
+                        : 'Sort by highest pips',
+                    icon: Icon(
+                      Icons.sort_rounded,
+                      color: sortByPips ? skin.secondary : skin.mutedText,
+                      size: 20,
+                    ),
+                    onPressed: () => setState(() => sortByPips = !sortByPips),
+                    constraints: const BoxConstraints(
+                      minWidth: 44,
+                      minHeight: 44,
                     ),
                   ),
                   if (c.busy)
@@ -1001,15 +1436,16 @@ class _DominoTableScreenState extends State<DominoTableScreen>
               LayoutBuilder(
                 builder: (_, box) {
                   final compact = MediaQuery.sizeOf(context).height < 500;
-                  final width = math.min(
-                    compact ? 34.0 : 48.0,
-                    (box.maxWidth - 36) / 7,
+                  final width = math.max(
+                    44.0,
+                    math.min(compact ? 44.0 : 48.0, (box.maxWidth - 36) / 7),
                   );
-                  return Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  return Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 6,
+                    runSpacing: 8,
                     children: [
-                      for (final value in hand) ...[
-                        if (value != hand.first) const SizedBox(width: 6),
+                      for (final value in hand)
                         DominoTile(
                           key: Key('domino-tile-$value'),
                           a: int.parse(value.split('-')[0]),
@@ -1019,14 +1455,29 @@ class _DominoTableScreenState extends State<DominoTableScreen>
                           playable:
                               active && legal.any((m) => m['tile'] == value),
                           onTap: active && legal.any((m) => m['tile'] == value)
-                              ? () => setState(() => tile = value)
+                              ? () => setState(() {
+                                  tile = value;
+                                  hintText = null;
+                                })
                               : null,
                         ),
-                      ],
                     ],
                   );
                 },
               ),
+              if (hintText != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      hintText!,
+                      key: const Key('domino-hint-text'),
+                      style: TextStyle(color: skin.secondary, fontSize: 11),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
               const SizedBox(height: 12),
               if (active && legal.isEmpty)
                 KorlixActionButton(
@@ -1043,6 +1494,10 @@ class _DominoTableScreenState extends State<DominoTableScreen>
                     Expanded(
                       child: FilledButton.icon(
                         key: const Key('domino-left'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF086B59),
+                          foregroundColor: Colors.white,
+                        ),
                         onPressed:
                             active &&
                                 legal.any(
@@ -1059,6 +1514,10 @@ class _DominoTableScreenState extends State<DominoTableScreen>
                     Expanded(
                       child: FilledButton.icon(
                         key: const Key('domino-right'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF6B37B2),
+                          foregroundColor: Colors.white,
+                        ),
                         onPressed:
                             active &&
                                 legal.any(
@@ -1082,7 +1541,9 @@ class _DominoTableScreenState extends State<DominoTableScreen>
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  'Reconnecting to the table…',
+                  solo
+                      ? 'Practice paused. Return to resume.'
+                      : 'Reconnecting to the table…',
                   style: TextStyle(color: skin.premium, fontSize: 12),
                 ),
               ),
@@ -1108,10 +1569,16 @@ class _DominoTableScreenState extends State<DominoTableScreen>
         ),
         actions: [
           IconButton(
-            tooltip: 'Refresh table',
-            onPressed: () => c.sync(),
-            icon: const Icon(Icons.refresh_rounded),
+            tooltip: 'Game rules',
+            onPressed: rules,
+            icon: const Icon(Icons.help_outline_rounded),
           ),
+          if (!solo)
+            IconButton(
+              tooltip: 'Refresh table',
+              onPressed: () => c.sync(),
+              icon: const Icon(Icons.refresh_rounded),
+            ),
           IconButton(
             tooltip: 'Leave table',
             onPressed: leaving ? null : leave,
@@ -1132,7 +1599,16 @@ class _DominoTableScreenState extends State<DominoTableScreen>
                   constraints: const BoxConstraints(maxWidth: 1000),
                   child: LayoutBuilder(
                     builder: (_, box) {
+                      final landscape =
+                          box.maxWidth > 650 && box.maxHeight < 500;
+                      final scrollHand =
+                          (!solo && landscape) ||
+                          (!landscape &&
+                              (box.maxHeight < 600 ||
+                                  MediaQuery.textScalerOf(context).scale(1) >
+                                      1.4));
                       final board = ListView(
+                        key: const Key('domino-game-scroll'),
                         padding: const EdgeInsets.all(16),
                         children: [
                           if (c.videoError != null ||
@@ -1180,17 +1656,35 @@ class _DominoTableScreenState extends State<DominoTableScreen>
                           else if (c.table['phase'] == 'waiting')
                             waiting()
                           else
-                            game(),
+                            game(includeScores: !scrollHand),
+                          if (scrollHand && c.table['phase'] != 'closed') ...[
+                            const SizedBox(height: 16),
+                            handBar(),
+                            const SizedBox(height: 16),
+                            scoreboard(),
+                          ],
                         ],
                       );
-                      final landscape =
-                          box.maxWidth > 650 && box.maxHeight < 500;
                       final playing = Column(
                         children: [
                           Expanded(child: board),
-                          if (c.table['phase'] != 'closed') handBar(),
+                          if (!scrollHand && c.table['phase'] != 'closed')
+                            handBar(),
                         ],
                       );
+                      if (solo && landscape && c.table['phase'] != 'closed') {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: board),
+                            SizedBox(
+                              width: math.min(360.0, box.maxWidth * .46),
+                              child: SingleChildScrollView(child: handBar()),
+                            ),
+                          ],
+                        );
+                      }
+                      if (solo) return playing;
                       if (landscape) {
                         return Row(
                           crossAxisAlignment: CrossAxisAlignment.start,

@@ -619,7 +619,7 @@ class _SocialScreenState extends State<SocialScreen>
                   ),
                   const SizedBox(height: 12),
                   KorlixActionButton(
-                    label: 'Dominoes · play with video',
+                    label: 'Dominoes · solo or friends',
                     icon: Icons.casino_outlined,
                     onPressed: _openDominoes,
                     tile:

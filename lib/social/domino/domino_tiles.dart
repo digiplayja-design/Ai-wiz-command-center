@@ -152,7 +152,7 @@ class DominoBoard extends StatelessWidget {
       return Semantics(
         label: tiles.isEmpty
             ? 'The domino table is empty.'
-            : 'Domino chain: ${tiles.map((t) => '${t['a']}-${t['b']}').join(', ')}',
+            : 'Left open end ${tiles.first['a']}. Right open end ${tiles.last['b']}. Domino chain: ${tiles.map((t) => '${t['a']}-${t['b']}').join(', ')}',
         child: Container(
           width: double.infinity,
           height: math.max(190, rows * 44.0 + 32),
@@ -256,6 +256,42 @@ class _BoardPainter extends CustomPainter {
         (t[reverse ? 'a' : 'b'] as num).toInt(),
         horizontal: true,
       ).paint(c, Size(w, h));
+      if (i == 0 || i == tiles.length - 1) {
+        c.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(-2, -2, w + 4, h + 4),
+            const Radius.circular(8),
+          ),
+          Paint()
+            ..color = i == 0 ? const Color(0xFF65E7C6) : const Color(0xFFC3A1FF)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2,
+        );
+        void endpoint(String label, Offset point, Color color) {
+          c.drawCircle(point, 7, Paint()..color = color);
+          final text = TextPainter(
+            text: TextSpan(
+              text: label,
+              style: const TextStyle(
+                color: Color(0xFF112630),
+                fontFamily: 'Roboto',
+                fontSize: 9,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            textDirection: TextDirection.ltr,
+          )..layout();
+          text.paint(c, point - Offset(text.width / 2, text.height / 2));
+          text.dispose();
+        }
+
+        if (i == 0) {
+          endpoint('L', const Offset(0, 0), const Color(0xFF65E7C6));
+        }
+        if (i == tiles.length - 1) {
+          endpoint('R', Offset(reverse ? 0 : w, h), const Color(0xFFC3A1FF));
+        }
+      }
       c.restore();
     }
   }
