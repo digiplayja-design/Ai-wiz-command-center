@@ -7,6 +7,7 @@ Sign-in, account/session isolation, third-party AI consent and the ordinary `/ap
 ## User workflows
 
 - Named entries, searchable title/category/body, favorites and recent-first ordering.
+- First-time users see an editable box immediately. New entry, templates and duplicate use IDs that work in both the web app and native apps.
 - New, duplicate, delete with Undo, copy one entry or all filtered results.
 - Meeting, interview and field-note starters for VoiceScribe; follow-up, project-update and support templates for Copy Box.
 - `{{field}}` placeholders: fill once, preview, copy without changing the saved template.
@@ -25,6 +26,10 @@ Account session changes clear the editor, close workspace dialogs, cancel dictat
 ## Verification
 
 `flutter test --no-pub test/text_workspace`
+
+`DART_BIN=/path/to/dart node --test test/web/text_workspace_ids_test.cjs`
+
+The compiled JavaScript regression covers the web-specific failure that previously prevented creating a box: `1 << 32` becomes zero in JavaScript and is not a valid random-number bound.
 
 Covers account/tool isolation, explicit non-destructive import, corrupt-data preservation, templates, bounded history, autosave/search, AI review, signout/late AI responses, repeat dictation/late-result rejection, final-result ordering and narrow phone layout.
 

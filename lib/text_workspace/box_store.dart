@@ -1,9 +1,8 @@
 import 'dart:convert';
-import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'box_id.dart';
 
-String boxId() =>
-    '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
+export 'box_id.dart';
 
 class SavedBox {
   SavedBox({

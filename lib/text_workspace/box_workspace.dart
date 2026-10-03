@@ -51,7 +51,10 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
     widget.sessionChanges.addListener(_checkSession);
     try {
       _boxes = widget.store.load();
-      if (_boxes.isNotEmpty) _select(_boxes.first);
+      // Open a usable editor immediately on a first visit. This empty starter
+      // is only persisted when the user edits it or creates another entry.
+      if (_boxes.isEmpty) _boxes.add(SavedBox());
+      _select(_boxes.first);
     } catch (_) {
       _loadFailed = true;
       _status =
@@ -159,14 +162,18 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
   }) async {
     await _stop();
     if (!mounted || !_valid) return;
-    final box = SavedBox(title: title, text: text, folder: folder);
-    setState(() {
-      _boxes.insert(0, box);
-      _select(box);
-      _query = '';
-      _favorites = false;
-    });
-    await _save();
+    try {
+      final box = SavedBox(title: title, text: text, folder: folder);
+      setState(() {
+        _boxes.insert(0, box);
+        _select(box);
+        _query = '';
+        _favorites = false;
+      });
+      await _save();
+    } catch (_) {
+      _message('The new entry could not be opened. Please try again.');
+    }
   }
 
   Future<void> _copy(String value) async {

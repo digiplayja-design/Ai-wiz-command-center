@@ -5264,6 +5264,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   bool _improvePictureStudioOpening = false;
   bool _logoStudioOpening = false;
   bool _emailEnhancerOpening = false;
+  bool _textWorkspaceOpening = false;
   String _pendingChatPrompt = '';
   bool _pendingChatIsImage = false;
   String? _pendingChatTopicId;
@@ -9955,14 +9956,14 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       return;
     }
 
-    if (_loading) {
-      return;
-    }
-
     if (tool == 'Voice-scribe' || tool == 'Copy Box') {
       unawaited(_openUtilityWorkspace(
         tool == 'Voice-scribe' ? 'voice_scribe' : 'copybox',
       ));
+      return;
+    }
+
+    if (_loading) {
       return;
     }
 
@@ -10475,6 +10476,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   Future<void> _openSavedTextWorkspace(bool voice) async {
+    if (!mounted || _textWorkspaceOpening) return;
     String? scope({bool session = false}) {
       try {
         final token = _authHeaders().entries.firstWhere((e) => e.key.toLowerCase() == 'authorization').value.split(' ').last;
@@ -10489,9 +10491,11 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       await _showKorlixNotice(title: 'Sign in required', message: 'Sign in to open your saved text workspace.');
       return;
     }
-    final preferences = await SharedPreferences.getInstance();
-    if (!mounted || scope(session: true) != session) return;
-    await Navigator.of(context).push<void>(MaterialPageRoute(builder: (workspaceContext) => BoxWorkspace(
+    _textWorkspaceOpening = true;
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      if (!mounted || scope(session: true) != session) return;
+      final route = MaterialPageRoute<void>(builder: (workspaceContext) => BoxWorkspace(
       store: BoxStore(preferences, account, voice),
       sessionChanges: kKorlixAuthRevision,
       sessionValid: () => scope(session: true) == session,
@@ -10508,7 +10512,19 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         if (scope(session: true) != session) throw StateError('Session changed');
         return result;
       },
-    )));
+      ));
+      await Navigator.of(context).push(route);
+      await route.completed;
+    } catch (_) {
+      if (mounted && scope(session: true) == session) {
+        await _showKorlixNotice(
+          title: '${voice ? 'VoiceScribe' : 'Copy Box'} could not open',
+          message: 'Please try opening the workspace again. Your saved entries have not been removed.',
+        );
+      }
+    } finally {
+      _textWorkspaceOpening = false;
+    }
   }
 
   Future<void> _openCustomAccessFeature(String featureKey) async {
@@ -10865,13 +10881,13 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   // KORLIX_CUSTOM_ACCESS_FRONTEND_V1_END
 
   Future<void> _openUtilityWorkspace(String featureKey) async {
-    if (_loading) return;
     if (_isIncludedTextWorkspace(featureKey)) {
       await _openSavedTextWorkspace(
         featureKey.trim().toLowerCase().replaceAll(RegExp(r'[\s_-]'), '') == 'voicescribe',
       );
       return;
     }
+    if (_loading) return;
     if (_customAccessLoading) {
       return;
     }
@@ -11195,7 +11211,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                   selected: selected,
                   accent: selected ? skin.success : statusColor,
                   size: KorlixButtonSize.compact,
-                  onPressed: _loading || (_customAccessLoading && !_isIncludedTextWorkspace(tool))
+                  onPressed: (_loading || _customAccessLoading) && !_isIncludedTextWorkspace(tool)
                       ? null
                       : () => _selectUtilityTool(tool),
                 ),
@@ -13305,7 +13321,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       tile: true, selected: selected, locked: locked,
     );
     Widget toolTile(String label) => tile(label, korlixToolIcon(label),
-      _loading || (_customAccessLoading && !_isIncludedTextWorkspace(label)) ? null : () => _selectUtilityTool(label));
+      (_loading || _customAccessLoading) && !_isIncludedTextWorkspace(label) ? null : () => _selectUtilityTool(label));
     bool businessAction(QuickAction action) => const {
       'create an app', 'email enhancer', 'negocios', 'crear plan', 'ideas de contenido', 'idées contenu',
     }.contains(action.label.toLowerCase());

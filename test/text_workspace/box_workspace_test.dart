@@ -129,6 +129,7 @@ void main() {
     FakeSpeech? speech,
     bool Function()? valid,
     Future<String> Function(String, String)? rewrite,
+    List<SavedBox>? initialBoxes,
   }) async {
     tester.view.resetPhysicalSize();
     tester.view.physicalSize = const Size(1100, 1000);
@@ -137,7 +138,11 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final prefs = await SharedPreferences.getInstance();
     final store = BoxStore(prefs, 'a', voice);
-    await store.save([SavedBox(title: 'First note', text: 'Original')]);
+    if (initialBoxes == null || initialBoxes.isNotEmpty) {
+      await store.save(
+        initialBoxes ?? [SavedBox(title: 'First note', text: 'Original')],
+      );
+    }
     final revision = ValueNotifier(0);
     await tester.pumpWidget(
       MaterialApp(
@@ -153,6 +158,85 @@ void main() {
     await tester.pumpAndSettle();
     return (store, revision);
   }
+
+  for (final voice in [false, true]) {
+    final name = voice ? 'VoiceScribe' : 'Copy Box';
+    testWidgets('$name opens an editable first box without another tap', (
+      tester,
+    ) async {
+      final (store, _) = await open(
+        tester,
+        voice: voice,
+        speech: FakeSpeech(),
+        initialBoxes: [],
+      );
+      expect(find.widgetWithText(AppBar, name), findsOneWidget);
+      final editor = find.widgetWithText(
+        TextField,
+        voice ? 'Transcript / notes' : 'Saved text',
+      );
+      expect(editor, findsOneWidget);
+      expect(store.load(), isEmpty);
+      await tester.enterText(editor, 'My first saved box');
+      await tester.pumpAndSettle();
+      expect(store.load().single.text, 'My first saved box');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('$name can create, duplicate and open a template', (
+      tester,
+    ) async {
+      final (store, _) = await open(tester, voice: voice, speech: FakeSpeech());
+      final originalId = store.load().single.id;
+      await tester.tap(find.text('New entry'));
+      await tester.pumpAndSettle();
+      expect(find.text('2 entries'), findsOneWidget);
+      final editor = find.widgetWithText(
+        TextField,
+        voice ? 'Transcript / notes' : 'Saved text',
+      );
+      await tester.enterText(editor, 'New content');
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Duplicate'));
+      await tester.tap(find.text('Duplicate'));
+      await tester.pumpAndSettle();
+      expect(store.load().where((b) => b.text == 'New content').length, 2);
+      await tester.tap(find.text('Templates'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(voice ? 'Meeting notes' : 'Client follow-up'));
+      await tester.pumpAndSettle();
+      final saved = store.load();
+      expect(saved.length, 4);
+      expect(saved.map((b) => b.id).toSet().length, 4);
+      expect(saved.singleWhere((b) => b.id == originalId).text, 'Original');
+      expect(saved.first.text, contains(voice ? 'Discussion:' : '{{client}}'));
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('corrupt saved boxes do not become an editable empty starter', (
+    tester,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final store = BoxStore(prefs, 'a', false);
+    await prefs.setString(store.key, 'broken');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BoxWorkspace(
+          store: store,
+          sessionChanges: ValueNotifier(0),
+          sessionValid: () => true,
+          rewrite: (a, b) async => b,
+          speech: FakeSpeech(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Saved data could not be read'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('New entry'), findsNothing);
+    expect(prefs.getString(store.key), 'broken');
+  });
 
   testWidgets('edits save and search filters the entry list', (tester) async {
     final (store, _) = await open(tester);

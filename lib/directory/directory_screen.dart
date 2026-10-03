@@ -19,7 +19,7 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
   DirJson _me = {}, _data = {};
   final Map<String, DirJson> _unsaved = {};
   List<DirJson> _businesses = [], _queue = [];
-  String? _id, _error;
+  String? _id, _error, _notice;
   String _adminQuery = '';
   bool _busy = false, _locked = false;
   bool get _admin => _me['isAdmin'] == true;
@@ -58,6 +58,7 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
       _businesses = [];
       _queue = [];
       _id = null;
+      _error = _notice = null;
     });
   }
 
@@ -66,6 +67,7 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
     setState(() {
       _busy = true;
       _error = null;
+      _notice = null;
     });
     try {
       await task();
@@ -143,6 +145,66 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
 
   String get _publicUrl =>
       'https://www.korlixdeveloper.com/business-directory/?business=${Uri.encodeComponent(_business['slug'] ?? '')}';
+
+  void _acceptBusiness(DirJson business) {
+    if (!mounted || _locked) return;
+    if (business['id'] is! String || business['version'] is! num) {
+      throw const DirectoryException(
+        'Refresh to check whether your listing was saved before retrying.',
+      );
+    }
+    setState(() {
+      final same = _id == business['id'];
+      _id = business['id'];
+      _data = {...(same ? _data : <String, dynamic>{}), 'business': business};
+      _businesses = [
+        for (final b in _businesses)
+          if (b['id'] != _id) b,
+        business,
+      ];
+    });
+  }
+
+  void _announce(String message) {
+    if (!mounted || _locked) return;
+    setState(() => _notice = message);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _refreshAfterWrite() async {
+    try {
+      await _load();
+    } catch (_) {
+      if (mounted && !_locked) {
+        setState(
+          () => _error =
+              'Your change was saved, but the directory could not refresh. Tap Refresh to update the screen.',
+        );
+      }
+    }
+  }
+
+  String _listingLabel(DirJson business) => switch (business['state']) {
+    'pending' =>
+      business['published'] == null
+          ? 'Awaiting listing review'
+          : 'Updates awaiting review',
+    'published' => 'Live in the directory',
+    'needs_changes' => 'Changes requested',
+    'hidden' => 'Hidden from the directory',
+    _ => business['published'] != null ? 'Draft updates saved' : 'Draft saved',
+  };
+
+  String _verificationLabel(dynamic state) => switch (state) {
+    'pending' => 'Application awaiting review',
+    'approved' => 'Ownership approved',
+    'needs_changes' => 'Application needs changes',
+    'revoked' => 'Approval withdrawn',
+    _ => 'Not requested',
+  };
+
   Future<void> _edit({bool create = false}) async {
     final recoveryKey = create ? 'new' : _id!;
     final recovery = _unsaved[recoveryKey];
@@ -192,16 +254,81 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
         : dirRows(
             _data['assets'],
           ).where((a) => a['purpose'] == 'photo').toList();
+    final form = GlobalKey<FormState>();
+    bool consent = false, formFinished = false;
+    String? formError;
+    String? validate(String field, String? raw) {
+      final value = (raw ?? '').trim();
+      if (['name', 'owner_name', 'description'].contains(field) &&
+          value.isEmpty) {
+        return 'Please complete this field.';
+      }
+      const limits = {
+        'specialties': 300,
+        'address': 250,
+        'service_area': 250,
+        'languages': 200,
+        'accessibility': 300,
+      };
+      if (limits[field] != null && value.length > limits[field]!) {
+        return 'Use ${limits[field]} characters or fewer.';
+      }
+      if (field == 'phone') {
+        if (value.isEmpty && controls['email']!.text.trim().isEmpty) {
+          return 'Add a business phone or contact email.';
+        }
+        if (value.isNotEmpty &&
+            !RegExp(
+              r'^[+\d() .x-]{5,40}$',
+              caseSensitive: false,
+            ).hasMatch(value)) {
+          return 'Enter a valid business phone number.';
+        }
+      }
+      if (field == 'email' &&
+          value.isNotEmpty &&
+          !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value)) {
+        return 'Enter a valid contact email.';
+      }
+      if (field == 'city' &&
+          value.isEmpty &&
+          controls['service_area']!.text.trim().isEmpty) {
+        return 'Add a city or service area.';
+      }
+      if (['website', 'social'].contains(field) && value.isNotEmpty) {
+        final uri = Uri.tryParse(value);
+        if (uri == null ||
+            !['http', 'https'].contains(uri.scheme) ||
+            uri.host.isEmpty ||
+            uri.userInfo.isNotEmpty) {
+          return 'Use a complete public http:// or https:// address.';
+        }
+      }
+      if (field == 'offer_expires' &&
+          controls['offer_text']!.text.trim().isNotEmpty &&
+          (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value) ||
+              DateTime.tryParse(value) == null)) {
+        return 'Use an offer expiry date in YYYY-MM-DD format.';
+      }
+      return null;
+    }
+
     try {
       final result = await _dialog<DirJson>(
         (c) => StatefulBuilder(
           builder: (c, update) => AlertDialog(
+            scrollable: true,
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 20,
+            ),
             title: Text(
               create ? 'Add your business — free' : 'Edit business listing',
             ),
             content: SizedBox(
               width: 650,
-              child: SingleChildScrollView(
+              child: Form(
+                key: form,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -229,8 +356,10 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
                     for (final e in fields.entries)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 7),
-                        child: TextField(
+                        child: TextFormField(
+                          key: ValueKey('directory-field-${e.key}'),
                           controller: controls[e.key],
+                          validator: (value) => validate(e.key, value),
                           maxLength: e.key == 'description'
                               ? 2000
                               : e.key == 'hours'
@@ -282,7 +411,38 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
                         ),
                     ],
                     const Text(
-                      'Save a draft first, upload company pictures, then submit for review. Basic listings show up to 3 photos; active verified members can show 12.',
+                      'Company photos are optional. You can save a draft to upload pictures first, or submit your free listing now. Basic listings show up to 3 photos; active verified members can show 12.',
+                    ),
+                    const SizedBox(height: 12),
+                    if (formError != null)
+                      Semantics(
+                        liveRegion: true,
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            formError!,
+                            style: TextStyle(
+                              color: Theme.of(c).colorScheme.error,
+                            ),
+                          ),
+                        ),
+                      ),
+                    CheckboxListTile(
+                      key: const ValueKey('directory-public-consent'),
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      titleAlignment: ListTileTitleAlignment.top,
+                      value: consent,
+                      title: const Text(
+                        'I am authorized to publish this listing.',
+                      ),
+                      subtitle: const Text(
+                        'Free listing review does not require a verified badge or payment.',
+                      ),
+                      onChanged: (value) => update(() {
+                        consent = value == true;
+                        formError = null;
+                      }),
                     ),
                   ],
                 ),
@@ -290,53 +450,119 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(c),
+                onPressed: () {
+                  if (formFinished) return;
+                  formFinished = true;
+                  Navigator.pop(c);
+                },
                 child: const Text('Cancel'),
               ),
-              FilledButton(
-                onPressed: () {
-                  final d = <String, dynamic>{
-                    for (final k in fields.keys)
-                      if (![
-                        'owner_name',
-                        'offer_text',
-                        'offer_expires',
-                      ].contains(k))
-                        k: controls[k]!.text.trim(),
-                    'category': category,
-                    'photos': photos,
-                    'offer': controls['offer_text']!.text.trim().isEmpty
-                        ? null
-                        : {
-                            'text': controls['offer_text']!.text.trim(),
-                            'expires': controls['offer_expires']!.text.trim(),
-                          },
-                  };
-                  Navigator.pop(c, {
-                    'details': d,
-                    'owner_name': controls['owner_name']!.text.trim(),
-                  });
-                },
-                child: const Text('Save draft'),
-              ),
+              for (final submit in [false, true])
+                FilledButton.tonal(
+                  key: ValueKey(
+                    submit ? 'directory-submit-free' : 'directory-save-draft',
+                  ),
+                  style: submit
+                      ? FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF146C43),
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(0, 48),
+                        )
+                      : null,
+                  onPressed: () {
+                    if (formFinished) return;
+                    if (form.currentState?.validate() != true) {
+                      update(
+                        () => formError =
+                            'Check the highlighted fields. Your information is still here.',
+                      );
+                      return;
+                    }
+                    if (submit && !consent) {
+                      update(
+                        () => formError =
+                            'Confirm permission to publish before submitting your free listing.',
+                      );
+                      return;
+                    }
+                    final d = <String, dynamic>{
+                      for (final k in fields.keys)
+                        if (![
+                          'owner_name',
+                          'offer_text',
+                          'offer_expires',
+                        ].contains(k))
+                          k: controls[k]!.text.trim(),
+                      'category': category,
+                      'photos': photos,
+                      'offer': controls['offer_text']!.text.trim().isEmpty
+                          ? null
+                          : {
+                              'text': controls['offer_text']!.text.trim(),
+                              'expires': controls['offer_expires']!.text.trim(),
+                            },
+                    };
+                    formFinished = true;
+                    Navigator.pop(c, {
+                      'details': d,
+                      'owner_name': controls['owner_name']!.text.trim(),
+                      'submit': submit,
+                    });
+                  },
+                  child: Text(submit ? 'Submit free listing' : 'Save draft'),
+                ),
             ],
           ),
         ),
       );
-      if (result == null || _locked) return;
+      if (result == null || !mounted || _locked) return;
       _unsaved[recoveryKey] = result;
+      final submit = result['submit'] == true;
       final b = await widget.client.request(
         'POST',
         create ? '/owner' : '/owner/$_id/action',
         body: {
           ...result,
-          if (!create) 'action': 'save',
+          if (!create) 'action': submit ? 'submit' : 'save',
           if (!create) 'version': _business['version'],
+          if (!create && submit) 'consent': true,
         },
       );
+      if (!mounted || _locked) return;
+      _acceptBusiness(b);
       _unsaved.remove(recoveryKey);
-      _id = b['id'];
-      await _load();
+      if (create && submit) {
+        try {
+          final submitted = await widget.client.request(
+            'POST',
+            '/owner/$_id/action',
+            body: {
+              'action': 'submit',
+              'version': b['version'],
+              'owner_name': b['owner_name'],
+              'details': b['draft'],
+              'consent': true,
+            },
+          );
+          if (!mounted || _locked) return;
+          _acceptBusiness(submitted);
+        } catch (error) {
+          if (!mounted || _locked) return;
+          _unsaved[_id!] = result;
+          _announce(
+            'Your business draft is saved. Submission was not confirmed.',
+          );
+          throw DirectoryException(
+            '$error Refresh this saved listing to check its status before submitting again.',
+          );
+        }
+      }
+      _announce(
+        submit
+            ? 'Free listing submitted for review.'
+            : 'Business draft saved. Submit it when you are ready for listing review.',
+      );
+      await _refreshAfterWrite();
     } finally {
       for (final c in controls.values) {
         c.dispose();
@@ -345,25 +571,33 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
   }
 
   Future<void> _submit() async {
+    if (_business['state'] == 'pending') return;
+    final id = _id;
+    final business = _business;
     final d = dirMap(_business['draft']);
     if (!await _confirm(
-      'Publish these business details?',
+      'Submit this free listing?',
       '${d['name']}\n${d['description']}\n\n${d['phone']}\n${d['email']}\n${[d['address'], d['city'], d['country'], d['service_area']].where((v) => v != null && v != '').join(', ')}\n\nThe business details and selected company photos will be public after approval. I am authorized to publish this information and these photos.',
     )) {
       return;
     }
-    await widget.client.request(
+    if (!mounted || _locked || id != _id) return;
+    final submitted = await widget.client.request(
       'POST',
-      '/owner/$_id/action',
+      '/owner/$id/action',
       body: {
         'action': 'submit',
-        'version': _business['version'],
-        'owner_name': _business['owner_name'],
+        'version': business['version'],
+        'owner_name': business['owner_name'],
         'details': d,
         'consent': true,
       },
     );
-    await _load();
+    if (!mounted || _locked) return;
+    _acceptBusiness(submitted);
+    _unsaved.remove(id);
+    _announce('Free listing submitted for review.');
+    await _refreshAfterWrite();
   }
 
   Future<void> _upload(String purpose) async {
@@ -724,6 +958,26 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
                         ),
                       ),
                     ),
+                  if (_notice != null)
+                    Semantics(
+                      liveRegion: true,
+                      child: Card(
+                        key: const ValueKey('directory-save-confirmation'),
+                        color: Theme.of(context).colorScheme.primaryContainer,
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            _notice!,
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onPrimaryContainer,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 24),
                   Text(
                     'My Businesses',
@@ -743,7 +997,7 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
                         leading: const Icon(Icons.storefront),
                         title: Text(b['draft']?['name'] ?? 'Business'),
                         subtitle: Text(
-                          'Listing: ${b['state']} • Verification: ${b['verification_state']}',
+                          'Free listing: ${_listingLabel(b)}\nOptional badge: ${_verificationLabel(b['verification_state'])}',
                         ),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => _run(() => _select(b['id'])),
@@ -774,7 +1028,7 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
                       ListTile(
                         title: Text(b['name'] ?? 'Business'),
                         subtitle: Text(
-                          '${b['state']} • verification ${b['verification_state']} • ${b['reports']} reports',
+                          '${_listingLabel(b)} • Optional badge: ${_verificationLabel(b['verification_state'])} • ${b['reports']} reports',
                         ),
                         trailing: const Icon(Icons.fact_check_outlined),
                         onTap: () => _run(() => _select(b['id'])),
@@ -803,6 +1057,49 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
         style: Theme.of(context).textTheme.headlineSmall,
       ),
       Text('${d['category']} • ${d['city'] ?? d['service_area'] ?? ''}'),
+      const SizedBox(height: 12),
+      Card(
+        key: const ValueKey('directory-listing-status'),
+        color: Theme.of(context).colorScheme.secondaryContainer,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _listingLabel(b),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSecondaryContainer,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                switch (b['state']) {
+                  'pending' =>
+                    b['published'] == null
+                        ? 'We received your free listing. It will appear in the public directory after a listing reviewer approves it. No verified badge or payment is required.'
+                        : 'Your updates are awaiting listing review. Your previously approved listing stays public while these changes are reviewed.',
+                  'published' =>
+                    'Your approved listing is public. Saved edits appear after you submit them and a reviewer approves the changes.',
+                  'needs_changes' =>
+                    'Read the listing review note below, update your details, then submit your free listing again.',
+                  'hidden' =>
+                    'This listing is not visible publicly. You can update and submit it for a new listing review.',
+                  _ =>
+                    b['published'] != null
+                        ? 'Your draft updates are saved. Your previously approved listing remains public. Submit the updates when they are ready for review.'
+                        : 'Your details are saved privately. Add optional company photos, then submit your free listing for review.',
+                },
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSecondaryContainer,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
       const SizedBox(height: 12),
       SelectableText(d['description'] ?? ''),
       const SizedBox(height: 12),
@@ -845,9 +1142,13 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
               icon: Icons.add_photo_alternate_outlined,
             ),
             _button(
-              'Submit listing for review',
-              () => _run(_submit),
-              icon: Icons.publish,
+              b['state'] == 'pending'
+                  ? 'Listing submitted'
+                  : 'Submit free listing',
+              b['state'] == 'pending' ? null : () => _run(_submit),
+              icon: b['state'] == 'pending'
+                  ? Icons.hourglass_top
+                  : Icons.publish,
             ),
             _button(
               'Hide listing',
@@ -912,8 +1213,13 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
       const Text(
         'Optional: \$4.99/month or \$49/year USD after review. Verification checks an owner’s connection to the business, not service quality. Basic listings stay free.',
       ),
+      Text('Optional badge: ${_verificationLabel(b['verification_state'])}'),
       Text(
-        'Application: ${b['verification_state']} • Membership: ${_membership['state'] ?? 'none'}',
+        _membership.isEmpty ||
+                _membership['state'] == null ||
+                _membership['state'] == 'none'
+            ? 'No paid membership. Your free listing review is separate.'
+            : 'Membership: ${_membership['state']}',
       ),
       if (b['verification_note']?.toString().isNotEmpty == true)
         Text('Verification review: ${b['verification_note']}'),

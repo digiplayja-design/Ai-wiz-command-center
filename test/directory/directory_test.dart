@@ -83,7 +83,9 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: DirectoryScreen(client: client)));
     await tester.pumpAndSettle();
     expect(
-      find.text('Listing: published • Verification: pending'),
+      find.text(
+        'Free listing: Live in the directory\nOptional badge: Application awaiting review',
+      ),
       findsOneWidget,
     );
     client.dispose();
