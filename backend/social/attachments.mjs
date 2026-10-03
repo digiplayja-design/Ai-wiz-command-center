@@ -54,7 +54,9 @@ export async function socialAttachments(database, result) {
     delete a.object_path;
     if (typeof path !== 'string' || !/^[0-9a-f-]{36}\/[0-9a-f-]{36}\.[a-z0-9]{1,8}$/.test(path)) continue;
     // Document links are minted only on explicit download, always as attachments.
-    if (a.kind === 'file') continue;
+    // Wall audio is public to eligible Social viewers, but can be removed or
+    // blocked. Recheck access at playback instead of caching a five-minute URL.
+    if (a.kind === 'file' || a.scope === 'wall') continue;
     let link = links.get(path);
     if (!link || link.until < Date.now()) {
       const { data, error } = await database.storage.from(attachmentBucket).createSignedUrl(path, 300);
@@ -106,7 +108,10 @@ export function registerSocialAttachments(app, { database, authenticate, logger 
       const user = await authenticate(req, res); if (!user) return;
       if (uploadingUsers.has(user.id) || uploadingUsers.size >= 2) throw Object.assign(new Error('Uploads are busy. Please try again in a moment.'), {status: 429});
       uploadOwner = user.id; uploadingUsers.add(uploadOwner);
-      const destination = req.query.group ? { group: req.query.group } : { peer: req.query.peer };
+      const destinations = ['peer', 'group', 'topic'].filter(key => req.query[key] != null);
+      if (destinations.length !== 1 || typeof req.query[destinations[0]] !== 'string') throw bad('Choose one conversation or wall post.');
+      const destination = { [destinations[0]]: req.query[destinations[0]] };
+      if (destination.topic && req.query.kind !== 'voice') throw bad('Wall replies support recorded voice notes.');
       await rpc(user, 'access', destination);
       const { default: multer } = await import('multer');
       const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: attachmentLimit, files: 1, fields: 0, parts: 2 } }).single('file');
@@ -132,7 +137,7 @@ export function registerSocialAttachments(app, { database, authenticate, logger 
       const user = await authenticate(req, res); if (!user) return;
       const { attachment } = await rpc(user, 'link', { id: req.query.id });
       const download = req.query.download === 'true' || attachment.kind === 'file';
-      const result = await database.storage.from(attachmentBucket).createSignedUrl(attachment.object_path, download ? 60 : 300, download ? { download: attachment.filename } : {});
+      const result = await database.storage.from(attachmentBucket).createSignedUrl(attachment.object_path, download || attachment.scope === 'wall' ? 60 : 300, download ? { download: attachment.filename } : {});
       if (result.error || !result.data?.signedUrl) throw storageError();
       res.json({ url: result.data.signedUrl });
     } catch (error) { res.status(error.status || 503).json({ error: error.status ? error.message : 'Attachment could not be opened.' }); }
