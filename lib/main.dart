@@ -30,6 +30,7 @@ import 'theme/korlix_theme.dart';
 import 'theme/korlix_action_button.dart';
 import 'theme/korlix_action_grid.dart';
 import 'auth/korlix_welcome_confirmation.dart';
+import 'auth/korlix_october_welcome.dart';
 import 'input_tools/upload_studio.dart';
 import 'input_tools/voice_composer.dart';
 import 'locator/locator_screen.dart';
@@ -838,8 +839,9 @@ class _AuthGateState extends State<AuthGate> {
 class AuthScreen extends StatefulWidget {
   final Future<void> Function(KorlixAuthSession) onSignedIn;
   final http.Client? client;
+  final DateTime? seasonalDate;
 
-  const AuthScreen({super.key, required this.onSignedIn, this.client});
+  const AuthScreen({super.key, required this.onSignedIn, this.client, this.seasonalDate});
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -1037,17 +1039,12 @@ class _AuthScreenState extends State<AuthScreen> {
         ? 'Create your Korlix AI account'
         : 'Sign in to Korlix AI';
     final buttonText = _isSignUp ? 'Create account' : 'Sign in';
+    final seasonalDate = widget.seasonalDate ?? DateTime.now();
+    final october = korlixIsOctober(seasonalDate);
 
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: korlixThemeBackgroundFor(kKorlixThemeNotifier.value),
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
+      body: KorlixOctoberWelcome(
+        date: seasonalDate,
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
@@ -1060,11 +1057,11 @@ class _AuthScreenState extends State<AuthScreen> {
                     color: skin.panel,
                     borderRadius: BorderRadius.circular(28),
                     border: Border.all(
-                      color: const Color(0xFF2EC7DF).withOpacity(0.38),
+                      color: (october ? const Color(0xFFFFBD69) : const Color(0xFF2EC7DF)).withValues(alpha: .38),
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF2EC7DF).withOpacity(0.12),
+                        color: (october ? const Color(0xFFCE83FF) : const Color(0xFF2EC7DF)).withValues(alpha: .12),
                         blurRadius: 36,
                         spreadRadius: 4,
                       ),
@@ -1079,6 +1076,9 @@ class _AuthScreenState extends State<AuthScreen> {
                     : Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (october) ...[
+                        KorlixOctoberGreeting(date: seasonalDate),
+                      ],
                       Image.asset(
                         'assets/branding/korlix_mini_mark.png',
                         height: 74,
@@ -1205,8 +1205,8 @@ class _AuthScreenState extends State<AuthScreen> {
                         child: ElevatedButton(
                           onPressed: _loading ? null : _submit,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF143B4A),
-                            foregroundColor: const Color(0xFFE4EBEE),
+                            backgroundColor: october ? const Color(0xFFFFBD69) : const Color(0xFF143B4A),
+                            foregroundColor: october ? const Color(0xFF352100) : const Color(0xFFE4EBEE),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(999),
                             ),
@@ -1217,7 +1217,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                   height: 22,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: skin.text,
+                                    color: october ? const Color(0xFF352100) : skin.text,
                                   ),
                                 )
                               : Text(
@@ -5136,7 +5136,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   bool _logoStudioOpening = false;
   bool _emailEnhancerOpening = false;
   String _pendingChatPrompt = '';
-  String _pendingChatStatus = 'Thinking through your request…';
+  bool _pendingChatIsImage = false;
   String? _pendingChatTopicId;
   bool _fixCreditReportMode = false;
   bool _creditDebtValidationRoundsVisible = false;
@@ -6306,7 +6306,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     await _stopAiCharacterTalkingForQuery();
     final prompt = _controller.text.trim();
     if (prompt.isEmpty) {
-      setState(() => _error = 'Describe the picture you want Korlix AI to create.');
+      setState(() => _error = KorlixChatCopy(_selectedLanguage).picturePromptRequired);
       return;
     }
     _ensureActiveChatTopicForPrompt(prompt);
@@ -6320,7 +6320,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       _featuredAnswerDismissed = false;
       _pendingChatPrompt = prompt;
       _pendingChatTopicId = topicId;
-      _pendingChatStatus = 'Creating your picture with extra detail. This may take a few minutes…';
+      _pendingChatIsImage = true;
     });
     try {
       final response = await http.post(
@@ -6336,11 +6336,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       final imageDataUrl = data['imageDataUrl']?.toString();
       final imageUrl = data['imageUrl']?.toString();
       if ((imageDataUrl == null || imageDataUrl.isEmpty) &&
-          (imageUrl == null || imageUrl.isEmpty)) throw Exception('No image was returned.');
+          (imageUrl == null || imageUrl.isEmpty)) throw Exception(KorlixChatCopy(language).noImageReturned);
       if (!mounted) return;
       final item = GeneratedItem(command: prompt,
-        title: data['title']?.toString() ?? 'Your picture',
-        content: data['content']?.toString() ?? 'Image generated.',
+        title: data['title']?.toString() ?? KorlixChatCopy(language).yourPicture,
+        content: data['content']?.toString() ?? KorlixChatCopy(language).imageGenerated,
         language: language, allowPdf: false, imageDataUrl: imageDataUrl, imageUrl: imageUrl);
       final message = ChatMessage(userText: prompt, aiText: item.content,
         language: language, isImage: true, imageDataUrl: imageDataUrl,
@@ -6926,7 +6926,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       _error = null;
       _pendingChatPrompt = _korlixVisibleUserText(command);
       _pendingChatTopicId = topicId;
-      _pendingChatStatus = 'Thinking deeply and preparing your answer…';
+      _pendingChatIsImage = false;
     });
 
     _speakConsiderItDone();
@@ -13068,9 +13068,11 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     }
     final busy = _loading && (_pendingChatTopicId == null || _pendingChatTopicId == _activeChatTopicId);
     return KorlixChatTimeline(key: ValueKey('chat-topic-$_activeChatTopicId'),
+      languageCode: _selectedLanguage,
       turns: turns, foreground: _korlixReadableForeground(skin),
       accent: skin.primary, surface: skin.panelDeep, busy: busy,
-      pendingQuestion: busy ? _pendingChatPrompt : '', status: _pendingChatStatus,
+      pendingQuestion: busy ? _pendingChatPrompt : '',
+      status: _pendingChatIsImage ? KorlixChatCopy(_selectedLanguage).creatingImageStatus : KorlixChatCopy(_selectedLanguage).thinkingStatus,
       onStarter: (prompt, imageMode) => _setChatMode(imageMode, starter: prompt));
   }
 
@@ -13171,13 +13173,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         ? (hasText && _activeUploadFiles.isNotEmpty)
         : hasText;
 
-    final hintText = _selectedLanguage == 'es'
-        ? 'Escribe aquí...'
-        : _selectedLanguage == 'fr'
-        ? 'Écrivez ici...'
-        : _imaginePictureMode
-        ? 'Describe the picture you want…'
-        : 'Ask anything, or describe what you want to create…';
+    final chatCopy = KorlixChatCopy(_selectedLanguage);
+    final hintText = _imaginePictureMode ? chatCopy.imageHint : chatCopy.textHint;
 
     final GeneratedItem? activeResult =
         (_results.isNotEmpty && !_featuredAnswerDismissed)
@@ -13312,7 +13309,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
               ),
               SizedBox(width: 8),
               KorlixActionButton(
-                label: _loading ? 'Sending' : 'Send',
+                label: _loading ? chatCopy.sending : chatCopy.send,
+                colorIdentity: 'Send',
                 icon: Icons.arrow_upward_rounded,
                 iconOnly: true,
                 busy: _loading,
@@ -13359,6 +13357,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 KorlixChatModeBar(imageMode: _imaginePictureMode, busy: _loading,
+                  languageCode: _selectedLanguage,
                   size: _chatImageSize, style: _chatImageStyle,
                   onModeChanged: _setChatMode,
                   onSizeChanged: (value) => setState(() => _chatImageSize = value),
@@ -13367,8 +13366,9 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 singleInputBoard(),
                 if (_imaginePictureMode) ...[
                   const SizedBox(height: 10),
-                  KorlixActionButton(label: 'Open Imagine Studio',
-                    subtitle: 'Explore styles, creative briefs & your gallery',
+                  KorlixActionButton(label: chatCopy.openImagineStudio,
+                    colorIdentity: 'Open Imagine Studio',
+                    subtitle: chatCopy.imagineStudioSubtitle,
                     icon: Icons.auto_awesome_mosaic_rounded, expand: true,
                     onPressed: _loading ? null : _openImagineStudio),
                 ],

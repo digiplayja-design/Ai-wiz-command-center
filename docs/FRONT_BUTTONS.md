@@ -43,6 +43,31 @@ Upload and Voice open reviewable input studios described in
   disable movement and transitions. There is no idle animation.
 - The send control retains the busy indicator and cannot submit again while busy.
 
+## Creation languages and October welcome
+
+The creation workspace receives the active home language (`en`, `es`, or `fr`).
+`KorlixChatCopy` supplies its heading, starter prompts, chat/image modes, image
+options, composer hints, send label, progress messages and result controls.
+Changing language updates the copy immediately while keeping existing user/AI
+content and selected image options. Localized action buttons supply a stable
+`colorIdentity`, so translating their label never changes their feature color.
+
+During the device's local October, the login screen uses a friendly seasonal
+background with smiling pumpkins, a ghost, moon and stars, plus a compact
+greeting and warm sign-in button. `KorlixOctoberWelcome` automatically restores
+the selected theme outside October. `AuthScreen.seasonalDate` is an optional
+test/preview override; production uses the device's current date. Decorations
+ignore pointer events and screen readers, and have no animations. The existing
+authentication, signup and confirmation handlers are retained.
+
+`test/chat_workspace_test.dart` checks live language changes, stable rendered
+colors, translated starter behavior, unchanged image API values and narrow
+French layouts. `test/october_login_test.dart` checks month boundaries and
+decoration accessibility. `test/auth_october_integration_test.dart` exercises
+the real sign-in/signup form with mocked HTTP, password visibility, small
+screens, keyboard insets and increased text size. Set `KORLIX_AUTH_REVIEW` and
+`KORLIX_FLUTTER_ROOT` to render its real-form phone/tablet screenshots.
+
 ## Verification
 
 Run `flutter test test/korlix_button_colors_test.dart test/korlix_action_button_test.dart test/chat_workspace_test.dart

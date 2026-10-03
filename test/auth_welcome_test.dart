@@ -34,6 +34,7 @@ void main() {
         MaterialApp(
           theme: korlixBuildTheme('korlix_blue'),
           home: app.AuthScreen(
+            seasonalDate: DateTime(2026, 11, 1),
             client: client,
             onSignedIn: (_) async {
               signedIn = true;
@@ -74,6 +75,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: app.AuthScreen(
+            seasonalDate: DateTime(2026, 11, 1),
             client: MockClient(
               (_) async => http.Response('{"session":null}', 200),
             ),
@@ -99,6 +101,7 @@ void main() {
         MaterialApp(
           theme: korlixBuildTheme('pure_white'),
           home: app.AuthScreen(
+            seasonalDate: DateTime(2026, 11, 1),
             client: MockClient(
               (_) async =>
                   http.Response('{"error":"Email not confirmed"}', 400),

@@ -12,6 +12,7 @@ class KorlixActionButton extends StatelessWidget {
     super.key,
     required this.label,
     required this.onPressed,
+    this.colorIdentity,
     this.icon,
     this.subtitle,
     this.eyebrow,
@@ -28,6 +29,8 @@ class KorlixActionButton extends StatelessWidget {
   });
 
   final String label;
+  /// Stable feature identity so translated labels keep the same button color.
+  final String? colorIdentity;
   final String? subtitle, eyebrow;
   final VoidCallback? onPressed;
   final IconData? icon;
@@ -48,7 +51,7 @@ class KorlixActionButton extends StatelessWidget {
     final compact = size == KorlixButtonSize.compact;
     final light = skin.isLight;
     final palette = korlixButtonColorsFor(
-      label,
+      colorIdentity ?? label,
       icon: icon,
       destructive: accent == skin.danger,
     );

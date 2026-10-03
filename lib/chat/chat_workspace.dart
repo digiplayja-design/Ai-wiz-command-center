@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 
 import '../theme/korlix_action_button.dart';
 import '../theme/korlix_action_grid.dart';
+import 'chat_workspace_copy.dart';
+
+export 'chat_workspace_copy.dart';
 
 class KorlixChatTurn {
   const KorlixChatTurn({
@@ -32,13 +35,15 @@ class KorlixChatTimeline extends StatelessWidget {
     required this.surface,
     this.busy = false,
     this.pendingQuestion = '',
-    this.status = 'Thinking through your request…',
+    this.status,
+    this.languageCode = 'en',
     this.onStarter,
   });
   final List<KorlixChatTurn> turns;
   final Color foreground, accent, surface;
   final bool busy;
-  final String pendingQuestion, status;
+  final String pendingQuestion, languageCode;
+  final String? status;
   final void Function(String prompt, bool image)? onStarter;
 
   Widget _question(String text, String id) => Align(
@@ -60,6 +65,7 @@ class KorlixChatTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final copy = KorlixChatCopy(languageCode);
     if (turns.isEmpty && !busy) {
       return Center(
         child: SingleChildScrollView(
@@ -69,7 +75,7 @@ class KorlixChatTimeline extends StatelessWidget {
               Icon(Icons.auto_awesome_rounded, color: accent, size: 28),
               const SizedBox(height: 14),
               Text(
-                'What would you like to create?',
+                copy.createTitle,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: foreground,
@@ -79,7 +85,7 @@ class KorlixChatTimeline extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Ask a question, work through an idea, or make a picture.',
+                copy.createSubtitle,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: foreground.withValues(alpha: .75),
@@ -93,23 +99,26 @@ class KorlixChatTimeline extends StatelessWidget {
                 alignment: WrapAlignment.center,
                 children: [
                   KorlixActionButton(
-                    label: 'Help me write',
+                    label: copy.helpWrite,
+                    colorIdentity: 'Help me write',
                     icon: Icons.edit_outlined,
                     size: KorlixButtonSize.compact,
                     onPressed: onStarter == null
                         ? null
-                        : () => onStarter!('Help me write ', false),
+                        : () => onStarter!(copy.helpWritePrompt, false),
                   ),
                   KorlixActionButton(
-                    label: 'Explore an idea',
+                    label: copy.exploreIdea,
+                    colorIdentity: 'Explore an idea',
                     icon: Icons.lightbulb_outline,
                     size: KorlixButtonSize.compact,
                     onPressed: onStarter == null
                         ? null
-                        : () => onStarter!('Help me think through ', false),
+                        : () => onStarter!(copy.exploreIdeaPrompt, false),
                   ),
                   KorlixActionButton(
-                    label: 'Create a picture',
+                    label: copy.createPicture,
+                    colorIdentity: 'Create a picture',
                     icon: Icons.image_outlined,
                     size: KorlixButtonSize.compact,
                     onPressed: onStarter == null
@@ -150,7 +159,7 @@ class KorlixChatTimeline extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        status,
+                        status?.isNotEmpty == true ? status! : copy.thinking,
                         style: TextStyle(
                           color: foreground,
                           fontSize: 14,
@@ -176,7 +185,7 @@ class KorlixChatTimeline extends StatelessWidget {
                 Align(
                   alignment: Alignment.centerRight,
                   child: IconButton(
-                    tooltip: 'Delete your question',
+                    tooltip: copy.deleteQuestion,
                     visualDensity: VisualDensity.compact,
                     onPressed: turn.onDeleteQuestion,
                     icon: Icon(
@@ -233,31 +242,31 @@ class KorlixChatTimeline extends StatelessWidget {
                         );
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Answer copied'),
-                              duration: Duration(seconds: 2),
+                            SnackBar(
+                              content: Text(copy.answerCopied),
+                              duration: const Duration(seconds: 2),
                             ),
                           );
                         }
                       },
                       icon: const Icon(Icons.copy_outlined, size: 16),
-                      label: const Text('Copy'),
+                      label: Text(copy.copy),
                     ),
                   if (turn.onOpenImage != null)
                     TextButton.icon(
                       onPressed: turn.onOpenImage,
                       icon: const Icon(Icons.open_in_full, size: 16),
-                      label: const Text('Open image'),
+                      label: Text(copy.openImage),
                     ),
                   if (turn.onSaveImage != null)
                     TextButton.icon(
                       onPressed: turn.onSaveImage,
                       icon: const Icon(Icons.download_outlined, size: 16),
-                      label: const Text('Save image'),
+                      label: Text(copy.saveImage),
                     ),
                   if (turn.onDeleteAnswer != null)
                     IconButton(
-                      tooltip: 'Delete this answer',
+                      tooltip: copy.deleteAnswer,
                       onPressed: turn.onDeleteAnswer,
                       icon: Icon(
                         Icons.delete_outline,
@@ -286,113 +295,131 @@ class KorlixChatModeBar extends StatelessWidget {
     required this.style,
     required this.onSizeChanged,
     required this.onStyleChanged,
+    this.languageCode = 'en',
   });
   final bool imageMode, busy;
   final void Function(bool) onModeChanged;
-  final String size, style;
+  final String size, style, languageCode;
   final ValueChanged<String> onSizeChanged, onStyleChanged;
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      KorlixActionGrid(
-        compact: true,
-        children: [
-          KorlixActionButton(
-            label: 'Chat',
-            selected: !imageMode,
-            expand: true,
-            onPressed: busy ? null : () => onModeChanged(false),
-          ),
-          KorlixActionButton(
-            label: 'Create image',
-            selected: imageMode,
-            expand: true,
-            onPressed: busy ? null : () => onModeChanged(true),
-          ),
-        ],
-      ),
-      const SizedBox(height: 6),
-      Text(
-        imageMode ? 'Extra-high image quality' : 'Astra · Extra high',
-        style: const TextStyle(fontSize: 12),
-      ),
-      if (imageMode) ...[
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 12,
-          runSpacing: 10,
+  Widget build(BuildContext context) {
+    final copy = KorlixChatCopy(languageCode);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        KorlixActionGrid(
+          compact: true,
           children: [
-            SizedBox(
-              width: 150,
-              child: DropdownButtonFormField<String>(
-                initialValue: size,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Shape',
-                  isDense: true,
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem(value: '1024x1024', child: Text('Square')),
-                  DropdownMenuItem(value: '1024x1536', child: Text('Portrait')),
-                  DropdownMenuItem(
-                    value: '1536x1024',
-                    child: Text('Landscape'),
-                  ),
-                  DropdownMenuItem(value: 'auto', child: Text('Automatic')),
-                ],
-                onChanged: busy
-                    ? null
-                    : (v) {
-                        if (v != null) onSizeChanged(v);
-                      },
-              ),
+            KorlixActionButton(
+              label: copy.chat,
+              colorIdentity: 'Chat',
+              selected: !imageMode,
+              expand: true,
+              onPressed: busy ? null : () => onModeChanged(false),
             ),
-            SizedBox(
-              width: 210,
-              child: DropdownButtonFormField<String>(
-                initialValue: style,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Style',
-                  isDense: true,
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'auto',
-                    child: Text('Follow my prompt'),
-                  ),
-                  DropdownMenuItem(value: 'photo', child: Text('Photographic')),
-                  DropdownMenuItem(
-                    value: 'illustration',
-                    child: Text('Illustration'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'design',
-                    child: Text('Graphic design'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'cinematic',
-                    child: Text('Cinematic'),
-                  ),
-                ],
-                onChanged: busy
-                    ? null
-                    : (v) {
-                        if (v != null) onStyleChanged(v);
-                      },
-              ),
+            KorlixActionButton(
+              label: copy.createImage,
+              colorIdentity: 'Create image',
+              selected: imageMode,
+              expand: true,
+              onPressed: busy ? null : () => onModeChanged(true),
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        const Text(
-          'Describe the subject, setting, lighting, and any exact words to include.',
-          style: TextStyle(fontSize: 12, height: 1.5),
+        const SizedBox(height: 6),
+        Text(
+          imageMode ? copy.imageQuality : copy.chatQuality,
+          style: const TextStyle(fontSize: 12),
         ),
+        if (imageMode) ...[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 12,
+            runSpacing: 10,
+            children: [
+              SizedBox(
+                width: 150,
+                child: DropdownButtonFormField<String>(
+                  initialValue: size,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: copy.shape,
+                    isDense: true,
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                      value: '1024x1024',
+                      child: Text(copy.square),
+                    ),
+                    DropdownMenuItem(
+                      value: '1024x1536',
+                      child: Text(copy.portrait),
+                    ),
+                    DropdownMenuItem(
+                      value: '1536x1024',
+                      child: Text(copy.landscape),
+                    ),
+                    DropdownMenuItem(
+                      value: 'auto',
+                      child: Text(copy.automatic),
+                    ),
+                  ],
+                  onChanged: busy
+                      ? null
+                      : (v) {
+                          if (v != null) onSizeChanged(v);
+                        },
+                ),
+              ),
+              SizedBox(
+                width: 210,
+                child: DropdownButtonFormField<String>(
+                  initialValue: style,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: copy.style,
+                    isDense: true,
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                      value: 'auto',
+                      child: Text(copy.followPrompt),
+                    ),
+                    DropdownMenuItem(
+                      value: 'photo',
+                      child: Text(copy.photographic),
+                    ),
+                    DropdownMenuItem(
+                      value: 'illustration',
+                      child: Text(copy.illustration),
+                    ),
+                    DropdownMenuItem(
+                      value: 'design',
+                      child: Text(copy.graphicDesign),
+                    ),
+                    DropdownMenuItem(
+                      value: 'cinematic',
+                      child: Text(copy.cinematic),
+                    ),
+                  ],
+                  onChanged: busy
+                      ? null
+                      : (v) {
+                          if (v != null) onStyleChanged(v);
+                        },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            copy.imageGuidance,
+            style: const TextStyle(fontSize: 12, height: 1.5),
+          ),
+        ],
       ],
-    ],
-  );
+    );
+  }
 }
