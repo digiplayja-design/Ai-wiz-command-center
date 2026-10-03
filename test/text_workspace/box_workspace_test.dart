@@ -223,11 +223,12 @@ void main() {
         TextField,
         voice ? 'Transcript / notes' : 'Saved text',
       );
-      expect(editor, findsOneWidget);
+      expect(editor, findsNWidgets(voice ? 1 : 12));
       expect(store.load(), isEmpty);
-      await tester.enterText(editor, 'My first saved box');
+      await tester.enterText(editor.first, 'My first saved box');
       await tester.pumpAndSettle();
-      expect(store.load().single.text, 'My first saved box');
+      expect(store.load().length, voice ? 1 : 12);
+      expect(store.load().first.text, 'My first saved box');
       expect(tester.takeException(), isNull);
     });
 
@@ -236,17 +237,28 @@ void main() {
     ) async {
       final (store, _) = await open(tester, voice: voice, speech: FakeSpeech());
       final originalId = store.load().single.id;
-      await tester.tap(find.text('New entry'));
-      await tester.pumpAndSettle();
-      expect(find.text('2 entries'), findsOneWidget);
-      final editor = find.widgetWithText(
-        TextField,
-        voice ? 'Transcript / notes' : 'Saved text',
+      await tester.tap(
+        voice
+            ? find.text('New entry')
+            : find.byKey(const ValueKey('copy-box-add-top')),
       );
+      await tester.pumpAndSettle();
+      expect(find.text(voice ? '2 entries' : '2 boxes'), findsOneWidget);
+      final newId = store.load().last.id;
+      final editor = voice
+          ? find.widgetWithText(TextField, 'Transcript / notes')
+          : find.byKey(ValueKey('copy-box-text-$newId'));
+      await tester.ensureVisible(editor);
       await tester.enterText(editor, 'New content');
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Duplicate'));
-      await tester.tap(find.text('Duplicate'));
+      final duplicate = voice
+          ? find.text('Duplicate')
+          : find.descendant(
+              of: find.byKey(ValueKey('copy-box-card-$newId')),
+              matching: find.text('Duplicate'),
+            );
+      await tester.ensureVisible(duplicate);
+      await tester.tap(duplicate);
       await tester.pumpAndSettle();
       expect(store.load().where((b) => b.text == 'New content').length, 2);
       await tester.ensureVisible(find.text('Templates'));
@@ -258,7 +270,10 @@ void main() {
       expect(saved.length, 4);
       expect(saved.map((b) => b.id).toSet().length, 4);
       expect(saved.singleWhere((b) => b.id == originalId).text, 'Original');
-      expect(saved.first.text, contains(voice ? 'Discussion:' : '{{client}}'));
+      expect(
+        (voice ? saved.first : saved.last).text,
+        contains(voice ? 'Discussion:' : '{{client}}'),
+      );
       expect(tester.takeException(), isNull);
     });
   }
@@ -283,11 +298,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('Saved data could not be read'), findsOneWidget);
     expect(find.byType(TextField), findsNothing);
-    expect(find.text('New entry'), findsNothing);
+    expect(find.byKey(const ValueKey('copy-box-add-top')), findsNothing);
     expect(prefs.getString(store.key), 'broken');
   });
 
-  testWidgets('edits save and search filters the entry list', (tester) async {
+  testWidgets('edits save and search filters the stacked boxes', (
+    tester,
+  ) async {
     final (store, _) = await open(tester);
     await tester.enterText(
       find.widgetWithText(TextField, 'Original'),
@@ -297,23 +314,54 @@ void main() {
     expect(store.load().single.text, 'Saved edit');
     await tester.enterText(find.byType(TextField).first, 'missing');
     await tester.pumpAndSettle();
-    expect(find.text('0 entries'), findsOneWidget);
+    expect(find.text('0 boxes'), findsOneWidget);
   });
   testWidgets(
-    'AI draft does not overwrite original before review and creates a version',
+    'AI apply and version restore affect only the second Copy Box card',
     (tester) async {
-      final (store, _) = await open(tester);
-      await tester.ensureVisible(find.text('Improve with KORLIX ▾'));
-      await tester.tap(find.text('Improve with KORLIX ▾'));
+      final (store, _) = await open(
+        tester,
+        initialBoxes: [
+          SavedBox(id: 'first', title: 'First', text: 'Keep this'),
+          SavedBox(id: 'second', title: 'Second', text: 'Original'),
+        ],
+      );
+      final card = find.byKey(const ValueKey('copy-box-card-second'));
+      final improve = find.descendant(
+        of: card,
+        matching: find.text('Improve with KORLIX ▾'),
+      );
+      await tester.ensureVisible(improve);
+      await tester.tap(improve);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Polish'));
       await tester.pumpAndSettle();
-      expect(store.load().single.text, 'Original');
+      expect(store.load().map((box) => box.text), ['Keep this', 'Original']);
       expect(find.text('Review • Polish'), findsOneWidget);
       await tester.tap(find.text('Apply'));
       await tester.pumpAndSettle();
-      expect(store.load().single.text, 'Improved');
-      expect(store.load().single.history, ['Original']);
+      expect(store.load().map((box) => box.text), ['Keep this', 'Improved']);
+      expect(store.load().last.history, ['Original']);
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(const ValueKey('copy-box-text-second')),
+            )
+            .controller!
+            .text,
+        'Improved',
+      );
+      final versions = find.descendant(
+        of: card,
+        matching: find.text('Versions'),
+      );
+      await tester.ensureVisible(versions);
+      await tester.tap(versions);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Version 1\nOriginal'));
+      await tester.pumpAndSettle();
+      expect(store.load().map((box) => box.text), ['Keep this', 'Original']);
+      expect(store.load().last.history, ['Improved', 'Original']);
     },
   );
   testWidgets('signout clears editor and ignores late AI result', (
@@ -382,6 +430,199 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'Copy Box appends editable cards, copies exact text and restores their order',
+    (tester) async {
+      String? clipboard;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            clipboard = (call.arguments as Map)['text'] as String;
+          }
+          return null;
+        },
+      );
+      addTearDown(() {
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        );
+      });
+      final (store, _) = await open(tester);
+      final firstId = store.load().single.id;
+      for (final key in ['copy-box-add-top', 'copy-box-add-bottom']) {
+        final add = find.byKey(ValueKey(key));
+        await tester.ensureVisible(add);
+        await tester.tap(add);
+        await tester.pumpAndSettle();
+        final newest = find.byKey(
+          ValueKey('copy-box-title-${store.load().last.id}'),
+        );
+        expect(newest.hitTestable(), findsOneWidget);
+      }
+      final ids = store.load().map((box) => box.id).toList();
+      expect(ids.first, firstId);
+      expect(ids.toSet().length, 3);
+      expect(find.text('3 boxes'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('workspace-entries-scroll')),
+        findsNothing,
+      );
+      const values = [
+        '  First\noriginal spacing  ',
+        'Second 🦋\nline',
+        'Third',
+      ];
+      for (var i = 0; i < ids.length; i++) {
+        final title = find.byKey(ValueKey('copy-box-title-${ids[i]}'));
+        final folder = find.byKey(ValueKey('copy-box-folder-${ids[i]}'));
+        final input = find.byKey(ValueKey('copy-box-text-${ids[i]}'));
+        await tester.ensureVisible(title);
+        await tester.enterText(title, 'Reusable ${i + 1}');
+        await tester.ensureVisible(folder);
+        await tester.enterText(folder, 'Folder ${i + 1}');
+        await tester.ensureVisible(input);
+        await tester.enterText(input, values[i]);
+        await tester.pumpAndSettle();
+        final copy = find.descendant(
+          of: find.byKey(ValueKey('copy-box-card-${ids[i]}')),
+          matching: find.widgetWithText(FilledButton, 'Copy Box ${i + 1}'),
+        );
+        await tester.ensureVisible(copy);
+        await tester.tap(copy);
+        await tester.pumpAndSettle();
+        expect(clipboard, values[i]);
+      }
+      final save = find.text('Save All');
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Copy All Boxes'));
+      await tester.pumpAndSettle();
+      expect(clipboard, values.join('\n\n'));
+      expect(store.load().map((box) => box.id), ids);
+      expect(store.load().map((box) => box.text), values);
+      expect(store.load().map((box) => box.title), [
+        'Reusable 1',
+        'Reusable 2',
+        'Reusable 3',
+      ]);
+      expect(store.load().map((box) => box.folder), [
+        'Folder 1',
+        'Folder 2',
+        'Folder 3',
+      ]);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await open(tester, initialBoxes: []);
+      expect(store.load().map((box) => box.id), ids);
+      final positions = <double>[];
+      for (var i = 0; i < ids.length; i++) {
+        final input = find.byKey(ValueKey('copy-box-text-${ids[i]}'));
+        expect(tester.widget<TextField>(input).controller!.text, values[i]);
+        positions.add(tester.getTopLeft(input).dy);
+      }
+      expect(positions[0], lessThan(positions[1]));
+      expect(positions[1], lessThan(positions[2]));
+      await _capture(tester, 'copybox-tablet-light-stack');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('Copy Box deleting and undoing a middle card preserves order', (
+    tester,
+  ) async {
+    final boxes = List.generate(
+      3,
+      (i) => SavedBox(id: 'box-$i', title: 'Title $i', text: 'Text $i'),
+    );
+    final (store, _) = await open(tester, initialBoxes: boxes);
+    final delete = find.descendant(
+      of: find.byKey(const ValueKey('copy-box-card-box-1')),
+      matching: find.text('Delete'),
+    );
+    await tester.ensureVisible(delete);
+    await tester.tap(delete);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.pumpAndSettle();
+    expect(store.load().map((box) => box.id), ['box-0', 'box-2']);
+    expect(find.byKey(const ValueKey('copy-box-card-box-1')), findsNothing);
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+    expect(store.load().map((box) => box.id), ['box-0', 'box-1', 'box-2']);
+    final positions = List.generate(
+      3,
+      (i) => tester.getTopLeft(find.byKey(ValueKey('copy-box-text-box-$i'))).dy,
+    );
+    expect(positions[0], lessThan(positions[1]));
+    expect(positions[1], lessThan(positions[2]));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'Copy Box filters and clears search without losing edits or order',
+    (tester) async {
+      final (store, _) = await open(
+        tester,
+        initialBoxes: [
+          SavedBox(id: 'alpha', title: 'Alpha', text: 'Original alpha'),
+          SavedBox(
+            id: 'beta',
+            title: 'Beta',
+            text: 'Original beta',
+            favorite: true,
+          ),
+          SavedBox(id: 'gamma', title: 'Gamma', text: 'Original gamma'),
+        ],
+      );
+      final input = find.byKey(const ValueKey('copy-box-text-beta'));
+      await tester.ensureVisible(input);
+      await tester.enterText(input, 'Edited beta remains saved');
+      final search = find.widgetWithText(
+        TextField,
+        'Search titles, folders and text',
+      );
+      await tester.ensureVisible(search);
+      await tester.enterText(search, 'beta');
+      await tester.pumpAndSettle();
+      expect(find.text('1 boxes'), findsOneWidget);
+      expect(find.byKey(const ValueKey('copy-box-text-alpha')), findsNothing);
+      expect(
+        tester.widget<TextField>(input).controller!.text,
+        'Edited beta remains saved',
+      );
+      await tester.enterText(search, 'no result');
+      await tester.pumpAndSettle();
+      expect(find.text('0 boxes'), findsOneWidget);
+      await tester.enterText(search, '');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Favorites'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('copy-box-text-alpha')), findsNothing);
+      expect(find.byKey(const ValueKey('copy-box-text-beta')), findsOneWidget);
+      await tester.tap(find.text('Favorites'));
+      await tester.pumpAndSettle();
+      expect(find.text('3 boxes'), findsOneWidget);
+      expect(store.load().map((box) => box.id), ['alpha', 'beta', 'gamma']);
+      expect(store.load()[1].text, 'Edited beta remains saved');
+      expect(
+        tester.getTopLeft(find.byKey(const ValueKey('copy-box-text-alpha'))).dy,
+        lessThan(tester.getTopLeft(input).dy),
+      );
+      expect(
+        tester.getTopLeft(input).dy,
+        lessThan(
+          tester
+              .getTopLeft(find.byKey(const ValueKey('copy-box-text-gamma')))
+              .dy,
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final voice in [false, true]) {
     final name = voice ? 'VoiceScribe' : 'Copy Box';
     testWidgets('$name outer mouse scrollbar moves the entire workspace', (
@@ -415,15 +656,22 @@ void main() {
       await tester.pumpAndSettle();
       expect(page.offset, greaterThan(50));
       expect(tester.getTopLeft(header).dy, lessThan(before - 50));
-      expect(
-        tester
-            .widget<Scrollbar>(
-              find.byKey(const ValueKey('workspace-entries-scrollbar')),
-            )
-            .controller!
-            .offset,
-        0,
-      );
+      if (voice) {
+        expect(
+          tester
+              .widget<Scrollbar>(
+                find.byKey(const ValueKey('workspace-entries-scrollbar')),
+              )
+              .controller!
+              .offset,
+          0,
+        );
+      } else {
+        expect(
+          find.byKey(const ValueKey('workspace-entries-scrollbar')),
+          findsNothing,
+        );
+      }
       await tester.ensureVisible(find.text('Duplicate'));
       expect(find.text('Duplicate').hitTestable(), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -433,7 +681,7 @@ void main() {
       testWidgets(
         '$name ${brightness.name} panels stay distinct on a 320px phone with large text',
         (tester) async {
-          await open(
+          final (store, _) = await open(
             tester,
             voice: voice,
             speech: FakeSpeech(),
@@ -452,7 +700,13 @@ void main() {
           final editor =
               tester
                       .widget<Container>(
-                        find.byKey(const ValueKey('workspace-editor-panel')),
+                        find.byKey(
+                          voice
+                              ? const ValueKey('workspace-editor-panel')
+                              : ValueKey(
+                                  'copy-box-card-panel-${store.load().first.id}',
+                                ),
+                        ),
                       )
                       .decoration!
                   as BoxDecoration;
@@ -477,62 +731,69 @@ void main() {
           );
           await tester.enterText(input, 'Large text stays editable.');
           await tester.pumpAndSettle();
-          await tester.ensureVisible(find.text('Copy text'));
-          expect(find.text('Copy text').hitTestable(), findsOneWidget);
+          final copy = voice
+              ? find.text('Copy text')
+              : find.widgetWithText(FilledButton, 'Copy Box 1');
+          await tester.ensureVisible(copy);
+          expect(copy.hitTestable(), findsOneWidget);
           await tester.ensureVisible(find.text('Duplicate'));
           expect(find.text('Duplicate').hitTestable(), findsOneWidget);
-          await tester.ensureVisible(find.text('New entry'));
-          await tester.tap(find.text('New entry'));
+          final add = voice
+              ? find.text('New entry')
+              : find.byKey(const ValueKey('copy-box-add-bottom'));
+          await tester.ensureVisible(add);
+          await tester.tap(add);
           await tester.pumpAndSettle();
-          expect(find.text('2 entries'), findsOneWidget);
+          expect(find.text(voice ? '2 entries' : '2 boxes'), findsOneWidget);
           expect(tester.takeException(), isNull);
         },
       );
     }
 
-    testWidgets(
-      '$name entries scroll independently and survive resize and empty filters',
-      (tester) async {
-        await open(
-          tester,
-          voice: voice,
-          speech: FakeSpeech(),
-          initialBoxes: List.generate(
-            25,
-            (i) => SavedBox(title: 'Entry $i', text: 'Reusable text $i'),
-          ),
-          size: const Size(1180, 860),
-        );
-        final listFinder = find.byKey(
-          const ValueKey('workspace-entries-scroll'),
-        );
-        final list = tester.widget<ListView>(listFinder).controller!;
-        final page = tester
-            .widget<Scrollbar>(
-              find.byKey(const ValueKey('workspace-page-scrollbar')),
-            )
-            .controller!;
-        await tester.drag(listFinder, const Offset(0, -250));
-        await tester.pumpAndSettle();
-        expect(list.offset, greaterThan(100));
-        expect(page.offset, 0);
-        await _capture(
-          tester,
-          '${voice ? 'voicescribe' : 'copybox'}-tablet-light',
-        );
-        tester.view.physicalSize = const Size(390, 844);
-        await tester.pumpAndSettle();
-        await tester.enterText(find.byType(TextField).first, 'no result');
-        await tester.pumpAndSettle();
-        expect(find.text('No entries match your search.'), findsOneWidget);
-        await tester.enterText(find.byType(TextField).first, '');
-        await tester.pumpAndSettle();
-        expect(
-          find.byKey(const ValueKey('workspace-entries-scrollbar')),
-          findsOneWidget,
-        );
-        expect(tester.takeException(), isNull);
-      },
-    );
+    if (voice)
+      testWidgets(
+        '$name entries scroll independently and survive resize and empty filters',
+        (tester) async {
+          await open(
+            tester,
+            voice: voice,
+            speech: FakeSpeech(),
+            initialBoxes: List.generate(
+              25,
+              (i) => SavedBox(title: 'Entry $i', text: 'Reusable text $i'),
+            ),
+            size: const Size(1180, 860),
+          );
+          final listFinder = find.byKey(
+            const ValueKey('workspace-entries-scroll'),
+          );
+          final list = tester.widget<ListView>(listFinder).controller!;
+          final page = tester
+              .widget<Scrollbar>(
+                find.byKey(const ValueKey('workspace-page-scrollbar')),
+              )
+              .controller!;
+          await tester.drag(listFinder, const Offset(0, -250));
+          await tester.pumpAndSettle();
+          expect(list.offset, greaterThan(100));
+          expect(page.offset, 0);
+          await _capture(
+            tester,
+            '${voice ? 'voicescribe' : 'copybox'}-tablet-light',
+          );
+          tester.view.physicalSize = const Size(390, 844);
+          await tester.pumpAndSettle();
+          await tester.enterText(find.byType(TextField).first, 'no result');
+          await tester.pumpAndSettle();
+          expect(find.text('No entries match your search.'), findsOneWidget);
+          await tester.enterText(find.byType(TextField).first, '');
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const ValueKey('workspace-entries-scrollbar')),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull);
+        },
+      );
   }
 }

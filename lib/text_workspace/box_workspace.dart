@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'box_store.dart';
+import 'copy_box_card.dart';
 
 class BoxWorkspace extends StatefulWidget {
   const BoxWorkspace({
@@ -26,8 +27,10 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
     with WidgetsBindingObserver {
   final _title = TextEditingController(),
       _text = TextEditingController(),
-      _folder = TextEditingController();
+      _folder = TextEditingController(),
+      _search = TextEditingController();
   final _pageScroll = ScrollController(), _entriesScroll = ScrollController();
+  final _copyBoxAnchors = <String, GlobalKey>{};
   late final _speech = widget.speech ?? SpeechToText();
   List<SavedBox> _boxes = [];
   SavedBox? _selected;
@@ -52,9 +55,13 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
     widget.sessionChanges.addListener(_checkSession);
     try {
       _boxes = widget.store.load();
-      // Open a usable editor immediately on a first visit. This empty starter
-      // is only persisted when the user edits it or creates another entry.
-      if (_boxes.isEmpty) _boxes.add(SavedBox());
+      // Restore the original twelve-box Copy Box desk on a first visit.
+      // Blank starters are only persisted when edited, added to or saved.
+      if (_boxes.isEmpty) {
+        _boxes.addAll(
+          List.generate(widget.store.voice ? 1 : 12, (_) => SavedBox()),
+        );
+      }
       _select(_boxes.first);
     } catch (_) {
       _loadFailed = true;
@@ -74,6 +81,7 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
     _title.clear();
     _text.clear();
     _folder.clear();
+    _search.clear();
     _partial = '';
     if (mounted) {
       final route = ModalRoute.of(context);
@@ -96,6 +104,7 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
     _title.dispose();
     _text.dispose();
     _folder.dispose();
+    _search.dispose();
     _pageScroll.dispose();
     _entriesScroll.dispose();
     super.dispose();
@@ -126,8 +135,8 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
         .catchError((Object error) {
           if (_valid) {
             setState(
-              () =>
-                  _status = 'Save failed. Copy your text, then use Retry save.',
+              () => _status =
+                  'Save failed. Copy your text, then use ${widget.store.voice ? 'Retry save' : 'Save All'}.',
             );
           }
         });
@@ -168,11 +177,33 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
     try {
       final box = SavedBox(title: title, text: text, folder: folder);
       setState(() {
-        _boxes.insert(0, box);
+        if (widget.store.voice) {
+          _boxes.insert(0, box);
+        } else {
+          _boxes.add(box);
+        }
         _select(box);
         _query = '';
+        _search.clear();
         _favorites = false;
       });
+      if (!widget.store.voice) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!_valid) return;
+          final target = _copyBoxAnchors[box.id]?.currentContext;
+          if (target != null) {
+            unawaited(
+              Scrollable.ensureVisible(
+                target,
+                alignment: 0.05,
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 250),
+              ),
+            );
+          }
+        });
+      }
       await _save();
     } catch (_) {
       _message('The new entry could not be opened. Please try again.');
@@ -305,16 +336,18 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
     }
   }
 
-  Future<void> _ai(String action) async {
+  Future<void> _ai(String action, {SavedBox? target}) async {
     await _stop();
+    final box = target ?? _selected;
+    final original = target?.text ?? _text.text;
     if (!mounted ||
         !_valid ||
-        _selected == null ||
-        _text.text.trim().isEmpty ||
+        box == null ||
+        !_boxes.contains(box) ||
+        original.trim().isEmpty ||
         _busy) {
       return;
     }
-    final box = _selected!, original = _text.text;
     setState(() => _busy = true);
     try {
       final result = await widget.rewrite(action, original);
@@ -387,10 +420,10 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
     }
   }
 
-  Future<void> _history() async {
+  Future<void> _history({SavedBox? target}) async {
     await _stop();
-    if (!mounted || !_valid || _selected == null) return;
-    final box = _selected!;
+    final box = target ?? _selected;
+    if (!mounted || !_valid || box == null || !_boxes.contains(box)) return;
     final value = await showDialog<String>(
       context: context,
       builder: (context) => SimpleDialog(
@@ -418,18 +451,19 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
                   .toList(),
       ),
     );
-    if (!mounted || !_valid || value == null) return;
+    if (!mounted || !_valid || value == null || !_boxes.contains(box)) return;
     setState(() {
       box.replace(value);
-      _text.text = value;
+      if (identical(box, _selected)) _text.text = value;
     });
     await _save();
   }
 
-  Future<void> _delete() async {
+  Future<void> _delete({SavedBox? target}) async {
     await _stop();
-    if (!mounted || !_valid || _selected == null) return;
-    final box = _selected!;
+    final box = target ?? _selected;
+    if (!mounted || !_valid || box == null || !_boxes.contains(box)) return;
+    final index = _boxes.indexOf(box);
     final yes = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
@@ -463,7 +497,7 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
           onPressed: () {
             if (!mounted || !_valid) return;
             setState(() {
-              _boxes.insert(0, box);
+              _boxes.insert(index.clamp(0, _boxes.length), box);
               _select(box);
             });
             unawaited(_save());
@@ -473,8 +507,8 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
     );
   }
 
-  Future<void> _fillTemplate() async {
-    final original = _text.text;
+  Future<void> _fillTemplate({SavedBox? target}) async {
+    final original = target?.text ?? _text.text;
     final fields = templateFields(original);
     if (fields.isEmpty) {
       _message(
@@ -634,17 +668,19 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
         ),
       );
     }
-    final visible =
-        _boxes
-            .where(
-              (b) =>
-                  (!_favorites || b.favorite) &&
-                  '${b.title} ${b.folder} ${b.text}'.toLowerCase().contains(
-                    _query.toLowerCase(),
-                  ),
-            )
-            .toList()
-          ..sort((a, b) => b.updated.compareTo(a.updated));
+    final visible = _boxes
+        .where(
+          (b) =>
+              (!_favorites || b.favorite) &&
+              '${b.title} ${b.folder} ${b.text}'.toLowerCase().contains(
+                _query.toLowerCase(),
+              ),
+        )
+        .toList();
+    // Copy Box is a stable stack: typing must never move a box under the user.
+    if (widget.store.voice) {
+      visible.sort((a, b) => b.updated.compareTo(a.updated));
+    }
     final theme = Theme.of(context);
     final palette = _WorkspacePalette(widget.store.voice, theme.brightness);
     final workspaceTheme = theme.copyWith(
@@ -756,13 +792,22 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
                                     runSpacing: 8,
                                     children: [
                                       FilledButton.icon(
+                                        key: widget.store.voice
+                                            ? null
+                                            : const ValueKey(
+                                                'copy-box-add-top',
+                                              ),
                                         style: FilledButton.styleFrom(
                                           backgroundColor: palette.primary,
                                           foregroundColor: palette.onPrimary,
                                         ),
                                         onPressed: _busy ? null : () => _new(),
                                         icon: const Icon(Icons.add),
-                                        label: const Text('New entry'),
+                                        label: Text(
+                                          widget.store.voice
+                                              ? 'New entry'
+                                              : 'Add Box',
+                                        ),
                                       ),
                                       FilledButton.icon(
                                         style: FilledButton.styleFrom(
@@ -777,18 +822,38 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
                                       ),
                                       OutlinedButton.icon(
                                         onPressed: () => _copy(
-                                          visible
-                                              .map(
-                                                (b) => '${b.title}\n${b.text}',
-                                              )
-                                              .join('\n\n────────\n\n'),
+                                          widget.store.voice
+                                              ? visible
+                                                    .map(
+                                                      (b) =>
+                                                          '${b.title}\n${b.text}',
+                                                    )
+                                                    .join('\n\n────────\n\n')
+                                              : visible
+                                                    .where(
+                                                      (b) => b.text
+                                                          .trim()
+                                                          .isNotEmpty,
+                                                    )
+                                                    .map((b) => b.text)
+                                                    .join('\n\n'),
                                         ),
                                         icon: const Icon(Icons.copy_all),
-                                        label: const Text('Copy results'),
+                                        label: Text(
+                                          widget.store.voice ||
+                                                  _query.isNotEmpty ||
+                                                  _favorites
+                                              ? 'Copy results'
+                                              : 'Copy All Boxes',
+                                        ),
                                       ),
                                       TextButton(
                                         onPressed: _save,
-                                        child: const Text('Retry save'),
+                                        child: Text(
+                                          widget.store.voice
+                                              ? 'Retry save'
+                                              : 'Save All',
+                                        ),
                                       ),
                                       if (!widget.store.imported &&
                                           widget.store.legacy.isNotEmpty)
@@ -807,6 +872,7 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
                           if (!_loadFailed) ...[
                             const SizedBox(height: 16),
                             TextField(
+                              controller: _search,
                               decoration: const InputDecoration(
                                 prefixIcon: Icon(Icons.search),
                                 hintText: 'Search titles, folders and text',
@@ -826,11 +892,15 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
                                   onSelected: (v) =>
                                       setState(() => _favorites = v),
                                 ),
-                                Text('${visible.length} entries'),
+                                Text(
+                                  '${visible.length} ${widget.store.voice ? 'entries' : 'boxes'}',
+                                ),
                               ],
                             ),
                             const SizedBox(height: 8),
-                            if (wide)
+                            if (!widget.store.voice)
+                              _copyBoxStack(visible, palette)
+                            else if (wide)
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -864,6 +934,71 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
       ),
     );
   }
+
+  Widget _copyBoxStack(
+    List<SavedBox> visible,
+    _WorkspacePalette palette,
+  ) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const Padding(
+        padding: EdgeInsets.only(bottom: 12),
+        child: Text(
+          'Keep each piece of text in its own box. Add another below whenever you need it.',
+        ),
+      ),
+      if (visible.isEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Text('No boxes match your search.'),
+        ),
+      for (final box in visible)
+        Padding(
+          key: _copyBoxAnchors.putIfAbsent(box.id, () => GlobalKey()),
+          padding: const EdgeInsets.only(bottom: 16),
+          child: CopyBoxCard(
+            key: ValueKey('copy-box-card-${box.id}'),
+            box: box,
+            number: _boxes.indexOf(box) + 1,
+            busy: _busy,
+            primary: palette.primary,
+            accent: palette.accent,
+            onAccent: palette.onAccent,
+            panelColor: palette.editor,
+            borderColor: palette.border,
+            selectionColor: palette.selection,
+            onChanged: () {
+              if (!_valid) return;
+              setState(() {});
+              unawaited(_save());
+            },
+            onCopy: _copy,
+            onAi: (action) => _ai(action, target: box),
+            onVersions: () => _history(target: box),
+            onFillTemplate: () => _fillTemplate(target: box),
+            onDuplicate: () => _new(
+              title: '${box.title} (copy)',
+              text: box.text,
+              folder: box.folder,
+            ),
+            onDelete: () => _delete(target: box),
+          ),
+        ),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: FilledButton.icon(
+          key: const ValueKey('copy-box-add-bottom'),
+          style: FilledButton.styleFrom(
+            backgroundColor: palette.primary,
+            foregroundColor: palette.onPrimary,
+          ),
+          onPressed: _busy ? null : () => _new(),
+          icon: const Icon(Icons.add),
+          label: const Text('Add Box'),
+        ),
+      ),
+    ],
+  );
 
   Widget _entryList(
     List<SavedBox> visible,
