@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'korlix_theme.dart';
+import 'korlix_button_colors.dart';
 
 Future<String?> showKorlixThemePicker(
   BuildContext context, {
@@ -73,7 +74,7 @@ class _KorlixThemePickerState extends State<KorlixThemePicker> {
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Preview a palette, then apply it. Your conversation stays right where you left it.',
+                        'Preview a palette, then apply it. Buttons stay colorful in every theme, and your conversation stays right where you left it.',
                         style: TextStyle(color: skin.mutedText, height: 1.5),
                       ),
                     ),
@@ -302,12 +303,16 @@ class KorlixThemePreview extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(9),
                           decoration: BoxDecoration(
-                            color: skin.primary,
+                            gradient: LinearGradient(
+                              colors: korlixButtonColorsFor(
+                                'Send',
+                              ).gradientColors,
+                            ),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(
                             Icons.arrow_upward,
-                            color: skin.textOnAccent,
+                            color: korlixButtonColorsFor('Send').foreground,
                             size: 18,
                           ),
                         ),

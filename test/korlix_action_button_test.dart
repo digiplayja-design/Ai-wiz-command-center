@@ -161,6 +161,114 @@ void main() {
   );
 
   testWidgets(
+    'enabled feature faces stay colorful and their labels readable in every theme',
+    (tester) async {
+      final facesByLabel = <String, List<Color>>{};
+      for (final theme in korlixThemeIds) {
+        for (final label in [
+          'VoiceScribe',
+          'Copy Box',
+          'Improve my picture',
+          'Workforce',
+          'Live Convo',
+        ]) {
+          await tester.pumpWidget(
+            app(
+              KorlixActionButton(
+                label: label,
+                subtitle: 'Open your workspace',
+                icon: korlixToolIcon(label),
+                tile: true,
+                onPressed: () {},
+              ),
+              theme: theme,
+              reduceMotion: true,
+            ),
+          );
+          await tester.pumpAndSettle();
+          final surface = tester.widget<AnimatedContainer>(
+            find
+                .descendant(
+                  of: find.byType(TextButton),
+                  matching: find.byType(AnimatedContainer),
+                )
+                .last,
+          );
+          final colors =
+              (surface.decoration! as BoxDecoration).gradient!.colors;
+          expect(
+            colors.every((color) => HSLColor.fromColor(color).saturation > .3),
+            isTrue,
+            reason: '$label should have a colorful face in $theme',
+          );
+          expect(
+            colors,
+            facesByLabel.putIfAbsent(label, () => colors),
+            reason: '$label should keep its identity when the theme changes',
+          );
+          for (final text in [label, 'Open your workspace']) {
+            final foreground = tester
+                .widget<Text>(find.text(text))
+                .style!
+                .color!;
+            for (final background in colors) {
+              expect(
+                _contrast(foreground, background),
+                greaterThanOrEqualTo(4.5),
+                reason: '$text must be readable across the $theme gradient',
+              );
+            }
+          }
+          expect(tester.takeException(), isNull, reason: '$theme / $label');
+        }
+      }
+    },
+  );
+
+  testWidgets(
+    'busy and disabled colorful buttons cannot activate in any theme',
+    (tester) async {
+      var calls = 0;
+      final focus = FocusNode();
+      addTearDown(focus.dispose);
+      for (final theme in korlixThemeIds) {
+        await tester.pumpWidget(
+          app(
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const KorlixActionButton(label: 'Copy Box', onPressed: null),
+                KorlixActionButton(
+                  label: 'VoiceScribe',
+                  busy: true,
+                  focusNode: focus,
+                  onPressed: () => calls++,
+                ),
+              ],
+            ),
+            theme: theme,
+            reduceMotion: true,
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Copy Box'));
+        await tester.tap(find.text('VoiceScribe'));
+        focus.requestFocus();
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.sendKeyEvent(LogicalKeyboardKey.space);
+        expect(calls, 0, reason: theme);
+        for (final button in tester.widgetList<TextButton>(
+          find.byType(TextButton),
+        )) {
+          expect(button.onPressed, isNull, reason: theme);
+        }
+        expect(tester.takeException(), isNull, reason: theme);
+      }
+    },
+  );
+
+  testWidgets(
     'front controls fit all themes on a narrow phone at 200 percent text',
     (tester) async {
       tester.view.physicalSize = const Size(320, 1600);
@@ -222,9 +330,15 @@ void main() {
       ('korlix_blue', 390.0),
       ('pure_black', 390.0),
       ('pure_white', 390.0),
+      ('pink_white', 390.0),
+      ('lavender_mist', 390.0),
       ('korlix_blue', 1000.0),
+      ('pure_black', 1000.0),
+      ('pure_white', 1000.0),
+      ('pink_white', 1000.0),
+      ('lavender_mist', 1000.0),
     ]) {
-      tester.view.physicalSize = Size(review.$2, 2700);
+      tester.view.physicalSize = Size(review.$2, 3600);
       final boundary = GlobalKey();
       await tester.pumpWidget(
         app(
@@ -235,6 +349,7 @@ void main() {
               child: Padding(
                 padding: const EdgeInsets.all(28),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     const Align(
                       alignment: Alignment.centerLeft,
@@ -362,6 +477,8 @@ class _ButtonReview extends StatelessWidget {
             'Virtual Closet',
             'Cybersecurity Defender',
             'Improve my picture',
+            'VoiceScribe',
+            'Copy Box',
             'Study / learn',
             'Music Studio',
             'Locator',
@@ -384,6 +501,49 @@ class _ButtonReview extends StatelessWidget {
         ),
         const SizedBox(height: 30),
       ],
+      KorlixActionSection(
+        title: 'Button states',
+        description: 'Clear status without changing what the controls do.',
+        icon: Icons.touch_app_outlined,
+        children: [
+          const KorlixActionButton(
+            label: 'Disabled',
+            icon: Icons.block_outlined,
+            tile: true,
+            onPressed: null,
+          ),
+          TickerMode(
+            enabled: false,
+            child: KorlixActionButton(
+              label: 'Working',
+              icon: Icons.hourglass_top_rounded,
+              tile: true,
+              busy: true,
+              onPressed: () {},
+            ),
+          ),
+          KorlixActionButton(
+            label: 'Selected',
+            icon: Icons.check_circle_outline,
+            tile: true,
+            selected: true,
+            onPressed: () {},
+          ),
+          KorlixActionButton(
+            label: 'Access options',
+            icon: Icons.lock_outline,
+            tile: true,
+            locked: true,
+            onPressed: () {},
+          ),
+        ],
+      ),
     ],
   );
+}
+
+double _contrast(Color foreground, Color background) {
+  final a = Color.alphaBlend(foreground, background).computeLuminance();
+  final b = background.computeLuminance();
+  return ((a > b ? a : b) + .05) / ((a > b ? b : a) + .05);
 }

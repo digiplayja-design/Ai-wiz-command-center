@@ -62,6 +62,52 @@ void main() {
       );
       expect(theme.colorScheme.onSurface, skin.text);
       expect(theme.colorScheme.onPrimary, skin.textOnAccent);
+      for (final style in [
+        theme.filledButtonTheme.style!,
+        theme.elevatedButtonTheme.style!,
+      ]) {
+        for (final states in [
+          <WidgetState>{},
+          {WidgetState.hovered},
+          {WidgetState.pressed},
+          {WidgetState.focused},
+        ]) {
+          final fill = style.backgroundColor!.resolve(states)!;
+          final ink = style.foregroundColor!.resolve(states)!;
+          final overlay = style.overlayColor!.resolve(states)!;
+          expect(
+            HSVColor.fromColor(fill).saturation,
+            greaterThan(.45),
+            reason: '$id colorful button',
+          );
+          expect(
+            contrast(ink, Color.alphaBlend(overlay, fill)),
+            greaterThanOrEqualTo(4.5),
+            reason: '$id button $states',
+          );
+        }
+        const disabled = {WidgetState.disabled};
+        expect(style.backgroundColor!.resolve(disabled), skin.panelSoft);
+        expect(style.foregroundColor!.resolve(disabled), skin.mutedText);
+        expect(
+          style.side!.resolve({WidgetState.focused})!.width,
+          greaterThan(1),
+        );
+      }
+      for (final style in [
+        theme.outlinedButtonTheme.style!,
+        theme.textButtonTheme.style!,
+      ]) {
+        final ink = style.foregroundColor!.resolve({})!;
+        expect(HSVColor.fromColor(ink).saturation, greaterThan(.35));
+        for (final background in surfaces) {
+          expect(
+            contrast(ink, background),
+            greaterThanOrEqualTo(4.5),
+            reason: '$id secondary button',
+          );
+        }
+      }
     });
   }
 

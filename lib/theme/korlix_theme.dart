@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'korlix_button_colors.dart';
 
 const korlixThemeIds = [
   'pure_white',
@@ -96,6 +97,39 @@ ThemeData korlixBuildTheme(String id) {
   final rounded = RoundedRectangleBorder(
     borderRadius: BorderRadius.circular(16),
   );
+  final primaryButton = korlixButtonColorsFor('Continue');
+  final elevatedButton = korlixButtonColorsFor('Save');
+  final actionInk = skin.isLight
+      ? const Color(0xFF254EAC)
+      : const Color(0xFF92C6FF);
+  ButtonStyle filledStyle(KorlixButtonColors colors) =>
+      FilledButton.styleFrom(
+        backgroundColor: colors.start,
+        foregroundColor: colors.foreground,
+        disabledBackgroundColor: skin.panelSoft,
+        disabledForegroundColor: skin.mutedText,
+        minimumSize: const Size(48, 48),
+        shape: rounded,
+      ).copyWith(
+        side: WidgetStateProperty.resolveWith(
+          (states) => BorderSide(
+            color: states.contains(WidgetState.focused)
+                ? skin.text
+                : Colors.transparent,
+            width: states.contains(WidgetState.focused) ? 3 : 1,
+          ),
+        ),
+        overlayColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.disabled)
+              ? Colors.transparent
+              : (colors.foreground.computeLuminance() > .5
+                        ? Colors.black
+                        : Colors.white)
+                    .withValues(
+                      alpha: states.contains(WidgetState.pressed) ? .08 : .04,
+                    ),
+        ),
+      );
   return base.copyWith(
     extensions: [KorlixPaletteExtension(skin)],
     scaffoldBackgroundColor: skin.backgroundMid,
@@ -155,25 +189,33 @@ ThemeData korlixBuildTheme(String id) {
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     ),
-    filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(
-        backgroundColor: skin.primary,
-        foregroundColor: skin.textOnAccent,
-        minimumSize: const Size(48, 48),
-        shape: rounded,
-      ),
+    filledButtonTheme: FilledButtonThemeData(style: filledStyle(primaryButton)),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: filledStyle(elevatedButton),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(
-        foregroundColor: skin.primary,
-        side: BorderSide(color: skin.border),
-        minimumSize: const Size(48, 48),
-        shape: rounded,
-      ),
+      style:
+          OutlinedButton.styleFrom(
+            foregroundColor: actionInk,
+            disabledForegroundColor: skin.mutedText,
+            side: BorderSide(color: actionInk.withValues(alpha: .7)),
+            minimumSize: const Size(48, 48),
+            shape: rounded,
+          ).copyWith(
+            side: WidgetStateProperty.resolveWith(
+              (states) => BorderSide(
+                color: states.contains(WidgetState.disabled)
+                    ? skin.border.withValues(alpha: .35)
+                    : actionInk.withValues(alpha: .7),
+                width: states.contains(WidgetState.focused) ? 2 : 1,
+              ),
+            ),
+          ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: skin.primary,
+        foregroundColor: actionInk,
+        disabledForegroundColor: skin.mutedText,
         minimumSize: const Size(48, 48),
       ),
     ),

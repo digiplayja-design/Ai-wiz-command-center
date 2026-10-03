@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'korlix_button_colors.dart';
 import 'korlix_theme.dart';
 
 enum KorlixButtonSize { compact, regular, hero }
@@ -46,9 +47,16 @@ class KorlixActionButton extends StatelessWidget {
     final hero = size == KorlixButtonSize.hero;
     final compact = size == KorlixButtonSize.compact;
     final light = skin.isLight;
-    final tint = accent ?? (locked ? skin.premium : skin.primary);
-    final ink = enabled ? skin.text : skin.mutedText.withValues(alpha: .65);
-    final color = enabled ? tint : skin.mutedText.withValues(alpha: .52);
+    final palette = korlixButtonColorsFor(
+      label,
+      icon: icon,
+      destructive: accent == skin.danger,
+    );
+    final tint = palette.start;
+    final ink = enabled
+        ? palette.foreground
+        : skin.mutedText.withValues(alpha: .65);
+    final color = ink;
     final radius = BorderRadius.circular(
       hero
           ? 24
@@ -62,58 +70,67 @@ class KorlixActionButton extends StatelessWidget {
     final duration = reduceMotion
         ? Duration.zero
         : const Duration(milliseconds: 150);
-    final face = Color.lerp(
-      skin.buttonFill,
-      tint,
-      active ? (light ? .08 : .14) : (hero ? .05 : 0),
-    )!;
+    final faceColors = enabled
+        ? palette.gradientColors
+        : [
+            Color.lerp(skin.panel, skin.mutedText, .08)!,
+            Color.lerp(skin.panelDeep, skin.mutedText, .10)!,
+          ];
     final iconSize = hero
         ? 52.0
         : compact
         ? 28.0
         : 32.0;
 
-    final Widget emblem =
-        leading ??
-        Container(
-          width: iconSize,
-          height: iconSize,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(hero ? 18 : 10),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color.lerp(skin.panel, color, light ? .08 : .22)!,
-                Color.lerp(skin.panelDeep, color, light ? .04 : .06)!,
+    final Widget emblem = leading != null
+        ? Opacity(opacity: enabled ? 1 : .45, child: leading)
+        : Container(
+            width: iconSize,
+            height: iconSize,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(hero ? 18 : 10),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  color.withValues(alpha: enabled ? .12 : .06),
+                  color.withValues(alpha: enabled ? .04 : .02),
+                ],
+              ),
+              border: Border.all(
+                color: color.withValues(alpha: enabled ? .32 : .12),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.white.withValues(alpha: enabled ? .14 : .04),
+                  offset: const Offset(-.5, -.5),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: light ? .12 : .28),
+                  offset: const Offset(0, 2),
+                  blurRadius: 3,
+                ),
               ],
             ),
-            border: Border.all(
-              color: color.withValues(alpha: light ? .25 : .32),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.white.withValues(alpha: light ? .9 : .10),
-                offset: const Offset(-.5, -.5),
-              ),
-              BoxShadow(
-                color: Colors.black.withValues(alpha: light ? .12 : .28),
-                offset: const Offset(0, 2),
-                blurRadius: 3,
-              ),
-            ],
-          ),
-          child: Icon(
-            icon,
-            size: hero
-                ? 28
-                : compact
-                ? 16
-                : 19,
-            color: color,
-          ),
-        );
+            child: busy
+                ? Padding(
+                    padding: EdgeInsets.all(hero ? 13 : 7),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: color,
+                    ),
+                  )
+                : Icon(
+                    icon,
+                    size: hero
+                        ? 28
+                        : compact
+                        ? 16
+                        : 19,
+                    color: color,
+                  ),
+          );
 
     final content = tile
         ? Column(
@@ -131,6 +148,16 @@ class KorlixActionButton extends StatelessWidget {
                         locked
                             ? Icons.lock_outline_rounded
                             : Icons.check_circle_rounded,
+                        size: 15,
+                        color: color,
+                      ),
+                    ),
+                  ],
+                  if (locked && active) ...[
+                    const SizedBox(width: 4),
+                    ExcludeSemantics(
+                      child: Icon(
+                        Icons.check_circle_rounded,
                         size: 15,
                         color: color,
                       ),
@@ -154,11 +181,7 @@ class KorlixActionButton extends StatelessWidget {
                 Text(
                   subtitle!,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: skin.mutedText,
-                    fontSize: 11,
-                    height: 1.3,
-                  ),
+                  style: TextStyle(color: ink, fontSize: 11, height: 1.3),
                 ),
               ],
             ],
@@ -216,7 +239,7 @@ class KorlixActionButton extends StatelessWidget {
                       Text(
                         subtitle!,
                         style: TextStyle(
-                          color: enabled ? skin.mutedText : ink,
+                          color: ink,
                           fontSize: hero ? 12 : 10.5,
                           height: 1.4,
                         ),
@@ -239,12 +262,23 @@ class KorlixActionButton extends StatelessWidget {
                   ),
                 ),
               ],
+              if (locked && active) ...[
+                const SizedBox(width: 4),
+                ExcludeSemantics(
+                  child: Icon(
+                    Icons.check_circle_rounded,
+                    size: hero ? 21 : 15,
+                    color: color,
+                  ),
+                ),
+              ],
             ],
           );
 
     final button = Semantics(
       selected: selected,
       label: iconOnly ? label : null,
+      value: busy ? 'Working' : null,
       hint: locked ? 'Opens access options' : null,
       child: Padding(
         // Space for the solid bottom edge. Neighboring buttons keep clear.
@@ -284,9 +318,19 @@ class KorlixActionButton extends StatelessWidget {
               ).copyWith(
                 animationDuration: duration,
                 overlayColor: WidgetStateProperty.resolveWith(
-                  (states) => tint.withValues(
-                    alpha: states.contains(WidgetState.pressed) ? .12 : .05,
-                  ),
+                  // Darken white-letter faces and lighten dark-letter faces;
+                  // interaction overlays always increase text contrast.
+                  (states) =>
+                      (palette.foreground == Colors.white
+                              ? Colors.black
+                              : Colors.white)
+                          .withValues(
+                            alpha: states.contains(WidgetState.pressed)
+                                ? .10
+                                : states.contains(WidgetState.hovered)
+                                ? .04
+                                : 0,
+                          ),
                 ),
                 backgroundBuilder: (context, states, child) {
                   final pressed =
@@ -315,41 +359,27 @@ class KorlixActionButton extends StatelessWidget {
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [
-                          Color.lerp(
-                            face,
-                            light ? Colors.white : skin.panelSoft,
-                            light ? .86 : .65,
-                          )!,
-                          face,
-                          Color.lerp(face, skin.panelDeep, .52)!,
-                        ],
-                        stops: const [0, .48, 1],
+                        colors: faceColors,
                       ),
                       border: Border.all(
-                        color: focused
-                            ? tint
-                            : tint.withValues(
-                                alpha: !enabled
-                                    ? .18
-                                    : active
-                                    ? .75
-                                    : raised
-                                    ? .64
-                                    : light
-                                    ? .36
-                                    : .38,
-                              ),
-                        width: focused ? 2 : 1,
+                        color: focused || active
+                            ? ink
+                            : color.withValues(alpha: enabled ? .24 : .18),
+                        width: focused || active ? 2 : 1,
                       ),
                       boxShadow: [
+                        // A contrasting outer ring remains visible on both
+                        // the colorful face and the surrounding light/dark page.
+                        if (focused)
+                          BoxShadow(
+                            color: light ? Colors.black : Colors.white,
+                            spreadRadius: 3,
+                          ),
                         // The hard lower edge provides physical depth without blur.
                         BoxShadow(
-                          color: Color.lerp(
-                            skin.panelDeep,
-                            tint,
-                            light ? .20 : .16,
-                          )!,
+                          color: enabled
+                              ? Color.lerp(palette.end, Colors.black, .22)!
+                              : skin.panelDeep,
                           offset: Offset(0, pressed ? 1 : 4),
                         ),
                         BoxShadow(
@@ -365,7 +395,7 @@ class KorlixActionButton extends StatelessWidget {
                         ),
                         if (enabled && (raised || active || hero))
                           BoxShadow(
-                            color: tint.withValues(alpha: light ? .07 : .11),
+                            color: tint.withValues(alpha: light ? .17 : .22),
                             blurRadius: hero ? 26 : 18,
                             spreadRadius: focused ? 1 : 0,
                           ),
@@ -374,8 +404,7 @@ class KorlixActionButton extends StatelessWidget {
                     child: CustomPaint(
                       painter: _ButtonReflection(
                         radius.topLeft.x,
-                        tint,
-                        light,
+                        ink,
                         enabled,
                       ),
                       child: child,
@@ -392,10 +421,10 @@ class KorlixActionButton extends StatelessWidget {
 }
 
 class _ButtonReflection extends CustomPainter {
-  const _ButtonReflection(this.radius, this.accent, this.light, this.enabled);
+  const _ButtonReflection(this.radius, this.accent, this.enabled);
   final double radius;
   final Color accent;
-  final bool light, enabled;
+  final bool enabled;
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
@@ -410,13 +439,7 @@ class _ButtonReflection extends CustomPainter {
         ..strokeWidth = 1
         ..shader = LinearGradient(
           colors: [
-            Colors.white.withValues(
-              alpha: light
-                  ? .95
-                  : enabled
-                  ? .30
-                  : .08,
-            ),
+            Colors.white.withValues(alpha: enabled ? .30 : .08),
             accent.withValues(alpha: .06),
           ],
         ).createShader(Offset.zero & size),
@@ -425,10 +448,7 @@ class _ButtonReflection extends CustomPainter {
 
   @override
   bool shouldRepaint(_ButtonReflection old) =>
-      old.radius != radius ||
-      old.accent != accent ||
-      old.light != light ||
-      old.enabled != enabled;
+      old.radius != radius || old.accent != accent || old.enabled != enabled;
 }
 
 class KorlixLiveConvoButton extends StatelessWidget {
@@ -437,6 +457,7 @@ class KorlixLiveConvoButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final skin = korlixSkinOf(context);
+    final voiceColors = korlixButtonColorsFor('Voice');
     return KorlixActionButton(
       label: 'Live Convo',
       eyebrow: 'K-Nova · LIVE VOICE',
@@ -453,16 +474,14 @@ class KorlixLiveConvoButton extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color.lerp(skin.primary, Colors.white, .3)!,
-              skin.primary,
-              Color.lerp(skin.primary, skin.secondary, .65)!,
-            ],
+            colors: voiceColors.gradientColors,
           ),
-          border: Border.all(color: skin.primary),
+          border: Border.all(
+            color: voiceColors.foreground.withValues(alpha: .4),
+          ),
           boxShadow: [
             BoxShadow(
-              color: skin.primary.withValues(
+              color: voiceColors.start.withValues(
                 alpha: onPressed == null ? .04 : .2,
               ),
               blurRadius: 16,
@@ -484,7 +503,7 @@ class KorlixLiveConvoButton extends StatelessWidget {
                   width: 3,
                   height: height,
                   decoration: BoxDecoration(
-                    color: skin.textOnAccent,
+                    color: voiceColors.foreground,
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),
