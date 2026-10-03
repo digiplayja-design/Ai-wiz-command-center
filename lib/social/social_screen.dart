@@ -8,6 +8,7 @@ import 'social_client.dart';
 import 'social_design.dart';
 import 'social_forms.dart';
 import 'social_threads.dart';
+import 'social_wall.dart';
 import 'social_call_screen.dart';
 import 'social_albums.dart';
 import 'social_call_controller.dart';
@@ -36,7 +37,7 @@ class _SocialScreenState extends State<SocialScreen>
   SocialMap? _profile;
   List<SocialMap> _categories = [], _items = [];
   String? _category, _error;
-  String _connectionFilter = 'all';
+  String _connectionFilter = 'all', _wallFeed = 'following';
   bool _initialized = false,
       _loading = false,
       _mutating = false,
@@ -45,7 +46,8 @@ class _SocialScreenState extends State<SocialScreen>
       _foreground = true,
       _moderator = false,
       _denied = false;
-  int _tab = 0, _offset = 0, _generation = 0;
+  int _tab = 4, _offset = 0, _generation = 0;
+  static const _tabOrder = [4, 0, 1, 2, 3];
   Timer? _poll, _heartbeat, _debounce;
   Timer? _calls;
   bool _checkingCalls = false, _callOpen = false;
@@ -234,11 +236,13 @@ class _SocialScreenState extends State<SocialScreen>
   Future<void> _load({bool quiet = false, bool next = false}) async {
     if (_profile == null || _denied) return;
     final generation = ++_generation,
-        offset = next ? _offset + (_tab == 2 ? 20 : 40) : 0;
+        offset = next ? _offset + (_tab == 2 || _tab == 4 ? 20 : 40) : 0;
     if (!quiet) setState(() => _loading = true);
     try {
       final r = await client.get(
-        _tab == 0
+        _tab == 4
+            ? 'wall'
+            : _tab == 0
             ? 'members'
             : _tab == 1
             ? 'connections'
@@ -248,24 +252,34 @@ class _SocialScreenState extends State<SocialScreen>
         {
           'offset': offset,
           'q': _search.text.trim(),
+          if (_tab == 4) 'feed': _wallFeed,
           if (_tab == 0) 'online': _online,
           if (_tab == 1) 'state': _connectionFilter,
           if (_tab == 2 && _category != null) 'category': _category,
         },
       );
       if (!mounted || generation != _generation || _denied) return;
-      final items = socialItems(r['items']), size = _tab == 2 ? 20 : 40;
+      final items = socialItems(r['items']),
+          size = _tab == 2 || _tab == 4 ? 20 : 40;
       setState(() {
-        _items = next
-            ? [..._items, ...items.take(size)]
-            : items.take(size).toList();
+        _items = <String, SocialMap>{
+          if (next)
+            for (final item in _items) '${item['id']}': item,
+          for (final item in items.take(size)) '${item['id']}': item,
+        }.values.toList();
         _more = items.length > size;
         _offset = offset;
         _error = null;
       });
     } catch (e) {
       if (mounted && generation == _generation && !_denied) {
-        setState(() => _error = '$e');
+        setState(() {
+          _error = '$e';
+          if (e is SocialException && [401, 403, 404].contains(e.status)) {
+            _items = [];
+            _more = false;
+          }
+        });
       }
     } finally {
       if (mounted && generation == _generation) {
@@ -288,6 +302,43 @@ class _SocialScreenState extends State<SocialScreen>
     });
     if (_scroll.hasClients) _scroll.jumpTo(0);
     unawaited(_load());
+  }
+
+  Future<void> _profileWall(SocialMap member) async {
+    final me = _profile;
+    if (me == null || _denied) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SocialProfileWallScreen(
+          client: client,
+          me: me,
+          member: member,
+          categories: _categories,
+          onChat: _chat,
+          onBlocked: _hideMember,
+          onConnectionRemoved: _hideMember,
+          onProfileChanged: (profile) {
+            if (mounted && !_denied) setState(() => _profile = profile);
+          },
+        ),
+      ),
+    );
+    if (mounted && !_denied) await _load();
+  }
+
+  Future<void> _composeWall() async {
+    final id = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SocialComposeTopic(
+          client: client,
+          categories: _categories,
+          wall: true,
+        ),
+      ),
+    );
+    if (mounted && !_denied && id != null) await _topic(id);
   }
 
   Future<void> _albums(SocialMap member, {bool owned = false}) async {
@@ -315,6 +366,19 @@ class _SocialScreenState extends State<SocialScreen>
     }
   }
 
+  void _hideMember(String id) {
+    if (!mounted) return;
+    _generation++;
+    setState(() {
+      _items = _items
+          .where(
+            (item) => item['id'] != id && socialMap(item['author'])['id'] != id,
+          )
+          .toList();
+      _loading = false;
+    });
+  }
+
   Future<void> _memberAction(String action, SocialMap p) async {
     if (action == 'report') {
       final sent = await socialReport(context, client, 'member', p['id']);
@@ -327,7 +391,7 @@ class _SocialScreenState extends State<SocialScreen>
         !await socialConfirm(
           context,
           'Block ${p['name']}?',
-          'This removes your connection and prevents messages and follow requests. Your forum content will be hidden from each other.',
+          'This removes your connection and prevents messages and follow requests. Your wall posts, profiles and forum content will be hidden from each other.',
           action: 'Block member',
         )) {
       return;
@@ -349,6 +413,9 @@ class _SocialScreenState extends State<SocialScreen>
     try {
       await client.post(action, {'peer': p['id']});
       if (mounted && !_denied) {
+        if (action == 'block' || action == 'remove') {
+          _hideMember('${p['id']}');
+        }
         socialNotice(context, switch (action) {
           'request' => 'Follow request sent.',
           'accept' => 'Connected. You can now message each other.',
@@ -495,12 +562,14 @@ class _SocialScreenState extends State<SocialScreen>
       'Keep the conversation going.',
       'A place for every perspective.',
       'Your people. One conversation.',
+      'Share your world.',
     ][_tab];
     final subtitle = [
       'Discover KORLIX members. Follow, connect and make a little room for something new.',
       'Approve a follow request to talk privately. Your connections, on your terms.',
       'Start a topic, share an idea and join conversations around the things you care about.',
       'Bring friends, family or your team together. Create a group and invite several connections at once.',
+      'A wall for your thoughts. A feed for your people. Follow the stories and conversations that matter to you.',
     ][_tab];
     return SocialPanel(
       child: LayoutBuilder(
@@ -585,6 +654,7 @@ class _SocialScreenState extends State<SocialScreen>
         'Search your connections',
         'Search topics and discussions',
         'Search your groups',
+        'Search public wall posts',
       ][_tab],
       suffixIcon: IconButton(
         tooltip: 'Clear search',
@@ -707,7 +777,23 @@ class _SocialScreenState extends State<SocialScreen>
               color: korlixSkinOf(context).mutedText,
             ),
           ),
+          if ('${p['status_caption'] ?? ''}'.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              p['status_caption'],
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontStyle: FontStyle.italic),
+            ),
+          ],
           const SizedBox(height: 16),
+          OutlinedButton.icon(
+            key: ValueKey('social-profile-${p['id']}'),
+            onPressed: () => _profileWall(p),
+            icon: const Icon(Icons.account_circle_outlined, size: 18),
+            label: const Text('View profile & wall'),
+          ),
+          const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: () => _albums(p),
             icon: const Icon(Icons.photo_library_outlined, size: 18),
@@ -1009,12 +1095,18 @@ class _SocialScreenState extends State<SocialScreen>
         if (_profile != null)
           PopupMenuButton<String>(
             tooltip: 'Social settings',
-            onSelected: (v) => v == 'profile'
+            onSelected: (v) => v == 'wall'
+                ? _profileWall(_profile!)
+                : v == 'profile'
                 ? _editProfile()
                 : v == 'albums'
                 ? _albums(_profile!, owned: true)
                 : _manage(v),
             itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'wall',
+                child: Text('My profile & wall'),
+              ),
               const PopupMenuItem(
                 value: 'profile',
                 child: Text('My Social profile'),
@@ -1039,9 +1131,20 @@ class _SocialScreenState extends State<SocialScreen>
     bottomNavigationBar: _profile == null || _denied
         ? null
         : NavigationBar(
-            selectedIndex: _tab,
-            onDestinationSelected: _switch,
+            selectedIndex: _tabOrder.indexOf(_tab),
+            onDestinationSelected: (index) => _switch(_tabOrder[index]),
+            labelBehavior:
+                MediaQuery.sizeOf(context).width < 400 ||
+                    MediaQuery.textScalerOf(context).scale(1) > 1.3
+                ? NavigationDestinationLabelBehavior.onlyShowSelected
+                : NavigationDestinationLabelBehavior.alwaysShow,
             destinations: const [
+              NavigationDestination(
+                key: ValueKey('social-wall-tab'),
+                icon: Icon(Icons.dynamic_feed_outlined),
+                selectedIcon: Icon(Icons.dynamic_feed_rounded),
+                label: 'Wall',
+              ),
               NavigationDestination(
                 icon: Icon(Icons.people_outline_rounded),
                 selectedIcon: Icon(Icons.people_rounded),
@@ -1072,6 +1175,7 @@ class _SocialScreenState extends State<SocialScreen>
             onRefresh: () => _profile == null ? _initialize() : _load(),
             child: ListView(
               controller: _scroll,
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.all(
                 MediaQuery.sizeOf(context).width < 430 ? 16 : 26,
               ),
@@ -1161,61 +1265,98 @@ class _SocialScreenState extends State<SocialScreen>
                       ),
                     ),
                 ] else ...[
-                  SocialPanel(
-                    padding: const EdgeInsets.all(14),
-                    child: Row(
+                  if (_tab != 4) ...[
+                    SocialPanel(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        children: [
+                          InkWell(
+                            onTap: _editProfile,
+                            borderRadius: BorderRadius.circular(36),
+                            child: SocialAvatar(
+                              member: _profile!,
+                              size: 60,
+                              showStatus: false,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${_profile!['name']}',
+                                  style: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                TextButton.icon(
+                                  onPressed: _editProfile,
+                                  icon: const Icon(
+                                    Icons.add_a_photo_outlined,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    _profile!['avatar_url'] == null
+                                        ? 'Add profile photo'
+                                        : 'Change profile photo',
+                                  ),
+                                ),
+                                TextButton.icon(
+                                  onPressed: () =>
+                                      _albums(_profile!, owned: true),
+                                  icon: const Icon(
+                                    Icons.photo_library_outlined,
+                                    size: 18,
+                                  ),
+                                  label: const Text('My photo albums'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _hero(),
+                    const SizedBox(height: 22),
+                  ] else ...[
+                    SocialWallComposerCard(
+                      profile: _profile!,
+                      onPost: _composeWall,
+                      onStatus: _editProfile,
+                      onProfile: () => _profileWall(_profile!),
+                    ),
+                    const SizedBox(height: 20),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
                       children: [
-                        InkWell(
-                          onTap: _editProfile,
-                          borderRadius: BorderRadius.circular(36),
-                          child: SocialAvatar(
-                            member: _profile!,
-                            size: 60,
-                            showStatus: false,
+                        for (final feed in [
+                          ('following', 'Following'),
+                          ('explore', 'Explore'),
+                          ('mine', 'My wall'),
+                        ])
+                          ChoiceChip(
+                            key: ValueKey('social-wall-feed-${feed.$1}'),
+                            label: Text(feed.$2),
+                            selected: _wallFeed == feed.$1,
+                            onSelected: (_) {
+                              if (_wallFeed == feed.$1) return;
+                              setState(() {
+                                _wallFeed = feed.$1;
+                                _items = [];
+                                _more = false;
+                                _error = null;
+                              });
+                              unawaited(_load());
+                            },
                           ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${_profile!['name']}',
-                                style: const TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              TextButton.icon(
-                                onPressed: _editProfile,
-                                icon: const Icon(
-                                  Icons.add_a_photo_outlined,
-                                  size: 18,
-                                ),
-                                label: Text(
-                                  _profile!['avatar_url'] == null
-                                      ? 'Add profile photo'
-                                      : 'Change profile photo',
-                                ),
-                              ),
-                              TextButton.icon(
-                                onPressed: () =>
-                                    _albums(_profile!, owned: true),
-                                icon: const Icon(
-                                  Icons.photo_library_outlined,
-                                  size: 18,
-                                ),
-                                label: const Text('My photo albums'),
-                              ),
-                            ],
-                          ),
-                        ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  _hero(),
-                  const SizedBox(height: 22),
+                    const SizedBox(height: 16),
+                  ],
                   _searchBox(),
                   const SizedBox(height: 18),
                   if (_tab == 0)
@@ -1264,7 +1405,43 @@ class _SocialScreenState extends State<SocialScreen>
                           ),
                       ],
                     ),
-                  if (_tab < 2) ...[
+                  if (_tab == 4) ...[
+                    _heading(
+                      _wallFeed == 'mine'
+                          ? 'Your public wall'
+                          : _wallFeed == 'explore'
+                          ? 'Around KORLIX Social'
+                          : 'From your people',
+                    ),
+                    if (_items.isEmpty && !_loading && _error == null)
+                      SocialEmpty(
+                        icon: Icons.dynamic_feed_outlined,
+                        title: _search.text.isNotEmpty
+                            ? 'No matching posts yet.'
+                            : _wallFeed == 'following'
+                            ? 'Your feed starts with your people.'
+                            : 'Make the first post.',
+                        body: _wallFeed == 'following'
+                            ? 'Posts from your accepted follows and your own wall appear here. Discover people or explore public posts to get started.'
+                            : 'Share a public thread and invite others into the conversation.',
+                        action: _wallFeed == 'following'
+                            ? TextButton(
+                                onPressed: () => _switch(0),
+                                child: const Text('Discover people'),
+                              )
+                            : null,
+                      ),
+                    for (final post in _items)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: SocialWallPostCard(
+                          post: post,
+                          onOpen: () => _topic('${post['id']}'),
+                          onProfile: () =>
+                              _profileWall(socialMap(post['author'])),
+                        ),
+                      ),
+                  ] else if (_tab < 2) ...[
                     _heading(
                       _tab == 0
                           ? 'People to connect with'

@@ -254,7 +254,15 @@ void main() {
     (t) async {
       final g = Groups()..invited = true;
       await social.mount(t, SocialScreen(client: g.client));
-      await replies.tap(t, find.text('Groups'));
+      await t.tap(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is NavigationDestination && widget.label == 'Groups',
+        ),
+      );
+      await t.pumpAndSettle();
+      expect(g.calls.any((call) => call['action'] == 'groups'), true);
+      await fixtures.reveal(t, find.text('GROUP INVITATION'));
       expect(find.text('GROUP INVITATION'), findsOneWidget);
       await replies.tap(t, find.text('Accept invitation'));
       expect(find.byType(SocialChatScreen), findsOneWidget);

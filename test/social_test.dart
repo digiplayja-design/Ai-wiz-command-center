@@ -247,6 +247,8 @@ void main() {
         theme: width == 320 ? 'pure_white' : 'korlix_blue',
       );
       expect(t.takeException(), isNull);
+      await t.tap(find.text('People').last);
+      await t.pumpAndSettle();
       await fixtures.tap(t, find.text('Follow'));
       expect(s.calls.where((c) => c['action'] == 'request').length, 1);
       await t.tap(find.text('Forums').last);
@@ -322,6 +324,8 @@ void main() {
         width: 390,
         theme: 'korlix_blue',
       );
+      await t.tap(find.text('People').last);
+      await t.pumpAndSettle();
       await fixtures.tap(t, find.text('Accept follow'));
       expect(s.accepted, true);
       expect(s.calls.where((c) => c['action'] == 'send'), isEmpty);
@@ -343,6 +347,8 @@ void main() {
       final s = Store();
       s.accepted = true;
       await mount(t, SocialScreen(client: s.client), width: 390);
+      await t.tap(find.text('People').last);
+      await t.pumpAndSettle();
       await fixtures.tap(t, find.text('Message'));
       s.token = 'Bearer other-account';
       s.revision.value++;

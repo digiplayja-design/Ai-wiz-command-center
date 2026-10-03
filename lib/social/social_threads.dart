@@ -1184,6 +1184,7 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
   bool _loading = false, _sending = false, _more = false;
   String? _error, _key, _body;
   int _generation = 0;
+  bool get _wall => _topic?['surface'] == 'wall';
   @override
   void initState() {
     super.initState();
@@ -1294,6 +1295,7 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
               client: widget.client,
               categories: widget.categories,
               topic: content,
+              wall: content['surface'] == 'wall',
             ),
           ),
         );
@@ -1308,9 +1310,11 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
     }
     if (!await socialConfirm(
       context,
-      topic ? 'Remove this topic?' : 'Remove this reply?',
       topic
-          ? 'The topic and its discussion will no longer be visible.'
+          ? (_wall ? 'Remove this wall post?' : 'Remove this topic?')
+          : 'Remove this reply?',
+      topic
+          ? 'This post and its discussion will no longer be visible.'
           : 'Your reply will no longer be visible.',
       action: 'Remove',
     )) {
@@ -1362,7 +1366,9 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
                 ),
               ),
               PopupMenuButton<String>(
-                tooltip: topic ? 'Topic options' : 'Reply options',
+                tooltip: topic
+                    ? (_wall ? 'Wall post options' : 'Topic options')
+                    : 'Reply options',
                 onSelected: (v) => _action(v, content, topic),
                 itemBuilder: (_) => [
                   if (mine) ...[
@@ -1375,7 +1381,7 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
             ],
           ),
           const SizedBox(height: 18),
-          if (topic) ...[
+          if (topic && '${content['title'] ?? ''}'.trim().isNotEmpty) ...[
             Text(
               content['title'],
               style: const TextStyle(
@@ -1403,7 +1409,7 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('Discussion'),
+      title: Text(_wall ? 'Wall thread' : 'Discussion'),
       actions: [
         IconButton(
           tooltip: 'Refresh discussion',
@@ -1423,10 +1429,12 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16),
                   child: Text(
-                    widget.categories
-                            .where((c) => c['id'] == _topic!['category'])
-                            .firstOrNull?['name'] ??
-                        'Forum',
+                    _wall
+                        ? 'PUBLIC WALL POST'
+                        : widget.categories
+                                  .where((c) => c['id'] == _topic!['category'])
+                                  .firstOrNull?['name'] ??
+                              'Forum',
                     style: TextStyle(
                       color: korlixSkinOf(context).primary,
                       fontWeight: FontWeight.w800,

@@ -348,9 +348,8 @@ void main() {
       );
       expect(find.text('Choose photo'), findsOneWidget);
       await fixtures.capture(t, 'social-profile-photo');
-      final profession = find.widgetWithText(
-        TextFormField,
-        'Profession (optional)',
+      final profession = find.byKey(
+        const ValueKey('social-profile-field-profession'),
       );
       await reveal(t, profession);
       await t.enterText(profession, 'Registered Nurse');

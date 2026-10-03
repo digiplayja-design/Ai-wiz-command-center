@@ -6,6 +6,7 @@ import '../theme/korlix_action_button.dart';
 import 'social_client.dart';
 import 'social_design.dart';
 import 'social_albums.dart';
+import 'social_profile_details.dart';
 
 class SocialProfileForm extends StatefulWidget {
   const SocialProfileForm({
@@ -25,9 +26,14 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
   late final _name = TextEditingController(text: widget.profile?['name']);
   late final _handle = TextEditingController(text: widget.profile?['handle']);
   late final _bio = TextEditingController(text: widget.profile?['bio']);
-  late final _profession = TextEditingController(
-    text: widget.profile?['profession'],
-  );
+  late final _details = <String, TextEditingController>{
+    for (final field in socialProfileFields)
+      field.id: TextEditingController(text: widget.profile?[field.id]),
+  };
+  late final _visibility = <String, String>{
+    for (final field in socialProfileFields)
+      field.id: socialProfileAudience(widget.profile ?? {}, field),
+  };
   Uint8List? _photo;
   bool _removePhoto = false, _picking = false;
   late bool _discoverable = widget.profile?['discoverable'] != false,
@@ -48,7 +54,9 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
       _name.clear();
       _handle.clear();
       _bio.clear();
-      _profession.clear();
+      for (final controller in _details.values) {
+        controller.clear();
+      }
       _photo = null;
       _removePhoto = true;
       setState(
@@ -63,7 +71,9 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
     _name.dispose();
     _handle.dispose();
     _bio.dispose();
-    _profession.dispose();
+    for (final controller in _details.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -82,7 +92,9 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
         'name': _name.text.trim(),
         'handle': _handle.text.trim().toLowerCase(),
         'bio': _bio.text.trim(),
-        'profession': _profession.text.trim(),
+        for (final field in socialProfileFields)
+          field.id: _details[field.id]!.text.trim(),
+        'profile_visibility': {..._visibility},
         'color': _color,
         'discoverable': _discoverable,
         'show_online': _online,
@@ -269,6 +281,7 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
                 const SizedBox(height: 24),
                 TextFormField(
                   controller: _name,
+                  enabled: !_saving && widget.client.available,
                   maxLength: 60,
                   decoration: const InputDecoration(labelText: 'Display name'),
                   onChanged: (_) => setState(() {}),
@@ -279,6 +292,7 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _handle,
+                  enabled: !_saving && widget.client.available,
                   maxLength: 24,
                   autocorrect: false,
                   decoration: const InputDecoration(
@@ -287,29 +301,16 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
                     helperText: '3–24 letters, numbers or underscores',
                   ),
                   validator: (v) =>
-                      RegExp(r'^[a-z0-9_]{3,24}$')
-                          .hasMatch((v ?? '').trim().toLowerCase())
+                      RegExp(
+                        r'^[a-z0-9_]{3,24}$',
+                      ).hasMatch((v ?? '').trim().toLowerCase())
                       ? null
                       : 'Use 3–24 letters, numbers or underscores',
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
-                  controller: _profession,
-                  enabled: !_saving,
-                  maxLength: 100,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(
-                    labelText: 'Profession (optional)',
-                    hintText: 'e.g. Designer, Nurse, Entrepreneur',
-                    prefixIcon: Icon(Icons.work_outline_rounded),
-                    helperText:
-                        'Shown on your profile and helps people find you.',
-                    helperMaxLines: 2,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
                   controller: _bio,
+                  enabled: !_saving && widget.client.available,
                   maxLength: 300,
                   minLines: 2,
                   maxLines: 4,
@@ -318,9 +319,31 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
                     hintText: 'Interests, ideas, and what brings you here',
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 const Text(
-                  'YOUR COLOR',
+                  'More about you',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Every detail below is optional. Public means other Social members. Followers means accepted connections. Choose an audience for each detail, or clear it whenever you like.',
+                  style: TextStyle(height: 1.5),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Phone number and income level start as Only me.',
+                  style: TextStyle(fontSize: 13, height: 1.5),
+                ),
+                const SizedBox(height: 18),
+                for (final section
+                    in socialProfileFields
+                        .map((field) => field.section)
+                        .toSet()) ...[
+                  _detailSection(section),
+                  const SizedBox(height: 18),
+                ],
+                const Text(
+                  'PROFILE ACCENT',
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
                     letterSpacing: 2,
@@ -391,7 +414,7 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Your name, photo, profession, handle, bio and forum posts are visible to other Social members. Hiding from People does not hide your posts or existing connections. Accepted follows allow both members to message and call. You can remove or block a connection at any time.',
+                  'Your name, photo, handle, bio and public posts are visible to other Social members. Optional details use the audience you choose above. Hiding from People does not hide your posts or existing connections. Accepted follows allow both members to message and call. You can remove or block a connection at any time.',
                   style: TextStyle(fontSize: 13, height: 1.6),
                 ),
                 const SizedBox(height: 20),
@@ -458,6 +481,81 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
       ),
     ),
   );
+
+  Widget _detailSection(String section) => SocialPanel(
+    accent: socialColor(
+      section == 'Your status'
+          ? 'violet'
+          : section == 'A few favorites'
+          ? 'coral'
+          : 'mint',
+    ),
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          section,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+        ),
+        for (final field in socialProfileFields.where(
+          (field) => field.section == section,
+        )) ...[
+          const SizedBox(height: 20),
+          TextFormField(
+            key: ValueKey('social-profile-field-${field.id}'),
+            controller: _details[field.id],
+            enabled: !_saving && widget.client.available,
+            maxLength: field.limit,
+            minLines: field.id == 'status_caption' ? 2 : 1,
+            maxLines: field.id == 'status_caption' ? 4 : 2,
+            keyboardType: field.id == 'phone_number'
+                ? TextInputType.phone
+                : TextInputType.text,
+            autocorrect: field.id != 'phone_number',
+            textCapitalization: field.id == 'phone_number'
+                ? TextCapitalization.none
+                : TextCapitalization.sentences,
+            decoration: InputDecoration(
+              labelText: field.label,
+              hintText: field.hint,
+              prefixIcon: Icon(field.icon),
+              alignLabelWithHint: field.id == 'status_caption',
+            ),
+          ),
+          const SizedBox(height: 6),
+          DropdownButtonFormField<String>(
+            key: ValueKey('social-profile-visibility-${field.id}'),
+            initialValue: _visibility[field.id],
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Who can see this?',
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 14,
+              ),
+            ),
+            items: [
+              for (final audience in socialProfileAudiences.entries)
+                DropdownMenuItem(
+                  value: audience.key,
+                  child: Row(
+                    children: [
+                      Icon(socialProfileAudienceIcon(audience.key), size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(audience.value)),
+                    ],
+                  ),
+                ),
+            ],
+            onChanged: _saving || !widget.client.available
+                ? null
+                : (value) => setState(() => _visibility[field.id] = value!),
+          ),
+        ],
+      ],
+    ),
+  );
 }
 
 class SocialComposeTopic extends StatefulWidget {
@@ -467,11 +565,13 @@ class SocialComposeTopic extends StatefulWidget {
     required this.categories,
     this.category,
     this.topic,
+    this.wall = false,
   });
   final SocialClient client;
   final List<SocialMap> categories;
   final String? category;
   final SocialMap? topic;
+  final bool wall;
   @override
   State<SocialComposeTopic> createState() => _SocialComposeTopicState();
 }
@@ -482,7 +582,8 @@ class _SocialComposeTopicState extends State<SocialComposeTopic> {
   late String _category =
       widget.topic?['category'] ??
       widget.category ??
-      widget.categories.first['id'];
+      (widget.categories.isEmpty ? 'community' : widget.categories.first['id']);
+  bool get _wall => widget.wall || widget.topic?['surface'] == 'wall';
   late final _id = widget.topic?['id'] ?? socialId();
   bool _saving = false;
   String? _error;
@@ -518,15 +619,13 @@ class _SocialComposeTopicState extends State<SocialComposeTopic> {
       _error = null;
     });
     try {
-      await widget.client.post(
-        widget.topic == null ? 'create_topic' : 'edit_topic',
-        {
-          'id': _id,
-          'category': _category,
-          'title': _title.text.trim(),
-          'body': _body.text.trim(),
-        },
-      );
+      await widget.client
+          .post(widget.topic == null ? 'create_topic' : 'edit_topic', {
+            'id': _id,
+            if (_wall) 'surface': 'wall' else 'category': _category,
+            'title': _title.text.trim(),
+            'body': _body.text.trim(),
+          });
       if (mounted) Navigator.pop(context, _id);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -539,7 +638,11 @@ class _SocialComposeTopicState extends State<SocialComposeTopic> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: Text(
-        widget.topic == null ? 'Start a conversation' : 'Edit your topic',
+        _wall
+            ? (widget.topic == null ? 'Write on your wall' : 'Edit your post')
+            : (widget.topic == null
+                  ? 'Start a conversation'
+                  : 'Edit your topic'),
       ),
     ),
     body: Center(
@@ -552,44 +655,63 @@ class _SocialComposeTopicState extends State<SocialComposeTopic> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
-                  'Good conversations start with a good question.',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+                Text(
+                  _wall
+                      ? 'Your thoughts. Your wall.'
+                      : 'Good conversations start with a good question.',
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'Your topic will be visible to KORLIX Social members. Share ideas, welcome other perspectives and keep personal information private.',
+                Text(
+                  _wall
+                      ? 'Public to KORLIX Social members and shown in your followers’ feeds. Followers are your accepted connections. Share an update, start a thread, or add a caption to your day.'
+                      : 'Your topic will be visible to KORLIX Social members. Share ideas, welcome other perspectives and keep personal information private.',
                 ),
                 const SizedBox(height: 24),
-                DropdownButtonFormField<String>(
-                  initialValue: _category,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Forum'),
-                  items: [
-                    for (final c in widget.categories)
-                      DropdownMenuItem(
-                        value: c['id'] as String,
-                        child: Text(c['name']),
-                      ),
-                  ],
-                  onChanged: _saving || widget.topic != null
-                      ? null
-                      : (v) => setState(() => _category = v!),
-                ),
+                if (!_wall)
+                  DropdownButtonFormField<String>(
+                    initialValue: _category,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Forum'),
+                    items: [
+                      for (final c in widget.categories)
+                        DropdownMenuItem(
+                          value: c['id'] as String,
+                          child: Text(c['name']),
+                        ),
+                    ],
+                    onChanged: _saving || widget.topic != null
+                        ? null
+                        : (v) => setState(() => _category = v!),
+                  ),
                 const SizedBox(height: 20),
                 TextFormField(
-                  controller: _title,
-                  maxLength: 140,
-                  decoration: const InputDecoration(
-                    labelText: 'Topic title',
-                    hintText: 'What would you like to discuss?',
+                  key: ValueKey(
+                    _wall ? 'social-wall-title' : 'social-topic-title',
                   ),
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'Add a title' : null,
+                  controller: _title,
+                  enabled: !_saving && widget.client.available,
+                  maxLength: 140,
+                  decoration: InputDecoration(
+                    labelText: _wall ? 'Headline (optional)' : 'Topic title',
+                    hintText: _wall
+                        ? 'Give your update a headline'
+                        : 'What would you like to discuss?',
+                  ),
+                  validator: (v) => !_wall && (v == null || v.trim().isEmpty)
+                      ? 'Add a title'
+                      : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
+                  key: ValueKey(
+                    _wall ? 'social-wall-body' : 'social-topic-body',
+                  ),
                   controller: _body,
+                  enabled: !_saving && widget.client.available,
                   maxLength: 8000,
                   minLines: 8,
                   maxLines: 20,
@@ -612,8 +734,11 @@ class _SocialComposeTopicState extends State<SocialComposeTopic> {
                   ),
                 const SizedBox(height: 20),
                 KorlixActionButton(
+                  key: ValueKey(
+                    _wall ? 'social-wall-publish' : 'social-topic-publish',
+                  ),
                   label: widget.topic == null
-                      ? 'Publish topic'
+                      ? (_wall ? 'Post to my wall' : 'Publish topic')
                       : 'Save changes',
                   icon: Icons.arrow_upward_rounded,
                   busy: _saving,
