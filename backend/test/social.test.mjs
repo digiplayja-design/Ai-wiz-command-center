@@ -42,6 +42,8 @@ before(async()=>{
  await db.exec(await readFile(new URL(wall,folder),'utf8'));
  const wallVoice=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_wall_voice_replies.sql'));
  await db.exec(await readFile(new URL(wallVoice,folder),'utf8'));
+ const autoDump=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_auto_dump.sql'));
+ await db.exec(await readFile(new URL(autoDump,folder),'utf8'));
  const app=express();app.use(express.json({limit:'250kb'}));registerSocial(app,{database:rpc,requireUser:async q=>{if(!users.includes(q.headers.authorization))throw Error();return {id:q.headers.authorization,email_confirmed_at:'2026-01-01'};},logger:{warn(){}}});
  server=app.listen(0);await new Promise(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}/api/social/`;
 });
@@ -171,7 +173,7 @@ test('specific message replies preserve Unicode, survive paging, and support ide
  await api('send',payload);await api('send',payload);
  const messages=(await api('messages',{peer:a.id},users[1],'GET')).items;
  assert.equal(messages.length,2);assert.equal(messages[1].reply_to,original.id);
- assert.deepEqual(messages[1].reply,{id:original.id,seq:messages[0].seq,sender:b.id,deleted:false,body:'Meeting at 3? 👋🏽'});
+ assert.deepEqual(messages[1].reply,{id:original.id,seq:messages[0].seq,sender:b.id,deleted:false,body:'Meeting at 3? 👋🏽',dump_at:null});
  for(let i=0;i<52;i++)await send();
  const viewed=await api('message',{peer:b.id,id:original.id},users[0],'GET');assert.equal(viewed.message.body,'Meeting at 3? 👋🏽');
  await api('send',{...payload,reply_to:null},users[0],'POST',409);

@@ -1,0 +1,61 @@
+-- Run only after applying the migration. Synthetic database rows only: no messages
+-- leave the database, no media is uploaded, and every mutation is rolled back.
+begin;
+create temporary table auto_dump_smoke(check_name text,result boolean) on commit drop;
+do $smoke$
+declare
+ u1 uuid:=gen_random_uuid(); u2 uuid:=gen_random_uuid(); u3 uuid:=gen_random_uuid();
+ p1 uuid; p2 uuid; p3 uuid; mid uuid:=gen_random_uuid(); rid uuid:=gen_random_uuid(); aid uuid:=gen_random_uuid();
+ op uuid:=gen_random_uuid(); gid uuid:=gen_random_uuid(); gm uuid:=gen_random_uuid();
+ r jsonb; original_deadline text; denied boolean;
+begin
+ insert into auth.users(id) values(u1),(u2),(u3);
+ r:=korlix_social_v1(u1,'save_profile',jsonb_build_object('handle','ad'||left(replace(u1::text,'-',''),20),'name','Auto Dump fixture one','color','cyan','discoverable',true,'show_online',false,'accepted_rules',true)); p1:=(r->'profile'->>'id')::uuid;
+ r:=korlix_social_v1(u2,'save_profile',jsonb_build_object('handle','ad'||left(replace(u2::text,'-',''),20),'name','Auto Dump fixture two','color','cyan','discoverable',true,'show_online',false,'accepted_rules',true)); p2:=(r->'profile'->>'id')::uuid;
+ r:=korlix_social_v1(u3,'save_profile',jsonb_build_object('handle','ad'||left(replace(u3::text,'-',''),20),'name','Auto Dump fixture three','color','cyan','discoverable',true,'show_online',false,'accepted_rules',true)); p3:=(r->'profile'->>'id')::uuid;
+ perform korlix_social_v1(u1,'request',jsonb_build_object('peer',p2));
+ perform korlix_social_v1(u2,'accept',jsonb_build_object('peer',p1));
+ perform korlix_social_attachment_v1(u1,'prepare',jsonb_build_object('id',aid,'peer',p2,'kind','file','filename','fixture.txt','content_type','application/octet-stream','extension','txt','size_bytes',30,'checksum',repeat('0',64)));
+ perform korlix_social_attachment_v1(u1,'ready',jsonb_build_object('id',aid));
+ perform korlix_social_media_chat_v1(u1,'send',jsonb_build_object('id',mid,'peer',p2,'body','Synthetic Auto Dump message','attachment_id',aid));
+ perform korlix_social_chat_v1(u2,'send',jsonb_build_object('id',rid,'peer',p1,'body','Synthetic reply','reply_to',mid));
+ r:=korlix_social_dump_v1(u1,'dump_schedule',jsonb_build_object('id',mid,'peer',p2,'seconds',15,'request_id',op));
+ original_deadline:=r->>'dump_at';
+ insert into auto_dump_smoke values('server_clock_delay',(r->>'dump_at')::timestamptz-(r->>'server_time')::timestamptz=interval '15 seconds');
+ r:=korlix_social_dump_v1(u1,'dump_schedule',jsonb_build_object('id',mid,'peer',p2,'seconds',15,'request_id',op));
+ insert into auto_dump_smoke values('network_retry_preserves_deadline',r->>'dump_at'=original_deadline);
+ r:=korlix_social_chat_v1(u1,'messages',jsonb_build_object('peer',p2));
+ insert into auto_dump_smoke values('pending_snapshot_and_quote_deadline',r->'dump_schedules'->>mid::text=original_deadline and r->'items'->1->'reply'->>'dump_at'=original_deadline);
+ r:=korlix_social_dump_v1(u1,'dump_cancel',jsonb_build_object('id',mid,'peer',p2,'request_id',gen_random_uuid()));
+ r:=korlix_social_dump_v1(u1,'dump_schedule',jsonb_build_object('id',mid,'peer',p2,'seconds',15,'request_id',op));
+ insert into auto_dump_smoke values('old_retry_does_not_rearm',r->'dump_at'='null'::jsonb);
+ perform korlix_social_dump_v1(u1,'dump_schedule',jsonb_build_object('id',mid,'peer',p2,'seconds',15,'request_id',gen_random_uuid()));
+ update korlix_social_message_dumps set dump_at=clock_timestamp()-interval '1 second' where viewer=p1 and scope='direct' and message_id=mid;
+ r:=korlix_social_media_chat_v1(u1,'messages',jsonb_build_object('peer',p2));
+ insert into auto_dump_smoke values('history_quote_and_cache_tombstone',jsonb_array_length(r->'items')=1 and r->'items'->0->'reply'='null'::jsonb and r->'dumped_ids' @> to_jsonb(array[mid]) and r->'dump_schedules'='{}'::jsonb);
+ r:=korlix_social_media_chat_v1(u2,'messages',jsonb_build_object('peer',p1));
+ insert into auto_dump_smoke values('other_participant_copy_preserved',jsonb_array_length(r->'items')=2 and r->'items'->0->>'body'='Synthetic Auto Dump message' and r->'items'->0->'attachment'->>'id'=aid::text);
+ denied:=false;
+ begin perform korlix_social_attachment_v1(u1,'link',jsonb_build_object('id',aid)); exception when no_data_found then denied:=true; end;
+ insert into auto_dump_smoke values('dumped_new_attachment_link_denied',denied);
+ r:=korlix_social_attachment_v1(u2,'link',jsonb_build_object('id',aid));
+ insert into auto_dump_smoke values('other_participant_attachment_preserved',r->'attachment'->>'id'=aid::text);
+ r:=korlix_social_dump_v1(u1,'dump_cancel',jsonb_build_object('id',mid,'peer',p2,'request_id',gen_random_uuid()));
+ insert into auto_dump_smoke values('late_cancellation_cannot_restore',r->'dumped'='true'::jsonb);
+ denied:=false;
+ begin perform korlix_social_dump_v1(u3,'dump_schedule',jsonb_build_object('id',mid,'peer',p2,'seconds',15,'request_id',gen_random_uuid())); exception when insufficient_privilege then denied:=true; end;
+ insert into auto_dump_smoke values('unrelated_member_denied',denied);
+ perform korlix_social_groups_v1(u1,'group_create',jsonb_build_object('group',gid,'name','Auto Dump fixture group','members',jsonb_build_array(p2)));
+ perform korlix_social_groups_v1(u2,'group_accept',jsonb_build_object('group',gid));
+ perform korlix_social_groups_v1(u1,'group_send',jsonb_build_object('group',gid,'id',gm,'body','Synthetic group message'));
+ perform korlix_social_dump_v1(u2,'dump_schedule',jsonb_build_object('group',gid,'id',gm,'seconds',45,'request_id',gen_random_uuid()));
+ update korlix_social_message_dumps set dump_at=clock_timestamp()-interval '1 second' where viewer=p2 and scope='group' and message_id=gm;
+ r:=korlix_social_groups_v1(u2,'group_messages',jsonb_build_object('group',gid));
+ insert into auto_dump_smoke values('group_history_and_unread_cleared',jsonb_array_length(r->'items')=0 and r->'peer'->>'unread'='0' and r->'dumped_ids' @> to_jsonb(array[gm]));
+ r:=korlix_social_groups_v1(u1,'group_messages',jsonb_build_object('group',gid));
+ insert into auto_dump_smoke values('other_group_member_preserved',jsonb_array_length(r->'items')=1);
+ insert into auto_dump_smoke values('browser_roles_denied',not has_function_privilege('anon','korlix_social_dump_v1(uuid,text,jsonb)','execute') and not has_function_privilege('authenticated','korlix_social_dump_v1(uuid,text,jsonb)','execute') and not has_table_privilege('authenticated','korlix_social_message_dumps','select'));
+ if exists(select 1 from auto_dump_smoke where result is distinct from true) then raise exception 'Auto Dump smoke check failed.'; end if;
+end $smoke$;
+select check_name,result from auto_dump_smoke order by check_name;
+rollback;
