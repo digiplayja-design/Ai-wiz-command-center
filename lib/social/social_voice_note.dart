@@ -222,10 +222,12 @@ class _SocialVoiceNoteSheetState extends State<SocialVoiceNoteSheet>
   }
 
   void _visibility() {
-    if (mounted &&
-        capture.recording &&
-        ModalRoute.of(context)?.isCurrent == false) {
-      unawaited(capture.stop());
+    if (mounted && ModalRoute.of(context)?.isCurrent == false) {
+      if (capture.recording) {
+        unawaited(capture.stop());
+      } else if (capture.busy) {
+        unawaited(capture.discard());
+      }
     }
   }
 
@@ -237,6 +239,15 @@ class _SocialVoiceNoteSheetState extends State<SocialVoiceNoteSheet>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed && capture.recording) {
       unawaited(capture.stop());
+    } else if (capture.busy &&
+        [
+          AppLifecycleState.hidden,
+          AppLifecycleState.paused,
+          AppLifecycleState.detached,
+        ].contains(state)) {
+      // Inactive alone can be the microphone permission dialog. A genuinely
+      // backgrounded sheet must invalidate a late permission/start result.
+      unawaited(capture.discard());
     }
   }
 

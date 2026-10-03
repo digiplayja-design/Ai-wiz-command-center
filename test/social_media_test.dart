@@ -294,4 +294,57 @@ void main() {
       expect(r.disposed, true);
     },
   );
+  testWidgets('background cancels a pending microphone permission request', (
+    t,
+  ) async {
+    final s = MediaStore(), r = Recorder()..startGate = Completer<void>();
+    final capture = SocialVoiceCapture(recorder: r);
+    addTearDown(s.client.dispose);
+    await social.mount(
+      t,
+      Scaffold(
+        body: SocialVoiceNoteSheet(client: s.client, capture: capture),
+      ),
+    );
+    await t.tap(find.text('Start recording'));
+    await t.pump();
+    expect(capture.busy, isTrue);
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await t.pump();
+    r.startGate!.complete();
+    await t.pumpAndSettle();
+    expect(capture.recording, isFalse);
+    expect(capture.preview, isNull);
+    expect(r.cancellations, greaterThan(0));
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await t.pumpWidget(const SizedBox());
+    await t.pump();
+    expect(r.disposed, isTrue);
+  });
+  testWidgets(
+    'permission dialog inactivity alone does not cancel an approved recording',
+    (t) async {
+      final s = MediaStore(), r = Recorder()..startGate = Completer<void>();
+      final capture = SocialVoiceCapture(recorder: r);
+      addTearDown(s.client.dispose);
+      await social.mount(
+        t,
+        Scaffold(
+          body: SocialVoiceNoteSheet(client: s.client, capture: capture),
+        ),
+      );
+      await t.tap(find.text('Start recording'));
+      await t.pump();
+      t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await t.pump();
+      expect(r.cancellations, 0);
+      r.startGate!.complete();
+      t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await t.pump();
+      expect(capture.recording, isTrue);
+      await t.pumpWidget(const SizedBox());
+      await t.pump();
+      expect(r.disposed, isTrue);
+    },
+  );
 }

@@ -1168,11 +1168,15 @@ class SocialTopicScreen extends StatefulWidget {
     required this.me,
     required this.id,
     required this.categories,
+    this.voiceNotePicker,
+    this.voiceCaptureFactory,
   });
   final SocialClient client;
   final SocialMap me;
   final String id;
   final List<SocialMap> categories;
+  final Future<SocialAttachmentDraft?> Function()? voiceNotePicker;
+  final SocialVoiceCapture Function()? voiceCaptureFactory;
   @override
   State<SocialTopicScreen> createState() => _SocialTopicScreenState();
 }
@@ -1181,10 +1185,19 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
   final _reply = TextEditingController();
   SocialMap? _topic;
   List<SocialMap> _replies = [];
-  bool _loading = false, _sending = false, _more = false;
-  String? _error, _key, _body;
-  int _generation = 0;
+  SocialAttachmentDraft? _voice;
+  bool _loading = false,
+      _sending = false,
+      _more = false,
+      _pickingVoice = false,
+      _uploading = false,
+      _awaitingConfirmation = false;
+  String? _error, _key, _body, _sendAttachmentId;
+  final _uploadAttempts = <String>{};
+  int _generation = 0, _draftGeneration = 0;
   bool get _wall => _topic?['surface'] == 'wall';
+  bool get _canReply =>
+      widget.client.available && _topic != null && _topic!['locked'] != true;
   @override
   void initState() {
     super.initState();
@@ -1196,10 +1209,10 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
     if (!widget.client.available && mounted) {
       _generation++;
       setState(() {
+        _clearDraft();
         _topic = null;
         _loading = false;
         _replies = [];
-        _reply.clear();
         _error = 'Your session changed. Close Social and sign in again.';
       });
     }
@@ -1207,12 +1220,14 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
 
   @override
   void dispose() {
+    _discardVoice();
     widget.client.removeListener(_access);
     _reply.dispose();
     super.dispose();
   }
 
   Future<void> _load({bool next = false}) async {
+    if (!widget.client.available) return;
     final g = ++_generation;
     setState(() => _loading = true);
     try {
@@ -1224,6 +1239,10 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
       final replies = socialItems(r['items']);
       setState(() {
         _topic = socialMap(r['topic']);
+        if (_topic!['locked'] == true) _clearDraft();
+        if (_awaitingConfirmation && replies.any((r) => r['id'] == _key)) {
+          _publishedDraft();
+        }
         _replies = next
             ? [..._replies, ...replies.take(40)]
             : replies.take(40).toList();
@@ -1235,6 +1254,7 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
         setState(() {
           _error = '$e';
           if (e is SocialException && [401, 403, 404].contains(e.status)) {
+            _clearDraft();
             _topic = null;
             _replies = [];
           }
@@ -1245,31 +1265,170 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
     }
   }
 
+  void _discardUploaded(SocialAttachmentDraft draft) {
+    if (_uploadAttempts.contains(draft.id) && widget.client.available) {
+      unawaited(
+        widget.client
+            .post('attachment_discard', {'id': draft.id})
+            .catchError((_) => <String, dynamic>{}),
+      );
+    }
+  }
+
+  void _discardVoice() {
+    final draft = _voice;
+    _voice = null;
+    if (draft != null) _discardUploaded(draft);
+  }
+
+  void _clearDraft() {
+    _draftGeneration++;
+    _discardVoice();
+    _reply.clear();
+    _key = _body = _sendAttachmentId = null;
+    _awaitingConfirmation = false;
+  }
+
+  void _publishedDraft() {
+    final id = _voice?.id;
+    _voice = null;
+    if (id != null) _uploadAttempts.remove(id);
+    _reply.clear();
+    _key = _body = _sendAttachmentId = null;
+    _awaitingConfirmation = false;
+  }
+
+  Future<void> _recordVoice() async {
+    if (!_wall ||
+        !_canReply ||
+        _sending ||
+        _pickingVoice ||
+        _awaitingConfirmation) {
+      return;
+    }
+    final generation = _draftGeneration;
+    setState(() => _pickingVoice = true);
+    try {
+      SocialAttachmentDraft? picked;
+      if (widget.voiceNotePicker != null) {
+        picked = await widget.voiceNotePicker!();
+      } else {
+        final capture = widget.voiceCaptureFactory?.call();
+        final bytes = await showModalBottomSheet<Uint8List>(
+          context: context,
+          isScrollControlled: true,
+          showDragHandle: true,
+          builder: (_) =>
+              SocialVoiceNoteSheet(client: widget.client, capture: capture),
+        );
+        if (bytes != null) {
+          picked = SocialAttachmentDraft(
+            bytes: bytes,
+            filename: 'Wall voice reply.wav',
+            kind: 'voice',
+          );
+        }
+      }
+      if (!mounted ||
+          generation != _draftGeneration ||
+          !_canReply ||
+          picked == null) {
+        return;
+      }
+      if (picked.kind != 'voice' ||
+          picked.bytes.length <= 44 ||
+          picked.bytes.length > SocialVoiceCapture.maxBytes + 44) {
+        throw const SocialException('Record one voice note up to 3 minutes.');
+      }
+      setState(() {
+        _discardVoice();
+        _voice = picked;
+        _error = null;
+      });
+    } catch (e) {
+      if (mounted && widget.client.available) socialNotice(context, e);
+    } finally {
+      if (mounted) setState(() => _pickingVoice = false);
+    }
+  }
+
   Future<void> _post() async {
-    final body = _reply.text.trim();
-    if (body.isEmpty || _sending) return;
-    if (_body != body) {
+    final body = _awaitingConfirmation ? _body! : _reply.text.trim(),
+        draft = _voice;
+    if ((body.isEmpty && draft == null) ||
+        _sending ||
+        _pickingVoice ||
+        !_canReply) {
+      return;
+    }
+    if (_body != body || _sendAttachmentId != draft?.id) {
       _body = body;
+      _sendAttachmentId = draft?.id;
       _key = socialId();
     }
+    final generation = _draftGeneration;
+    var publishing = false;
     setState(() => _sending = true);
     try {
+      if (draft != null && draft.uploaded == null) {
+        setState(() => _uploading = true);
+        _uploadAttempts.add(draft.id);
+        final uploaded = await widget.client.uploadAttachment(
+          bytes: draft.bytes,
+          filename: draft.filename,
+          kind: 'voice',
+          id: draft.id,
+          destination: {'topic': widget.id},
+        );
+        if (!mounted || generation != _draftGeneration || !_canReply) {
+          _discardUploaded(draft);
+          return;
+        }
+        final attachment = socialMap(uploaded['attachment']);
+        if (attachment['id'] != draft.id) {
+          throw const SocialException(
+            'Voice upload was not confirmed. Your recording is ready to retry.',
+          );
+        }
+        draft.uploaded = attachment;
+        setState(() => _uploading = false);
+      }
+      publishing = true;
       await widget.client.post('reply', {
         'id': widget.id,
         'reply_id': _key,
         'body': body,
+        if (draft != null) 'attachment_id': draft.id,
       });
-      if (mounted && widget.client.available) {
-        _reply.clear();
-        _key = null;
-        _body = null;
+      if (mounted && generation == _draftGeneration && _canReply) {
+        _publishedDraft();
         socialNotice(context, 'Reply published.');
         await _load();
       }
     } catch (e) {
-      if (mounted) socialNotice(context, e);
+      if (mounted && generation == _draftGeneration) {
+        _awaitingConfirmation =
+            _awaitingConfirmation ||
+            (publishing &&
+                (e is! SocialException || e.status == 0 || e.status >= 500));
+        if (e is SocialException && [401, 403, 404].contains(e.status)) {
+          setState(() {
+            _clearDraft();
+            _topic = null;
+            _replies = [];
+            _error = '$e';
+          });
+        } else {
+          socialNotice(context, e);
+        }
+      }
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _uploading = false;
+        });
+      }
     }
   }
 
@@ -1338,7 +1497,8 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
 
   Widget _postCard(SocialMap content, bool topic) {
     final author = socialMap(content['author']),
-        mine = author['id'] == widget.me['id'];
+        mine = author['id'] == widget.me['id'],
+        attachment = socialMap(content['attachment']);
     return SocialPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1392,10 +1552,20 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
             ),
             const SizedBox(height: 16),
           ],
-          SelectableText(
-            content['body'],
-            style: const TextStyle(height: 1.65, fontSize: 15),
-          ),
+          if ('${content['body'] ?? ''}'.isNotEmpty)
+            SelectableText(
+              '${content['body']}',
+              style: const TextStyle(height: 1.65, fontSize: 15),
+            ),
+          if (!topic && attachment['kind'] == 'voice') ...[
+            if ('${content['body'] ?? ''}'.isNotEmpty)
+              const SizedBox(height: 14),
+            SocialAttachmentView(
+              key: ValueKey(attachment['id']),
+              client: widget.client,
+              attachment: attachment,
+            ),
+          ],
           if (content['updated_at'] != content['created_at'])
             const Padding(
               padding: EdgeInsets.only(top: 10),
@@ -1406,6 +1576,130 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
     );
   }
 
+  Widget _voiceDraft() {
+    final draft = _voice!;
+    return Column(
+      key: const ValueKey('wall-voice-draft'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 12),
+        const Text(
+          'Listen before you publish',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        SocialVoicePlayer(key: ValueKey(draft.id), bytes: draft.bytes),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              key: const ValueKey('wall-replace-voice'),
+              onPressed: _sending || _pickingVoice || _awaitingConfirmation
+                  ? null
+                  : _recordVoice,
+              icon: const Icon(Icons.mic_rounded),
+              label: const Text('Re-record'),
+            ),
+            TextButton.icon(
+              key: const ValueKey('wall-remove-voice'),
+              onPressed: _sending || _pickingVoice || _awaitingConfirmation
+                  ? null
+                  : () => setState(_discardVoice),
+              icon: const Icon(Icons.delete_outline_rounded),
+              label: const Text('Remove voice note'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _composer() => SocialPanel(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Add your perspective',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+        ),
+        if (_wall) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Your reply is public to KORLIX Social members who can view this wall post.',
+            style: TextStyle(
+              color: korlixSkinOf(context).mutedText,
+              fontSize: 12,
+              height: 1.5,
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        TextField(
+          key: const ValueKey('wall-reply-text'),
+          controller: _reply,
+          enabled: !_sending && !_pickingVoice && !_awaitingConfirmation,
+          maxLength: 4000,
+          minLines: _voice == null ? 3 : 2,
+          maxLines: 8,
+          decoration: InputDecoration(
+            labelText: _voice == null ? null : 'Caption (optional)',
+            hintText: _voice == null
+                ? 'Keep it thoughtful. Keep it respectful.'
+                : 'Add a little context to your voice reply…',
+          ),
+        ),
+        if (_voice != null) _voiceDraft(),
+        if (_wall && _voice == null) ...[
+          const SizedBox(height: 8),
+          KorlixActionButton(
+            key: const ValueKey('wall-record-voice'),
+            label: 'Record voice note',
+            colorIdentity: 'Voice',
+            subtitle: 'Up to 3 minutes · Preview before publishing',
+            icon: Icons.mic_rounded,
+            onPressed: _sending || _pickingVoice || _awaitingConfirmation
+                ? null
+                : _recordVoice,
+            busy: _pickingVoice,
+            expand: true,
+          ),
+        ],
+        const SizedBox(height: 12),
+        if (_awaitingConfirmation)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: Text(
+              'Publication is not confirmed. Retry to confirm this reply without posting it twice. Your caption and voice note are kept until then.',
+              style: TextStyle(fontSize: 12, height: 1.5),
+            ),
+          ),
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _reply,
+          builder: (_, text, _) => KorlixActionButton(
+            key: const ValueKey('wall-publish-reply'),
+            label: _uploading
+                ? 'Uploading voice note…'
+                : _awaitingConfirmation
+                ? 'Retry reply'
+                : 'Publish reply',
+            colorIdentity: 'Publish reply',
+            icon: Icons.arrow_upward_rounded,
+            onPressed:
+                _sending ||
+                    _pickingVoice ||
+                    (text.text.trim().isEmpty && _voice == null)
+                ? null
+                : _post,
+            busy: _sending,
+            expand: true,
+          ),
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -1413,7 +1707,9 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
       actions: [
         IconButton(
           tooltip: 'Refresh discussion',
-          onPressed: _loading ? null : () => _load(),
+          onPressed: _loading || _sending || _pickingVoice
+              ? null
+              : () => _load(),
           icon: const Icon(Icons.refresh_rounded),
         ),
       ],
@@ -1456,6 +1752,7 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
                   ),
                 for (final reply in _replies)
                   Padding(
+                    key: ValueKey(reply['id']),
                     padding: const EdgeInsets.only(bottom: 16),
                     child: _postCard(reply, false),
                   ),
@@ -1473,39 +1770,7 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
                         'Existing posts can still be read. New replies are closed.',
                   )
                 else
-                  SocialPanel(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Text(
-                          'Add your perspective',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _reply,
-                          enabled: !_sending,
-                          maxLength: 4000,
-                          minLines: 3,
-                          maxLines: 8,
-                          decoration: const InputDecoration(
-                            hintText: 'Keep it thoughtful. Keep it respectful.',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        KorlixActionButton(
-                          label: 'Publish reply',
-                          icon: Icons.arrow_upward_rounded,
-                          onPressed: _sending ? null : _post,
-                          busy: _sending,
-                          expand: true,
-                        ),
-                      ],
-                    ),
-                  ),
+                  _composer(),
               ],
               if (_error != null)
                 Padding(
@@ -1544,6 +1809,7 @@ class _EditReplyState extends State<_EditReply> {
   late final _text = TextEditingController(text: widget.reply['body']);
   bool _saving = false;
   String? _error;
+  bool get _voice => socialMap(widget.reply['attachment'])['kind'] == 'voice';
   @override
   void initState() {
     super.initState();
@@ -1567,7 +1833,11 @@ class _EditReplyState extends State<_EditReply> {
   }
 
   Future<void> _save() async {
-    if (!widget.client.available || _text.text.trim().isEmpty) return;
+    if (!widget.client.available ||
+        _saving ||
+        (_text.text.trim().isEmpty && !_voice)) {
+      return;
+    }
     setState(() => _saving = true);
     try {
       await widget.client.post('edit_reply', {
@@ -1584,17 +1854,22 @@ class _EditReplyState extends State<_EditReply> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Edit reply'),
+    title: Text(_voice ? 'Edit voice reply caption' : 'Edit reply'),
     content: SingleChildScrollView(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           TextField(
             controller: _text,
+            enabled: !_saving && widget.client.available,
             minLines: 3,
             maxLines: 10,
             maxLength: 4000,
+            decoration: InputDecoration(
+              labelText: _voice ? 'Caption (optional)' : null,
+            ),
           ),
+          if (_voice) const Text('Your voice note stays with this reply.'),
           if (_error != null) Text(_error!),
         ],
       ),
@@ -1605,7 +1880,7 @@ class _EditReplyState extends State<_EditReply> {
         child: const Text('Cancel'),
       ),
       FilledButton(
-        onPressed: _saving ? null : _save,
+        onPressed: _saving || !widget.client.available ? null : _save,
         child: const Text('Save'),
       ),
     ],

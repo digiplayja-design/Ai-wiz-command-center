@@ -35,19 +35,30 @@ class SocialVoicePlayer extends StatefulWidget {
     this.url,
     this.durationMs,
     this.refreshUrl,
+    this.resolveBeforePlay = false,
+    this.accessClient,
+    this.playbackFactory,
   });
   final Uint8List? bytes;
   final String? url;
   final int? durationMs;
   final Future<String> Function()? refreshUrl;
+
+  /// Wall audio is permission checked on every new play, including resume.
+  final bool resolveBeforePlay;
+  final SocialClient? accessClient;
+  final SocialNotePlayback Function()? playbackFactory;
   @override
   State<SocialVoicePlayer> createState() => _SocialVoicePlayerState();
 }
 
 class _SocialVoicePlayerState extends State<SocialVoicePlayer>
     with WidgetsBindingObserver {
-  late final SocialNotePlayback _player = playback.createSocialNotePlayback();
-  bool _busy = false;
+  late final SocialNotePlayback _player =
+      widget.playbackFactory?.call() ?? playback.createSocialNotePlayback();
+  bool _busy = false, _foreground = true;
+  int _request = 0;
+  Duration? _resumePosition;
   double _speed = 1;
   String? _error;
   Duration get _position => _player.position;
@@ -72,56 +83,144 @@ class _SocialVoicePlayerState extends State<SocialVoicePlayer>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _player.addListener(_changed);
-    _player.source(bytes: widget.bytes, url: widget.url);
+    widget.accessClient?.addListener(_accessChanged);
+    if (!widget.resolveBeforePlay) {
+      _player.source(bytes: widget.bytes, url: widget.url);
+    }
+  }
+
+  bool _current(int request) =>
+      mounted &&
+      request == _request &&
+      _foreground &&
+      widget.accessClient?.available != false &&
+      ModalRoute.of(context)?.isCurrent != false;
+
+  void _accessChanged() {
+    if (widget.accessClient?.available == false) {
+      _invalidate(clear: true);
+      if (mounted) {
+        setState(() => _error = 'Your session changed. Reopen KORLIX Social.');
+      }
+    }
+  }
+
+  void _invalidate({required bool clear, bool retainPosition = false}) {
+    _request++;
+    _busy = false;
+    if (retainPosition) _resumePosition ??= _position;
+    unawaited(_player.pause());
+    if (clear) _player.source();
   }
 
   @override
   void didUpdateWidget(covariant SocialVoicePlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_playing &&
-        (oldWidget.url != widget.url || oldWidget.bytes != widget.bytes)) {
-      _player.source(bytes: widget.bytes, url: widget.url);
+    if (oldWidget.accessClient != widget.accessClient) {
+      oldWidget.accessClient?.removeListener(_accessChanged);
+      widget.accessClient?.addListener(_accessChanged);
+      _invalidate(clear: true);
+      _resumePosition = null;
+    }
+    if (((oldWidget.url != widget.url || oldWidget.bytes != widget.bytes) &&
+            (widget.resolveBeforePlay || !_playing)) ||
+        oldWidget.resolveBeforePlay != widget.resolveBeforePlay) {
+      _invalidate(clear: true);
+      _resumePosition = null;
+      if (!widget.resolveBeforePlay) {
+        _player.source(bytes: widget.bytes, url: widget.url);
+      }
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) unawaited(_player.pause());
+    _foreground = state == AppLifecycleState.resumed;
+    if (!_foreground) {
+      if (widget.resolveBeforePlay) {
+        _invalidate(clear: true, retainPosition: true);
+      } else {
+        unawaited(_player.pause());
+      }
+      if (mounted) setState(() {});
+    }
   }
 
   @override
   void dispose() {
+    _request++;
     WidgetsBinding.instance.removeObserver(this);
+    widget.accessClient?.removeListener(_accessChanged);
     _player.removeListener(_changed);
     _player.dispose();
     super.dispose();
   }
 
   Future<void> _toggle() async {
-    if (_busy) return;
+    if (_busy || !_foreground || widget.accessClient?.available == false) {
+      return;
+    }
     if (_playing) {
       await _player.pause();
       return;
     }
+    final request = ++_request;
+    final resumeAt = _resumePosition ?? _position;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      // Keep HTML play inside this tap's gesture, before any network wait.
-      await _player.play();
-    } catch (_) {
-      if (mounted) {
-        setState(() => _error = 'Tap play to retry. Check your device volume.');
+      if (widget.resolveBeforePlay) {
+        // Begin the silent HTML play in the tap gesture, before any network wait.
+        await _player.activate();
+        if (!_current(request)) return;
+        final refresh = widget.refreshUrl;
+        if (refresh == null) {
+          throw const SocialException('Voice note unavailable.');
+        }
+        final url = await refresh();
+        if (!_current(request)) return;
+        final uri = Uri.tryParse(url);
+        if (uri == null ||
+            !uri.hasAuthority ||
+            (uri.scheme != 'https' && uri.scheme != 'http')) {
+          throw const SocialException('Voice note unavailable. Try again.');
+        }
+        _player.source(url: url);
+        await _player.seek(resumeAt);
+        if (!_current(request)) return;
+        await _player.speed(_speed);
+        if (!_current(request)) return;
+        _resumePosition = null;
       }
-      if (widget.refreshUrl != null) {
-        try {
-          final url = await widget.refreshUrl!();
-          if (mounted) _player.source(url: url);
-        } catch (_) {}
+      await _player.play();
+    } catch (error) {
+      if (!_current(request)) return;
+      if (widget.resolveBeforePlay) {
+        _player.source();
+        _resumePosition = resumeAt;
+        setState(
+          () => _error = error is SocialException
+              ? error.status == 403 || error.status == 404
+                    ? 'This voice note is no longer available to you.'
+                    : error.message
+              : 'Could not play this voice note. Check your volume and tap play to retry.',
+        );
+      } else {
+        setState(() => _error = 'Tap play to retry. Check your device volume.');
+        if (widget.refreshUrl != null) {
+          try {
+            final url = await widget.refreshUrl!();
+            if (_current(request)) _player.source(url: url);
+          } catch (_) {}
+        }
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted && request == _request) {
+        if (!_current(request) && widget.resolveBeforePlay) _player.source();
+        setState(() => _busy = false);
+      }
     }
   }
 
@@ -331,6 +430,8 @@ class _SocialAttachmentViewState extends State<SocialAttachmentView> {
         url: a['url'] as String?,
         durationMs: (a['duration_ms'] as num?)?.toInt(),
         refreshUrl: _link,
+        resolveBeforePlay: a['scope'] == 'wall',
+        accessClient: a['scope'] == 'wall' ? widget.client : null,
       );
     }
     return Column(
