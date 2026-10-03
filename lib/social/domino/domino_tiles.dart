@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../social_client.dart';
+import 'domino_layout.dart';
 
 class DominoTile extends StatelessWidget {
   const DominoTile({
@@ -147,15 +148,14 @@ class DominoBoard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (_, box) {
-      final columns = (box.maxWidth / 61).floor().clamp(3, 12),
-          rows = (tiles.length / columns).ceil().clamp(1, 10);
+      final height = box.maxWidth < 360 ? 210.0 : 240.0;
       return Semantics(
         label: tiles.isEmpty
             ? 'The domino table is empty.'
             : 'Left open end ${tiles.first['a']}. Right open end ${tiles.last['b']}. Domino chain: ${tiles.map((t) => '${t['a']}-${t['b']}').join(', ')}',
         child: Container(
           width: double.infinity,
-          height: math.max(190, rows * 44.0 + 32),
+          height: height,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
@@ -205,8 +205,10 @@ class DominoBoard extends StatelessWidget {
                 )
               : InteractiveViewer(
                   minScale: 1,
-                  maxScale: 3,
-                  child: CustomPaint(painter: _BoardPainter(tiles, columns)),
+                  maxScale: 6,
+                  child: SizedBox.expand(
+                    child: CustomPaint(painter: _BoardPainter(tiles)),
+                  ),
                 ),
         ),
       );
@@ -215,88 +217,67 @@ class DominoBoard extends StatelessWidget {
 }
 
 class _BoardPainter extends CustomPainter {
-  _BoardPainter(this.tiles, this.columns);
+  _BoardPainter(this.tiles);
   final List<SocialMap> tiles;
-  final int columns;
+
   @override
   void paint(Canvas c, Size size) {
-    final cell = size.width / columns,
-        w = math.min(52.0, cell - 6),
-        h = w / 1.85;
-    Offset center(int i) {
-      final row = i ~/ columns, col = i % columns;
-      return Offset(
-        (row.isEven ? col : columns - 1 - col) * cell + cell / 2,
-        20 + row * 44,
-      );
-    }
-
-    for (var i = 1; i < tiles.length; i++) {
-      c.drawLine(
-        center(i - 1),
-        center(i),
-        Paint()
-          ..color = const Color(0xFF73A995)
-          ..strokeWidth = 2,
-      );
-    }
-    for (var i = 0; i < tiles.length; i++) {
-      final at = center(i), t = tiles[i], reverse = (i ~/ columns).isOdd;
-      c.save();
-      c.translate(at.dx - w / 2, at.dy - h / 2);
+    final layout = layoutDominoChain(
+      tiles
+          .map(
+            (t) => DominoLayoutValue(
+              (t['a'] as num).toInt(),
+              (t['b'] as num).toInt(),
+            ),
+          )
+          .toList(growable: false),
+      size,
+    );
+    for (var i = 0; i < layout.tiles.length; i++) {
+      final tile = layout.tiles[i];
       c.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(1, 3, w, h),
-          const Radius.circular(5),
+          tile.rect.shift(const Offset(0, 2)),
+          Radius.circular(layout.unit * .16),
         ),
-        Paint()..color = const Color(0x77000000),
+        Paint()..color = const Color(0x66000000),
       );
+      c.save();
+      c.translate(tile.rect.center.dx, tile.rect.center.dy);
+      c.rotate(tile.quarterTurns * math.pi / 2);
+      c.translate(-layout.unit, -layout.unit / 2);
       DominoPainter(
-        (t[reverse ? 'b' : 'a'] as num).toInt(),
-        (t[reverse ? 'a' : 'b'] as num).toInt(),
+        tile.value.a,
+        tile.value.b,
         horizontal: true,
-      ).paint(c, Size(w, h));
-      if (i == 0 || i == tiles.length - 1) {
-        c.drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromLTWH(-2, -2, w + 4, h + 4),
-            const Radius.circular(8),
-          ),
-          Paint()
-            ..color = i == 0 ? const Color(0xFF65E7C6) : const Color(0xFFC3A1FF)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2,
-        );
-        void endpoint(String label, Offset point, Color color) {
-          c.drawCircle(point, 7, Paint()..color = color);
-          final text = TextPainter(
-            text: TextSpan(
-              text: label,
-              style: const TextStyle(
-                color: Color(0xFF112630),
-                fontFamily: 'Roboto',
-                fontSize: 9,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            textDirection: TextDirection.ltr,
-          )..layout();
-          text.paint(c, point - Offset(text.width / 2, text.height / 2));
-          text.dispose();
-        }
-
-        if (i == 0) {
-          endpoint('L', const Offset(0, 0), const Color(0xFF65E7C6));
-        }
-        if (i == tiles.length - 1) {
-          endpoint('R', Offset(reverse ? 0 : w, h), const Color(0xFFC3A1FF));
-        }
-      }
+      ).paint(c, Size(layout.unit * 2, layout.unit));
       c.restore();
     }
+    if (layout.tiles.isEmpty) return;
+    void endpoint(String label, Offset point, Offset outward, Color color) {
+      final at = point + outward * 11;
+      c.drawCircle(at, 8, Paint()..color = color);
+      final text = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: const TextStyle(
+            color: Color(0xFF112630),
+            fontFamily: 'Roboto',
+            fontSize: 10,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      text.paint(c, at - Offset(text.width / 2, text.height / 2));
+      text.dispose();
+    }
+
+    final first = layout.tiles.first, last = layout.tiles.last;
+    endpoint('L', first.entry, -first.flow, const Color(0xFF65E7C6));
+    endpoint('R', last.exit, last.flow, const Color(0xFFC3A1FF));
   }
 
   @override
-  bool shouldRepaint(_BoardPainter old) =>
-      old.tiles != tiles || old.columns != columns;
+  bool shouldRepaint(_BoardPainter old) => old.tiles != tiles;
 }

@@ -9,6 +9,7 @@ import '../social_design.dart';
 import 'domino_controller.dart';
 import 'domino_solo.dart';
 import 'domino_tiles.dart';
+import 'domino_table_scene.dart';
 
 class DominoLobby extends StatefulWidget {
   const DominoLobby({super.key, required this.client, required this.profile});
@@ -971,10 +972,20 @@ class _DominoTableScreenState extends State<DominoTableScreen>
             expand: true,
           ),
         const SizedBox(height: 18),
-        const DominoBoard(tiles: []),
+        tableScene(const []),
       ],
     ),
   );
+  Widget tableScene(List<SocialMap> board, {Key? key}) => DominoTableScene(
+    key: key,
+    tiles: board,
+    players: c.players,
+    me: c.me,
+    turn: c.table['turn'] as String?,
+    capacity: (c.table['capacity'] as num? ?? 4).toInt(),
+    playing: c.table['phase'] == 'playing',
+  );
+
   Widget scoreboard() {
     final teams = (c.table['capacity'] as num?) == 4;
     final wins = socialMap(c.table['wins']),
@@ -1231,7 +1242,7 @@ class _DominoTableScreenState extends State<DominoTableScreen>
           ),
         ),
         const SizedBox(height: 12),
-        DominoBoard(key: const Key('domino-board'), tiles: board),
+        tableScene(board, key: const Key('domino-board')),
         const SizedBox(height: 12),
         if (board.isNotEmpty)
           Wrap(

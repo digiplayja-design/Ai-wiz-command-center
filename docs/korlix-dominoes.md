@@ -1,10 +1,16 @@
 # KORLIX Social Dominoes
 
-Open **Social → Dominoes · play with video**. Create a private two-player table or four-player partner table, invite accepted Social connections, and have each player select Ready. The host deals. Invitations also appear as a direct Social message; no address-book messages are sent automatically.
+Open **Social → Dominoes · solo or friends**. Play against the computer, or create a private two-player table or four-player partner table, invite accepted Social connections, and have each player select Ready. The host deals. Invitations also appear as a direct Social message; no address-book messages are sent automatically.
 
 This is original free-play block dominoes with a double-six set, seven tiles per player, no drawing, and opposite-seat partners in four-player games. The highest dealt double opens (highest total tile if no double is dealt). Players must play if a move exists. An empty hand wins; a blocked table is decided by remaining team/individual pip totals. Ties award no points. Points have no monetary value. No wagers, wallets, purchases, or cash-out are implemented.
 
 The backend owns shuffling, turns, tile legality, scoring, and private hands. Clients submit a revision and unique action ID; conflicts trigger a refresh. Each player sees only their own tiles. Tables expire after four hours. Leaving an active round or the host leaving closes the table.
+
+## Jamaican-style table presentation
+
+The game and waiting room show a wooden table with four chairs and player names. The viewer sits at the bottom; in a four-player game, successive numbered seats run bottom, right, top, left, with the partner opposite. In two-player and computer practice games the opponent sits opposite, and the two unused chairs are labelled "Not in use". Invitations do not occupy a chair until accepted. Seats show only public tile counts, and the current player's chair is highlighted during play.
+
+The board presents a continuous matching chain, with doubles crosswise and bends as the chain grows. Open ends retain the L/R labels used by the play controls; the board can be pinched to zoom. The table presentation follows the placement conventions described in [SixLove's Jamaican Partner guide](https://sixlove.app/partner-domino/). Existing opening, blocked-hand and score rules above remain in force; this presentation update does not introduce a Six-Love match rule set.
 
 Video is explicit opt-in through **Join video & audio**. One local capture feeds up to three WebRTC peer connections. Each remote participant has a separate audio output; video renderers contain video tracks only. Controls cover microphone, camera, camera switch, speakerphone where supported, resume sound, and reconnect. Browser speaker routing depends on the device/browser. Cameras remain beside the board in landscape and above it in portrait. Backgrounding or leaving stops local media; returning requires joining video again. Nothing records the call.
 
