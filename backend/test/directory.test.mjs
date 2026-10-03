@@ -7,6 +7,28 @@ async function publish(b){b=await call(owner,'submit',b.id,{owner_name:'Test Own
 test.before(async()=>{db=new PGlite();await db.exec('create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create schema storage;create table auth.users(id uuid primary key);create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);grant usage on schema public to service_role;');for(const u of[owner,other,administrator])await db.query('insert into auth.users values($1)',[u]);await db.exec(await readFile(new URL('../../supabase/migrations/20261002184255_business_directory_verified_membership.sql',import.meta.url),'utf8'));await db.exec('set role service_role');});
 test.after(async()=>db?.close());
 test('free owner listing stays private until approved and never exposes private owner fields',async()=>{const b=await create();assert.equal((await call(null,'browse')).businesses.length,0);await assert.rejects(call(other,'get',b.id),/DIR403/);const published=await publish(b);const card=await call(null,'public',b.id);assert.equal(card.details.name,'Test Bakery');assert.equal(card.verified,false);assert.equal(card.owner_id,undefined);assert.equal(card.owner_name,undefined);assert.equal((await call(null,'browse',null,{q:'bread'})).businesses.length,1);assert.equal(published.state,'published');});
+test('free submission returns a pending receipt and enters review without verification or membership',async()=>{
+ const draft=await create();
+ assert.equal(draft.state,'draft');
+ assert.equal(draft.verification_state,'none');
+ assert.equal(draft.consent_at,null);
+ const submitted=await call(owner,'submit',draft.id,{owner_name:'Test Owner',details:draft.draft,version:draft.version,consent:true});
+ assert.equal(submitted.id,draft.id);
+ assert.equal(submitted.state,'pending');
+ assert.equal(submitted.version,draft.version+1);
+ assert.equal(submitted.verification_state,'none');
+ assert(submitted.consent_at);
+ assert.equal(submitted.published,null);
+ const snapshot=await call(owner,'get',draft.id);
+ assert.equal(snapshot.business.state,'pending');
+ assert.deepEqual(snapshot.membership,{});
+ const mine=(await call(owner,'mine')).businesses.find(b=>b.id===draft.id);
+ assert.equal(mine.state,'pending');
+ const queue=(await call(administrator,'admin_queue',null,{},true)).businesses;
+ assert(queue.some(b=>b.id===draft.id&&b.state==='pending'&&b.verification_state==='none'));
+ await assert.rejects(call(null,'public',draft.id),/DIR404/);
+ assert.equal((await call(null,'browse',null,{ids:[draft.id]})).businesses.length,0);
+});
 test('stale edits, unowned photos, missing consent and non-admin reviews are rejected',async()=>{const b=await create();await assert.rejects(call(owner,'save',b.id,{version:99,owner_name:'Test Owner',details:b.draft}),/DIR409/);await assert.rejects(call(owner,'submit',b.id,{version:1,owner_name:'Test Owner',details:b.draft,consent:false}),/DIR400/);await assert.rejects(call(owner,'save',b.id,{version:1,owner_name:'Test Owner',details:{...b.draft,photos:[other]}}),/DIR400/);await assert.rejects(call(owner,'review',b.id,{version:1,note:'not admin',decision:'approve'}),/DIR403/);});
 test('payment alone cannot activate badge; checks plus paid approved membership required',async()=>{let b=await publish(await create());await assert.rejects(call(owner,'checkout_start',b.id,{interval:'month',livemode:true}),/DIR409/);b=await call(owner,'verification_submit',b.id,{evidence_note:'I own the company website and business registration.'});await assert.rejects(call(administrator,'verification_review',b.id,{version:b.version,decision:'approve',note:'Incomplete checks',checks:['email']},true),/DIR400/);b=await call(administrator,'verification_review',b.id,{version:b.version,decision:'approve',note:'Email, phone and registry checked',checks:['email','phone','ownership']},true);assert.equal((await call(null,'public',b.id)).verified,false);const m=await call(owner,'checkout_start',b.id,{interval:'month',livemode:true});await assert.rejects(call(owner,'checkout_start',b.id,{interval:'year',livemode:true}),/DIR409/);assert.equal((await call(owner,'checkout_start',b.id,{interval:'month',livemode:true})).generation,m.generation);await call(null,'billing_apply',b.id,{livemode:true,generation:m.generation,subscription_id:'sub_test',customer_id:'cus_test',state:'active',invoice_id:'in_test',paid_until:new Date(Date.now()+86400000).toISOString()});assert.equal((await call(null,'public',b.id)).verified,true);b=await call(owner,'save',b.id,{version:b.version,owner_name:'Test Owner',details:{...b.draft,phone:'+1 555 0200'}});assert.equal(b.verification_state,'needs_changes');assert.equal((await call(null,'public',b.id)).verified,false);});
 test('hidden listings cannot be read publicly',async()=>{let b=await publish(await create());await call(owner,'hide',b.id);await assert.rejects(call(null,'public',b.id),/DIR404/);});

@@ -6,6 +6,19 @@ async function request(path,{method='GET',body,auth=false}={}){const r=await fet
 test('public browsing works without a paid entitlement or sign-in',async()=>{const r=await request('/businesses');assert.equal(r.status,200);assert.equal(calls.at(-1).actor,undefined);});
 test('owner data requires authentication and supplied admin flags are ignored',async()=>{assert.equal((await request('/me')).status,401);await request('/me',{auth:true});assert.equal(calls.at(-1).admin,false);assert.equal((await request('/admin/'+business,{method:'POST',auth:true,body:{isAdmin:true,action:'review',decision:'approve',version:1,note:'Attempted bypass'}})).status,403);});
 test('checkout fails closed when credentials are absent',async()=>{const r=await request('/owner/'+business+'/membership',{method:'POST',auth:true,body:{action:'checkout',interval:'month',acceptRecurring:true}});assert.equal(r.status,503);assert.match(r.data.error,/not configured/);});
+test('free create and submit routes remain available when paid checkout is unconfigured',async()=>{
+ const details={name:'Fixture Bakery',category:'Food & Drink',description:'Bread and pastries',email:'fixture@example.test',city:'Kingston',photos:[]};
+ const created=await request('/owner',{method:'POST',auth:true,body:{owner_name:'Fixture Owner',details}});
+ assert.equal(created.status,200);
+ assert.equal(calls.at(-1).action,'create');
+ assert.equal(calls.at(-1).actor,uid);
+ const submitted=await request('/owner/'+business+'/action',{method:'POST',auth:true,body:{action:'submit',owner_name:'Fixture Owner',details,version:1,consent:true}});
+ assert.equal(submitted.status,200);
+ assert.equal(calls.at(-1).action,'submit');
+ assert.equal(calls.at(-1).id,business);
+ assert.equal(calls.at(-1).p.consent,true);
+ assert.equal(calls.at(-1).p.version,1);
+});
 test('forged webhooks cannot update memberships',async()=>{const before=calls.length;assert.equal((await request('/billing/webhook',{method:'POST',body:{type:'customer.subscription.updated',data:{object:{metadata:{korlix_directory:business}}}}})).status,400);assert.equal(calls.length,before);});
 test('real signature validation enforces freshness and body integrity',()=>{const billing=directoryBilling({KORLIX_DIRECTORY_STRIPE_SECRET_KEY:'sk_test_fixture',KORLIX_DIRECTORY_STRIPE_WEBHOOK_SECRET:'whsec_fixture'}),raw=Buffer.from('{"id":"evt_fixture"}'),t=Math.floor(Date.now()/1000),signature=createHmac('sha256','whsec_fixture').update(t+'.').update(raw).digest('hex');assert(billing.verify(raw,`t=${t},v1=${signature}`));assert(!billing.verify(Buffer.from('{}'),`t=${t},v1=${signature}`));assert(!billing.verify(raw,`t=${t-1000},v1=${signature}`));});
 test('Stripe retry uses fixed server pricing and a stable idempotency key',async()=>{let sent;const generation='33333333-3333-4333-8333-333333333333';const billing=directoryBilling({KORLIX_DIRECTORY_STRIPE_SECRET_KEY:'sk_test_fixture',KORLIX_DIRECTORY_STRIPE_WEBHOOK_SECRET:'whsec_fixture'},{fetcher:async(url,options)=>{sent={url,options};return {ok:true,json:async()=>({id:'cs_fixture',url:'https://checkout.stripe.com/c/pay/fixture',livemode:false,client_reference_id:business,metadata:{generation},mode:'subscription',status:'open'})};}});await billing.checkout(business,{generation,interval:'month',checkout_expires:new Date(Date.now()+3600000).toISOString()},'fixture@example.test');const form=new URLSearchParams(sent.options.body);assert.equal(form.get('line_items[0][price_data][unit_amount]'),'499');assert.equal(form.get('mode'),'subscription');assert.equal(sent.options.headers['Idempotency-Key'],'directory-'+generation);});
