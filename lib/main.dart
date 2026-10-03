@@ -9904,6 +9904,10 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     );
   }
 
+  bool _isIncludedTextWorkspace(String featureKey) => const {
+    'voicescribe', 'copybox',
+  }.contains(featureKey.trim().toLowerCase().replaceAll(RegExp(r'[\s_-]'), ''));
+
   // KORLIX_CUSTOM_ACCESS_FRONTEND_V1_BEGIN
   List<Map<String, dynamic>> _customAccessMapList(dynamic value) {
     if (value is! List) {
@@ -10432,9 +10436,12 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       'requiresPayment',
       'requires_payment',
     );
-    final unlocked = _customAccessHasFeature(featureKey);
+    final includedTextWorkspace = _isIncludedTextWorkspace(featureKey);
+    final unlocked = includedTextWorkspace || _customAccessHasFeature(featureKey);
 
-    final statusLabel = unlocked
+    final statusLabel = includedTextWorkspace
+        ? 'Included · No code needed'
+        : unlocked
         ? 'Active'
         : included
         ? 'Included with code'
@@ -10538,7 +10545,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
             final catalog = _customAccessCatalogOrFallback;
             final included = catalog
                 .where(
-                  (item) => _customAccessItemBool(
+                  (item) => _isIncludedTextWorkspace(_customAccessFeatureKey(item)) || _customAccessItemBool(
                     item,
                     'includedInTrial',
                     'included_in_trial',
@@ -10547,7 +10554,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 .toList(growable: false);
             final paidAddons = catalog
                 .where(
-                  (item) => !_customAccessItemBool(
+                  (item) => !_isIncludedTextWorkspace(_customAccessFeatureKey(item)) && !_customAccessItemBool(
                     item,
                     'includedInTrial',
                     'included_in_trial',
@@ -10555,9 +10562,11 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 )
                 .toList(growable: false);
 
-            final hasIncludedAccess =
-                _customAccessHasFeature('copybox') ||
-                _customAccessHasFeature('voice_scribe');
+            final hasIncludedAccess = included.any((item) =>
+              _isIncludedTextWorkspace(_customAccessFeatureKey(item)) ||
+              _customAccessHasFeature(_customAccessFeatureKey(item)));
+            final hasCodeFeatures = included.any((item) =>
+              !_isIncludedTextWorkspace(_customAccessFeatureKey(item)));
 
             return SafeArea(
               child: Padding(
@@ -10613,7 +10622,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Request a 7-day access code or enter a code sent by Korlix support. Codes unlock Copybox and Voice-scribe for your account email. Paid add-ons appear here and become openable only after payment/entitlement is active.',
+                          'VoiceScribe and Copy Box are included with your KORLIX account. No access code is needed. Paid add-ons become available when their payment or entitlement is active.',
                           style: TextStyle(
                             color: skin.mutedText,
                             fontSize: 13,
@@ -10624,18 +10633,20 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                         const SizedBox(height: 14),
                         Row(
                           children: [
-                            Expanded(
-                              child: FilledButton.icon(
-                                onPressed: _customAccessLoading
-                                    ? null
-                                    : () => unawaited(
-                                        _requestCustomAccessCode(setSheetState),
-                                      ),
-                                icon: const Icon(Icons.mail_outline_rounded),
-                                label: const Text('Request a Code'),
+                            if (hasCodeFeatures) ...[
+                              Expanded(
+                                child: FilledButton.icon(
+                                  onPressed: _customAccessLoading
+                                      ? null
+                                      : () => unawaited(
+                                          _requestCustomAccessCode(setSheetState),
+                                        ),
+                                  icon: const Icon(Icons.mail_outline_rounded),
+                                  label: const Text('Request a Code'),
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 10),
+                              const SizedBox(width: 10),
+                            ],
                             Expanded(
                               child: OutlinedButton.icon(
                                 onPressed: _customAccessLoading
@@ -10680,7 +10691,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                         ],
                         const SizedBox(height: 18),
                         Text(
-                          'Included with free 7-day access',
+                          'Included tools',
                           style: TextStyle(
                             color: skin.text,
                             fontSize: 16,
@@ -10735,7 +10746,14 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   // KORLIX_CUSTOM_ACCESS_FRONTEND_V1_END
 
   Future<void> _openUtilityWorkspace(String featureKey) async {
-    if (_loading || _customAccessLoading) {
+    if (_loading) return;
+    if (_isIncludedTextWorkspace(featureKey)) {
+      await _openSavedTextWorkspace(
+        featureKey.trim().toLowerCase().replaceAll(RegExp(r'[\s_-]'), '') == 'voicescribe',
+      );
+      return;
+    }
+    if (_customAccessLoading) {
       return;
     }
 
@@ -11058,7 +11076,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                   selected: selected,
                   accent: selected ? skin.success : statusColor,
                   size: KorlixButtonSize.compact,
-                  onPressed: _loading || _customAccessLoading
+                  onPressed: _loading || (_customAccessLoading && !_isIncludedTextWorkspace(tool))
                       ? null
                       : () => _selectUtilityTool(tool),
                 ),
@@ -13171,7 +13189,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       tile: true, selected: selected, locked: locked,
     );
     Widget toolTile(String label) => tile(label, korlixToolIcon(label),
-      _loading || _customAccessLoading ? null : () => _selectUtilityTool(label));
+      _loading || (_customAccessLoading && !_isIncludedTextWorkspace(label)) ? null : () => _selectUtilityTool(label));
     bool businessAction(QuickAction action) => const {
       'create an app', 'email enhancer', 'negocios', 'crear plan', 'ideas de contenido', 'idées contenu',
     }.contains(action.label.toLowerCase());

@@ -1,7 +1,8 @@
 # VoiceScribe and Copy Box workspaces
 
-Both existing Custom Access routes now open the shared workspace in `lib/text_workspace`.
-Existing trial/custom-access checks remain in `_openUtilityWorkspace` and the Custom Access menu.
+VoiceScribe and Copy Box open the shared workspace in `lib/text_workspace` for every signed-in KORLIX account. As of October 3, 2026, neither tool requires a Custom Access code, a seven-day trial entitlement, or a Custom Access status request. Home and utility buttons remain usable while unrelated Custom Access requests are loading. Legacy Custom Access tiles show both tools as included without a code; paid add-on checks remain unchanged.
+
+Sign-in, account/session isolation, third-party AI consent and the ordinary `/api/generate` usage limits still apply. This is a frontend access correction; no backend or database changes are needed.
 
 ## User workflows
 
