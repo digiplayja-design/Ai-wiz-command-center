@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../theme/korlix_theme.dart';
 import '../theme/korlix_action_button.dart';
 import 'social_client.dart';
+import 'social_alert_scope.dart';
+import 'social_notifications.dart';
 import 'social_design.dart';
 import 'social_forms.dart';
 import 'social_threads.dart';
@@ -50,6 +52,7 @@ class _SocialScreenState extends State<SocialScreen>
   static const _tabOrder = [4, 0, 1, 2, 3];
   Timer? _poll, _heartbeat, _debounce;
   Timer? _calls;
+  SocialNotifications? _notifications;
   bool _checkingCalls = false, _callOpen = false;
   bool _initialConversationOpened = false;
   SocialClient get client => widget.client;
@@ -62,10 +65,6 @@ class _SocialScreenState extends State<SocialScreen>
     WidgetsBinding.instance.addObserver(this);
     client.addListener(_access);
     unawaited(_initialize());
-    _calls = Timer.periodic(
-      const Duration(seconds: 3),
-      (_) => unawaited(_incomingCall()),
-    );
     _poll = Timer.periodic(const Duration(seconds: 15), (_) {
       if (_foreground &&
           _profile != null &&
@@ -80,6 +79,22 @@ class _SocialScreenState extends State<SocialScreen>
       const Duration(seconds: 30),
       (_) => _presence(_foreground),
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _notifications = SocialAlertScope.maybeOf(context)?.notifications;
+    if (_notifications != null) {
+      _calls?.cancel();
+      _calls = null;
+    } else {
+      // Standalone Social routes retain incoming calls without an app host.
+      _calls ??= Timer.periodic(
+        const Duration(seconds: 3),
+        (_) => unawaited(_incomingCall()),
+      );
+    }
   }
 
   void _access() {
@@ -125,7 +140,8 @@ class _SocialScreenState extends State<SocialScreen>
   }
 
   Future<void> _incomingCall() async {
-    if (_checkingCalls ||
+    if (_notifications != null ||
+        _checkingCalls ||
         _callOpen ||
         !_foreground ||
         _profile == null ||
@@ -136,6 +152,7 @@ class _SocialScreenState extends State<SocialScreen>
     try {
       final r = await client.get('call_inbox', {'device': client.callDevice});
       if (!mounted ||
+          _notifications != null ||
           _callOpen ||
           !_foreground ||
           !client.available ||
@@ -163,17 +180,22 @@ class _SocialScreenState extends State<SocialScreen>
     SocialMap? incoming,
   }) async {
     if (_callOpen || !client.available || !mounted) return;
+    final sessionClient = client;
+    final notifications = _notifications;
+    if (notifications != null && !notifications.beginCall()) return;
+    final alertClient = notifications?.client;
     _callOpen = true;
-    final media = SocialCallMedia();
-    // Unlock playback in the outgoing call button's gesture, before routing or
-    // authentication/network awaits. Incoming calls still wait for Answer.
-    if (incoming == null) unawaited(media.audio.activate());
+    SocialCallMedia? media;
     try {
+      media = SocialCallMedia();
+      // Unlock playback in the outgoing call button's gesture, before routing or
+      // authentication/network awaits. Incoming calls still wait for Answer.
+      if (incoming == null) unawaited(media.audio.activate());
       await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => SocialCallScreen(
-            client: client,
+            client: sessionClient,
             peer: peer,
             video: video,
             incoming: incoming,
@@ -182,8 +204,17 @@ class _SocialScreenState extends State<SocialScreen>
         ),
       );
     } finally {
-      await media.close();
-      _callOpen = false;
+      try {
+        await media?.close();
+      } finally {
+        _callOpen = false;
+        if (notifications != null &&
+            alertClient != null &&
+            identical(notifications.client, alertClient) &&
+            alertClient.available) {
+          notifications.endCall();
+        }
+      }
     }
   }
 

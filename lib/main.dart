@@ -12,6 +12,8 @@ import 'social/social_client.dart';
 import 'social/social_screen.dart';
 import 'social/social_notifications.dart';
 import 'social/social_notification_banner.dart';
+import 'social/social_alert_scope.dart';
+import 'social/social_app_alerts.dart';
 import 'camera_ask/camera_ask_client.dart';
 import 'camera_ask/camera_ask_screen.dart';
 import 'inventory/inventory_client.dart';
@@ -361,15 +363,33 @@ String korlixFriendlyErrorMessage(Object error) {
   return raw.replaceFirst('Exception: ', '');
 }
 
+final _korlixNavigatorKey = GlobalKey<NavigatorState>();
+final _korlixSocialRouteObserver = RouteObserver<ModalRoute<dynamic>>();
+
 class CheeChaiCheeApp extends StatelessWidget {
   const CheeChaiCheeApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return KorlixThemeScope(builder: (context, theme) => MaterialApp(
+      navigatorKey: _korlixNavigatorKey,
       navigatorObservers: <NavigatorObserver>[
         kKorlixMeetingCopilotAuthObserver,
+        _korlixSocialRouteObserver,
       ],
+      builder: (context, child) => SocialAppAlerts(
+        baseUrl: kKorlixBackendBaseUrl,
+        headersBuilder: () => {
+          ...KorlixDeviceStore.headers(),
+          if (kKorlixAccessToken?.isNotEmpty == true)
+            'Authorization': 'Bearer $kKorlixAccessToken',
+        },
+        sessionChanges: kKorlixAuthRevision,
+        navigatorKey: _korlixNavigatorKey,
+        routeObserver: _korlixSocialRouteObserver,
+        beforeOpenCall: stopKorlixCharacterSpeechGlobally,
+        child: child ?? const SizedBox.shrink(),
+      ),
 
       routes: <String, WidgetBuilder>{
         KorlixMeetingCopilotRoute.routeName: (_) =>
@@ -5214,7 +5234,8 @@ class CommandCenterScreen extends StatefulWidget {
 class _CommandCenterScreenState extends State<CommandCenterScreen>
     with WidgetsBindingObserver {
   late final ChatMemoryClient _chatMemory;
-  late final SocialNotifications _socialNotifications;
+  SocialNotifications get _socialNotifications =>
+      SocialAlertScope.maybeOf(context)!.notifications;
   bool _socialOpening = false;
   bool _showSavedTopicsPanel = false;
   final ScrollController _savedTopicsScrollController = ScrollController();
@@ -5516,16 +5537,6 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     _pendingGenerationJobsPrefsKey = 'korlix_chat_jobs_account_v2_$chatStorageScope';
     _chatMemory = ChatMemoryClient(baseUrl: kKorlixBackendBaseUrl,
       headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision);
-    _socialNotifications = SocialNotifications(
-      baseUrl: kKorlixBackendBaseUrl,
-      headersBuilder: _authHeaders,
-      sessionChanges: kKorlixAuthRevision,
-      shouldPoll: () => mounted && !_socialOpening &&
-          ModalRoute.of(context)?.isCurrent == true,
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(_socialNotifications.refresh());
-    });
     unawaited(_chatMemory.load());
     unawaited(
       KorlixAppleBillingService.instance.configure(
@@ -5548,7 +5559,6 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _chatMemory.dispose();
-    _socialNotifications.dispose();
     _schedulingVoice?.dispose();
     _schedulingVoiceClient?.dispose();
     _imagineStudio?.dispose();
@@ -5862,7 +5872,6 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         state == AppLifecycleState.hidden;
 
     _appLifecyclePaused = paused;
-    _socialNotifications.setForeground(state == AppLifecycleState.resumed);
 
     if (state == AppLifecycleState.resumed) {
       _appLifecyclePaused = false;

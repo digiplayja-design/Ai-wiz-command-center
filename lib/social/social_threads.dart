@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import '../theme/korlix_theme.dart';
 import '../theme/korlix_action_button.dart';
 import 'social_client.dart';
+import 'social_alert_scope.dart';
+import 'social_notifications.dart';
 import 'social_design.dart';
 import 'social_forms.dart';
 import 'social_emoji.dart';
@@ -35,7 +37,7 @@ class SocialChatScreen extends StatefulWidget {
 }
 
 class _SocialChatScreenState extends State<SocialChatScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, RouteAware {
   final _text = TextEditingController(), _scroll = ScrollController();
   final _composeFocus = FocusNode();
   SocialMap? _replyTo;
@@ -54,6 +56,16 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       _unavailable = false;
   String? _error, _sendKey, _sendBody;
   int _generation = 0, _readThrough = 0;
+  SocialNotifications? _notifications;
+  RouteObserver<ModalRoute<dynamic>>? _routeObserver;
+  ModalRoute<dynamic>? _chatRoute;
+  SocialClient? _claimedClient;
+  static final _conversationOwners = Expando<Object>();
+  Object? _conversationClaim;
+  bool _routeVisible = false;
+  int _visibilityRevision = 0;
+  String get _conversationKey =>
+      '${widget.groupChat ? 'group' : 'peer'}:${widget.peer['id']}';
   String _action(String name) => widget.groupChat ? 'group_$name' : name;
   SocialMap get _destination => {
     widget.groupChat ? 'group' : 'peer': _peer['id'],
@@ -75,6 +87,107 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     });
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final scope = SocialAlertScope.maybeOf(context);
+    final route = ModalRoute.of(context);
+    if (identical(_notifications, scope?.notifications) &&
+        identical(_routeObserver, scope?.routeObserver) &&
+        identical(_chatRoute, route)) {
+      return;
+    }
+    _routeObserver?.unsubscribe(this);
+    _releaseConversation();
+    _notifications = scope?.notifications;
+    _routeObserver = scope?.routeObserver;
+    _chatRoute = route;
+    _routeVisible = route?.isCurrent ?? false;
+    if (route != null) _routeObserver?.subscribe(this, route);
+    _syncConversationVisibility();
+  }
+
+  void _releaseConversation() {
+    ++_visibilityRevision;
+    final notifications = _notifications;
+    final key = _conversationKey;
+    final claim = _conversationClaim;
+    if (claim == null || notifications == null) return;
+    _conversationClaim = null;
+    final accountClient = _claimedClient;
+    _claimedClient = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (identical(_conversationOwners[notifications], claim)) {
+        _conversationOwners[notifications] = null;
+        if (identical(notifications.client, accountClient) &&
+            notifications.activeConversationKey == key) {
+          notifications.setActiveConversation(null);
+        }
+      }
+    });
+  }
+
+  void _syncConversationVisibility() {
+    final notifications = _notifications;
+    if (notifications == null) return;
+    final revision = ++_visibilityRevision;
+    final accountClient = notifications.client;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          revision != _visibilityRevision ||
+          !identical(_notifications, notifications) ||
+          !identical(notifications.client, accountClient)) {
+        return;
+      }
+      final visible =
+          _routeVisible &&
+          _chatRoute?.isCurrent == true &&
+          _foreground &&
+          !_unavailable &&
+          widget.client.available;
+      if (visible) {
+        final claim = _conversationClaim ??= Object();
+        _conversationOwners[notifications] = claim;
+        notifications.setActiveConversation(_conversationKey);
+        _claimedClient = accountClient;
+      } else if (_conversationClaim != null) {
+        if (identical(_conversationOwners[notifications], _conversationClaim)) {
+          _conversationOwners[notifications] = null;
+          if (identical(_claimedClient, accountClient) &&
+              notifications.activeConversationKey == _conversationKey) {
+            notifications.setActiveConversation(null);
+          }
+        }
+        _conversationClaim = null;
+        _claimedClient = null;
+      }
+    });
+  }
+
+  @override
+  void didPush() {
+    _routeVisible = _chatRoute?.isCurrent ?? false;
+    _syncConversationVisibility();
+  }
+
+  @override
+  void didPopNext() {
+    _routeVisible = true;
+    _syncConversationVisibility();
+  }
+
+  @override
+  void didPushNext() {
+    _routeVisible = false;
+    _syncConversationVisibility();
+  }
+
+  @override
+  void didPop() {
+    _routeVisible = false;
+    _syncConversationVisibility();
+  }
+
   void _access() {
     if (!widget.client.available && mounted) {
       _generation++;
@@ -94,17 +207,21 @@ class _SocialChatScreenState extends State<SocialChatScreen>
         _unavailable = true;
         _error = 'Your session changed. Close Social and sign in again.';
       });
+      _syncConversationVisibility();
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
+    _syncConversationVisibility();
     if (_foreground) unawaited(_load(quiet: true));
   }
 
   @override
   void dispose() {
+    _routeObserver?.unsubscribe(this);
+    _releaseConversation();
     _timer?.cancel();
     _discardAttachment();
     widget.client.removeListener(_access);
@@ -228,6 +345,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
         _unavailable = false;
         _error = null;
       });
+      _syncConversationVisibility();
       if (!older && atBottom) _bottom();
     } catch (e) {
       if (mounted && g == _generation) {
@@ -242,6 +360,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
             _text.clear();
           }
         });
+        _syncConversationVisibility();
       }
     } finally {
       if (mounted && g == _generation) setState(() => _loading = false);
@@ -1015,10 +1134,12 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                                 ],
                               ),
                               const SizedBox(height: 8),
-                              const Text(
-                                'Both people need Social open to connect.',
+                              Text(
+                                _notifications == null
+                                    ? 'Both people need Social open to connect.'
+                                    : 'Calls can reach you anywhere in the KORLIX AI app while it is open.',
                                 textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 11),
+                                style: const TextStyle(fontSize: 11),
                               ),
                             ],
                           ),

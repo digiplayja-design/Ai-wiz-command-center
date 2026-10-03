@@ -41,12 +41,20 @@ class SocialClient extends ChangeNotifier {
   late final String _scope;
   bool _closed = false, _denied = false;
   bool get available => !_closed && !_denied;
+
+  /// Notify active media controllers before a session owner replaces or
+  /// disposes this client. Disposing a ChangeNotifier alone emits no event.
+  void invalidateSession() {
+    if (_closed || _denied) return;
+    _denied = true;
+    notifyListeners();
+  }
+
   void _check() {
     if (!_closed &&
         !_denied &&
         (_scope.isEmpty || _scope != agentAccountScope(headersBuilder()))) {
-      _denied = true;
-      notifyListeners();
+      invalidateSession();
     }
   }
 
