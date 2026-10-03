@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../bookkeeping/bookkeeping_file_save.dart';
+import '../sounds/korlix_sound_actions.dart';
+import '../sounds/korlix_sound_service.dart';
 import 'directory_client.dart';
 
 class DirectoryScreen extends StatefulWidget {
@@ -562,6 +564,7 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
             ? 'Free listing submitted for review.'
             : 'Business draft saved. Submit it when you are ready for listing review.',
       );
+      unawaited(kKorlixSounds.play(KorlixSound.success));
       await _refreshAfterWrite();
     } finally {
       for (final c in controls.values) {
@@ -597,6 +600,7 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
     _acceptBusiness(submitted);
     _unsaved.remove(id);
     _announce('Free listing submitted for review.');
+    unawaited(kKorlixSounds.play(KorlixSound.success));
     await _refreshAfterWrite();
   }
 
@@ -618,11 +622,17 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
       '/owner/$_id/assets',
       body: {'purpose': purpose, 'base64': base64Encode(f.bytes!)},
     );
+    final assetId = uploaded['id'];
+    if (assetId is! String || assetId.trim().isEmpty) {
+      throw const DirectoryException(
+        'The upload could not be confirmed. Refresh before trying again.',
+      );
+    }
     if (purpose == 'photo' && !_locked) {
       final draft = dirClone(dirMap(_business['draft']));
       final photos = List<String>.from(draft['photos'] ?? []);
       if (photos.length < 12) {
-        photos.add(uploaded['id']);
+        photos.add(assetId);
         draft['photos'] = photos;
         await widget.client.request(
           'POST',
@@ -636,6 +646,13 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
         );
       }
     }
+    if (!mounted || _locked) return;
+    unawaited(
+      kKorlixSounds.play(
+        KorlixSound.success,
+        eventId: 'directory-asset:$assetId',
+      ),
+    );
     await _select(_id!);
   }
 
@@ -875,7 +892,8 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
     VoidCallback? action, {
     IconData icon = Icons.arrow_forward,
   }) => OutlinedButton.icon(
-    onPressed: _busy ? null : action,
+    onPressed: korlixSoundAction(_busy ? null : action),
+    style: const ButtonStyle(enableFeedback: false),
     icon: Icon(icon),
     label: Text(label),
   );

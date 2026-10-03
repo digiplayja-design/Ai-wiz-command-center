@@ -1,3 +1,4 @@
+import '../sounds/korlix_sound_service.dart';
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -444,6 +445,7 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
       if (notice != null) {
         setState(() => _notice = notice);
         _feedback(notice);
+        unawaited(kKorlixSounds.play(KorlixSound.success));
       }
       return true;
     } catch (e) {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:ai_wiz_command_center/sounds/korlix_sound_service.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
@@ -21,6 +22,9 @@ class FakeSpeech implements SpeechToText {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
   SpeechResultListener? result;
   int cancellations = 0;
+  bool listening = false, declineListen = false;
+  @override
+  bool get isListening => listening;
   @override
   Future<bool> initialize({
     SpeechErrorListener? onError,
@@ -34,6 +38,7 @@ class FakeSpeech implements SpeechToText {
   @override
   Future cancel() async {
     cancellations++;
+    listening = false;
   }
 
   @override
@@ -50,7 +55,9 @@ class FakeSpeech implements SpeechToText {
     sampleRate = 0,
     SpeechListenOptions? listenOptions,
   }) async {
+    expect(kKorlixSounds.quiet, isTrue);
     result = onResult;
+    listening = !declineListen;
   }
 
   void words(String value, {bool finalResult = false}) => result?.call(
@@ -391,6 +398,25 @@ void main() {
     expect(find.text('Late secret'), findsNothing);
     expect(store.load().single.text, 'Original');
   });
+  testWidgets(
+    'silent dictation rejection releases quiet without closing VoiceScribe',
+    (tester) async {
+      final speech = FakeSpeech()..declineListen = true;
+      await open(tester, voice: true, speech: speech);
+      await tester.tap(find.text('Start dictation'));
+      await tester.pumpAndSettle();
+      expect(kKorlixSounds.quiet, isFalse);
+      speech.listening = true;
+      speech.statusListener?.call('listening');
+      expect(kKorlixSounds.quiet, isTrue);
+      await tester.tap(find.text('Stop & keep transcript'));
+      await tester.pumpAndSettle();
+      expect(kKorlixSounds.quiet, isFalse);
+      speech.statusListener?.call('listening');
+      expect(kKorlixSounds.quiet, isFalse);
+    },
+  );
+
   testWidgets('dictation appends once and rejects late results after stop', (
     tester,
   ) async {

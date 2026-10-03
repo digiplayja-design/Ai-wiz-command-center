@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
+import '../sounds/korlix_sound_service.dart';
 import 'social_client.dart';
 import 'social_audio_output.dart';
 import 'social_audio_output_native.dart'
@@ -490,7 +491,12 @@ class SocialCallController extends ChangeNotifier {
     required this.video,
     SocialMap? incoming,
     SocialCallMedia? media,
+    KorlixSoundService? sounds,
+    DateTime? ringExpiresAt,
   }) : media = media ?? SocialCallMedia(),
+       sounds = sounds ?? kKorlixSounds,
+       // Only incoming invitations inherit the app-wide alert's deadline.
+       _ringExpiresAt = incoming != null ? ringExpiresAt : null,
        incoming = incoming != null,
        id = incoming?['id'] ?? socialId(),
        state = incoming?['state'] ?? 'preparing' {
@@ -505,6 +511,9 @@ class SocialCallController extends ChangeNotifier {
   final bool video, incoming;
   final String id;
   final SocialCallMedia media;
+  final KorlixSoundService sounds;
+  DateTime? _ringExpiresAt;
+  bool _closingMedia = false;
   String state, status = '', error = '';
   bool busy = false, ended = false, connected = false, relay = false;
   String relayStatus = '';
@@ -525,7 +534,35 @@ class SocialCallController extends ChangeNotifier {
       ? Duration.zero
       : DateTime.now().difference(connectedAt!);
   void _notify() {
+    _syncSounds();
     if (!_disposed) notifyListeners();
+  }
+
+  void _syncSounds() {
+    final ringing =
+        !ended && !_disposed && state == 'ringing' && !_answerStarted;
+    if (ringing) {
+      _ringExpiresAt ??= DateTime.now().add(const Duration(seconds: 45));
+    }
+    // Ringback is allowed while waiting for an answer. Effects stay silent
+    // during capture setup, answering, connection, and track teardown.
+    sounds.setQuiet(
+      this,
+      _closingMedia ||
+          (!ended &&
+              !_disposed &&
+              (_answerStarted ||
+                  connected ||
+                  state == 'accepted' ||
+                  state == 'preparing' && busy)),
+    );
+    sounds.setRinging(
+      this,
+      ringing,
+      callId: id,
+      expiresAt: _ringExpiresAt,
+      outgoing: !incoming,
+    );
   }
 
   void _session() {
@@ -569,6 +606,7 @@ class SocialCallController extends ChangeNotifier {
       _notify();
     });
     if (incoming) {
+      _notify();
       _startPolling();
     } else {
       busy = true;
@@ -670,7 +708,7 @@ class SocialCallController extends ChangeNotifier {
     if (ended || call.isEmpty) return;
     if (_acceptedAt != null && call['state'] == 'ringing') return;
     state = call['state'] ?? state;
-    unawaited(media.audio.setRinging(state == 'ringing' && !incoming));
+    _syncSounds();
     if (!['ringing', 'accepted'].contains(state)) {
       unawaited(
         end(
@@ -836,14 +874,19 @@ class SocialCallController extends ChangeNotifier {
   Future<void> end(String message, {bool notifyServer = true}) async {
     if (ended) return;
     ended = true;
-    unawaited(media.audio.setRinging(false));
+    _closingMedia = true;
     busy = false;
     connected = false;
     status = message;
     _timer?.cancel();
     _clock?.cancel();
     _candidates.clear();
-    unawaited(media.close());
+    unawaited(
+      media.close().whenComplete(() {
+        _closingMedia = false;
+        _syncSounds();
+      }),
+    );
     _notify();
     if (notifyServer && client.available) {
       try {

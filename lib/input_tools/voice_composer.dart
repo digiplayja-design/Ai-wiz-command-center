@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../sounds/korlix_sound_service.dart';
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
@@ -27,7 +28,9 @@ abstract class KorlixDictationEngine {
 
 class KorlixDeviceDictation extends KorlixDictationEngine {
   final _speech = SpeechToText();
+  final Object _soundQuietOwner = Object();
   bool _closed = false, _initialized = false, _captured = false;
+  bool _requestedListening = false;
   ValueChanged<String>? _oldStatus, _statusListener;
   ValueChanged<SpeechRecognitionError>? _oldError, _errorListener;
   Completer<void>? _finish;
@@ -42,12 +45,20 @@ class KorlixDeviceDictation extends KorlixDictationEngine {
       _captured = true;
     }
     _statusListener = (status) {
+      if (status == 'listening' && _requestedListening && !_closed) {
+        kKorlixSounds.setQuiet(_soundQuietOwner, true);
+      } else if (status == 'done' || status == 'notListening') {
+        _requestedListening = false;
+        kKorlixSounds.setQuiet(_soundQuietOwner, false);
+      }
       if (status == 'done' && !(_finish?.isCompleted ?? true)) {
         _finish!.complete();
       }
       if (!_closed) onStatus(status);
     };
     _errorListener = (error) {
+      _requestedListening = false;
+      kKorlixSounds.setQuiet(_soundQuietOwner, false);
       if (!(_finish?.isCompleted ?? true)) _finish!.complete();
       if (!_closed) onError(error.errorMsg);
     };
@@ -77,41 +88,64 @@ class KorlixDeviceDictation extends KorlixDictationEngine {
     required ValueChanged<double> onLevel,
   }) async {
     if (_closed) return;
-    await _speech.listen(
-      onResult: (result) {
-        if (!_closed) onWords(result.recognizedWords);
-      },
-      onSoundLevelChange: (level) {
-        if (!_closed) onLevel(level);
-      },
-      listenOptions: SpeechListenOptions(
-        localeId: locale,
-        listenMode: ListenMode.dictation,
-        partialResults: true,
-        cancelOnError: true,
-        autoPunctuation: true,
-        listenFor: const Duration(minutes: 2),
-        pauseFor: const Duration(seconds: 8),
-      ),
-    );
+    _requestedListening = true;
+    kKorlixSounds.setQuiet(_soundQuietOwner, true);
+    try {
+      await _speech.listen(
+        onResult: (result) {
+          if (!_closed) onWords(result.recognizedWords);
+        },
+        onSoundLevelChange: (level) {
+          if (!_closed) onLevel(level);
+        },
+        listenOptions: SpeechListenOptions(
+          localeId: locale,
+          listenMode: ListenMode.dictation,
+          partialResults: true,
+          cancelOnError: true,
+          autoPunctuation: true,
+          listenFor: const Duration(minutes: 2),
+          pauseFor: const Duration(seconds: 8),
+        ),
+      );
+      // Some platforms decline without an error/status callback. A genuinely
+      // delayed listening callback can reacquire this still-requested lease.
+      if (_closed || !_speech.isListening) {
+        kKorlixSounds.setQuiet(_soundQuietOwner, false);
+      }
+    } catch (_) {
+      _requestedListening = false;
+      kKorlixSounds.setQuiet(_soundQuietOwner, false);
+      rethrow;
+    }
   }
 
   @override
   Future<void> stop() async {
+    _requestedListening = false;
     if (!_initialized || _closed) return;
     _finish = Completer<void>();
-    await _speech.stop();
-    await _finish!.future.timeout(
-      const Duration(milliseconds: 2500),
-      onTimeout: () {},
-    );
-    _finish = null;
+    try {
+      await _speech.stop();
+      await _finish!.future.timeout(
+        const Duration(milliseconds: 2500),
+        onTimeout: () {},
+      );
+    } finally {
+      _finish = null;
+      kKorlixSounds.setQuiet(_soundQuietOwner, false);
+    }
   }
 
   @override
   Future<void> cancel() async {
-    if (_initialized && _speech.statusListener == _statusListener) {
-      await _speech.cancel();
+    _requestedListening = false;
+    try {
+      if (_initialized && _speech.statusListener == _statusListener) {
+        await _speech.cancel();
+      }
+    } finally {
+      kKorlixSounds.setQuiet(_soundQuietOwner, false);
     }
   }
 
@@ -127,6 +161,7 @@ class KorlixDeviceDictation extends KorlixDictationEngine {
   @override
   void dispose() {
     _closed = true;
+    _requestedListening = false;
     if (!(_finish?.isCompleted ?? true)) _finish!.complete();
     unawaited(cancel());
     _restore();

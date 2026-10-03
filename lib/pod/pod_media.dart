@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../sounds/korlix_sound_service.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -75,6 +76,14 @@ class PodMediaController extends PodMedia {
   PodMediaController({required this.playback, required this.recorder});
   final PodPlaybackBackend playback;
   final PodRecorderBackend recorder;
+  Object? _playQuietOwner, _captureQuietOwner;
+
+  void _releaseQuiet(Object? owner) {
+    if (owner != null) kKorlixSounds.setQuiet(owner, false);
+    if (identical(owner, _playQuietOwner)) _playQuietOwner = null;
+    if (identical(owner, _captureQuietOwner)) _captureQuietOwner = null;
+  }
+
   static const maxRecordingDuration = Duration(seconds: 30);
   static const maxPcmBytes = 24000 * 2 * 30;
   static const maxWavBytes = maxPcmBytes + 44;
@@ -167,6 +176,9 @@ class PodMediaController extends PodMedia {
       throw const PodMediaException('Finish recording before resuming sound.');
     }
     final revision = ++_playRevision;
+    _releaseQuiet(_playQuietOwner);
+    final soundQuietOwner = _playQuietOwner = Object();
+    kKorlixSounds.setQuiet(soundQuietOwner, true);
     _playCancelled?.complete();
     final cancelled = _playCancelled = Completer<void>();
     playing = false;
@@ -200,6 +212,8 @@ class PodMediaController extends PodMedia {
       unawaited(playback.stop().catchError((_) {}));
       throw failure;
     } finally {
+      // stop() owns release when a cancellation is awaiting device teardown.
+      if (revision == _playRevision) _releaseQuiet(soundQuietOwner);
       if (!_closed && revision == _playRevision) {
         _playCancelled = null;
         playing = false;
@@ -210,6 +224,7 @@ class PodMediaController extends PodMedia {
 
   @override
   Future<void> stop() {
+    final soundQuietOwner = _playQuietOwner;
     ++_playRevision;
     ++_activationRevision;
     _playCancelled?.complete();
@@ -218,7 +233,10 @@ class PodMediaController extends PodMedia {
     blocked = false;
     error = null;
     _changed();
-    return playback.stop().catchError((_) {});
+    return playback
+        .stop()
+        .catchError((_) {})
+        .whenComplete(() => _releaseQuiet(soundQuietOwner));
   }
 
   @override
@@ -227,6 +245,8 @@ class PodMediaController extends PodMedia {
     if (_starting) return _startFuture!;
     if (recording) return Future<void>.value();
     final revision = ++_captureRevision;
+    final soundQuietOwner = _captureQuietOwner = Object();
+    kKorlixSounds.setQuiet(soundQuietOwner, true);
     _starting = true;
     _clip = null;
     error = null;
@@ -291,6 +311,9 @@ class PodMediaController extends PodMedia {
             : 'The microphone could not start. Check microphone permission and try again.';
         throw PodMediaException(error!);
       } finally {
+        if (!recording || _closed || revision != _captureRevision) {
+          _releaseQuiet(soundQuietOwner);
+        }
         if (!_closed && revision == _captureRevision) {
           _starting = false;
           _changed();
@@ -326,6 +349,7 @@ class PodMediaController extends PodMedia {
       );
     }
     final revision = _captureRevision;
+    final soundQuietOwner = _captureQuietOwner;
     _timer?.cancel();
     _limitTimer?.cancel();
     _watch.stop();
@@ -367,6 +391,7 @@ class PodMediaController extends PodMedia {
         if (!_closed && revision == _captureRevision) error = failure.message;
         throw failure;
       } finally {
+        _releaseQuiet(soundQuietOwner);
         // onDone already releases a stream subscription. Cancelling it again
         // adds an unnecessary asynchronous boundary after hardware has stopped.
         // A revoked or interrupted capture still needs best-effort cleanup.
@@ -385,6 +410,7 @@ class PodMediaController extends PodMedia {
 
   @override
   Future<void> cancelRecording() {
+    final soundQuietOwner = _captureQuietOwner;
     ++_captureRevision;
     recorder.cancelPendingStart();
     _timer?.cancel();
@@ -406,7 +432,7 @@ class PodMediaController extends PodMedia {
     return _captureOperation(() async {
       await recorder.cancel().catchError((_) {});
       await captureStream?.cancel();
-    });
+    }).whenComplete(() => _releaseQuiet(soundQuietOwner));
   }
 
   @override

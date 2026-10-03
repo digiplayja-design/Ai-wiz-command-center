@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../sounds/korlix_sound_service.dart';
 import 'radar_client.dart';
 import 'radar_results.dart';
 
@@ -224,6 +225,14 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
                     : 'Your bid review and working draft are saved.')
               : _s(j['error']);
         });
+        if (j['state'] == 'completed') {
+          unawaited(
+            kKorlixSounds.play(
+              KorlixSound.bell,
+              eventId: 'contract-radar:${_s(j['id'])}',
+            ),
+          );
+        }
       } else {
         setState(() => _error = null);
       }
@@ -253,6 +262,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
       await _load();
       if (mounted && !_locked && success != null) {
         setState(() => _notice = success);
+        unawaited(kKorlixSounds.play(KorlixSound.success));
       }
     } catch (e) {
       if (mounted && !_locked) setState(() => _error = e.toString());
@@ -309,6 +319,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
         _notice = 'Business profile saved. Your radar is ready.';
       });
       _go(0);
+      unawaited(kKorlixSounds.play(KorlixSound.success));
       if (!forSearch) {
         _profileFeedback('Business profile saved. Your radar is ready.');
       }

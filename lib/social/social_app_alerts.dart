@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../sounds/korlix_sound_service.dart';
 import 'social_alert_overlay.dart';
 import 'social_alert_scope.dart';
 import 'social_call_screen.dart';
@@ -23,6 +24,7 @@ class SocialAppAlerts extends StatefulWidget {
     this.beforeOpenCall,
     this.notifications,
     this.clientBuilder,
+    this.sounds,
   });
 
   final String baseUrl;
@@ -34,6 +36,7 @@ class SocialAppAlerts extends StatefulWidget {
   final VoidCallback? beforeOpenCall;
   final SocialNotifications? notifications;
   final SocialClient Function()? clientBuilder;
+  final KorlixSoundService? sounds;
 
   @override
   State<SocialAppAlerts> createState() => _SocialAppAlertsState();
@@ -46,6 +49,10 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
   String? _callError;
   SocialClient? _lastClient;
   String? _lastCall;
+  late final KorlixSoundService _sounds;
+  late int _messageRevision;
+  DateTime? _ringExpiresAt;
+  final Set<String> _silencedCalls = {};
 
   @override
   void initState() {
@@ -62,6 +69,9 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
           clientBuilder: widget.clientBuilder,
         );
     _lastClient = _notifications.client;
+    _sounds = widget.sounds ?? kKorlixSounds;
+    // A restored unread count or a pre-existing popup is not a new message.
+    _messageRevision = _notifications.messageRevision;
     _notifications.addListener(_changed);
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -70,6 +80,7 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
       _notifications.setForeground(
         state == null || state == AppLifecycleState.resumed,
       );
+      _changed();
       unawaited(_notifications.refreshCalls());
     });
   }
@@ -77,7 +88,38 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
   void _changed() {
     final client = _notifications.client;
     final id = _notifications.incomingCall?['id']?.toString();
-    if (identical(client, _lastClient) && id == _lastCall) return;
+    final replaced = !identical(client, _lastClient);
+    if (replaced) {
+      _silencedCalls.clear();
+      _ringExpiresAt = null;
+      _sounds.setRinging(this, false);
+    } else if (_notifications.messageRevision != _messageRevision &&
+        _notifications.messageAlert != null &&
+        _notifications.available &&
+        !_notifications.callOpen) {
+      unawaited(
+        _sounds.play(
+          KorlixSound.message,
+          eventId:
+              'social-message:${identityHashCode(client)}:${_notifications.messageRevision}',
+        ),
+      );
+    }
+    _messageRevision = _notifications.messageRevision;
+    if (id != null && (replaced || id != _lastCall)) {
+      _ringExpiresAt = DateTime.now().add(const Duration(seconds: 45));
+    }
+    _sounds.setRinging(
+      this,
+      id != null &&
+          _notifications.available &&
+          !_notifications.callOpen &&
+          !_declining &&
+          !_silencedCalls.contains(id),
+      callId: id,
+      expiresAt: _ringExpiresAt,
+    );
+    if (!replaced && id == _lastCall) return;
     _lastClient = client;
     _lastCall = id;
     if (mounted && (_declining || _callError != null)) {
@@ -133,9 +175,15 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
         client == null ||
         !client.available ||
         incoming['id'] != _notifications.incomingCall?['id'] ||
-        !_notifications.beginCall()) {
+        _notifications.callOpen) {
       return;
     }
+    // The route takes over the same bounded invitation; opening is not Answer.
+    // Remember it so a failed hang-up response cannot ring again on return.
+    final ringExpiresAt = _ringExpiresAt;
+    _silenceCall('${incoming['id']}');
+    unawaited(_sounds.activate());
+    if (!_notifications.beginCall()) return;
     try {
       widget.beforeOpenCall?.call();
       // Opening a ringing call never opens the microphone or camera. The
@@ -147,6 +195,8 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
           peer: socialMap(incoming['peer']),
           video: incoming['mode'] == 'video',
           incoming: incoming,
+          sounds: _sounds,
+          ringExpiresAt: ringExpiresAt,
         ),
       );
       await navigator.push<void>(route);
@@ -174,6 +224,7 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
       _declining = true;
       _callError = null;
     });
+    _silenceCall('$id');
     try {
       await client.post('call_end', {'id': id, 'device': client.callDevice});
       if (mounted && identical(client, _notifications.client)) {
@@ -194,10 +245,17 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
     }
   }
 
+  void _silenceCall(String id) {
+    _silencedCalls.add(id);
+    if (_silencedCalls.length > 64) _silencedCalls.remove(_silencedCalls.first);
+    _sounds.setRinging(this, false);
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _notifications.removeListener(_changed);
+    _sounds.setRinging(this, false);
     if (widget.notifications == null) _notifications.dispose();
     super.dispose();
   }

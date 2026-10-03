@@ -560,7 +560,7 @@ void main() {
     },
   );
   test(
-    'ringback stops on answer and on hangup; incoming never rings back',
+    'call output stays free of legacy ringback; shared sounds own ringing',
     () async {
       final store = calls.CallStore(),
           client = store.client('caller'),
@@ -572,12 +572,12 @@ void main() {
         media: calls.FakeMedia(audio: audio),
       );
       await c.initialize();
-      expect(audio.ringChanges, [true]);
+      expect(audio.ringChanges, isEmpty);
       await c.poll();
-      expect(audio.ringChanges, [true]);
+      expect(audio.ringChanges, isEmpty);
       store.state = 'accepted';
       await c.poll();
-      expect(audio.ringChanges, [true, false]);
+      expect(audio.ringChanges, isEmpty);
       await c.end('done');
       c.dispose();
       client.dispose();
@@ -592,7 +592,7 @@ void main() {
       );
       await d.initialize();
       await d.end('cancel');
-      expect(secondAudio.ringChanges, [true, false]);
+      expect(secondAudio.ringChanges, isEmpty);
       d.dispose();
       secondClient.dispose();
       final third = calls.CallStore(),

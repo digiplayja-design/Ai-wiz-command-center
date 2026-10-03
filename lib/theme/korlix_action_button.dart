@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../sounds/korlix_sound_actions.dart';
 import 'korlix_button_colors.dart';
 import 'korlix_theme.dart';
 
@@ -29,6 +30,7 @@ class KorlixActionButton extends StatelessWidget {
   });
 
   final String label;
+
   /// Stable feature identity so translated labels keep the same button color.
   final String? colorIdentity;
   final String? subtitle, eyebrow;
@@ -287,7 +289,7 @@ class KorlixActionButton extends StatelessWidget {
         // Space for the solid bottom edge. Neighboring buttons keep clear.
         padding: const EdgeInsets.only(bottom: 4),
         child: TextButton(
-          onPressed: enabled ? onPressed : null,
+          onPressed: korlixSoundAction(enabled ? onPressed : null),
           focusNode: focusNode,
           clipBehavior: Clip.none,
           style:
@@ -319,6 +321,8 @@ class KorlixActionButton extends StatelessWidget {
                   context,
                 ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
               ).copyWith(
+                // The shared sound controller owns click feedback and mute.
+                enableFeedback: false,
                 animationDuration: duration,
                 overlayColor: WidgetStateProperty.resolveWith(
                   // Darken white-letter faces and lighten dark-letter faces;

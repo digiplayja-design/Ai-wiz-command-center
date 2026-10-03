@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../sounds/korlix_sound_service.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -47,6 +48,7 @@ class _WorkforceFormState extends State<WorkforceForm> {
   final _values = <String, dynamic>{};
   final _controllers = <String, TextEditingController>{};
   final _speech = SpeechToText();
+  final Object _soundQuietOwner = Object();
   bool _saving = false, _listening = false;
   String? _error;
   String _beforeSpeech = '';
@@ -65,7 +67,11 @@ class _WorkforceFormState extends State<WorkforceForm> {
 
   @override
   void dispose() {
-    _speech.cancel();
+    _listening = false;
+    _speech
+        .cancel()
+        .whenComplete(() => kKorlixSounds.setQuiet(_soundQuietOwner, false))
+        .catchError((_) {});
     for (final c in _controllers.values) {
       c.dispose();
     }
@@ -76,14 +82,20 @@ class _WorkforceFormState extends State<WorkforceForm> {
     try {
       if (_listening) {
         await _speech.stop();
+        kKorlixSounds.setQuiet(_soundQuietOwner, false);
         if (mounted) setState(() => _listening = false);
         return;
       }
       final ok = await _speech.initialize(
         onStatus: (s) {
+          if (mounted && _listening && s == 'listening') {
+            kKorlixSounds.setQuiet(_soundQuietOwner, true);
+          }
+          if (s != 'listening') kKorlixSounds.setQuiet(_soundQuietOwner, false);
           if (mounted && s != 'listening') setState(() => _listening = false);
         },
         onError: (_) {
+          kKorlixSounds.setQuiet(_soundQuietOwner, false);
           if (mounted) {
             setState(() {
               _listening = false;
@@ -102,6 +114,7 @@ class _WorkforceFormState extends State<WorkforceForm> {
       }
       _beforeSpeech = _controllers['summary']?.text ?? '';
       setState(() => _listening = true);
+      kKorlixSounds.setQuiet(_soundQuietOwner, true);
       await _speech.listen(
         onResult: (r) {
           if (mounted) {
@@ -110,7 +123,9 @@ class _WorkforceFormState extends State<WorkforceForm> {
           }
         },
       );
+      if (!_speech.isListening) kKorlixSounds.setQuiet(_soundQuietOwner, false);
     } catch (_) {
+      kKorlixSounds.setQuiet(_soundQuietOwner, false);
       if (mounted) {
         setState(
           () =>
@@ -123,6 +138,7 @@ class _WorkforceFormState extends State<WorkforceForm> {
   Future<void> _save() async {
     if (!_key.currentState!.validate()) return;
     await _speech.stop();
+    kKorlixSounds.setQuiet(_soundQuietOwner, false);
     if (!mounted) return;
     setState(() {
       _saving = true;

@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../sounds/korlix_sound_service.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:record/record.dart';
@@ -74,6 +75,7 @@ class SocialVoiceCapture extends ChangeNotifier {
   SocialVoiceCapture({SocialRecorder? recorder})
     : recorder = recorder ?? DeviceSocialRecorder();
   final SocialRecorder recorder;
+  final Object _soundQuietOwner = Object();
   static const maxBytes = 24000 * 2 * 180;
   final _bytes = BytesBuilder(copy: false), _watch = Stopwatch();
   StreamSubscription<Uint8List>? _stream;
@@ -96,6 +98,7 @@ class SocialVoiceCapture extends ChangeNotifier {
     preview = null;
     _bytes.clear();
     _notify();
+    kKorlixSounds.setQuiet(_soundQuietOwner, true);
     try {
       final stream = await recorder.start();
       if (_closed || generation != _generation) {
@@ -139,6 +142,7 @@ class SocialVoiceCapture extends ChangeNotifier {
           : 'The microphone could not start. Check microphone permissions and try again.';
       await recorder.cancel().catchError((_) {});
     } finally {
+      if (!recording) kKorlixSounds.setQuiet(_soundQuietOwner, false);
       busy = false;
       _notify();
     }
@@ -167,6 +171,7 @@ class SocialVoiceCapture extends ChangeNotifier {
       await recorder.cancel().catchError((_) {});
       error = 'The recording could not be completed. Please try again.';
     } finally {
+      kKorlixSounds.setQuiet(_soundQuietOwner, false);
       recording = false;
       busy = false;
       await _stream?.cancel();
@@ -179,6 +184,7 @@ class SocialVoiceCapture extends ChangeNotifier {
     _timer?.cancel();
     _watch.stop();
     await recorder.cancel().catchError((_) {});
+    kKorlixSounds.setQuiet(_soundQuietOwner, false);
     await _stream?.cancel();
     _bytes.clear();
     preview = null;
@@ -196,7 +202,10 @@ class SocialVoiceCapture extends ChangeNotifier {
     preview = null;
     unawaited(_stream?.cancel());
     unawaited(
-      recorder.cancel().catchError((_) {}).whenComplete(recorder.dispose),
+      recorder.cancel().catchError((_) {}).whenComplete(() {
+        kKorlixSounds.setQuiet(_soundQuietOwner, false);
+        return recorder.dispose();
+      }),
     );
     super.dispose();
   }

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
+import '../sounds/korlix_sound_service.dart';
 import '../theme/korlix_theme.dart';
 import '../theme/korlix_action_button.dart';
 import 'social_client.dart';
@@ -15,12 +16,16 @@ class SocialCallScreen extends StatefulWidget {
     required this.video,
     this.incoming,
     this.media,
+    this.sounds,
+    this.ringExpiresAt,
   });
   final SocialClient client;
   final SocialMap peer;
   final bool video;
   final SocialMap? incoming;
   final SocialCallMedia? media;
+  final KorlixSoundService? sounds;
+  final DateTime? ringExpiresAt;
   @override
   State<SocialCallScreen> createState() => _SocialCallScreenState();
 }
@@ -36,6 +41,8 @@ class _SocialCallScreenState extends State<SocialCallScreen>
     video: widget.video,
     incoming: widget.incoming,
     media: widget.media,
+    sounds: widget.sounds,
+    ringExpiresAt: widget.ringExpiresAt,
   );
   @override
   void initState() {

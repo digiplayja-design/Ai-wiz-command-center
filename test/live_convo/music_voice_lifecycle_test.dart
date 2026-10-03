@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:ai_wiz_command_center/sounds/korlix_sound_service.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -214,6 +215,11 @@ class _VoiceIo extends K136sLiveConvoIo {
 
   @override
   Future<rtc.MediaStream> microphone(Map<String, dynamic> constraints) {
+    expectSync(
+      kKorlixSounds.quiet,
+      isTrue,
+      reason: 'Mute interface effects before requesting the microphone.',
+    );
     final pending = micGate;
     micGate = null;
     if (pending != null) return pending.future;
@@ -273,7 +279,7 @@ class _MusicFixture {
   Map<String, dynamic>? returnedAction;
   bool? closedAtHandoff;
   Future<void>? routeCompleted;
-  Completer<http.Response>? contextGate;
+  Completer<http.Response>? contextGate, usageEndGate;
   bool rejectAccess = false;
   Map<String, dynamic> get recipe => {
     ...blankMusic(),
@@ -480,18 +486,27 @@ Future<void> _screen(
       try {
         await _finish(tester, _stage(tester).onStart!());
         await _pump(tester);
-        expect(_stage(tester).connected, isTrue);
+        expect(_stage(tester).connected, isTrue, reason: _stage(tester).error);
         f.spokenResultDone();
         await body(f);
       } finally {
         await tester.pumpWidget(const SizedBox.shrink());
         await _pump(tester);
+        expect(
+          kKorlixSounds.quiet,
+          isFalse,
+          reason: 'Closing voice must release its quiet owner.',
+        );
         f.dispose();
       }
     },
     () => MockClient((request) async {
       expectSync(request.url.path, '/api/live-convo/usage');
-      f.usageReports.add(Map<String, dynamic>.from(jsonDecode(request.body)));
+      final report = Map<String, dynamic>.from(jsonDecode(request.body));
+      f.usageReports.add(report);
+      if (report['ended'] == true && f.usageEndGate != null) {
+        return f.usageEndGate!.future;
+      }
       return http.Response('{"allowed":true}', 200);
     }),
   );
@@ -676,13 +691,39 @@ void main() {
         f.tool();
         await _pump(tester, 1);
         expect(f.reads, 1);
+        expect(kKorlixSounds.quiet, isTrue);
         await _finish(tester, _stage(tester).onTogglePause!());
+        expect(kKorlixSounds.quiet, isFalse);
         f.contextGate!.complete(http.Response(jsonEncode(f.studio), 200));
         await _pump(tester);
         expect(f.controller.context, isEmpty);
         expect(f.controller.result, isEmpty);
         expect(f.io.streams.single.audio.enabled, isFalse);
         expect(f.writes, 0);
+      });
+    },
+  );
+
+  testWidgets(
+    'effects resume after hardware closes while the final usage report is pending',
+    (tester) async {
+      await _screen(tester, (f) async {
+        f.usageEndGate = Completer<http.Response>();
+        final pause = _stage(tester).onTogglePause!();
+        try {
+          await _pump(tester);
+          expect(
+            f.usageReports.any((report) => report['ended'] == true),
+            isTrue,
+          );
+          expect(f.io.streams.single.audio.enabled, isFalse);
+          expect(f.io.streams.single.disposals, 1);
+          expect(f.usageEndGate!.isCompleted, isFalse);
+          expect(kKorlixSounds.quiet, isFalse);
+        } finally {
+          f.usageEndGate!.complete(http.Response('{"allowed":true}', 200));
+          await _finish(tester, pause);
+        }
       });
     },
   );

@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../sounds/korlix_sound_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:speech_to_text/speech_to_text.dart';
@@ -32,6 +33,13 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
   final _pageScroll = ScrollController(), _entriesScroll = ScrollController();
   final _copyBoxAnchors = <String, GlobalKey>{};
   late final _speech = widget.speech ?? SpeechToText();
+  Object? _soundQuietOwner;
+
+  void _releaseSoundQuiet(Object? owner) {
+    if (owner != null) kKorlixSounds.setQuiet(owner, false);
+    if (identical(owner, _soundQuietOwner)) _soundQuietOwner = null;
+  }
+
   List<SavedBox> _boxes = [];
   SavedBox? _selected;
   String _query = '', _status = 'Saved on this device', _partial = '';
@@ -75,7 +83,9 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
     if (widget.sessionValid() || _locked) return;
     _locked = true;
     _generation++;
-    unawaited(_speech.cancel());
+    unawaited(
+      _speech.cancel().whenComplete(() => _releaseSoundQuiet(_soundQuietOwner)),
+    );
     _boxes.clear();
     _selected = null;
     _title.clear();
@@ -97,10 +107,16 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
 
   @override
   void dispose() {
+    final soundQuietOwner = _soundQuietOwner;
     _generation++;
     widget.sessionChanges.removeListener(_checkSession);
     WidgetsBinding.instance.removeObserver(this);
-    unawaited(_speech.cancel());
+    unawaited(
+      _speech
+          .cancel()
+          .whenComplete(() => _releaseSoundQuiet(soundQuietOwner))
+          .catchError((_) {}),
+    );
     _title.dispose();
     _text.dispose();
     _folder.dispose();
@@ -118,7 +134,7 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
     }
   }
 
-  Future<void> _save() {
+  Future<void> _save({bool announceSuccess = false}) {
     if (!mounted || !_valid || _loadFailed) return Future.value();
     // Snapshot now; serialize writes so a slower old write cannot overwrite new text.
     final snapshot = _boxes.map((b) => SavedBox.fromJson(b.toJson())).toList();
@@ -126,6 +142,9 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
         .then((_) => widget.store.save(snapshot))
         .then((_) {
           if (_valid) {
+            if (announceSuccess) {
+              unawaited(kKorlixSounds.play(KorlixSound.success));
+            }
             setState(
               () => _status =
                   'Saved on this device • ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
@@ -221,6 +240,7 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
   }
 
   Future<void> _stop() async {
+    final soundQuietOwner = _soundQuietOwner;
     _generation++;
     if (_listening && _partial.isNotEmpty && _valid && _selected != null) {
       _selected!.replace(
@@ -239,6 +259,7 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
         await _speech.cancel();
       } catch (_) {}
     }
+    _releaseSoundQuiet(soundQuietOwner);
   }
 
   Future<void> _dictate() async {
@@ -262,6 +283,11 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
         unawaited(_stop());
       };
       _speech.statusListener = (status) {
+        if (live() && status == 'listening') {
+          kKorlixSounds.setQuiet(_soundQuietOwner ??= Object(), true);
+        } else if (live() && status == 'notListening') {
+          _releaseSoundQuiet(_soundQuietOwner);
+        }
         // Wait for done/final result; notListening may precede the final words.
         if (live() && status == 'done') unawaited(_stop());
       };
@@ -280,6 +306,8 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
         _listening = true;
         _partial = '';
       });
+      final owner = _soundQuietOwner ??= Object();
+      kKorlixSounds.setQuiet(owner, true);
       await _speech.listen(
         listenOptions: SpeechListenOptions(
           localeId: _locale,
@@ -294,6 +322,7 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
         },
       );
       if (!live()) await _speech.cancel();
+      if (!_speech.isListening) _releaseSoundQuiet(owner);
     } catch (_) {
       if (live()) {
         await _stop();
@@ -848,7 +877,8 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
                                         ),
                                       ),
                                       TextButton(
-                                        onPressed: _save,
+                                        onPressed: () =>
+                                            _save(announceSuccess: true),
                                         child: Text(
                                           widget.store.voice
                                               ? 'Retry save'

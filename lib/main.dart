@@ -1,3 +1,7 @@
+import 'sounds/korlix_sound_service.dart';
+import 'sounds/korlix_sound_host.dart';
+import 'sounds/korlix_sound_actions.dart';
+import 'sounds/korlix_sound_settings_screen.dart';
 import 'directory/directory_client.dart';
 import 'directory/directory_screen.dart';
 import 'text_workspace/box_workspace.dart';
@@ -148,6 +152,9 @@ String? kKorlixUserEmail;
 final ValueNotifier<int> kKorlixAuthRevision = ValueNotifier<int>(0);
 
 void korlixSetInMemorySession(KorlixAuthSession? session) {
+  if (session == null || session.email != kKorlixUserEmail) {
+    kKorlixSounds.clearSession();
+  }
   kKorlixAccessToken = session?.accessToken;
   kKorlixRefreshToken = session?.refreshToken;
   kKorlixUserEmail = session?.email;
@@ -377,7 +384,7 @@ class CheeChaiCheeApp extends StatelessWidget {
         kKorlixMeetingCopilotAuthObserver,
         _korlixSocialRouteObserver,
       ],
-      builder: (context, child) => SocialAppAlerts(
+      builder: (context, child) => KorlixSoundHost(child: SocialAppAlerts(
         baseUrl: kKorlixBackendBaseUrl,
         headersBuilder: () => {
           ...KorlixDeviceStore.headers(),
@@ -389,7 +396,7 @@ class CheeChaiCheeApp extends StatelessWidget {
         routeObserver: _korlixSocialRouteObserver,
         beforeOpenCall: stopKorlixCharacterSpeechGlobally,
         child: child ?? const SizedBox.shrink(),
-      ),
+      )),
 
       routes: <String, WidgetBuilder>{
         KorlixMeetingCopilotRoute.routeName: (_) =>
@@ -824,7 +831,10 @@ class _AuthGateState extends State<AuthGate> {
           child: SafeArea(
             child: Material(
               color: Colors.transparent,
-              child: KorlixAccountButton(),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                KorlixAccountButton(),
+                _KorlixSoundSettingsButton(),
+              ]),
             ),
           ),
         ),
@@ -840,14 +850,22 @@ class _AuthGateState extends State<AuthGate> {
           child: SafeArea(
             child: Material(
               color: Colors.transparent,
-              child: TextButton.icon(
-                onPressed: _handleSignOut,
+              child: MediaQuery.sizeOf(context).width < 460 &&
+                      MediaQuery.textScalerOf(context).scale(14) > 18
+                  ? IconButton(
+                      tooltip: 'Sign out',
+                      enableFeedback: false,
+                      onPressed: korlixSoundAction(_handleSignOut),
+                      icon: const Icon(Icons.logout, color: Color(0xFFE4EBEE)),
+                    )
+                  : TextButton.icon(
+                onPressed: korlixSoundAction(_handleSignOut),
                 icon: const Icon(Icons.logout, size: 18),
                 label: const Text('Sign out'),
-                style: TextButton.styleFrom(
+                style: korlixSoundButtonStyle(TextButton.styleFrom(
                   foregroundColor: const Color(0xFFE4EBEE),
                   backgroundColor: Colors.black.withOpacity(0.32),
-                ),
+                )),
               ),
             ),
           ),
@@ -1227,15 +1245,15 @@ class _AuthScreenState extends State<AuthScreen> {
                         decoration: InputDecoration(
                           labelText: 'Password',
                           labelStyle: TextStyle(color: skin.mutedText),
-                          suffixIcon: IconButton(
+                          suffixIcon: IconButton(enableFeedback: false,
                             tooltip: _obscurePassword
                                 ? 'Show password'
                                 : 'Hide password',
-                            onPressed: _loading
+                            onPressed: korlixSoundAction(_loading
                                 ? null
                                 : () => setState(() {
                                     _obscurePassword = !_obscurePassword;
-                                  }),
+                                  })),
                             icon: Icon(
                               _obscurePassword
                                   ? Icons.visibility_outlined
@@ -1291,9 +1309,9 @@ class _AuthScreenState extends State<AuthScreen> {
                       if (!_isSignUp && _showForgotPassword) ...[
                         const SizedBox(height: 10),
                         TextButton.icon(
-                          onPressed: (_loading || _resetLoading)
+                          onPressed: korlixSoundAction((_loading || _resetLoading)
                               ? null
-                              : _requestPasswordReset,
+                              : _requestPasswordReset),
                           icon: _resetLoading
                               ? SizedBox(
                                   width: 16,
@@ -1309,9 +1327,9 @@ class _AuthScreenState extends State<AuthScreen> {
                                 ? 'Sending reset email...'
                                 : 'Forgot password? Send reset email',
                           ),
-                          style: TextButton.styleFrom(
+                          style: korlixSoundButtonStyle(TextButton.styleFrom(
                             foregroundColor: const Color(0xFF69D9E8),
-                          ),
+                          )),
                         ),
                       ],
                       if (_message != null) ...[
@@ -1327,14 +1345,14 @@ class _AuthScreenState extends State<AuthScreen> {
                         width: double.infinity,
                         height: 54,
                         child: ElevatedButton(
-                          onPressed: _loading ? null : _submit,
-                          style: ElevatedButton.styleFrom(
+                          onPressed: korlixSoundAction(_loading ? null : _submit),
+                          style: korlixSoundButtonStyle(ElevatedButton.styleFrom(
                             backgroundColor: october ? const Color(0xFFFFBD69) : const Color(0xFF143B4A),
                             foregroundColor: october ? const Color(0xFF352100) : const Color(0xFFE4EBEE),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(999),
                             ),
-                          ),
+                          )),
                           child: _loading
                               ? SizedBox(
                                   width: 22,
@@ -1354,8 +1372,8 @@ class _AuthScreenState extends State<AuthScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      TextButton(
-                        onPressed: _loading
+                      TextButton(style: korlixSoundButtonStyle(null),
+                        onPressed: korlixSoundAction(_loading
                             ? null
                             : () {
                                 TextInput.finishAutofillContext(shouldSave: false);
@@ -1367,7 +1385,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                   _message = null;
                                   _showForgotPassword = false;
                                 });
-                              },
+                              }),
                         child: Text(
                           _isSignUp
                               ? 'Already have an account? Sign in'
@@ -1597,13 +1615,13 @@ class _KorlixGeneratedVideoPlayerState
             ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
-              onPressed: _loading ? null : _load,
+              onPressed: korlixSoundAction(_loading ? null : _load),
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Retry Preview'),
-              style: OutlinedButton.styleFrom(
+              style: korlixSoundButtonStyle(OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFFB7FF00),
                 side: const BorderSide(color: Color(0xFFB7FF00)),
-              ),
+              )),
             ),
           ],
         ),
@@ -1657,6 +1675,7 @@ class _KorlixCharacterIntroPreviewState
     extends State<KorlixCharacterIntroPreview> {
   static const int _maxAutoLoops = 3;
 
+  final Object _soundQuietOwner = Object();
   VideoPlayerController? _controller;
   bool _ready = false;
   bool _soundOn = false;
@@ -1697,6 +1716,7 @@ class _KorlixCharacterIntroPreviewState
     }
 
     _controller = null;
+    kKorlixSounds.setQuiet(_soundQuietOwner, false);
     _ready = false;
     _completedLoops = 0;
     _handlingEnd = false;
@@ -1745,6 +1765,8 @@ class _KorlixCharacterIntroPreviewState
 
   void _handleVideoProgress() {
     final controller = _controller;
+    kKorlixSounds.setQuiet(_soundQuietOwner,
+      controller != null && controller.value.isPlaying && controller.value.volume > 0);
 
     if (controller == null || _handlingEnd) {
       return;
@@ -1794,6 +1816,7 @@ class _KorlixCharacterIntroPreviewState
   }
 
   Future<void> _stopTalkingCompletely({bool seekToEnd = false}) async {
+    kKorlixSounds.setQuiet(_soundQuietOwner, false);
     final controller = _controller;
 
     if (controller == null) {
@@ -1828,6 +1851,7 @@ class _KorlixCharacterIntroPreviewState
     }
 
     final next = !_soundOn;
+    kKorlixSounds.setQuiet(_soundQuietOwner, next);
 
     try {
       await controller.setVolume(next ? 1.0 : 0.0);
@@ -1838,6 +1862,7 @@ class _KorlixCharacterIntroPreviewState
         await controller.play();
       }
     } catch (_) {
+      kKorlixSounds.setQuiet(_soundQuietOwner, false);
       return;
     }
 
@@ -1857,12 +1882,14 @@ class _KorlixCharacterIntroPreviewState
       return;
     }
 
+    kKorlixSounds.setQuiet(_soundQuietOwner, true);
     try {
       _completedLoops = 0;
       await controller.setVolume(1.0);
       await controller.seekTo(Duration.zero);
       await controller.play();
     } catch (_) {
+      kKorlixSounds.setQuiet(_soundQuietOwner, false);
       return;
     }
 
@@ -1877,6 +1904,7 @@ class _KorlixCharacterIntroPreviewState
 
   @override
   void dispose() {
+    kKorlixSounds.setQuiet(_soundQuietOwner, false);
     kKorlixStopCharacterSpeechSignal.removeListener(_handleGlobalStopSignal);
     _controller?.removeListener(_handleVideoProgress);
     _controller?.dispose();
@@ -1932,8 +1960,8 @@ class _KorlixCharacterIntroPreviewState
                   ),
                 ],
               ),
-              child: IconButton(
-                onPressed: _toggleSound,
+              child: IconButton(enableFeedback: false,
+                onPressed: korlixSoundAction(_toggleSound),
                 icon: Icon(
                   _soundOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
                 ),
@@ -2284,6 +2312,19 @@ class _KorlixCharacterIntroVideoState extends State<KorlixCharacterIntroVideo> {
   }
 }
 
+class _KorlixSoundSettingsButton extends StatelessWidget {
+  const _KorlixSoundSettingsButton();
+  @override
+  Widget build(BuildContext context) => IconButton(enableFeedback: false,
+    key: const Key('korlix-open-sounds'),
+    tooltip: 'Sounds & Alerts',
+    icon: const Icon(Icons.volume_up_outlined, color: Color(0xFF69D9E8)),
+    onPressed: korlixSoundAction(() => Navigator.of(context).push<void>(MaterialPageRoute<void>(
+      builder: (_) => const KorlixSoundSettingsScreen(),
+    ))),
+  );
+}
+
 class KorlixAccountButton extends StatefulWidget {
   const KorlixAccountButton({super.key});
 
@@ -2395,14 +2436,14 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                   width: double.infinity,
                   height: 46,
                   child: FilledButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: FilledButton.styleFrom(
+                    onPressed: korlixSoundAction(() => Navigator.of(context).pop()),
+                    style: korlixSoundButtonStyle(FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF143B4A),
                       foregroundColor: const Color(0xFFE4EBEE),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(999),
                       ),
-                    ),
+                    )),
                     child: const Text(
                       'Close',
                       style: TextStyle(fontWeight: FontWeight.w900),
@@ -2500,18 +2541,18 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
+            TextButton(style: korlixSoundButtonStyle(null),
+              onPressed: korlixSoundAction(() => Navigator.of(dialogContext).pop(false)),
               child: const Text('Cancel'),
             ),
             FilledButton.icon(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
+              onPressed: korlixSoundAction(() => Navigator.of(dialogContext).pop(true)),
               icon: const Icon(Icons.delete_forever_rounded),
               label: Text(confirmLabel),
-              style: FilledButton.styleFrom(
+              style: korlixSoundButtonStyle(FilledButton.styleFrom(
                 backgroundColor: Colors.redAccent,
                 foregroundColor: Colors.white,
-              ),
+              )),
             ),
           ],
         );
@@ -3013,24 +3054,24 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                   ),
                 ),
                 actions: [
-                  TextButton(
-                    onPressed: working
+                  TextButton(style: korlixSoundButtonStyle(null),
+                    onPressed: korlixSoundAction(working
                         ? null
                         : () {
                             Navigator.of(statefulDialogContext).pop(false);
-                          },
+                          }),
                     child: const Text('Cancel'),
                   ),
                   FilledButton.icon(
-                    onPressed: working
+                    onPressed: korlixSoundAction(working
                         ? null
                         : () {
                             unawaited(submit());
-                          },
-                    style: FilledButton.styleFrom(
+                          }),
+                    style: korlixSoundButtonStyle(FilledButton.styleFrom(
                       backgroundColor: const Color(0xFFB794F4),
                       foregroundColor: const Color(0xFF160A22),
-                    ),
+                    )),
                     icon: working
                         ? const SizedBox.square(
                             dimension: 18,
@@ -3191,11 +3232,11 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                             ],
                           ),
                         ),
-                        IconButton(
+                        IconButton(enableFeedback: false,
                           tooltip: 'Close BRAIN VAULT Security',
-                          onPressed: () {
+                          onPressed: korlixSoundAction(() {
                             Navigator.of(sheetContext).pop();
-                          },
+                          }),
                           icon: const Icon(Icons.close_rounded),
                           color: const Color(0xFFC7D7DC),
                         ),
@@ -3293,16 +3334,16 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                     const SizedBox(height: 16),
                     if (!configured)
                       FilledButton.icon(
-                        onPressed: canManage
+                        onPressed: korlixSoundAction(canManage
                             ? () {
                                 unawaited(runAction('set'));
                               }
-                            : null,
-                        style: FilledButton.styleFrom(
+                            : null),
+                        style: korlixSoundButtonStyle(FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(50),
                           backgroundColor: const Color(0xFFB794F4),
                           foregroundColor: const Color(0xFF160A22),
-                        ),
+                        )),
                         icon: const Icon(Icons.add_moderator_rounded),
                         label: const Text(
                           'Set BRAIN VAULT Password',
@@ -3311,16 +3352,16 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       )
                     else ...[
                       FilledButton.icon(
-                        onPressed: canManage
+                        onPressed: korlixSoundAction(canManage
                             ? () {
                                 unawaited(runAction('change'));
                               }
-                            : null,
-                        style: FilledButton.styleFrom(
+                            : null),
+                        style: korlixSoundButtonStyle(FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(50),
                           backgroundColor: const Color(0xFFB794F4),
                           foregroundColor: const Color(0xFF160A22),
-                        ),
+                        )),
                         icon: const Icon(Icons.password_rounded),
                         label: const Text(
                           'Change BRAIN VAULT Password',
@@ -3329,16 +3370,16 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       ),
                       const SizedBox(height: 10),
                       OutlinedButton.icon(
-                        onPressed: canManage
+                        onPressed: korlixSoundAction(canManage
                             ? () {
                                 unawaited(runAction('reset'));
                               }
-                            : null,
-                        style: OutlinedButton.styleFrom(
+                            : null),
+                        style: korlixSoundButtonStyle(OutlinedButton.styleFrom(
                           minimumSize: const Size.fromHeight(50),
                           foregroundColor: const Color(0xFFFFC566),
                           side: const BorderSide(color: Color(0xFFFFC566)),
-                        ),
+                        )),
                         icon: const Icon(Icons.restart_alt_rounded),
                         label: const Text(
                           'Reset with KORLIX Login Password',
@@ -3428,12 +3469,12 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
             style: TextStyle(color: Color(0xFFA9C6CF)),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
+            TextButton(style: korlixSoundButtonStyle(null),
+              onPressed: korlixSoundAction(() => Navigator.of(context).pop(false)),
               child: const Text('Cancel'),
             ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
+            TextButton(style: korlixSoundButtonStyle(null),
+              onPressed: korlixSoundAction(() => Navigator.of(context).pop(true)),
               child: const Text(
                 'Request deletion',
                 style: TextStyle(color: Colors.redAccent),
@@ -3942,7 +3983,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                                     SizedBox(
                                       width: double.infinity,
                                       child: FilledButton(
-                                        onPressed: selected || comingSoon
+                                        onPressed: korlixSoundAction(selected || comingSoon
                                             ? null
                                             : () async {
                                                 if (!available) {
@@ -3962,8 +4003,8 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                                                     selectedId = id;
                                                   });
                                                 }
-                                              },
-                                        style: FilledButton.styleFrom(
+                                              }),
+                                        style: korlixSoundButtonStyle(FilledButton.styleFrom(
                                           backgroundColor: available
                                               ? const Color(0xFF143B4A)
                                               : const Color(0xFF334155),
@@ -3975,7 +4016,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                                               999,
                                             ),
                                           ),
-                                        ),
+                                        )),
                                         child: Text(
                                           selected
                                               ? 'Selected'
@@ -4196,61 +4237,61 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                     ),
                     const SizedBox(height: 14),
                     FilledButton.icon(
-                      onPressed: () => _openPlansPanel(currentTier: tier),
+                      onPressed: korlixSoundAction(() => _openPlansPanel(currentTier: tier)),
                       icon: const Icon(Icons.workspace_premium_rounded),
                       label: const Text('View plans / upgrade'),
-                      style: FilledButton.styleFrom(
+                      style: korlixSoundButtonStyle(FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF143B4A),
                         foregroundColor: const Color(0xFFE4EBEE),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(999),
                         ),
-                      ),
+                      )),
                     ),
                     const SizedBox(height: 10),
                     FilledButton.icon(
-                      onPressed: () => _openCharactersPanel(
+                      onPressed: korlixSoundAction(() => _openCharactersPanel(
                         currentTier: tier,
                         selectedCharacterId:
                             (profile['selected_character'] ?? 'jj').toString(),
                         characters: characters,
                         characterAccess: characterAccess,
-                      ),
+                      )),
                       icon: const Icon(Icons.groups_rounded),
                       label: const Text('View characters'),
-                      style: FilledButton.styleFrom(
+                      style: korlixSoundButtonStyle(FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF0A2B3D),
                         foregroundColor: const Color(0xFFE4EBEE),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(999),
                         ),
-                      ),
+                      )),
                     ),
 
                     const SizedBox(height: 10),
                     FilledButton.icon(
-                      onPressed: _openComingSoonPanel,
+                      onPressed: korlixSoundAction(_openComingSoonPanel),
                       icon: const Icon(Icons.upcoming_rounded),
                       label: const Text('Coming Soon'),
-                      style: FilledButton.styleFrom(
+                      style: korlixSoundButtonStyle(FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF143B4A),
                         foregroundColor: const Color(0xFFE4EBEE),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(999),
                         ),
-                      ),
+                      )),
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
-                      onPressed: () => _openThemePanel(
+                      onPressed: korlixSoundAction(() => _openThemePanel(
                         currentTier: tier,
                         currentTheme:
                             (profile['preferred_theme'] ?? 'korlix_blue')
                                 .toString(),
-                      ),
+                      )),
                       icon: const Icon(Icons.palette_outlined),
                       label: const Text('Themes & Screen Skins'),
-                      style: OutlinedButton.styleFrom(
+                      style: korlixSoundButtonStyle(OutlinedButton.styleFrom(
                         foregroundColor: tier == 'ultra' || tier == 'enterprise'
                             ? const Color(0xFFFFD166)
                             : const Color(0xFFA9C6CF),
@@ -4264,15 +4305,27 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(999),
                         ),
-                      ),
+                      )),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: korlixSoundAction(() => Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(builder: (_) => const KorlixSoundSettingsScreen()),
+                      )),
+                      icon: const Icon(Icons.volume_up_outlined),
+                      label: const Text('Sounds & Alerts'),
+                      style: korlixSoundButtonStyle(OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF69D9E8),
+                        side: const BorderSide(color: Color(0xFF69D9E8)),
+                      )),
                     ),
                     const SizedBox(height: 10),
                     // KORLIX_BRAIN_VAULT_ACCOUNT_MANAGER_SETTINGS_BUILD131_V1_BEGIN
                     OutlinedButton.icon(
-                      onPressed: _openBrainVaultSecuritySettings,
+                      onPressed: korlixSoundAction(_openBrainVaultSecuritySettings),
                       icon: const Icon(Icons.admin_panel_settings_rounded),
                       label: const Text('BRAIN VAULT Security'),
-                      style: OutlinedButton.styleFrom(
+                      style: korlixSoundButtonStyle(OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFFDFC9FF),
                         side: BorderSide(
                           color: const Color(0xFFB794F4).withValues(alpha: 0.68),
@@ -4280,15 +4333,15 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(999),
                         ),
-                      ),
+                      )),
                     ),
                     // KORLIX_BRAIN_VAULT_ACCOUNT_MANAGER_SETTINGS_BUILD131_V1_END
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
-                      onPressed: _requestAccountDeletion,
+                      onPressed: korlixSoundAction(_requestAccountDeletion),
                       icon: const Icon(Icons.delete_forever_rounded),
                       label: const Text('Request account deletion'),
-                      style: OutlinedButton.styleFrom(
+                      style: korlixSoundButtonStyle(OutlinedButton.styleFrom(
                         foregroundColor: Colors.redAccent,
                         side: BorderSide(
                           color: Colors.redAccent.withOpacity(0.55),
@@ -4296,7 +4349,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(999),
                         ),
-                      ),
+                      )),
                     ),
                     const SizedBox(height: 22),
                     Row(
@@ -4313,7 +4366,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                         ),
                         if (history.isNotEmpty)
                           TextButton.icon(
-                            onPressed: historyDeleteBusy
+                            onPressed: korlixSoundAction(historyDeleteBusy
                                 ? null
                                 : () async {
                                     setPanelState(() {
@@ -4353,7 +4406,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                                         });
                                       }
                                     }
-                                  },
+                                  }),
                             icon: historyDeleteBusy
                                 ? const SizedBox(
                                     width: 16,
@@ -4366,9 +4419,9 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                             label: Text(
                               historyDeleteBusy ? 'Deleting…' : 'Delete All',
                             ),
-                            style: TextButton.styleFrom(
+                            style: korlixSoundButtonStyle(TextButton.styleFrom(
                               foregroundColor: Colors.redAccent,
-                            ),
+                            )),
                           ),
                       ],
                     ),
@@ -4444,25 +4497,25 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                               Row(
                                 children: [
                                   TextButton.icon(
-                                    onPressed: () => _reportHistoryItem(
+                                    onPressed: korlixSoundAction(() => _reportHistoryItem(
                                       generationId: historyId,
                                       prompt: prompt,
-                                    ),
+                                    )),
                                     icon: const Icon(
                                       Icons.flag_outlined,
                                       size: 17,
                                     ),
                                     label: const Text('Report Output'),
-                                    style: TextButton.styleFrom(
+                                    style: korlixSoundButtonStyle(TextButton.styleFrom(
                                       foregroundColor: const Color(0xFF69D9E8),
                                       padding: EdgeInsets.zero,
-                                    ),
+                                    )),
                                   ),
                                   const Spacer(),
-                                  IconButton(
+                                  IconButton(enableFeedback: false,
                                     tooltip: 'Delete saved generation',
                                     onPressed:
-                                        historyDeleteBusy || historyId.isEmpty
+                                        korlixSoundAction(historyDeleteBusy || historyId.isEmpty
                                         ? null
                                         : () async {
                                             setPanelState(() {
@@ -4510,7 +4563,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                                                 });
                                               }
                                             }
-                                          },
+                                          }),
                                     icon: const Icon(
                                       Icons.delete_outline_rounded,
                                     ),
@@ -4552,8 +4605,20 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
 
   @override
   Widget build(BuildContext context) {
+    if (MediaQuery.sizeOf(context).width < 460 &&
+        MediaQuery.textScalerOf(context).scale(14) > 18) {
+      return IconButton(
+        tooltip: 'Settings',
+        enableFeedback: false,
+        onPressed: korlixSoundAction(_loading ? null : _openPanel),
+        icon: _loading
+            ? const SizedBox(width: 17, height: 17,
+                child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.settings_rounded, color: Color(0xFFE4EBEE)),
+      );
+    }
     return TextButton.icon(
-      onPressed: _loading ? null : _openPanel,
+      onPressed: korlixSoundAction(_loading ? null : _openPanel),
       icon: _loading
           ? const SizedBox(
               width: 17,
@@ -4565,10 +4630,10 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
             )
           : const Icon(Icons.settings_rounded, size: 18),
       label: const Text('Settings'),
-      style: TextButton.styleFrom(
+      style: korlixSoundButtonStyle(TextButton.styleFrom(
         foregroundColor: const Color(0xFFE4EBEE),
         backgroundColor: Colors.black.withOpacity(0.32),
-      ),
+      )),
     );
   }
 }
@@ -5736,8 +5801,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Row(children: [
         Expanded(child: Text('${files.length} ${files.length == 1 ? 'file' : 'files'} attached', style: TextStyle(color: skin.text, fontWeight: FontWeight.w700))),
-        TextButton(onPressed: _loading ? null : _handleUploadPressed, child: const Text('Manage')),
-        IconButton(tooltip: 'Clear all attachments', onPressed: _loading ? null : _clearPickedUploadFiles, icon: const Icon(Icons.delete_sweep_outlined)),
+        TextButton(style: korlixSoundButtonStyle(null), onPressed: korlixSoundAction(_loading ? null : _handleUploadPressed), child: const Text('Manage')),
+        IconButton(enableFeedback: false, tooltip: 'Clear all attachments', onPressed: korlixSoundAction(_loading ? null : _clearPickedUploadFiles), icon: const Icon(Icons.delete_sweep_outlined)),
       ]),
       for (var i = 0; i < files.length; i++) Padding(padding: const EdgeInsets.only(bottom: 8), child: KorlixUploadFileCard(file: files[i], onRemove: _loading ? null : () => _removePickedUploadFileAt(i))),
     ]);
@@ -6249,11 +6314,19 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       );
 
       unawaited(_persistLocalChatTopics());
+      if (!_resumePendingGenerationJobsRunning) {
+        unawaited(kKorlixSounds.play(KorlixSound.bell,
+          eventId: 'generation:${safeTopicId}:${completedAt.microsecondsSinceEpoch}'));
+      }
       return;
     }
 
     _results.insert(0, newItem);
     _addChatMessage(message);
+    if (!_resumePendingGenerationJobsRunning) {
+      unawaited(kKorlixSounds.play(KorlixSound.bell,
+        eventId: 'generation:${_activeChatTopicId}:${completedAt.microsecondsSinceEpoch}'));
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_chatScrollController.hasClients) {
@@ -7536,12 +7609,12 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
           title: Text(_t.clearConfirmTitle),
           content: Text(_t.clearConfirmMessage),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
+            TextButton(style: korlixSoundButtonStyle(null),
+              onPressed: korlixSoundAction(() => Navigator.pop(context, false)),
               child: Text(_t.cancel),
             ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
+            FilledButton(style: korlixSoundButtonStyle(null),
+              onPressed: korlixSoundAction(() => Navigator.pop(context, true)),
               child: Text(_t.clearAll),
             ),
           ],
@@ -7944,9 +8017,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
                           children: [
                             Expanded(
                               child: OutlinedButton(
-                                onPressed: () =>
-                                    Navigator.of(sheetContext).pop(),
-                                style: OutlinedButton.styleFrom(
+                                onPressed: korlixSoundAction(() =>
+                                    Navigator.of(sheetContext).pop()),
+                                style: korlixSoundButtonStyle(OutlinedButton.styleFrom(
                                   foregroundColor: const Color(0xFFE4EBEE),
                                   side: BorderSide(
                                     color: Colors.white.withValues(alpha: 0.22),
@@ -7957,7 +8030,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(999),
                                   ),
-                                ),
+                                )),
                                 child: const Text(
                                   'Cancel',
                                   style: TextStyle(fontWeight: FontWeight.w900),
@@ -7967,17 +8040,17 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
                             const SizedBox(width: 12),
                             Expanded(
                               child: FilledButton.icon(
-                                onPressed: () {
+                                onPressed: korlixSoundAction(() {
                                   Navigator.of(
                                     sheetContext,
                                   ).pop(<String, String>{
                                     'reason': selectedReason,
                                     'details': detailsController.text.trim(),
                                   });
-                                },
+                                }),
                                 icon: const Icon(Icons.flag_rounded),
                                 label: const Text('Submit'),
-                                style: FilledButton.styleFrom(
+                                style: korlixSoundButtonStyle(FilledButton.styleFrom(
                                   backgroundColor: Colors.redAccent,
                                   foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(
@@ -7986,7 +8059,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(999),
                                   ),
-                                ),
+                                )),
                               ),
                             ),
                           ],
@@ -8307,29 +8380,29 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
           ),
           actions: [
             if (item.hasImageResult) ...[
-              TextButton.icon(
-                onPressed: () => _saveGeneratedImage(item),
+              TextButton.icon(style: korlixSoundButtonStyle(null),
+                onPressed: korlixSoundAction(() => _saveGeneratedImage(item)),
                 icon: const Icon(Icons.download_rounded),
                 label: const Text('Save'),
               ),
-              TextButton.icon(
-                onPressed: () => _shareGeneratedImage(item),
+              TextButton.icon(style: korlixSoundButtonStyle(null),
+                onPressed: korlixSoundAction(() => _shareGeneratedImage(item)),
                 icon: const Icon(Icons.share_rounded),
                 label: const Text('Share'),
               ),
             ] else ...[
-              TextButton(
-                onPressed: () => _copyResultText(item),
+              TextButton(style: korlixSoundButtonStyle(null),
+                onPressed: korlixSoundAction(() => _copyResultText(item)),
                 child: Text(language.copy),
               ),
               if (item.allowPdf)
-                TextButton(
-                  onPressed: () => _exportPdf(item),
+                TextButton(style: korlixSoundButtonStyle(null),
+                  onPressed: korlixSoundAction(() => _exportPdf(item)),
                   child: Text(language.exportPdf),
                 ),
             ],
-            TextButton(
-              onPressed: () => Navigator.pop(context),
+            TextButton(style: korlixSoundButtonStyle(null),
+              onPressed: korlixSoundAction(() => Navigator.pop(context)),
               child: Text(language.close),
             ),
           ],
@@ -8711,12 +8784,12 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
+            TextButton(style: korlixSoundButtonStyle(null),
+              onPressed: korlixSoundAction(() => Navigator.of(dialogContext).pop(false)),
               child: const Text('Close'),
             ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
+            FilledButton(style: korlixSoundButtonStyle(null),
+              onPressed: korlixSoundAction(() => Navigator.of(dialogContext).pop(true)),
               child: const Text('I understand and agree'),
             ),
           ],
@@ -9373,19 +9446,19 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+            TextButton(style: korlixSoundButtonStyle(null),
+              onPressed: korlixSoundAction(() => Navigator.of(context).pop()),
               child: const Text(
                 'Not now',
                 style: TextStyle(color: Color(0xFFA9C6CF)),
               ),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(),
-              style: FilledButton.styleFrom(
+              onPressed: korlixSoundAction(() => Navigator.of(context).pop()),
+              style: korlixSoundButtonStyle(FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF143B4A),
                 foregroundColor: const Color(0xFFE4EBEE),
-              ),
+              )),
               child: const Text('Got it'),
             ),
           ],
@@ -9421,11 +9494,11 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
             : const Color(0xFF69D9E8).withOpacity(0.34),
       ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-      onPressed: () => _showPremiumFeaturePrompt(
+      onPressed: korlixSoundAction(() => _showPremiumFeaturePrompt(
         title: title,
         availability: availability,
         description: description,
-      ),
+      )),
     );
   }
 
@@ -9444,14 +9517,14 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       width: 50,
       height: 56,
       child: OutlinedButton(
-        onPressed: _loading
+        onPressed: korlixSoundAction(_loading
             ? null
             : () => _showPremiumFeaturePrompt(
                 title: title,
                 availability: availability,
                 description: description,
-              ),
-        style: OutlinedButton.styleFrom(
+              )),
+        style: korlixSoundButtonStyle(OutlinedButton.styleFrom(
           padding: EdgeInsets.zero,
           foregroundColor: accent,
           backgroundColor: Colors.black.withOpacity(0.18),
@@ -9459,7 +9532,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(17),
           ),
-        ),
+        )),
         child: Stack(
           clipBehavior: Clip.none,
           alignment: Alignment.center,
@@ -10226,8 +10299,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
+            TextButton(style: korlixSoundButtonStyle(null),
+              onPressed: korlixSoundAction(() => Navigator.of(dialogContext).pop()),
               child: const Text('OK'),
             ),
           ],
@@ -10399,13 +10472,13 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 Navigator.of(dialogContext).pop(value.trim()),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
+            TextButton(style: korlixSoundButtonStyle(null),
+              onPressed: korlixSoundAction(() => Navigator.of(dialogContext).pop()),
               child: const Text('Cancel'),
             ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(controller.text.trim()),
+            FilledButton(style: korlixSoundButtonStyle(null),
+              onPressed: korlixSoundAction(() =>
+                  Navigator.of(dialogContext).pop(controller.text.trim())),
               child: const Text('Redeem'),
             ),
           ],
@@ -10642,13 +10715,13 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
             ),
           ),
           const SizedBox(width: 10),
-          FilledButton(
-            onPressed: unlocked
+          FilledButton(style: korlixSoundButtonStyle(null),
+            onPressed: korlixSoundAction(unlocked
                 ? () {
                     Navigator.of(sheetContext).pop();
                     unawaited(_openCustomAccessFeature(featureKey));
                   }
-                : null,
+                : null),
             child: Text(unlocked ? 'Open' : 'Locked'),
           ),
         ],
@@ -10747,9 +10820,9 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                                 ),
                               ),
                             ),
-                            IconButton(
+                            IconButton(enableFeedback: false,
                               tooltip: 'Close',
-                              onPressed: () => Navigator.of(sheetContext).pop(),
+                              onPressed: korlixSoundAction(() => Navigator.of(sheetContext).pop()),
                               icon: const Icon(Icons.close_rounded),
                               color: skin.text,
                             ),
@@ -10770,12 +10843,12 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                           children: [
                             if (hasCodeFeatures) ...[
                               Expanded(
-                                child: FilledButton.icon(
-                                  onPressed: _customAccessLoading
+                                child: FilledButton.icon(style: korlixSoundButtonStyle(null),
+                                  onPressed: korlixSoundAction(_customAccessLoading
                                       ? null
                                       : () => unawaited(
                                           _requestCustomAccessCode(setSheetState),
-                                        ),
+                                        )),
                                   icon: const Icon(Icons.mail_outline_rounded),
                                   label: const Text('Request a Code'),
                                 ),
@@ -10783,14 +10856,14 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                               const SizedBox(width: 10),
                             ],
                             Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: _customAccessLoading
+                              child: OutlinedButton.icon(style: korlixSoundButtonStyle(null),
+                                onPressed: korlixSoundAction(_customAccessLoading
                                     ? null
                                     : () => unawaited(
                                         _promptAndRedeemCustomAccessCode(
                                           setSheetState,
                                         ),
-                                      ),
+                                      )),
                                 icon: const Icon(Icons.password_rounded),
                                 label: const Text('Enter a Code'),
                               ),
@@ -10952,8 +11025,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
           'The new dashboard will be added in Build 90.',
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
+          TextButton(style: korlixSoundButtonStyle(null),
+            onPressed: korlixSoundAction(() => Navigator.pop(context)),
             child: const Text('Close'),
           ),
         ],
@@ -11157,15 +11230,15 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                   ),
                 ),
               ),
-              IconButton(
+              IconButton(enableFeedback: false,
                 tooltip: 'Close utilities',
-                onPressed: _loading
+                onPressed: korlixSoundAction(_loading
                     ? null
                     : () {
                         setState(() {
                           _clearUtilitySelection();
                         });
-                      },
+                      }),
                 icon: Icon(Icons.close, color: _korlixReadableForeground(skin)),
               ),
             ],
@@ -11677,8 +11750,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
               children: [
                 Align(
                   alignment: Alignment.centerRight,
-                  child: IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                  child: IconButton(enableFeedback: false,
+                    onPressed: korlixSoundAction(() => Navigator.of(context).pop()),
                     icon: const Icon(Icons.close_rounded),
                     color: const Color(0xFFE4EBEE),
                   ),
@@ -11738,14 +11811,14 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                   width: double.infinity,
                   height: 46,
                   child: FilledButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: FilledButton.styleFrom(
+                    onPressed: korlixSoundAction(() => Navigator.of(context).pop()),
+                    style: korlixSoundButtonStyle(FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF143B4A),
                       foregroundColor: const Color(0xFFE4EBEE),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(999),
                       ),
-                    ),
+                    )),
                     child: const Text(
                       'Close',
                       style: TextStyle(fontWeight: FontWeight.w900),
@@ -12062,8 +12135,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                             ),
                           ),
                         ),
-                        IconButton(
-                          onPressed: () => Navigator.of(context).pop(),
+                        IconButton(enableFeedback: false,
+                          onPressed: korlixSoundAction(() => Navigator.of(context).pop()),
                           icon: const Icon(Icons.close_rounded),
                           color: const Color(0xFFE4EBEE),
                         ),
@@ -12156,29 +12229,29 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                         children: [
                           Expanded(
                             child: FilledButton.icon(
-                              onPressed: () => _downloadGeneratedVideo(videoId),
+                              onPressed: korlixSoundAction(() => _downloadGeneratedVideo(videoId)),
                               icon: const Icon(Icons.download_rounded),
                               label: const Text('Download Video'),
-                              style: FilledButton.styleFrom(
+                              style: korlixSoundButtonStyle(FilledButton.styleFrom(
                                 backgroundColor: const Color(0xFF143B4A),
                                 foregroundColor: const Color(0xFFE4EBEE),
-                              ),
+                              )),
                             ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: () {
+                              onPressed: korlixSoundAction(() {
                                 Share.share(
                                   'I created a video with Korlix AI. Video ID: $videoId',
                                   subject: 'Korlix AI video',
                                 );
-                              },
+                              }),
                               icon: const Icon(Icons.share_rounded),
                               label: const Text('Share'),
-                              style: OutlinedButton.styleFrom(
+                              style: korlixSoundButtonStyle(OutlinedButton.styleFrom(
                                 foregroundColor: const Color(0xFF69D9E8),
-                              ),
+                              )),
                             ),
                           ),
                         ],
@@ -12268,40 +12341,40 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
           const SizedBox(height: 14),
           if (pdfBase64.isNotEmpty)
             ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
+              style: korlixSoundButtonStyle(ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFB71C1C),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
-              ),
+              )),
               icon: const Icon(Icons.picture_as_pdf_rounded, size: 20),
               label: const Text(
                 'Download PDF',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              onPressed: () =>
-                  _saveCreditDocFile(pdfBase64, 'credit_dispute_letter.pdf'),
+              onPressed: korlixSoundAction(() =>
+                  _saveCreditDocFile(pdfBase64, 'credit_dispute_letter.pdf')),
             ),
           if (pdfBase64.isNotEmpty) const SizedBox(height: 8),
           if (docxBase64.isNotEmpty)
             ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
+              style: korlixSoundButtonStyle(ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1565C0),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
-              ),
+              )),
               icon: const Icon(Icons.article_rounded, size: 20),
               label: const Text(
                 'Download Word Doc',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              onPressed: () =>
-                  _saveCreditDocFile(docxBase64, 'credit_dispute_letter.docx'),
+              onPressed: korlixSoundAction(() =>
+                  _saveCreditDocFile(docxBase64, 'credit_dispute_letter.docx')),
             ),
         ],
       ),
@@ -12585,11 +12658,11 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                                           ),
                                         ),
                                         // Minimize/Maximize button
-                                        IconButton(
-                                          onPressed: () => setState(
+                                        IconButton(enableFeedback: false,
+                                          onPressed: korlixSoundAction(() => setState(
                                             () => _answerMinimized =
                                                 !_answerMinimized,
-                                          ),
+                                          )),
                                           tooltip: _answerMinimized
                                               ? 'Maximize'
                                               : 'Minimize',
@@ -12601,12 +12674,12 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                                             size: 18,
                                           ),
                                         ),
-                                        IconButton(
-                                          onPressed: () {
+                                        IconButton(enableFeedback: false,
+                                          onPressed: korlixSoundAction(() {
                                             setState(() {
                                               _featuredAnswerDismissed = true;
                                             });
-                                          },
+                                          }),
                                           icon: Icon(Icons.close_rounded),
                                           color: skin.text,
                                           tooltip: 'Close',
@@ -12885,8 +12958,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(false),
-                        style: OutlinedButton.styleFrom(
+                        onPressed: korlixSoundAction(() => Navigator.of(context).pop(false)),
+                        style: korlixSoundButtonStyle(OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFFE4EBEE),
                           side: BorderSide(
                             color: Colors.white.withValues(alpha: 0.22),
@@ -12895,7 +12968,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(999),
                           ),
-                        ),
+                        )),
                         child: const Text(
                           'Cancel',
                           style: TextStyle(fontWeight: FontWeight.w900),
@@ -12905,17 +12978,17 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                     const SizedBox(width: 12),
                     Expanded(
                       child: FilledButton.icon(
-                        onPressed: () => Navigator.of(context).pop(true),
+                        onPressed: korlixSoundAction(() => Navigator.of(context).pop(true)),
                         icon: const Icon(Icons.delete_outline_rounded),
                         label: const Text('Delete'),
-                        style: FilledButton.styleFrom(
+                        style: korlixSoundButtonStyle(FilledButton.styleFrom(
                           backgroundColor: Colors.redAccent,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 13),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(999),
                           ),
-                        ),
+                        )),
                       ),
                     ),
                   ],
@@ -12966,19 +13039,19 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(false),
+                      child: OutlinedButton(style: korlixSoundButtonStyle(null),
+                        onPressed: korlixSoundAction(() => Navigator.of(context).pop(false)),
                         child: const Text('Cancel'),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: FilledButton(
-                        onPressed: () => Navigator.of(context).pop(true),
-                        style: FilledButton.styleFrom(
+                        onPressed: korlixSoundAction(() => Navigator.of(context).pop(true)),
+                        style: korlixSoundButtonStyle(FilledButton.styleFrom(
                           backgroundColor: Colors.redAccent,
                           foregroundColor: Colors.white,
-                        ),
+                        )),
                         child: const Text('Delete'),
                       ),
                     ),
@@ -13585,7 +13658,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 ),
                 if (_currentTier == 'basic' && !kKorlixHideTipDeveloperOnIos) ...[
                   const SizedBox(height: 20),
-                  TextButton.icon(icon: const Icon(Icons.favorite_outline_rounded), label: const Text('Tip the developer'), onPressed: _loading ? null : _openDonateCashApp),
+                  TextButton.icon(style: korlixSoundButtonStyle(null), icon: const Icon(Icons.favorite_outline_rounded), label: const Text('Tip the developer'), onPressed: korlixSoundAction(_loading ? null : _openDonateCashApp)),
                 ],
 
                 if (_error != null) ...[
@@ -14332,21 +14405,21 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(false),
+                      child: OutlinedButton(style: korlixSoundButtonStyle(null),
+                        onPressed: korlixSoundAction(() => Navigator.of(context).pop(false)),
                         child: const Text('Cancel'),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: FilledButton.icon(
-                        onPressed: () => Navigator.of(context).pop(true),
+                        onPressed: korlixSoundAction(() => Navigator.of(context).pop(true)),
                         icon: const Icon(Icons.delete_outline_rounded),
                         label: const Text('Delete'),
-                        style: FilledButton.styleFrom(
+                        style: korlixSoundButtonStyle(FilledButton.styleFrom(
                           backgroundColor: Colors.redAccent,
                           foregroundColor: Colors.white,
-                        ),
+                        )),
                       ),
                     ),
                   ],
@@ -14745,8 +14818,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
-                    onPressed: () => Navigator.of(sheetContext).pop(),
-                    style: OutlinedButton.styleFrom(
+                    onPressed: korlixSoundAction(() => Navigator.of(sheetContext).pop()),
+                    style: korlixSoundButtonStyle(OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFF69D9E8),
                       side: BorderSide(
                         color: const Color(0xFF69D9E8).withValues(alpha: 0.42),
@@ -14755,7 +14828,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(999),
                       ),
-                    ),
+                    )),
                     child: const Text(
                       'Cancel',
                       style: TextStyle(fontWeight: FontWeight.w900),
@@ -14837,12 +14910,12 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                   ),
                 ),
               ),
-              IconButton(
-                onPressed: () => _submitRenameSavedTopic(topic.id),
+              IconButton(enableFeedback: false,
+                onPressed: korlixSoundAction(() => _submitRenameSavedTopic(topic.id)),
                 icon: Icon(Icons.check_rounded, color: skin.primary),
               ),
-              IconButton(
-                onPressed: _cancelRenameSavedTopic,
+              IconButton(enableFeedback: false,
+                onPressed: korlixSoundAction(_cancelRenameSavedTopic),
                 icon: Icon(Icons.close_rounded, color: skin.mutedText),
               ),
             ],
@@ -15351,9 +15424,9 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                           children: [
                             Expanded(
                               child: OutlinedButton(
-                                onPressed: () =>
-                                    Navigator.of(sheetContext).pop(),
-                                style: OutlinedButton.styleFrom(
+                                onPressed: korlixSoundAction(() =>
+                                    Navigator.of(sheetContext).pop()),
+                                style: korlixSoundButtonStyle(OutlinedButton.styleFrom(
                                   foregroundColor: const Color(0xFFE4EBEE),
                                   side: BorderSide(
                                     color: Colors.white.withValues(alpha: 0.22),
@@ -15364,7 +15437,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(999),
                                   ),
-                                ),
+                                )),
                                 child: const Text(
                                   'Cancel',
                                   style: TextStyle(fontWeight: FontWeight.w900),
@@ -15374,17 +15447,17 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                             const SizedBox(width: 12),
                             Expanded(
                               child: FilledButton.icon(
-                                onPressed: () {
+                                onPressed: korlixSoundAction(() {
                                   Navigator.of(
                                     sheetContext,
                                   ).pop(<String, String>{
                                     'reason': selectedReason,
                                     'details': detailsController.text.trim(),
                                   });
-                                },
+                                }),
                                 icon: const Icon(Icons.flag_rounded),
                                 label: const Text('Submit'),
-                                style: FilledButton.styleFrom(
+                                style: korlixSoundButtonStyle(FilledButton.styleFrom(
                                   backgroundColor: Colors.redAccent,
                                   foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(
@@ -15393,7 +15466,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(999),
                                   ),
-                                ),
+                                )),
                               ),
                             ),
                           ],
@@ -15449,15 +15522,15 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     return Align(
       alignment: Alignment.centerRight,
       child: TextButton.icon(
-        onPressed: () => _showGooglePlayAiReportSheet(
+        onPressed: korlixSoundAction(() => _showGooglePlayAiReportSheet(
           contentType: contentType,
           prompt: prompt,
           outputSummary: outputSummary,
           contentId: contentId,
-        ),
+        )),
         icon: const Icon(Icons.flag_outlined, size: 17),
         label: const Text('Report AI Output'),
-        style: TextButton.styleFrom(
+        style: korlixSoundButtonStyle(TextButton.styleFrom(
           foregroundColor: Colors.redAccent,
           padding: EdgeInsets.symmetric(
             horizontal: compact ? 10 : 12,
@@ -15472,7 +15545,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
             side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.52)),
           ),
           backgroundColor: Colors.black.withValues(alpha: 0.20),
-        ),
+        )),
       ),
     );
   }
@@ -15537,8 +15610,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
               ),
             ),
             // Minimize/Maximize button
-            IconButton(
-              onPressed: () => setState(() => _chatMinimized = !_chatMinimized),
+            IconButton(enableFeedback: false,
+              onPressed: korlixSoundAction(() => setState(() => _chatMinimized = !_chatMinimized)),
               tooltip: _chatMinimized ? 'Maximize chat' : 'Minimize chat',
               icon: Icon(
                 _chatMinimized
@@ -15548,13 +15621,13 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 size: 22,
               ),
             ),
-            TextButton.icon(
-              onPressed: () async {
+            TextButton.icon(style: korlixSoundButtonStyle(null),
+              onPressed: korlixSoundAction(() async {
                 await _clearAllResults();
                 setState(() {
                   _chatMessages.clear();
                 });
-              },
+              }),
               icon: const Icon(Icons.delete_sweep, size: 18),
               label: const Text('Clear'),
             ),
@@ -15763,19 +15836,19 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 SizedBox(
                   width: 28,
                   height: 28,
-                  child: IconButton(
+                  child: IconButton(enableFeedback: false,
                     padding: EdgeInsets.zero,
                     visualDensity: VisualDensity.compact,
                     tooltip: isMinimized
                         ? 'Maximize message'
                         : 'Minimize message',
-                    onPressed: () => setState(() {
+                    onPressed: korlixSoundAction(() => setState(() {
                       if (isMinimized) {
                         _minimizedMessages.remove(index);
                       } else {
                         _minimizedMessages.add(index);
                       }
-                    }),
+                    })),
                     icon: Icon(
                       isMinimized
                           ? Icons.keyboard_arrow_down
@@ -15789,12 +15862,12 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 SizedBox(
                   width: 28,
                   height: 28,
-                  child: IconButton(
+                  child: IconButton(enableFeedback: false,
                     padding: EdgeInsets.zero,
                     visualDensity: VisualDensity.compact,
                     tooltip: 'Remove message',
-                    onPressed: () =>
-                        setState(() => _deletedMessages.add(index)),
+                    onPressed: korlixSoundAction(() =>
+                        setState(() => _deletedMessages.add(index))),
                     icon: Icon(
                       Icons.close_rounded,
                       size: 16,
@@ -15958,8 +16031,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                                   ),
                                 ),
                                 actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx),
+                                  TextButton(style: korlixSoundButtonStyle(null),
+                                    onPressed: korlixSoundAction(() => Navigator.pop(ctx)),
                                     child: const Text('Close'),
                                   ),
                                 ],
@@ -16120,34 +16193,34 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
             spacing: 8,
             runSpacing: 8,
             children: [
-              FilledButton(
-                onPressed: () => _showResult(item),
+              FilledButton(style: korlixSoundButtonStyle(null),
+                onPressed: korlixSoundAction(() => _showResult(item)),
                 child: Text(language.open),
               ),
               if (isImage) ...[
-                OutlinedButton.icon(
-                  onPressed: () => _saveGeneratedImage(item),
+                OutlinedButton.icon(style: korlixSoundButtonStyle(null),
+                  onPressed: korlixSoundAction(() => _saveGeneratedImage(item)),
                   icon: const Icon(Icons.download_rounded, size: 18),
                   label: const Text('Save'),
                 ),
-                OutlinedButton.icon(
-                  onPressed: () => _shareGeneratedImage(item),
+                OutlinedButton.icon(style: korlixSoundButtonStyle(null),
+                  onPressed: korlixSoundAction(() => _shareGeneratedImage(item)),
                   icon: const Icon(Icons.share_rounded, size: 18),
                   label: const Text('Share'),
                 ),
               ] else ...[
-                OutlinedButton(
-                  onPressed: () => _copyResultText(item),
+                OutlinedButton(style: korlixSoundButtonStyle(null),
+                  onPressed: korlixSoundAction(() => _copyResultText(item)),
                   child: Text(language.copy),
                 ),
                 if (item.allowPdf)
-                  OutlinedButton(
-                    onPressed: () => _exportPdf(item),
+                  OutlinedButton(style: korlixSoundButtonStyle(null),
+                    onPressed: korlixSoundAction(() => _exportPdf(item)),
                     child: Text(language.pdf),
                   ),
               ],
-              TextButton(
-                onPressed: () => _deleteResult(item),
+              TextButton(style: korlixSoundButtonStyle(null),
+                onPressed: korlixSoundAction(() => _deleteResult(item)),
                 child: Text(
                   language.delete,
                   style: const TextStyle(color: Colors.redAccent),
@@ -16716,8 +16789,8 @@ class _TalkingWizardHostState extends State<TalkingWizardHost> {
                                 style: const TextStyle(color: Colors.white70),
                               ),
                               const SizedBox(height: 16),
-                              FilledButton.icon(
-                                onPressed: _playWizard,
+                              FilledButton.icon(style: korlixSoundButtonStyle(null),
+                                onPressed: korlixSoundAction(_playWizard),
                                 icon: const Icon(Icons.play_arrow),
                                 label: Text(current.awakenText),
                               ),
@@ -16739,8 +16812,8 @@ class _TalkingWizardHostState extends State<TalkingWizardHost> {
                               style: const TextStyle(color: Colors.redAccent),
                             ),
                             const SizedBox(height: 12),
-                            FilledButton(
-                              onPressed: _loadWizardVideo,
+                            FilledButton(style: korlixSoundButtonStyle(null),
+                              onPressed: korlixSoundAction(_loadWizardVideo),
                               child: const Text('Retry'),
                             ),
                           ],
@@ -16757,13 +16830,13 @@ class _TalkingWizardHostState extends State<TalkingWizardHost> {
           alignment: WrapAlignment.center,
           spacing: 10,
           children: [
-            FilledButton.icon(
-              onPressed: controller == null ? null : _replayWizard,
+            FilledButton.icon(style: korlixSoundButtonStyle(null),
+              onPressed: korlixSoundAction(controller == null ? null : _replayWizard),
               icon: const Icon(Icons.replay),
               label: Text(current.replayGreeting),
             ),
-            OutlinedButton.icon(
-              onPressed: _loadWizardVideo,
+            OutlinedButton.icon(style: korlixSoundButtonStyle(null),
+              onPressed: korlixSoundAction(_loadWizardVideo),
               icon: const Icon(Icons.refresh),
               label: Text(current.reloadWizard),
             ),

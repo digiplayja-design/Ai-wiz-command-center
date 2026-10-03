@@ -1,5 +1,6 @@
 // ignore_for_file: deprecated_member_use, avoid_web_libraries_in_flutter
 import 'dart:async';
+import '../sounds/korlix_sound_service.dart';
 import 'dart:html' as html;
 import 'dart:typed_data';
 import 'dart:web_audio' as web;
@@ -25,10 +26,12 @@ class _WebPlayer implements K135zResponsePlayer {
     Timer? timer, recordingTimer;
     K135zPlayedPcm? recording;
     StreamSubscription<html.Event>? ended, visibility, pageHide;
+    final soundQuietOwner = Object();
     bool finished = false;
     void finish([Object? failure]) {
       if (finished) return;
       finished = true;
+      kKorlixSounds.setQuiet(soundQuietOwner, false);
       timer?.cancel();recordingTimer?.cancel();recording?.finish();
       ended?.cancel();visibility?.cancel();pageHide?.cancel();
       try { source?.stop(0); } catch (_) {}
@@ -53,6 +56,7 @@ class _WebPlayer implements K135zResponsePlayer {
       source = context.createBufferSource()..buffer = buffer;
       ended = source!.onEnded.listen((_) => finish());
       source!.connectNode(context.destination!);
+      kKorlixSounds.setQuiet(soundQuietOwner, true);
       source!.start(0);
       if (recordingSink != null) {
         final started = context.currentTime!;
