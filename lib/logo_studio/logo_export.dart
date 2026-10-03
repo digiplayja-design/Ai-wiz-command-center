@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ui' as ui;
 import 'package:archive/archive.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -6,11 +7,49 @@ import 'package:pdf/widgets.dart' as pw;
 import 'logo_model.dart';
 import 'logo_render.dart';
 
+/// Verify optional AI artwork is a complete, decodable PNG before download.
+Future<void> validateLogoArtwork(Uint8List bytes) async {
+  const message =
+      'This artwork could not be opened. Generate a new AI concept.';
+  const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (bytes.length < 33 || bytes.length > 32 * 1024 * 1024) {
+    throw const FormatException(message);
+  }
+  for (var i = 0; i < signature.length; i++) {
+    if (bytes[i] != signature[i]) throw const FormatException(message);
+  }
+  final header = ByteData.sublistView(bytes);
+  final width = header.getUint32(16), height = header.getUint32(20);
+  if (header.getUint32(8) != 13 ||
+      ascii.decode(bytes.sublist(12, 16), allowInvalid: true) != 'IHDR' ||
+      width == 0 ||
+      height == 0 ||
+      width * height > 32000000) {
+    throw const FormatException(message);
+  }
+  ui.Codec? codec;
+  ui.Image? image;
+  try {
+    codec = await ui.instantiateImageCodec(bytes);
+    image = (await codec.getNextFrame()).image;
+    if (image.width != width || image.height != height) {
+      throw const FormatException(message);
+    }
+  } catch (_) {
+    throw const FormatException(message);
+  } finally {
+    image?.dispose();
+    codec?.dispose();
+  }
+}
+
 Future<String> logoSvg(
   LogoDesign design, {
   LogoSurface surface = LogoSurface.transparent,
   LogoInk ink = LogoInk.color,
   bool iconOnly = false,
+  int? width,
+  int? height,
 }) async {
   await ensureLogoFonts();
   final regular = (await rootBundle.load(
@@ -26,7 +65,7 @@ Future<String> logoSvg(
     surface: surface,
     ink: ink,
     iconOnly: iconOnly,
-  ).svg(fontStyle: fonts);
+  ).svg(fontStyle: fonts, width: width, height: height);
 }
 
 Future<Uint8List> logoBrandGuide(
@@ -167,9 +206,18 @@ Future<Uint8List> logoBrandKit(
     text('logos/${entry.$1}.svg', await logoSvg(design, ink: entry.$2));
   }
   add('logos/transparent-2400.png', await logoPng(design));
+  add('logos/black-2400.png', await logoPng(design, ink: LogoInk.black));
+  add('logos/white-2400.png', await logoPng(design, ink: LogoInk.white));
   final light = await logoPng(design, surface: LogoSurface.light);
   add('logos/light-2400.png', light);
   add('logos/dark-2400.png', await logoPng(design, surface: LogoSurface.dark));
+  // Export the same identity in useful lockups, without changing the project.
+  for (final layout in ['Horizontal', 'Stacked', 'Wordmark', 'Monogram']) {
+    final variant = design.copy(layout: layout);
+    final name = layout.toLowerCase();
+    text('layouts/$name.svg', await logoSvg(variant));
+    add('layouts/$name-2400.png', await logoPng(variant));
+  }
   text('social/icon.svg', await logoSvg(design, iconOnly: true));
   add(
     'social/avatar-1024.png',
@@ -213,7 +261,7 @@ Future<Uint8List> logoBrandKit(
   );
   text(
     'READ-ME.txt',
-    '${design.name} / KORLIX Logo Studio\n\nYour editable logo collection and brand guide.\n\nPalette: #${design.primary}, #${design.secondary}, #${design.paper}\nTypography: Roboto ${design.typeface}. Some SVG editors may require installing the bundled fonts to preserve lettering.\n\nSVG logos contain real vector shapes and editable text; PNG files are raster images. The primary PNG is 2400 x 1600 pixels. Avatar is 1024 x 1024; cover is 1500 x 500. Social sizes are general-purpose canvases; check each platform before publishing.\n\nTo edit again, open Logo Studio > Saved > Import project and choose project.korlix-logo.json. Saved projects in the app stay in this browser/device and account. Keep this backup.\n\nOptional AI artwork is exported separately as a PNG; it is not vectorized by this kit.\n\nRoboto font licensing: https://www.apache.org/licenses/LICENSE-2.0\n',
+    '${design.name} / KORLIX Logo Studio\n\nYour editable logo collection and brand guide.\n\nPalette: #${design.primary}, #${design.secondary}, #${design.paper}\nTypography: Roboto ${design.typeface}. Some SVG editors may require installing the bundled fonts to preserve lettering.\n\nSVG logos contain real vector shapes and editable text; PNG files are raster images. The primary PNG is 2400 x 1600 pixels. Transparent black and white PNGs are included for single-color use. The layouts folder includes horizontal, stacked, wordmark and monogram SVG/PNG versions of your identity.\n\nAvatar and icon SVG are square, with proportional safe space. Avatar is 1024 x 1024; cover is 1500 x 500. Social sizes are general-purpose canvases; check each platform before publishing. White transparent logos need a dark background to be visible.\n\nTo edit again, open Logo Studio > Saved > Import project and choose project.korlix-logo.json. Saved projects in the app stay in this browser/device and account. Keep this backup.\n\nOptional AI artwork is exported separately as a PNG; it is not vectorized by this kit.\n\nRoboto font licensing: https://www.apache.org/licenses/LICENSE-2.0\n',
   );
   checkCurrent?.call();
   return Uint8List.fromList(ZipEncoder().encode(archive));

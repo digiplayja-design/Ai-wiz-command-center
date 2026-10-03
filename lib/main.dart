@@ -8938,13 +8938,15 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         baseUrl: kKorlixBackendBaseUrl, headersBuilder: _authHeaders,
         sessionChanges: kKorlixAuthRevision));
       final studio = client;
-      await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => LogoStudioScreen(
+      final route = MaterialPageRoute<void>(builder: (_) => LogoStudioScreen(
         client: studio, language: _selectedLanguage, allowVoice: _hasVoiceAccess,
         ensureConsent: () => ensureKorlixThirdPartyAiConsent(
           context: context, featureName: 'Logo Studio AI concepts',
           providers: const {KorlixThirdPartyAiProvider.openAi},
           dataCategories: const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts}),
-      )));
+      ));
+      await Navigator.of(context).push<void>(route);
+      await route.completed;
     } finally { client?.dispose(); _logoStudioOpening = false; }
   }
 

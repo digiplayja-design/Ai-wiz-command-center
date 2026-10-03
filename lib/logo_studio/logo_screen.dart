@@ -11,6 +11,8 @@ import 'logo_model.dart';
 import 'logo_render.dart';
 import 'logo_export.dart';
 import 'logo_io.dart';
+import 'logo_export_options.dart';
+import 'logo_preview_board.dart';
 
 class LogoStudioScreen extends StatefulWidget {
   const LogoStudioScreen({
@@ -40,6 +42,10 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
   final scroll = ScrollController();
   int tab = 0, palette = 0;
   String industry = 'Technology', style = 'Modern';
+  LogoDesign _briefBase = const LogoDesign();
+  String? _selectedAiId;
+  LogoInk ink = LogoInk.color;
+  int exportPreset = 0;
   String? error, notice;
   bool ready = false, exporting = false, consenting = false, importing = false;
   LogoSurface surface = LogoSurface.light;
@@ -50,6 +56,9 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
   void initState() {
     super.initState();
     c.addListener(_session);
+    for (final controller in [_name, _tagline, _idea]) {
+      controller.addListener(_refreshBrief);
+    }
     unawaited(_initialize());
   }
 
@@ -79,6 +88,10 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
     }
   }
 
+  void _refreshBrief() {
+    if (mounted && tab == 0) setState(() {});
+  }
+
   void _session() {
     if (!c.available) {
       _name.clear();
@@ -86,6 +99,8 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
       _idea.clear();
       _hex.clear();
       _accent.clear();
+      _selectedAiId = null;
+      _briefBase = const LogoDesign();
       error = notice = null;
     } else if (tab == 2) {
       _sync(c.design);
@@ -93,6 +108,13 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
   }
 
   void _sync(LogoDesign d) {
+    _briefBase = d;
+    palette = logoPalettes.indexWhere(
+      (p) =>
+          p.primary == d.primary &&
+          p.secondary == d.secondary &&
+          p.paper == d.paper,
+    );
     for (final entry in [
       (_name, d.name),
       (_tagline, d.tagline),
@@ -126,11 +148,19 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
         ? e.message
         : e is FormatException
         ? e.message
+        : e is TimeoutException
+        ? 'This took longer than expected. Your design is still here. Please try again.'
         : 'That action could not finish. Please try again.';
     setState(() => error = message);
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _scrollTop() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && scroll.hasClients) scroll.jumpTo(0);
+    });
   }
 
   void _go(int next) {
@@ -144,21 +174,78 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
       tab = next;
       error = notice = null;
     });
-    if (scroll.hasClients) scroll.jumpTo(0);
+    _scrollTop();
   }
 
-  LogoDesign get brief {
-    final p = logoPalettes[palette];
-    return LogoDesign(
-      name: _name.text.trim(),
-      tagline: _tagline.text.trim(),
-      industry: industry,
-      style: style,
-      idea: _idea.text.trim(),
+  LogoDesign get brief => _briefBase.copy(
+    name: _name.text.trim(),
+    tagline: _tagline.text.trim(),
+    industry: industry,
+    style: style,
+    idea: _idea.text.trim(),
+  );
+
+  ImagineResult? get _selectedAi {
+    final results = c.images.results;
+    if (results.isEmpty) return null;
+    return results.firstWhere(
+      (result) => result.id == _selectedAiId,
+      orElse: () => results.first,
+    );
+  }
+
+  void _applyPalette(int index) {
+    final p = logoPalettes[index];
+    palette = index;
+    _briefBase = _briefBase.copy(
       primary: p.primary,
       secondary: p.secondary,
       paper: p.paper,
     );
+  }
+
+  void _applyPreset(String id) {
+    if (busy) return;
+    final preset = switch (id) {
+      'cafe' => (
+        'Food & drink',
+        'Organic',
+        1,
+        'Warm hospitality, fresh ingredients, and a welcoming neighborhood café.',
+      ),
+      'wellness' => (
+        'Beauty & wellness',
+        'Elegant',
+        3,
+        'Calm, thoughtful care with a soft botanical symbol and a confident premium feel.',
+      ),
+      'craft' => (
+        'Retail & fashion',
+        'Bold',
+        4,
+        'Independent craft and bold personality, with a memorable symbol that works on packaging.',
+      ),
+      _ => (
+        'Technology',
+        'Modern',
+        0,
+        'Forward motion, clarity, and a distinctive geometric symbol for a digital-first brand.',
+      ),
+    };
+    setState(() {
+      industry = preset.$1;
+      style = preset.$2;
+      _applyPalette(preset.$3);
+      _idea.text = preset.$4;
+    });
+  }
+
+  void _shortlist(LogoDesign design) {
+    try {
+      c.toggleShortlist(design);
+    } catch (e) {
+      _error(e);
+    }
   }
 
   void _generate() {
@@ -208,16 +295,19 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
     try {
       if (!await widget.ensureConsent() || !mounted || !c.available) return;
       await c.images.create(c.design.aiBrief, language: widget.language);
+      if (mounted && c.available && c.images.results.isNotEmpty) {
+        setState(() => _selectedAiId = c.images.results.first.id);
+      }
     } catch (e) {
-      _error(e);
+      _error(c.images.error == null ? e : ImagineException(c.images.error!));
     } finally {
       if (mounted) setState(() => consenting = false);
     }
   }
 
-  Future<void> _save() async {
+  Future<void> _save({bool asCopy = false}) async {
     try {
-      await c.save();
+      await c.save(asCopy: asCopy);
       _say(
         'Project saved in this account on this device. Export a project backup to keep another copy.',
       );
@@ -235,7 +325,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
       c.import(source);
       _sync(c.design);
       setState(() => tab = 2);
-      if (scroll.hasClients) scroll.jumpTo(0);
+      _scrollTop();
     } catch (e) {
       _error(e);
     } finally {
@@ -251,7 +341,10 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
     }
     final box = buttonContext.findRenderObject() as RenderBox;
     final origin = box.localToGlobal(Offset.zero) & box.size, d = c.design;
-    final ai = c.images.results.isEmpty ? null : c.images.results.first;
+    final ai = _selectedAi;
+    final preset = logoExportPresets[exportPreset];
+    final exportSurface = surface, exportInk = ink;
+    var filename = d.filename;
     setState(() {
       exporting = true;
       error = notice = null;
@@ -271,7 +364,20 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
           extension = 'brand-kit.zip';
           mime = 'application/zip';
         case 'svg':
-          bytes = Uint8List.fromList(utf8.encode(await logoSvg(d)));
+          bytes = Uint8List.fromList(
+            utf8.encode(
+              await logoSvg(
+                d,
+                surface: exportSurface,
+                ink: exportInk,
+                width: preset.width,
+                height: preset.height,
+                iconOnly: preset.iconOnly,
+              ),
+            ),
+          );
+          filename =
+              '${d.filename}-${preset.id}-${exportSurface.name}-${exportInk.name}';
           extension = 'svg';
           mime = 'image/svg+xml';
         case 'pdf':
@@ -286,16 +392,30 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
           mime = 'application/json';
         case 'ai':
           if (ai == null) return;
+          await validateLogoArtwork(ai.bytes);
+          guard();
           bytes = ai.bytes;
+          filename = LogoDesign(
+            name: ai.brief.lettering.split('\n').first,
+          ).filename;
           extension = 'ai-concept.png';
           mime = 'image/png';
         default:
-          bytes = await logoPng(d, surface: surface);
+          bytes = await logoPng(
+            d,
+            surface: exportSurface,
+            ink: exportInk,
+            width: preset.width,
+            height: preset.height,
+            iconOnly: preset.iconOnly,
+          );
+          filename =
+              '${d.filename}-${preset.id}-${exportSurface.name}-${exportInk.name}';
           extension = 'png';
           mime = 'image/png';
       }
       guard();
-      await io.save(bytes, '${d.filename}.$extension', mime, origin);
+      await io.save(bytes, '$filename.$extension', mime, origin);
       guard();
       _say(
         'Your ${kind == 'kit' ? 'brand kit' : 'file'} is ready. Save it using your browser or device options.',
@@ -424,7 +544,8 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
           label: Text(logoPalettes[i].name),
           selected: editing
               ? c.design.primary == logoPalettes[i].primary &&
-                    c.design.secondary == logoPalettes[i].secondary
+                    c.design.secondary == logoPalettes[i].secondary &&
+                    c.design.paper == logoPalettes[i].paper
               : palette == i,
           onSelected: busy
               ? null
@@ -439,21 +560,242 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
                       ),
                     );
                   } else {
-                    setState(() => palette = i);
+                    setState(() => _applyPalette(i));
                   }
                 },
         ),
     ],
   );
-  Widget _canvas(LogoDesign d, {LogoSurface? backdrop, bool icon = false}) =>
-      ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: LogoCanvas(
-          design: d,
-          surface: backdrop ?? surface,
-          iconOnly: icon,
+  Widget _canvas(
+    LogoDesign d, {
+    LogoSurface? backdrop,
+    bool icon = false,
+    Key? key,
+    LogoInk previewInk = LogoInk.color,
+    double aspectRatio = 1.5,
+  }) => ClipRRect(
+    borderRadius: BorderRadius.circular(18),
+    child: LogoCanvas(
+      key: key,
+      design: d,
+      ink: previewInk,
+      aspectRatio: aspectRatio,
+      surface: backdrop ?? surface,
+      iconOnly: icon,
+    ),
+  );
+
+  Widget _presetCards() => LayoutBuilder(
+    builder: (context, constraints) => Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        for (final preset in const [
+          (
+            'cafe',
+            'Café & food',
+            Icons.local_cafe_outlined,
+            Color(0xFF16604B),
+            Color(0xFFE8F4EB),
+          ),
+          (
+            'wellness',
+            'Beauty & care',
+            Icons.spa_outlined,
+            Color(0xFF79339D),
+            Color(0xFFF7EBFF),
+          ),
+          (
+            'tech',
+            'Tech & ideas',
+            Icons.bolt_rounded,
+            Color(0xFF1852B1),
+            Color(0xFFEAF1FF),
+          ),
+          (
+            'craft',
+            'Made with soul',
+            Icons.palette_outlined,
+            Color(0xFF9D3623),
+            Color(0xFFFFEFE7),
+          ),
+        ])
+          SizedBox(
+            width: (constraints.maxWidth - 10) / 2,
+            child: Material(
+              color: preset.$5,
+              borderRadius: BorderRadius.circular(15),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                key: ValueKey('logo-preset-${preset.$1}'),
+                onTap: busy ? null : () => _applyPreset(preset.$1),
+                child: Padding(
+                  padding: const EdgeInsets.all(13),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(preset.$3, color: preset.$4),
+                      const SizedBox(height: 9),
+                      Text(
+                        preset.$2,
+                        style: TextStyle(
+                          color: preset.$4,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+
+  Widget _shortlistPanel() => _panel(
+    Column(
+      key: const Key('logo-shortlist'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _heading(
+          'Your shortlist · ${c.shortlist.length}/3',
+          'Compare your favorites on the same background, then choose one to refine.',
         ),
-      );
+        LayoutBuilder(
+          builder: (context, constraints) => Wrap(
+            spacing: 12,
+            runSpacing: 16,
+            children: [
+              for (var i = 0; i < c.shortlist.length; i++)
+                SizedBox(
+                  width: constraints.maxWidth < 520
+                      ? constraints.maxWidth
+                      : (constraints.maxWidth - (c.shortlist.length - 1) * 12) /
+                            c.shortlist.length,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _canvas(c.shortlist[i], backdrop: LogoSurface.light),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${c.shortlist[i].layout} · ${c.shortlist[i].mark}',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      Wrap(
+                        spacing: 4,
+                        children: [
+                          TextButton.icon(
+                            key: ValueKey('logo-compare-$i'),
+                            onPressed: busy
+                                ? null
+                                : () => _choose(c.shortlist[i]),
+                            icon: const Icon(Icons.tune_rounded),
+                            label: const Text('Customize'),
+                          ),
+                          IconButton(
+                            tooltip: 'Remove comparison ${i + 1}',
+                            onPressed: busy
+                                ? null
+                                : () => _shortlist(c.shortlist[i]),
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _exportConfigurator() {
+    final preset = logoExportPresets[exportPreset];
+    final backdropLuminance = logoColor(
+      surface == LogoSurface.dark ? '111927' : c.design.paper,
+    ).computeLuminance();
+    final inkContrast = ink == LogoInk.white
+        ? 1.05 / (backdropLuminance + .05)
+        : (backdropLuminance + .05) / .05;
+    final lowContrast =
+        surface != LogoSurface.transparent &&
+        ink != LogoInk.color &&
+        inkContrast < 4.5;
+    return _panel(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _heading(
+            'Choose your finish.',
+            'The preview matches your PNG and SVG download settings.',
+          ),
+          _canvas(
+            c.design,
+            key: const Key('logo-export-preview'),
+            previewInk: ink,
+            icon: preset.iconOnly,
+            aspectRatio: preset.width / preset.height,
+          ),
+          _label('Background'),
+          _choices(
+            ['Light', 'Dark', 'Transparent'],
+            ['Light', 'Dark', 'Transparent'][surface.index],
+            (v) => setState(
+              () => surface = LogoSurface
+                  .values[['Light', 'Dark', 'Transparent'].indexOf(v)],
+            ),
+          ),
+          _label('Ink'),
+          _choices(
+            ['Color', 'Black', 'White'],
+            ['Color', 'Black', 'White'][ink.index],
+            (v) => setState(
+              () =>
+                  ink = LogoInk.values[['Color', 'Black', 'White'].indexOf(v)],
+            ),
+          ),
+          _label('Size & layout'),
+          DropdownButtonFormField<String>(
+            key: const Key('logo-export-preset'),
+            initialValue: preset.id,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Export size'),
+            items: [
+              for (final option in logoExportPresets)
+                DropdownMenuItem(value: option.id, child: Text(option.label)),
+            ],
+            onChanged: busy
+                ? null
+                : (value) {
+                    if (value != null) {
+                      setState(
+                        () => exportPreset = logoExportPresets.indexWhere(
+                          (p) => p.id == value,
+                        ),
+                      );
+                    }
+                  },
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '${preset.width} × ${preset.height} pixels · ${preset.iconOnly ? 'Symbol only' : 'Complete logo'}',
+            style: TextStyle(color: skin.mutedText, height: 1.4),
+          ),
+          if (lowContrast)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                'This ink blends into the selected background. Choose a more contrasting ink or a Transparent background for a clearer logo.',
+                style: TextStyle(color: skin.text, height: 1.4),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
   List<Widget> _start() => [
     _panel(
@@ -500,20 +842,21 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
                 ],
               ),
               child: _canvas(
-                const LogoDesign(
-                  name: 'NORTHLINE',
-                  tagline: 'BUILD WHAT’S NEXT',
-                  primary: '155BE8',
-                  secondary: '26B8D7',
-                  paper: 'F4F6FB',
-                ),
+                logoDirections(
+                  brief.copy(
+                    name: _name.text.trim().isEmpty
+                        ? 'YOUR BRAND'
+                        : _name.text.trim(),
+                  ),
+                ).first,
+                key: const Key('logo-live-preview'),
                 backdrop: LogoSurface.light,
               ),
             ),
           ),
           const SizedBox(height: 14),
           Text(
-            'SAMPLE DESIGN  ·  EDITABLE SVG  ·  TRANSPARENT PNG',
+            'LIVE PREVIEW  ·  EDITABLE SVG  ·  TRANSPARENT PNG',
             style: TextStyle(
               color: skin.mutedText,
               fontSize: 10,
@@ -527,6 +870,9 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _label('A little inspiration'),
+          _presetCards(),
+          const SizedBox(height: 24),
           _heading(
             'First, your brand.',
             'A name and a little direction are all you need.',
@@ -553,6 +899,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
           ),
           _label('What do you do?'),
           DropdownButtonFormField<String>(
+            key: ValueKey('logo-industry-$industry'),
             initialValue: industry,
             isExpanded: true,
             decoration: const InputDecoration(labelText: 'Industry'),
@@ -606,6 +953,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
       'Meet your possibilities.',
       'Choose a direction. Every symbol, color, and line of text can be changed.',
     ),
+    if (c.shortlist.isNotEmpty) _shortlistPanel(),
     if (c.concepts.isNotEmpty)
       LayoutBuilder(
         builder: (context, constraints) => Wrap(
@@ -635,9 +983,36 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
                         ),
                         Padding(
                           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                          child: Text(
-                            'Customize',
-                            style: TextStyle(color: skin.primary, fontSize: 12),
+                          child: Wrap(
+                            alignment: WrapAlignment.spaceBetween,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 4,
+                            children: [
+                              Text(
+                                'Customize',
+                                style: TextStyle(
+                                  color: skin.primary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              IconButton(
+                                key: ValueKey('logo-shortlist-$i'),
+                                tooltip: c.isShortlisted(c.concepts[i])
+                                    ? 'Remove from shortlist'
+                                    : 'Shortlist to compare',
+                                onPressed: busy
+                                    ? null
+                                    : () => _shortlist(c.concepts[i]),
+                                icon: Icon(
+                                  c.isShortlisted(c.concepts[i])
+                                      ? Icons.favorite_rounded
+                                      : Icons.favorite_border_rounded,
+                                ),
+                                color: c.isShortlisted(c.concepts[i])
+                                    ? const Color(0xFFBC2861)
+                                    : skin.mutedText,
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -653,7 +1028,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
       _action(
         'More directions',
         Icons.refresh_rounded,
-        busy ? null : () => c.generate(c.design),
+        busy ? null : () => c.generate(c.design, preserveSelection: true),
       ),
       _action('Edit selected', Icons.tune_rounded, busy ? null : () => _go(2)),
     ),
@@ -661,68 +1036,163 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
     _aiPanel(),
   ];
 
-  Widget _aiPanel() => _panel(
-    Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _heading(
-          'Take a creative detour.',
-          'Ask AI for a custom visual concept using your brand brief. AI artwork downloads as PNG; the editable logos and SVG kit remain separate.',
-        ),
-        Text(
-          '1 generation credit per completed AI concept. Review lettering before using it.',
-          style: TextStyle(color: skin.mutedText, fontSize: 12, height: 1.5),
-        ),
-        const SizedBox(height: 16),
-        KorlixActionButton(
-          label: c.images.busy
-              ? 'Creating · ${c.images.elapsed}s'
-              : 'Explore with AI',
-          icon: Icons.auto_awesome_rounded,
-          expand: true,
-          onPressed: busy ? null : _ai,
-        ),
-        if (c.images.busy)
-          const Padding(
-            padding: EdgeInsets.only(top: 16),
-            child: LinearProgressIndicator(),
+  Widget _aiPanel() {
+    final selected = _selectedAi;
+    return _panel(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _heading(
+            'Take a creative detour.',
+            'Ask AI for a custom visual concept using your brand brief. AI artwork downloads as PNG; the editable logos and SVG kit remain separate.',
           ),
-        if (c.images.results.isNotEmpty) ...[
-          const SizedBox(height: 18),
           Text(
-            'AI concept: ${c.images.results.first.brief.lettering.split('\n').first}',
-            style: const TextStyle(fontWeight: FontWeight.w700),
+            '1 generation credit per completed AI concept. Review lettering before using it.',
+            style: TextStyle(color: skin.mutedText, fontSize: 12, height: 1.5),
           ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: Image.memory(
-              c.images.results.first.bytes,
-              gaplessPlayback: true,
-              errorBuilder: (_, _, _) => const Padding(
-                padding: EdgeInsets.all(20),
-                child: Text(
-                  'This artwork could not be displayed. Try another concept.',
+          const SizedBox(height: 16),
+          KorlixActionButton(
+            label: c.images.busy
+                ? 'Creating · ${c.images.elapsed}s'
+                : 'Explore with AI',
+            icon: Icons.auto_awesome_rounded,
+            expand: true,
+            onPressed: busy ? null : _ai,
+          ),
+          if (c.images.busy)
+            const Padding(
+              padding: EdgeInsets.only(top: 16),
+              child: LinearProgressIndicator(),
+            ),
+          if (selected != null) ...[
+            const SizedBox(height: 22),
+            Text(
+              'Your AI explorations',
+              style: TextStyle(
+                color: skin.text,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Select an artwork to preview and download. Up to six recent concepts stay here during this session.',
+              style: TextStyle(color: skin.mutedText, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) => Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (var i = 0; i < c.images.results.length; i++)
+                    SizedBox(
+                      width:
+                          (constraints.maxWidth -
+                              (constraints.maxWidth >= 500 ? 20 : 10)) /
+                          (constraints.maxWidth >= 500 ? 3 : 2),
+                      child: Semantics(
+                        selected: selected.id == c.images.results[i].id,
+                        child: Material(
+                          color: skin.panelDeep,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            side: BorderSide(
+                              color: selected.id == c.images.results[i].id
+                                  ? skin.primary
+                                  : skin.border,
+                              width: selected.id == c.images.results[i].id
+                                  ? 3
+                                  : 1,
+                            ),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            key: ValueKey('logo-ai-result-$i'),
+                            onTap: busy
+                                ? null
+                                : () => setState(
+                                    () =>
+                                        _selectedAiId = c.images.results[i].id,
+                                  ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                AspectRatio(
+                                  aspectRatio: 1,
+                                  child: Image.memory(
+                                    c.images.results[i].bytes,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, _, _) =>
+                                        const Icon(Icons.broken_image_outlined),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Text(
+                                    '${i + 1} · ${c.images.results[i].brief.lettering.split('\n').first}',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'AI concept: ${selected.brief.lettering.split('\n').first}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 440),
+                child: Image.memory(
+                  selected.bytes,
+                  key: ValueKey('logo-ai-preview-${selected.id}'),
+                  gaplessPlayback: true,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Text(
+                      'This artwork could not be displayed. Try another concept.',
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          _download(
-            'Download AI concept',
-            Icons.download_rounded,
-            'ai',
-            subtitle: 'PNG artwork',
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Download to keep this artwork before closing the studio.',
-            style: TextStyle(color: skin.mutedText, fontSize: 12),
-          ),
+            const SizedBox(height: 12),
+            _download(
+              'Download AI concept',
+              Icons.download_rounded,
+              'ai',
+              subtitle: '${selected.width} × ${selected.height} PNG artwork',
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Download to keep this artwork before closing the studio. Each file uses the selected concept’s brand name.',
+              style: TextStyle(
+                color: skin.mutedText,
+                fontSize: 12,
+                height: 1.4,
+              ),
+            ),
+          ],
         ],
-      ],
-    ),
-  );
+      ),
+    );
+  }
 
   List<Widget> _editor() => [
     _heading(
@@ -762,6 +1232,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
         ],
       ),
     ),
+    _panel(LogoPreviewBoard(design: c.design)),
     _panel(
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -827,6 +1298,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
             children: [
               Expanded(
                 child: TextField(
+                  key: const Key('logo-primary-hex'),
                   controller: _hex,
                   maxLength: 6,
                   decoration: const InputDecoration(
@@ -843,6 +1315,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: TextField(
+                  key: const Key('logo-accent-hex'),
                   controller: _accent,
                   maxLength: 6,
                   decoration: const InputDecoration(
@@ -859,9 +1332,22 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
             ],
           ),
           const SizedBox(height: 18),
+          Text(
+            c.currentProjectId == null
+                ? 'New project · not saved yet'
+                : c.hasUnsavedChanges
+                ? 'Unsaved changes'
+                : 'Saved on this device',
+            style: TextStyle(color: skin.mutedText, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
           _pair(
             _action(
-              c.saving ? 'Saving…' : 'Save project',
+              c.saving
+                  ? 'Saving…'
+                  : c.currentProjectId == null
+                  ? 'Save project'
+                  : 'Save changes',
               Icons.bookmark_add_outlined,
               busy || c.saving ? null : _save,
             ),
@@ -871,6 +1357,13 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
               busy ? null : () => _go(3),
             ),
           ),
+          if (c.currentProjectId != null)
+            TextButton.icon(
+              key: const Key('logo-save-copy'),
+              onPressed: busy || c.saving ? null : () => _save(asCopy: true),
+              icon: const Icon(Icons.copy_all_rounded),
+              label: const Text('Save a copy'),
+            ),
         ],
       ),
     ),
@@ -881,10 +1374,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
       'Your brand, ready to go.',
       'A coordinated collection for your website, profiles, presentations, and next big idea.',
     ),
-    _canvas(c.design, backdrop: LogoSurface.light),
-    const SizedBox(height: 12),
-    _canvas(c.design, backdrop: LogoSurface.dark),
-    const SizedBox(height: 18),
+    _exportConfigurator(),
     _panel(
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -918,13 +1408,14 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
         'Download PNG',
         Icons.image_outlined,
         'png',
-        subtitle: '${surface.name} background',
+        subtitle:
+            '${logoExportPresets[exportPreset].width} × ${logoExportPresets[exportPreset].height} · ${surface.name}',
       ),
       _download(
         'Download SVG',
         Icons.polyline_outlined,
         'svg',
-        subtitle: 'Transparent vector',
+        subtitle: '${ink.name} vector · ${surface.name}',
       ),
     ),
     const SizedBox(height: 14),
@@ -934,7 +1425,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
     ),
     const SizedBox(height: 20),
     Text(
-      'Choose the PNG background in Edit. SVG retains editable text; some editors may need the bundled Roboto fonts. AI concept artwork is downloaded separately from Ideas.',
+      'PNG and SVG use your export settings above. Transparent previews show a checkerboard; the downloaded file has no checkerboard. The complete ZIP includes all standard variants. SVG retains editable text; some editors may need the bundled Roboto fonts. AI artwork downloads separately from Ideas.',
       style: TextStyle(color: skin.mutedText, height: 1.5, fontSize: 12),
     ),
   ];
@@ -956,13 +1447,18 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
         busy
             ? null
             : () {
-                c.choose(const LogoDesign());
+                c.newBrand();
+                _selectedAiId = null;
                 _sync(c.design);
                 setState(() {
                   tab = 0;
                   palette = 0;
+                  surface = LogoSurface.light;
+                  ink = LogoInk.color;
+                  exportPreset = 0;
+                  error = notice = null;
                 });
-                if (scroll.hasClients) scroll.jumpTo(0);
+                _scrollTop();
               },
       ),
     ),
@@ -997,11 +1493,15 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
                 TextButton.icon(
                   onPressed: busy
                       ? null
-                      : () => _choose(
-                          LogoDesign.fromJson(
-                            Map<String, dynamic>.from(project['design']),
-                          ),
-                        ),
+                      : () {
+                          try {
+                            c.openProject('${project['id']}');
+                            _sync(c.design);
+                            _go(2);
+                          } catch (e) {
+                            _error(e);
+                          }
+                        },
                   icon: const Icon(Icons.edit_outlined),
                   label: const Text('Open project'),
                 ),
@@ -1055,6 +1555,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 940),
                   child: ListView(
+                    key: ValueKey('logo-tab-$tab'),
                     controller: scroll,
                     padding: const EdgeInsets.all(20),
                     children: [

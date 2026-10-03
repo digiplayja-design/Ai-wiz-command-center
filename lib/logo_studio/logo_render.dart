@@ -167,9 +167,27 @@ class LogoLettering {
       textDirection: TextDirection.ltr,
       maxLines: 1,
     )..layout();
-    var p = make(size);
-    if (p.width > rect.width) p = make(size * rect.width / p.width * .97);
-    return p;
+    final original = make(size);
+    if (original.width <= rect.width && original.height <= rect.height) {
+      return original;
+    }
+    original.dispose();
+    // Tracking is a fixed distance, so scaling the font once does not reliably
+    // fit long names. Measure the final lettering, including its spacing.
+    var low = .1, high = size;
+    for (var i = 0; i < 16; i++) {
+      final middle = (low + high) / 2;
+      final candidate = make(middle);
+      final fits =
+          candidate.width <= rect.width && candidate.height <= rect.height;
+      candidate.dispose();
+      if (fits) {
+        low = middle;
+      } else {
+        high = middle;
+      }
+    }
+    return make(low);
   }
 
   Offset position(TextPainter p) =>
@@ -202,8 +220,13 @@ class LogoComposition {
   final LogoSurface surface;
   final LogoInk ink;
   final bool iconOnly;
-  String get foreground =>
-      ink == LogoInk.white || surface == LogoSurface.dark ? 'FFFFFF' : '17202B';
+  String get foreground => ink == LogoInk.black
+      ? '000000'
+      : ink == LogoInk.white || surface == LogoSurface.dark
+      ? 'FFFFFF'
+      : surface == LogoSurface.light
+      ? _onColor(design.paper)
+      : '17202B';
   String get primary => ink == LogoInk.black
       ? '000000'
       : ink == LogoInk.white
@@ -270,8 +293,42 @@ class LogoComposition {
     ];
   }
 
-  void paint(Canvas canvas) {
+  /// Bounds of the mark and measured lettering, without the old artboard's
+  /// empty margins. All previews and exports use these same fitted bounds.
+  Rect get contentBounds {
+    Rect? bounds;
+    if (design.layout != 'Wordmark' || iconOnly) bounds = markRect;
+    for (final text in lettering) {
+      final painter = text.painter;
+      final rect = text.position(painter) & painter.size;
+      painter.dispose();
+      bounds = bounds == null ? rect : bounds.expandToInclude(rect);
+    }
+    return bounds == null || bounds.width <= 0 || bounds.height <= 0
+        ? const Rect.fromLTWH(0, 0, 1200, 800)
+        : bounds;
+  }
+
+  _LogoViewport _viewport(Size size) =>
+      _LogoViewport(contentBounds, size, paddingFraction: iconOnly ? .14 : .08);
+
+  void paintFitted(Canvas canvas, Size size) {
     if (background != null) {
+      canvas.drawRect(
+        Offset.zero & size,
+        Paint()..color = logoColor(background!),
+      );
+    }
+    final viewport = _viewport(size);
+    canvas.save();
+    canvas.translate(viewport.offset.dx, viewport.offset.dy);
+    canvas.scale(viewport.scale);
+    paint(canvas, paintBackground: false);
+    canvas.restore();
+  }
+
+  void paint(Canvas canvas, {bool paintBackground = true}) {
+    if (paintBackground && background != null) {
       canvas.drawRect(
         Offset.zero & logoArtSize,
         Paint()..color = logoColor(background!),
@@ -311,13 +368,24 @@ class LogoComposition {
     }
   }
 
-  String svg({String fontStyle = ''}) {
+  String svg({String fontStyle = '', int? width, int? height}) {
+    final outputWidth = width ?? (iconOnly ? 1024 : 1200);
+    final outputHeight = height ?? (iconOnly ? 1024 : 800);
+    _checkLogoDimensions(outputWidth, outputHeight);
+    final viewport = _viewport(
+      Size(outputWidth.toDouble(), outputHeight.toDouble()),
+    );
     final out = StringBuffer(
-      '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800" role="img"><title>${const HtmlEscape().convert(design.name)} logo</title>$fontStyle',
+      '<svg xmlns="http://www.w3.org/2000/svg" width="$outputWidth" height="$outputHeight" viewBox="0 0 $outputWidth $outputHeight" role="img"><title>${const HtmlEscape().convert(design.name)} logo</title>$fontStyle',
     );
     if (background != null) {
-      out.write('<rect width="1200" height="800" fill="#$background"/>');
+      out.write(
+        '<rect width="$outputWidth" height="$outputHeight" fill="#$background"/>',
+      );
     }
+    out.write(
+      '<g transform="translate(${viewport.offset.dx} ${viewport.offset.dy}) scale(${viewport.scale})">',
+    );
     if (design.layout != 'Wordmark' || iconOnly) {
       final rect = markRect;
       if (monogram) {
@@ -352,12 +420,39 @@ class LogoComposition {
     for (final text in lettering) {
       out.write(text.svg());
     }
-    return '${out.toString()}</svg>';
+    return '${out.toString()}</g></svg>';
   }
 }
 
-String _onColor(String hex) =>
-    logoColor(hex).computeLuminance() > .45 ? '111927' : 'FFFFFF';
+class _LogoViewport {
+  _LogoViewport(Rect bounds, Size size, {required double paddingFraction}) {
+    final padding = size.shortestSide * paddingFraction;
+    scale = math.min(
+      (size.width - padding * 2) / bounds.width,
+      (size.height - padding * 2) / bounds.height,
+    );
+    offset = Offset(
+      size.width / 2 - bounds.center.dx * scale,
+      size.height / 2 - bounds.center.dy * scale,
+    );
+  }
+  late final double scale;
+  late final Offset offset;
+}
+
+void _checkLogoDimensions(int width, int height) {
+  if (width < 1 || height < 1 || width * height > 6000000) {
+    throw ArgumentError('Unsupported logo dimensions.');
+  }
+}
+
+String _onColor(String hex) {
+  final luminance = logoColor(hex).computeLuminance();
+  final dark = logoColor('111927').computeLuminance();
+  final whiteContrast = 1.05 / (luminance + .05);
+  final darkContrast = (luminance + .05) / (dark + .05);
+  return darkContrast >= whiteContrast ? '111927' : 'FFFFFF';
+}
 
 class LogoCanvas extends StatelessWidget {
   const LogoCanvas({
@@ -366,17 +461,19 @@ class LogoCanvas extends StatelessWidget {
     this.surface = LogoSurface.light,
     this.ink = LogoInk.color,
     this.iconOnly = false,
+    this.aspectRatio,
   });
   final LogoDesign design;
   final LogoSurface surface;
   final LogoInk ink;
   final bool iconOnly;
+  final double? aspectRatio;
   @override
   Widget build(BuildContext context) => Semantics(
     label: '${design.name}, ${design.layout} logo, ${design.mark} symbol',
     image: true,
     child: AspectRatio(
-      aspectRatio: 1.5,
+      aspectRatio: aspectRatio ?? (iconOnly ? 1 : 1.5),
       child: CustomPaint(
         painter: _LogoPainter(
           LogoComposition(
@@ -417,52 +514,41 @@ class _LogoPainter extends CustomPainter {
         }
       }
     }
-    canvas.save();
-    canvas.scale(size.width / 1200, size.height / 800);
-    composition.paint(canvas);
-    canvas.restore();
+    composition.paintFitted(canvas, size);
   }
 
   @override
-  bool shouldRepaint(covariant _LogoPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _LogoPainter oldDelegate) =>
+      composition.design != oldDelegate.composition.design ||
+      composition.surface != oldDelegate.composition.surface ||
+      composition.ink != oldDelegate.composition.ink ||
+      composition.iconOnly != oldDelegate.composition.iconOnly;
 }
 
 Future<Uint8List> logoPng(
   LogoDesign design, {
   LogoSurface surface = LogoSurface.transparent,
   LogoInk ink = LogoInk.color,
-  int width = 2400,
-  int height = 1600,
+  int? width,
+  int? height,
   bool iconOnly = false,
 }) async {
-  if (width < 1 || height < 1 || width * height > 6000000) {
-    throw ArgumentError('Unsupported logo dimensions.');
-  }
+  final outputWidth = width ?? (iconOnly ? 1024 : 2400);
+  final outputHeight = height ?? (iconOnly ? 1024 : 1600);
+  _checkLogoDimensions(outputWidth, outputHeight);
   await ensureLogoFonts();
   final recorder = ui.PictureRecorder();
   // Each export owns and releases its recording and image.
   final c = Canvas(recorder);
-  final scale = math.min(width / 1200, height / 800);
-  if (surface != LogoSurface.transparent) {
-    c.drawRect(
-      Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
-      Paint()
-        ..color = logoColor(
-          surface == LogoSurface.dark ? '111927' : design.paper,
-        ),
-    );
-  }
-  c.translate((width - 1200 * scale) / 2, (height - 800 * scale) / 2);
-  c.scale(scale);
   LogoComposition(
     design,
     surface: surface,
     ink: ink,
     iconOnly: iconOnly,
-  ).paint(c);
+  ).paintFitted(c, Size(outputWidth.toDouble(), outputHeight.toDouble()));
   final picture = recorder.endRecording();
   try {
-    final image = await picture.toImage(width, height);
+    final image = await picture.toImage(outputWidth, outputHeight);
     try {
       return (await image.toByteData(
         format: ui.ImageByteFormat.png,
