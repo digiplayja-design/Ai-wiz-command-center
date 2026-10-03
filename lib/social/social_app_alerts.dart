@@ -58,6 +58,7 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
           sessionChanges: widget.sessionChanges,
           shouldPoll: () => mounted,
           enableCalls: true,
+          enablePresence: true,
           clientBuilder: widget.clientBuilder,
         );
     _lastClient = _notifications.client;

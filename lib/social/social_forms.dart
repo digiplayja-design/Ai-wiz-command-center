@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../theme/korlix_action_button.dart';
 import 'social_client.dart';
+import 'social_alert_scope.dart';
 import 'social_design.dart';
 import 'social_albums.dart';
 import 'social_profile_details.dart';
@@ -116,7 +118,12 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
           return;
         }
       }
-      if (mounted) Navigator.pop(context, socialMap(r['profile']));
+      if (mounted) {
+        unawaited(
+          SocialAlertScope.maybeOf(context)?.notifications.refreshPresence(),
+        );
+        Navigator.pop(context, socialMap(r['profile']));
+      }
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     } finally {
@@ -402,7 +409,7 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
                       SwitchListTile.adaptive(
                         title: const Text('Show when I am online'),
                         subtitle: const Text(
-                          'Visible while you use Social. It expires shortly after you leave.',
+                          'Visible while you use KORLIX. It expires shortly after you leave.',
                         ),
                         value: _online,
                         onChanged: _saving

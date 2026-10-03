@@ -1,4 +1,9 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:ui' as ui;
+import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -55,8 +60,41 @@ class FakeSpeech implements SpeechToText {
   );
 }
 
+final _captureKey = GlobalKey();
+
+Future<void> _capture(WidgetTester tester, String name) async {
+  final directory = Platform.environment['BOX_WORKSPACE_SCREENSHOTS'];
+  if (directory == null) return;
+  await tester.runAsync(() async {
+    final image =
+        await (_captureKey.currentContext!.findRenderObject()!
+                as RenderRepaintBoundary)
+            .toImage(pixelRatio: 1.5);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    await Directory(directory).create(recursive: true);
+    await File(
+      '$directory/$name.png',
+    ).writeAsBytes(bytes!.buffer.asUint8List());
+    image.dispose();
+  });
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    await (FontLoader(
+      'Roboto',
+    )..addFont(rootBundle.load('assets/fieldproof/Roboto-Regular.ttf'))).load();
+    final root = Platform.environment['KORLIX_FLUTTER_ROOT'];
+    if (root != null) {
+      await (FontLoader('MaterialIcons')..addFont(
+            File(
+              '$root/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
+            ).readAsBytes().then(ByteData.sublistView),
+          ))
+          .load();
+    }
+  });
   setUp(() => SharedPreferences.setMockInitialValues({}));
   test('accounts and tool types have independent persistence', () async {
     final prefs = await SharedPreferences.getInstance();
@@ -130,9 +168,12 @@ void main() {
     bool Function()? valid,
     Future<String> Function(String, String)? rewrite,
     List<SavedBox>? initialBoxes,
+    Size size = const Size(1100, 1000),
+    double textScale = 1,
+    Brightness brightness = Brightness.light,
   }) async {
     tester.view.resetPhysicalSize();
-    tester.view.physicalSize = const Size(1100, 1000);
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -146,6 +187,13 @@ void main() {
     final revision = ValueNotifier(0);
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(brightness: brightness, fontFamily: 'Roboto'),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: RepaintBoundary(key: _captureKey, child: child!),
+        ),
         home: BoxWorkspace(
           store: store,
           sessionChanges: revision,
@@ -201,6 +249,7 @@ void main() {
       await tester.tap(find.text('Duplicate'));
       await tester.pumpAndSettle();
       expect(store.load().where((b) => b.text == 'New content').length, 2);
+      await tester.ensureVisible(find.text('Templates'));
       await tester.tap(find.text('Templates'));
       await tester.pumpAndSettle();
       await tester.tap(find.text(voice ? 'Meeting notes' : 'Client follow-up'));
@@ -254,6 +303,7 @@ void main() {
     'AI draft does not overwrite original before review and creates a version',
     (tester) async {
       final (store, _) = await open(tester);
+      await tester.ensureVisible(find.text('Improve with KORLIX ▾'));
       await tester.tap(find.text('Improve with KORLIX ▾'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Polish'));
@@ -276,6 +326,7 @@ void main() {
       valid: () => valid,
       rewrite: (a, b) => completer.future,
     );
+    await tester.ensureVisible(find.text('Improve with KORLIX ▾'));
     await tester.tap(find.text('Improve with KORLIX ▾'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Polish'));
@@ -330,4 +381,158 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
+
+  for (final voice in [false, true]) {
+    final name = voice ? 'VoiceScribe' : 'Copy Box';
+    testWidgets('$name outer mouse scrollbar moves the entire workspace', (
+      tester,
+    ) async {
+      await open(
+        tester,
+        voice: voice,
+        speech: FakeSpeech(),
+        size: const Size(1024, 700),
+      );
+      final barFinder = find.byKey(const ValueKey('workspace-page-scrollbar'));
+      final bar = tester.widget<Scrollbar>(barFinder);
+      final page = bar.controller!;
+      expect(bar.thumbVisibility, isTrue);
+      expect(bar.trackVisibility, isTrue);
+      expect(bar.interactive, isTrue);
+      expect(page.position.maxScrollExtent, greaterThan(100));
+      final header = find.text(
+        voice ? 'Speak it. Shape it. Save it.' : 'Your words, ready to reuse.',
+      );
+      final before = tester.getTopLeft(header).dy;
+      final bounds = tester.getRect(barFinder);
+      expect(bounds.right, 1024);
+      final gesture = await tester.startGesture(
+        Offset(bounds.right - 8, bounds.top + 25),
+        kind: PointerDeviceKind.mouse,
+      );
+      await gesture.moveBy(const Offset(0, 260));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(page.offset, greaterThan(50));
+      expect(tester.getTopLeft(header).dy, lessThan(before - 50));
+      expect(
+        tester
+            .widget<Scrollbar>(
+              find.byKey(const ValueKey('workspace-entries-scrollbar')),
+            )
+            .controller!
+            .offset,
+        0,
+      );
+      await tester.ensureVisible(find.text('Duplicate'));
+      expect(find.text('Duplicate').hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    for (final brightness in [Brightness.light, Brightness.dark]) {
+      testWidgets(
+        '$name ${brightness.name} panels stay distinct on a 320px phone with large text',
+        (tester) async {
+          await open(
+            tester,
+            voice: voice,
+            speech: FakeSpeech(),
+            size: const Size(320, 740),
+            textScale: 2,
+            brightness: brightness,
+          );
+          expect(tester.takeException(), isNull);
+          final overview =
+              tester
+                      .widget<Container>(
+                        find.byKey(const ValueKey('workspace-overview-panel')),
+                      )
+                      .decoration!
+                  as BoxDecoration;
+          final editor =
+              tester
+                      .widget<Container>(
+                        find.byKey(const ValueKey('workspace-editor-panel')),
+                      )
+                      .decoration!
+                  as BoxDecoration;
+          final input = find.widgetWithText(
+            TextField,
+            voice ? 'Transcript / notes' : 'Saved text',
+          );
+          final inputTheme = Theme.of(
+            tester.element(input),
+          ).inputDecorationTheme;
+          expect(overview.color, isNot(editor.color));
+          expect(inputTheme.fillColor, isNot(editor.color));
+          await _capture(
+            tester,
+            '${voice ? 'voicescribe' : 'copybox'}-${brightness.name}-320-top',
+          );
+          await tester.ensureVisible(input);
+          await tester.pumpAndSettle();
+          await _capture(
+            tester,
+            '${voice ? 'voicescribe' : 'copybox'}-${brightness.name}-320-input',
+          );
+          await tester.enterText(input, 'Large text stays editable.');
+          await tester.pumpAndSettle();
+          await tester.ensureVisible(find.text('Copy text'));
+          expect(find.text('Copy text').hitTestable(), findsOneWidget);
+          await tester.ensureVisible(find.text('Duplicate'));
+          expect(find.text('Duplicate').hitTestable(), findsOneWidget);
+          await tester.ensureVisible(find.text('New entry'));
+          await tester.tap(find.text('New entry'));
+          await tester.pumpAndSettle();
+          expect(find.text('2 entries'), findsOneWidget);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+
+    testWidgets(
+      '$name entries scroll independently and survive resize and empty filters',
+      (tester) async {
+        await open(
+          tester,
+          voice: voice,
+          speech: FakeSpeech(),
+          initialBoxes: List.generate(
+            25,
+            (i) => SavedBox(title: 'Entry $i', text: 'Reusable text $i'),
+          ),
+          size: const Size(1180, 860),
+        );
+        final listFinder = find.byKey(
+          const ValueKey('workspace-entries-scroll'),
+        );
+        final list = tester.widget<ListView>(listFinder).controller!;
+        final page = tester
+            .widget<Scrollbar>(
+              find.byKey(const ValueKey('workspace-page-scrollbar')),
+            )
+            .controller!;
+        await tester.drag(listFinder, const Offset(0, -250));
+        await tester.pumpAndSettle();
+        expect(list.offset, greaterThan(100));
+        expect(page.offset, 0);
+        await _capture(
+          tester,
+          '${voice ? 'voicescribe' : 'copybox'}-tablet-light',
+        );
+        tester.view.physicalSize = const Size(390, 844);
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField).first, 'no result');
+        await tester.pumpAndSettle();
+        expect(find.text('No entries match your search.'), findsOneWidget);
+        await tester.enterText(find.byType(TextField).first, '');
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('workspace-entries-scrollbar')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }

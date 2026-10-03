@@ -77,7 +77,7 @@ class _SocialScreenState extends State<SocialScreen>
     });
     _heartbeat = Timer.periodic(
       const Duration(seconds: 30),
-      (_) => _presence(_foreground),
+      (_) => _presence(),
     );
   }
 
@@ -109,11 +109,16 @@ class _SocialScreenState extends State<SocialScreen>
     }
   }
 
-  void _presence(bool active) {
-    if (_profile == null || !client.available) return;
+  void _presence({bool refreshHosted = false}) {
+    if (_profile == null || !client.available || !_foreground) return;
+    final notifications = _notifications;
+    if (notifications != null) {
+      if (refreshHosted) unawaited(notifications.refreshPresence());
+      return;
+    }
     unawaited(
       client
-          .post('presence', {'active': active})
+          .post('presence', {'active': true})
           .catchError((_) => <String, dynamic>{}),
     );
   }
@@ -121,12 +126,11 @@ class _SocialScreenState extends State<SocialScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
-    _presence(_foreground);
+    _presence();
   }
 
   @override
   void dispose() {
-    _presence(false);
     _poll?.cancel();
     _heartbeat?.cancel();
     _debounce?.cancel();
@@ -231,7 +235,7 @@ class _SocialScreenState extends State<SocialScreen>
         _error = null;
       });
       if (_profile != null) {
-        _presence(true);
+        _presence(refreshHosted: true);
         await _load();
         if (mounted &&
             !_denied &&
@@ -270,29 +274,35 @@ class _SocialScreenState extends State<SocialScreen>
         offset = next ? _offset + (_tab == 2 || _tab == 4 ? 20 : 40) : 0;
     if (!quiet) setState(() => _loading = true);
     try {
-      final r = await client.get(
-        _tab == 4
-            ? 'wall'
-            : _tab == 0
-            ? 'members'
-            : _tab == 1
-            ? 'connections'
-            : _tab == 2
-            ? 'topics'
-            : 'groups',
-        {
-          'offset': offset,
-          'q': _search.text.trim(),
-          if (_tab == 4) 'feed': _wallFeed,
-          if (_tab == 0) 'online': _online,
-          if (_tab == 1) 'state': _connectionFilter,
-          if (_tab == 2 && _category != null) 'category': _category,
-        },
-      );
+      final results = await Future.wait([
+        client.get(
+          _tab == 4
+              ? 'wall'
+              : _tab == 0
+              ? 'members'
+              : _tab == 1
+              ? 'connections'
+              : _tab == 2
+              ? 'topics'
+              : 'groups',
+          {
+            'offset': offset,
+            'q': _search.text.trim(),
+            if (_tab == 4) 'feed': _wallFeed,
+            if (_tab == 0) 'online': _online,
+            if (_tab == 1) 'state': _connectionFilter,
+            if (_tab == 2 && _category != null) 'category': _category,
+          },
+        ),
+        client.get('member', {'peer': _profile!['id']}),
+      ]);
+      final r = results.first;
       if (!mounted || generation != _generation || _denied) return;
       final items = socialItems(r['items']),
           size = _tab == 2 || _tab == 4 ? 20 : 40;
       setState(() {
+        final updatedProfile = socialMap(results.last['profile']);
+        if (updatedProfile['id'] == _profile?['id']) _profile = updatedProfile;
         _items = <String, SocialMap>{
           if (next)
             for (final item in _items) '${item['id']}': item,
@@ -350,7 +360,9 @@ class _SocialScreenState extends State<SocialScreen>
           onBlocked: _hideMember,
           onConnectionRemoved: _hideMember,
           onProfileChanged: (profile) {
-            if (mounted && !_denied) setState(() => _profile = profile);
+            if (mounted && !_denied) {
+              setState(() => _profile = profile);
+            }
           },
         ),
       ),
@@ -392,7 +404,7 @@ class _SocialScreenState extends State<SocialScreen>
     if (!mounted || _denied) return;
     if (result != null) {
       setState(() => _profile = result);
-      _presence(true);
+      _presence(refreshHosted: true);
       await _load();
     }
   }
@@ -735,10 +747,8 @@ class _SocialScreenState extends State<SocialScreen>
             ],
           ),
           const SizedBox(height: 14),
-          Text(
-            p['name'] ?? '',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          SocialMemberName(
+            member: p,
             style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 19),
           ),
           const SizedBox(height: 4),
@@ -751,17 +761,6 @@ class _SocialScreenState extends State<SocialScreen>
               fontSize: 12,
             ),
           ),
-          if (p['online'] == true)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                '● Online in Social',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: korlixSkinOf(context).success,
-                ),
-              ),
-            ),
           if ('${p['profession'] ?? ''}'.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 10),
@@ -1042,12 +1041,24 @@ class _SocialScreenState extends State<SocialScreen>
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: Text(
-                            '${socialMap(t['author'])['name']} · ${socialTime(t['created_at'])}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: korlixSkinOf(context).mutedText,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SocialMemberName(
+                                member: socialMap(t['author']),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                socialTime(t['created_at']),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: korlixSkinOf(context).mutedText,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         if (t['locked'] == true)
@@ -1315,8 +1326,8 @@ class _SocialScreenState extends State<SocialScreen>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  '${_profile!['name']}',
+                                SocialMemberName(
+                                  member: _profile!,
                                   style: const TextStyle(
                                     fontSize: 17,
                                     fontWeight: FontWeight.w800,

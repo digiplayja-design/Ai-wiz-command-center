@@ -73,6 +73,103 @@ class SocialPanel extends StatelessWidget {
   }
 }
 
+/// Presence is server-filtered: a private status is indistinguishable from
+/// offline. Never infer presence from a message, a call, or a Domino seat.
+String? socialPresenceLabel(SocialMap member) {
+  if ('${member['id'] ?? ''}'.isEmpty ||
+      member['name'] == 'Unavailable member' ||
+      member['blocked'] == true ||
+      member['unavailable'] == true ||
+      member['suspended'] == true ||
+      member['deleted'] == true) {
+    return null;
+  }
+  if (member['show_online'] == false) return 'Offline';
+  if (member['online'] is! bool) return 'Status unavailable';
+  return member['online'] == true ? 'Online' : 'Offline';
+}
+
+/// Keeps the status beside a name when space permits, and wraps it at large
+/// text sizes instead of squeezing or truncating the status into a color dot.
+class SocialMemberName extends StatelessWidget {
+  const SocialMemberName({
+    super.key,
+    required this.member,
+    this.style,
+    this.name,
+    this.showStatus = true,
+    this.maxLines = 2,
+    this.alignment = WrapAlignment.start,
+  });
+  final SocialMap member;
+  final TextStyle? style;
+  final String? name;
+  final bool showStatus;
+  final int maxLines;
+  final WrapAlignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = showStatus ? socialPresenceLabel(member) : null;
+    final online = label == 'Online';
+    final skin = korlixSkinOf(context);
+    final color = online
+        ? (skin.isLight ? const Color(0xFF137145) : const Color(0xFF75E8B8))
+        : skin.mutedText;
+    return LayoutBuilder(
+      builder: (context, constraints) => Wrap(
+        alignment: alignment,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 7,
+        runSpacing: 3,
+        children: [
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+            child: Text(
+              name ?? '${member['name'] ?? 'Social member'}',
+              maxLines: maxLines,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
+          ),
+          if (label != null)
+            Tooltip(
+              message: online
+                  ? 'Recently active in KORLIX'
+                  : label == 'Offline'
+                  ? 'Offline or status hidden'
+                  : 'Presence could not be confirmed',
+              child: Semantics(
+                label: '$label in KORLIX',
+                child: ExcludeSemantics(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: .1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: color.withValues(alpha: .25)),
+                    ),
+                    child: Text(
+                      '● $label',
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class SocialAvatar extends StatelessWidget {
   const SocialAvatar({
     super.key,
@@ -87,10 +184,9 @@ class SocialAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final name = '${member['name'] ?? '?'}'.trim(),
         color = socialColor(member['color']);
+    final status = showStatus ? socialPresenceLabel(member) : null;
     return Semantics(
-      label: showStatus && member['online'] == true
-          ? '$name, online in Social'
-          : name,
+      label: status == null ? name : '$name, $status in KORLIX',
       child: SizedBox(
         width: size,
         height: size,
@@ -130,7 +226,7 @@ class SocialAvatar extends StatelessWidget {
                     : _initial(name),
               ),
             ),
-            if (showStatus && member['online'] == true)
+            if (status == 'Online' || status == 'Offline')
               Positioned(
                 right: 0,
                 bottom: 1,
@@ -138,7 +234,9 @@ class SocialAvatar extends StatelessWidget {
                   width: 14,
                   height: 14,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF58D7AA),
+                    color: status == 'Online'
+                        ? const Color(0xFF58D7AA)
+                        : const Color(0xFF83909D),
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: korlixSkinOf(context).panelDeep,

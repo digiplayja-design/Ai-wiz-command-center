@@ -888,8 +888,14 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                     const SizedBox(width: 8),
                   ],
                   Flexible(
-                    child: Text(
-                      _author(m),
+                    child: SocialMemberName(
+                      member: mine
+                          ? widget.me
+                          : widget.groupChat
+                          ? socialMap(m['author'])
+                          : _peer,
+                      name: _author(m),
+                      showStatus: !mine && !removed && !_unavailable,
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -974,21 +980,22 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
+      toolbarHeight: MediaQuery.textScalerOf(context).scale(1) > 1.3 ? 112 : 76,
       title: Row(
         children: [
           if (widget.groupChat)
             const Icon(Icons.groups_rounded, size: 36)
           else
-            SocialAvatar(member: _peer, size: 36),
+            SocialAvatar(member: _peer, size: 36, showStatus: !_unavailable),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  _peer['name'],
+                SocialMemberName(
+                  member: _peer,
+                  showStatus: !widget.groupChat && !_unavailable,
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
@@ -997,9 +1004,9 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                 Text(
                   widget.groupChat
                       ? '${_peer['member_count'] ?? 1} members · Group chat'
-                      : _peer['online'] == true
-                      ? 'Online in Social'
                       : 'Private conversation',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 11),
                 ),
               ],
@@ -1302,7 +1309,8 @@ class SocialTopicScreen extends StatefulWidget {
   State<SocialTopicScreen> createState() => _SocialTopicScreenState();
 }
 
-class _SocialTopicScreenState extends State<SocialTopicScreen> {
+class _SocialTopicScreenState extends State<SocialTopicScreen>
+    with WidgetsBindingObserver {
   final _reply = TextEditingController();
   SocialMap? _topic;
   List<SocialMap> _replies = [];
@@ -1316,14 +1324,40 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
   String? _error, _key, _body, _sendAttachmentId;
   final _uploadAttempts = <String>{};
   int _generation = 0, _draftGeneration = 0;
+  Timer? _presencePoll;
+  bool _foreground = true, _refreshing = false;
   bool get _wall => _topic?['surface'] == 'wall';
   bool get _canReply =>
       widget.client.available && _topic != null && _topic!['locked'] != true;
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.client.addListener(_access);
     unawaited(_load());
+    _presencePoll = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (_foreground &&
+          !_loading &&
+          !_refreshing &&
+          !_sending &&
+          !_pickingVoice &&
+          ModalRoute.of(context)?.isCurrent == true) {
+        unawaited(_load(quiet: true));
+      }
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    if (_foreground &&
+        !_loading &&
+        !_refreshing &&
+        !_sending &&
+        !_pickingVoice &&
+        ModalRoute.of(context)?.isCurrent == true) {
+      unawaited(_load(quiet: true));
+    }
   }
 
   void _access() {
@@ -1341,48 +1375,81 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
 
   @override
   void dispose() {
+    _presencePoll?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _discardVoice();
     widget.client.removeListener(_access);
     _reply.dispose();
     super.dispose();
   }
 
-  Future<void> _load({bool next = false}) async {
+  Future<void> _load({bool next = false, bool quiet = false}) async {
     if (!widget.client.available) return;
     final g = ++_generation;
-    setState(() => _loading = true);
+    _refreshing = true;
+    if (!quiet) setState(() => _loading = true);
     try {
       final r = await widget.client.get('topic', {
         'id': widget.id,
         if (next && _replies.isNotEmpty) 'after': _replies.last['seq'],
       });
       if (!mounted || g != _generation || !widget.client.available) return;
-      final replies = socialItems(r['items']);
+      var replies = socialItems(r['items']);
+      var more = replies.length > 40;
+      final pageCount = quiet ? (_replies.length + 39) ~/ 40 : 1;
+      replies = replies.take(40).toList();
+      for (var page = 1; page < pageCount && more; page++) {
+        final nextPage = await widget.client.get('topic', {
+          'id': widget.id,
+          'after': replies.last['seq'],
+        });
+        if (!mounted || g != _generation || !widget.client.available) return;
+        final items = socialItems(nextPage['items']);
+        more = items.length > 40;
+        replies.addAll(items.take(40));
+      }
       setState(() {
         _topic = socialMap(r['topic']);
         if (_topic!['locked'] == true) _clearDraft();
         if (_awaitingConfirmation && replies.any((r) => r['id'] == _key)) {
           _publishedDraft();
         }
-        _replies = next
-            ? [..._replies, ...replies.take(40)]
-            : replies.take(40).toList();
-        _more = replies.length > 40;
+        _replies = next ? [..._replies, ...replies] : replies;
+        _more = more;
         _error = null;
       });
     } catch (e) {
       if (mounted && g == _generation) {
         setState(() {
-          _error = '$e';
+          if (!quiet) _error = '$e';
           if (e is SocialException && [401, 403, 404].contains(e.status)) {
             _clearDraft();
             _topic = null;
             _replies = [];
+          } else if (quiet) {
+            if (_topic != null) {
+              _topic = {
+                ..._topic!,
+                'author': {...socialMap(_topic!['author']), 'online': null},
+              };
+            }
+            _replies = [
+              for (final reply in _replies)
+                {
+                  ...reply,
+                  'author': {...socialMap(reply['author']), 'online': null},
+                },
+            ];
           }
         });
       }
     } finally {
-      if (mounted && g == _generation) setState(() => _loading = false);
+      if (mounted && g == _generation) {
+        setState(() {
+          _loading = false;
+          _refreshing = false;
+        });
+      }
     }
   }
 
@@ -1632,8 +1699,8 @@ class _SocialTopicScreenState extends State<SocialTopicScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      author['name'] ?? '',
+                    SocialMemberName(
+                      member: author,
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                     Text(

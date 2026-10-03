@@ -28,6 +28,7 @@ class SocialNotifications extends ChangeNotifier {
     required this.shouldPoll,
     this.clientBuilder,
     this.enableCalls = false,
+    this.enablePresence = false,
     Duration interval = const Duration(seconds: 5),
   }) {
     sessionChanges.addListener(_sessionChanged);
@@ -39,6 +40,12 @@ class SocialNotifications extends ChangeNotifier {
         (_) => unawaited(refreshCalls()),
       );
     }
+    if (enablePresence) {
+      _presenceTimer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => unawaited(refreshPresence()),
+      );
+    }
   }
 
   final String baseUrl;
@@ -47,10 +54,12 @@ class SocialNotifications extends ChangeNotifier {
   final bool Function() shouldPoll;
   final SocialClient Function()? clientBuilder;
   final bool enableCalls;
+  final bool enablePresence;
   SocialClient? _client;
   SocialClient? get client => available ? _client : null;
-  Timer? _timer, _callTimer, _callExpiry;
-  Future<void>? _pending, _pendingCalls;
+  Timer? _timer, _callTimer, _callExpiry, _presenceTimer;
+  Future<void>? _pending, _pendingCalls, _pendingPresence;
+  int _presenceGeneration = 0;
   String _scope = '';
   int _generation = 0;
   int _callGeneration = 0;
@@ -81,6 +90,7 @@ class SocialNotifications extends ChangeNotifier {
     _syncAccount(replaceDenied: true);
     unawaited(refresh());
     unawaited(refreshCalls());
+    unawaited(refreshPresence());
   }
 
   void _syncAccount({bool replaceDenied = false}) {
@@ -90,6 +100,8 @@ class SocialNotifications extends ChangeNotifier {
       return;
     }
     _invalidateLoads();
+    _presenceGeneration++;
+    _pendingPresence = null;
     _client?.removeListener(_accessChanged);
     // Shared call controllers must stop capture before disposal removes their
     // access-change listeners.
@@ -192,6 +204,33 @@ class SocialNotifications extends ChangeNotifier {
     } else {
       unawaited(refresh());
       unawaited(refreshCalls());
+      unawaited(refreshPresence());
+    }
+  }
+
+  /// Presence belongs to the foreground app, not a particular Social route.
+  /// Only renew the server's short lease: a false write from one closed tab or
+  /// screen would incorrectly hide activity in another. The server alone
+  /// applies the member's opt-in privacy setting and expires inactive users.
+  Future<void> refreshPresence() {
+    if (_closed || !enablePresence) return Future.value();
+    _syncAccount();
+    if (!_foreground || !shouldPoll() || !available) return Future.value();
+    return _pendingPresence ??= _renewPresence(_client!, _presenceGeneration);
+  }
+
+  Future<void> _renewPresence(SocialClient client, int generation) async {
+    try {
+      await client.post('presence', {'active': true});
+    } catch (_) {
+      // No Social profile, hidden status, and transient network errors must
+      // never interrupt another tool or erase confirmed message/call state.
+    } finally {
+      if (!_closed &&
+          generation == _presenceGeneration &&
+          identical(client, _client)) {
+        _pendingPresence = null;
+      }
     }
   }
 
@@ -376,6 +415,7 @@ class SocialNotifications extends ChangeNotifier {
     _timer?.cancel();
     _callTimer?.cancel();
     _callExpiry?.cancel();
+    _presenceTimer?.cancel();
     sessionChanges.removeListener(_sessionChanged);
     _client?.removeListener(_accessChanged);
     _client?.invalidateSession();

@@ -137,8 +137,8 @@ class SocialWallPostCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          '${author['name'] ?? 'Social member'}',
+                        SocialMemberName(
+                          member: author,
                           style: const TextStyle(
                             fontWeight: FontWeight.w800,
                             fontSize: 16,
@@ -241,19 +241,44 @@ class SocialProfileWallScreen extends StatefulWidget {
       _SocialProfileWallScreenState();
 }
 
-class _SocialProfileWallScreenState extends State<SocialProfileWallScreen> {
+class _SocialProfileWallScreenState extends State<SocialProfileWallScreen>
+    with WidgetsBindingObserver {
   SocialMap? _profile;
   List<SocialMap> _posts = [];
   String? _error;
   bool _loading = false, _mutating = false, _more = false, _about = false;
   int _generation = 0, _offset = 0;
+  Timer? _presencePoll;
+  bool _foreground = true, _refreshing = false;
   bool get _owned => widget.member['id'] == widget.me['id'];
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.client.addListener(_access);
     unawaited(_load());
+    _presencePoll = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (_foreground &&
+          !_loading &&
+          !_refreshing &&
+          !_mutating &&
+          ModalRoute.of(context)?.isCurrent == true) {
+        unawaited(_load(quiet: true));
+      }
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    if (_foreground &&
+        !_loading &&
+        !_refreshing &&
+        !_mutating &&
+        ModalRoute.of(context)?.isCurrent == true) {
+      unawaited(_load(quiet: true));
+    }
   }
 
   void _access() {
@@ -271,14 +296,18 @@ class _SocialProfileWallScreenState extends State<SocialProfileWallScreen> {
 
   @override
   void dispose() {
+    _presencePoll?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     widget.client.removeListener(_access);
     super.dispose();
   }
 
-  Future<void> _load({bool next = false}) async {
+  Future<void> _load({bool next = false, bool quiet = false}) async {
     if (!widget.client.available) return;
+    if (quiet) return _refreshProfile();
     final generation = ++_generation;
     final offset = next ? _offset + 20 : 0;
+    _refreshing = true;
     setState(() => _loading = true);
     try {
       final results = await Future.wait([
@@ -298,15 +327,18 @@ class _SocialProfileWallScreenState extends State<SocialProfileWallScreen> {
           404,
         );
       }
-      final incoming = socialItems(results[1]['items']);
+      final incoming = [
+        for (final page in results.skip(1))
+          ...socialItems(page['items']).take(20),
+      ];
       setState(() {
         _profile = profile;
         _posts = <String, SocialMap>{
           if (next)
             for (final post in _posts) '${post['id']}': post,
-          for (final post in incoming.take(20)) '${post['id']}': post,
+          for (final post in incoming) '${post['id']}': post,
         }.values.toList();
-        _more = incoming.length > 20;
+        _more = socialItems(results.last['items']).length > 20;
         _offset = offset;
         _error = null;
       });
@@ -324,8 +356,65 @@ class _SocialProfileWallScreenState extends State<SocialProfileWallScreen> {
       }
     } finally {
       if (mounted && generation == _generation) {
-        setState(() => _loading = false);
+        setState(() {
+          _loading = false;
+          _refreshing = false;
+        });
       }
+    }
+  }
+
+  Future<void> _refreshProfile() async {
+    if (_refreshing || !widget.client.available) return;
+    final generation = ++_generation;
+    _refreshing = true;
+    try {
+      final result = await widget.client.get('member', {
+        'peer': widget.member['id'],
+      });
+      if (!mounted || generation != _generation || !widget.client.available) {
+        return;
+      }
+      final profile = socialMap(result['profile']);
+      if (profile['id'] != widget.member['id']) {
+        throw const SocialException(
+          'This profile is no longer available.',
+          404,
+        );
+      }
+      setState(() {
+        _profile = profile;
+        _posts = [
+          for (final post in _posts)
+            {
+              ...post,
+              if (socialMap(post['author'])['id'] == profile['id'])
+                'author': {...socialMap(post['author']), ...profile},
+            },
+        ];
+      });
+      if (_owned) widget.onProfileChanged?.call(profile);
+    } catch (e) {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        if (e is SocialException && [401, 403, 404].contains(e.status)) {
+          _profile = null;
+          _posts = [];
+          _more = false;
+          _error = '$e';
+        } else {
+          if (_profile != null) _profile = {..._profile!, 'online': null};
+          _posts = [
+            for (final post in _posts)
+              {
+                ...post,
+                'author': {...socialMap(post['author']), 'online': null},
+              },
+          ];
+        }
+      });
+    } finally {
+      if (generation == _generation) _refreshing = false;
     }
   }
 
@@ -446,8 +535,8 @@ class _SocialProfileWallScreenState extends State<SocialProfileWallScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '${p['name'] ?? ''}',
+                  SocialMemberName(
+                    member: p,
                     style: const TextStyle(
                       fontSize: 26,
                       fontWeight: FontWeight.w800,

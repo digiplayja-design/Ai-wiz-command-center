@@ -226,6 +226,91 @@ class _Harness {
 
 void main() {
   testWidgets(
+    'production host maintains presence above a tool without changing its draft',
+    (tester) async {
+      final store = _AlertStore();
+      final navigator = GlobalKey<NavigatorState>();
+      final observer = RouteObserver<ModalRoute<dynamic>>();
+      final draft = TextEditingController();
+      int presenceCount() => store.requests
+          .where((request) => request['action'] == 'presence')
+          .length;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorKey: navigator,
+          navigatorObservers: [observer],
+          builder: (context, child) => SocialAppAlerts(
+            baseUrl: 'https://fixture.test',
+            headersBuilder: store.headers,
+            sessionChanges: store.revision,
+            navigatorKey: navigator,
+            routeObserver: observer,
+            clientBuilder: store.client,
+            child: child!,
+          ),
+          home: const Scaffold(body: Text('KORLIX tools')),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(presenceCount(), 1);
+      unawaited(
+        navigator.currentState!.push<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: const Text('Copy Box draft')),
+              body: TextField(
+                key: const ValueKey('presence-tool-draft'),
+                controller: draft,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('presence-tool-draft')),
+        'Preserve my Copy Box work',
+      );
+      await tester.pump(const Duration(seconds: 30));
+      expect(presenceCount(), 2);
+      expect(find.text('Copy Box draft'), findsOneWidget);
+      expect(draft.text, 'Preserve my Copy Box work');
+
+      for (final state in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+      await tester.pump(const Duration(seconds: 90));
+      expect(presenceCount(), 2);
+      for (final state in [
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+      await tester.pump();
+      expect(presenceCount(), 3);
+      expect(draft.text, 'Preserve my Copy Box work');
+      expect(
+        store.requests
+            .where((request) => request['action'] == 'presence')
+            .map((request) => request['active']),
+        everyElement(true),
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 30));
+      expect(presenceCount(), 3);
+      draft.dispose();
+      store.revision.dispose();
+    },
+  );
+
+  testWidgets(
     'message appears above a pushed tool and dialog, preserving drafts',
     (tester) async {
       final harness = _Harness(_AlertStore());

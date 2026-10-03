@@ -27,6 +27,9 @@ class SocialCallScreen extends StatefulWidget {
 
 class _SocialCallScreenState extends State<SocialCallScreen>
     with WidgetsBindingObserver {
+  late SocialMap _displayPeer = widget.peer;
+  Timer? _presencePoll;
+  bool _checkingPresence = false, _foreground = true;
   late final call = SocialCallController(
     client: widget.client,
     peer: widget.peer,
@@ -40,6 +43,42 @@ class _SocialCallScreenState extends State<SocialCallScreen>
     WidgetsBinding.instance.addObserver(this);
     call.addListener(_change);
     unawaited(call.initialize());
+    unawaited(_refreshPeer());
+    _presencePoll = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (_foreground &&
+          !call.ended &&
+          ModalRoute.of(context)?.isCurrent == true) {
+        unawaited(_refreshPeer());
+      }
+    });
+  }
+
+  Future<void> _refreshPeer() async {
+    if (_checkingPresence || !widget.client.available) return;
+    _checkingPresence = true;
+    try {
+      final result = await widget.client.get('member', {
+        'peer': widget.peer['id'],
+      });
+      if (!mounted || !widget.client.available) return;
+      final profile = socialMap(result['profile']);
+      if (profile['id'] == widget.peer['id']) {
+        setState(() => _displayPeer = profile);
+      } else {
+        setState(() => _displayPeer = {..._displayPeer, 'online': null});
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(
+          () => _displayPeer =
+              e is SocialException && [401, 403, 404].contains(e.status)
+              ? {'name': 'Unavailable member', 'color': 'cyan'}
+              : {..._displayPeer, 'online': null},
+        );
+      }
+    } finally {
+      _checkingPresence = false;
+    }
   }
 
   void _change() {
@@ -48,6 +87,7 @@ class _SocialCallScreenState extends State<SocialCallScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
     // `inactive` can be a microphone permission prompt. Hidden/background calls
     // end so the app never silently keeps publishing camera or microphone.
     if ([
@@ -61,6 +101,7 @@ class _SocialCallScreenState extends State<SocialCallScreen>
 
   @override
   void dispose() {
+    _presencePoll?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     call.removeListener(_change);
     call.dispose();
@@ -382,7 +423,7 @@ class _SocialCallScreenState extends State<SocialCallScreen>
   Widget build(BuildContext context) {
     final s = korlixSkinOf(context), m = call.media;
     final displayPeer = widget.client.available
-        ? widget.peer
+        ? _displayPeer
         : <String, dynamic>{'name': 'Connection', 'color': 'cyan'};
     final incoming = call.incoming && call.state == 'ringing' && !call.ended;
     final time =
@@ -484,10 +525,9 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                                         ),
                                       ),
                                       const SizedBox(height: 18),
-                                      Text(
-                                        displayPeer['name'] ??
-                                            'Your connection',
-                                        textAlign: TextAlign.center,
+                                      SocialMemberName(
+                                        member: displayPeer,
+                                        alignment: WrapAlignment.center,
                                         style: const TextStyle(
                                           fontSize: 25,
                                           fontWeight: FontWeight.w800,

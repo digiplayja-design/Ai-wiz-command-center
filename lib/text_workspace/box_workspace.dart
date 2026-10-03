@@ -27,6 +27,7 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
   final _title = TextEditingController(),
       _text = TextEditingController(),
       _folder = TextEditingController();
+  final _pageScroll = ScrollController(), _entriesScroll = ScrollController();
   late final _speech = widget.speech ?? SpeechToText();
   List<SavedBox> _boxes = [];
   SavedBox? _selected;
@@ -95,6 +96,8 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
     _title.dispose();
     _text.dispose();
     _folder.dispose();
+    _pageScroll.dispose();
+    _entriesScroll.dispose();
     super.dispose();
   }
 
@@ -642,149 +645,219 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
             )
             .toList()
           ..sort((a, b) => b.updated.compareTo(a.updated));
-    return PopScope(
-      canPop: !_listening && !_starting,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
-        await _stop();
-        if (context.mounted) Navigator.of(context).pop();
-      },
-      child: Scaffold(
-        appBar: AppBar(title: Text(_name)),
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  widget.store.voice
-                      ? 'Speak it. Shape it. Save it.'
-                      : 'Your words, ready to reuse.',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Private to this account on this browser/device. No cross-device sync. $_status',
-                ),
-                if (_loadFailed)
-                  const SizedBox()
-                else ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      FilledButton.icon(
-                        onPressed: _busy ? null : () => _new(),
-                        icon: const Icon(Icons.add),
-                        label: const Text('New entry'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _busy ? null : _preset,
-                        icon: const Icon(Icons.description_outlined),
-                        label: const Text('Templates'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: () => _copy(
-                          visible
-                              .map((b) => '${b.title}\n${b.text}')
-                              .join('\n\n────────\n\n'),
-                        ),
-                        icon: const Icon(Icons.copy_all),
-                        label: const Text('Copy results'),
-                      ),
-                      TextButton(
-                        onPressed: _save,
-                        child: const Text('Retry save'),
-                      ),
-                      if (!widget.store.imported &&
-                          widget.store.legacy.isNotEmpty)
-                        TextButton(
-                          onPressed: _import,
-                          child: const Text('Import older boxes'),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search),
-                      hintText: 'Search titles, folders and text',
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (v) => setState(() => _query = v),
-                  ),
-                  Row(
-                    children: [
-                      FilterChip(
-                        label: const Text('Favorites'),
-                        selected: _favorites,
-                        onSelected: (v) => setState(() => _favorites = v),
-                      ),
-                      const SizedBox(width: 12),
-                      Text('${visible.length} entries'),
-                    ],
-                  ),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, size) {
-                        final list = ListView(
-                          children: visible
-                              .map(
-                                (b) => ListTile(
-                                  selected: identical(b, _selected),
-                                  leading: Icon(
-                                    b.favorite
-                                        ? Icons.star
-                                        : Icons.article_outlined,
-                                  ),
-                                  title: Text(
-                                    b.title.isEmpty ? 'Untitled' : b.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  subtitle: Text(
-                                    '${b.folder.isEmpty ? '' : '${b.folder} • '}${b.text.replaceAll('\n', ' ')}',
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  onTap: _busy ? null : () => _choose(b),
-                                ),
-                              )
-                              .toList(),
-                        );
-                        final editor = _selected == null
-                            ? const Center(
-                                child: Text(
-                                  'Create an entry or choose a template to get started.',
-                                ),
-                              )
-                            : _editor();
-                        if (size.maxWidth >= 800) {
-                          return Row(
-                            children: [
-                              SizedBox(width: 260, child: list),
-                              const VerticalDivider(),
-                              Expanded(child: editor),
-                            ],
-                          );
-                        }
-                        return Column(
-                          children: [
-                            SizedBox(
-                              height: visible.isEmpty ? 0 : 110,
-                              child: list,
+    final theme = Theme.of(context);
+    final palette = _WorkspacePalette(widget.store.voice, theme.brightness);
+    final workspaceTheme = theme.copyWith(
+      colorScheme: theme.colorScheme.copyWith(
+        primary: palette.primary,
+        onPrimary: palette.onPrimary,
+        secondary: palette.accent,
+        onSecondary: palette.onAccent,
+      ),
+      scrollbarTheme: ScrollbarThemeData(
+        thumbColor: WidgetStatePropertyAll(palette.primary),
+        trackColor: WidgetStatePropertyAll(palette.track),
+        trackBorderColor: const WidgetStatePropertyAll(Colors.transparent),
+        crossAxisMargin: 3,
+        mainAxisMargin: 6,
+      ),
+      inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+        filled: true,
+        fillColor: palette.input,
+        contentPadding: const EdgeInsets.all(14),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: palette.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: palette.primary, width: 2),
+        ),
+      ),
+    );
+    return Theme(
+      data: workspaceTheme,
+      child: PopScope(
+        canPop: !_listening && !_starting,
+        onPopInvokedWithResult: (didPop, result) async {
+          if (didPop) return;
+          await _stop();
+          if (context.mounted) Navigator.of(context).pop();
+        },
+        child: Scaffold(
+          backgroundColor: palette.background,
+          appBar: AppBar(
+            title: Text(_name),
+            backgroundColor: palette.panel,
+            foregroundColor: theme.colorScheme.onSurface,
+            surfaceTintColor: Colors.transparent,
+          ),
+          body: SafeArea(
+            // Disable platform-generated scrollbars: both scrollable regions
+            // below have their own controller and a visible, draggable thumb.
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(
+                context,
+              ).copyWith(scrollbars: false),
+              child: Scrollbar(
+                key: const ValueKey('workspace-page-scrollbar'),
+                controller: _pageScroll,
+                thumbVisibility: true,
+                trackVisibility: true,
+                interactive: true,
+                thickness: 10,
+                radius: const Radius.circular(8),
+                scrollbarOrientation: ScrollbarOrientation.right,
+                notificationPredicate: (notification) =>
+                    notification.depth == 0,
+                child: SingleChildScrollView(
+                  key: const ValueKey('workspace-page-scroll'),
+                  controller: _pageScroll,
+                  primary: false,
+                  padding: const EdgeInsets.fromLTRB(12, 16, 26, 24),
+                  child: LayoutBuilder(
+                    builder: (context, size) {
+                      final wide =
+                          size.maxWidth >= 800 &&
+                          MediaQuery.textScalerOf(context).scale(16) <= 24;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Container(
+                            key: const ValueKey('workspace-overview-panel'),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: palette.panel,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: palette.border),
                             ),
-                            const Divider(),
-                            Expanded(child: editor),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  widget.store.voice
+                                      ? 'Speak it. Shape it. Save it.'
+                                      : 'Your words, ready to reuse.',
+                                  style: theme.textTheme.headlineSmall
+                                      ?.copyWith(
+                                        color: palette.primary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Private to this account on this browser/device. No cross-device sync. $_status',
+                                ),
+                                if (!_loadFailed) ...[
+                                  const SizedBox(height: 12),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      FilledButton.icon(
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor: palette.primary,
+                                          foregroundColor: palette.onPrimary,
+                                        ),
+                                        onPressed: _busy ? null : () => _new(),
+                                        icon: const Icon(Icons.add),
+                                        label: const Text('New entry'),
+                                      ),
+                                      FilledButton.icon(
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor: palette.accent,
+                                          foregroundColor: palette.onAccent,
+                                        ),
+                                        onPressed: _busy ? null : _preset,
+                                        icon: const Icon(
+                                          Icons.description_outlined,
+                                        ),
+                                        label: const Text('Templates'),
+                                      ),
+                                      OutlinedButton.icon(
+                                        onPressed: () => _copy(
+                                          visible
+                                              .map(
+                                                (b) => '${b.title}\n${b.text}',
+                                              )
+                                              .join('\n\n────────\n\n'),
+                                        ),
+                                        icon: const Icon(Icons.copy_all),
+                                        label: const Text('Copy results'),
+                                      ),
+                                      TextButton(
+                                        onPressed: _save,
+                                        child: const Text('Retry save'),
+                                      ),
+                                      if (!widget.store.imported &&
+                                          widget.store.legacy.isNotEmpty)
+                                        TextButton(
+                                          onPressed: _import,
+                                          child: const Text(
+                                            'Import older boxes',
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          if (!_loadFailed) ...[
+                            const SizedBox(height: 16),
+                            TextField(
+                              decoration: const InputDecoration(
+                                prefixIcon: Icon(Icons.search),
+                                hintText: 'Search titles, folders and text',
+                              ),
+                              onChanged: (v) => setState(() => _query = v),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                FilterChip(
+                                  label: const Text('Favorites'),
+                                  selected: _favorites,
+                                  selectedColor: palette.selection,
+                                  onSelected: (v) =>
+                                      setState(() => _favorites = v),
+                                ),
+                                Text('${visible.length} entries'),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            if (wide)
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SizedBox(
+                                    width: 260,
+                                    child: _entryList(
+                                      visible,
+                                      palette,
+                                      wide: true,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(child: _editorPanel(palette)),
+                                ],
+                              )
+                            else ...[
+                              _entryList(visible, palette, wide: false),
+                              const SizedBox(height: 16),
+                              _editorPanel(palette),
+                            ],
                           ],
-                        );
-                      },
-                    ),
+                        ],
+                      );
+                    },
                   ),
-                ],
-              ],
+                ),
+              ),
             ),
           ),
         ),
@@ -792,144 +865,298 @@ class _BoxWorkspaceState extends State<BoxWorkspace>
     );
   }
 
-  Widget _editor() => SingleChildScrollView(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _title,
-                onChanged: (_) => _edit(),
-                decoration: const InputDecoration(labelText: 'Title'),
+  Widget _entryList(
+    List<SavedBox> visible,
+    _WorkspacePalette palette, {
+    required bool wide,
+  }) => Container(
+    decoration: BoxDecoration(
+      color: palette.panel,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: palette.border),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: Material(
+      color: Colors.transparent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+            child: Text(
+              'Your entries',
+              style: TextStyle(
+                color: palette.primary,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            IconButton(
-              tooltip: 'Favorite',
-              onPressed: () {
-                setState(() => _selected!.favorite = !_selected!.favorite);
-                unawaited(_save());
-              },
-              icon: Icon(_selected!.favorite ? Icons.star : Icons.star_border),
-            ),
-          ],
-        ),
-        TextField(
-          controller: _folder,
-          onChanged: (_) => _edit(),
-          decoration: const InputDecoration(
-            labelText: 'Folder / category',
-            hintText: 'e.g. Clients, Meetings, Personal',
           ),
-        ),
-        const SizedBox(height: 12),
-        if (widget.store.voice) ...[
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              FilledButton.icon(
-                onPressed: _busy ? null : _dictate,
-                icon: Icon(_listening || _starting ? Icons.stop : Icons.mic),
-                label: Text(
-                  _starting
-                      ? 'Cancel microphone'
-                      : _listening
-                      ? 'Stop & keep transcript'
-                      : 'Start dictation',
+          if (visible.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(14),
+              child: Text('No entries match your search.'),
+            )
+          else
+            SizedBox(
+              height: wide ? 440 : 132,
+              child: Scrollbar(
+                key: const ValueKey('workspace-entries-scrollbar'),
+                controller: _entriesScroll,
+                thumbVisibility: true,
+                trackVisibility: true,
+                interactive: true,
+                thickness: 7,
+                child: ListView(
+                  key: const ValueKey('workspace-entries-scroll'),
+                  controller: _entriesScroll,
+                  primary: false,
+                  padding: const EdgeInsets.only(right: 14, bottom: 8),
+                  children: visible
+                      .map(
+                        (b) => ListTile(
+                          selected: identical(b, _selected),
+                          selectedColor: palette.primary,
+                          selectedTileColor: palette.selection,
+                          leading: Icon(
+                            b.favorite ? Icons.star : Icons.article_outlined,
+                          ),
+                          title: Text(
+                            b.title.isEmpty ? 'Untitled' : b.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            '${b.folder.isEmpty ? '' : '${b.folder} • '}${b.text.replaceAll('\n', ' ')}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onTap: _busy ? null : () => _choose(b),
+                        ),
+                      )
+                      .toList(),
                 ),
-              ),
-              TextButton.icon(
-                onPressed: _busy ? null : _languages,
-                icon: const Icon(Icons.language),
-                label: Text(_locale ?? 'Device language'),
-              ),
-            ],
-          ),
-          const Text(
-            'Dictation appends to this entry. Speech recognition availability and processing depend on your browser/device.',
-          ),
-          if (_listening)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text(
-                _partial.isEmpty ? 'Listening…' : _partial,
-                style: const TextStyle(fontStyle: FontStyle.italic),
               ),
             ),
         ],
-        TextField(
-          controller: _text,
-          readOnly: _listening || _starting,
-          minLines: 8,
-          maxLines: 18,
-          onChanged: (_) => _edit(),
-          decoration: InputDecoration(
-            labelText: widget.store.voice ? 'Transcript / notes' : 'Saved text',
-            hintText: widget.store.voice
-                ? 'Speak, type or paste your notes…'
-                : 'Write reusable text. Use {{client}} for template fields.',
-            border: const OutlineInputBorder(),
+      ),
+    ),
+  );
+
+  Widget _editorPanel(_WorkspacePalette palette) => Container(
+    key: const ValueKey('workspace-editor-panel'),
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: palette.editor,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: palette.accent, width: 1.5),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          widget.store.voice ? 'Transcript studio' : 'Writing desk',
+          style: TextStyle(
+            color: palette.accent,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
           ),
         ),
-        const SizedBox(height: 8),
-        Text(
-          '${_text.text.trim().isEmpty ? 0 : _text.text.trim().split(RegExp(r'\s+')).length} words • ${_text.text.length} characters',
+        const SizedBox(height: 14),
+        if (_selected == null)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Text('Create an entry or choose a template to get started.'),
+          )
+        else
+          _editor(palette),
+      ],
+    ),
+  );
+
+  Widget _editor(_WorkspacePalette palette) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _title,
+              onChanged: (_) => _edit(),
+              decoration: const InputDecoration(labelText: 'Title'),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Favorite',
+            onPressed: () {
+              setState(() => _selected!.favorite = !_selected!.favorite);
+              unawaited(_save());
+            },
+            icon: Icon(_selected!.favorite ? Icons.star : Icons.star_border),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: _folder,
+        onChanged: (_) => _edit(),
+        decoration: const InputDecoration(
+          labelText: 'Folder / category',
+          hintText: 'e.g. Clients, Meetings, Personal',
         ),
-        const SizedBox(height: 12),
+      ),
+      const SizedBox(height: 12),
+      if (widget.store.voice) ...[
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
             FilledButton.icon(
-              onPressed: () => _copy(_text.text),
-              icon: const Icon(Icons.copy),
-              label: const Text('Copy text'),
-            ),
-            OutlinedButton(
-              onPressed: _busy ? null : _fillTemplate,
-              child: const Text('Fill template'),
-            ),
-            PopupMenuButton<String>(
-              enabled: !_busy && _text.text.trim().isNotEmpty,
-              onSelected: _ai,
-              itemBuilder: (_) => [
-                'Polish',
-                'Summarize',
-                'Action items',
-                'Meeting notes',
-                'Professional email',
-                'Shorten',
-              ].map((v) => PopupMenuItem(value: v, child: Text(v))).toList(),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  _busy ? 'Creating AI draft…' : 'Improve with KORLIX ▾',
-                ),
+              style: FilledButton.styleFrom(
+                backgroundColor: palette.primary,
+                foregroundColor: palette.onPrimary,
+              ),
+              onPressed: _busy ? null : _dictate,
+              icon: Icon(_listening || _starting ? Icons.stop : Icons.mic),
+              label: Text(
+                _starting
+                    ? 'Cancel microphone'
+                    : _listening
+                    ? 'Stop & keep transcript'
+                    : 'Start dictation',
               ),
             ),
-            TextButton(
-              onPressed: _busy ? null : _history,
-              child: const Text('Versions'),
-            ),
-            TextButton(
-              onPressed: _busy
-                  ? null
-                  : () => _new(
-                      title: '${_title.text} (copy)',
-                      text: _text.text,
-                      folder: _folder.text,
-                    ),
-              child: const Text('Duplicate'),
-            ),
-            TextButton(
-              onPressed: _busy ? null : _delete,
-              child: const Text('Delete'),
+            TextButton.icon(
+              onPressed: _busy ? null : _languages,
+              icon: const Icon(Icons.language),
+              label: Text(_locale ?? 'Device language'),
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        const Text(
+          'Dictation appends to this entry. Speech recognition availability and processing depend on your browser/device.',
+        ),
+        const SizedBox(height: 12),
+        if (_listening)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              _partial.isEmpty ? 'Listening…' : _partial,
+              style: const TextStyle(fontStyle: FontStyle.italic),
+            ),
+          ),
       ],
-    ),
+      TextField(
+        controller: _text,
+        readOnly: _listening || _starting,
+        // Let the outer page scrollbar reach every line and editor action.
+        minLines: 8,
+        maxLines: null,
+        onChanged: (_) => _edit(),
+        decoration: InputDecoration(
+          labelText: widget.store.voice ? 'Transcript / notes' : 'Saved text',
+          hintText: widget.store.voice
+              ? 'Speak, type or paste your notes…'
+              : 'Write reusable text. Use {{client}} for template fields.',
+        ),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        '${_text.text.trim().isEmpty ? 0 : _text.text.trim().split(RegExp(r'\s+')).length} words • ${_text.text.length} characters',
+      ),
+      const SizedBox(height: 12),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: palette.accent,
+              foregroundColor: palette.onAccent,
+            ),
+            onPressed: () => _copy(_text.text),
+            icon: const Icon(Icons.copy),
+            label: const Text('Copy text'),
+          ),
+          OutlinedButton(
+            onPressed: _busy ? null : _fillTemplate,
+            child: const Text('Fill template'),
+          ),
+          PopupMenuButton<String>(
+            enabled: !_busy && _text.text.trim().isNotEmpty,
+            onSelected: _ai,
+            itemBuilder: (_) => [
+              'Polish',
+              'Summarize',
+              'Action items',
+              'Meeting notes',
+              'Professional email',
+              'Shorten',
+            ].map((v) => PopupMenuItem(value: v, child: Text(v))).toList(),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: palette.selection,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: palette.border),
+              ),
+              child: Text(
+                _busy ? 'Creating AI draft…' : 'Improve with KORLIX ▾',
+                style: TextStyle(
+                  color: palette.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: _busy ? null : _history,
+            child: const Text('Versions'),
+          ),
+          TextButton(
+            onPressed: _busy
+                ? null
+                : () => _new(
+                    title: '${_title.text} (copy)',
+                    text: _text.text,
+                    folder: _folder.text,
+                  ),
+            child: const Text('Duplicate'),
+          ),
+          TextButton(
+            onPressed: _busy ? null : _delete,
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    ],
   );
+}
+
+class _WorkspacePalette {
+  _WorkspacePalette(this.voice, Brightness brightness)
+    : dark = brightness == Brightness.dark;
+
+  final bool voice, dark;
+  Color get primary => voice
+      ? (dark ? const Color(0xFF65DED0) : const Color(0xFF00766D))
+      : (dark ? const Color(0xFF8EBBFF) : const Color(0xFF2359BB));
+  Color get accent => voice
+      ? (dark ? const Color(0xFFC6A9FF) : const Color(0xFF7140BA))
+      : (dark ? const Color(0xFFFFB098) : const Color(0xFFAD3F25));
+  Color get onPrimary => dark ? const Color(0xFF10242E) : Colors.white;
+  Color get onAccent => dark ? const Color(0xFF2B1835) : Colors.white;
+  Color get background => voice
+      ? (dark ? const Color(0xFF0C2023) : const Color(0xFFECF9F6))
+      : (dark ? const Color(0xFF111D30) : const Color(0xFFF0F5FF));
+  Color get panel => voice
+      ? (dark ? const Color(0xFF173239) : const Color(0xFFD9F3EE))
+      : (dark ? const Color(0xFF1B2C48) : const Color(0xFFDDEAFF));
+  Color get editor => voice
+      ? (dark ? const Color(0xFF2A233A) : const Color(0xFFF4ECFF))
+      : (dark ? const Color(0xFF36282A) : const Color(0xFFFFEEE8));
+  Color get input => dark ? const Color(0xFF171A24) : Colors.white;
+  Color get border => primary.withValues(alpha: dark ? 0.48 : 0.35);
+  Color get selection => primary.withValues(alpha: dark ? 0.15 : 0.10);
+  Color get track => primary.withValues(alpha: dark ? 0.18 : 0.12);
 }

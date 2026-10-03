@@ -102,8 +102,10 @@ class SocialGroupCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           if (invited) ...[
-            Text(
-              'Invited by ${socialMap(group['owner_profile'])['name'] ?? 'the group owner'}',
+            SocialMemberName(
+              member: socialMap(group['owner_profile']),
+              name:
+                  'Invited by ${socialMap(group['owner_profile'])['name'] ?? 'the group owner'}',
               style: TextStyle(color: s.primary, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
@@ -386,7 +388,7 @@ class _SocialGroupInviteState extends State<SocialGroupInvite> {
                             );
                           },
                     secondary: SocialAvatar(member: p, size: 38),
-                    title: Text('${p['name']}'),
+                    title: SocialMemberName(member: p),
                     subtitle: Text(
                       widget.excluded.contains(p['id'])
                           ? 'Already joined or invited'
@@ -638,7 +640,7 @@ class _SocialGroupDetailsState extends State<SocialGroupDetails> {
                       member: socialMap(m['profile']),
                       size: 42,
                     ),
-                    title: Text('${socialMap(m['profile'])['name']}'),
+                    title: SocialMemberName(member: socialMap(m['profile'])),
                     subtitle: Text(
                       m['is_owner'] == true
                           ? 'Group owner'
