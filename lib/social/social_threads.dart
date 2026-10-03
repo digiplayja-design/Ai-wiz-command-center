@@ -14,6 +14,8 @@ import 'social_design.dart';
 import 'social_forms.dart';
 import 'social_emoji.dart';
 import 'social_message_quote.dart';
+import 'social_auto_dump.dart';
+import 'social_dump_truck.dart';
 
 class SocialChatScreen extends StatefulWidget {
   const SocialChatScreen({
@@ -25,6 +27,7 @@ class SocialChatScreen extends StatefulWidget {
     this.groupChat = false,
     this.onGroupDetails,
     this.attachmentPicker,
+    this.autoDumpNow,
   });
   final SocialClient client;
   final SocialMap me, peer;
@@ -32,6 +35,7 @@ class SocialChatScreen extends StatefulWidget {
   final bool groupChat;
   final Future<SocialAttachmentDraft?> Function(String kind)? attachmentPicker;
   final Future<bool> Function()? onGroupDetails;
+  final DateTime Function()? autoDumpNow;
   @override
   State<SocialChatScreen> createState() => _SocialChatScreenState();
 }
@@ -43,6 +47,19 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   SocialMap? _replyTo;
   String? _sendReplyId;
   bool _openingOriginal = false;
+  late final SocialAutoDump _dumps = SocialAutoDump(now: widget.autoDumpNow);
+  final _dumpedSeen = <String>{};
+  final _dumpedLoaded = <String>{},
+      _dumpedQuoted = <String>{},
+      _restoreDumpIds = <String>{};
+  bool _restoringDumped = false;
+  final _messageKeys = <String, GlobalKey>{};
+  final _dumpLayerKey = GlobalKey();
+  final _historyViewportKey = GlobalKey();
+  bool _dumpMode = false, _dumpSaving = false;
+  String? _dumpPreview;
+  double? _dumpPickupY;
+  int _dumpAnimation = 0;
   SocialAttachmentDraft? _attachment;
   bool _pickingAttachment = false, _uploading = false;
   String? _sendAttachmentId;
@@ -75,13 +92,15 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.client.addListener(_access);
+    _dumps.addListener(_dumpChanged);
     _scroll.addListener(_scrollChanged);
     unawaited(_load());
     _timer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (_foreground &&
           !_loading &&
           !_sending &&
-          ModalRoute.of(context)?.isCurrent == true) {
+          !_dumpSaving &&
+          ModalRoute.of(context)?.isActive == true) {
         unawaited(_load(quiet: true));
       }
     });
@@ -179,6 +198,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   @override
   void didPushNext() {
     _routeVisible = false;
+    if (_dumpPreview != null) setState(() => _dumpPreview = null);
     _syncConversationVisibility();
   }
 
@@ -191,7 +211,14 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   void _access() {
     if (!widget.client.available && mounted) {
       _generation++;
+      _dumps.clear();
+      _dumpedSeen.clear();
+      _dumpedLoaded.clear();
+      _dumpedQuoted.clear();
+      _restoreDumpIds.clear();
       setState(() {
+        _dumpPreview = null;
+        _dumpMode = false;
         _messages = [];
         _attachment = null;
         _replyTo = null;
@@ -215,6 +242,9 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
     _syncConversationVisibility();
+    if (!_foreground && _dumpPreview != null) {
+      setState(() => _dumpPreview = null);
+    }
     if (_foreground) unawaited(_load(quiet: true));
   }
 
@@ -223,6 +253,8 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     _routeObserver?.unsubscribe(this);
     _releaseConversation();
     _timer?.cancel();
+    _dumps.removeListener(_dumpChanged);
+    _dumps.dispose();
     _discardAttachment();
     widget.client.removeListener(_access);
     WidgetsBinding.instance.removeObserver(this);
@@ -269,7 +301,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   }
 
   Future<void> _load({bool quiet = false, bool older = false}) async {
-    if (!widget.client.available || (_loading && quiet)) return;
+    if (!widget.client.available || _dumpSaving || (_loading && quiet)) return;
     final g = ++_generation, atBottom = _atBottom;
     setState(() => _loading = true);
     try {
@@ -280,6 +312,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       if (!mounted || g != _generation || !widget.client.available) return;
       final list = socialItems(r['items']),
           page = list.length > 50 ? list.skip(1).toList() : list;
+      _dumps.observe(r, page);
       final merged = <String, SocialMap>{
         for (final m in _messages) m['id']: m,
         for (final m in page) m['id']: m,
@@ -287,6 +320,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       setState(() {
         _messages = merged.values.toList()
           ..sort((a, b) => (a['seq'] as num).compareTo(b['seq'] as num));
+        _scrubDumped();
         if (widget.groupChat && r['hidden_senders'] is List) {
           final hidden = Set<String>.from(r['hidden_senders']);
           _messages = [
@@ -363,7 +397,10 @@ class _SocialChatScreenState extends State<SocialChatScreen>
         _syncConversationVisibility();
       }
     } finally {
-      if (mounted && g == _generation) setState(() => _loading = false);
+      if (mounted && g == _generation) {
+        setState(() => _loading = false);
+        unawaited(_restoreDumpedMessages());
+      }
     }
   }
 
@@ -377,6 +414,198 @@ class _SocialChatScreenState extends State<SocialChatScreen>
             .catchError((_) => <String, dynamic>{}),
       );
     }
+  }
+
+  SocialMap _dumpedQuote(SocialMap message) => {
+    ...message,
+    'body': '',
+    'deleted': true,
+    'attachment': null,
+    'reply': null,
+  };
+
+  void _scrubDumped() {
+    _messages = [
+      for (final message in _messages)
+        if (!_dumps.hidden('${message['id']}'))
+          if (_dumps.hidden('${socialMap(message['reply'])['id']}'))
+            {...message, 'reply': _dumpedQuote(socialMap(message['reply']))}
+          else
+            message,
+    ];
+    if (_dumps.hidden('${_replyTo?['id']}')) _replyTo = null;
+  }
+
+  void _dumpChanged() {
+    if (!mounted || !widget.client.available || _unavailable) return;
+    final fresh = _dumps.dumped.difference(_dumpedSeen);
+    final restored = _dumpedSeen.difference(_dumps.dumped);
+    _restoreDumpIds.addAll(
+      restored.intersection({..._dumpedLoaded, ..._dumpedQuoted}),
+    );
+    _dumpedSeen.removeAll(restored);
+    _dumpedLoaded.addAll([
+      for (final message in _messages)
+        if (fresh.contains('${message['id']}')) '${message['id']}',
+    ]);
+    _dumpedQuoted.addAll([
+      for (final message in _messages)
+        if (fresh.contains('${socialMap(message['reply'])['id']}'))
+          '${socialMap(message['reply'])['id']}',
+    ]);
+    _dumpedSeen.addAll(fresh);
+    // Only a currently visible bubble can appear in the playful pickup.
+    // Expiry still redacts every loaded page while a sheet or photo is open.
+    if (_dumpPreview == null &&
+        _foreground &&
+        ModalRoute.of(context)?.isCurrent == true) {
+      final layer = _dumpLayerKey.currentContext?.findRenderObject();
+      final history = _historyViewportKey.currentContext?.findRenderObject();
+      if (layer is RenderBox &&
+          layer.hasSize &&
+          history is RenderBox &&
+          history.hasSize) {
+        final viewport =
+            layer.globalToLocal(history.localToGlobal(Offset.zero)) &
+            history.size;
+        for (final message in _messages) {
+          if (!fresh.contains('${message['id']}')) continue;
+          final render = _messageKeys['${message['id']}']?.currentContext
+              ?.findRenderObject();
+          if (render is! RenderBox || !render.hasSize || !render.attached) {
+            continue;
+          }
+          final position = layer.globalToLocal(
+            render.localToGlobal(Offset.zero),
+          );
+          final rect = position & render.size;
+          if (!viewport.overlaps(rect)) continue;
+          _dumpPreview = '${message['body'] ?? ''}'.trim().isEmpty
+              ? 'Selected attachment'
+              : '${message['body']}';
+          _dumpPickupY = rect.center.dy;
+          _dumpAnimation++;
+          break;
+        }
+      }
+    }
+    setState(_scrubDumped);
+    if (!_loading) unawaited(_restoreDumpedMessages());
+  }
+
+  Future<void> _restoreDumpedMessages() async {
+    if (_restoringDumped ||
+        _restoreDumpIds.isEmpty ||
+        !mounted ||
+        !widget.client.available ||
+        _unavailable) {
+      return;
+    }
+    _restoringDumped = true;
+    try {
+      for (final id in List<String>.of(_restoreDumpIds)) {
+        if (_dumps.hidden(id)) {
+          _restoreDumpIds.remove(id);
+          continue;
+        }
+        final generation = _generation;
+        try {
+          final result = await widget.client.get(_action('message'), {
+            ..._destination,
+            'id': id,
+          });
+          if (!mounted || !widget.client.available || _unavailable) return;
+          if (generation != _generation) continue;
+          final message = socialMap(result['message']);
+          _dumps.observe(result, [message]);
+          if (message['id'] != id || _dumps.hidden(id)) continue;
+          setState(() {
+            _messages = [
+              for (final existing in _messages)
+                if (existing['id'] == id)
+                  message
+                else if (socialMap(existing['reply'])['id'] == id)
+                  {...existing, 'reply': message}
+                else
+                  existing,
+              if (_dumpedLoaded.contains(id) &&
+                  !_messages.any((existing) => existing['id'] == id))
+                message,
+            ]..sort((a, b) => (a['seq'] as num).compareTo(b['seq'] as num));
+            _scrubDumped();
+          });
+          _restoreDumpIds.remove(id);
+          _dumpedLoaded.remove(id);
+          _dumpedQuoted.remove(id);
+        } catch (_) {
+          // Retain only the ID and retry at the next successful refresh.
+        }
+      }
+    } finally {
+      _restoringDumped = false;
+    }
+  }
+
+  Future<void> _chooseAutoDump(SocialMap message) async {
+    final id = '${message['id']}';
+    if (_unavailable || !widget.client.available || _dumps.hidden(id)) return;
+    _composeFocus.unfocus();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => SocialAutoDumpSheet(
+        client: widget.client,
+        dumps: _dumps,
+        message: message,
+        onSave: (seconds, requestId) async {
+          if (_unavailable || !widget.client.available) {
+            throw const SocialException('This conversation is unavailable.');
+          }
+          ++_generation; // A read started before this mutation is stale.
+          setState(() {
+            _dumpSaving = true;
+            _loading = false;
+          });
+          try {
+            final result = await widget.client
+                .post(seconds == null ? 'dump_cancel' : 'dump_schedule', {
+                  'id': id,
+                  ..._destination,
+                  'seconds': ?seconds,
+                  'request_id': requestId,
+                });
+            if (!mounted || !widget.client.available || _unavailable) {
+              throw const SocialException(
+                'Your session changed. Reopen Social.',
+              );
+            }
+            if (result['id'] != id ||
+                !result.containsKey('dump_at') ||
+                DateTime.tryParse('${result['server_time']}') == null ||
+                (result['dump_at'] != null &&
+                    DateTime.tryParse('${result['dump_at']}') == null)) {
+              throw const SocialException(
+                'The timer was not confirmed. Please retry.',
+              );
+            }
+            _dumps.confirm(id, result);
+            setState(() => _dumpMode = false);
+            socialNotice(
+              context,
+              result['dumped'] == true
+                  ? 'This message has already been dumped from your history.'
+                  : result['dump_at'] == null
+                  ? 'Auto Dump is off. The message stays in your history.'
+                  : 'Auto Dump timer confirmed.',
+            );
+          } finally {
+            if (mounted) setState(() => _dumpSaving = false);
+          }
+        },
+      ),
+    );
+    if (mounted && widget.client.available) unawaited(_load(quiet: true));
   }
 
   Future<void> _pickAttachment(String kind) async {
@@ -617,7 +846,8 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     if (_sending ||
         _unavailable ||
         !widget.client.available ||
-        m['deleted'] == true) {
+        m['deleted'] == true ||
+        _dumps.hidden('${m['id']}')) {
       return;
     }
     setState(() => _replyTo = Map<String, dynamic>.from(m));
@@ -625,7 +855,12 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   }
 
   Future<void> _viewOriginal(String id) async {
-    if (_openingOriginal || _unavailable || !widget.client.available) return;
+    if (_openingOriginal ||
+        _unavailable ||
+        !widget.client.available ||
+        _dumps.hidden(id)) {
+      return;
+    }
     _openingOriginal = true;
     try {
       final result = await widget.client.get(_action('message'), {
@@ -634,6 +869,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       });
       if (!mounted || !widget.client.available || _unavailable) return;
       final message = socialMap(result['message']);
+      _dumps.observe(result, [message]);
       if (message.isEmpty) {
         throw const SocialException('Message is no longer available.');
       }
@@ -650,6 +886,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
         if (_replyTo?['id'] == id) {
           _replyTo = message['deleted'] == true ? null : message;
         }
+        _scrubDumped();
       });
       _composeFocus.unfocus();
       final selected = await showModalBottomSheet<SocialMap>(
@@ -657,7 +894,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
         showDragHandle: true,
         isScrollControlled: true,
         builder: (sheetContext) => AnimatedBuilder(
-          animation: widget.client,
+          animation: Listenable.merge([widget.client, _dumps]),
           builder: (context, _) {
             if (!widget.client.available || _unavailable) {
               return const SafeArea(
@@ -668,7 +905,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
               );
             }
             final s = korlixSkinOf(context),
-                removed = message['deleted'] == true;
+                removed = message['deleted'] == true || _dumps.hidden(id);
             return SafeArea(
               child: ConstrainedBox(
                 constraints: BoxConstraints(
@@ -755,6 +992,10 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   }
 
   Future<void> _messageAction(String action, SocialMap m) async {
+    if (action == 'dump') {
+      await _chooseAutoDump(m);
+      return;
+    }
     if (action == 'reply') {
       _chooseReply(m);
       return;
@@ -848,6 +1089,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 620),
         child: Container(
+          key: _messageKeys.putIfAbsent('${m['id']}', GlobalKey.new),
           margin: EdgeInsets.only(
             left: mine ? 28 : 0,
             right: mine ? 0 : 28,
@@ -928,6 +1170,15 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                           child: const Text('Reply'),
                         ),
                         PopupMenuItem(
+                          value: 'dump',
+                          enabled: !_dumpSaving && !_unavailable,
+                          child: Text(
+                            _dumps.deadlines.containsKey('${m['id']}')
+                                ? 'Manage Auto Dump'
+                                : 'Auto Dump',
+                          ),
+                        ),
+                        PopupMenuItem(
                           value: mine ? 'delete' : 'report',
                           child: Text(
                             mine ? 'Remove message' : 'Report message',
@@ -970,6 +1221,29 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                 '${socialTime(m['created_at'])}${mine && !removed ? (m['read_at'] != null ? ' · Read' : ' · Sent') : ''}',
                 style: TextStyle(fontSize: 10, color: s.mutedText),
               ),
+              if (!removed &&
+                  (_dumpMode || _dumps.deadlines.containsKey('${m['id']}')))
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: TextButton.icon(
+                    key: ValueKey('dump-message-${m['id']}'),
+                    onPressed: _dumpSaving || _unavailable
+                        ? null
+                        : () => _chooseAutoDump(m),
+                    icon: const Icon(Icons.local_shipping_rounded, size: 18),
+                    style: TextButton.styleFrom(
+                      foregroundColor: s.isLight
+                          ? const Color(0xffa84800)
+                          : const Color(0xffffba75),
+                      backgroundColor: Colors.orange.withValues(alpha: .12),
+                    ),
+                    label: Text(
+                      _dumps.deadlines.containsKey('${m['id']}')
+                          ? _dumps.countdown('${m['id']}')
+                          : 'Select for Auto Dump',
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -1015,6 +1289,19 @@ class _SocialChatScreenState extends State<SocialChatScreen>
         ],
       ),
       actions: [
+        IconButton(
+          key: const ValueKey('auto-dump-mode'),
+          tooltip: _dumpMode
+              ? 'Exit Auto Dump selection'
+              : 'Activate Auto Dump',
+          isSelected: _dumpMode,
+          color: Colors.orange,
+          onPressed: _unavailable
+              ? null
+              : () => setState(() => _dumpMode = !_dumpMode),
+          icon: const Icon(Icons.local_shipping_outlined),
+          selectedIcon: const Icon(Icons.local_shipping_rounded),
+        ),
         if (widget.onCall != null && !_unavailable)
           PopupMenuButton<bool>(
             tooltip: 'Start a call',
@@ -1067,224 +1354,270 @@ class _SocialChatScreenState extends State<SocialChatScreen>
           ),
       ],
     ),
-    body: SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 900),
-          child: Column(
-            children: [
-              if (_error != null)
-                Material(
-                  color: Theme.of(context).colorScheme.errorContainer,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _error!,
-                            style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onErrorContainer,
-                            ),
-                          ),
+    body: Stack(
+      key: _dumpLayerKey,
+      children: [
+        SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 900),
+              child: Column(
+                children: [
+                  if (_dumpMode && !_unavailable)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      color: Colors.orange.withValues(alpha: .14),
+                      child: const Text(
+                        'Auto Dump is on. Select a message below to set its timer. Only your history changes.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
                         ),
-                        IconButton(
-                          tooltip: 'Retry conversation',
-                          onPressed: () => _load(),
-                          icon: const Icon(Icons.refresh_rounded),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              Expanded(
-                child: ListView(
-                  controller: _scroll,
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 20),
-                      child: Text(
-                        widget.groupChat
-                            ? 'Only accepted members can chat. You see messages sent after you join. Reported messages may be reviewed by KORLIX moderators.'
-                            : 'Connected by choice. Your messages are shared only with this connection. Reported messages may be reviewed by KORLIX moderators.',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 12, height: 1.5),
                       ),
                     ),
-                    if (widget.onCall != null && !_unavailable)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 20),
-                        child: SocialPanel(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            children: [
-                              Wrap(
-                                alignment: WrapAlignment.center,
-                                spacing: 10,
-                                runSpacing: 10,
+                  if (_error != null)
+                    Material(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _error!,
+                                style: TextStyle(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onErrorContainer,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Retry conversation',
+                              onPressed: () => _load(),
+                              icon: const Icon(Icons.refresh_rounded),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  Expanded(
+                    child: ListView(
+                      key: _historyViewportKey,
+                      controller: _scroll,
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 20),
+                          child: Text(
+                            widget.groupChat
+                                ? 'Only accepted members can chat. You see messages sent after you join. Reported messages may be reviewed by KORLIX moderators.'
+                                : 'Connected by choice. Your messages are shared only with this connection. Reported messages may be reviewed by KORLIX moderators.',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 12, height: 1.5),
+                          ),
+                        ),
+                        if (widget.onCall != null && !_unavailable)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 20),
+                            child: SocialPanel(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
                                 children: [
-                                  KorlixActionButton(
-                                    label: 'Audio call',
-                                    icon: Icons.call_outlined,
-                                    size: KorlixButtonSize.compact,
-                                    onPressed: () => widget.onCall!(false),
+                                  Wrap(
+                                    alignment: WrapAlignment.center,
+                                    spacing: 10,
+                                    runSpacing: 10,
+                                    children: [
+                                      KorlixActionButton(
+                                        label: 'Audio call',
+                                        icon: Icons.call_outlined,
+                                        size: KorlixButtonSize.compact,
+                                        onPressed: () => widget.onCall!(false),
+                                      ),
+                                      KorlixActionButton(
+                                        label: 'Video call',
+                                        icon: Icons.videocam_outlined,
+                                        size: KorlixButtonSize.compact,
+                                        onPressed: () => widget.onCall!(true),
+                                      ),
+                                    ],
                                   ),
-                                  KorlixActionButton(
-                                    label: 'Video call',
-                                    icon: Icons.videocam_outlined,
-                                    size: KorlixButtonSize.compact,
-                                    onPressed: () => widget.onCall!(true),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    _notifications == null
+                                        ? 'Both people need Social open to connect.'
+                                        : 'Calls can reach you anywhere in the KORLIX AI app while it is open.',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(fontSize: 11),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 8),
-                              Text(
-                                _notifications == null
-                                    ? 'Both people need Social open to connect.'
-                                    : 'Calls can reach you anywhere in the KORLIX AI app while it is open.',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ),
-                    if (_more)
-                      TextButton(
-                        onPressed: _loading ? null : () => _load(older: true),
-                        child: const Text('Load earlier messages'),
-                      ),
-                    if (_messages.isEmpty && !_loading && !_unavailable)
-                      SocialEmpty(
-                        icon: Icons.waving_hand_outlined,
-                        title: widget.groupChat
-                            ? 'Welcome to ${_peer['name']}.'
-                            : 'Say hello to ${_peer['name']}.',
-                        body: widget.groupChat
-                            ? 'Start the conversation. Invited members can join after accepting in Groups.'
-                            : 'You’re connected. Start with something you have in common.',
-                      ),
-                    for (final m in _messages) _bubble(m),
-                    if (_loading && _messages.isEmpty)
-                      const Center(child: CircularProgressIndicator()),
-                  ],
-                ),
-              ),
-              if (!_unavailable && _attachment != null) _attachmentDraft(),
-              if (_uploading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  child: Column(
-                    children: [
-                      LinearProgressIndicator(),
-                      SizedBox(height: 4),
-                      Text(
-                        'Uploading attachment…',
-                        style: TextStyle(fontSize: 11),
-                      ),
-                    ],
+                        if (_more)
+                          TextButton(
+                            onPressed: _loading
+                                ? null
+                                : () => _load(older: true),
+                            child: const Text('Load earlier messages'),
+                          ),
+                        if (_messages.isEmpty && !_loading && !_unavailable)
+                          SocialEmpty(
+                            icon: Icons.waving_hand_outlined,
+                            title: widget.groupChat
+                                ? 'Welcome to ${_peer['name']}.'
+                                : 'Say hello to ${_peer['name']}.',
+                            body: widget.groupChat
+                                ? 'Start the conversation. Invited members can join after accepting in Groups.'
+                                : 'You’re connected. Start with something you have in common.',
+                          ),
+                        for (final m in _messages) _bubble(m),
+                        if (_loading && _messages.isEmpty)
+                          const Center(child: CircularProgressIndicator()),
+                      ],
+                    ),
                   ),
-                ),
-              if (!_unavailable)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Wrap(
-                    spacing: 4,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      for (final item in [
-                        ('image', 'Photo', Icons.photo_outlined),
-                        ('file', 'File', Icons.attach_file_rounded),
-                        ('voice', 'Voice note', Icons.mic_none_rounded),
-                      ])
-                        TextButton.icon(
-                          onPressed: _sending || _pickingAttachment
-                              ? null
-                              : () => _pickAttachment(item.$1),
-                          icon: Icon(item.$3, size: 19),
-                          label: Text(item.$2),
-                        ),
-                    ],
-                  ),
-                ),
-              if (!_unavailable && _replyTo != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: SocialMessageQuote(
-                    key: const ValueKey('reply-composer-preview'),
-                    message: _replyTo!,
-                    author: _author(_replyTo!),
-                    composing: true,
-                    onCancel: _sending
-                        ? null
-                        : () => setState(() => _replyTo = null),
-                  ),
-                ),
-              if (!_unavailable)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      IconButton(
-                        tooltip: 'Add emoji',
-                        onPressed: _sending
+                  if (!_unavailable && _attachment != null) _attachmentDraft(),
+                  if (_uploading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
+                      child: Column(
+                        children: [
+                          LinearProgressIndicator(),
+                          SizedBox(height: 4),
+                          Text(
+                            'Uploading attachment…',
+                            style: TextStyle(fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (!_unavailable)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Wrap(
+                        spacing: 4,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          for (final item in [
+                            ('image', 'Photo', Icons.photo_outlined),
+                            ('file', 'File', Icons.attach_file_rounded),
+                            ('voice', 'Voice note', Icons.mic_none_rounded),
+                          ])
+                            TextButton.icon(
+                              onPressed: _sending || _pickingAttachment
+                                  ? null
+                                  : () => _pickAttachment(item.$1),
+                              icon: Icon(item.$3, size: 19),
+                              label: Text(item.$2),
+                            ),
+                        ],
+                      ),
+                    ),
+                  if (!_unavailable && _replyTo != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      child: SocialMessageQuote(
+                        key: const ValueKey('reply-composer-preview'),
+                        message: _replyTo!,
+                        author: _author(_replyTo!),
+                        composing: true,
+                        onCancel: _sending
                             ? null
-                            : () async {
-                                await socialChooseEmoji(context, _text);
-                                if (!widget.client.available || _unavailable) {
-                                  _text.clear();
-                                }
-                              },
-                        icon: const Icon(Icons.emoji_emotions_outlined),
+                            : () => setState(() => _replyTo = null),
                       ),
-                      Expanded(
-                        child: TextField(
-                          controller: _text,
-                          focusNode: _composeFocus,
-                          enabled: !_sending,
-                          minLines: 1,
-                          maxLines: 5,
-                          maxLength: 2000,
-                          textCapitalization: TextCapitalization.sentences,
-                          decoration: const InputDecoration(
-                            hintText: 'Write a message…',
-                            counterText: '',
-                            contentPadding: EdgeInsets.all(16),
+                    ),
+                  if (!_unavailable)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          IconButton(
+                            tooltip: 'Add emoji',
+                            onPressed: _sending
+                                ? null
+                                : () async {
+                                    await socialChooseEmoji(context, _text);
+                                    if (!widget.client.available ||
+                                        _unavailable) {
+                                      _text.clear();
+                                    }
+                                  },
+                            icon: const Icon(Icons.emoji_emotions_outlined),
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      IconButton.filled(
-                        tooltip: _sending ? 'Sending message' : 'Send message',
-                        onPressed: _sending ? null : _send,
-                        style: IconButton.styleFrom(
-                          minimumSize: const Size(52, 52),
-                          foregroundColor: korlixSkinOf(context).textOnAccent,
-                        ),
-                        icon: _sending
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Icon(
-                                Icons.arrow_upward_rounded,
-                                color: korlixSkinOf(context).textOnAccent,
+                          Expanded(
+                            child: TextField(
+                              controller: _text,
+                              focusNode: _composeFocus,
+                              enabled: !_sending,
+                              minLines: 1,
+                              maxLines: 5,
+                              maxLength: 2000,
+                              textCapitalization: TextCapitalization.sentences,
+                              decoration: const InputDecoration(
+                                hintText: 'Write a message…',
+                                counterText: '',
+                                contentPadding: EdgeInsets.all(16),
                               ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          IconButton.filled(
+                            tooltip: _sending
+                                ? 'Sending message'
+                                : 'Send message',
+                            onPressed: _sending ? null : _send,
+                            style: IconButton.styleFrom(
+                              minimumSize: const Size(52, 52),
+                              foregroundColor: korlixSkinOf(
+                                context,
+                              ).textOnAccent,
+                            ),
+                            icon: _sending
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.arrow_upward_rounded,
+                                    color: korlixSkinOf(context).textOnAccent,
+                                  ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-            ],
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
-      ),
+        if (_dumpPreview != null &&
+            widget.client.available &&
+            !_unavailable &&
+            _foreground)
+          Positioned.fill(
+            child: SocialDumpTruck(
+              key: ValueKey('dump-truck-$_dumpAnimation'),
+              preview: _dumpPreview!,
+              pickupY: _dumpPickupY,
+              onComplete: () {
+                if (mounted) setState(() => _dumpPreview = null);
+              },
+            ),
+          ),
+      ],
     ),
   );
 }

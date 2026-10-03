@@ -343,13 +343,32 @@ class SocialAttachmentView extends StatefulWidget {
 class _SocialAttachmentViewState extends State<SocialAttachmentView> {
   bool _opening = false;
   String? _imageUrl;
+  DialogRoute<void>? _photoRoute;
+  NavigatorState? _photoNavigator;
+
+  @override
+  void dispose() {
+    // A fullscreen preview lives in its own route. Remove that exact route
+    // when its message disappears, including expiry while the photo is open.
+    final route = _photoRoute, navigator = _photoNavigator;
+    _photoRoute = null;
+    _photoNavigator = null;
+    if (route != null && navigator != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (navigator.mounted && route.isActive) navigator.removeRoute(route);
+      });
+    }
+    super.dispose();
+  }
+
   Future<String> _link({bool download = false}) async {
-    final r = await widget.client.get('attachment_link', {
+    final client = widget.client;
+    final r = await client.get('attachment_link', {
       'id': widget.attachment['id'],
       if (download) 'download': true,
     });
-    if (!widget.client.available) {
-      throw const SocialException('Your session changed.');
+    if (!mounted || !client.available) {
+      throw const SocialException('This attachment is no longer available.');
     }
     return '${r['url']}';
   }
@@ -381,10 +400,12 @@ class _SocialAttachmentViewState extends State<SocialAttachmentView> {
     try {
       final url = await _link();
       if (!mounted || !widget.client.available) return;
-      await showDialog<void>(
+      final accessClient = widget.client;
+      final navigator = Navigator.of(context, rootNavigator: true);
+      final route = DialogRoute<void>(
         context: context,
         builder: (context) => AnimatedBuilder(
-          animation: widget.client,
+          animation: accessClient,
           builder: (context, _) => Dialog.fullscreen(
             child: Scaffold(
               appBar: AppBar(
@@ -395,7 +416,7 @@ class _SocialAttachmentViewState extends State<SocialAttachmentView> {
                   onPressed: () => Navigator.pop(context),
                 ),
               ),
-              body: widget.client.available
+              body: accessClient.available
                   ? InteractiveViewer(
                       minScale: .5,
                       maxScale: 5,
@@ -414,6 +435,13 @@ class _SocialAttachmentViewState extends State<SocialAttachmentView> {
           ),
         ),
       );
+      _photoRoute = route;
+      _photoNavigator = navigator;
+      await navigator.push<void>(route);
+      if (identical(_photoRoute, route)) {
+        _photoRoute = null;
+        _photoNavigator = null;
+      }
     } catch (e) {
       if (mounted) socialNotice(context, e);
     } finally {
