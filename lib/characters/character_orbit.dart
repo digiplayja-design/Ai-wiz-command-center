@@ -175,25 +175,6 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
                   height: 1.16,
                 ),
               ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 7,
-                ),
-                decoration: BoxDecoration(
-                  color: skin.primary.withValues(alpha: .1),
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: Text(
-                  'All characters · Every plan',
-                  style: TextStyle(
-                    color: skin.primary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
               if (wide) ...[
                 const SizedBox(height: 28),
                 _identity(character, skin, wide: true),
