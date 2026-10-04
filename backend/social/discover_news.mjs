@@ -4,8 +4,9 @@ import chatQuality from '../chat_quality.cjs';
 
 export const newsCategories = ['world','jamaica','business','technology','sports','entertainment'];
 const plain = (value, max) => typeof value === 'string' && value.trim().length > 0 && value.length <= max && !/[\x00-\x1f<>]/.test(value);
+const invalid = (message,diagnostic) => Object.assign(Error(message),{diagnostic});
 export function parseDiscoverNews(response, now = Date.now()) {
-  if (response?.status !== 'completed') throw Error('News research incomplete');
+  if (response?.status !== 'completed') throw invalid('News research incomplete',{stage:'response_status',status:response?.status||'missing',reason:response?.incomplete_details?.reason});
   const sources = new Set();
   let searched = false;
   for (const item of response.output || []) {
@@ -19,21 +20,22 @@ export function parseDiscoverNews(response, now = Date.now()) {
     }
   }
   const raw = response.output_text || response.output?.flatMap(x => x.content || []).filter(x => x.type === 'output_text').map(x => x.text).join('');
-  if (!searched || typeof raw !== 'string' || raw.length > 20000) throw Error('News sources unavailable');
-  const parsed = JSON.parse(raw), found = new Set(), items = [];
+  if (!searched || typeof raw !== 'string' || raw.length > 20000) throw invalid('News sources unavailable',{stage:'sources',searched,sources:sources.size,characters:raw?.length});
+  let parsed;try{parsed=JSON.parse(raw);}catch{throw invalid('Invalid news JSON',{stage:'json'});}
+  const found = new Set(), items = [], rejected={source:0,date:0,text:0};
   if (!Array.isArray(parsed.items) || parsed.items.length > 12) throw Error('Invalid news edition');
   for (const item of parsed.items) {
     const url = safePodSourceUrl(item.url), published = Date.parse(item.published_at);
-    if (!url || !sources.has(url) || found.has(url) || !newsCategories.includes(item.category) ||
-        !plain(item.title,120) || !plain(item.summary,460) || item.summary.trim().split(/\s+/).length > 75 ||
-        !Number.isFinite(published) || published > now + 300000 || published < now - 3*86400000) continue;
+    if (!url || !sources.has(url) || found.has(url)){rejected.source++;continue;}
+    if (!Number.isFinite(published) || published > now + 300000 || published < now - 3*86400000){rejected.date++;continue;}
+    if (!newsCategories.includes(item.category) || !plain(item.title,120) || !plain(item.summary,460) || item.summary.trim().split(/\s+/).length > 75){rejected.text++;continue;}
     found.add(url);
     const hash = createHash('sha256').update(url).digest('hex');
     items.push({id:`${hash.slice(0,8)}-${hash.slice(8,12)}-5${hash.slice(13,16)}-a${hash.slice(17,20)}-${hash.slice(20,32)}`,
       title:item.title.trim(),summary:item.summary.trim(),category:item.category,url,source:new URL(url).hostname.replace(/^www\./,''),
       published_at:new Date(published).toISOString()});
   }
-  if (!items.length) throw Error('No current source-linked stories');
+  if (!items.length) throw invalid('No current source-linked stories',{stage:'validation',searched,sources:sources.size,returned:parsed.items.length,rejected});
   return items;
 }
 

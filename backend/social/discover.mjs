@@ -56,7 +56,7 @@ export function registerSocialDiscover(app,{database,authenticate,research,proce
     refreshing=(async()=>{
       let claim;
       try { claim=(await worker('claim')).claim; if(claim){ const items=await research(); await worker('news_ready',{claim,items}); } }
-      catch { if(claim)await worker('news_failed',{claim}).catch(()=>{}); logger.warn('Discover news refresh unavailable; keeping the previous checked edition.'); }
+      catch(error) { if(claim)await worker('news_failed',{claim}).catch(()=>{}); logger.warn('Discover news refresh unavailable; keeping the previous checked edition.',{diagnostic:error.diagnostic||{stage:'provider_or_storage',name:error.name,status:error.status,code:error.code,param:error.param}}); }
       finally{refreshing=null;}
     })(); return refreshing;
   };
