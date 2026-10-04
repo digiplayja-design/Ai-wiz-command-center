@@ -18,7 +18,7 @@ export function showInput(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) fail('Choose your show settings.');
   if (!CATEGORIES.includes(value.category)) fail('Choose a show category.');
   if (![900, 1800].includes(value.durationSeconds)) fail('Choose a 15- or 30-minute show.');
-  if (![1, 2].includes(value.hostCount)) fail('Choose K-Nova alone or K-Nova with the Analyst.');
+  if (![1, 2].includes(value.hostCount)) fail('Choose Rici alone or Rici with the Analyst.');
   return {title: text(value.title, 80, 'Show title'), topic: text(value.topic, 240, 'Topic'),
     category: value.category, durationSeconds: value.durationSeconds, hostCount: value.hostCount};
 }

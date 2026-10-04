@@ -30,7 +30,7 @@ export function sceneSvg({title, text, speaker = 'host', paused = false, rehears
   <circle cx="170" cy="300" r="75" fill="#171f3f" stroke="${accent}" stroke-width="3"/>
   <rect x="153" y="260" width="34" height="59" rx="17" fill="${accent}"/>
   <path d="M139 291v12a31 31 0 0062 0v-12M170 335v25M151 360h38" fill="none" stroke="white" stroke-width="5" stroke-linecap="round"/>
-  <text x="272" y="281" fill="white" font-family="sans-serif" font-size="32" font-weight="bold">${speaker==='host'?'K-Nova':'The Analyst'}</text>
+  <text x="272" y="281" fill="white" font-family="sans-serif" font-size="32" font-weight="bold">${speaker==='host'?'Rici':'The Analyst'}</text>
   <text x="274" y="315" fill="#abb7d6" font-family="sans-serif" font-size="20">${paused ? 'The producer has paused the discussion' : speaker==='host'?'Your AI host':'AI cohost · Evidence and perspective'}</text>
   <rect x="58" y="400" width="1160" height="255" rx="24" fill="#111a30" stroke="#273451"/>
   ${caption.map((l,i)=>`<text x="82" y="${438+i*26}" fill="#f1f4ff" font-family="sans-serif" font-size="22">${escape(l)}</text>`).join('')}

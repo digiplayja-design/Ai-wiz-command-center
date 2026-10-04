@@ -101,7 +101,7 @@ export function createYouTube(config,{fetcher=fetch}={}) {
       if(!channels.items?.some(channel=>channel.id===config.channelId))throw new LiveStudioError('The connected YouTube channel changed. Reconnect it before starting a new show.',409);
       // Always unlisted during acceptance. No user/model text can change visibility.
       const broadcast=await api('create_broadcast','liveBroadcasts?part=snippet,status,contentDetails',{method:'POST',signal,body:{snippet:{title:show.config.title,
-        description:'An AI-hosted KORLIX Live Studio show. K-Nova and the Analyst are AI-generated voices. Sources and uncertainty are discussed on air.',
+        description:'An AI-hosted KORLIX Live Studio show. Rici and the Analyst are AI-generated voices. Sources and uncertainty are discussed on air.',
         scheduledStartTime:new Date(Date.now()+60000).toISOString()},status:{privacyStatus:'unlisted',selfDeclaredMadeForKids:false},
         contentDetails:{enableAutoStart:false,enableAutoStop:true,recordFromStart:true,enableDvr:true,
           monitorStream:{enableMonitorStream:false,broadcastStreamDelayMs:0}}}});

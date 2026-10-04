@@ -165,6 +165,7 @@ test('real session configuration preserves language, accent and ordinary/bookkee
   assert.match(config.instructions, /"language_preference":"Spanish"/);
   assert.match(config.instructions, /Keep the selected accent/);
   assert.match(config.instructions, /KORLIX Music Studio/);
+  assert.match(config.instructions, /Rici \(pronounced Ree-see\)/);
   assert(!config.instructions.includes('Ordinary agent instructions'));
   assert.equal(genericCalls, 0);
   assert.equal(config.audio.output.voice, 'fixture-voice');
@@ -179,5 +180,11 @@ test('real session configuration preserves language, accent and ordinary/bookkee
   const guard = source.indexOf('app.use("/api/live-convo/session", musicVoiceSessionGuard');
   const reservation = source.indexOf('app.use("/api/live-convo/session", async');
   assert(guard > 0 && guard < reservation);
-  assert(source.includes('if (!req.korlixFieldProofVoice && !req.korlixBookkeepingVoice && !req.korlixMusicVoice) await korlixLiveConvoAttachAgentSessionV1'));
+  const isolatedGuard = source.match(/if \(([^\n]+)\) await korlixLiveConvoAttachAgentSessionV1/);
+  assert(isolatedGuard, 'voice modes must be isolated from generic agent attachment');
+  const canAttach = new Function('req', `return ${isolatedGuard[1]};`);
+  assert.equal(canAttach({}), true);
+  for (const mode of ['korlixMusicVoice','korlixBookkeepingVoice','korlixFieldProofVoice','korlixWorkforceVoice','korlixCrmVoice']) {
+    assert.equal(canAttach({[mode]:true}), false, `${mode} must stay isolated`);
+  }
 });

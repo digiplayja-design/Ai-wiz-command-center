@@ -31,6 +31,8 @@ test.before(async()=>{
  const welcomeMigration=(await readdir(dir)).find(n=>n.endsWith('_pod_prompt_welcome_audio.sql'));await db.exec(await readFile(new URL(welcomeMigration,dir),'utf8'));
  const preparedMigration=(await readdir(dir)).find(n=>n.endsWith('_pod_prepared_turn_buffer.sql'));assert(preparedMigration,'prepared-turn migration is required');
  await db.exec(await readFile(new URL(preparedMigration,dir),'utf8'));
+ const riciMigration=(await readdir(dir)).find(n=>n.endsWith('_rici_pod_welcome.sql'));assert(riciMigration,'Rici welcome migration is required');
+ await db.exec(await readFile(new URL(riciMigration,dir),'utf8'));
  store=createPodStore({database:{rpc:async(_name,p)=>{
   try{return {data:(await db.query('select public.korlix_pod_v1($1,$2,$3,$4) r',[p.p_actor,p.p_action,p.p_id,p.p_data])).rows[0].r};}
   catch(error){return {error};}

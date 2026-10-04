@@ -97,7 +97,7 @@ export function createLiveRuntime({store,providers,storage,youtube:defaultYouTub
         await event('destination',{broadcastId:session.id,streamId:session.streamId,watchUrl:session.watchUrl});
       }
       const researched=await paid('research',()=>providers.research({...show.config,style:'balanced',signal}));brief=researched.brief;
-      const welcome={speaker:'host',sourceIds:[],text:`Welcome to KORLIX Live Studio. I’m K-Nova, your AI host${show.config.hostCount===2?', joined by our AI Analyst':''}. This is ${show.config.title}. We’ll separate verified facts from opinions and show our sources.`};
+      const welcome={speaker:'host',sourceIds:[],text:`Welcome to KORLIX Live Studio. I’m Rici, your AI host${show.config.hostCount===2?', joined by our AI Analyst':''}. This is ${show.config.title}. We’ll separate verified facts from opinions and show our sources.`};
       // The provider enforces the 480-character speech bound.
       const welcomeAudio=await speak(welcome);
       const opening={...researched.initialTurn,speaker:show.config.hostCount===1?'host':'analyst'};

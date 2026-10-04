@@ -12,7 +12,7 @@ const opening = {text: 'NASA describes a range of missions. Which priorities sho
 const researchResult = () => ({status: 'completed', id: 'resp_research', _request_id: 'req_research', usage,
   output: [{type: 'web_search_call', status: 'completed', action: {type: 'search', sources: [{url: sourceUrl, title: 'NASA missions'}]}}],
   output_text: JSON.stringify({text: brief.text, requiresCurrentSources: false, currentSourcesAvailable: true, sources: [{url: sourceUrl}], opening})});
-const turnResult = (text = 'Welcome! I’m K-Nova, here with our AI Analyst. What should these missions help us understand?', sourceIds = ['source-1']) =>
+const turnResult = (text = 'Welcome! I’m Rici, here with our AI Analyst. What should these missions help us understand?', sourceIds = ['source-1']) =>
   ({status: 'completed', usage, output_text: JSON.stringify({text, sourceIds})});
 const turnArgs = (overrides = {}) => ({episode, brief, remainingSeconds: 300, ...overrides});
 
@@ -84,7 +84,7 @@ test('a deterministic welcome is source-free, topic-neutral and needs only one s
   assert.deepEqual(twoHosts.sourceIds, []);
   assert.equal(twoHosts.usage, undefined);
   assert(twoHosts.text.length <= 480);
-  assert.match(twoHosts.text, /K-Nova/);
+  assert.match(twoHosts.text, /Rici/);
   assert.match(twoHosts.text, /AI Analyst/);
   assert.match(twoHosts.text, /check sources before discussing the facts/);
   assert(!twoHosts.text.includes('Challenger'));

@@ -503,7 +503,7 @@ test('a new episode returns welcome audio before any research or language-model 
   const f=fixture({brief:null});t.after(()=>f.runtime.stop());
   const first=await f.run();
   assert.deepEqual(f.providerCalls().map(c=>c.name),['provider:speak']);
-  assert.equal(first.turn.speaker,'host');assert.match(first.turn.text,/K-Nova/);
+  assert.equal(first.turn.speaker,'host');assert.match(first.turn.text,/Rici/);
   assert.deepEqual(first.turn.sourceIds,[]);assert(first.audio.base64);
   assert.deepEqual(f.receipts.map(r=>r.callKey),['speak']);
   assert.equal(f.finishes[0].welcome,true);assert.equal(f.finishes[0].brief,undefined);

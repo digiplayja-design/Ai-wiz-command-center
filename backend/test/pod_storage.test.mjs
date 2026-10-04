@@ -8,7 +8,7 @@ import {createPodStore} from '../pod/store.mjs';
 let db,store,owner,other;
 const limits={tier:'ultra',monthlySessions:20,monthlySeconds:10800,monthlyTokens:4000000,maxSessionSeconds:1200,maxResponses:80};
 const input={category:'technology',topic:'What makes technology useful?',durationSeconds:900,hostCount:3,style:'balanced'};
-const welcomeTurn=hostCount=>({speaker:'host',sourceIds:[],text:`Hey, I’m K-Nova. Welcome to The Pod and You, with ${hostCount===3?'our AI Analyst and Challenger':'our AI Analyst'}. Next, we’ll check sources before discussing the facts. That check can take a little time. You can pause us, or use Chime in to add your take.`});
+const welcomeTurn=hostCount=>({speaker:'host',sourceIds:[],text:`Hey, I’m Rici. Welcome to The Pod and You, with ${hostCount===3?'our AI Analyst and Challenger':'our AI Analyst'}. Next, we’ll check sources before discussing the facts. That check can take a little time. You can pause us, or use Chime in to add your take.`});
 const raw=async(actor,action,id=null,data={})=>(await db.query('select public.korlix_pod_v1($1,$2,$3,$4) r',[actor,action,id,data])).rows[0].r;
 const create=async(extra={})=>store.create(owner,{requestId:randomUUID(),input,limits,...extra});
 const row=async(id)=>(await db.query('select * from public.korlix_pod_sessions where id=$1',[id])).rows[0];
@@ -36,6 +36,8 @@ test.before(async()=>{
  await db.exec(await readFile(new URL(welcomeMigration,dir),'utf8'));
  const preparedMigration=(await readdir(dir)).find(n=>n.endsWith('_pod_prepared_turn_buffer.sql'));
  await db.exec(await readFile(new URL(preparedMigration,dir),'utf8'));
+ const riciMigration=(await readdir(dir)).find(n=>n.endsWith('_rici_pod_welcome.sql'));assert(riciMigration,'Rici welcome migration is required');
+ await db.exec(await readFile(new URL(riciMigration,dir),'utf8'));
  store=createPodStore({database:{rpc:async(_name,p)=>{try{return {data:await raw(p.p_actor,p.p_action,p.p_id,p.p_data)};}catch(error){if(process.env.POD_DEBUG)console.error(error.message,error.where);return {error};}}},logger:{warn(){}}});
 });
 test.beforeEach(async()=>{await db.exec('reset role');owner=randomUUID();other=randomUUID();await db.query('insert into auth.users values($1),($2)',[owner,other]);await db.exec('set role service_role');});
@@ -89,6 +91,13 @@ test('fixed first welcome commits with speech receipt alone and no fabricated te
  assert.equal(Date.parse(done.episode.deadlineAt)-Date.parse(done.episode.startedAt),900000);
  const nextClaim=await claim(done.episode);await paid(episode.id,nextClaim.requestId,'speak');
  await assert.rejects(store.finish(owner,episode.id,nextClaim.requestId,{welcome:true,turn:welcomeTurn(3)}),e=>e.status===400);
+});
+test('rolling deploy accepts the legacy fixed welcome without broadening access or weakening the guard',async()=>{
+ const {episode}=await create(),c=await claim(episode);await paid(episode.id,c.requestId,'speak');
+ const legacy={...welcomeTurn(3),text:welcomeTurn(3).text.replace('Rici','K-Nova')};
+ const done=await store.finish(owner,episode.id,c.requestId,{welcome:true,turn:legacy});assert(done.committed);
+ const [fn]=(await db.query("select prosecdef,has_function_privilege('anon',oid,'execute') anon,has_function_privilege('authenticated',oid,'execute') authenticated,has_function_privilege('service_role',oid,'execute') service from pg_proc where oid='public.korlix_pod_v1(uuid,text,uuid,jsonb)'::regprocedure")).rows;
+ assert.deepEqual(fn,{prosecdef:false,anon:false,authenticated:false,service:true});
 });
 test('welcome guard rejects improvised text and fake source metadata but supports two-host copy',async()=>{
  const {episode}=await create({input:{...input,hostCount:2}}),c=await claim(episode);await paid(episode.id,c.requestId,'speak');

@@ -19,7 +19,7 @@ test('generation is structured, text-only, no provider storage or tool access',a
   const client={responses:{create:async(r,o)=>{request=r;options=o;return {status:'completed',output_text:JSON.stringify(result)};}}};
   assert.deepEqual(await enhanceEmail({client,input:brief}),result);
   assert.equal(request.store,false);assert.equal(request.tools,undefined);assert.equal(request.text.format.strict,true);assert.equal(options.maxRetries,0);
-  assert.deepEqual(JSON.parse(request.input[0].content),brief);assert.match(request.instructions,/never invent facts/i);assert.match(request.instructions,/K-Nova/);
+  assert.deepEqual(JSON.parse(request.input[0].content),brief);assert.match(request.instructions,/never invent facts/i);assert.match(request.instructions,/Rici/);
   for(const response of [{status:'incomplete',output_text:JSON.stringify(result)},{status:'completed',output_text:'not json'},{status:'completed',output:[{content:[{type:'refusal'}]}]}]) await assert.rejects(enhanceEmail({client:{responses:{create:async()=>response}},input:brief}));
 });
 test('authenticated route enforces consent, credits, isolated retries and failures',async t=>{

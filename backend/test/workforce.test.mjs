@@ -534,7 +534,7 @@ test('Work board enforces assignments, tenant isolation, current access and retr
  for(const role of ['anon','authenticated']) {await db.exec(`reset role;set role ${role}`);await assert.rejects(db.query('select * from korlix_workforce_tasks'),/permission denied/);await assert.rejects(call(owner,'snapshot'),/permission denied/);}
  await db.exec('reset role;set role service_role');
 });
-test('K-Nova context excludes evidence and invitations; drafts cannot write or broaden employee access',async()=>{
+test('Rici context excludes evidence and invitations; drafts cannot write or broaden employee access',async()=>{
  const {workforceVoiceContext,prepareWorkforceVoiceDraft}=await import('../workforce/voice.mjs');
  const data=enrichSnapshot(await call(worker,'snapshot'));
  const context=workforceVoiceContext(data);assert.equal(context.members.length,1);assert.equal(context.members[0].email,undefined);assert.equal(context.events,undefined);assert.equal(context.invites,undefined);assert.equal(context.policy,undefined);

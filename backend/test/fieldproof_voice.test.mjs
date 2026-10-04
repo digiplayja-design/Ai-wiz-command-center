@@ -16,7 +16,7 @@ test('voice guards reject anonymous, duplicate and mixed modes before allowance'
  assert.equal(allowance,0);const response=await fetch(url+'fieldproof=1',{method:'POST',headers:{Authorization:'owner'}});assert.deepEqual(await response.json(),{enabled:true});assert.equal(allowance,1);
  }finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
 });
-test('actual session config selects isolated K-Nova instructions and preserves voice interruption',async()=>{
+test('actual session config selects isolated Rici instructions and preserves voice interruption',async()=>{
  const source=await readFile(new URL('../server.js',import.meta.url),'utf8'),start=source.indexOf('function korlixLiveConvoSessionConfigV1(req) {'),end=source.indexOf('// KORLIX_LIVE_CONVO_BUILD129_LIMITS_BEGIN',start);
  const config=new Function('fieldProofVoiceInstructions','korlixLiveConvoEnvStringV1','korlixLiveConvoModelV1','korlixLiveConvoAccentInstructionV1','korlixLiveConvoReasoningEffortV1','korlixLiveConvoVoiceV1',source.slice(start,end)+';return korlixLiveConvoSessionConfigV1;')(fieldProofVoiceInstructions,(_k,f)=>f,()=> 'fixture',()=> 'Selected accent',()=> 'low',()=> 'voice')({korlixFieldProofVoice:{enabled:true},headers:{'x-korlix-language':'Spanish'}});
  assert.match(config.instructions,/"language_preference":"Spanish"/);assert.match(config.instructions,/Selected accent/);assert.match(config.instructions,/UNSAVED/);assert.equal(config.audio.input.turn_detection.interrupt_response,true);
