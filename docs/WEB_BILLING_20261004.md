@@ -1,5 +1,19 @@
 # KORLIX web subscriptions — October 4, 2026
 
+## Current launch state — sales paused (2026-10-04)
+
+The owner requested that the billing framework remain ready while new direct web sales stay disabled pending Ohio registration and tax setup. This status supersedes the earlier activation/deployment records below.
+
+- Production Render service `srv-d8csvkkp3tds73emfikg` now has `KORLIX_WEB_STRIPE_ENABLED=false` and `KORLIX_DIRECTORY_STRIPE_ENABLED=false`. The update was merged without replacing other environment variables.
+- Deployment `dep-db1e2cnavr4c73bfia70` became live at 23:29:21 UTC using backend commit `9c6840644d3a10bedce23d950de0ee74d3d1a60d`.
+- Both public billing health endpoints returned HTTP 200 with `checkoutEnabled:false`. Web billing remains `configured:true`; Directory remains `paymentCredentialsConfigured:true`; both Stripe connections remain `verified` in live mode. Directory free listings/public browsing remain enabled.
+- The deployed Pro/Ultra UI already handles this state by disabling new-purchase buttons and displaying its preparation notice. The server gates both new and resumed checkout requests. Existing billing management, webhook processing, reconciliation, prices and credentials are preserved.
+- Live Stripe API lists returned no open Checkout Sessions, no subscriptions (all statuses), and no Payment Links, with no further pages. No existing checkout needed expiration and no customer subscription was canceled.
+- Stripe Tax head office has been updated to the owner-confirmed Ohio office. No tax registration was added; automatic tax is still disabled.
+- Scope: KORLIX direct Stripe web subscriptions and paid Directory memberships. This change does not alter native app-store billing or third-party host booking payments.
+
+Do not re-enable either sales switch merely because the integration is configured or a sandbox test passes. After the owner confirms the appropriate Ohio registration is obtained, confirm the applicable product tax treatment and selling jurisdictions, configure the corresponding Stripe Tax registration and checkout tax behavior, verify calculations in sandbox, and complete launch acceptance before restoring the relevant flag to `true`. Keep free use and existing customer billing management available during the pause.
+
 Owner-confirmed offer: Pro USD 34.99/month; Ultra Premium USD 124.99/month. Enterprise remains Contact Sales. Basic and access to all AI characters remain free. AI GAS, Music Studio, Directory verification and paid 2MEETU bookings have separate billing.
 
 ## Implementation
@@ -35,7 +49,7 @@ Backend environment names (never commit their secret values):
 - `KORLIX_WEB_STRIPE_WEBHOOK_SECRET`
 - `KORLIX_WEB_STRIPE_SECRET_KEY`, or explicit `KORLIX_WEB_STRIPE_USE_DIRECTORY_CREDENTIAL=true` to reuse the existing server credential.
 
-Health: `/api/billing/web/health`. Expect configured/checkoutEnabled/livePayments true and connection `verified`. Authentication remains required for every account action. The Directory keeps its own webhook and portal.
+Health: `/api/billing/web/health`. Expect configured/livePayments true and connection `verified`; `checkoutEnabled` must remain false while the launch pause above is active. Authentication remains required for every account action. The Directory keeps its own webhook and portal.
 
 Automatic tax is not enabled. Before enabling collection, the owner should confirm applicable registrations and configure Stripe Tax accordingly. No registration or tax jurisdiction was invented by this release.
 
