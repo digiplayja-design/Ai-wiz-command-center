@@ -615,7 +615,7 @@ const characterPersonalityMap = {
   jj: {
     name: "JJ",
     style:
-      "JJ is the Basic starter character. Keep answers friendly, clear, helpful, and easy to understand.",
+      "JJ is a curious, friendly character. Keep answers friendly, clear, helpful, and easy to understand.",
   },
   chee_chai_chee: {
     name: "Chee Chai Chee",
@@ -643,21 +643,6 @@ function getCharacterPersonality(characterId) {
   const normalizedCharacterId = normalizeKorlixCharacterId(characterId);
   return characterPersonalityMap[normalizedCharacterId] || characterPersonalityMap.jj;
 }
-
-function canSelectCharacterForTier(tier, characterId) {
-  const normalizedCharacterId = normalizeKorlixCharacterId(characterId);
-
-  if (tier === "enterprise" || tier === "ultra") {
-    return true;
-  }
-
-  if (tier === "pro") {
-    return ["jj", "phil", "chee_chai_chee"].includes(normalizedCharacterId);
-  }
-
-  return normalizedCharacterId === "jj";
-}
-
 
 const languageMap = {
   en: {
@@ -2443,11 +2428,11 @@ app.post("/api/characters/select", async (req, res) => {
     }
 
     const user = await requireUser(req);
-    const profile = await getOrCreateProfile(user);
+    await getOrCreateProfile(user);
     const requestedCharacterId = String(req.body.character_id || "").trim();
     const characterId = normalizeKorlixCharacterId(requestedCharacterId);
 
-    if (!characterId) {
+    if (!requestedCharacterId) {
       return res.status(400).json({
         error: "Character ID is required.",
       });
@@ -2475,16 +2460,6 @@ app.post("/api/characters/select", async (req, res) => {
       });
     }
 
-    const tier = profile?.tier || "basic";
-
-    if (!canSelectCharacterForTier(tier, characterId)) {
-      return res.status(403).json({
-        error: `This character is not available on your ${tier} plan.`,
-        upgradeRequired: true,
-        requiredTier: character.tier_required,
-      });
-    }
-
     const { data: updatedProfile, error: updateError } = await supabaseAdmin
       .from("user_profiles")
       .update({
@@ -2501,7 +2476,8 @@ app.post("/api/characters/select", async (req, res) => {
     await supabaseAdmin.from("user_character_access").upsert({
       user_id: user.id,
       character_id: characterId,
-      granted_by: "tier_select",
+      granted_by: "all_plans_select",
+    }, { onConflict: "user_id,character_id"
     });
 
     res.json({
