@@ -9966,8 +9966,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   Future<void> _openContactsCrm() async {
     if (_currentTier.trim().toLowerCase() != 'enterprise') return;
     await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
-      ContactsScreen(client: ContactsClient(backendBaseUrl: kKorlixBackendBaseUrl,
-        headersBuilder: _authHeaders))));
+      ContactsScreen(characterId:normalizeKorlixCharacterId(kKorlixSelectedCharacterNotifier.value),language:_t.label,client: ContactsClient(backendBaseUrl: kKorlixBackendBaseUrl,
+        headersBuilder: _authHeaders,sessionChanges:kKorlixAuthRevision))));
   }
 
   Future<void> _openScheduling() async {

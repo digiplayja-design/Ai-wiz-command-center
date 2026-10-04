@@ -1717,6 +1717,7 @@ class _KorlixLiveConvoAgentHubSheetState
           Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => ContactsScreen(
+                language: widget.language,
                 client: ContactsClient(
                   backendBaseUrl: widget.client.backendBaseUrl,
                   headersBuilder: widget.client.headersBuilder,

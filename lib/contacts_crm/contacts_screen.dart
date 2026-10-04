@@ -1,3 +1,7 @@
+import '../live_convo/korlix_live_convo_test_screen.dart';
+import '../privacy/korlix_third_party_ai_consent.dart';
+import 'crm_email_screen.dart';
+import 'crm_voice.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -12,8 +16,9 @@ import 'contacts_style.dart';
 import 'contact_profile.dart';
 
 class ContactsScreen extends StatefulWidget {
-  const ContactsScreen({super.key, required this.client});
+  const ContactsScreen({super.key, required this.client, this.characterId = 'jj', this.language = 'English'});
   final ContactsClient client;
+  final String characterId, language;
   @override
   State<ContactsScreen> createState() => _ContactsScreenState();
 }
@@ -160,6 +165,32 @@ class _ContactsScreenState extends State<ContactsScreen> {
       _notify('Contact saved');
       await _load();
     }
+  }
+
+  Future<void> _openEmail({CrmJson? contact, CrmJson? draft}) async {
+    if (_locked || widget.client.sessionChanged) return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>Theme(data:CrmStyle.theme,child:CrmEmailScreen(client:widget.client,contact:contact,draft:draft))));
+    if(mounted&&!_locked)await _load();
+  }
+
+  Future<void> _openCrmVoice() async {
+    if(_locked||widget.client.sessionChanged)return;
+    final consent=await ensureKorlixThirdPartyAiConsent(context:context,featureName:'CRM and K-Nova',providers:const {KorlixThirdPartyAiProvider.openAi},dataCategories:const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,KorlixThirdPartyAiDataCategory.crmRecords});
+    if(!consent||!mounted||_locked||widget.client.sessionChanged)return;
+    final voice=CrmVoiceController(client:widget.client);
+    CrmJson? result;
+    try {
+      final route=MaterialPageRoute<CrmJson>(builder:(_)=>KorlixLiveConvoTestScreen(crmVoice:voice,sessionChanges:widget.client.sessionChanges,backendBaseUrl:widget.client.backendBaseUrl,headersBuilder:widget.client.headersBuilder,characterId:widget.characterId,language:widget.language));
+      result=await Navigator.of(context).push<CrmJson>(route);await route.completed;
+    } finally { voice.dispose(); }
+    if(!mounted||_locked||widget.client.sessionChanged||result==null)return;
+    final contact=crmMap((await widget.client.request('GET','/${result['contact_id']}'))['contact']);
+    if(!mounted||_locked)return;
+    if(contact['version']!=result['contact_version'])throw const ContactsException('This contact changed while voice was open. Ask K-Nova again using the latest contact.');
+    final draft=crmMap(result['draft']);
+    if(result['action']=='email') {
+      await _openEmail(contact:contact,draft:draft);
+    } else if(result['action']=='note')await _edit({...contact,...draft},1);
   }
 
   Future<void> _import([String source = 'spreadsheet']) async {
@@ -503,7 +534,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 children: [
                   _brandMark(38),
                   const SizedBox(width: 10),
-                  const Column(
+                  const Expanded(child: FittedBox(fit:BoxFit.scaleDown,alignment:Alignment.centerLeft,child:Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
@@ -523,7 +554,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                         ),
                       ),
                     ],
-                  ),
+                  ))),
                 ],
               ),
             ),
@@ -1630,6 +1661,11 @@ class _ContactsScreenState extends State<ContactsScreen> {
             ],
           ),
         const SizedBox(height: 22),
+        Wrap(spacing:10,runSpacing:8,children:[
+          FilledButton.icon(key:const Key('crm-autonomous-email'),onPressed:_operation||_locked?null:()=>_action(()=>_openEmail()),icon:const Icon(Icons.mark_email_read_outlined),label:const Text('Autonomous email')),
+          OutlinedButton.icon(key:const Key('crm-k-nova'),onPressed:_operation||_locked?null:()=>_action(_openCrmVoice),icon:const Icon(Icons.graphic_eq_rounded,color:CrmStyle.violet),label:const Text('K-Nova')),
+        ]),
+        const SizedBox(height:16),
         _summary(mobile),
         const SizedBox(height: 22),
         Expanded(
@@ -1801,7 +1837,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                 Expanded(
                                   child: LayoutBuilder(
                                     builder: (context, box) {
-                                      final minimum = mobile ? 660.0 : 740.0;
+                                      final minimum = mobile ? 740.0 : 804.0;
                                       final extra = _filtersOpen ? 150.0 : 0.0;
                                       final height =
                                           box.maxHeight < minimum + extra
