@@ -95,6 +95,10 @@ test('a deterministic welcome is source-free, topic-neutral and needs only one s
   assert.equal(audio.durationSeconds, 1);
   assert.deepEqual(fixture.calls.map(call => call.kind), ['speech']);
   assert.equal(fixture.calls[0].payload.voice, POD_VOICES.host);
+  assert.match(fixture.calls[0].payload.input, /I’m Ree-see\./);
+  assert(!fixture.calls[0].payload.input.includes('Rici'));
+  assert.match(twoHosts.text, /I’m Rici\./, 'saved and displayed copy keeps the written name');
+  assert.match(fixture.calls[0].payload.instructions, /pure s sound in see/);
   assert.equal(audio.usage.kind, 'speech');
   assert.equal(audio.usage.totalTokens, null);
   assert.throws(() => podWelcomeTurn({...episode, turns: [{speaker: 'host', text: twoHosts.text}]}), error => error.code === 'POD_WELCOME_UNAVAILABLE');

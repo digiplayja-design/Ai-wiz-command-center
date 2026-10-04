@@ -1,4 +1,5 @@
 'use strict';
+const {riciSpeechText, RICI_PRONUNCIATION} = require('../voice/rici_pronunciation.cjs');
 const C = require('../k135z_copilot_notes/contract.cjs');
 const {K135zZoomError} = require('./b5b_contract.cjs');
 const fail = (status, code) => { throw new K135zZoomError(status, `K135Z_RESPONSE_${code}`); };
@@ -104,8 +105,8 @@ function createSpokenReplies({env, provider, now, loadAgentRuntime, log = () => 
       const audioStarted = now();
       const configured = String(env.KORLIX_LIVE_CONVO_VOICE || '').trim().toLowerCase();
       const audio = await provider('audio/speech', {model:'gpt-4o-mini-tts',
-        voice:voices.has(configured)?configured:'marin',input:text,response_format:'mp3',
-        instructions:'Say exactly the supplied answer, warmly and clearly. Do not add an introduction.'}, signal, 350000, true);
+        voice:voices.has(configured)?configured:'marin',input:riciSpeechText(text),response_format:'mp3',
+        instructions:`${RICI_PRONUNCIATION} Say exactly the supplied answer, warmly and clearly. Do not add an introduction.`}, signal, 350000, true);
       if (audio.length < 64 || !(audio.subarray(0,3).toString() === 'ID3' ||
           (audio[0] === 255 && (audio[1]&224) === 224))) fail(502, 'INVALID_AUDIO');
       timings.audioMs = now() - audioStarted;

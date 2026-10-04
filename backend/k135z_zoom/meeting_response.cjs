@@ -1,4 +1,5 @@
 'use strict';
+const {riciSpeechText, RICI_PRONUNCIATION} = require('../voice/rici_pronunciation.cjs');
 const crypto = require('node:crypto');
 const {astraRequest} = require('../korlix_astra.cjs');
 const {createSpokenReplies, validateSpokenRequest} = require('./spoken_reply.cjs');
@@ -106,7 +107,7 @@ function createMeetingResponses({env = process.env, fetchImpl = globalThis.fetch
     try {
       const configured = String(env.KORLIX_LIVE_CONVO_VOICE || '').trim().toLowerCase();
       const bytes = await provider('audio/speech', {model:'gpt-4o-mini-tts',voice:VOICES.has(configured)?configured:'marin',
-        input:draft.text,response_format:'mp3',instructions:'Read only the supplied meeting update, warmly and clearly at a natural pace.'}, signal, 350000, true);
+        input:riciSpeechText(draft.text),response_format:'mp3',instructions:`${RICI_PRONUNCIATION} Read only the supplied meeting update, warmly and clearly at a natural pace.`}, signal, 350000, true);
       if (bytes.length < 64 || !(bytes.subarray(0,3).toString() === 'ID3' || (bytes[0] === 255 && (bytes[1]&224) === 224))) fail(502,'INVALID_AUDIO');
       await verify();
       if (drafts.get(body.draftId) !== draft || draft.expires <= now()) fail(409,'DRAFT_EXPIRED');

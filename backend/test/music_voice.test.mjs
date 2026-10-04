@@ -165,7 +165,7 @@ test('real session configuration preserves language, accent and ordinary/bookkee
   assert.match(config.instructions, /"language_preference":"Spanish"/);
   assert.match(config.instructions, /Keep the selected accent/);
   assert.match(config.instructions, /KORLIX Music Studio/);
-  assert.match(config.instructions, /Rici \(pronounced Ree-see\)/);
+  assert.match(config.instructions, /REE \+ SEE, with the s sound in see/);
   assert(!config.instructions.includes('Ordinary agent instructions'));
   assert.equal(genericCalls, 0);
   assert.equal(config.audio.output.voice, 'fixture-voice');

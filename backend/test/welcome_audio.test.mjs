@@ -10,8 +10,8 @@ test('one fixed Rici clip is coalesced, cached and returned as a valid bounded W
   const [a,b] = await Promise.all([audio.get(), audio.get()]);
   assert.equal(calls,1); assert.equal(a,b); assert.equal(await audio.get(),a); assert.equal(calls,1);
   assert.equal(a.toString('ascii',0,4),'RIFF'); assert.equal(a.readUInt32LE(24),24000); assert.equal(a.readUInt32LE(40),96000);
-  assert.equal(request.payload.input,WELCOME_TEXT); assert.equal(request.payload.voice,'marin'); assert.equal(request.options.maxRetries,0);
-  assert.equal(audio.status().version,2); assert.equal(audio.status().assistant,'Rici'); assert.match(request.payload.instructions,/Rici as Ree-see/); assert(!WELCOME_TEXT.includes('K-Nova')); assert.equal(audio.status().ready,true); assert.equal(audio.status().metered,false);
+  assert.match(request.payload.input,/I'm Ree-see/); assert.match(request.payload.input,/Look for Ree-see/); assert(!request.payload.input.includes('Rici')); assert(WELCOME_TEXT.includes("I'm Rici")); assert.equal(request.payload.voice,'marin'); assert.equal(request.options.maxRetries,0);
+  assert.equal(audio.status().version,3); assert.equal(audio.status().assistant,'Rici'); assert.match(request.payload.instructions,/REE \+ SEE/); assert(!WELCOME_TEXT.includes('K-Nova')); assert.equal(audio.status().ready,true); assert.equal(audio.status().metered,false);
 });
 test('provider failures and malformed or oversized audio back off instead of generating on every request', async () => {
   for(const response of [()=>{throw new Error('secret provider error');},()=>new Response('bad',{headers:{'content-type':'text/plain'}}),()=>new Response(Buffer.alloc(1920002)),()=>new Response(Buffer.alloc(48001))]) {
@@ -27,8 +27,8 @@ test('the public route exposes only the fixed greeting with safe cache headers, 
   registerWelcomeAudio(app,{speak:async(p)=>{calls.push(p);return pcm();}});
   const server=app.listen(0,'127.0.0.1'); await new Promise(r=>server.once('listening',r));
   t.after(()=>new Promise(r=>server.close(r)));
-  const response=await fetch(`http://127.0.0.1:${server.address().port}/api/welcome/rici-v2.wav?input=malicious&voice=other`);
+  const response=await fetch(`http://127.0.0.1:${server.address().port}/api/welcome/rici-v3.wav?input=malicious&voice=other`);
   assert.equal(response.status,200);assert.match(response.headers.get('content-type'),/audio\/wav/);assert.match(response.headers.get('cache-control'),/public/);
-  const legacy=await fetch(`http://127.0.0.1:${server.address().port}/api/welcome/knova-v1.wav`); assert.equal(legacy.status,200);
-  assert.equal((await response.arrayBuffer()).byteLength,96044);assert.equal(calls.length,1);assert.equal(calls[0].input,WELCOME_TEXT);
+  for(const path of ['rici-v2.wav','knova-v1.wav']) { const legacy=await fetch(`http://127.0.0.1:${server.address().port}/api/welcome/${path}`); assert.equal(legacy.status,200); }
+  assert.equal((await response.arrayBuffer()).byteLength,96044);assert.equal(calls.length,1);assert.match(calls[0].input,/I'm Ree-see/); assert(!calls[0].input.includes('malicious'));
 });
