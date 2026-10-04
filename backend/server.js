@@ -1,3 +1,4 @@
+import {registerWelcomeAudio} from './welcome/audio.mjs';
 import {createCrmDirectorySync} from './contacts_crm/directory_sync.mjs';
 import {crmVoiceSessionGuard,crmVoiceInstructions} from './contacts_crm/voice.mjs';
 import { registerDirectory } from './directory/routes.mjs';
@@ -3740,6 +3741,7 @@ app.get("/api/health", (req, res) => {
       discovery:'regional_official_sources',directSamConfigured:createSamAdapter().ready(),
       pdfImport:true,deadlineMonitoring:true,automaticMonitoringUsesAiCredits:false,
       automaticSubmission:false},
+    welcomeVoice: korlixWelcomeAudio.status(),
     contactsCrm: {version:3,voice:true,directoryImport:{version:1,source:'korlix_directory',automatic:true,intervalMinutes:60,batchLimit:100,enabledByDefault:false},email:{version:1,followUpDates:true,draftReview:true,automaticFollowUps:true,enabledByDefault:false,providerConfigured:createFieldProofEmailProvider({environment:process.env,namespace:'crm'}).status().ready}},
     workforce: {version:3,voice:true,businessProfiles:true,industryTemplates:12,teamTypes:5,taskBoard:true,
       email:{version:1,workspaceRecipients:true,draftReview:true,automaticReminders:true,dailySummaries:true,enabledByDefault:false,providerConfigured:createFieldProofEmailProvider({environment:process.env,namespace:'workforce'}).status().ready}},
@@ -12751,6 +12753,7 @@ const fieldProofEmails = registerFieldProofEmails(app, {
 });
 // Share the existing verified Resend webhook; its Agent Email handler runs next.
 registerFieldProofEmailWebhook(app,{emailService:fieldProofEmails,environment:process.env});
+const korlixWelcomeAudio=registerWelcomeAudio(app,{speak:(payload,options)=>new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0}).audio.speech.create(payload,options)});
 const crmDirectorySync=createCrmDirectorySync({database:fieldProofEmailDatabase});
 crmDirectorySync.start();
 process.once('SIGTERM',()=>crmDirectorySync.stop());
