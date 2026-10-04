@@ -139,6 +139,7 @@ import 'image_to_video/image_to_video_screen.dart';
 import 'live_convo/korlix_live_convo_test_screen.dart';
 
 import 'billing/korlix_apple_billing.dart';
+import 'billing/web_billing_screen.dart';
 import 'privacy/korlix_third_party_ai_consent.dart';
 
 import 'meeting_copilot/korlix_meeting_copilot_route.dart';
@@ -164,6 +165,7 @@ KorlixPortalLaunch? _korlixInitialPortalLaunch;
 bool _korlixPortalLaunchRequested = false;
 
 final ValueNotifier<int> kKorlixAuthRevision = ValueNotifier<int>(0);
+final ValueNotifier<int> kKorlixBillingRevision = ValueNotifier<int>(0);
 
 void korlixSetInMemorySession(KorlixAuthSession? session) {
   if (session == null || session.email != kKorlixUserEmail) {
@@ -3654,9 +3656,16 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
   // KORLIX_APPLE_SUBSCRIPTIONS_BUILD130_PLANS_BEGIN
   Future<void> _handleAppleSubscriptionTierChanged(String _) async {
     if (!mounted) return;
+    kKorlixBillingRevision.value++;
   }
 
   Future<void> _openPlansPanel({required String currentTier}) async {
+    if (kIsWeb) {
+      await showKorlixWebBilling(context, baseUrl: kKorlixBackendBaseUrl,
+        headersBuilder: _headers, sessionChanges: kKorlixAuthRevision,
+        onTierChanged: _handleAppleSubscriptionTierChanged);
+      return;
+    }
     await showKorlixAppleSubscriptionSheet(
       context: context,
       backendBaseUrl: kKorlixBackendBaseUrl,
@@ -4175,9 +4184,12 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                     ),
                     const SizedBox(height: 14),
                     FilledButton.icon(
-                      onPressed: korlixSoundAction(() => _openPlansPanel(currentTier: tier)),
+                      onPressed: korlixSoundAction(() {
+                        if (kIsWeb) Navigator.of(context).pop();
+                        unawaited(_openPlansPanel(currentTier: tier));
+                      }),
                       icon: const Icon(Icons.workspace_premium_rounded),
-                      label: const Text('View plans / upgrade'),
+                      label: const Text(kIsWeb ? 'Plans & Billing' : 'View plans / upgrade'),
                       style: korlixSoundButtonStyle(FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF143B4A),
                         foregroundColor: const Color(0xFFE4EBEE),
@@ -5386,6 +5398,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   // KORLIX_ENTERPRISE_COPYALL_REWRITE_SAFE_V1_END
 
   // KORLIX_APPLE_SUBSCRIPTIONS_BUILD130_TIER_CALLBACK_BEGIN
+  void _handleBillingRevision() {
+    if (mounted) unawaited(_loadCurrentTier());
+  }
+
   Future<void> _handleAppleSubscriptionTierChanged(String tier) async {
     final normalizedTier = tier.trim().toLowerCase();
 
@@ -5415,8 +5431,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     _pendingGenerationJobsPrefsKey = 'korlix_chat_jobs_account_v2_$chatStorageScope';
     _chatMemory = ChatMemoryClient(baseUrl: kKorlixBackendBaseUrl,
       headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision);
+    kKorlixBillingRevision.addListener(_handleBillingRevision);
     unawaited(_chatMemory.load());
-    unawaited(
+    if (!kIsWeb) unawaited(
       KorlixAppleBillingService.instance.configure(
         backendBaseUrl: kKorlixBackendBaseUrl,
         headersBuilder: _authHeaders,
@@ -5429,6 +5446,15 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     _loadCurrentTier();
     _loadLocalChatTopics();
     unawaited(_resumePendingGenerationJobs());
+    if (kIsWeb && ['return', 'cancel', 'plans'].contains(Uri.base.queryParameters['billing'])) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(showKorlixWebBilling(context, baseUrl: kKorlixBackendBaseUrl,
+          headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision,
+          onTierChanged: _handleAppleSubscriptionTierChanged,
+          checkoutReturn: Uri.base.queryParameters['billing']));
+      });
+    }
   }
 
   Future<void> _loadSavedKorlixTheme() => kKorlixAppearancePreferences.restore();
@@ -5437,6 +5463,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _chatMemory.dispose();
+    kKorlixBillingRevision.removeListener(_handleBillingRevision);
     _characters.dispose();
     _schedulingVoice?.dispose();
     _schedulingVoiceClient?.dispose();

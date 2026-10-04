@@ -39,6 +39,7 @@ class KorlixAppleBillingService extends ChangeNotifier {
   bool _checkingStatus = false;
   bool _restoring = false;
   bool _storeAvailable = false;
+  bool _webSubscriptionActive = false;
   String _currentTier = 'basic';
   String? _busyProductId;
   String? _message;
@@ -52,6 +53,7 @@ class KorlixAppleBillingService extends ChangeNotifier {
   bool get checkingStatus => _checkingStatus;
   bool get restoring => _restoring;
   bool get storeAvailable => _storeAvailable;
+  bool get webSubscriptionActive => _webSubscriptionActive;
   bool get busy => _busyProductId != null || _restoring;
   String get currentTier => _currentTier;
   String? get busyProductId => _busyProductId;
@@ -187,6 +189,11 @@ class KorlixAppleBillingService extends ChangeNotifier {
       }
 
       _currentTier = _normalizeTier(data['tier']?.toString());
+      _webSubscriptionActive = data['webSubscriptionActive'] == true;
+      if (_webSubscriptionActive) {
+        _message =
+            'Your membership is billed through KORLIX web. Manage it through its original billing provider.';
+      }
       _entitlement = (data['entitlement'] as Map?)?.cast<String, dynamic>();
       await _notifyTierChanged(_currentTier);
     } catch (error) {
@@ -198,6 +205,7 @@ class KorlixAppleBillingService extends ChangeNotifier {
   }
 
   Future<void> purchase(String productId) async {
+    if (busy || _checkingStatus) return;
     if (!isApplePlatform) {
       _setError('Apple subscriptions require the iPhone or iPad app.');
       return;
@@ -206,6 +214,16 @@ class KorlixAppleBillingService extends ChangeNotifier {
     final KorlixBillingHeadersBuilder? builder = _headersBuilder;
     if (builder == null || !_hasBearer(builder())) {
       _setError('Please sign in before subscribing.');
+      return;
+    }
+
+    await refreshStatus();
+    if (_error != null || _webSubscriptionActive) {
+      if (_webSubscriptionActive) {
+        _setError(
+          'An existing web subscription must be managed with its original billing provider.',
+        );
+      }
       return;
     }
 
@@ -812,7 +830,11 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
       action: current
           ? null
           : FilledButton.icon(
-              onPressed: product == null || service.busy
+              onPressed:
+                  product == null ||
+                      service.busy ||
+                      service.checkingStatus ||
+                      service.webSubscriptionActive
                   ? null
                   : () => service.purchase(productId),
               style: FilledButton.styleFrom(

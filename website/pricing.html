@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="KORLIX AI web plans: Basic free, Pro USD $34.99/month, Ultra Premium USD $124.99/month. Manage monthly billing in KORLIX.">
+<title>Plans &amp; Pricing | KORLIX AI</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.plans{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;margin:32px 0}
+.plan{padding:28px;border:1px solid var(--accent);border-radius:26px;background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 14%,#071b27),#071b27);box-shadow:0 14px 50px #0003;display:flex;flex-direction:column}
+.plan h2{color:var(--accent);font-size:28px;margin:0}.price{font-size:36px;font-weight:800;color:var(--text);margin:20px 0}.price small{font-size:16px;font-weight:400;color:var(--muted)}
+.plan ul{padding-left:20px;flex:1}.plan li{margin:8px 0}.plan .button{text-align:center;border-color:var(--accent);border-radius:14px;font-weight:bold;padding:15px}
+.eyebrow{color:var(--aqua);letter-spacing:3px;font-size:13px;font-weight:700}.note{padding:22px;border:1px solid #69d9e844;border-radius:18px}.page{max-width:1080px;overflow-wrap:anywhere}h1{font-size:clamp(32px,6vw,58px);letter-spacing:0;margin-top:20px}a:focus-visible{outline:3px solid white;outline-offset:5px}
+@media(max-width:650px){.plans{grid-template-columns:1fr}.plan{padding:22px}.page{padding:28px 0}.price{font-size:32px}}
+</style>
+</head>
+<body><main class="page">
+<a class="back" href="/">← KORLIX AI</a>
+<p class="eyebrow">CHOOSE YOUR CAPACITY</p><h1>Make room for your next idea.</h1>
+<p>Start free. Choose a monthly plan when you need more capacity. Every plan includes all AI characters.</p>
+<div class="plans">
+<section class="plan" style="--accent:#b59aff"><h2>Pro</h2><p>Room for your everyday ideas.</p>
+<div class="price">$34.99 <small>USD / month</small></div>
+<ul><li>30 AI requests and 60 credits per day</li><li>2 video generations per month</li><li>All AI characters</li><li>Document and export tools</li></ul>
+<a class="button" href="/app/?billing=plans">View Pro in KORLIX</a></section>
+<section class="plan" style="--accent:#ffd36f"><h2>Ultra Premium</h2><p>More capacity for ambitious work.</p>
+<div class="price">$124.99 <small>USD / month</small></div>
+<ul><li>75 AI requests and 200 credits per day</li><li>10 video generations per month</li><li>All AI characters</li><li>Higher personal usage allowances</li></ul>
+<a class="button" href="/app/?billing=plans">View Ultra in KORLIX</a></section>
+<section class="plan" style="--accent:#69d9e8"><h2>Basic</h2><p>Start exploring KORLIX.</p><div class="price">Free</div>
+<ul><li>All AI characters</li><li>Daily usage limits</li><li>No subscription required</li></ul><a class="button" href="/app/">Open KORLIX</a></section>
+<section class="plan" style="--accent:#75dbb9"><h2>Enterprise</h2><p>Access built around your business.</p><div class="price">Contact Sales</div>
+<ul><li>Custom organization access</li><li>Agreed usage and support</li><li>All AI characters</li></ul><a class="button" href="mailto:support@korlixdeveloper.com?subject=KORLIX%20Enterprise%20enquiry">Contact Sales</a></section>
+</div>
+<section class="note"><h2>Clear monthly billing</h2>
+<p>Pro and Ultra Premium renew automatically each month until canceled. Sign in and open <strong>Settings → Plans &amp; Billing</strong> to subscribe, change payment details, see invoices, change your web plan, or cancel renewal. Cancellation keeps access through your paid period. Stripe shows the final charge before you pay.</p>
+<p>AI GAS, Music Studio and the optional Business Directory verification membership are separate purchases. A generation may use more than one credit. Daily and monthly allowances have separate limits; plans do not promise unlimited use. App-store prices and billing routes can differ.</p>
+<p>For billing or refund requests, contact <a href="mailto:support@korlixdeveloper.com">support@korlixdeveloper.com</a> with your account email and transaction reference. Never send full card details.</p></section>
+<nav class="links" aria-label="Billing and policies"><a href="subscription-terms.html">Subscription terms</a><a href="privacy-policy.html">Privacy</a><a href="terms.html">Terms of use</a><a href="support.html">Support</a><a href="/business-directory/">Business Directory</a></nav>
+</main></body></html>
