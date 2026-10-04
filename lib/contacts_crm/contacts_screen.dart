@@ -184,7 +184,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
   Future<void> _openCrmVoice() async {
     if(_locked||widget.client.sessionChanged)return;
-    final consent=await ensureKorlixThirdPartyAiConsent(context:context,featureName:'CRM and K-Nova',providers:const {KorlixThirdPartyAiProvider.openAi},dataCategories:const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,KorlixThirdPartyAiDataCategory.crmRecords});
+    final consent=await ensureKorlixThirdPartyAiConsent(context:context,featureName:'CRM and Rici',providers:const {KorlixThirdPartyAiProvider.openAi},dataCategories:const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,KorlixThirdPartyAiDataCategory.crmRecords});
     if(!consent||!mounted||_locked||widget.client.sessionChanged)return;
     final voice=CrmVoiceController(client:widget.client);
     CrmJson? result;
@@ -195,7 +195,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
     if(!mounted||_locked||widget.client.sessionChanged||result==null)return;
     final contact=crmMap((await widget.client.request('GET','/${result['contact_id']}'))['contact']);
     if(!mounted||_locked)return;
-    if(contact['version']!=result['contact_version'])throw const ContactsException('This contact changed while voice was open. Ask K-Nova again using the latest contact.');
+    if(contact['version']!=result['contact_version'])throw const ContactsException('This contact changed while voice was open. Ask Rici again using the latest contact.');
     final draft=crmMap(result['draft']);
     if(result['action']=='email') {
       await _openEmail(contact:contact,draft:draft);
@@ -1673,7 +1673,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
         const SizedBox(height: 22),
         Wrap(spacing:10,runSpacing:8,children:[
           FilledButton.icon(key:const Key('crm-autonomous-email'),onPressed:_operation||_locked?null:()=>_action(()=>_openEmail()),icon:const Icon(Icons.mark_email_read_outlined),label:const Text('Autonomous email')),
-          OutlinedButton.icon(key:const Key('crm-k-nova'),onPressed:_operation||_locked?null:()=>_action(_openCrmVoice),icon:const Icon(Icons.graphic_eq_rounded,color:CrmStyle.violet),label:const Text('K-Nova')),
+          OutlinedButton.icon(key:const Key('crm-k-nova'),onPressed:_operation||_locked?null:()=>_action(_openCrmVoice),icon:const Icon(Icons.graphic_eq_rounded,color:CrmStyle.violet),label:const Text('Rici')),
           OutlinedButton.icon(key:const Key('crm-directory-sync'),onPressed:_operation||_locked?null:()=>_action(_openDirectorySync),icon:const Icon(Icons.storefront_outlined,color:CrmStyle.gold),label:const Text('Auto-pull listings')),
         ]),
         const SizedBox(height:16),

@@ -120,7 +120,7 @@ String cameraAskPrompt({
       .toList();
   final task = mode.instruction;
   final contextJson = jsonEncode(context);
-  return '''KORLIX Camera Ask — K-Nova visual assistant.
+  return '''KORLIX Camera Ask — Rici visual assistant.
 Answer in $answerLanguage. Preferred style: $detail.
 The $photoCount photos are numbered in upload order. Task: $task
 Answer the current question using the actual visible content. State uncertainty and ask for a clearer photo when necessary.

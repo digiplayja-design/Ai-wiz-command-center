@@ -112,4 +112,4 @@ input::placeholder,textarea::placeholder { color:#8fa2bc; }
 [hidden] { display:none!important; }
 .studio-queue-meta { flex-wrap:wrap; }.studio-queue-meta>span { flex:1; min-width:120px; }.studio-queue-meta>.button { font-size:12px; }
 
-.k133-builder-header::after { content:"K-Nova / Email automation"; }
+.k133-builder-header::after { content:"Rici / Email automation"; }

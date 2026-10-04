@@ -67,7 +67,7 @@ class ResumeHero extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                'Shape your experience into a resume that feels like you. Refine with K-Nova. Make every detail count.',
+                'Shape your experience into a resume that feels like you. Refine with Rici. Make every detail count.',
                 style: TextStyle(
                   color: s.mutedText,
                   fontSize: 14,

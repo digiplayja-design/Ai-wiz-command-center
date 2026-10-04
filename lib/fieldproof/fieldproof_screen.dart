@@ -324,7 +324,7 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
         _editorGeneration++;
         _createKey = id == null ? fieldProofRequestKey() : null;
         _notice =
-            'K-Nova prepared an unsaved draft. Review every entry, then save the job.';
+            'Rici prepared an unsaved draft. Review every entry, then save the job.';
       });
       _top();
     } catch (e) {
@@ -422,7 +422,7 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
           const Icon(Icons.graphic_eq, color: Colors.white),
           const SizedBox(height: 10),
           const Text(
-            'K-Nova · Your field assistant',
+            'Rici · Your field assistant',
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w800,
@@ -439,7 +439,7 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
             key: const Key('fp-voice'),
             onPressed: _working || _dirty ? null : _voice,
             icon: const Icon(Icons.mic_none),
-            label: const Text('Talk to K-Nova'),
+            label: const Text('Talk to Rici'),
           ),
           if (_dirty)
             const Text(

@@ -932,7 +932,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
             TextButton.icon(
               onPressed: busy ? null : _voice,
               icon: const Icon(Icons.mic_none_rounded),
-              label: const Text('Tell K-Nova your idea'),
+              label: const Text('Tell Rici your idea'),
             ),
           const SizedBox(height: 16),
           KorlixActionButton(

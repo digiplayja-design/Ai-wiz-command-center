@@ -392,7 +392,7 @@ class _KorlixVoiceComposerState extends State<KorlixVoiceComposer>
     final time =
         '${(_seconds ~/ 60).toString().padLeft(2, '0')}:${(_seconds % 60).toString().padLeft(2, '0')}';
     return Scaffold(
-      appBar: AppBar(title: const Text('K-Nova voice input')),
+      appBar: AppBar(title: const Text('Rici voice input')),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
@@ -467,7 +467,7 @@ class _KorlixVoiceComposerState extends State<KorlixVoiceComposer>
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Turn your voice into an editable message for K-Nova.',
+                      'Turn your voice into an editable message for Rici.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: skin.mutedText, height: 1.5),
                     ),
@@ -613,7 +613,7 @@ class _KorlixVoiceComposerState extends State<KorlixVoiceComposer>
               if (widget.showLiveConvo) ...[
                 const SizedBox(height: 18),
                 KorlixActionButton(
-                  label: 'Talk with K-Nova instead',
+                  label: 'Talk with Rici instead',
                   subtitle: 'Open Live Convo',
                   icon: Icons.spatial_audio_off_rounded,
                   expand: true,

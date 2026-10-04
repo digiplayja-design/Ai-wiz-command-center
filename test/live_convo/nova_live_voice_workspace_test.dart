@@ -31,7 +31,7 @@ void main() {
         (tester) async {
           final actions = <String>[];
           await mount(tester, dark: dark, width: width, scale: 1.25, actions: actions);
-          expect(find.text('K-Nova'), findsOneWidget);
+          expect(find.text('Rici'), findsOneWidget);
           expect(find.text('Start LIVE CONVO').hitTestable(), findsOneWidget);
           final agents = find.byKey(const Key('live-voice-agents'));
           expect(agents.hitTestable(), findsOneWidget);
@@ -127,7 +127,7 @@ void main() {
         tester,
         connected: true,
         muted: true,
-        status: 'K-Nova is speaking…',
+        status: 'Rici is speaking…',
         agent: 'Custom Coach',
       );
       expect(find.text('Custom Coach is speaking'), findsOneWidget);
@@ -185,7 +185,7 @@ void main() {
         width: spec.$2,
         connected: spec.$3,
         entries: spec.$3,
-        status: spec.$3 ? 'K-Nova is speaking…' : 'Ready',
+        status: spec.$3 ? 'Rici is speaking…' : 'Ready',
       );
       final boundary = tester.renderObject<RenderRepaintBoundary>(
         find.byKey(const Key('voice-capture')),
@@ -216,7 +216,7 @@ Future<void> mount(
   bool muted = false,
   bool entries = false,
   String status = 'Ready',
-  String agent = 'K-Nova',
+  String agent = 'Rici',
   List<String>? actions,
   bool inventory = false,
 }) async {
@@ -263,7 +263,7 @@ Widget fixture({
   bool muted = false,
   bool entries = false,
   String status = 'Ready',
-  String agent = 'K-Nova',
+  String agent = 'Rici',
   List<String>? actions,
   Future<bool> Function()? requestClose,
   bool inventory = false,

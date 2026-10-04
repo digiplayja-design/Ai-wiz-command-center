@@ -232,7 +232,7 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
           !const ['income', 'expense'].contains(draft['kind'])) {
         setState(
           () => _error =
-              'This voice draft does not match the selected business. Ask K-Nova to prepare it again.',
+              'This voice draft does not match the selected business. Ask Rici to prepare it again.',
         );
         return;
       }
@@ -785,7 +785,7 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
         ),
         const SizedBox(height: 12),
         const Text(
-          'LIVE VOICE · K-Nova',
+          'LIVE VOICE · Rici',
           style: TextStyle(
             color: Color(0xff7fe6f3),
             fontWeight: FontWeight.w800,
@@ -826,7 +826,7 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
             foregroundColor: _navy,
           ),
           icon: const Icon(Icons.mic_none_rounded),
-          label: Text(_voiceOpening ? 'Opening K-Nova…' : 'Talk to K-Nova'),
+          label: Text(_voiceOpening ? 'Opening Rici…' : 'Talk to Rici'),
         ),
         const SizedBox(height: 12),
         const Text(

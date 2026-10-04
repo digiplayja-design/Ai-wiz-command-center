@@ -467,7 +467,7 @@ class KorlixLiveConvoButton extends StatelessWidget {
     final voiceColors = korlixButtonColorsFor('Voice');
     return KorlixActionButton(
       label: 'Live Convo',
-      eyebrow: 'K-Nova · LIVE VOICE',
+      eyebrow: 'Rici · LIVE VOICE',
       subtitle: 'Tap to start a conversation',
       onPressed: onPressed,
       size: KorlixButtonSize.hero,

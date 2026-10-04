@@ -8,7 +8,7 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ai_wiz_command_center/main.dart' as app;
 import 'package:ai_wiz_command_center/auth/knova_welcome_controller.dart';
-import 'package:ai_wiz_command_center/auth/knova_welcome_card.dart';
+import 'package:ai_wiz_command_center/auth/rici_welcome_button.dart';
 import 'package:ai_wiz_command_center/auth/knova_welcome_player.dart';
 import 'package:ai_wiz_command_center/sounds/korlix_sound_service.dart';
 import 'korlix_sound_service_test.dart' as sound;
@@ -142,6 +142,7 @@ void main() {
       final f = Fixture();
       addTearDown(f.dispose);
       await f.controller.preload();
+      expect(f.requests.single.url.path, '/api/welcome/rici-v2.wav');
       f.controller.prepareGesture();
       expect(f.player.activations, 1);
       expect(f.player.plays, 0);
@@ -210,7 +211,7 @@ void main() {
     },
   );
   test(
-    'the saved welcome preference suppresses both audio and the welcome card',
+    'the saved welcome preference suppresses both audio and the toolbar control',
     () async {
       final f = Fixture();
       addTearDown(f.dispose);
@@ -224,7 +225,7 @@ void main() {
   );
   for (final width in [390.0, 1024.0]) {
     testWidgets(
-      'Welcome transcript and controls fit width $width with enlarged text',
+      'Welcome uses only a toolbar control at width $width with enlarged text',
       (t) async {
         t.view.physicalSize = Size(width, 1100);
         t.view.devicePixelRatio = 1;
@@ -240,22 +241,30 @@ void main() {
                 textScaler: const TextScaler.linear(1.6),
               ),
               child: Scaffold(
-                body: Center(child: KnovaWelcomeCard(controller: f.controller)),
+                body: Center(
+                  child: RiciWelcomeButton(controller: f.controller),
+                ),
               ),
             ),
           ),
         );
         await t.pumpAndSettle();
         expect(t.takeException(), isNull);
-        expect(find.text(knovaWelcomeText), findsOneWidget);
-        await t.ensureVisible(find.byKey(const Key('knova-welcome-listen')));
-        await t.tap(find.byKey(const Key('knova-welcome-listen')));
+        expect(find.text(knovaWelcomeText), findsNothing);
+        expect(find.byType(Card), findsNothing);
+        expect(find.byType(Dialog), findsNothing);
+        expect(find.byTooltip('Stop Rici’s welcome'), findsOneWidget);
+        await t.ensureVisible(find.byKey(const Key('rici-welcome-audio')));
+        await t.tap(find.byKey(const Key('rici-welcome-audio')));
         await t.pump();
         expect(f.controller.active, false);
-        await t.ensureVisible(find.byKey(const Key('knova-welcome-close')));
-        await t.tap(find.byKey(const Key('knova-welcome-close')));
+        expect(find.byTooltip('Listen to Rici’s welcome'), findsOneWidget);
+        await t.tap(find.byKey(const Key('rici-welcome-audio')));
         await t.pump();
-        expect(find.byKey(const Key('knova-signin-welcome')), findsNothing);
+        expect(f.controller.active, true);
+        f.controller.signedOut();
+        await t.pump();
+        expect(find.byKey(const Key('rici-welcome-audio')), findsNothing);
         await t.pumpWidget(const SizedBox());
         f.dispose();
       },

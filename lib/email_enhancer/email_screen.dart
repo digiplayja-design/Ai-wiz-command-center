@@ -324,7 +324,7 @@ class _EmailEnhancerScreenState extends State<EmailEnhancerScreen> {
     if (working || !c.available) return;
     if (!widget.allowVoice) {
       _say(
-        'K-Nova dictation requires voice access on your plan. You can still type or import an email.',
+        'Rici dictation requires voice access on your plan. You can still type or import an email.',
       );
       return;
     }
@@ -651,7 +651,7 @@ class _EmailEnhancerScreenState extends State<EmailEnhancerScreen> {
         _heading(
           '01  /  YOUR MESSAGE',
           'Start with your message',
-          'Paste an email, write a few notes or dictate with K-Nova.',
+          'Paste an email, write a few notes or dictate with Rici.',
         ),
         Wrap(
           spacing: 8,
@@ -695,7 +695,7 @@ class _EmailEnhancerScreenState extends State<EmailEnhancerScreen> {
             key: const Key('email-reply-notes'),
           ),
         _pair(
-          _button('K-Nova dictation', Icons.graphic_eq_rounded, _voice),
+          _button('Rici dictation', Icons.graphic_eq_rounded, _voice),
           _button('Import text', Icons.upload_file_rounded, _import),
         ),
         const SizedBox(height: 18),
@@ -799,7 +799,7 @@ class _EmailEnhancerScreenState extends State<EmailEnhancerScreen> {
         _heading(
           'READY WHEN YOU ARE',
           'A better email starts here',
-          'Add your message, choose a tone and let K-Nova polish it.',
+          'Add your message, choose a tone and let Rici polish it.',
         ),
         _button('Write an email', Icons.edit_note_rounded, () => _go(0)),
       ]);

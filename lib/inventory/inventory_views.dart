@@ -410,7 +410,7 @@ extension _InventoryViews on _InventoryScreenState {
                           primary: true,
                         ),
                         action(
-                          'K-Nova Live',
+                          'Rici Live',
                           Icons.graphic_eq,
                           editable ? _voice : null,
                         ),
@@ -475,7 +475,7 @@ extension _InventoryViews on _InventoryScreenState {
               ? 'Make room for what’s next.'
               : 'No matching items yet.',
           _query.text.isEmpty
-              ? 'Add your first item and a location. Then receive stock, add photos and let K-Nova find it.'
+              ? 'Add your first item and a location. Then receive stock, add photos and let Rici find it.'
               : 'Try a shorter name, SKU, serial or picture. Geographic searches include your recorded locations.',
           icon: Icons.inventory_2_outlined,
           button: _query.text.isEmpty
@@ -736,7 +736,7 @@ extension _InventoryViews on _InventoryScreenState {
             spacing: 10,
             runSpacing: 10,
             children: [
-              action('Ask K-Nova', Icons.mic_none, editable ? _voice : null),
+              action('Ask Rici', Icons.mic_none, editable ? _voice : null),
               action(
                 'Search by picture',
                 Icons.image_search,

@@ -339,7 +339,7 @@ class _ResumeScreenState extends State<ResumeScreen> {
                   maxLines: 16,
                   maxLength: 12000,
                   decoration: const InputDecoration(
-                    labelText: 'K-Nova suggestion',
+                    labelText: 'Rici suggestion',
                     alignLabelWithHint: true,
                   ),
                 ),
@@ -378,7 +378,7 @@ class _ResumeScreenState extends State<ResumeScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Text(
-                  'Paste an existing resume, or upload a PDF, Word, or text file. K-Nova will organize the facts for your review.',
+                  'Paste an existing resume, or upload a PDF, Word, or text file. Rici will organize the facts for your review.',
                 ),
                 const SizedBox(height: 16),
                 TextField(

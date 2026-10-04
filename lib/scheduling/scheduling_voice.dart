@@ -132,7 +132,7 @@ String _spokenTime(SchedulingMap item, String field) =>
 String _requiredText(dynamic value) {
   if (value is! String || value.trim().isEmpty) {
     throw const SchedulingException(
-      'The complete proposal could not be verified. Ask K-Nova to prepare it again.',
+      'The complete proposal could not be verified. Ask Rici to prepare it again.',
     );
   }
   return value;
@@ -527,7 +527,7 @@ class SchedulingVoiceController extends ChangeNotifier {
           expires = DateTime.tryParse('${proposal['expires_at']}');
       if (expires == null || !expires.isAfter(_now())) {
         throw const SchedulingException(
-          'This proposal expired. Ask K-Nova to prepare it again.',
+          'This proposal expired. Ask Rici to prepare it again.',
         );
       }
       final review = schedulingVoiceReadback(plan);
@@ -558,7 +558,7 @@ class SchedulingVoiceController extends ChangeNotifier {
         _readback = '';
         _result = _error(
           const SchedulingException(
-            'This proposal expired. Ask K-Nova to prepare it again.',
+            'This proposal expired. Ask Rici to prepare it again.',
           ),
         );
         _notify();
@@ -572,7 +572,7 @@ class SchedulingVoiceController extends ChangeNotifier {
       if (plan['action'] == 'slots') ...plan,
       'message':
           plan['summary'] ??
-          'The proposal is not ready. Ask K-Nova to prepare it again.',
+          'The proposal is not ready. Ask Rici to prepare it again.',
       'applied': false,
     };
     _readback = _readResult(_result);
@@ -596,7 +596,7 @@ class SchedulingVoiceController extends ChangeNotifier {
       clearPending();
       _result = _error(
         const SchedulingException(
-          'This proposal expired. Ask K-Nova to prepare it again.',
+          'This proposal expired. Ask Rici to prepare it again.',
         ),
       );
       _notify();

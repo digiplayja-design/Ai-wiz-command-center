@@ -25,7 +25,7 @@ class WorkforceVoicePanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'K-Nova · Workforce',
+                'Rici · Workforce',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),

@@ -27,7 +27,7 @@ class FieldProofVoicePanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'K-Nova · FieldProof',
+                'Rici · FieldProof',
                 style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 8),

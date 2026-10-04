@@ -631,7 +631,7 @@ void _readinessScreenTests() {
 
 
 void _novaReliabilityTests() {
-  testWidgets('K-Nova inventory tool calls the authorized search and displays results once', (tester) async {
+  testWidgets('Rici inventory tool calls the authorized search and displays results once', (tester) async {
     final searches=<Map<String,dynamic>>[];
     await _withScreen(tester,(io)async{
       await _finishAction(tester,_screenAction(tester));
@@ -646,7 +646,7 @@ void _novaReliabilityTests() {
       expect(channel.sent.where((x)=>x['type']=='conversation.item.create'&&x['item']['type']=='function_call_output'),hasLength(1));
     },inventorySearch:(args)async{searches.add(args);return {'total':2,'scope':'nationwide','country':'US','items':[]};});
   });
-  testWidgets('K-Nova drops delayed inventory results after the account changes', (tester) async {
+  testWidgets('Rici drops delayed inventory results after the account changes', (tester) async {
     final gate=Completer<Map<String,dynamic>>();
     await _withScreen(tester,(io)async{
       await _finishAction(tester,_screenAction(tester));final channel=io.peers.single.channel;

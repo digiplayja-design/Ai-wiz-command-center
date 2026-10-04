@@ -1,6 +1,6 @@
 # KORLIX Resume Studio
 
-The home **Write my Resume** action opens a dedicated Flutter workspace. The French and Spanish home actions use the same workspace. The studio supports guided contact/profile/experience/education/skills/project editing, reviewed K-Nova rewrites, cover letters, job-description notes with explicit phrase matching, three styles, section and entry ordering, preview, PDF/DOCX/text export, and up to 30 device-local drafts with duplication and removal.
+The home **Write my Resume** action opens a dedicated Flutter workspace. The French and Spanish home actions use the same workspace. The studio supports guided contact/profile/experience/education/skills/project editing, reviewed Rici rewrites, cover letters, job-description notes with explicit phrase matching, three styles, section and entry ordering, preview, PDF/DOCX/text export, and up to 30 device-local drafts with duplication and removal.
 
 ## Data and generation
 

@@ -1523,8 +1523,8 @@ class _KorlixLiveConvoAgentHubSheetState
     return Semantics(
       button: true,
       label: enterprise
-          ? 'Open K-Nova Meeting Copilot'
-          : 'K-Nova Meeting Copilot, Enterprise upgrade required',
+          ? 'Open Rici Meeting Copilot'
+          : 'Rici Meeting Copilot, Enterprise upgrade required',
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: () {
@@ -1599,7 +1599,7 @@ class _KorlixLiveConvoAgentHubSheetState
                   child: Image.asset(
                     'assets/meeting_copilot/nova_canonical.webp',
                     fit: BoxFit.cover,
-                    semanticLabel: 'K-Nova, KORLIX AI meeting assistant',
+                    semanticLabel: 'Rici, KORLIX AI meeting assistant',
                     errorBuilder: (_, _, _) => const Icon(
                       Icons.smart_toy_rounded,
                       color: Color(0xFF69D9E8),
@@ -1613,7 +1613,7 @@ class _KorlixLiveConvoAgentHubSheetState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'K-NOVA MEETING COPILOT',
+                      'Rici MEETING COPILOT',
                       style: TextStyle(
                         color: Color(0xFFF0F7F8),
                         fontSize: 16,
@@ -1627,7 +1627,7 @@ class _KorlixLiveConvoAgentHubSheetState
                                 'intelligence, live notes, '
                                 'decisions, and action items.'
                           : 'Locked — upgrade to '
-                                'Enterprise for K-Nova '
+                                'Enterprise for Rici '
                                 'meeting intelligence.',
                       style: const TextStyle(
                         color: Color(0xFFA9C6CF),

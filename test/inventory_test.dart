@@ -194,7 +194,7 @@ void main() {
           final c = FakeInventory();
           await mount(t, c, width: width, scale: 1.25, theme: theme);
           expect(find.text('KORLIX Inventory'), findsOneWidget);
-          expect(find.text('K-Nova Live'), findsOneWidget);
+          expect(find.text('Rici Live'), findsOneWidget);
           expect(t.takeException(), isNull);
           await tap(t, find.text('Statewide'));
           expect(c.searches.last['scope'], 'statewide');
@@ -228,7 +228,7 @@ void main() {
       await t.pump(const Duration(milliseconds: 400));
       await t.pumpAndSettle();
       expect(c.searches.last['q'], 'dri');
-      await tap(t, find.text('Ask K-Nova'));
+      await tap(t, find.text('Ask Rici'));
       expect(liveSearch, isNotNull);
       await liveSearch!({'q': '000-AT'});
       await t.pumpAndSettle();

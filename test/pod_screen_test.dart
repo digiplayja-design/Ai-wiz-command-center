@@ -736,7 +736,7 @@ void main() {
       client.completePreparation(0);
       await tester.pumpAndSettle();
       expect(client.playedPrepared, isEmpty);
-      expect(find.text('K-Nova is speaking'), findsOneWidget);
+      expect(find.text('Rici is speaking'), findsOneWidget);
       expect(
         find.text('The next perspective stays private until playback.'),
         findsNothing,

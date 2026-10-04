@@ -43,7 +43,7 @@ class PodTopicArtwork extends StatelessWidget {
   );
 }
 
-/// K-Nova's established avatar and distinct synthetic identities for her guests.
+/// Rici's established avatar and distinct synthetic identities for her guests.
 class PodHostPortrait extends StatelessWidget {
   const PodHostPortrait({
     super.key,

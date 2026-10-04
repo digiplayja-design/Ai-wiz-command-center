@@ -713,7 +713,7 @@ class _LiveStudioScreenState extends State<LiveStudioScreen>
               border: Border.all(color: color.withValues(alpha: .7)),
             ),
             child: Icon(
-              name == 'K-Nova' ? Icons.mic_rounded : Icons.graphic_eq_rounded,
+              name == 'Rici' ? Icons.mic_rounded : Icons.graphic_eq_rounded,
               color: color,
               size: 35,
             ),
@@ -806,7 +806,7 @@ class _LiveStudioScreenState extends State<LiveStudioScreen>
           Row(
             children: [
               _host(
-                'K-Nova',
+                'Rici',
                 'AI host',
                 _violet,
                 speaking: progress['speaker'] == 'host',
@@ -927,14 +927,14 @@ class _LiveStudioScreenState extends State<LiveStudioScreen>
           runSpacing: 6,
           children: [
             ChoiceChip(
-              label: const Text('K-Nova'),
+              label: const Text('Rici'),
               selected: _hosts == 1,
               onSelected: _busy || _invalid
                   ? null
                   : (_) => setState(() => _hosts = 1),
             ),
             ChoiceChip(
-              label: const Text('K-Nova + Analyst'),
+              label: const Text('Rici + Analyst'),
               selected: _hosts == 2,
               onSelected: _busy || _invalid
                   ? null

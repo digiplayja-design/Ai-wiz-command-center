@@ -357,7 +357,7 @@ void main() {
       KorlixLiveConvoAgentHubSheet(
         client: c,
         activeAgent: agents.first,
-        characterName: 'K-Nova',
+        characterName: 'Rici',
         language: 'English',
       ),
     );
@@ -386,7 +386,7 @@ void main() {
         KorlixLiveConvoAgentHubSheet(
           client: c,
           activeAgent: agents.first,
-          characterName: 'K-Nova',
+          characterName: 'Rici',
           language: 'English',
         ),
         width: 390,
@@ -526,7 +526,7 @@ void main() {
         KorlixLiveConvoAgentHubSheet(
           client: c,
           activeAgent: agents.first,
-          characterName: 'K-Nova',
+          characterName: 'Rici',
           language: 'English',
         ),
         width: 320,

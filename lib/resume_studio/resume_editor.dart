@@ -282,7 +282,7 @@ extension _ResumeEditor on _ResumeScreenState {
             hint: 'Your experience, strengths, and the value you bring.',
           ),
           _button(
-            'Refine with K-Nova',
+            'Refine with Rici',
             Icons.auto_awesome_outlined,
             d.hasEvidence
                 ? () => _suggest(
@@ -359,10 +359,10 @@ extension _ResumeEditor on _ResumeScreenState {
             lines: 12,
             max: 12000,
             hint:
-                'Write your letter here, or ask K-Nova for a draft based on your experience.',
+                'Write your letter here, or ask Rici for a draft based on your experience.',
           ),
           _button(
-            'Draft with K-Nova',
+            'Draft with Rici',
             Icons.auto_awesome_outlined,
             d.hasEvidence
                 ? () => _suggest(

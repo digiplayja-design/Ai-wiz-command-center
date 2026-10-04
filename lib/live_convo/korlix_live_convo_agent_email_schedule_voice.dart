@@ -641,7 +641,7 @@ class KorlixLiveConvoAgentEmailScheduleVoiceClient {
     final clean = _svText(agentId, max: 96).toLowerCase();
     if (clean.isEmpty) {
       throw const KorlixLiveConvoAgentEmailVoiceException(
-        'Select the authorized K-Nova agent first. '
+        'Select the authorized Rici agent first. '
         'No schedule was created and nothing was sent.',
         code: 'agent_email_schedule_voice_agent_required',
       );
@@ -881,7 +881,7 @@ class KorlixLiveConvoAgentEmailScheduleVoiceClient {
     try {
       if (pending.isExpired(now)) {
         throw const KorlixLiveConvoAgentEmailVoiceException(
-          'That spoken schedule confirmation expired. Ask K-Nova to prepare it '
+          'That spoken schedule confirmation expired. Ask Rici to prepare it '
           'again. No schedule was created and nothing was sent.',
           code: 'agent_email_schedule_voice_confirmation_expired',
         );

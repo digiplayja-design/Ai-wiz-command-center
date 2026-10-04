@@ -303,7 +303,7 @@ class _KorlixUploadStudioState extends State<KorlixUploadStudio> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Add documents or photos. Review them here, then ask K-Nova in your conversation.',
+                      'Add documents or photos. Review them here, then ask Rici in your conversation.',
                       style: TextStyle(color: skin.mutedText, height: 1.5),
                     ),
                     const SizedBox(height: 10),

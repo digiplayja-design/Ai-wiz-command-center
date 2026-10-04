@@ -1,6 +1,6 @@
 part of 'korlix_live_convo_character_stage.dart';
 
-// K-Nova Live Voice: presentation only. Voice, approvals and tools remain owned
+// Rici Live Voice: presentation only. Voice, approvals and tools remain owned
 // by the session controller. The halo indicates state, never microphone volume.
 extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
   bool get _dark => Theme.of(context).brightness == Brightness.dark;
@@ -19,8 +19,8 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
       _dark ? const Color(0xFFFFA8B1) : const Color(0xFFAB2941);
   String get _voiceDisplayName =>
       widget.activeAgentName.trim().isEmpty ||
-          _activeAgentName == 'My Assistant' || _activeAgentName.toLowerCase() == 'nova' || widget.inventoryResults != null
-      ? 'K-Nova'
+          _activeAgentName == 'My Assistant' || const {'nova', 'knova'}.contains(_activeAgentName.toLowerCase().replaceAll(RegExp(r'[-‑– ]'), '')) || widget.inventoryResults != null
+      ? 'Rici'
       : _activeAgentName;
 
   Widget _panel(
@@ -76,7 +76,7 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'K-Nova',
+                'Rici',
                 style: TextStyle(
                   color: _ink,
                   fontSize: 20,

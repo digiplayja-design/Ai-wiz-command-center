@@ -387,7 +387,7 @@ void main() {
     expect(find.textContaining('Dictation is unavailable'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'Typed fallback');
     await tester.pump();
-    await tap(tester, 'Talk with K-Nova instead');
+    await tap(tester, 'Talk with Rici instead');
     expect((result as KorlixVoiceDraft).text, 'Typed fallback');
     expect((result as KorlixVoiceDraft).openLiveConvo, isTrue);
   });

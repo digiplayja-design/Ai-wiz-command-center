@@ -397,7 +397,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
     final unit = wfMap(s['policy_snapshot'])['output_unit'] ?? 'tasks',
         request = wfId();
     await _form(
-      draft == null ? 'Your work update' : 'Review K-Nova work update',
+      draft == null ? 'Your work update' : 'Review Rici work update',
       'Record what you completed since your last update. Only add new completed units; do not repeat the day’s total.',
       [
         WfField(
@@ -631,7 +631,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
     if (people.isEmpty) return;
     final tomorrow = DateTime.now().add(const Duration(days: 1));
     await _form(
-      draft == null ? 'Schedule a shift' : 'Review K-Nova schedule',
+      draft == null ? 'Schedule a shift' : 'Review Rici schedule',
       'Assign a shift up to 24 hours. Dates below use this device’s local time; team members see them in their local time.',
       [
         WfField(
@@ -1482,7 +1482,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
         ),
         const SizedBox(height: 16),
         const Text(
-          'A private workspace for companies, agencies, field crews, remote teams and nonprofits. Plan assignments, coordinate shifts, track progress and talk to K-Nova.',
+          'A private workspace for companies, agencies, field crews, remote teams and nonprofits. Plan assignments, coordinate shifts, track progress and talk to Rici.',
           style: TextStyle(color: WfStyle.muted, fontSize: 16, height: 1.6),
         ),
         const SizedBox(height: 28),
@@ -1522,7 +1522,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
             WfBadge('Optional attendance evidence'),
             WfBadge('Projects & work board'),
             WfBadge('Contractors & volunteers'),
-            WfBadge('K-Nova voice assistance'),
+            WfBadge('Rici voice assistance'),
             WfBadge('Hourly work updates'),
             WfBadge('Manager approvals'),
           ],
@@ -2849,7 +2849,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
     final request = wfId();
     await _form(
       draft != null
-          ? 'Review K-Nova task'
+          ? 'Review Rici task'
           : task == null
           ? 'Plan a task'
           : 'Edit assignment',
@@ -2988,7 +2988,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
                         : _talkToNova,
                     icon: const Icon(Icons.graphic_eq),
                     label: Text(
-                      _voiceBusy ? 'Opening K-Nova…' : 'Talk to K-Nova',
+                      _voiceBusy ? 'Opening Rici…' : 'Talk to Rici',
                     ),
                   ),
                 if (_owner)
@@ -3038,7 +3038,7 @@ class _WorkforceScreenState extends State<WorkforceScreen>
           result['saved'] != false ||
           result['reviewRequired'] != true) {
         _toast(
-          'Your workspace changed. Reopen K-Nova to prepare a fresh draft.',
+          'Your workspace changed. Reopen Rici to prepare a fresh draft.',
         );
         return;
       }

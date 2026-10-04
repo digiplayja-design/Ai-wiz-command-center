@@ -31,7 +31,7 @@ String _s(dynamic v) => v?.toString() ?? '';
 bool _terminal(Map<String, dynamic>? e) =>
     e != null && ['ended', 'failed'].contains(e['state']);
 String _speaker(String value) => switch (value) {
-  'host' => 'K-Nova',
+  'host' => 'Rici',
   'analyst' => 'Analyst',
   'challenger' => 'Challenger',
   'user' => 'You',
@@ -2490,7 +2490,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _host('host', 'K-Nova', 'Your host'),
+              _host('host', 'Rici', 'Your host'),
               _host('analyst', 'Analyst', 'The context'),
               if (count == 3)
                 _host('challenger', 'Challenger', 'Another angle'),

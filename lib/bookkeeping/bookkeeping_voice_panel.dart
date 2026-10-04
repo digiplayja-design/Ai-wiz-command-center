@@ -68,7 +68,7 @@ class BookkeepingVoicePanel extends StatelessWidget {
                 Text('Reporting month: ${controller.month} · USD'),
                 const SizedBox(height: 10),
                 const Text(
-                  'Ask K-Nova about your recorded totals or describe an income or expense.',
+                  'Ask Rici about your recorded totals or describe an income or expense.',
                 ),
                 if (controller.busy) ...[
                   const SizedBox(height: 12),

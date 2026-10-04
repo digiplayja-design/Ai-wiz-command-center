@@ -362,14 +362,14 @@ void main() {
           .widget<TextField>(input('Professional profile'))
           .controller!
           .text;
-      await tap(t, find.text('Refine with K-Nova'));
+      await tap(t, find.text('Refine with Rici'));
       expect(find.text('Review your profile'), findsOneWidget);
       await tap(t, find.text('Keep original'));
       expect(
         t.widget<TextField>(input('Professional profile')).controller!.text,
         old,
       );
-      await tap(t, find.text('Refine with K-Nova'));
+      await tap(t, find.text('Refine with Rici'));
       await tap(t, find.text('Apply to draft'));
       expect(
         t.widget<TextField>(input('Professional profile')).controller!.text,
@@ -381,7 +381,7 @@ void main() {
         old,
       );
       a.status = 429;
-      await tap(t, find.text('Refine with K-Nova'));
+      await tap(t, find.text('Refine with Rici'));
       expect(find.text('Plan allowance reached'), findsOneWidget);
       expect(
         t.widget<TextField>(input('Professional profile')).controller!.text,

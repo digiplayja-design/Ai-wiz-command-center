@@ -6,7 +6,7 @@ The home business tile opens a dedicated, theme-aware email workspace. Mobile us
 
 - Polish an existing email, create an email from notes, or reply to an incoming email with explicit reply instructions.
 - Six tones, three length targets, original-language output or five selected languages, recipient context, goal and signature.
-- Four editable starters, local UTF-8 text import and the existing K-Nova voice composer (voice-plan access applies).
+- Four editable starters, local UTF-8 text import and the existing Rici voice composer (voice-plan access applies).
 - Three selectable subject suggestions; editable subject/body; original versus edited comparison; explanatory edit notes and items to confirm.
 - Five recent AI versions in the open session. Switching versions or regenerating over manual edits requires confirmation.
 - Up to 20 account-scoped drafts in device/browser storage, manual save, search, reopen and delete. These are not synchronized between devices. Another-window conflicts and corrupt storage do not silently overwrite drafts.

@@ -469,7 +469,7 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
       final result = await widget.openVoice!(workingDraft);
       if (!_alive(epoch) || result == null) return;
       if (revision != _editRevision || version != _version || current != jsonEncode(_data)) {
-        setState(() => _notice = 'Your studio changed. Your current edits were kept. Talk to K-Nova again when you are ready.');
+        setState(() => _notice = 'Your studio changed. Your current edits were kept. Talk to Rici again when you are ready.');
         return;
       }
       if (result['action'] == 'draft' && result.length == 2) {
@@ -479,7 +479,7 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
           _dirty = true;
           _voicePrepared = true;
           _tab = 0;
-          _notice = 'K-Nova prepared your idea. Review or edit it below, then save the draft or create your music. Nothing has been generated.';
+          _notice = 'Rici prepared your idea. Review or edit it below, then save the draft or create your music. Nothing has been generated.';
         });
         _top();
       } else if (result['action'] == 'listen' && result.length == 3) {
@@ -502,7 +502,7 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
           _search.clear();
           _favorites = false;
           _tab = 1;
-          _notice = 'Listen mode · K-Nova’s microphone is off. Tap Play if your browser needs a tap to start audio.';
+          _notice = 'Listen mode · Rici’s microphone is off. Tap Play if your browser needs a tap to start audio.';
         });
         _top();
         // The callback returns only after LIVE CONVO has released its microphone.
@@ -511,11 +511,11 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
           setState(() => _notice = 'Your track is ready. Tap Play in My tracks to begin listening.');
         }
       } else {
-        throw const MusicException('K-Nova’s studio selection could not be confirmed. Your current idea was kept.');
+        throw const MusicException('Rici’s studio selection could not be confirmed. Your current idea was kept.');
       }
     } catch (e) {
       if (_alive(epoch)) setState(() => _error = e is MusicException
-          ? '$e' : 'Could not switch audio modes. Pause your music and try Talk to K-Nova again.');
+          ? '$e' : 'Could not switch audio modes. Pause your music and try Talk to Rici again.');
     } finally {
       if (_alive(epoch)) setState(() { _voiceOpen = false; _busy = false; });
     }
@@ -843,11 +843,11 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
           child: Icon(Icons.multitrack_audio_rounded, color: _colors.onTertiary)),
         const SizedBox(width: 14),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('K-NOVA · YOUR MUSIC PRODUCER',
+          Text('Rici · YOUR MUSIC PRODUCER',
             style: TextStyle(fontSize: 11, letterSpacing: 1.1,
               fontWeight: FontWeight.w800, color: _colors.onSurfaceVariant)),
           const SizedBox(height: 5),
-          _heading('Create with K-Nova'),
+          _heading('Create with Rici'),
         ])),
       ]),
       const SizedBox(height: 14),
@@ -856,7 +856,7 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
       Wrap(spacing: 10, runSpacing: 10, children: [
         FilledButton.icon(key: const ValueKey('music-open-voice'),
           onPressed: _editable ? _openVoice : null,
-          icon: const Icon(Icons.mic_rounded), label: const Text('Talk to K-Nova')),
+          icon: const Icon(Icons.mic_rounded), label: const Text('Talk to Rici')),
         Chip(avatar: Icon(_player.playing ? Icons.headphones_rounded : Icons.tune_rounded, size: 17),
           label: Text(_player.playing ? 'Listen mode' : 'Your studio, your direction')),
       ]),

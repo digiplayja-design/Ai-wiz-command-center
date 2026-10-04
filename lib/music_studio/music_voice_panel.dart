@@ -101,7 +101,7 @@ class MusicVoicePanel extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'K-Nova · Your music producer',
+                            'Rici · Your music producer',
                             style: text.titleMedium,
                           ),
                           const SizedBox(height: 3),
@@ -259,7 +259,7 @@ class MusicVoicePanel extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    'Voice and microphone pause before playback. Return to Talk to K-Nova when you want to discuss another version.',
+                    'Voice and microphone pause before playback. Return to Talk to Rici when you want to discuss another version.',
                   ),
                   const SizedBox(height: 12),
                   Wrap(

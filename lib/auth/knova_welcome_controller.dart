@@ -5,7 +5,7 @@ import '../sounds/korlix_sound_service.dart';
 import 'knova_welcome_player.dart';
 
 const knovaWelcomeText =
-    "Welcome to KORLIX! I'm K-Nova, your AI voice companion. You'll find me in CRM, Workforce, Inventory, Bookkeeping, Music Studio, and more. Look for K-Nova or the voice button, tap to start, and tell me what you need. I can guide you, help you find things, and make everyday tasks easier. Let's explore!";
+    "Welcome to KORLIX! I'm Rici, your AI voice companion. You'll find me in CRM, Workforce, Inventory, Bookkeeping, Music Studio, and more. Look for Rici or the voice button, tap to start, and tell me what you need. I can guide you, help you find things, and make everyday tasks easier. Let's explore!";
 
 enum KnovaWelcomeState { ready, loading, speaking, blocked, unavailable, muted }
 
@@ -15,7 +15,7 @@ class KnovaWelcomeController extends ChangeNotifier {
     required this.sounds,
     KnovaWelcomePlayer? player,
     http.Client? client,
-  }) : _url = Uri.parse('$backendBaseUrl/api/welcome/knova-v1.wav'),
+  }) : _url = Uri.parse('$backendBaseUrl/api/welcome/rici-v2.wav'),
        _player = player ?? createKnovaWelcomePlayer(),
        _client = client ?? http.Client() {
     sounds.addListener(_soundChanged);

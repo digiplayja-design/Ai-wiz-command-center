@@ -1363,7 +1363,7 @@ class _SchedulingScreenState extends State<SchedulingScreen>
                                   OutlinedButton.icon(
                                     onPressed: _busy ? null : _openVoice,
                                     icon: const Icon(Icons.mic_none),
-                                    label: const Text('Talk to K-Nova'),
+                                    label: const Text('Talk to Rici'),
                                   ),
                               ],
                             ),

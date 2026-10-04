@@ -200,7 +200,7 @@ void main() {
       expect(body, contains('Answer in Spanish'));
       expect(body, contains('question-5'));
       expect(body, isNot(contains('question-0')));
-      expect(body, contains('K-Nova'));
+      expect(body, contains('Rici'));
       h.client.dispose();
     },
   );
@@ -307,7 +307,7 @@ void main() {
           await t.pumpAndSettle();
           expect(h.captures, 1);
           expect(h.calls, 0);
-          expect(find.text('Ask K-Nova'), findsOneWidget);
+          expect(find.text('Ask Rici'), findsOneWidget);
           expect(t.takeException(), isNull);
           await t.pumpWidget(const SizedBox());
         },
@@ -398,7 +398,7 @@ void main() {
     await t.pumpAndSettle();
     expect(find.textContaining('Your sign-in changed'), findsOneWidget);
     expect(find.byType(InteractiveViewer), findsNothing);
-    expect(find.text('Ask K-Nova'), findsNothing);
+    expect(find.text('Ask Rici'), findsNothing);
     await t.pumpWidget(const SizedBox());
   });
   testWidgets('Camera Ask visual review', (t) async {

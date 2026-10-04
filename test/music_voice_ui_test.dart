@@ -227,7 +227,7 @@ void main() {
       expect(c.statuses, 1);
       expect(p.toggles, 1);
       expect(p.activeId, '${fixture.id}:0');
-      expect(find.textContaining('Listen mode · K-Nova'), findsOneWidget);
+      expect(find.textContaining('Listen mode · Rici'), findsOneWidget);
       expect(c.starts, isEmpty);
       await fixture.close(t);
     },
@@ -332,10 +332,10 @@ void main() {
           scale: 1.25,
           open: (_) async => null,
         );
-        expect(find.text('Create with K-Nova'), findsOneWidget);
+        expect(find.text('Create with Rici'), findsOneWidget);
         expect(t.takeException(), isNull);
         await fixture.library(t);
-        expect(find.text('Create with K-Nova'), findsOneWidget);
+        expect(find.text('Create with Rici'), findsOneWidget);
         expect(t.takeException(), isNull);
         final dir = const String.fromEnvironment('MUSIC_VOICE_SCREENSHOT_DIR');
         if (dir.isNotEmpty) {

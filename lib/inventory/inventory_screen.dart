@@ -926,7 +926,7 @@ class InventoryVoiceResults extends StatelessWidget {
           children: [
             Text(
               result.isEmpty
-                  ? 'K-Nova · your inventory assistant'
+                  ? 'Rici · your inventory assistant'
                   : '${result['total'] ?? 0} inventory matches',
               style: Theme.of(context).textTheme.titleMedium,
             ),

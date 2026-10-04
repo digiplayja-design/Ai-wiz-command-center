@@ -287,7 +287,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(find.text('K-Nova'), findsWidgets);
+      expect(find.text('Rici'), findsWidgets);
       await tester.drag(
         find.byType(SingleChildScrollView).first,
         const Offset(0, -950),

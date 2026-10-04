@@ -601,7 +601,7 @@ class _KorlixSoundSettingsScreenState extends State<KorlixSoundSettingsScreen> {
                           const SizedBox(height: 18),
                           _switch(
                             id: 'welcome',
-                            title: 'K-Nova welcome voice',
+                            title: 'Rici welcome voice',
                             description:
                                 'A spoken introduction after you sign in. Uses your volume and quiet hours. No AI GAS is used.',
                             value: settings.welcomeVoice,

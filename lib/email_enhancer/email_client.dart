@@ -202,7 +202,7 @@ class EmailEnhancerClient extends ChangeNotifier {
       final j = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
       if (r.statusCode < 200 || r.statusCode >= 300) {
         throw EmailEnhancerException(
-          '${j['error'] ?? 'K-Nova could not finish this email.'}',
+          '${j['error'] ?? 'Rici could not finish this email.'}',
         );
       }
       final result = EnhancedEmail.fromJson(
@@ -213,7 +213,7 @@ class EmailEnhancerClient extends ChangeNotifier {
     } on TimeoutException {
       guard();
       throw const EmailEnhancerException(
-        'K-Nova is taking longer than expected. Your original is unchanged. Retry when ready.',
+        'Rici is taking longer than expected. Your original is unchanged. Retry when ready.',
       );
     } on http.ClientException {
       guard();

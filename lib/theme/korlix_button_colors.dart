@@ -114,6 +114,7 @@ KorlixButtonColors korlixButtonColorsFor(
     'save' || 'savepng' || 'fieldproof' || 'voice' || 'voicerecorder' => 'teal',
     'liveconvo' ||
     'knova' ||
+    'rici' ||
     'moretools' ||
     'imagineapicture' ||
     'openimaginestudio' ||

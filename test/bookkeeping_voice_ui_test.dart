@@ -53,7 +53,7 @@ void main() {
                 onPressed: () async {
                   allowed = await ensureKorlixThirdPartyAiConsent(
                     context: context,
-                    featureName: 'Bookkeeping and K-Nova',
+                    featureName: 'Bookkeeping and Rici',
                     providers: const {KorlixThirdPartyAiProvider.openAi},
                     dataCategories: const {
                       KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
@@ -118,7 +118,7 @@ void main() {
       );
       await t.pumpAndSettle();
       final initialMonth = months.single;
-      await f.tap(t, 'Talk to K-Nova');
+      await f.tap(t, 'Talk to Rici');
       expect(opened, [f.businessId, 'Harbor Creative LLC', initialMonth]);
       expect(writes, isEmpty);
       expect(t.takeException(), isNull);
@@ -215,7 +215,7 @@ void main() {
           ),
         );
         await t.pumpAndSettle();
-        await f.tap(t, 'Talk to K-Nova');
+        await f.tap(t, 'Talk to Rici');
         expect(find.byType(BookkeepingEntryDialog), findsNothing);
         expect(writes, 0);
         if (wrongBusiness)
@@ -255,7 +255,7 @@ void main() {
         ),
       );
       await t.pumpAndSettle();
-      await f.tap(t, 'Talk to K-Nova');
+      await f.tap(t, 'Talk to Rici');
       await expectLater(client.request('GET', '/denied'), throwsException);
       result.complete(draft());
       await t.pumpAndSettle();

@@ -428,7 +428,7 @@ class _ButtonReview extends StatelessWidget {
       const SizedBox(height: 18),
       KorlixActionSection(
         title: 'Start here',
-        description: 'Choose how you want to work with K-Nova.',
+        description: 'Choose how you want to work with Rici.',
         icon: Icons.tune_rounded,
         children: [
           for (final entry in [

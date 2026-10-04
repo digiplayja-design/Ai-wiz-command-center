@@ -691,7 +691,7 @@ class _CameraAskScreenState extends State<CameraAskScreen> {
               child: Text(
                 _mode == CameraAskMode.compare
                     ? 'Add two or three photos. Ask about differences, labels, condition, or visible features.'
-                    : 'For better answers, keep labels and small text sharp. Mention the detail you want K-Nova to focus on.',
+                    : 'For better answers, keep labels and small text sharp. Mention the detail you want Rici to focus on.',
                 style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
               ),
             ),
@@ -767,7 +767,7 @@ class _CameraAskScreenState extends State<CameraAskScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _label('K-NOVA  /  ${turn.mode.label.toUpperCase()}'),
+                _label('Rici  /  ${turn.mode.label.toUpperCase()}'),
                 const SizedBox(height: 14),
                 Text(
                   turn.question,
@@ -857,7 +857,7 @@ class _CameraAskScreenState extends State<CameraAskScreen> {
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop || !_busy) return;
         if (await _confirm(
-          'Leave while K-Nova is answering?',
+          'Leave while Rici is answering?',
           'The request may finish and use one credit. Check History for its answer.',
           'Leave',
         )) {
@@ -949,7 +949,7 @@ class _CameraAskScreenState extends State<CameraAskScreen> {
                                     : _photos.isEmpty
                                     ? 'Take a photo'
                                     : _turns.isEmpty
-                                    ? 'Ask K-Nova'
+                                    ? 'Ask Rici'
                                     : 'Ask follow-up',
                               ),
                             ),

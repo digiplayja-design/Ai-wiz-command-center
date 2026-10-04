@@ -441,7 +441,7 @@ class _BookkeepingEntryDialogState extends State<BookkeepingEntryDialog> {
                       ] else ...[
                         if (widget.initialDraft != null) ...[
                           const Text(
-                            'Prepared with K-Nova. Check each detail, choose any missing fields, then review the entry. Nothing has been saved.',
+                            'Prepared with Rici. Check each detail, choose any missing fields, then review the entry. Nothing has been saved.',
                             style: TextStyle(
                               fontWeight: FontWeight.w700,
                               color: Color(0xff087e98),

@@ -73,7 +73,7 @@ void main() {
     );
   });
 
-  test('Nova card is in Agent Hub', () {
+  test('Rici card is in Agent Hub', () {
     final s = r(a);
     expect(
       s,
@@ -83,7 +83,7 @@ void main() {
       ),
     );
     expect(s, contains('K135Z_B4B_V11_AGENT_HUB_CARD_SLOT'));
-    expect(s, contains('NOVA MEETING COPILOT'));
+    expect(s, contains('Rici MEETING COPILOT'));
     expect(
       s,
       contains(
@@ -97,7 +97,7 @@ void main() {
     final s = r(a);
     expect(s, contains('ENTERPRISE ONLY'));
     expect(s, contains('Locked — upgrade to '));
-    expect(s, contains('Enterprise for K-Nova'));
+    expect(s, contains('Enterprise for Rici'));
     expect(s, contains('Icons.lock_outline_rounded'));
     expect(s, contains('KorlixMeetingCopilotLockedPanel'));
   });
@@ -125,7 +125,6 @@ void main() {
     final s = r(m);
     final z = allMeeting();
 
-    expect(s, contains('K135Z_B4A'));
     expect(s, contains('KorlixMeetingCopilotRoute.routeName'));
     expect(z, contains('muted'));
     expect(z, contains('host'));

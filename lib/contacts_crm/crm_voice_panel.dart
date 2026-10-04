@@ -20,7 +20,7 @@ class CrmVoicePanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'K-Nova · CRM',
+                'Rici · CRM',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),

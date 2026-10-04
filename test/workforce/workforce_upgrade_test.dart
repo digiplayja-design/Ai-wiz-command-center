@@ -165,7 +165,7 @@ void main() {
     },
   );
   testWidgets(
-    'K-Nova task stays unsaved until editable review is saved with pinned member version',
+    'Rici task stays unsaved until editable review is saved with pinned member version',
     (t) async {
       t.view.physicalSize = const Size(1200, 1400);
       t.view.devicePixelRatio = 1;
@@ -219,9 +219,9 @@ void main() {
         ),
       );
       await t.pumpAndSettle();
-      await t.tap(find.text('Talk to K-Nova'));
+      await t.tap(find.text('Talk to Rici'));
       await t.pumpAndSettle();
-      expect(find.text('Review K-Nova task'), findsOneWidget);
+      expect(find.text('Review Rici task'), findsOneWidget);
       expect(writes, isEmpty);
       final title = find.byWidgetPredicate(
         (w) => w is TextFormField && w.initialValue == 'Check the equipment',
@@ -270,7 +270,7 @@ void main() {
         ),
       );
       await t.pumpAndSettle();
-      await t.tap(find.text('Talk to K-Nova'));
+      await t.tap(find.text('Talk to Rici'));
       await t.pumpAndSettle();
       expect(find.byType(WorkforceForm), findsNothing);
       expect(find.textContaining('workspace changed'), findsOneWidget);

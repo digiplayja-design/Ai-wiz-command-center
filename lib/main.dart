@@ -38,7 +38,8 @@ import 'theme/korlix_action_button.dart';
 import 'theme/korlix_action_grid.dart';
 import 'auth/korlix_welcome_confirmation.dart';
 import 'auth/knova_welcome_controller.dart';
-import 'auth/knova_welcome_card.dart';
+import 'auth/rici_welcome_button.dart';
+import 'navigation/home_tool_catalog.dart';
 import 'auth/korlix_october_welcome.dart';
 import 'auth/korlix_login_preferences.dart';
 import 'auth/korlix_portal_launch.dart';
@@ -876,15 +877,16 @@ class _AuthGateState extends State<AuthGate> {
     return Stack(
       children: [
         const CommandCenterScreen(),
-        const Positioned(
+        Positioned(
           top: 8,
           left: 8,
           child: SafeArea(
             child: Material(
               color: Colors.transparent,
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                KorlixAccountButton(),
-                _KorlixSoundSettingsButton(),
+                const KorlixAccountButton(),
+                const _KorlixSoundSettingsButton(),
+                RiciWelcomeButton(controller: _welcome),
               ]),
             ),
           ),
@@ -920,10 +922,6 @@ class _AuthGateState extends State<AuthGate> {
               ),
             ),
           ),
-        ),
-        Positioned(
-          top: 64, left: 16, right: 16,
-          child: SafeArea(child: Align(alignment: Alignment.topCenter, child: KnovaWelcomeCard(controller: _welcome))),
         ),
       ],
     );
@@ -5411,35 +5409,6 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   // Build 109 product decision:
   // Hide inactive Utility tools until full native workflows are ready.
   // Keep active Utility tools visible.
-  static const List<String> _utilityTools = <String>[
-    'Logo Studio',
-    'Inventory Studio',
-    'Cybersecurity Defender',
-    'Study Studio',
-    'App Studio',
-    'Music Studio',
-    'Tax Prep',
-    'BabyBlend',
-    'FieldProof',
-    'AI Visibility',
-    'SEO Agent',
-    'The Pod and You',
-    'Live Studio',
-    'Contract Radar',
-    'Virtual Closet',
-    'Bookkeeping 2027',
-    'Funnel Studio',
-    'Payroll',
-    'KORLIX 2MEETU',
-    'Contacts CRM',
-    'Business Directory',
-    'Workforce',
-    'Voice-scribe',
-    'Copy Box',
-    'Background remover',
-    'Songwriter',
-  ];
-
   static const Set<String> _hiddenInactiveUtilityTools = <String>{
     'Voice recorder',
     'Video splitter',
@@ -9345,7 +9314,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   Future<void> _openResumeStudio() async {
     final client=ResumeClient(baseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision,language:_selectedLanguage);
     await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>ResumeScreen(client:client,
-      ensureConsent:(context)=>KorlixThirdPartyAiConsent.ensure(context:context,featureName:'Resume Studio and K-Nova',providers:{KorlixThirdPartyAiProvider.openAi},dataCategories:{KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.filesAndDocuments}),
+      ensureConsent:(context)=>KorlixThirdPartyAiConsent.ensure(context:context,featureName:'Resume Studio and Rici',providers:{KorlixThirdPartyAiProvider.openAi},dataCategories:{KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.filesAndDocuments}),
     )));
   }
 
@@ -9370,7 +9339,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
 
   Future<void> _openInventoryStudio() async {
     final client=InventoryClient(backendBaseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
-    Future<bool> consent(BuildContext context)=>KorlixThirdPartyAiConsent.ensure(context:context,featureName:'Inventory Studio and K-Nova',providers:{KorlixThirdPartyAiProvider.openAi},dataCategories:{KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.imagesAndPhotos,KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts});
+    Future<bool> consent(BuildContext context)=>KorlixThirdPartyAiConsent.ensure(context:context,featureName:'Inventory Studio and Rici',providers:{KorlixThirdPartyAiProvider.openAi},dataCategories:{KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.imagesAndPhotos,KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts});
     await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>InventoryScreen(client:client,ensureConsent:consent,openVoice:(search,results)async{
       await Navigator.of(context).push<void>(MaterialPageRoute<void>(builder:(_)=>KorlixLiveConvoTestScreen(
         sessionChanges:kKorlixAuthRevision,backendBaseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,
@@ -9823,7 +9792,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
           final revision = kKorlixAuthRevision.value;
           final consent = await ensureKorlixThirdPartyAiConsent(
             context: context,
-            featureName: 'Bookkeeping and K-Nova',
+            featureName: 'Bookkeeping and Rici',
             providers: const {KorlixThirdPartyAiProvider.openAi},
             dataCategories: const {
               KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
@@ -9904,7 +9873,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       openVoice:(snapshot) async {
         final revision=kKorlixAuthRevision.value;
         final consent=await ensureKorlixThirdPartyAiConsent(context:context,
-          featureName:'FieldProof and K-Nova',providers:const {KorlixThirdPartyAiProvider.openAi},
+          featureName:'FieldProof and Rici',providers:const {KorlixThirdPartyAiProvider.openAi},
           dataCategories:const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
             KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,
             KorlixThirdPartyAiDataCategory.fieldProofRecords});
@@ -10016,7 +9985,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     final client=WorkforceClient(backendBaseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
     await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>WorkforceScreen(client:client,openVoice:(snapshot)async{
       final revision=kKorlixAuthRevision.value;
-      final consent=await ensureKorlixThirdPartyAiConsent(context:context,featureName:'Workforce and K-Nova',providers:const {KorlixThirdPartyAiProvider.openAi},dataCategories:const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,KorlixThirdPartyAiDataCategory.workforceRecords});
+      final consent=await ensureKorlixThirdPartyAiConsent(context:context,featureName:'Workforce and Rici',providers:const {KorlixThirdPartyAiProvider.openAi},dataCategories:const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,KorlixThirdPartyAiDataCategory.workforceRecords});
       if(!consent||!mounted||client.sessionChanged||revision!=kKorlixAuthRevision.value)return null;
       final voice=WorkforceVoiceController(client:client,organizationId:snapshot['organization']['id'] as String,memberId:snapshot['member']['user_id'] as String,memberVersion:snapshot['member']['version'] as int);
       try{
@@ -11102,7 +11071,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       openVoice:(workingDraft) async {
         final revision = kKorlixAuthRevision.value;
         final consent = await ensureKorlixThirdPartyAiConsent(
-          context: context, featureName: 'Music Studio and K-Nova',
+          context: context, featureName: 'Music Studio and Rici',
           providers: const {KorlixThirdPartyAiProvider.openAi},
           dataCategories: const {
             KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
@@ -11171,7 +11140,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     };
 
     String statusFor(String tool) {
-      if (tool == 'Inventory Studio') return 'Find, scan and manage stock across every location with K-Nova';
+      if (tool == 'Inventory Studio') return 'Find, scan and manage stock across every location with Rici';
       if (tool == 'Logo Studio') return 'Create editable logos, explore AI concepts, and download your brand kit';
       if (tool == 'Cybersecurity Defender') return 'Check suspicious messages, strengthen habits and get incident help';
       if (tool == 'Study Studio') return 'Learn with lessons, flashcards and practice quizzes';
@@ -11191,7 +11160,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       if (tool == 'Payroll') return 'Enterprise US payroll, employee onboarding and payroll tax workflows';
       if (tool == 'KORLIX 2MEETU' || tool == 'Scheduling') return 'AI scheduling, booking pages, group sessions and appointments';
       if (tool == 'Business Directory') return 'Free business listings, public discovery and optional verification';
-      if (tool == 'Workforce') return 'Your business, team tasks, shifts and K-Nova voice assistance';
+      if (tool == 'Workforce') return 'Your business, team tasks, shifts and Rici voice assistance';
       if (tool == 'Contacts CRM') return 'Enterprise contacts, imports and KORLIX connections';
       if (tool == 'Voice-scribe') {
         return 'Transcribe speech into saved voice boxes';
@@ -11279,7 +11248,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Utility',
+                  'More tools',
                   style: TextStyle(
                     color: _korlixReadableForeground(skin),
                     fontSize: 16,
@@ -11316,7 +11285,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
               ),
             ),
             child: Text(
-              'Status note: Only active Utility tools are shown. Inactive tools are hidden until their full workflows are ready.',
+              'Extra tools for writing, transcription and quick edits.',
               style: TextStyle(
                 color: _korlixReadableForeground(skin, muted: true),
                 fontSize: 12.4,
@@ -11327,7 +11296,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
           ),
           const SizedBox(height: 12),
           KorlixActionGrid(
-            children: _utilityTools.where((tool) => !['Contacts CRM', 'Funnel Studio', 'Payroll'].contains(tool) || _currentTier.trim().toLowerCase() == 'enterprise').map((tool) {
+            children: moreHomeTools(quickActionLabels: _t.quickActions.where((a) => !_isCreditReportActionSafeUi(a)).map((a) => a.label), enterprise: _currentTier.trim().toLowerCase() == 'enterprise').map((tool) {
               final selected = selectedTool == tool;
               final status = statusFor(tool);
               final statusColor = statusColorFor(tool);
@@ -13361,7 +13330,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     final korlixThirdPartyAiConsentGranted =
         await ensureKorlixThirdPartyAiConsent(
           context: context,
-          featureName: schedulingMode ? 'KORLIX 2MEETU and K-Nova' : 'LIVE CONVO',
+          featureName: schedulingMode ? 'KORLIX 2MEETU and Rici' : 'LIVE CONVO',
           providers: const <KorlixThirdPartyAiProvider>{
             KorlixThirdPartyAiProvider.openAi,
           },
@@ -13655,7 +13624,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 const SizedBox(height: 14),
                 // KORLIX_LIVE_CONVO_HERO_HOME_SLOT_BUILD131_END
                 KorlixActionSection(
-                  title: 'Start here', description: 'Choose how you want to work with K-Nova.',
+                  title: 'Start here', description: 'Choose how you want to work with Rici.',
                   icon: Icons.tune_rounded,
                   children: [
                     tile('Upload', Icons.upload_file_rounded,
@@ -13684,9 +13653,9 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                   title: 'For business', description: 'Manage operations, grow your reach, and get work done.',
                   icon: Icons.business_center_outlined,
                   children: [
-                    for (final tool in ['Logo Studio', 'Inventory Studio', 'Bookkeeping 2027', 'KORLIX 2MEETU', 'FieldProof', 'SEO Agent', 'AI Visibility', 'Contract Radar', 'Workforce', 'Business Directory']) toolTile(tool),
+                    for (final tool in homeBusinessTools) toolTile(tool),
                     if (_currentTier.trim().toLowerCase() == 'enterprise') ...[
-                      toolTile('Contacts CRM'), toolTile('Funnel Studio'), toolTile('Payroll'),
+                      for (final tool in homeEnterpriseTools) toolTile(tool),
                     ],
                     for (final action in quickActions.where(businessAction)) _buildSafeUiQuickActionChip(action, tile: true),
                   ],
@@ -13706,7 +13675,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                           ? '${_socialNotifications.countLabel} unread messages'
                           : 'People, messages & forums'),
                     ),
-                    for (final tool in ['Live Studio', 'The Pod and You', 'Tax Prep', 'BabyBlend', 'Virtual Closet', 'Cybersecurity Defender']) toolTile(tool),
+                    for (final tool in homePersonalTools) toolTile(tool),
                     for (final action in quickActions.where((a) => !businessAction(a))) _buildSafeUiQuickActionChip(action, tile: true),
                     tile('Music Studio', Icons.library_music_rounded, _loading ? null : _showMusicStudio),
                     tile('Locator', Icons.location_on_outlined, _loading ? null : _showLocatorOptions),
