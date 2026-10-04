@@ -1,0 +1,57 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import {PGlite} from '@electric-sql/pglite';
+import {directorySyncFilters,createCrmDirectorySync} from '../contacts_crm/directory_sync.mjs';
+const owner='11111111-1111-4111-8111-111111111111',other='22222222-2222-4222-8222-222222222222',basic='33333333-3333-4333-8333-333333333333';
+let db;const cmd=async(action,p={},user=owner)=>(await db.query('select korlix_crm_directory_v1($1,$2,$3) result',[user,action,JSON.stringify(p)])).rows[0].result;
+const filters=(extra={})=>({q:'',category:'',city:'',country:'',verified_only:false,...extra});
+async function business(name,extra={},state='published',draft={name:'PRIVATE draft',secret:'PRIVATE evidence'}){return (await db.query("insert into korlix_directory_businesses(owner_id,slug,owner_name,draft,published,state,verification_note,evidence_note) values($1,$2,'PRIVATE owner',$3,$4,$5,'PRIVATE verification','PRIVATE evidence') returning *",[other,name.toLowerCase().replaceAll(' ','-'),JSON.stringify(draft),state==='draft'?null:JSON.stringify({name,category:'Construction & Trades',email:name.toLowerCase().replaceAll(' ','')+'@example.test',phone:'',description:'Public plumbing business',city:'Kingston',country:'Jamaica',website:'https://example.test',address:'Public street',public_contact_name:'Public contact',...extra}),state])).rows[0];}
+test.before(async()=>{db=new PGlite();await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create schema storage;create table auth.users(id uuid primary key);create table user_profiles(id uuid primary key,tier text);create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table korlix_agent_email_recipients(id uuid primary key default gen_random_uuid(),user_id uuid,email text,active boolean default true,consent_status text default 'transactional_only',source_reference text,suppressed_at timestamptz,suppression_reason text,updated_at timestamptz);grant usage on schema public to anon,authenticated,service_role;grant select on user_profiles to service_role;grant all on korlix_agent_email_recipients to service_role;`);
+ for(const f of ['20260921162128_enterprise_contacts_crm.sql','20261002184255_business_directory_verified_membership.sql','20261004122927_crm_directory_auto_pull.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+f,import.meta.url),'utf8'));
+ for(const u of [owner,other,basic]){await db.query('insert into auth.users values($1)',[u]);await db.query('insert into user_profiles values($1,$2)',[u,u===basic?'basic':'enterprise']);}
+ await db.exec('set role service_role');});
+test.after(async()=>db?.close());
+test('Anonymous and authenticated roles have no table or RPC access',async()=>{for(const role of ['anon','authenticated']){await db.exec('set role '+role);await assert.rejects(cmd('state'),/permission denied/);await assert.rejects(db.query('select * from korlix_crm_directory_sync'),/permission denied/);await assert.rejects(db.query('select * from korlix_crm_directory_matches_v1($1,$2)',[owner,'{}']),/permission denied/);await db.exec('set role service_role');}await assert.rejects(cmd('state',{},basic),/Enterprise required/);});
+test('Preview respects published snapshot, location/category filters and current verification, and makes no changes',async()=>{
+ const b=await business('Kingston Plumber');await business('Draft Only',{},'draft');await business('Hidden Listing',{},'hidden');await business('Ohio Plumber',{city:'Columbus',country:'United States'});await business('Kingston Cafe',{category:'Food & Drink'});
+ const r=await cmd('preview',{filters:filters({q:'plumbing',category:'Construction & Trades',city:'Kingston',country:'jamaica'})});assert.equal(r.preview_only,true);assert.deepEqual(r.businesses.map(x=>x.id),[b.id]);assert(!JSON.stringify(r).includes('PRIVATE'));assert.equal(r.businesses[0].website,'https://example.test');assert.equal((await db.query('select count(*)::int n from korlix_contacts')).rows[0].n,0);assert.equal((await cmd('state')).settings.version,0);
+ assert.equal((await cmd('preview',{filters:filters({verified_only:true})})).businesses.length,0);
+ await db.query("update korlix_directory_businesses set verification_state='approved' where id=$1",[b.id]);await db.query("insert into korlix_directory_memberships(business_id,livemode,state,paid_until) values($1,true,'active',now()+interval '1 day')",[b.id]);assert.equal((await cmd('preview',{filters:filters({verified_only:true})})).businesses.length,1);
+ await db.query("update korlix_directory_memberships set paid_until=now()-interval '1 day' where business_id=$1",[b.id]);assert.equal((await cmd('preview',{filters:filters({verified_only:true})})).businesses.length,0);
+});
+test('Saved filters pause auto pull; imports are leads with no communication permission and no duplicates',async()=>{
+ let s=(await cmd('save',{version:0,filters:filters({city:'Kingston',category:'Construction & Trades'})})).settings;assert.equal(s.enabled,false);assert.equal((await cmd('tick',{},null)).processed,0);
+ await assert.rejects(cmd('run',{version:s.version}),/Confirm importing/);assert.equal((await cmd('run',{version:s.version,confirmed:true})).imported,1);
+ let c=(await db.query('select * from korlix_contacts where user_id=$1',[owner])).rows[0];assert.equal(c.source,'directory');assert.equal(c.category,'lead');assert.equal(c.email_permission,'none');assert.equal(c.call_permission,'none');assert.equal(c.follow_up_on,null);assert.equal(c.consent_at,null);assert(c.directory_business_id);assert(c.tags.includes('Business Directory'));assert.match(c.notes,/Website: https:\/\/example.test/);assert(!JSON.stringify(c).includes('PRIVATE'));
+ // Personal edits and archiving remain intact, even if the listing later changes.
+ await db.query("update korlix_contacts set notes='Owner notes',email_permission='transactional',archived_at=now(),version=version+1 where id=$1",[c.id]);await db.query("update korlix_directory_businesses set published=jsonb_set(published,'{email}','\"new-address@example.test\"'),version=version+1 where id=$1",[c.directory_business_id]);assert.equal((await cmd('preview',{filters:s.filters})).businesses.length,0);
+ assert.equal((await db.query('select notes from korlix_contacts where id=$1',[c.id])).rows[0].notes,'Owner notes');
+ // A different account can import the same public listing independently.
+ let os=(await cmd('save',{version:0,filters:s.filters},other)).settings;assert.equal((await cmd('run',{version:os.version,confirmed:true},other)).imported,1);
+});
+test('Existing email/phone matches, including archived contacts, are skipped without modifying them',async()=>{
+ await business('Duplicate Email',{email:'existing@example.test',city:'Dedupe'});await business('Duplicate Phone',{email:'',phone:'+1 (555) 123-4567',city:'Dedupe'});
+ await db.query("insert into korlix_contacts(user_id,name,email,email_permission,notes,archived_at) values($1,'Existing','existing@example.test','transactional','Keep this',now())",[owner]);await db.query("insert into korlix_contacts(user_id,name,phone,phone_key) values($1,'Existing phone','15551234567','15551234567')",[owner]);
+ assert.equal((await cmd('preview',{filters:filters({city:'Dedupe'})})).businesses.length,0);assert.equal((await db.query("select notes from korlix_contacts where email='existing@example.test'")).rows[0].notes,'Keep this');
+});
+test('Hourly worker is idempotent, rechecks visibility and access, and settings reject stale versions',async()=>{
+ const b=await business('Hourly Lead',{city:'Hourly'});let s=(await cmd('state')).settings;s=(await cmd('save',{version:s.version,filters:filters({city:'Hourly'})})).settings;
+ await assert.rejects(cmd('toggle',{version:s.version-1,enabled:true,confirmed:true}),/settings changed/);await assert.rejects(cmd('toggle',{version:s.version,enabled:true}),/confirm automatic/);
+ s=(await cmd('toggle',{version:s.version,enabled:true,confirmed:true})).settings;
+ await db.query("update korlix_directory_businesses set state='hidden' where id=$1",[b.id]);await cmd('tick',{},null);assert.equal((await cmd('state')).settings.last_result.imported,0);
+ await db.query("update korlix_directory_businesses set state='published' where id=$1",[b.id]);await db.query("update korlix_crm_directory_sync set next_run_at=now()-interval '1 minute' where user_id=$1",[owner]);await cmd('tick',{},null);assert.equal((await cmd('state')).settings.last_result.imported,1);assert.equal((await cmd('tick',{},null)).processed,0);
+ await db.query("update korlix_crm_directory_sync set next_run_at=now()-interval '1 minute' where user_id=$1",[owner]);await cmd('tick',{},null);assert.equal((await cmd('state')).settings.last_result.imported,0);
+ await db.exec('reset role');await db.query("update user_profiles set tier='basic' where id=$1",[owner]);await db.exec('set role service_role');await db.query("update korlix_crm_directory_sync set next_run_at=now()-interval '1 minute' where user_id=$1",[owner]);await cmd('tick',{},null);assert.equal((await db.query('select enabled from korlix_crm_directory_sync where user_id=$1',[owner])).rows[0].enabled,false);await assert.rejects(cmd('state'),/Enterprise required/);
+});
+test('Service validates filters and cannot accept client-supplied automatic mode, identity or listing facts',async()=>{
+ assert.throws(()=>directorySyncFilters({category:'Fake'}));assert.throws(()=>directorySyncFilters({city:'a\nb'}));assert.throws(()=>directorySyncFilters({verified_only:'true'}));assert.throws(()=>directorySyncFilters({owner_id:other}));
+ const calls=[];const service=createCrmDirectorySync({database:{rpc:async(_name,args)=>{calls.push(args);return {data:{ok:true}};}}});await assert.rejects(service.action(owner,'tick'),/supported/);await assert.rejects(service.action(owner,'run',{version:1,automatic:true}),/Confirm/);await service.action(owner,'run',{version:2,confirmed:true,automatic:true,user_id:other,businesses:[{email:'injected'}]});assert.deepEqual(calls[0],{p_actor:owner,p_action:'run',p:{version:2,confirmed:true,automatic:false}});
+});
+test('Large directories advance in bounded batches without repeating imported listings',async()=>{
+ for(let i=0;i<105;i++)await business('Batch Business '+String(i).padStart(3,'0'),{city:'Batch City'});
+ let s=(await cmd('state',{},other)).settings;s=(await cmd('save',{version:s.version,filters:filters({city:'Batch City'})},other)).settings;
+ let preview=await cmd('preview',{filters:s.filters},other);assert.equal(preview.businesses.length,25);assert.equal(preview.available_in_batch,100);assert.equal(preview.more_available,true);
+ // Previous import was less than ten seconds ago; move only the synthetic clock record.
+ await db.query("update korlix_crm_directory_sync set last_run_at=now()-interval '1 minute' where user_id=$1",[other]);
+ assert.equal((await cmd('run',{version:s.version,confirmed:true},other)).imported,100);
+ preview=await cmd('preview',{filters:s.filters},other);assert.equal(preview.available_in_batch,5);assert.equal(preview.more_available,false);
+ await db.query("update korlix_crm_directory_sync set last_run_at=now()-interval '1 minute' where user_id=$1",[other]);assert.equal((await cmd('run',{version:s.version,confirmed:true},other)).imported,5);assert.equal((await cmd('preview',{filters:s.filters},other)).available_in_batch,0);
+});

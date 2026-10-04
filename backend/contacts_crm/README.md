@@ -54,3 +54,16 @@ Apply `20261004115009_crm_autonomous_email.sql` before deploying this backend an
 - The CRM AI consent describes contact details, notes and follow-up records sent to OpenAI. Retrieval is bounded to 25 contacts per lookup and 1,000 characters of notes. The due-contact search uses UTC; autonomous email uses the rule's selected timezone.
 
 Regression checks: `node --test backend/test/crm_email_schema.test.mjs backend/test/crm_voice_email.test.mjs backend/test/contacts_crm.test.mjs backend/test/workforce_voice.test.mjs backend/test/workforce_emails.test.mjs backend/test/fieldproof_email_provider.test.mjs`; Flutter CRM widgets plus CRM/Workforce voice lifecycle suites. All tests use synthetic contacts and mocked email/voice transports; they do not send real messages.
+
+## Automatic business listing imports (October 2026)
+
+Apply `20261004122927_crm_directory_auto_pull.sql` before deploying this backend and its frontend. It requires the existing Contacts CRM and Business Directory migrations. No new production dependency, API key, environment variable or AI credit charge is added.
+
+- CRM → **Auto-pull listings** imports published listings from the **KORLIX Business Directory**. External directories such as Google or Yelp are not connected.
+- Filter by keyword, business category, city/service area, country or current verified status. Country matches the full published country name, ignoring case. **Preview matches** shows up to 25 candidates without creating contacts. **Save filters** always pauses automatic imports; review and choose **Pull now** or **Enable auto-pull** afterward.
+- Each run adds up to 100 new matching listings as leads. Enabled accounts run hourly, starting with the next scheduler pass. The server checks for due accounts once a minute, at most ten per pass, with database locks to prevent concurrent duplicate runs. Enterprise access and public listing visibility are checked again at import time.
+- Only public business details are copied: name, available email/phone, category, website, address, city, country, service area, description and public contact name. Private drafts, owner profiles, billing and verification evidence are excluded.
+- Matching listing identity, email or normalized phone is skipped, including archived CRM contacts. Existing contacts and personal edits are preserved; later listing changes do not overwrite imported records. Imported records use the **Business Directory** source and can be viewed from this screen.
+- Imports leave email and call permission unset and do not create a follow-up date, email rule or outgoing message. The settings table has RLS enabled and no browser grants; both import functions are restricted to the backend service role. Settings changes use optimistic versions and all operations derive the owner from the verified session.
+
+Checks: `node --test backend/test/crm_directory_sync.test.mjs backend/test/contacts_crm.test.mjs backend/test/directory.test.mjs backend/test/directory_routes.test.mjs`, `flutter test --no-pub test/contacts_crm`, and `flutter build web --release --base-href /app/ --no-pub`. Tests use synthetic listings in an isolated PostgreSQL database and mocked API responses; no real accounts are enabled or imported during release verification.

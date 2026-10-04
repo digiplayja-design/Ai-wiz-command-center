@@ -24,6 +24,7 @@ export function registerContactsCrm(
     store = null,
     emailService = null,
     crmEmails = null,
+    directorySync = null,
   } = {},
 ) {
   const persistence = store || (database ? createContactStore(database) : null);
@@ -78,6 +79,11 @@ export function registerContactsCrm(
     }
   };
   const base = "/api/contacts";
+  const listings=()=>{if(!directorySync)fail('Business listing imports are temporarily unavailable.',503);return directorySync;};
+  app.get(base+'/directory-sync',route(async(_req,res,u)=>res.json(await listings().action(u,'state'))));
+  app.post(base+'/directory-sync/preview',route(async(req,res,u)=>res.json(await listings().action(u,'preview',req.body))));
+  app.put(base+'/directory-sync',route(async(req,res,u)=>res.json(await listings().action(u,'save',req.body))));
+  app.post(base+'/directory-sync/actions',route(async(req,res,u)=>res.json(await listings().action(u,req.body?.action,req.body))));
   app.get(base+'/voice/context',route(async(req,res,u)=>res.json(await crmVoiceContext(persistence,u,req.query))));
   app.post(base+'/voice/draft',route(async(req,res,u)=>res.json(await prepareCrmVoiceDraft(persistence,u,req.body))));
   const mail=()=>{if(!crmEmails)fail('CRM email is temporarily unavailable.',503);return crmEmails;};

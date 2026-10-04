@@ -8,7 +8,7 @@ export const CATEGORIES = [
   "partner",
   "vendor",
 ];
-export const SOURCES = ["manual", "phone", "email", "facebook", "spreadsheet", "funnel"];
+export const SOURCES = ["manual", "phone", "email", "facebook", "spreadsheet", "funnel", "directory"];
 export class ContactError extends Error {
   constructor(message, status = 400, code = "CONTACT_INVALID") {
     super(message);
