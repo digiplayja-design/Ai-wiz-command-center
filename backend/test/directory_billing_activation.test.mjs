@@ -10,6 +10,19 @@ const generation='22222222-2222-4222-8222-222222222222';
 const credentials={KORLIX_DIRECTORY_STRIPE_SECRET_KEY:'rk_test_fixture',KORLIX_DIRECTORY_STRIPE_WEBHOOK_SECRET:'whsec_fixture'};
 const subscription=()=>({id:'sub_fixture',customer:'cus_fixture',livemode:false,status:'active',metadata:{korlix_directory:business,generation},items:{data:[{quantity:1,current_period_end:2000000000,price:{currency:'usd',unit_amount:499,recurring:{interval:'month',interval_count:1}}}]},latest_invoice:{id:'in_fixture',status:'paid',amount_paid:499}});
 
+test('portal cancellation dates stop renewal without removing the paid membership period',()=>{
+ const billing=directoryBilling(credentials);
+ const paid=subscription(),end=paid.items.data[0].current_period_end;
+ const scheduled=billing.validSubscription({...paid,cancel_at_period_end:false,cancel_at:end});
+ assert.equal(scheduled.cancel_at_period_end,true);
+ assert.equal(scheduled.state,'active');
+ assert.equal(scheduled.paid_until,new Date(end*1000).toISOString());
+ for(const cancel_at of [null,0,end+86400]){
+  assert.equal(billing.validSubscription({...paid,cancel_at_period_end:false,cancel_at}).cancel_at_period_end,false);
+ }
+ assert.equal(billing.validSubscription({...paid,cancel_at_period_end:true}).cancel_at_period_end,true);
+});
+
 test('credential check verifies the expected account portal without creating payments',async()=>{
  let requests=0;
  const billing=directoryBilling({...credentials,KORLIX_DIRECTORY_STRIPE_PORTAL_CONFIGURATION_ID:'bpc_fixture'},{fetcher:async(url,options)=>{

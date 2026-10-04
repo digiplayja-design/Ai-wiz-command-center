@@ -32,7 +32,11 @@ export function directoryBilling(env,{fetcher=fetch,now=Date.now}={}){
   const invoice=s.latest_invoice,paid=s.status==='active'&&invoice?.status==='paid'&&invoice?.amount_paid>=PRICES[period];
   const end=lines[0]?.current_period_end??s.current_period_end;
   if(paid&&!Number.isFinite(end))fail('Membership renewal date could not be verified.',409);
-  return {livemode:live,business_id:s.metadata.korlix_directory,generation:s.metadata.generation,subscription_id:s.id,customer_id:typeof s.customer==='string'?s.customer:s.customer?.id,state:paid?'active':s.status==='active'?'unpaid':s.status,paid_until:paid?new Date(end*1000).toISOString():null,invoice_id:typeof invoice==='object'?invoice?.id:invoice,cancel_at_period_end:s.cancel_at_period_end===true};
+  // The customer portal can schedule flexible subscriptions with cancel_at
+  // while leaving cancel_at_period_end false. Preserve paid access and report
+  // renewal as canceled when that date is the end of this paid period.
+  const renewalCanceled=s.cancel_at_period_end===true||(Number.isFinite(end)&&Number.isFinite(s.cancel_at)&&s.cancel_at>0&&s.cancel_at===end);
+  return {livemode:live,business_id:s.metadata.korlix_directory,generation:s.metadata.generation,subscription_id:s.id,customer_id:typeof s.customer==='string'?s.customer:s.customer?.id,state:paid?'active':s.status==='active'?'unpaid':s.status,paid_until:paid?new Date(end*1000).toISOString():null,invoice_id:typeof invoice==='object'?invoice?.id:invoice,cancel_at_period_end:renewalCanceled};
  }
  return {ready,configured,enabled,live,checkConnection,apiVersion:DIRECTORY_STRIPE_API_VERSION,verify:(raw,signature)=>configured&&stripeSignature(raw,signature,secret),
   async checkout(business,m,email){

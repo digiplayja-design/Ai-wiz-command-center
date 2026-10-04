@@ -78,27 +78,41 @@ so later default-portal changes cannot alter Directory billing behavior.
 ## Verification and remaining activation work (October 4, 2026)
 
 - Live Stripe account verification completed; charges and payouts enabled.
+- The restricted live runtime credential was verified through the deployed
+  adapter and its pinned Endive API. New checkout remains explicitly paused.
 - Sandbox monthly/yearly Checkout Sessions were created with totals 499/4900
-  cents. They remain unpaid and expire automatically; this was session creation,
-  not browser Checkout completion.
+  cents. The monthly hosted Checkout was completed using Stripe's documented
+  test card and a synthetic customer: Stripe returned a complete, paid session,
+  active subscription, and paid 499-cent invoice. Its browser return to KORLIX
+  was verified. The annual session was only created, not paid.
 - A separate synthetic sandbox subscription produced an active subscription
   and paid 499-cent invoice. Scheduled cancellation kept the paid period;
   immediate test cleanup produced canceled status. No live customer was charged.
 - Actual sandbox subscription responses passed the adapter's membership
   validation for active, scheduled-cancel and canceled cases.
 - A sandbox customer portal session was created successfully.
+- The hosted monthly customer's portal showed the paid invoice and scheduled
+  cancellation at the end of its paid period. Stripe returned `cancel_at`
+  equal to the subscription item's period end while `cancel_at_period_end`
+  remained false. The adapter now recognizes this portal cancellation shape
+  and preserves paid access while displaying renewal as canceled. Actual
+  provider responses and a regression check passed. The synthetic subscription
+  was then canceled immediately as test cleanup; no live customer was charged.
+- The return page now keeps membership guidance in its own banner so the
+  asynchronous business search cannot overwrite it. The URL alone never
+  confirms payment, activates membership, or grants a badge.
 - Local checks cover credential gating, cached read-only connection probing,
   rejected signatures, asynchronous payment failure, fixed prices, paused
   management, ownership, duplicate/stale observations, and test/live isolation.
 - Flutter Directory tests and the release web build passed.
 
-Still required: restricted server credential entry, validation through the
-deployed adapter with its pinned HTTP API version, complete hosted Checkout and
-signed webhook delivery into the application, renewal time-travel testing, and
-review of tax configuration. The connector exposed test-clock creation but did
-not expose advancement during this session, so renewal simulation is not yet
-verified. Account connection to ChatGPT does not supply Render with its own
-runtime API credential.
+Still required: signed Stripe webhook delivery into the application with an
+isolated sandbox runtime configuration, renewal time-travel testing, and review
+of tax configuration. The connector exposed test-clock creation but did not
+expose advancement or webhook test delivery during this session. Dashboard
+sign-in remains unverified, so these tests are not yet complete. The hosted
+Checkout and portal checks above used synthetic Stripe objects and did not
+activate any real business listing in the application.
 
 Keep production checkout and the new webhook endpoint paused until those
 checks are complete. The previous Clover endpoint remains disabled; only the
