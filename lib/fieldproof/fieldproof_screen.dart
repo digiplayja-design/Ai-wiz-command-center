@@ -1,4 +1,5 @@
 import '../sounds/korlix_sound_service.dart';
+import '../sounds/korlix_sound_actions.dart';
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -6,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart' as ip;
 import 'fieldproof_client.dart';
+import 'fieldproof_email.dart';
+import 'fieldproof_email_screen.dart';
 import 'fieldproof_report.dart';
 import 'fieldproof_saver.dart';
 import 'fieldproof_workspace.dart';
@@ -107,6 +110,25 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(s)));
+  }
+
+  Future<void> _openEmail({bool forJob = false}) async {
+    if (_working || _locked) return;
+    final emailClient = FieldProofEmailClient(
+      backendBaseUrl: widget.client.backendBaseUrl,
+      headersBuilder: widget.client.headersBuilder,
+      sessionChanges: widget.client.sessionChanges,
+    );
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => FieldProofEmailScreen(
+        client: emailClient,
+        ownsClient: true,
+        jobId: forJob ? fpText(_job['id']) : null,
+        jobTitle: forJob ? fpText(_data['title']) : null,
+        jobCompleted: forJob && _job['state'] == 'completed',
+        saveFile: widget.saveFile,
+      ),
+    ));
   }
 
   void _top() {
@@ -844,6 +866,14 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
                 label: const Text('New field job'),
               ),
               const SizedBox(height: 12),
+              FilledButton.icon(
+                key: const Key('fp-email-open'),
+                onPressed: korlixSoundAction(_working ? null : () => _openEmail()),
+                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF7048B8), foregroundColor: Colors.white),
+                icon: const Icon(Icons.mark_email_read_outlined),
+                label: const Text('Autonomous Email'),
+              ),
+              const SizedBox(height: 12),
               const Text(
                 'Choose from 14 templates covering trades, inspections, service, deliveries and general field work. Private job records and manual reports are available when signed in.',
                 style: TextStyle(color: _muted, height: 1.5),
@@ -992,6 +1022,12 @@ class _FieldProofScreenState extends State<FieldProofScreen> {
                         : null,
                     icon: const Icon(Icons.edit_outlined),
                     label: const Text('Edit job'),
+                  ),
+                  OutlinedButton.icon(
+                    key: const Key('fp-email-job'),
+                    onPressed: korlixSoundAction(_working ? null : () => _openEmail(forJob: true)),
+                    icon: const Icon(Icons.email_outlined),
+                    label: const Text('Customer email'),
                   ),
                   OutlinedButton.icon(
                     key: const Key('fp-repeat'),

@@ -8,7 +8,7 @@ Open **FieldProof** from the home shortcuts or Tools. Start a job with its title
 
 Record customer approval when required. This is the technician's declaration, including who recorded it, the reported approver, notes, time and job revision. It is not a customer-authenticated signature. Changes to the job or photos invalidate earlier approval for closeout. Closing a job requires explicit confirmation and current required records; reopening creates a new revision.
 
-The Report tab exports a PDF with photo previews, the original-file hash manifest, entered facts, approval status, recent activity and any current KORLIX review. Original files download individually. The invoice handoff is a text draft containing scope, hours, materials, outstanding items and billing notes. It does not issue an invoice or post to bookkeeping. Exports and customer delivery are deliberate user actions.
+The Report tab exports a PDF with photo previews, the original-file hash manifest, entered facts, approval status, recent activity and any current KORLIX review. Original files download individually. The invoice handoff is a text draft containing scope, hours, materials, outstanding items and billing notes. It does not issue an invoice or post to bookkeeping. Manual exports remain available. Optional customer email delivery and supervisor summaries are configured per account; see [FieldProof Autonomous Email](FIELDPROOF_EMAIL.md).
 
 ## K-Nova and the expanded workspace
 
@@ -38,7 +38,7 @@ Limits: 200 jobs/account; 24 photos/job; 10 MB per still JPG, PNG or WEBP; 40 me
 
 Migrations: the repository's `*_fieldproof.sql` and `*_fieldproof_workspace_upgrade.sql`. The upgrade replaces only the photo-capacity check in the deployed RPC and guards against an unexpected prior function body. API base: `/api/fieldproof`. Health includes `fieldProof.version`, model, reasoning effort, credit cost, maximum photos and original-evidence support. No new environment variables or services are required.
 
-Review jobs run in the existing backend process: one per account, two per process, up to 12 starts/hour/account. Reopening a screen polls the same saved review. A stale review is marked failed after eight minutes on the next FieldProof request and uses no credit. This release does not provide a durable distributed worker, crew sharing, offline synchronization, legally authenticated signatures, video evidence, automatic bookkeeping posting or automated customer delivery. It retains 20 reviews/job and 200 activity records/job, returning the newest 30 activities.
+Review jobs run in the existing backend process: one per account, two per process, up to 12 starts/hour/account. Reopening a screen polls the same saved review. A stale review is marked failed after eight minutes on the next FieldProof request and uses no credit. This release does not provide crew sharing, offline synchronization, legally authenticated signatures, video evidence or automatic bookkeeping posting. Customer email delivery and supervisor summaries use the separately configured durable email queue described in [FieldProof Autonomous Email](FIELDPROOF_EMAIL.md). It retains 20 reviews/job and 200 activity records/job, returning the newest 30 activities.
 
 ## Validation
 
