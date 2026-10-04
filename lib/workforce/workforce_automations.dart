@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import 'workforce_client.dart';
 import 'workforce_style.dart';
 import 'workforce_email_recipient.dart';
@@ -161,7 +163,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
     final r = _recipients.where((r) => r['id'] == id).firstOrNull;
     return r == null
         ? 'Approved email recipient'
-        : '${r['displayName'] ?? r['display_name'] ?? ''} <${r['email']}>';
+        : '${r['displayName'] ?? r['display_name'] ?? r['name'] ?? ''} <${r['email']}>';
   }
 
   bool _recipientAvailable(dynamic id) => _recipients.any(
@@ -219,9 +221,12 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
     });
   }
 
-  Future<void> _new(String kind) async {
+  Future<void> _new(String kind, {WfJson? rule}) async {
+    // Ignore any poll started before the editor opened.
+    final generation = ++_generation;
+    _loading = false;
     _dialog = true;
-    await showDialog<void>(
+    final saved = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (context) => _AutomationForm(
@@ -231,10 +236,23 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
         members: widget.members,
         recipients: _recipients,
         timezone: widget.timezone,
+        rule: rule,
       ),
     );
     _dialog = false;
-    if (mounted) await _load();
+    if (!mounted || generation != _generation) return;
+    await _load();
+    if (mounted && saved == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            rule == null
+                ? 'Reminder saved. Review & enable when ready.'
+                : 'Changes saved. Review & enable to resume with the new instructions.',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _addRecipient() async {
@@ -352,16 +370,17 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
         children: [
           const Icon(Icons.auto_awesome, color: WfStyle.cyan, size: 18),
           const SizedBox(width: 8),
-          const Text(
-            'KORLIX AUTOMATIONS',
-            style: TextStyle(
-              color: WfStyle.cyan,
-              fontSize: 11,
-              letterSpacing: 2,
-              fontWeight: FontWeight.w700,
+          const Expanded(
+            child: Text(
+              'KORLIX AUTOMATIONS',
+              style: TextStyle(
+                color: WfStyle.cyan,
+                fontSize: 11,
+                letterSpacing: 2,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
-          const Spacer(),
           IconButton(
             tooltip: 'Refresh automations',
             onPressed: _busy ? null : _load,
@@ -522,7 +541,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
         ),
         const SizedBox(height: 30),
         const Text(
-          'Start with a recipe',
+          'Create a reminder',
           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
         ),
         const SizedBox(height: 14),
@@ -665,6 +684,22 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
                       color: WfStyle.gold,
                     ),
                   const SizedBox(height: 14),
+                  if (r['channel'] == 'workspace_email') ...[
+                    _text(
+                      (r['instructions']?.toString().trim().isNotEmpty ?? false)
+                          ? 'Instructions: ${r['instructions']}'
+                          : 'Instructions: standard reminder message',
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _busy || _data!['active_plan'] != true
+                          ? null
+                          : () => _new(r['kind'].toString(), rule: r),
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('Edit reminder'),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   OutlinedButton.icon(
                     onPressed:
                         _busy ||
@@ -872,14 +907,17 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
   };
 }
 
-String _preview(WfJson r, String member) => switch (r['kind']) {
-  'daily_summary' =>
-    '[Workspace] — Workforce report\n[Previous calendar date] ([Workspace timezone])\n\n[Recorded shifts and full-shift hours overlapping that date]\n[Employee-reported quantities, work updates and blockers]\n[Pending correction count]\n\nWork quantities are employee-reported. Timesheets require manager review.',
-  'missed_shift' =>
-    '[Workspace]\nNo clock-in is recorded for ${member == 'All active team members' ? '[Employee]' : member}’s scheduled shift starting [scheduled time].\n\nPlease check in through Workforce or contact your employer if plans have changed. This alert is based on attendance records; it does not establish an absence.',
-  _ =>
-    '[Workspace]\n${member == 'All active team members' ? '[Employee]' : member} has a work update due.\n\nPlease open Workforce → My day and record completed work, quantities, and any blockers.\nThis reminder reflects recorded updates, not a judgement of productivity.',
-};
+String _preview(WfJson r, String member) {
+  final instructions = r['instructions']?.toString().trim() ?? '';
+  return switch (r['kind']) {
+    'daily_summary' =>
+      '[Workspace] — Workforce report\n[Previous calendar date] ([Workspace timezone])\n\n[Recorded shifts and full-shift hours overlapping that date]\n[Employee-reported quantities, work updates and blockers]\n[Pending correction count]\n\nWork quantities are employee-reported. Timesheets require manager review.${instructions.isEmpty ? '' : '\n\n$instructions'}',
+    'missed_shift' =>
+      '[Workspace]\nNo clock-in is recorded for ${member == 'All active team members' ? '[Employee]' : member}’s scheduled shift starting [scheduled time].\n\n${instructions.isEmpty ? 'Please check in through Workforce or contact your employer if plans have changed.' : instructions}\nThis alert is based on attendance records; it does not establish an absence.',
+    _ =>
+      '[Workspace]\n${member == 'All active team members' ? '[Employee]' : member} has a work update due.\n\n${instructions.isEmpty ? 'Please open Workforce → My day and record completed work, quantities, and any blockers.' : instructions}\nThis reminder reflects recorded updates, not a judgement of productivity.',
+  };
+}
 
 class _EnableDialog extends StatefulWidget {
   const _EnableDialog({
@@ -998,47 +1036,93 @@ class _AutomationForm extends StatefulWidget {
     required this.members,
     required this.recipients,
     required this.timezone,
+    this.rule,
   });
   final WorkforceClient client;
   final String path, kind, timezone;
   final List<WfJson> members, recipients;
+  final WfJson? rule;
   @override
   State<_AutomationForm> createState() => _AutomationFormState();
 }
 
 class _AutomationFormState extends State<_AutomationForm> {
   final _form = GlobalKey<FormState>();
-  final _id = wfId();
-  late final TextEditingController _name;
-  final _delay = TextEditingController(text: '10'),
-      _limit = TextEditingController(text: '5');
-  String _mode = 'review', _start = '08:00', _end = '18:00';
-  String _channel = 'workspace_email',
-      _member = '',
-      _recipient = '',
-      _time = '08:00';
-  final Set<int> _days = {1, 2, 3, 4, 5};
+  late final String _id;
+  late final TextEditingController _name, _instructions, _delay, _limit;
+  late String _mode, _start, _end, _channel, _member, _recipient, _time;
+  late final Set<int> _days;
   bool _saving = false;
   String? _error;
+  bool get _editing => widget.rule != null;
+  bool get _email => _channel == 'workspace_email';
+  List<WfJson> get _availableRecipients => widget.recipients
+      .where(
+        (r) =>
+            r['workspace'] == true &&
+            r['active'] == true &&
+            ![
+              'unsubscribed',
+              'suppressed',
+            ].contains(r['consentStatus'] ?? r['consent_status']),
+      )
+      .toList();
+
   @override
   void initState() {
     super.initState();
-    _name = TextEditingController(text: _kinds[widget.kind]!.$1);
-    if (widget.kind == 'daily_summary') _limit.text = '1';
+    final r = widget.rule ?? <String, dynamic>{};
+    _id = r['id']?.toString() ?? wfId();
+    _name = TextEditingController(
+      text: r['name']?.toString() ?? _kinds[widget.kind]!.$1,
+    );
+    _instructions = TextEditingController(
+      text: r['instructions']?.toString() ?? '',
+    );
+    _delay = TextEditingController(text: '${r['delay_minutes'] ?? 10}');
+    _limit = TextEditingController(
+      text: '${r['daily_limit'] ?? (widget.kind == 'daily_summary' ? 1 : 5)}',
+    );
+    _mode = r['delivery_mode']?.toString() ?? 'review';
+    _start = _clock(r['send_start'], '08:00');
+    _end = _clock(r['send_end'], '18:00');
+    _time = _clock(r['local_time'], '08:00');
+    _channel = r['channel']?.toString() ?? 'workspace_email';
+    _member = r['member_id']?.toString() ?? '';
+    _recipient = r['recipient_id']?.toString() ?? '';
+    _days = (r['days'] as List? ?? [1, 2, 3, 4, 5]).cast<int>().toSet();
+  }
+
+  String _clock(dynamic value, String fallback) {
+    final text = value?.toString() ?? fallback;
+    return text.length >= 5 ? text.substring(0, 5) : fallback;
   }
 
   @override
   void dispose() {
-    _name.dispose();
-    _delay.dispose();
-    _limit.dispose();
+    for (final controller in [_name, _instructions, _delay, _limit]) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
   Future<void> _save() async {
-    if (!_form.currentState!.validate()) return;
+    if (_saving || !_form.currentState!.validate()) return;
     if (_days.isEmpty) {
-      setState(() => _error = 'Choose at least one weekday.');
+      setState(() => _error = 'Choose at least one day.');
+      return;
+    }
+    if (_email && !_availableRecipients.any((r) => r['id'] == _recipient)) {
+      setState(() => _error = 'Choose an approved email recipient.');
+      return;
+    }
+    if (_email &&
+        widget.kind == 'daily_summary' &&
+        (_time.compareTo(_start) < 0 || _time.compareTo(_end) >= 0)) {
+      setState(
+        () => _error =
+            'Choose a summary time inside the sending window in More options.',
+      );
       return;
     }
     setState(() {
@@ -1048,14 +1132,16 @@ class _AutomationFormState extends State<_AutomationForm> {
     try {
       await widget.client.request(
         'POST',
-        widget.path,
+        '${widget.path}${_editing ? '/update' : ''}',
         body: {
           'id': _id,
+          if (_editing) 'version': widget.rule!['version'],
           'name': _name.text.trim(),
           'kind': widget.kind,
           'channel': _channel,
+          'instructions': _email ? _instructions.text.trim() : '',
           'member_id': _member.isEmpty ? null : _member,
-          'recipient_id': _channel != 'call_review' ? _recipient : null,
+          'recipient_id': _email ? _recipient : null,
           'delivery_mode': _mode,
           'send_start': _start,
           'send_end': _end,
@@ -1065,7 +1151,7 @@ class _AutomationFormState extends State<_AutomationForm> {
           'daily_limit': int.parse(_limit.text),
         },
       );
-      if (mounted) Navigator.pop(context);
+      if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -1084,11 +1170,22 @@ class _AutomationFormState extends State<_AutomationForm> {
     return n == null || n < low || n > high ? 'Enter $low–$high' : null;
   }
 
+  Widget _help(String value) => Text(
+    value,
+    style: const TextStyle(color: WfStyle.muted, fontSize: 12, height: 1.5),
+  );
+  String get _memberName =>
+      widget.members
+          .where((m) => m['user_id'] == _member)
+          .firstOrNull?['display_name']
+          ?.toString() ??
+      'All active team members';
+
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !_saving,
     child: AlertDialog(
-      title: Text(_kinds[widget.kind]!.$1),
+      title: Text(_editing ? 'Edit reminder' : _kinds[widget.kind]!.$1),
       content: SizedBox(
         width: 580,
         child: SingleChildScrollView(
@@ -1098,59 +1195,23 @@ class _AutomationFormState extends State<_AutomationForm> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Saved paused. You will review and enable it separately.',
-                  style: TextStyle(color: WfStyle.muted, fontSize: 13),
+                _help(
+                  _editing
+                      ? 'Update the instructions below. Saving pauses this reminder so you can review the changes before it runs again.'
+                      : 'Choose who receives the email, what it says, and when it runs. Save first, then review & enable.',
                 ),
                 _gap(),
-                TextFormField(
-                  controller: _name,
-                  maxLength: 100,
-                  decoration: const InputDecoration(
-                    labelText: 'Automation name',
-                  ),
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'Enter a name' : null,
-                ),
-                _gap(),
-                DropdownButtonFormField<String>(
-                  initialValue: _channel,
-                  decoration: const InputDecoration(
-                    labelText: 'Follow-up action',
-                  ),
-                  isExpanded: true,
-                  items: [
-                    const DropdownMenuItem(
-                      value: 'workspace_email',
-                      child: Text('Workforce email'),
-                    ),
-                    if (widget.kind != 'daily_summary')
-                      const DropdownMenuItem(
-                        value: 'call_review',
-                        child: Text('Call escalation for owner review'),
-                      ),
-                  ],
-                  onChanged: _saving
-                      ? null
-                      : (v) => setState(() => _channel = v!),
-                ),
-                _gap(),
-                if (_channel == 'workspace_email') ...[
+                if (_email) ...[
                   DropdownButtonFormField<String>(
-                    initialValue: _recipient.isEmpty ? null : _recipient,
-                    decoration: const InputDecoration(
-                      labelText: 'Approved email recipient',
-                    ),
+                    key: const ValueKey('reminder-recipient'),
+                    initialValue:
+                        _availableRecipients.any((r) => r['id'] == _recipient)
+                        ? _recipient
+                        : null,
+                    decoration: const InputDecoration(labelText: 'Send to'),
                     isExpanded: true,
                     items: [
-                      for (final r in widget.recipients.where(
-                        (r) =>
-                            r['workspace'] == true &&
-                            r['active'] == true &&
-                            !['unsubscribed', 'suppressed'].contains(
-                              r['consentStatus'] ?? r['consent_status'],
-                            ),
-                      ))
+                      for (final r in _availableRecipients)
                         DropdownMenuItem(
                           value: r['id'].toString(),
                           child: Text(
@@ -1166,17 +1227,35 @@ class _AutomationFormState extends State<_AutomationForm> {
                         ? 'Choose an approved recipient'
                         : null,
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Add recipients in Autonomous email. Choose a supervisor authorized to see team records, or the employee for their own reminder.',
-                    style: TextStyle(color: WfStyle.muted, fontSize: 12),
+                  if (_availableRecipients.isEmpty) ...[
+                    const SizedBox(height: 8),
+                    _help(
+                      'Add an email recipient in Autonomous email, then return here.',
+                    ),
+                  ],
+                  _gap(),
+                  TextFormField(
+                    key: const ValueKey('reminder-instructions'),
+                    controller: _instructions,
+                    enabled: !_saving,
+                    minLines: 3,
+                    maxLines: 6,
+                    maxLength: 1500,
+                    decoration: const InputDecoration(
+                      labelText: 'Email instructions',
+                      hintText:
+                          'Please submit your completed jobs, quantities and any blockers in Workforce.',
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  _help(
+                    'Included exactly as written in the email. Leave blank for the standard message. Set the schedule using the controls below.',
                   ),
                   _gap(),
                   DropdownButtonFormField<String>(
                     initialValue: _mode,
-                    decoration: const InputDecoration(
-                      labelText: 'Delivery mode',
-                    ),
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'How to send'),
                     items: const [
                       DropdownMenuItem(
                         value: 'review',
@@ -1192,56 +1271,28 @@ class _AutomationFormState extends State<_AutomationForm> {
                         : (v) => setState(() => _mode = v!),
                   ),
                   _gap(),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          initialValue: _start,
-                          decoration: const InputDecoration(
-                            labelText: 'Send after (HH:MM)',
-                          ),
-                          onChanged: (v) => _start = v,
-                          validator: (v) => _validTime(v) ? null : 'Use HH:MM',
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextFormField(
-                          initialValue: _end,
-                          decoration: const InputDecoration(
-                            labelText: 'Send before (HH:MM)',
-                          ),
-                          onChanged: (v) => _end = v,
-                          validator: (v) =>
-                              _validTime(v) && _start.compareTo(v!) < 0
-                              ? null
-                              : 'End after start',
-                        ),
-                      ),
-                    ],
-                  ),
-                  _gap(),
-                ] else ...[
-                  const Text(
-                    'Creates an item in your review queue. Automatic outbound calling is not enabled.',
-                    style: TextStyle(color: WfStyle.gold, fontSize: 13),
-                  ),
-                  _gap(),
                 ],
                 if (widget.kind != 'daily_summary') ...[
                   DropdownButtonFormField<String>(
                     initialValue: _member,
-                    decoration: const InputDecoration(
-                      labelText: 'Whose records should trigger this?',
-                    ),
                     isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Whose work should trigger this?',
+                    ),
                     items: [
                       const DropdownMenuItem(
                         value: '',
                         child: Text('All active team members'),
                       ),
+                      if (_member.isNotEmpty &&
+                          !widget.members.any((m) => m['user_id'] == _member))
+                        DropdownMenuItem(
+                          value: _member,
+                          enabled: false,
+                          child: const Text('Selected member is unavailable'),
+                        ),
                       for (final m in widget.members.where(
-                        (m) => m['active'] == true,
+                        (m) => m['active'] == true || m['user_id'] == _member,
                       ))
                         DropdownMenuItem(
                           value: m['user_id'].toString(),
@@ -1258,13 +1309,20 @@ class _AutomationFormState extends State<_AutomationForm> {
                   _gap(),
                   TextFormField(
                     controller: _delay,
+                    enabled: !_saving,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       labelText: widget.kind == 'missed_update'
-                          ? 'Extra minutes after the policy grace period'
+                          ? 'Extra delay after an update is overdue (minutes)'
                           : 'Minutes after the scheduled start',
                     ),
                     validator: (v) => _number(v, 0, 240),
+                  ),
+                  const SizedBox(height: 8),
+                  _help(
+                    widget.kind == 'missed_update'
+                        ? 'Runs only while the employee is clocked in and a required update is overdue. The shift’s update interval and grace period apply first.'
+                        : 'Runs only when a scheduled shift has no recorded clock-in.',
                   ),
                   _gap(),
                 ] else ...[
@@ -1290,14 +1348,11 @@ class _AutomationFormState extends State<_AutomationForm> {
                     label: Text('Deliver at $_time · ${widget.timezone}'),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Summarises the previous calendar day. If the server resumes late, it catches up within six hours of this time.',
-                    style: TextStyle(color: WfStyle.muted, fontSize: 12),
-                  ),
+                  _help('Summarises the previous calendar day.'),
                   _gap(),
                 ],
                 const Text(
-                  'Active weekdays',
+                  'Days to run',
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
@@ -1317,14 +1372,114 @@ class _AutomationFormState extends State<_AutomationForm> {
                   ],
                 ),
                 _gap(),
-                TextFormField(
-                  controller: _limit,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Maximum follow-ups per day (1–50)',
+                ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  maintainState: true,
+                  title: const Text('More options'),
+                  subtitle: Text(
+                    '$_start–$_end · ${widget.timezone} · up to ${_limit.text}/day',
                   ),
-                  validator: (v) => _number(v, 1, 50),
+                  children: [
+                    _gap(),
+                    TextFormField(
+                      controller: _name,
+                      enabled: !_saving,
+                      maxLength: 100,
+                      decoration: const InputDecoration(
+                        labelText: 'Reminder name',
+                      ),
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Enter a name' : null,
+                    ),
+                    if (!_editing) ...[
+                      _gap(),
+                      DropdownButtonFormField<String>(
+                        initialValue: _channel,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Follow-up action',
+                        ),
+                        items: [
+                          const DropdownMenuItem(
+                            value: 'workspace_email',
+                            child: Text('Workforce email'),
+                          ),
+                          if (widget.kind != 'daily_summary')
+                            const DropdownMenuItem(
+                              value: 'call_review',
+                              child: Text('Call escalation for owner review'),
+                            ),
+                        ],
+                        onChanged: _saving
+                            ? null
+                            : (v) => setState(() => _channel = v!),
+                      ),
+                      if (!_email)
+                        _help(
+                          'Creates an owner review item. No outbound calls are placed.',
+                        ),
+                    ],
+                    if (_email) ...[
+                      _gap(),
+                      TextFormField(
+                        initialValue: _start,
+                        enabled: !_saving,
+                        decoration: const InputDecoration(
+                          labelText: 'Send after (HH:MM)',
+                        ),
+                        onChanged: (v) => setState(() => _start = v),
+                        validator: (v) => _validTime(v) ? null : 'Use HH:MM',
+                      ),
+                      _gap(),
+                      TextFormField(
+                        initialValue: _end,
+                        enabled: !_saving,
+                        decoration: const InputDecoration(
+                          labelText: 'Send before (HH:MM)',
+                        ),
+                        onChanged: (v) => setState(() => _end = v),
+                        validator: (v) =>
+                            _validTime(v) && _start.compareTo(v!) < 0
+                            ? null
+                            : 'End after start',
+                      ),
+                    ],
+                    _gap(),
+                    TextFormField(
+                      controller: _limit,
+                      enabled: !_saving,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Maximum follow-ups per day (1–50)',
+                      ),
+                      onChanged: (_) => setState(() {}),
+                      validator: (v) => _number(v, 1, 50),
+                    ),
+                    _gap(),
+                  ],
                 ),
+                if (_email)
+                  ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    title: const Text('Email preview'),
+                    children: [
+                      _help(
+                        'Names and dates are filled from Workforce records.',
+                      ),
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: SelectableText(
+                          _preview({
+                            'kind': widget.kind,
+                            'instructions': _instructions.text.trim(),
+                          }, _memberName),
+                          style: const TextStyle(fontSize: 13, height: 1.6),
+                        ),
+                      ),
+                      _gap(),
+                    ],
+                  ),
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 16),
@@ -1340,12 +1495,18 @@ class _AutomationFormState extends State<_AutomationForm> {
       ),
       actions: [
         TextButton(
-          onPressed: _saving ? null : () => Navigator.pop(context),
+          onPressed: _saving ? null : () => Navigator.pop(context, false),
           child: const Text('Cancel'),
         ),
         FilledButton(
           onPressed: _saving ? null : _save,
-          child: Text(_saving ? 'Saving…' : 'Save paused'),
+          child: Text(
+            _saving
+                ? 'Saving…'
+                : _editing
+                ? 'Save changes'
+                : 'Save paused',
+          ),
         ),
       ],
     ),

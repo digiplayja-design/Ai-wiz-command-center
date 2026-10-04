@@ -35,6 +35,8 @@ Future<void> mount(
   List<WfJson>? calls,
   double width = 1200,
   bool ready = true,
+  double textScale = 1,
+  int? updateError,
   GlobalKey? capture,
 }) async {
   tester.view.physicalSize = Size(width, 1000);
@@ -51,6 +53,22 @@ Future<void> mount(
         if (request.url.path.endsWith('/toggle')) {
           rules.first['enabled'] = body['enabled'];
           rules.first['version'] = 2;
+        } else if (request.url.path.endsWith('/automations/update')) {
+          if (updateError != null) {
+            return http.Response(
+              jsonEncode({
+                'error':
+                    'This reminder changed. Close and reopen it before saving.',
+              }),
+              updateError,
+            );
+          }
+          final index = rules.indexWhere((r) => r['id'] == body['id']);
+          rules[index] = {
+            ...body,
+            'enabled': false,
+            'version': (body['version'] as int) + 1,
+          };
         } else if (request.url.path.endsWith('/automations')) {
           rules.add({...body, 'enabled': false, 'version': 1});
         } else if (request.url.path.endsWith('/review')) {
@@ -89,12 +107,18 @@ Future<void> mount(
     }),
   );
   await tester.pumpWidget(
-    MaterialApp(
-      theme: WfStyle.theme,
-      home: Scaffold(
-        body: RepaintBoundary(
-          key: capture,
-          child: SingleChildScrollView(
+    RepaintBoundary(
+      key: capture,
+      child: MaterialApp(
+        theme: WfStyle.theme,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: WorkforceAutomations(
               client: client,
@@ -222,7 +246,7 @@ void main() {
       final calls = <WfJson>[];
       await mount(tester, rules: [], calls: calls);
       await click(tester, find.widgetWithText(OutlinedButton, 'Set up').first);
-      final recipientField = find.byType(DropdownButtonFormField<String>).at(1);
+      final recipientField = find.byKey(const ValueKey('reminder-recipient'));
       await click(tester, recipientField);
       await click(tester, find.text('employer@example.com').last);
       await click(tester, find.text('Save paused'));
@@ -233,6 +257,132 @@ void main() {
       expect(calls.single['send_start'], '08:00');
       expect(calls.single.containsKey('enabled'), false);
       expect(find.text('Review & enable'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'Reminder instructions save on the existing rule and survive reopen',
+    (tester) async {
+      final calls = <WfJson>[];
+      final rules = <WfJson>[
+        {
+          ...rule(channel: 'workspace_email'),
+          'instructions': 'Original instructions',
+          'delivery_mode': 'review',
+          'send_start': '09:30:00',
+          'send_end': '17:30:00',
+        },
+      ];
+      final capture = GlobalKey();
+      await mount(
+        tester,
+        rules: rules,
+        calls: calls,
+        width: 1100,
+        capture: capture,
+      );
+      await click(tester, find.text('Edit reminder'));
+      final instructions = find.byKey(const ValueKey('reminder-instructions'));
+      expect(
+        tester.widget<TextFormField>(instructions).controller!.text,
+        'Original instructions',
+      );
+      expect(find.text('More options'), findsOneWidget);
+      await tester.enterText(
+        instructions,
+        'Include completed jobs, quantities and any blockers.',
+      );
+      await click(tester, find.text('Email preview'));
+      expect(
+        find
+            .textContaining(
+              'Include completed jobs, quantities and any blockers.',
+            )
+            .evaluate()
+            .length,
+        greaterThanOrEqualTo(2),
+      );
+      expect(calls, isEmpty);
+      if (Platform.environment['WORKFORCE_CAPTURE_DIR']
+          case final String path) {
+        await tester.runAsync(() async {
+          final boundary =
+              capture.currentContext!.findRenderObject()
+                  as RenderRepaintBoundary;
+          final image = await boundary.toImage(pixelRatio: 1.5);
+          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+          Directory(path).createSync(recursive: true);
+          File(
+            '$path/workforce_reminder_editor.png',
+          ).writeAsBytesSync(bytes!.buffer.asUint8List());
+          image.dispose();
+        });
+      }
+      await click(tester, find.text('Save changes'));
+      expect(calls.length, 1);
+      expect(calls.single['path'], '/api/workforce/$org/automations/update');
+      expect(calls.single['id'], rule()['id']);
+      expect(calls.single['version'], 1);
+      expect(
+        calls.single['instructions'],
+        'Include completed jobs, quantities and any blockers.',
+      );
+      expect(calls.single['send_start'], '09:30');
+      expect(calls.single['send_end'], '17:30');
+      expect(rules.length, 1);
+      expect(rules.single['enabled'], false);
+      await click(tester, find.text('Edit reminder'));
+      expect(
+        tester.widget<TextFormField>(instructions).controller!.text,
+        'Include completed jobs, quantities and any blockers.',
+      );
+      await click(tester, find.text('Cancel'));
+      await click(tester, find.text('Review & enable'));
+      expect(
+        find.textContaining(
+          'Include completed jobs, quantities and any blockers.',
+        ),
+        findsWidgets,
+      );
+      expect(calls.length, 1);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'A rejected save keeps instructions in the editor at 320 pixels and large text',
+    (tester) async {
+      final calls = <WfJson>[];
+      await mount(
+        tester,
+        rules: [
+          {
+            ...rule(channel: 'workspace_email'),
+            'send_start': '08:00:00',
+            'send_end': '18:00:00',
+            'instructions': 'Old',
+          },
+        ],
+        calls: calls,
+        width: 320,
+        textScale: 2,
+        updateError: 409,
+      );
+      await click(tester, find.text('Edit reminder'));
+      final instructions = find.byKey(const ValueKey('reminder-instructions'));
+      await tester.enterText(instructions, 'Keep these unsaved instructions');
+      await click(tester, find.text('Save changes'));
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(
+        tester.widget<TextFormField>(instructions).controller!.text,
+        'Keep these unsaved instructions',
+      );
+      expect(
+        find.text('This reminder changed. Close and reopen it before saving.'),
+        findsOneWidget,
+      );
+      expect(calls.length, 1);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     },
