@@ -1,3 +1,4 @@
+import {crmVoiceContext,prepareCrmVoiceDraft} from './voice.mjs';
 import {
   normalizeContact,
   fail,
@@ -22,6 +23,7 @@ export function registerContactsCrm(
     environment = process.env,
     store = null,
     emailService = null,
+    crmEmails = null,
   } = {},
 ) {
   const persistence = store || (database ? createContactStore(database) : null);
@@ -76,6 +78,12 @@ export function registerContactsCrm(
     }
   };
   const base = "/api/contacts";
+  app.get(base+'/voice/context',route(async(req,res,u)=>res.json(await crmVoiceContext(persistence,u,req.query))));
+  app.post(base+'/voice/draft',route(async(req,res,u)=>res.json(await prepareCrmVoiceDraft(persistence,u,req.body))));
+  const mail=()=>{if(!crmEmails)fail('CRM email is temporarily unavailable.',503);return crmEmails;};
+  app.get(base+'/email',route(async(_req,res,u)=>res.json(await mail().action(u,'state'))));
+  app.post(base+'/email/rules',route(async(req,res,u)=>res.json(await mail().action(u,'save',req.body))));
+  app.post(base+'/email/actions',route(async(req,res,u)=>res.json(await mail().action(u,req.body?.action,req.body))));
   app.get(
     base + "/capabilities",
     route(async (_req, res, u) =>

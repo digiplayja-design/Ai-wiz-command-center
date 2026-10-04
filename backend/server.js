@@ -1,3 +1,4 @@
+import {crmVoiceSessionGuard,crmVoiceInstructions} from './contacts_crm/voice.mjs';
 import { registerDirectory } from './directory/routes.mjs';
 import { registerChatMemory, prepareChatMemory } from './chat_memory/memory.mjs';
 import { resumeTextPolicy } from './resume_studio/policy.mjs';
@@ -25,6 +26,7 @@ import { registerScheduling } from './scheduling/routes.mjs';
 import { generateSchedulingAI } from './scheduling/ai.mjs';
 import { workforceVoiceInstructions, workforceVoiceSessionGuard } from './workforce/voice.mjs';
 import { registerWorkforce } from './workforce/routes.mjs'; // K138_WORKFORCE
+import {createCrmEmails,registerCrmEmailPublicRoutes} from './contacts_crm/emails.mjs';
 import { registerContactsCrm } from './contacts_crm/routes.mjs'; // K137_ENTERPRISE_CONTACTS
 import { registerBookkeeping } from './bookkeeping/routes.mjs';
 import { bookkeepingVoiceInstructions, bookkeepingVoiceSessionGuard } from './bookkeeping/voice.mjs';
@@ -3737,6 +3739,7 @@ app.get("/api/health", (req, res) => {
       discovery:'regional_official_sources',directSamConfigured:createSamAdapter().ready(),
       pdfImport:true,deadlineMonitoring:true,automaticMonitoringUsesAiCredits:false,
       automaticSubmission:false},
+    contactsCrm: {version:2,voice:true,email:{version:1,followUpDates:true,draftReview:true,automaticFollowUps:true,enabledByDefault:false,providerConfigured:createFieldProofEmailProvider({environment:process.env,namespace:'crm'}).status().ready}},
     workforce: {version:3,voice:true,businessProfiles:true,industryTemplates:12,teamTypes:5,taskBoard:true,
       email:{version:1,workspaceRecipients:true,draftReview:true,automaticReminders:true,dailySummaries:true,enabledByDefault:false,providerConfigured:createFieldProofEmailProvider({environment:process.env,namespace:'workforce'}).status().ready}},
     fieldProof: {version:3,model:CHAT_MODEL,reasoningEffort:CHAT_EFFORT,creditCost:FIELDPROOF_CREDIT_COST,maxPhotos:24,originalEvidence:true,voice:true,industryTemplates:14,readings:true,punchList:true,batchPhotos:true,
@@ -8556,6 +8559,7 @@ function korlixLiveConvoSessionConfigV1(req) {
     type: "realtime",
     model: korlixLiveConvoModelV1(),
     instructions: req.korlixWorkforceVoice ? workforceVoiceInstructions({ language: korlixLiveConvoEnvStringV1('KORLIX_LIVE_CONVO_LANGUAGE', String(req.headers?.['x-korlix-language'] || 'English')) }) + '\n' + korlixLiveConvoAccentInstructionV1(req)
+      : req.korlixCrmVoice ? crmVoiceInstructions({language:korlixLiveConvoEnvStringV1('KORLIX_LIVE_CONVO_LANGUAGE',String(req.headers?.['x-korlix-language']||'English'))}) + '\n' + korlixLiveConvoAccentInstructionV1(req)
       : req.korlixFieldProofVoice ? fieldProofVoiceInstructions({ language: korlixLiveConvoEnvStringV1('KORLIX_LIVE_CONVO_LANGUAGE', String(req.headers?.['x-korlix-language'] || 'English')) }) + '\n' + korlixLiveConvoAccentInstructionV1(req)
       : req.korlixBookkeepingVoice ? bookkeepingVoiceInstructions(req.korlixBookkeepingVoice, { language: korlixLiveConvoEnvStringV1('KORLIX_LIVE_CONVO_LANGUAGE', String(req.headers?.['x-korlix-language'] || 'English')) }) + '\n' + korlixLiveConvoAccentInstructionV1(req)
       : req.korlixMusicVoice ? musicVoiceInstructions({ language: korlixLiveConvoEnvStringV1('KORLIX_LIVE_CONVO_LANGUAGE', String(req.headers?.['x-korlix-language'] || 'English')) }) + '\n' + korlixLiveConvoAccentInstructionV1(req)
@@ -9464,6 +9468,7 @@ app.post("/api/live-convo/usage", async (req, res) => {
   }
 });
 
+app.use("/api/live-convo/session", crmVoiceSessionGuard({requireUser,database:supabaseAdmin}));
 app.use("/api/live-convo/session", workforceVoiceSessionGuard({ requireUser, database: supabaseAdmin }));
 app.use("/api/live-convo/session", fieldProofVoiceSessionGuard({ requireUser }));
 app.use("/api/live-convo/session", musicVoiceSessionGuard({ requireUser }));
@@ -9615,7 +9620,7 @@ app.post(
         });
       }
 
-      if (!req.korlixWorkforceVoice && !req.korlixFieldProofVoice && !req.korlixBookkeepingVoice && !req.korlixMusicVoice) await korlixLiveConvoAttachAgentSessionV1({ req, user });
+      if (!req.korlixWorkforceVoice && !req.korlixFieldProofVoice && !req.korlixBookkeepingVoice && !req.korlixMusicVoice && !req.korlixCrmVoice) await korlixLiveConvoAttachAgentSessionV1({ req, user });
 
       // KORLIX_LIVE_CONVO_SDP_CRLF_FIX_V1
       // Preserve the complete SDP offer, including its final CRLF.
@@ -12745,6 +12750,11 @@ const fieldProofEmails = registerFieldProofEmails(app, {
 });
 // Share the existing verified Resend webhook; its Agent Email handler runs next.
 registerFieldProofEmailWebhook(app,{emailService:fieldProofEmails,environment:process.env});
+const crmEmails=createCrmEmails({database:fieldProofEmailDatabase,environment:process.env});
+registerCrmEmailPublicRoutes(app,{service:crmEmails,environment:process.env});
+crmEmails.start();
+process.once('SIGTERM',()=>crmEmails.stop());
+process.once('SIGINT',()=>crmEmails.stop());
 const workforceEmails=createWorkforceEmails({database:fieldProofEmailDatabase,environment:process.env});
 registerWorkforceEmailPublicRoutes(app,{service:workforceEmails,environment:process.env});
 process.once('SIGTERM',()=>fieldProofEmails.stop());
@@ -12888,7 +12898,7 @@ registerBookkeeping(app, { database: supabaseAdmin, requireUser, receiptOptions:
     await incrementUsage({ usageCounter, liveSearchUsed: false, fileRequested: false, creditsNeeded: 1 });
   },
 } });
-registerContactsCrm(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }); // K137_ENTERPRISE_CONTACTS
+registerContactsCrm(app, { crmEmails, database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }); // K137_ENTERPRISE_CONTACTS
 registerDirectory(app, {database: supabaseAdmin, requireUser});
 registerWorkforce(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1, workspaceEmail: workforceEmails }); // K138_WORKFORCE
 registerFunnels(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1, autoStartScheduler: true }); // K141_FUNNEL_SCHEDULING

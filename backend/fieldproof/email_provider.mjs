@@ -89,7 +89,7 @@ function wire(input, from, namespace) {
     text: content(input.text, true),
     // Resend returns this server-owned tag in signed delivery webhooks, allowing
     // a bounce to find its authorized dispatch even before its HTTP receipt saves.
-    tags: [{ name: namespace === 'workforce' ? 'workforce_delivery' : 'fieldproof_delivery', value: input.id.toLowerCase() }],
+    tags: [{ name: `${namespace}_delivery`, value: input.id.toLowerCase() }],
     // The caller must derive this from fresh authenticated account data, never
     // from a job's customer email or an arbitrary user-supplied setting.
     reply_to: address(input.replyTo),
@@ -98,7 +98,7 @@ function wire(input, from, namespace) {
   if (html) payload.html = html;
   const attachments = pdfAttachments(input.attachments);
   if (attachments.length) payload.attachments = attachments;
-  return { body: JSON.stringify(payload), idempotencyKey: `${namespace === 'workforce' ? 'wf' : 'fp'}-email:${input.id.toLowerCase()}` };
+  return { body: JSON.stringify(payload), idempotencyKey: `${namespace === 'workforce' ? 'wf' : namespace === 'crm' ? 'crm' : 'fp'}-email:${input.id.toLowerCase()}` };
 }
 
 async function responseBody(response) {
@@ -127,7 +127,7 @@ function retryAfter(response) {
 }
 
 export function createFieldProofEmailProvider({ environment = process.env, fetchImpl = globalThis.fetch, namespace = 'fieldproof' } = {}) {
-  if (!['fieldproof', 'workforce'].includes(namespace)) throw new Error('Unknown transactional email namespace');
+  if (!['fieldproof', 'workforce', 'crm'].includes(namespace)) throw new Error('Unknown transactional email namespace');
   const configuration = () => {
     const apiKey = environment.RESEND_API_KEY;
     let from = null;
