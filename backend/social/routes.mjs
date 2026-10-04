@@ -5,7 +5,8 @@ import { createSocialCallConfig, socialRelayReadiness } from './calls.mjs';
 import { registerDomino } from './domino.mjs';
 import { registerSocialAttachments, socialAttachments } from './attachments.mjs';
 import { registerSocialAlbums } from './albums.mjs';
-export function registerSocial(app, { database, requireUser, logger = console, env = process.env } = {}) {
+import { createSocialPush } from './push.mjs';
+export function registerSocial(app, { database, requireUser, logger = console, env = process.env, pushSender, autoStart = true } = {}) {
   const callConfig = createSocialCallConfig({env,logger});
   logger.info?.('Social calling relay readiness', socialRelayReadiness(env));
   const actions = new Set(['bootstrap', 'members', 'member', 'wall', 'connections', 'messages', 'message', 'topics', 'topic', 'blocks', 'reports',
@@ -16,9 +17,9 @@ export function registerSocial(app, { database, requireUser, logger = console, e
   for (const action of groupActions) actions.add(action);
   const reads = new Set(['bootstrap', 'members', 'member', 'wall', 'connections', 'messages', 'message', 'topics', 'topic', 'blocks', 'reports']);
   for (const action of ['groups','group_details','group_messages','group_message']) reads.add(action);
-  const callActions = new Set(['call_config', 'call_inbox', 'call_start', 'call_accept', 'call_end', 'call_poll', 'call_signal']);
+  const callActions = new Set(['call_config', 'call_inbox', 'call_history', 'call_restart', 'call_start', 'call_accept', 'call_end', 'call_poll', 'call_signal']);
   for (const action of callActions) actions.add(action);
-  for (const action of ['call_config', 'call_inbox', 'call_poll']) reads.add(action);
+  for (const action of ['call_config', 'call_inbox', 'call_poll', 'call_history']) reads.add(action);
   const authenticate = async (req, res) => {
     let user;
     try { user = await requireUser(req); } catch { res.status(401).json({ error: 'Sign in to use KORLIX Social.' }); return null; }
@@ -30,6 +31,8 @@ export function registerSocial(app, { database, requireUser, logger = console, e
   registerSocialAlbums(app, { database, authenticate, logger });
   registerDomino(app, { database, authenticate, env, logger });
   registerSocialAttachments(app, { database, authenticate, logger });
+  const push = createSocialPush({ database, authenticate, env, logger, sender: pushSender, autoStart });
+  push.register(app);
   const route = async (req, res) => {
     res.set('Cache-Control', 'no-store');
     try {
@@ -52,7 +55,7 @@ export function registerSocial(app, { database, requireUser, logger = console, e
       const result = await database.rpc(['dump_schedule','dump_cancel'].includes(action) ? 'korlix_social_dump_v1' : mediaChat ? 'korlix_social_media_chat_v1' : groupAction ? 'korlix_social_groups_v1' : callActions.has(action) ? 'korlix_social_calls_v1' : 'korlix_social_v1', { p_actor: user.id, p_action: groupReport ? 'group_report' : action, p_data: data });
       if (result.error) {
         const code = result.error.code;
-        const status = { P0001: 400, P0002: 404, '42501': 403, '23505': 409, '23514': 400, '22P02': 400, '22003': 400, '54000': 429 }[code];
+        const status = { P0001: 400, P0002: 404, '42501': 403, '23505': 409, '40001': 409, '23514': 400, '22P02': 400, '22003': 400, '54000': 429 }[code];
         if (status) return res.status(status).json({ error: code === '23505' ? 'That handle or request is already in use. Refresh and try again.' : ['22P02', '22003', '23514'].includes(code) ? 'Check the fields and try again.' : result.error.message });
         logger.warn('Social storage unavailable', { action, code });
         return res.status(503).json({ error: 'This change could not be confirmed. Refresh before retrying.' });
@@ -65,4 +68,5 @@ export function registerSocial(app, { database, requireUser, logger = console, e
   };
   app.get('/api/social/:action', route);
   app.post('/api/social/:action', route);
+  return push;
 }

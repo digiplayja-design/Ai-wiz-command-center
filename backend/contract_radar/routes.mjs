@@ -1,9 +1,11 @@
+import {createRadarMonitor} from './monitor.mjs';
 import {randomUUID,createHash} from 'node:crypto';
 import {RadarError,fail,text,uuid,profileData,importData} from './ai.mjs';
 const base='/api/contract-radar';
 const stages=['saved','reviewing','preparing','submitted','won','closed'];
-export function registerContractRadar(app,{database,requireUser,aiAccess,discover,review,logger=console}={}){
+export function registerContractRadar(app,{database,requireUser,aiAccess,discover,review,logger=console,environment=process.env,autoStartMonitor=false,sam,extractPdf}={}){
  const active=new Set(),starting=new Set();
+ const monitor=createRadarMonitor({database,requireUser,environment,autoStart:autoStartMonitor,sam,extractPdf,logger});monitor.register(app);
  const call=async(actor,action,id=null,data={})=>{const r=await database.rpc('korlix_radar_v1',{p_actor:actor,p_action:action,p_id:id,p_data:data});
   if(r.error){const status={P0002:404,'40001':409,'54000':429,P0001:400,'42501':403}[r.error.code];if(status)fail(r.error.message,status);fail('Contract Radar storage is temporarily unavailable. Refresh and retry.',503);}return r.data;};
  const route=fn=>async(q,r)=>{r.set('Cache-Control','no-store');try{const user=await requireUser(q);if(!user?.id)fail('Sign in to use Contract Radar.',401);if(!database)fail('Contract Radar is temporarily unavailable.',503);await fn(q,r,user);}catch(e){const status=e instanceof RadarError?e.status:e.statusCode===401?401:503;r.status(status).json({error:e instanceof RadarError?e.message:status===401?'Sign in again to use Contract Radar.':'Contract Radar is temporarily unavailable. Refresh and retry.'});}};
@@ -13,7 +15,7 @@ export function registerContractRadar(app,{database,requireUser,aiAccess,discove
   const result=j.kind==='discover'?await discover({...j.input}):await review({...j.input});
   await call(user.id,'job_finish',j.id,{result});
  }catch(e){logger.warn('Contract Radar job failed',{kind:j.kind,errorType:e.name||'Error'});try{await call(user.id,'job_fail',j.id,{error:e instanceof RadarError?e.message:'KORLIX could not finish this request. No credit was charged. Please retry.'});}catch{logger.warn('Contract Radar job status could not be saved');}}finally{active.delete(j.id);}};
- app.get(base,route(async(_q,r,u)=>{const d=await call(u.id,'list');r.json({profile:d.profile?{data:d.profile.data,updatedAt:d.profile.updated_at}:null,opportunities:d.opportunities.map(publicOpportunity),jobs:d.jobs.map(publicJob),coverage:'Official-source web search: SAM.gov and NYC City Record. Corporate and other RFPs can be pasted for review.',creditCost:1});}));
+ app.get(base,route(async(_q,r,u)=>{const d=await call(u.id,'list');r.json({profile:d.profile?{data:d.profile.data,updatedAt:d.profile.updated_at}:null,opportunities:d.opportunities.map(publicOpportunity),jobs:d.jobs.map(publicJob),coverage:'Official-source web search for your selected region. Direct SAM.gov search and daily in-app reminders use no AI credits. PDF RFPs can be imported for review.',creditCost:1,capabilities:monitor.rootCapabilities()});}));
  app.put(base+'/profile',route(async(q,r,u)=>{const p=await call(u.id,'profile_save',null,profileData(q.body));r.json({profile:{data:p.data,updatedAt:p.updated_at}});}));
  app.post(base+'/opportunities',route(async(q,r,u)=>{
   let data,source_key;const id=uuid(q.body?.request_key);
@@ -48,5 +50,5 @@ export function registerContractRadar(app,{database,requireUser,aiAccess,discove
   }finally{starting.delete(id);}
  }));
  app.get(base+'/jobs/:id',route(async(q,r,u)=>r.json({job:publicJob(await call(u.id,'job_get',uuid(q.params.id)))})));
- return {active};
+ return {active,monitor};
 }

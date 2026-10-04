@@ -44,6 +44,8 @@ before(async()=>{
  await db.exec(await readFile(new URL(wallVoice,folder),'utf8'));
  const autoDump=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_auto_dump.sql'));
  await db.exec(await readFile(new URL(autoDump,folder),'utf8'));
+ const communication=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_communication_upgrade.sql'));
+ await db.exec(await readFile(new URL(communication,folder),'utf8'));
  const app=express();app.use(express.json({limit:'250kb'}));registerSocial(app,{database:rpc,requireUser:async q=>{if(!users.includes(q.headers.authorization))throw Error();return {id:q.headers.authorization,email_confirmed_at:'2026-01-01'};},logger:{warn(){}}});
  server=app.listen(0);await new Promise(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}/api/social/`;
 });

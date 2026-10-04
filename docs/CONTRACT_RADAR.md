@@ -1,30 +1,71 @@
-# KORLIX Contract Radar — first release
+# KORLIX Contract Radar
 
-## Start
-Open **Contract Radar** from the home quick actions or tools. Save a business name, services and service area in **Business**. Optionally add capacity, credentials and NAICS codes. In **Discover**, enter an optional focus and choose **Find opportunities**. Open each original notice, then save useful leads to **Pipeline**. Use **Paste an RFP** for corporate or other notices. In a saved opportunity, add the complete RFP text, choose **Review with KORLIX**, review the evidence and missing information, and copy the working draft.
+## Finding and reviewing work
 
-## Coverage and accuracy
-Discovery uses OpenAI Responses web search restricted to SAM.gov and NYC City Record. This is selective search-backed discovery, not a direct procurement API feed, exhaustive coverage, or a verified list of every open bid. Direct SAM integration requires a separate API key and is deferred. Accepted results must have an individual official notice URL present in the actual provider retrieval sources. Unsupported URLs, duplicates, awards and known past response dates are rejected. Notice classifications distinguish solicitations, sources-sought and presolicitations. Dates, summaries and relevance are search-derived: check the original notice, attachments, amendments, response time and eligibility before acting.
+Save your business profile and select a search region. On-demand **Official web search** uses your services, service area, NAICS codes and optional focus. It returns up to 12 source-linked notices. **Direct SAM.gov** searches a structured federal feed without AI credits when the server connection is configured. Both paths keep the original notice link visible; verify closing times, eligibility, documents and amendments there before bidding.
 
-Other RFPs can be pasted (18,000 characters maximum); this release does not parse uploaded PDFs or fetch arbitrary URLs. Summary-only reviews are visibly marked. Requirement evidence must match an exact passage of supplied material; unsupported evidence is removed and the requirement is marked for verification. Profile qualifications are self-reported. KORLIX prepares drafts with missing-input placeholders; it does not verify credentials, set prices, promise awards, submit bids, contact buyers or move pipeline stages automatically. Submitted/won stages are manual records.
+| Region | Official web search sources | Automatic feed |
+| --- | --- | --- |
+| United States | SAM.gov, NYC City Record, New York State OGS | SAM.gov when configured |
+| Canada | CanadaBuys tender notices | None; use on-demand web search |
+| United Kingdom | Find a Tender, Contracts Finder | None; use on-demand web search |
+| Jamaica | GOJEP, Ministry of Health tender notices | None; some GOJEP records need browser access |
 
-## Access and credits
-Profiles, saved opportunities and manual pipeline management are available to signed-in users. AI discovery/review uses the existing Ultra Premium/Enterprise entitlement and consent gate, Astra at extra-high reasoning, and one existing credit per successful request. Searches with no accepted opportunities use zero credits. Failed/interrupted requests do not charge; replaying the same request does not charge or dispatch twice. This release does not create a new payment product.
+Coverage is selective, not a complete national, state or local procurement feed. Official web results require individual notice URLs actually retrieved by the provider and permitted for the selected region. The backend rejects unsupported sites, duplicate results, known past deadlines and awards. Sources-sought and presolicitations are labelled leads rather than open bids.
 
-## Privacy and lifecycle
-All records are scoped to the backend-verified account. Three private RLS-enabled tables have no direct anonymous/authenticated access; only the service role can execute the security-invoker RPC. Client requests never select an owner. Session changes discard stale responses and clear private editor state.
+Save useful leads to the pipeline. Corporate and other RFPs can be pasted or imported from a PDF. PDF extraction accepts one file up to 5 MiB and 60 pages, returning up to 18,000 characters and an explicit truncation warning. Review the extracted text before saving. Scanned, encrypted or unreadable PDFs are rejected with a readable explanation; there is no OCR. Extraction is private, does not invoke AI and does not retain the raw upload. Only text you subsequently save becomes part of the opportunity.
 
-Discovery sends services, service area, optional NAICS and the search focus to OpenAI/web search. Reviews send the saved profile and selected notice text or summary to OpenAI after AI consent. Requests set store:false. Profile/notice snapshots and results remain in the private Radar records. Search retrieval uses official public sources. Request bodies, RFP text and profile details are not logged by the module.
+**Review with KORLIX** remains an explicit consented action. It prepares a requirements checklist, missing-information questions and a working draft. Requirement evidence must match exact supplied passages. Summary-only reviews are labelled; a feed listing is not a full RFP. Credentials remain self-reported, missing facts become placeholders, and nothing is submitted or sent to a buyer automatically.
 
-Removing a saved opportunity removes its review jobs, but its earlier discovery result can remain in search history. **Clear my radar** removes that account's profile, opportunities and job history. It does not reverse already consumed credits or request deletion from third-party provider retention. Account deletion cascades Radar records. Editing RFP text invalidates its saved review; profile updates do not rewrite historical reviews, whose profile snapshot time is displayed.
+## Daily monitoring and alerts
 
-## Runtime limits and recovery
-Jobs run in the existing backend process, with database-backed state. Navigating away and reopening resumes polling. A server restart can interrupt work; jobs older than eight minutes become failed without charge and can be restarted manually. There is no durable external queue or automatic retry. One active job per account, three starting/running jobs per process, 12 starts per account per hour, 100 saved opportunities, at most 100 retained job records and 12 jobs returned in the current view. Provider calls have finite deadlines and no automatic retries. Inputs and stored JSON sizes are bounded.
+Monitoring starts off for every account. In **Monitoring**, select a time zone, local digest time and reminders at 30, 14, 7, 3, 1 or 0 days before a saved deadline (up to five choices). Enable daily monitoring to receive an **in-app** digest and deadline alerts. No email or push delivery is implied.
+
+Up to five saved SAM.gov searches can run daily. Each search checks up to 100 feed records; results remain in the monitoring screen. Up to ten saved SAM.gov notices are checked per daily run, prioritizing those least recently checked. A changed title, response date, status, published/modified date or attachment-link metadata produces a **notice details changed** alert. The system does not download attachments or compare their contents, and the public API exposes the latest version rather than a complete amendment history. If a check fails or a notice cannot be retrieved, its earlier snapshot is retained with a warning. Verify the original source.
+
+Deadline alerts use the most recent available SAM snapshot, or the saved deadline for other opportunities. They follow the account's local calendar date, not an inferred exact closing time. Won, closed and submitted items do not receive deadline reminders. Monitoring works for saved deadlines even without a SAM key. Missing configuration, failures and request limits are visible; the worker never silently switches to billable AI discovery.
+
+The daily worker persists leases, results and unique event keys in Postgres. It polls once per minute, handles at most three accounts per tick, limits each account's processing window to eight minutes and recovers abandoned ten-minute leases. Settings changes cancel stale work before results are committed. A completed local-calendar-day digest is not repeated. One retained event per notice revision/deadline prevents duplicate alerts. Read/clear actions affect only the owner; cleared alerts retain their deduplication key until the 180-day history cleanup.
+
+## Access, credits and privacy
+
+Manual records, PDF extraction, direct feed searches and monitoring are available to signed-in users. They use no AI credits. AI discovery/review retains the existing Ultra Premium/Enterprise entitlement, sharing consent and one-credit charge per successful request. Empty searches and failed/interrupted requests do not charge. Idempotent AI retries do not dispatch or charge twice.
+
+All database actors come from verified backend authentication, never client owner fields. All eight Radar tables have RLS enabled and deny direct anonymous/authenticated access. Service-only security-invoker RPCs enforce ownership. No service keys are exposed to clients. Raw PDFs are processed inside a bounded worker thread, with no arbitrary URL fetching, and discarded after extraction. Request bodies, RFP text, profiles and API keys are not logged by the module.
+
+Discovery sends services, service area, NAICS and focus to OpenAI/web search. Reviews send the selected business profile and notice text/summary only after consent, with `store:false`. Historical review snapshots remain private. Account deletion cascades Radar records. Removing an opportunity removes its watches and review jobs. **Clear my radar** atomically removes the profile, opportunities, jobs, monitoring settings, searches and alerts; already consumed credits are not reversed. Daily rate counters remain until their normal cleanup.
+
+## Limits and provider setup
+
+Existing limits remain: 100 saved opportunities, one active AI job per account, three AI jobs per process, 12 AI starts/account/hour and eight-minute interruption recovery. Inputs and database JSON are bounded.
+
+Direct searches and saves share a durable limit of 40 user actions per UTC day (each search can use two provider requests). Automatic monitoring separately reserves at most 20 provider requests per owner per UTC day, including retries: two reserved per search and one per notice check. A 429 response starts a shared-process SAM cooldown honoring `Retry-After`, bounded to 30 seconds–24 hours and defaulting to one hour. The provider's shared-key quota may be lower; requests can therefore remain unavailable until it resets. There are no automatic API retries within a request.
+
+Set **SAM_GOV_API_KEY** (or legacy alias **SAM_API_KEY**) on the backend to enable the direct connection. The key is server-only and used only with `https://api.sam.gov/opportunities/v2/search`. Redirects are rejected; response size is capped at 2 MiB and requests time out after 20 seconds. A configured status does not prove that the credential is valid or the provider has remaining quota. No new Google billing product is introduced. Existing AI usage rules still apply to explicit AI actions.
 
 ## API and deployment
-API prefix: /api/contract-radar. GET reads the private snapshot; DELETE requires confirmed:true. PUT /profile saves the profile. POST /opportunities accepts an owned completed discovery job/index or a manual RFP; PATCH/DELETE /opportunities/:id updates/removes it. POST /jobs takes a UUID request_key, kind, consent and optional query/opportunity_id. GET /jobs/:id polls. Responses use Cache-Control:no-store.
 
-Apply the additive contract_radar migration before deploying the backend, then deploy the frontend. Align the repository migration filename with the version returned by Supabase migration history. Existing OpenAI and database configuration is reused; no new credentials, storage buckets, scheduled workers or service plans are introduced. Backend health includes contractRadar.version=1. Roll back both services to their previous release commits if needed; leave additive tables intact to preserve user records. Never drop customer data as a rollback step.
+Prefix: `/api/contract-radar`, all authenticated responses `Cache-Control: no-store`.
 
-## Verification
-Automated backend tests execute the actual migration using PGlite and exercise HTTP ownership, RLS/grants, consent/access, idempotency, atomic charging, source retrieval validation, evidence checks, input validation, recovery and deletion. Flutter tests cover client auth/session guards, profile setup, consent, discovery/save/source links, pipeline/reviews, retries, failed-editor preservation, account switching and confirmation at phone/desktop sizes including larger text. Provider responses in automated tests are fixtures. A signed-in real-provider discovery and RFP review remain live acceptance checks; public health and unauthenticated rejection alone do not prove provider output quality.
+- Existing profile, pipeline and AI-job endpoints remain compatible. Profile adds `geography: us | ca | uk | jm`; omitted values default to US for legacy accounts.
+- `POST /documents`: multipart `file`, returns extraction preview only.
+- `POST /direct-search`: `{query, naics, state}`. `POST /direct-search/save`: `{request_key, notice_id}`, re-fetches and saves a validated official notice.
+- `GET /monitor`: capabilities, settings, searches and alerts.
+- `PUT /monitor/settings`: `{version, enabled, timezone, digest_time, deadline_days}`. Stale versions return 409.
+- `POST /monitor/searches`: `{request_key, name, query, naics, state, enabled}`. Delete with `DELETE /monitor/searches/:id`.
+- `POST /monitor/alerts/:id/read`, `POST /monitor/alerts/read-all`, and `DELETE /monitor/alerts` with `{confirmed:true}`.
+
+Apply `20261004013602_contract_radar_monitoring.sql` after the original Radar migration and before deploying the backend. It preserves the existing core RPC, wrapping it to clear monitoring atomically with existing records. Register with `autoStartMonitor:true`; stop `monitor.stop()` on shutdown. No new dependency, bucket, paid worker or service plan is needed. Roll back application releases if required, leaving additive data intact.
+
+## Verification and sources
+
+27 automated backend tests use actual PGlite migrations, Express requests and PDF extraction. Fixtures verify ownership, RLS/grants, consent/charging, source validation, PDF limits, daily deduplication, leases, stale settings, quotas, cooldown and pagination. No live AI call, authenticated SAM request, email or buyer contact was made during testing. Real-provider acceptance remains necessary after a SAM key is configured.
+
+Official references checked during implementation:
+
+- [GSA Opportunities public API](https://open.gsa.gov/api/get-opportunities-public-api/)
+- [New York State OGS bid calendar](https://ogs.ny.gov/procurement/bid-opportunities)
+- [CanadaBuys tender opportunities](https://canadabuys.canada.ca/en/tender-opportunities)
+- [GOV.UK Find a Tender](https://www.gov.uk/find-tender) and [Contracts Finder](https://www.gov.uk/contracts-finder)
+- [GOJEP](https://www.gojep.gov.jm/epps/home.do) and [Jamaica Ministry of Health tenders](https://www.moh.gov.jm/tenders/)
+- Installed `pdf-parse` 2.4.5 official README (`PDFParse.getInfo`, `getText`, `destroy`); existing pinned dependency reused.

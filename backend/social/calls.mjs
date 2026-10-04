@@ -10,7 +10,7 @@ export function socialCallConfig(env = process.env) {
       iceServers.push({ urls, ...(typeof server.username === 'string' ? { username: server.username } : {}), ...(typeof server.credential === 'string' ? { credential: server.credential } : {}) });
     }
   } catch { /* Direct connectivity remains available if optional config is invalid. */ }
-  return { enabled: env.SOCIAL_CALLS_ENABLED !== 'false', iceServers, relay: iceServers.some(s => s.urls.some(u => /^turns?:/.test(u)) && s.username && s.credential) === true, ringSeconds: 45 };
+  return { protocol: 2, recovery: true, enabled: env.SOCIAL_CALLS_ENABLED !== 'false', iceServers, relay: iceServers.some(s => s.urls.some(u => /^turns?:/.test(u)) && s.username && s.credential) === true, ringSeconds: 45 };
 }
 
 export function socialRelayReadiness(env = process.env) {

@@ -3,6 +3,8 @@ import { registerChatMemory, prepareChatMemory } from './chat_memory/memory.mjs'
 import { resumeTextPolicy } from './resume_studio/policy.mjs';
 import { registerEmailEnhancer, enhanceEmail } from './email_enhancer/enhancer.mjs';
 import { registerSocial } from './social/routes.mjs';
+import { socialPushConfig } from './social/push.mjs';
+import { socialRelayReadiness } from './social/calls.mjs';
 import { registerAgentStudio } from './agent_studio/routes.mjs';
 import { generateStep, WorkflowError } from './agent_studio/model.mjs';
 import { registerInventory } from './inventory/routes.mjs';
@@ -12,6 +14,7 @@ import { generateReview } from './cyber_defender/model.mjs';
 import { registerStudyStudio } from './study_studio/routes.mjs';
 import { generateLesson } from './study_studio/model.mjs';
 import { registerAppStudio } from './app_studio/routes.mjs';
+import { registerAppPortals } from './app_studio/portal.mjs';
 import { generateSpec } from './app_studio/model.mjs';
 import { registerMusicStudio } from './music/routes.mjs';
 import { musicVoiceInstructions, musicVoiceSessionGuard } from './music/voice.mjs';
@@ -29,6 +32,7 @@ import { createPortrait as createBabyBlendPortrait } from './babyblend/ai.mjs';
 import { registerVirtualCloset } from './virtual_closet/routes.mjs';
 import { createTryOn, suggestOutfit } from './virtual_closet/ai.mjs';
 import { registerContractRadar } from './contract_radar/routes.mjs';
+import { createSamAdapter } from './contract_radar/sam.mjs';
 import { registerFieldProof } from './fieldproof/routes.mjs';
 import { registerFieldProofEmails } from './fieldproof/emails.mjs';
 import { registerFieldProofEmailWebhook } from './fieldproof/email_webhook.mjs';
@@ -265,6 +269,16 @@ const supabaseAuth =
         },
       })
     : null;
+
+// Bound queue and private-file transport independently of legacy request flows.
+const upgradedFeatureDatabase = supabaseUrl && supabaseServiceRoleKey
+  ? createClient(supabaseUrl, supabaseServiceRoleKey, {
+      auth: {autoRefreshToken:false,persistSession:false},
+      global: {fetch:(input,init={})=>fetch(input,{...init,signal:init.signal
+        ? AbortSignal.any([init.signal,AbortSignal.timeout(20000)])
+        : AbortSignal.timeout(20000)})},
+    })
+  : null;
 
 
 const KORLIX_TEMPORARILY_DOWN_MESSAGE =
@@ -3706,13 +3720,20 @@ app.get("/api/health", (req, res) => {
     inventory: {version:1,search:true,stockLedger:true,serialTracking:true,orders:true,pictureRecognition:true},
     cyberDefender: {version:1,quickChecks:true,privateReports:true,safetyChecklist:true,incidentGuides:true},
     studyStudio: {version:1,savedProgress:true,flashcards:true,practiceQuiz:true},
-    appStudio: {version:1,interactivePreview:true,savedProjects:true,versionHistory:true,webExport:true},
+    appStudio: {version:2,interactivePreview:true,savedProjects:true,versionHistory:true,webExport:true,
+      hostedCustomerPortals:true,sharedRecords:true,privateUploads:true},
+    social: {version:2,callRecovery:true,callHistory:true,
+      relayMode:socialRelayReadiness().mode,webPushConfigured:socialPushConfig().enabled,
+      nativePushConfigured:false},
     musicStudio: {version:2,savedLibrary:true,savedDrafts:true,provider:'musicapi.ai',providerConfigured:Boolean(process.env.MUSICAPI_KEY||process.env.MUSICAPI_API_KEY||process.env.MUSICAPI_AI_KEY)},
     liveStudio: {version:2,customerWorkspaces:true,privateRehearsals:true,youtubeVisibility:'unlisted',publicBroadcasts:false},
     taxPrep: {version:1,country:'US',bookkeepingLinked:true,filingEnabled:false,automaticTaxCalculation:false},
     babyBlend: {version: 1, privateStorage: true, analysisModel: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, creditCost: 1, ...pictureModelSettings()},
     virtualCloset: {version: 1, privateStorage: true, analysisModel: CHAT_MODEL, ...pictureModelSettings()},
-    contractRadar: {version: 1, model: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, discovery: 'official_source_web_search', automaticSubmission: false},
+    contractRadar: {version:2,model:CHAT_MODEL,reasoningEffort:CHAT_EFFORT,
+      discovery:'regional_official_sources',directSamConfigured:createSamAdapter().ready(),
+      pdfImport:true,deadlineMonitoring:true,automaticMonitoringUsesAiCredits:false,
+      automaticSubmission:false},
     workforce: {version:2,voice:true,businessProfiles:true,industryTemplates:12,teamTypes:5,taskBoard:true},
     fieldProof: {version:3,model:CHAT_MODEL,reasoningEffort:CHAT_EFFORT,creditCost:FIELDPROOF_CREDIT_COST,maxPhotos:24,originalEvidence:true,voice:true,industryTemplates:14,readings:true,punchList:true,batchPhotos:true,
       email:{version:1,customerReports:true,followUps:true,supervisorSummaries:true,perAccountSettings:true,enabledByDefault:false,providerConfigured:createFieldProofEmailProvider({environment:process.env}).status().ready}},
@@ -12641,7 +12662,16 @@ const bookkeepingStorage = supabaseUrl && supabaseServiceRoleKey ? createClient(
   auth: { autoRefreshToken: false, persistSession: false },
   global: { fetch: (url, init = {}) => fetch(url, { ...init, signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(45000)]) : AbortSignal.timeout(45000) }) },
 }) : null;
-registerSocial(app, {database:supabaseAdmin,requireUser});
+const socialCommunication = registerSocial(app, {database:upgradedFeatureDatabase,requireUser});
+process.once('SIGTERM',()=>socialCommunication.stop());
+process.once('SIGINT',()=>socialCommunication.stop());
+const appPortals = registerAppPortals(app, {
+  database:upgradedFeatureDatabase,storageDatabase:upgradedFeatureDatabase,requireUser,
+  publicRoot:process.env.RENDER_EXTERNAL_URL||'https://chee-chai-chee-backend.onrender.com',
+  appRoot:'https://www.korlixdeveloper.com/app/',
+});
+process.once('SIGTERM',()=>appPortals.stop());
+process.once('SIGINT',()=>appPortals.stop());
 registerChatMemory(app, {database:supabaseAdmin,requireUser});
 registerEmailEnhancer(app, {requireUser,
   access: async user => {
@@ -12777,7 +12807,8 @@ registerSeoAgent(app, {database: supabaseAdmin, requireUser, autoStartScheduler:
   },
   scan: data => scanSeo({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
 });
-registerContractRadar(app, {database: supabaseAdmin, requireUser,
+const contractRadar = registerContractRadar(app, {
+  database:upgradedFeatureDatabase,requireUser,environment:process.env,autoStartMonitor:true,
   aiAccess: async user => {
     if (!process.env.OPENAI_API_KEY) return {allowed:false,status:503,reason:'KORLIX Contract Radar is temporarily unavailable.'};
     const profile = await getOrCreateProfile(user);
@@ -12790,6 +12821,8 @@ registerContractRadar(app, {database: supabaseAdmin, requireUser,
   discover: data => discoverContracts({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
   review: data => reviewContract({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
 });
+process.once('SIGTERM',()=>contractRadar.monitor.stop());
+process.once('SIGINT',()=>contractRadar.monitor.stop());
 registerBabyBlend(app, { database: supabaseAdmin, storageDatabase: bookkeepingStorage, requireUser,
   aiAccess: async user => {
     if (!process.env.OPENAI_API_KEY) return {allowed:false,status:503,reason:'BabyBlend creation is temporarily unavailable.'};
