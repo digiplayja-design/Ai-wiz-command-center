@@ -10,12 +10,11 @@ const homeBusinessTools = <String>[
   'Contract Radar',
   'Workforce',
   'Business Directory',
-];
-const homeEnterpriseTools = <String>[
+  // Keep the entry visible even while the home tier request is loading/fails.
+  // CRM verifies Enterprise access on its own authenticated API.
   'Contacts CRM',
-  'Funnel Studio',
-  'Payroll',
 ];
+const homeEnterpriseTools = <String>['Funnel Studio', 'Payroll'];
 const homePersonalTools = <String>[
   'Live Studio',
   'The Pod and You',

@@ -454,6 +454,37 @@ Future<void> _withScreen(WidgetTester tester, Future<void> Function(_ReadinessIo
 }
 
 void _readinessScreenTests() {
+  testWidgets('Rici speaks one name while assistant captions keep the written spelling', (tester) async {
+    await _withScreen(tester, (io) async {
+      await _finishAction(tester, _screenAction(tester));
+      final channel = io.peers.single.channel;
+      final greeting = channel.sent.where((x) => x['type'] == 'response.create').last;
+      final instructions = greeting['response']['instructions'] as String;
+      expect(instructions, contains('say only Ree-see'));
+      expect(instructions, contains('Do not announce the pronunciation'));
+      expect(instructions, isNot(contains('Rici')));
+      expect(instructions, isNot(contains('written Ree-see')));
+      void event(String type, [Map<String, dynamic> rest = const {}]) =>
+          channel.onMessage!(rtc.RTCDataChannelMessage(jsonEncode({'type': type, ...rest})));
+      event('response.created');
+      for (final delta in ['Hi, I am Ree', '-', 'see.']) {
+        event('response.output_audio_transcript.delta', {'delta': delta});
+        await tester.pump();
+      }
+      expect(_stage(tester).assistantTranscript, 'Hi, I am Rici.');
+      expect(_stage(tester).transcriptEntries.last.text, 'Hi, I am Rici.');
+      event('response.output_audio_transcript.done', {'transcript': 'Hi, I am Ree-see.'});
+      event('response.done', {'response': {'status': 'completed'}});
+      await _pumpSteps(tester, 2);
+      await _stage(tester).onSendText!('Tell Rici my plan.');
+      await tester.pump();
+      final input = channel.sent.where((x) => x['type'] == 'conversation.item.create' && x['item']['role'] == 'user').last;
+      expect(input['item']['content'][0]['text'], 'Tell Rici my plan.');
+      // A normal reply inherits the complete server session policy.
+      final reply = channel.sent.where((x) => x['type'] == 'response.create').last;
+      expect(reply['response']?['instructions'], isNull);
+    });
+  });
   testWidgets('F5 readiness fixture: callback checks work during pumping and retain failures', (tester) async {
     final io = _ReadinessIo();
     var checked = false;

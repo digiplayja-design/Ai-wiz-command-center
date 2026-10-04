@@ -32,7 +32,8 @@ void main() {
           ].map(homeToolIdentity).toList();
           expect(all.toSet().length, all.length);
           expect(all, containsAll(['study studio', 'app studio', 'workforce']));
-          expect(all.contains('contacts crm'), enterprise);
+          expect(all.where((tool) => tool == 'contacts crm').length, 1);
+          expect(extras, isNot(contains('Contacts CRM')));
         },
       );
     }
