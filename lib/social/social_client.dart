@@ -122,6 +122,28 @@ class SocialClient extends ChangeNotifier {
     return _send(request);
   }
 
+  Future<SocialMap> uploadDiscoverVideo(Uint8List bytes, String id) async {
+    _guard();
+    if (bytes.isEmpty || bytes.length > 50 * 1024 * 1024) {
+      throw const SocialException('Choose a video smaller than 50 MB.');
+    }
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse(
+        '${baseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/social/discover_upload',
+      ).replace(queryParameters: {'id': id}),
+    );
+    request.headers.addEntries(
+      headersBuilder().entries.where(
+        (e) => e.key.toLowerCase() != 'content-type',
+      ),
+    );
+    request.files.add(
+      http.MultipartFile.fromBytes('video', bytes, filename: 'discover-video'),
+    );
+    return _send(request, timeout: const Duration(minutes: 4));
+  }
+
   Future<SocialMap> uploadAlbumPhoto({
     required String album,
     required String id,

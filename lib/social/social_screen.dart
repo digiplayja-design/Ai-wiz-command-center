@@ -18,6 +18,7 @@ import 'social_groups.dart';
 import 'social_invite_screen.dart';
 import 'social_notification_settings.dart';
 import 'social_call_history.dart';
+import 'social_discover.dart';
 import 'domino/domino_screen.dart';
 
 class SocialScreen extends StatefulWidget {
@@ -1400,6 +1401,25 @@ class _SocialScreenState extends State<SocialScreen>
                     _hero(),
                     const SizedBox(height: 22),
                   ] else ...[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 18),
+                      child: FilledButton.tonalIcon(
+                        key: const ValueKey('social-discover'),
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => SocialDiscoverScreen(
+                              client: client,
+                              profile: _profile!,
+                            ),
+                          ),
+                        ),
+                        icon: const Icon(Icons.explore_rounded),
+                        label: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                          child: Text('Discover · News & videos'),
+                        ),
+                      ),
+                    ),
                     SocialWallComposerCard(
                       profile: _profile!,
                       onPost: _composeWall,

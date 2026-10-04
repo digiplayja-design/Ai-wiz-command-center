@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../theme/korlix_theme.dart';
 import '../theme/korlix_action_button.dart';
 import 'social_client.dart';
+import 'social_discover.dart';
 import 'social_alert_scope.dart';
 import 'social_notifications.dart';
 import 'social_design.dart';
@@ -2559,13 +2560,37 @@ class _SocialManagementScreenState extends State<SocialManagementScreen> {
                             Text(item['reason']),
                             const Divider(height: 28),
                             SelectableText(
-                              '${socialMap(item['snapshot'])['title'] ?? socialMap(item['snapshot'])['name'] ?? ''}\n${socialMap(item['snapshot'])['body'] ?? socialMap(item['snapshot'])['bio'] ?? ''}',
+                              '${socialMap(item['snapshot'])['title'] ?? socialMap(item['snapshot'])['name'] ?? ''}\n${socialMap(item['snapshot'])['body'] ?? socialMap(item['snapshot'])['summary'] ?? socialMap(item['snapshot'])['bio'] ?? ''}',
                             ),
                             const SizedBox(height: 16),
                             Wrap(
                               spacing: 8,
                               runSpacing: 8,
                               children: [
+                                if (item['kind'] == 'video')
+                                  TextButton.icon(
+                                    onPressed: () => Navigator.of(context).push(
+                                      MaterialPageRoute<void>(
+                                        builder: (_) => DiscoverVideoViewer(
+                                          client: widget.client,
+                                          items: [
+                                            {
+                                              ...socialMap(item['snapshot']),
+                                              'id': item['target_id'],
+                                              'caption': socialMap(
+                                                item['snapshot'],
+                                              )['body'],
+                                              'author': <String, dynamic>{},
+                                            },
+                                          ],
+                                          initialId: '${item['target_id']}',
+                                          report: '${item['id']}',
+                                        ),
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.play_arrow_rounded),
+                                    label: const Text('Review reported video'),
+                                  ),
                                 TextButton(
                                   onPressed: _loading
                                       ? null
