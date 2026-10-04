@@ -70,6 +70,19 @@ A Checkout return page or unverified event never grants a badge. Price, currency
 quantity, payment mode, paid invoice, ownership/generation and period remain
 validated. Sandbox payments never grant a public live badge.
 
+For a temporary signed-delivery check against the deployed URL without changing
+the live API key, set `KORLIX_DIRECTORY_STRIPE_SANDBOX_WEBHOOK_SECRET`, a random
+32-character lowercase hexadecimal `KORLIX_DIRECTORY_STRIPE_SANDBOX_PROBE_ID`,
+and an ISO `KORLIX_DIRECTORY_STRIPE_SANDBOX_PROBE_EXPIRES` at most two hours ahead.
+The sandbox signing secret must differ from the live endpoint's secret. The
+check defaults off and expires automatically. Only a Stripe-signed test-mode
+`customer.subscription.updated` event with matching
+`metadata.korlix_directory_delivery_probe` records a sanitized in-memory receipt
+in `health.sandboxWebhookProbe`. This branch never reads Stripe or the database,
+and never grants membership. It verifies network delivery and raw-body signature
+handling, not owner checkout or membership activation. Disable the sandbox
+endpoint and clear all three variables after checking the receipt.
+
 The prepared portal allows invoice history, payment method changes, and
 cancellation at the end of the billing period. Plan/quantity updates and the
 public portal login link are disabled. Set the configuration ID explicitly

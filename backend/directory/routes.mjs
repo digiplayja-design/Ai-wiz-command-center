@@ -2,15 +2,17 @@ import {randomUUID} from 'node:crypto';
 import sharp from 'sharp';
 import {adminIds,CATEGORIES,PRICES,details,DirectoryError,fail,id,slug,storeFor,text} from './core.mjs';
 import {directoryBilling} from './billing.mjs';
+import {sandboxWebhookProbe} from './webhook_probe.mjs';
 export function registerDirectory(app,{database,requireUser,environment=process.env,store,billing,now=Date.now}={}){
  const persistence=store||(database?storeFor(database):null),admins=adminIds(environment),pay=billing||directoryBilling(environment),limits=new Map();
  const root='/api/directory';
+ const deliveryProbe=sandboxWebhookProbe(environment,now);
  function rate(key,max=60,period=60000){const time=now();let v=limits.get(key);if(!v||time-v.at>period)v={at:time,n:0};v.n++;limits.set(key,v);if(limits.size>20000)for(const [k,x]of limits)if(time-x.at>3600000)limits.delete(k);if(v.n>max)fail('Please wait before trying again.',429);}
  const ip=q=>environment.RENDER==='true'?String(q.headers['x-forwarded-for']||q.ip).split(',').at(-1).trim():q.ip;
  const admin=user=>admins.has(user?.id?.toLowerCase());
  const command=(user,action,business,p)=>persistence.command(user?.id,admin(user),action,business,p);
  const wrap=(fn,auth=false)=>async(q,r)=>{r.set('Cache-Control','no-store');try{if(!persistence)fail('Directory storage is not configured.',503);let user=null;if(auth){try{user=await requireUser(q);}catch{fail('Sign in to manage your business.',401);}if(!user?.id||user.is_anonymous)fail('Sign in with a permanent account.',401);rate('owner:'+user.id,80);}else rate('public:'+ip(q),120);await fn(q,r,user);}catch(e){r.status(e instanceof DirectoryError?e.status:503).json({error:e instanceof DirectoryError?e.message:'Directory request could not be completed. Please retry.'});}};
- app.get(root+'/health',async(q,r)=>{r.set('Cache-Control','no-store');const paymentConnection=pay.checkConnection?await pay.checkConnection():'unchecked';r.json({version:1,freeListings:true,publicBrowsing:true,paymentsReady:pay.ready,paymentCredentialsConfigured:pay.configured===true,checkoutEnabled:pay.enabled===true,paymentConnection,paymentApiVersion:pay.apiVersion,livePayments:pay.live,adminConfigured:admins.size>0,prices:{currency:'USD',monthlyCents:499,yearlyCents:4900}});});
+ app.get(root+'/health',async(q,r)=>{r.set('Cache-Control','no-store');const paymentConnection=pay.checkConnection?await pay.checkConnection():'unchecked';r.json({version:1,freeListings:true,publicBrowsing:true,paymentsReady:pay.ready,paymentCredentialsConfigured:pay.configured===true,checkoutEnabled:pay.enabled===true,paymentConnection,paymentApiVersion:pay.apiVersion,livePayments:pay.live,adminConfigured:admins.size>0,prices:{currency:'USD',monthlyCents:499,yearlyCents:4900},sandboxWebhookProbe:deliveryProbe.status()});});
  app.get(root+'/businesses',wrap(async(q,r)=>r.json({...await command(null,'browse',null,{q:text(q.query.q,120),category:text(q.query.category,80),city:text(q.query.city,100),...(q.query.ids?{ids:text(q.query.ids,2000).split(',').slice(0,50).map(id)}:{}),offset:Math.min(10000,Math.max(0,Number(q.query.offset)||0))}),categories:CATEGORIES})));
  app.get(root+'/businesses/:slug',wrap(async(q,r)=>r.json(await command(null,'public',null,{slug:text(q.params.slug,120,true)}))));
  app.post(root+'/businesses/:id/report',wrap(async(q,r)=>{rate('report:'+ip(q),5,3600000);if(q.body?.website)fail('Report could not be submitted.');r.json(await command(null,'report',id(q.params.id),{reason:text(q.body?.reason,1000,true)}));}));
@@ -82,7 +84,9 @@ export function registerDirectory(app,{database,requireUser,environment=process.
   fail('Choose a membership action.');
  },true));
  app.post(root+'/billing/webhook',async(q,r)=>{
-  try{if(!pay.verify(q.korlixDirectoryRawBody,q.headers['stripe-signature']))return r.status(400).json({error:'Invalid payment signature.'});
+  try{const probe=deliveryProbe.receive(q.korlixDirectoryRawBody,q.headers['stripe-signature']);
+   if(probe)return r.status(probe.status).json(probe.body);
+   if(!pay.verify(q.korlixDirectoryRawBody,q.headers['stripe-signature']))return r.status(400).json({error:'Invalid payment signature.'});
    const event=JSON.parse(q.korlixDirectoryRawBody.toString());if(event.livemode!==pay.live)return r.status(400).json({error:'Payment mode mismatch.'});
    const o=event.data?.object;
    if(event.type.startsWith('customer.subscription.')){
