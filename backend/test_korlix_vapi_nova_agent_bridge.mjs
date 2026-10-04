@@ -403,3 +403,17 @@ test(
     );
   },
 );
+
+test('a Rici phone-agent runtime uses the same single spoken pronunciation', async () => {
+ let payload;
+ const bridge=createKorlixVapiNovaAgentBridgeFetch({
+  environment:{KORLIX_VAPI_NOVA_AGENT_BRAIN_ENABLED:'true',KORLIX_VAPI_NOVA_AGENT_BRAIN_REQUIRED:'true',KORLIX_VAPI_NOVA_OWNER_UID:'11111111-1111-4111-8111-111111111111',KORLIX_VAPI_NOVA_AGENT_ID:'general'},
+  loadAgentRuntime:async()=>({instructions:'Rici is the approved assistant. Ask before taking any action.'}),
+  fetchImpl:async(_url,options)=>{payload=JSON.parse(options.body);return {ok:true};},
+ });
+ await bridge('https://model.invalid/responses',modelRequest());
+ assert(!payload.instructions.includes('Rici'));
+ assert.match(payload.instructions,/say only Ree-see/);
+ assert.match(payload.instructions,/Ask before taking any action/);
+ assert.equal(payload.input[0].content,'Tell me about stock 5S-U202.');
+});

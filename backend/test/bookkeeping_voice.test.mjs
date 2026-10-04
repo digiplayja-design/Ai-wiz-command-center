@@ -1,3 +1,5 @@
+import riciVoice from '../voice/rici_pronunciation.cjs';
+const {riciRealtimeInstructions} = riciVoice;
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -155,8 +157,8 @@ test('dedicated session config retains selected language and accent without gene
   assert(start >= 0 && end > start);
   // Exercise the real session-config function without booting the application
   // or creating a provider session. Generic agent evaluation must not occur.
-  const make = override => new Function('bookkeepingVoiceInstructions', 'korlixLiveConvoEnvStringV1', 'korlixLiveConvoModelV1', 'korlixLiveConvoAccentInstructionV1', 'korlixLiveConvoAgentInstructionsV1', 'korlixLiveConvoReasoningEffortV1', 'korlixLiveConvoVoiceV1', source.slice(start, end) + '; return korlixLiveConvoSessionConfigV1;')(
-    bookkeepingVoiceInstructions, (key, fallback) => key === 'KORLIX_LIVE_CONVO_LANGUAGE' && override ? override : fallback,
+  const make = override => new Function('riciRealtimeInstructions', 'bookkeepingVoiceInstructions', 'korlixLiveConvoEnvStringV1', 'korlixLiveConvoModelV1', 'korlixLiveConvoAccentInstructionV1', 'korlixLiveConvoAgentInstructionsV1', 'korlixLiveConvoReasoningEffortV1', 'korlixLiveConvoVoiceV1', source.slice(start, end) + '; return korlixLiveConvoSessionConfigV1;')(
+    riciRealtimeInstructions, bookkeepingVoiceInstructions, (key, fallback) => key === 'KORLIX_LIVE_CONVO_LANGUAGE' && override ? override : fallback,
     () => 'fixture-model', () => 'Keep the selected accent.', () => { throw new Error('Generic agent prompt must remain isolated.'); }, () => 'low', () => 'fixture-voice',
   );
   const workspace = { business: { id: business.id, name: 'Fixture books' }, month: '2027-01' };

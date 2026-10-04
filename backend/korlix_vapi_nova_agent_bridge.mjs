@@ -1,3 +1,5 @@
+import riciVoice from './voice/rici_pronunciation.cjs';
+const {riciRealtimeInstructions} = riciVoice;
 const KORLIX_VAPI_NOVA_AGENT_BRIDGE_POLICY = `
 KORLIX NOVA TELEPHONE AGENT-HUB POLICY:
 
@@ -277,6 +279,11 @@ export function createKorlixVapiNovaAgentBridgeFetch({
     ]
       .filter(Boolean)
       .join("\n\n");
+
+    // Apply the same spoken-name policy when this phone agent uses Rici.
+    if (/\bRici\b/i.test(payload.instructions)) {
+      payload.instructions = riciRealtimeInstructions(payload.instructions);
+    }
 
     return fetchImpl(
       url,

@@ -1,3 +1,5 @@
+import riciVoice from '../voice/rici_pronunciation.cjs';
+const {riciRealtimeInstructions} = riciVoice;
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -155,8 +157,8 @@ test('real session configuration preserves language, accent and ordinary/bookkee
   const end = source.indexOf('// KORLIX_LIVE_CONVO_BUILD129_LIMITS_BEGIN', start);
   assert(start >= 0 && end > start);
   let genericCalls = 0;
-  const make = languageOverride => new Function('musicVoiceInstructions', 'bookkeepingVoiceInstructions', 'korlixLiveConvoEnvStringV1', 'korlixLiveConvoModelV1', 'korlixLiveConvoAccentInstructionV1', 'korlixLiveConvoAgentInstructionsV1', 'korlixLiveConvoReasoningEffortV1', 'korlixLiveConvoVoiceV1', source.slice(start, end) + '; return korlixLiveConvoSessionConfigV1;')(
-    musicVoiceInstructions, bookkeepingVoiceInstructions,
+  const make = languageOverride => new Function('riciRealtimeInstructions', 'musicVoiceInstructions', 'bookkeepingVoiceInstructions', 'korlixLiveConvoEnvStringV1', 'korlixLiveConvoModelV1', 'korlixLiveConvoAccentInstructionV1', 'korlixLiveConvoAgentInstructionsV1', 'korlixLiveConvoReasoningEffortV1', 'korlixLiveConvoVoiceV1', source.slice(start, end) + '; return korlixLiveConvoSessionConfigV1;')(
+    riciRealtimeInstructions, musicVoiceInstructions, bookkeepingVoiceInstructions,
     (key, fallback) => key === 'KORLIX_LIVE_CONVO_LANGUAGE' && languageOverride ? languageOverride : fallback,
     () => 'fixture-model', () => 'Keep the selected accent.', () => { genericCalls++; return 'Ordinary agent instructions.'; }, () => 'low', () => 'fixture-voice',
   );
@@ -165,7 +167,7 @@ test('real session configuration preserves language, accent and ordinary/bookkee
   assert.match(config.instructions, /"language_preference":"Spanish"/);
   assert.match(config.instructions, /Keep the selected accent/);
   assert.match(config.instructions, /KORLIX Music Studio/);
-  assert.match(config.instructions, /REE \+ SEE, with the s sound in see/);
+  assert.match(config.instructions, /pure s sound in see/);
   assert(!config.instructions.includes('Ordinary agent instructions'));
   assert.equal(genericCalls, 0);
   assert.equal(config.audio.output.voice, 'fixture-voice');
