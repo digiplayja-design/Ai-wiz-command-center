@@ -30,6 +30,9 @@ import { registerVirtualCloset } from './virtual_closet/routes.mjs';
 import { createTryOn, suggestOutfit } from './virtual_closet/ai.mjs';
 import { registerContractRadar } from './contract_radar/routes.mjs';
 import { registerFieldProof } from './fieldproof/routes.mjs';
+import { registerFieldProofEmails } from './fieldproof/emails.mjs';
+import { registerFieldProofEmailWebhook } from './fieldproof/email_webhook.mjs';
+import { createFieldProofEmailProvider } from './fieldproof/email_provider.mjs';
 import { fieldProofVoiceInstructions, fieldProofVoiceSessionGuard } from './fieldproof/voice.mjs';
 import { reviewEvidence, CREDIT_COST as FIELDPROOF_CREDIT_COST } from './fieldproof/model.mjs';
 import { registerAiVisibility } from './ai_visibility/routes.mjs';
@@ -3711,7 +3714,8 @@ app.get("/api/health", (req, res) => {
     virtualCloset: {version: 1, privateStorage: true, analysisModel: CHAT_MODEL, ...pictureModelSettings()},
     contractRadar: {version: 1, model: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, discovery: 'official_source_web_search', automaticSubmission: false},
     workforce: {version:2,voice:true,businessProfiles:true,industryTemplates:12,teamTypes:5,taskBoard:true},
-    fieldProof: {version:2,model:CHAT_MODEL,reasoningEffort:CHAT_EFFORT,creditCost:FIELDPROOF_CREDIT_COST,maxPhotos:24,originalEvidence:true,voice:true,industryTemplates:14,readings:true,punchList:true,batchPhotos:true},
+    fieldProof: {version:3,model:CHAT_MODEL,reasoningEffort:CHAT_EFFORT,creditCost:FIELDPROOF_CREDIT_COST,maxPhotos:24,originalEvidence:true,voice:true,industryTemplates:14,readings:true,punchList:true,batchPhotos:true,
+      email:{version:1,customerReports:true,followUps:true,supervisorSummaries:true,perAccountSettings:true,enabledByDefault:false,providerConfigured:createFieldProofEmailProvider({environment:process.env}).status().ready}},
     aiVisibility: {version: 1, model: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, method: 'openai_web_samples_v1', sampleCount: 3, creditCost: VISIBILITY_CREDIT_COST},
   });
 });
@@ -12692,6 +12696,22 @@ registerFieldProof(app, {database: supabaseAdmin, storageDatabase: bookkeepingSt
   },
   review: data => reviewEvidence({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
 });
+// Email dispatch is account-scoped and disabled until each owner configures it.
+// Bounded database/storage calls keep worker preparation inside its lease.
+const fieldProofEmailDatabase = supabaseUrl && supabaseServiceRoleKey ? createClient(supabaseUrl, supabaseServiceRoleKey, {
+  auth: {persistSession:false,autoRefreshToken:false},
+  global: {fetch:(input,init={})=>fetch(input,{...init,signal:init.signal
+    ? AbortSignal.any([init.signal,AbortSignal.timeout(20000)]) : AbortSignal.timeout(20000)})},
+}) : null;
+const fieldProofEmails = registerFieldProofEmails(app, {
+  database:fieldProofEmailDatabase, storageDatabase:fieldProofEmailDatabase,
+  requireUser, environment:process.env,
+  publicRoot:process.env.RENDER_EXTERNAL_URL || 'https://chee-chai-chee-backend.onrender.com',
+});
+// Share the existing verified Resend webhook; its Agent Email handler runs next.
+registerFieldProofEmailWebhook(app,{emailService:fieldProofEmails,environment:process.env});
+process.once('SIGTERM',()=>fieldProofEmails.stop());
+process.once('SIGINT',()=>fieldProofEmails.stop());
 registerAiVisibility(app, {database: supabaseAdmin, requireUser,
   aiAccess: async user => {
     if (!process.env.OPENAI_API_KEY) return {allowed:false,status:503,reason:'KORLIX AI Visibility is temporarily unavailable.'};

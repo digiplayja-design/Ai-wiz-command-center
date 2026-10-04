@@ -25,7 +25,7 @@ export function registerFieldProof(app,{database,storageDatabase=database,requir
  }catch(e){logger.warn('FieldProof review failed',{errorType:e.name||'Error'});try{await call(u.id,'review_fail',r.id,{error:e instanceof FieldProofError?e.message:'KORLIX could not finish this review. No credit was charged. Please retry.'});}catch{logger.warn('FieldProof review status could not be saved');}}finally{active.delete(r.id);}};
  const confirmed=q=>{if(q.body?.confirmed!==true)fail('Confirm this action before continuing.');};
  registerFieldProofVoice(app,{route,call});
- app.get(base,route(async(_q,r,u)=>r.json({jobs:(await call(u.id,'list')).map(publicJob),templates:TEMPLATES,tags:TAGS,creditCost:CREDIT_COST,features:{voice:true,batchPhotos:true,readings:true,punchList:true},limits:{jobs:200,photosPerJob:MAX_PHOTOS,checks:32,readings:20,issues:16,photoBytes:10*1024*1024,storageBytes:500*1024*1024}})));
+ app.get(base,route(async(_q,r,u)=>r.json({jobs:(await call(u.id,'list')).map(publicJob),templates:TEMPLATES,tags:TAGS,creditCost:CREDIT_COST,features:{voice:true,batchPhotos:true,readings:true,punchList:true,autonomousEmail:true},limits:{jobs:200,photosPerJob:MAX_PHOTOS,checks:32,readings:20,issues:16,photoBytes:10*1024*1024,storageBytes:500*1024*1024}})));
  app.post(base+'/jobs',route(async(q,r,u)=>{const id=uuid(q.body?.request_key);await call(u.id,'job_create',id,jobData(q.body?.data));r.status(201).json(await snapshot(u.id,id));}));
  app.get(base+'/jobs/:id',route(async(q,r,u)=>r.json(await snapshot(u.id,uuid(q.params.id)))));
  app.put(base+'/jobs/:id',route(async(q,r,u)=>{const id=uuid(q.params.id);await call(u.id,'job_save',id,{version:version(q.body?.version),data:jobData(q.body?.data)});r.json(await snapshot(u.id,id));}));
