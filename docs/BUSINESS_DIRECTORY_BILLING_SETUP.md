@@ -141,19 +141,25 @@ so later default-portal changes cannot alter Directory billing behavior.
   remain disabled. The live Endive endpoint
   `we_1UMtFQ22E1oIiTRbqPqBVeqp` is enabled with the required events.
 
-Production checkout is activated by deploying
-`KORLIX_DIRECTORY_STRIPE_ENABLED=true`. Confirm that the deployed Directory
-health reports `checkoutEnabled=true`, `paymentsReady=true`,
-`paymentConnection=verified`, `livePayments=true`, and a disabled sandbox probe.
+Production checkout was activated with
+`KORLIX_DIRECTORY_STRIPE_ENABLED=true` on October 4, 2026. The backend deployment
+was live at 19:29 UTC, and the deployed Directory health confirmed
+`checkoutEnabled=true`, `paymentsReady=true`, `paymentConnection=verified`,
+`livePayments=true`, and a disabled sandbox probe.
 The existing approved prices remain USD 4.99/month and USD 49/year. Free listings
 remain free. Other KORLIX billing features are outside this integration.
 
-The hosted Checkout, portal, delivery and renewal checks used synthetic Stripe
-objects and did not activate a real business listing or charge a live customer.
-A signed-in owner opening checkout with the deployed restricted live key is the
-remaining owner-flow check; the read-only runtime credential check validates
-portal access, not every write permission. Do not describe an actual live
-customer payment as verified until one has occurred normally.
+The signed-in business owner opened the live monthly hosted Checkout at 19:57
+UTC on October 4. The page displayed USD 4.99 per month. Stripe independently
+confirmed a live subscription-mode session with a 499-cent USD total,
+`status=open`, `payment_status=unpaid`, and no subscription created. This
+confirms owner access and Checkout creation through the deployed restricted
+live credential. The session was left unpaid to expire normally.
+
+Completed payments, portal cancellation, signed delivery and renewal checks
+used synthetic sandbox objects. No live customer was charged and no paid live
+badge activation was exercised. Do not describe the actual paid live lifecycle
+as verified until a customer completes it normally.
 
 Live tax configuration was reviewed: no active Stripe Tax registrations were
 configured. This activation leaves automatic tax collection disabled and does
