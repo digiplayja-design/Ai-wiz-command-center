@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,7 +11,9 @@ import 'package:ai_wiz_command_center/contacts_crm/contacts_screen.dart';
 import 'contacts_screen_test.dart' as fixtures;
 
 class Fixture {
-  bool failSave = false;
+  bool failSave = false, failEnable = false, failStatus = false;
+  int immediateImports = 2;
+  Completer<http.Response>? pendingState;
   final calls = <({String method, String path, CrmJson body})>[];
   CrmJson settings = {
     'version': 1,
@@ -68,13 +71,40 @@ class Fixture {
           settings = {...settings, 'imported_total': 1};
           return reply({'imported': 1, 'skipped': 0});
         }
+        if (body['enabled'] == true && failEnable) {
+          return http.Response(
+            jsonEncode({'error': 'Import could not complete. Try again.'}),
+            503,
+          );
+        }
         settings = {
           ...settings,
           'version': (settings['version'] as int) + 1,
           'enabled': body['enabled'],
+          if (body['enabled'] == true) ...{
+            'imported_total':
+                (settings['imported_total'] as int) + immediateImports,
+            'last_run_at': '2026-10-04T16:00:00Z',
+            'next_run_at': '2026-10-04T17:00:00Z',
+          },
         };
-        return reply({'settings': settings});
+        return reply({
+          'settings': settings,
+          if (body['enabled'] == true)
+            'initial_result': {
+              'imported': immediateImports,
+              'skipped': 0,
+              'automatic': true,
+            },
+        });
       }
+      if (pendingState != null) {
+        final pending = pendingState!;
+        pendingState = null;
+        return pending.future;
+      }
+      if (failStatus)
+        return http.Response('{"error":"Status unavailable"}', 503);
       return reply({
         'settings': settings,
         'categories': ['Construction & Trades', 'Food & Drink'],
@@ -120,6 +150,9 @@ void main() {
       expect(writes[1].body['version'], 1);
       expect(writes[1].body['enabled'], true);
       expect(f.settings['enabled'], true);
+      expect(find.textContaining('2 leads added now'), findsOneWidget);
+      expect(find.textContaining('Leads added: 2'), findsOneWidget);
+      expect(f.calls.where((c) => c.body['action'] == 'run'), isEmpty);
       await t.pumpWidget(const SizedBox());
       f.client.dispose();
     },
@@ -243,7 +276,7 @@ void main() {
       await tap(t, find.text('Import leads'));
       final run = f.calls.firstWhere((c) => c.body['action'] == 'run').body;
       expect(run, {'action': 'run', 'version': 2, 'confirmed': true});
-      expect(find.textContaining('1 leads added'), findsOneWidget);
+      expect(find.textContaining('1 lead added'), findsOneWidget);
       expect(t.takeException(), isNull);
       await t.pumpWidget(const SizedBox());
       f.client.dispose();
@@ -274,6 +307,113 @@ void main() {
       await tap(t, find.text('View imported contacts'));
       expect(queries.last, 'directory');
       expect(t.takeException(), isNull);
+    },
+  );
+
+  testWidgets('Enable reports no new matches without requiring a manual pull', (
+    t,
+  ) async {
+    final f = Fixture()..immediateImports = 0;
+    await t.pumpWidget(MaterialApp(home: CrmDirectoryScreen(client: f.client)));
+    await t.pumpAndSettle();
+    await tap(t, find.byKey(const Key('directory-toggle')));
+    await tap(t, find.text('Enable auto-pull').last);
+    expect(
+      find.textContaining('No new matching listings right now'),
+      findsOneWidget,
+    );
+    expect(find.text('Pause auto-pull'), findsOneWidget);
+    await t.pumpWidget(const SizedBox());
+    f.client.dispose();
+  });
+
+  testWidgets('A failed first import stays paused and offers a safe retry', (
+    t,
+  ) async {
+    final f = Fixture()..failEnable = true;
+    await t.pumpWidget(MaterialApp(home: CrmDirectoryScreen(client: f.client)));
+    await t.pumpAndSettle();
+    await tap(t, find.byKey(const Key('directory-toggle')));
+    await tap(t, find.text('Enable auto-pull').last);
+    expect(find.text('Auto-pull is paused'), findsOneWidget);
+    expect(find.textContaining('Import could not complete'), findsOneWidget);
+    f.failEnable = false;
+    await tap(t, find.byKey(const Key('directory-toggle')));
+    await tap(t, find.text('Enable auto-pull').last);
+    expect(find.textContaining('2 leads added now'), findsOneWidget);
+    await t.pumpWidget(const SizedBox());
+    f.client.dispose();
+  });
+
+  testWidgets(
+    'Automatic status updates preserve unsaved filters and stop after closing',
+    (t) async {
+      final f = Fixture();
+      f.settings['enabled'] = true;
+      await t.pumpWidget(
+        MaterialApp(home: CrmDirectoryScreen(client: f.client)),
+      );
+      await t.pumpAndSettle();
+      await t.enterText(find.byKey(const Key('directory-city')), 'Kingston');
+      f.settings = {
+        ...f.settings,
+        'imported_total': 7,
+        'last_run_at': '2026-10-04T16:00:00Z',
+      };
+      await t.pump(const Duration(seconds: 15));
+      await t.pumpAndSettle();
+      expect(find.textContaining('Leads added: 7'), findsOneWidget);
+      expect(
+        t
+            .widget<TextField>(find.byKey(const Key('directory-city')))
+            .controller!
+            .text,
+        'Kingston',
+      );
+      expect(f.calls.where((c) => c.method != 'GET'), isEmpty);
+      f.failStatus = true;
+      await t.pump(const Duration(seconds: 15));
+      await t.pumpAndSettle();
+      expect(
+        find.textContaining('Could not refresh import status'),
+        findsOneWidget,
+      );
+      expect(find.text('Auto-pull is on'), findsOneWidget);
+      f.failStatus = false;
+      await t.pump(const Duration(seconds: 15));
+      await t.pumpAndSettle();
+      expect(
+        find.textContaining('Could not refresh import status'),
+        findsNothing,
+      );
+      await t.pumpWidget(const SizedBox());
+      final count = f.calls.length;
+      await t.pump(const Duration(seconds: 60));
+      expect(f.calls.length, count);
+      f.client.dispose();
+    },
+  );
+
+  testWidgets(
+    'A late status response cannot undo Pause or overwrite its version',
+    (t) async {
+      final f = Fixture();
+      f.settings['enabled'] = true;
+      await t.pumpWidget(
+        MaterialApp(home: CrmDirectoryScreen(client: f.client)),
+      );
+      await t.pumpAndSettle();
+      final stale = crmClone(f.settings);
+      final pending = Completer<http.Response>();
+      f.pendingState = pending;
+      await t.pump(const Duration(seconds: 15));
+      await tap(t, find.byKey(const Key('directory-toggle')));
+      pending.complete(f.reply({'settings': stale}));
+      await t.pumpAndSettle();
+      expect(find.text('Auto-pull is paused'), findsOneWidget);
+      expect(find.text('Enable auto-pull'), findsOneWidget);
+      await t.pumpWidget(const SizedBox());
+      f.client.dispose();
     },
   );
 }

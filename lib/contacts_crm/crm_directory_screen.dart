@@ -10,7 +10,8 @@ class CrmDirectoryScreen extends StatefulWidget {
   State<CrmDirectoryScreen> createState() => _CrmDirectoryScreenState();
 }
 
-class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
+class _CrmDirectoryScreenState extends State<CrmDirectoryScreen>
+    with WidgetsBindingObserver {
   final _query = TextEditingController(),
       _city = TextEditingController(),
       _country = TextEditingController();
@@ -25,15 +26,26 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
       _hasLoaded = false,
       _locked = false;
   String? _error, _notice;
+  String? _statusError;
+  Timer? _statusTimer;
+  bool _polling = false;
+  int _stateRevision = 0;
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.client.addAccessDeniedListener(_lock);
     unawaited(_load());
+    _statusTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => unawaited(_pollStatus()),
+    );
   }
 
   @override
   void dispose() {
+    _statusTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     widget.client.removeAccessDeniedListener(_lock);
     _query.dispose();
     _city.dispose();
@@ -43,6 +55,7 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
 
   void _lock() {
     if (!mounted) return;
+    ++_stateRevision;
     setState(() {
       _locked = true;
       _settings = {};
@@ -77,6 +90,7 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
         _loading = false;
         _hasLoaded = true;
         _error = null;
+        _statusError = null;
       });
     } catch (e) {
       if (mounted && !_locked) {
@@ -85,6 +99,44 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
           _loading = false;
         });
       }
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_pollStatus());
+  }
+
+  Future<void> _pollStatus() async {
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (!mounted ||
+        !_hasLoaded ||
+        _busy ||
+        _locked ||
+        _polling ||
+        _settings['enabled'] != true ||
+        (lifecycle != null && lifecycle != AppLifecycleState.resumed) ||
+        ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
+    _polling = true;
+    final revision = _stateRevision;
+    try {
+      final r = await widget.client.request('GET', '/directory-sync');
+      if (!mounted || _locked || revision != _stateRevision) return;
+      setState(() {
+        _setSettings(crmMap(r['settings']), keepEdits: _dirty);
+        _statusError = null;
+      });
+    } catch (_) {
+      if (mounted && !_locked && revision == _stateRevision) {
+        setState(
+          () => _statusError =
+              'Could not refresh import status. Tap Refresh to check again.',
+        );
+      }
+    } finally {
+      _polling = false;
     }
   }
 
@@ -123,16 +175,19 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
     'verified_only': _verified,
   };
   void _changed() => setState(() {
+    ++_stateRevision;
     _dirty = true;
     _preview = {};
     _notice = null;
   });
   Future<void> _run(Future<void> Function() fn) async {
     if (_busy || _locked) return;
+    ++_stateRevision;
     setState(() {
       _busy = true;
       _error = null;
       _notice = null;
+      _statusError = null;
     });
     try {
       await fn();
@@ -195,7 +250,7 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
           ),
           content: SingleChildScrollView(
             child: Text(
-              '$_filterSummary\n\n${_dirty || (_settings['version'] ?? 0) == 0 ? 'These filters will be saved automatically. ${!automatic && _settings['enabled'] == true ? 'Auto-pull will pause when the new filters are saved. ' : ''}\n\n' : ''}Add up to 100 currently matching KORLIX Business Directory listings as CRM leads${automatic ? ' each hour' : ''}. Existing and archived contacts are skipped.\n\nEmail and call permission will remain unset for imported leads.',
+              '$_filterSummary\n\n${_dirty || (_settings['version'] ?? 0) == 0 ? 'These filters will be saved automatically. ${!automatic && _settings['enabled'] == true ? 'Auto-pull will pause when the new filters are saved. ' : ''}\n\n' : ''}Add up to 100 currently matching KORLIX Business Directory listings as CRM leads${automatic ? ' now, then check for new matches every hour' : ''}. Existing and archived contacts are skipped.\n\nEmail and call permission will remain unset for imported leads.',
             ),
           ),
           actions: [
@@ -248,18 +303,30 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
           setState(() {
             _preview = {};
             _notice =
-                '${r['imported']} leads added. ${r['skipped']} changed or duplicate listings skipped.';
+                '${r['imported']} ${r['imported'] == 1 ? 'lead' : 'leads'} added. ${r['skipped']} changed or duplicate listings skipped.';
           });
         }
       } else {
         setState(() {
           _setSettings(crmMap(r['settings']), keepEdits: pausing && _dirty);
           _notice = enabled == true
-              ? 'Auto-pull is on. The first check starts shortly.'
+              ? _enableNotice(crmMap(r['initial_result']))
               : 'Auto-pull paused.';
+          if (!pausing) _preview = {};
         });
       }
     });
+  }
+
+  String _enableNotice(CrmJson result) {
+    final imported = result['imported'];
+    if (imported is num && imported > 0) {
+      return 'Auto-pull is on. $imported ${imported == 1 ? 'lead' : 'leads'} added now. New matching listings will be checked hourly.';
+    }
+    if (imported == 0) {
+      return 'Auto-pull is on. No new matching listings right now. New matches will be checked hourly.';
+    }
+    return 'Auto-pull is on. Import status updates automatically below.';
   }
 
   String _time(dynamic value) {
@@ -500,6 +567,14 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
                                 style: const TextStyle(color: CrmStyle.cyan),
                               ),
                             ),
+                          if (_statusError != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: Text(
+                                _statusError!,
+                                style: const TextStyle(color: CrmStyle.gold),
+                              ),
+                            ),
                           const SizedBox(height: 24),
                           Card(
                             child: Padding(
@@ -521,7 +596,7 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
                                   ),
                                   const SizedBox(height: 8),
                                   const Text(
-                                    'Checks every hour. Up to 100 new listings per run. Duplicates are checked by listing ID, email and phone, including archived contacts.',
+                                    'Imports immediately when enabled, then checks hourly. Up to 100 new listings per run. Status updates automatically. Existing and archived contacts are skipped.',
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
