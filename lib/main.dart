@@ -40,6 +40,11 @@ import 'auth/korlix_welcome_confirmation.dart';
 import 'auth/knova_welcome_controller.dart';
 import 'auth/rici_welcome_button.dart';
 import 'navigation/home_tool_catalog.dart';
+import 'characters/character_catalog.dart';
+import 'characters/character_orbit.dart';
+import 'characters/character_selection_controller.dart';
+import 'characters/character_video_gestures.dart';
+export 'characters/character_catalog.dart' show normalizeKorlixCharacterId;
 import 'auth/korlix_october_welcome.dart';
 import 'auth/korlix_login_preferences.dart';
 import 'auth/korlix_portal_launch.dart';
@@ -1462,72 +1467,6 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 }
 
-class KorlixHomeCharacterHero extends StatelessWidget {
-  const KorlixHomeCharacterHero({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF071B27).withOpacity(0.74),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFF2EC7DF).withOpacity(0.34)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF2EC7DF).withOpacity(0.12),
-            blurRadius: 34,
-            spreadRadius: 3,
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          const Text(
-            'Selected Character',
-            style: TextStyle(
-              color: Color(0xFF69D9E8),
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.1,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'JJ',
-            style: TextStyle(
-              color: Color(0xFFE4EBEE),
-              fontSize: 26,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Basic starter character. Open Settings → View characters to preview and unlock more Korlix AI characters.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Color(0xFFA9C6CF),
-              fontSize: 13,
-              height: 1.35,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 14),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 280),
-            child: const KorlixCharacterIntroPreview(
-              assetPath: 'assets/characters/jj/intro.mp4',
-              muted: false,
-              showSoundButton: true,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class KorlixGeneratedVideoPlayer extends StatefulWidget {
   final String videoUrl;
   final Map<String, String> headers;
@@ -1707,6 +1646,7 @@ class KorlixCharacterIntroPreview extends StatefulWidget {
   final bool loop;
   final double aspectRatio;
   final bool fillParent;
+  final bool dragSurface;
   final BoxFit fit;
 
   const KorlixCharacterIntroPreview({
@@ -1718,6 +1658,7 @@ class KorlixCharacterIntroPreview extends StatefulWidget {
     this.loop = true,
     this.aspectRatio = 9 / 16,
     this.fillParent = false,
+    this.dragSurface = false,
     this.fit = BoxFit.cover,
   });
 
@@ -1732,6 +1673,7 @@ class _KorlixCharacterIntroPreviewState
 
   final Object _soundQuietOwner = Object();
   VideoPlayerController? _controller;
+  VoidCallback? _releaseVideoGestures;
   bool _ready = false;
   bool _soundOn = false;
   int _completedLoops = 0;
@@ -1765,6 +1707,8 @@ class _KorlixCharacterIntroPreviewState
 
   Future<void> _loadVideo() async {
     final oldController = _controller;
+    _releaseVideoGestures?.call();
+    _releaseVideoGestures = null;
 
     if (oldController != null) {
       oldController.removeListener(_handleVideoProgress);
@@ -1805,6 +1749,9 @@ class _KorlixCharacterIntroPreviewState
         return;
       }
 
+      if (widget.dragSurface) {
+        _releaseVideoGestures = allowCharacterVideoGestures(widget.assetPath);
+      }
       setState(() {
         _controller = controller;
         _ready = true;
@@ -1962,6 +1909,7 @@ class _KorlixCharacterIntroPreviewState
     kKorlixSounds.setQuiet(_soundQuietOwner, false);
     kKorlixStopCharacterSpeechSignal.removeListener(_handleGlobalStopSignal);
     _controller?.removeListener(_handleVideoProgress);
+    _releaseVideoGestures?.call();
     _controller?.dispose();
     super.dispose();
   }
@@ -3717,68 +3665,17 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     }
   }
 
-  Color _tierAccent(String tier) {
-    switch (tier) {
-      case 'enterprise':
-        return const Color(0xFFE4EBEE);
-      case 'ultra':
-        return const Color(0xFFFFD166);
-      case 'pro':
-        return const Color(0xFFB794F4);
-      default:
-        return const Color(0xFF69D9E8);
-    }
-  }
-
-  String _tierLabel(String tier) {
-    switch (tier) {
-      case 'enterprise':
-        return 'Enterprise';
-      case 'ultra':
-        return 'Ultra Premium';
-      case 'pro':
-        return 'Pro';
-      default:
-        return 'Basic';
-    }
-  }
-
   String? _characterIntroAsset(String id) {
-    switch (normalizeKorlixCharacterId(id)) {
-      case 'jj':
-        return 'assets/characters/jj/intro.mp4';
-      case 'phil':
-        return 'assets/characters/phil/intro.mp4';
-      case 'yuna':
-        return 'assets/characters/yuna/intro.mp4';
-      case 'ji_a':
-        return 'assets/characters/ji-a/intro.mp4';
-      case 'chee_chai_chee':
-        return 'assets/characters/chee_chai_chee/intro.mp4';
-      default:
-        return null;
+    final normalized = normalizeKorlixCharacterId(id);
+    for (final character in korlixCharacters) {
+      if (character.id == normalized) return character.video;
     }
-  }
-
-  bool _tierCanSelectCharacter({
-    required String tier,
-    required String characterId,
-  }) {
-    final normalizedCharacterId = normalizeKorlixCharacterId(characterId);
-
-    if (tier == 'enterprise' || tier == 'ultra') {
-      return true;
-    }
-
-    if (tier == 'pro') {
-      return ['jj', 'chee_chai_chee', 'phil'].contains(normalizedCharacterId);
-    }
-
-    return normalizedCharacterId == 'jj';
+    return null;
   }
 
   Future<bool> _selectCharacter(String characterId) async {
     final normalizedCharacterId = normalizeKorlixCharacterId(characterId);
+    final authRevision = kKorlixAuthRevision.value;
 
     try {
       final response = await http.post(
@@ -3789,14 +3686,13 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
         body: jsonEncode({'character_id': normalizedCharacterId}),
       );
 
+      if (!mounted || authRevision != kKorlixAuthRevision.value) return false;
       final data = jsonDecode(response.body) as Map<String, dynamic>;
 
       if (response.statusCode >= 400) {
         await _showKorlixNotice(
-          title: 'Upgrade required',
-          message:
-              data['error']?.toString() ??
-              'This character is not available on your current plan.',
+          title: 'Character update failed',
+          message: data['error']?.toString() ?? 'Could not save your character. Try again.',
         );
         return false;
       }
@@ -3820,19 +3716,10 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
   }
 
   Future<void> _openCharactersPanel({
-    required String currentTier,
-    required String selectedCharacterId,
     required List<dynamic> characters,
-    required List<dynamic> characterAccess,
   }) async {
-    final accessIds = characterAccess
-        .whereType<Map>()
-        .map((item) => item['character_id']?.toString())
-        .whereType<String>()
-        .map(normalizeKorlixCharacterId)
-        .toSet();
-
-    var selectedId = normalizeKorlixCharacterId(selectedCharacterId);
+    var selectedId = kKorlixSelectedCharacterNotifier.value;
+    var savingCharacter = false;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -3877,7 +3764,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'Intro videos autoplay muted. Tap Select to choose an available character. Locked characters stay visible so you can preview what higher tiers unlock.',
+                        'Every available character is included on every plan. Tap Select, or spin the character orbit on your home screen.',
                         style: TextStyle(
                           color: Color(0xFFA9C6CF),
                           fontSize: 13,
@@ -3885,7 +3772,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                         ),
                       ),
                       const SizedBox(height: 18),
-                      ...characters.map((raw) {
+                      ...characters.whereType<Map>().where((c) => c['is_active'] == true && c['is_coming_soon'] != true).map((raw) {
                         final character = (raw as Map).cast<String, dynamic>();
                         final rawId = character['id']?.toString() ?? '';
                         final id = normalizeKorlixCharacterId(rawId);
@@ -3893,21 +3780,13 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                             character['name']?.toString() ?? 'Korlix Character';
                         final description =
                             character['description']?.toString() ?? '';
-                        final tierRequired =
-                            character['tier_required']?.toString() ?? 'basic';
                         final isActive = character['is_active'] == true;
                         final comingSoon = character['is_coming_soon'] == true;
                         final selected =
                             normalizeKorlixCharacterId(id) ==
                             normalizeKorlixCharacterId(selectedId);
-                        final tierAllows = _tierCanSelectCharacter(
-                          tier: currentTier,
-                          characterId: id,
-                        );
-                        final explicitlyGranted = accessIds.contains(id);
-                        final available =
-                            isActive && (tierAllows || explicitlyGranted);
-                        final accent = _tierAccent(tierRequired);
+                        final available = isActive && !comingSoon;
+                        final accent = korlixCharacterFor(id).color;
                         final videoAsset = _characterIntroAsset(id);
 
                         String status;
@@ -3919,7 +3798,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                         } else if (available) {
                           status = 'Available';
                         } else {
-                          status = 'Locked';
+                          status = 'Unavailable';
                         }
 
                         return Container(
@@ -4027,7 +3906,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      'Required tier: ${_tierLabel(tierRequired)}',
+                                      'Included on every plan',
                                       style: TextStyle(
                                         color: accent,
                                         fontSize: 12,
@@ -4038,26 +3917,16 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                                     SizedBox(
                                       width: double.infinity,
                                       child: FilledButton(
-                                        onPressed: korlixSoundAction(selected || comingSoon
+                                        onPressed: korlixSoundAction(selected || !available || savingCharacter
                                             ? null
                                             : () async {
-                                                if (!available) {
-                                                  await _showKorlixNotice(
-                                                    title: 'Upgrade required',
-                                                    message:
-                                                        '$name is available on ${_tierLabel(tierRequired)} and higher.',
-                                                  );
-                                                  return;
-                                                }
-
-                                                final success =
-                                                    await _selectCharacter(id);
-
-                                                if (success) {
-                                                  setModalState(() {
-                                                    selectedId = id;
-                                                  });
-                                                }
+                                                setModalState(() => savingCharacter = true);
+                                                final success = await _selectCharacter(id);
+                                                if (!context.mounted) return;
+                                                setModalState(() {
+                                                  savingCharacter = false;
+                                                  if (success) selectedId = id;
+                                                });
                                               }),
                                         style: korlixSoundButtonStyle(FilledButton.styleFrom(
                                           backgroundColor: available
@@ -4079,7 +3948,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                                               ? 'Coming soon'
                                               : available
                                               ? 'Select'
-                                              : 'Upgrade',
+                                              : 'Unavailable',
                                         ),
                                       ),
                                     ),
@@ -4192,7 +4061,6 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
         (historyData['history'] as List?) ?? const <dynamic>[],
       );
       final characters = (meData['characters'] as List?) ?? [];
-      final characterAccess = (meData['characterAccess'] as List?) ?? [];
       var historyDeleteBusy = false;
 
       final tier = (profile['tier'] ?? 'basic').toString();
@@ -4306,11 +4174,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                     const SizedBox(height: 10),
                     FilledButton.icon(
                       onPressed: korlixSoundAction(() => _openCharactersPanel(
-                        currentTier: tier,
-                        selectedCharacterId:
-                            (profile['selected_character'] ?? 'jj').toString(),
                         characters: characters,
-                        characterAccess: characterAccess,
                       )),
                       icon: const Icon(Icons.groups_rounded),
                       label: const Text('View characters'),
@@ -4713,107 +4577,6 @@ Aspect ratio: 16:9 cinematic widescreen.
 
 final ValueNotifier<String> kKorlixSelectedCharacterNotifier =
     ValueNotifier<String>('jj');
-
-String normalizeKorlixCharacterId(String? id) {
-  final raw = (id ?? '').trim().toLowerCase();
-
-  if (raw.isEmpty) {
-    return 'jj';
-  }
-
-  final normalized = raw.replaceAll('-', '_').replaceAll(' ', '_');
-
-  switch (normalized) {
-    case 'ji_a':
-    case 'jia':
-      return 'ji_a';
-    case 'chee_chai_chee':
-    case 'cheechai':
-    case 'cheechaichee':
-      return 'chee_chai_chee';
-    case 'jj':
-    case 'phil':
-    case 'yuna':
-    case 'enterprise':
-      return normalized;
-    default:
-      return normalized;
-  }
-}
-
-class KorlixCharacterDisplayData {
-  final String id;
-  final String name;
-  final String eyebrow;
-  final String description;
-  final String assetPath;
-  final bool soundOn;
-
-  const KorlixCharacterDisplayData({
-    required this.id,
-    required this.name,
-    required this.eyebrow,
-    required this.description,
-    required this.assetPath,
-    this.soundOn = false,
-  });
-}
-
-KorlixCharacterDisplayData korlixCharacterDisplayFor(String id) {
-  switch (normalizeKorlixCharacterId(id)) {
-    case 'chee_chai_chee':
-      return const KorlixCharacterDisplayData(
-        id: 'chee_chai_chee',
-        name: 'Chee Chai Chee',
-        eyebrow: 'PRO AI CHARACTER',
-        description:
-            'A dark cyber-mystic wizard built for strategy, wisdom, and powerful answers.',
-        assetPath: 'assets/characters/chee_chai_chee/intro.mp4',
-        soundOn: true,
-      );
-    case 'phil':
-      return const KorlixCharacterDisplayData(
-        id: 'phil',
-        name: 'Phil',
-        eyebrow: 'PRO AI CHARACTER',
-        description:
-            'Helpful, clear, and easy to talk to. Phil helps you get things done.',
-        assetPath: 'assets/characters/phil/intro.mp4',
-        soundOn: true,
-      );
-    case 'yuna':
-      return const KorlixCharacterDisplayData(
-        id: 'yuna',
-        name: 'Yuna',
-        eyebrow: 'ULTRA PREMIUM CHARACTER',
-        description:
-            'Elegant, creative, and strategic. Yuna is built for premium-level ideas.',
-        assetPath: 'assets/characters/yuna/intro.mp4',
-        soundOn: true,
-      );
-    case 'ji_a':
-      return const KorlixCharacterDisplayData(
-        id: 'ji_a',
-        name: 'Ji-A',
-        eyebrow: 'ULTRA PREMIUM CHARACTER',
-        description:
-            'A premium AI character built for focused, cinematic, high-value assistance.',
-        assetPath: 'assets/characters/ji-a/intro.mp4',
-        soundOn: true,
-      );
-    case 'jj':
-    default:
-      return const KorlixCharacterDisplayData(
-        id: 'jj',
-        name: 'JJ',
-        eyebrow: 'FEATURED AI CHARACTER',
-        description:
-            'Curious, thoughtful, and always ready to chat. Ask JJ anything!',
-        assetPath: 'assets/characters/jj/intro.mp4',
-        soundOn: true,
-      );
-  }
-}
 
 class QuickAction {
   final String label;
@@ -5371,7 +5134,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       speech_to_text.SpeechToText();
 
   bool _loading = false;
-  bool _selectedCharacterFetchStarted = false;
+  late final CharacterSelectionController _characters;
   bool _featuredAnswerDismissed = false;
   bool _createVideoMode = false;
   bool _improvePictureMode = false;
@@ -5624,6 +5387,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _characters = CharacterSelectionController(
+      baseUrl: kKorlixBackendBaseUrl, headersBuilder: _authHeaders,
+      selected: kKorlixSelectedCharacterNotifier, sessionChanges: kKorlixAuthRevision,
+    );
+    unawaited(_characters.load());
     final chatStorageScope = chatAccountStorageKey(_authHeaders());
     _localChatTopicsPrefsKey = 'korlix_chat_topics_account_v2_$chatStorageScope';
     _pendingGenerationJobsPrefsKey = 'korlix_chat_jobs_account_v2_$chatStorageScope';
@@ -5651,6 +5419,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _chatMemory.dispose();
+    _characters.dispose();
     _schedulingVoice?.dispose();
     _schedulingVoiceClient?.dispose();
     _imagineStudio?.dispose();
@@ -11692,48 +11461,6 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     );
   }
 
-  Future<void> _refreshSelectedCharacterFromBackend({
-    bool force = false,
-  }) async {
-    if (!force && _selectedCharacterFetchStarted) {
-      return;
-    }
-
-    if (kKorlixAccessToken == null || kKorlixAccessToken!.isEmpty) {
-      return;
-    }
-
-    _selectedCharacterFetchStarted = true;
-
-    try {
-      final response = await http.get(
-        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/me'),
-        headers: _authHeaders(),
-      );
-
-      if (response.statusCode >= 400) {
-        return;
-      }
-
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final profile =
-          (data['profile'] as Map?)?.cast<String, dynamic>() ??
-          <String, dynamic>{};
-
-      final selected = (profile['selected_character'] ?? 'jj')
-          .toString()
-          .trim();
-
-      if (selected.isNotEmpty) {
-        kKorlixSelectedCharacterNotifier.value = normalizeKorlixCharacterId(
-          selected,
-        );
-      }
-    } catch (_) {
-      // The home screen should still load even if character sync fails.
-    }
-  }
-
   Future<void> _showVideoEnginePending(String scenePrompt) async {
     if (!mounted) {
       return;
@@ -12425,321 +12152,38 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   Widget _buildMockupFeaturedCharacterCard() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _refreshSelectedCharacterFromBackend();
-    });
-
-    final GeneratedItem? activeResult = null;
-
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-      child: ValueListenableBuilder<String>(
-        valueListenable: kKorlixSelectedCharacterNotifier,
-        builder: (context, selectedCharacterId, _) {
-          final character = korlixCharacterDisplayFor(selectedCharacterId);
-          final skin = korlixSkinPaletteFor(kKorlixThemeNotifier.value);
-
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxWidth < 560;
-              final cardHeight = compact ? 315.0 : 300.0;
-
-              return Container(
-                height: cardHeight,
-                decoration: BoxDecoration(
-                  color: skin.panel.withOpacity(skin.isLight ? 0.88 : 0.72),
-                  borderRadius: BorderRadius.circular(26),
-                  border: Border.all(
-                    color: skin.border.withOpacity(skin.isLight ? 0.52 : 0.32),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: skin.glow.withOpacity(skin.isLight ? 0.08 : 0.12),
-                      blurRadius: 30,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: compact ? 10 : 10,
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              compact ? 16 : 28,
-                              compact ? 16 : 24,
-                              compact ? 10 : 18,
-                              compact ? 16 : 24,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  character.eyebrow,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: skin.primary,
-                                    fontSize: compact ? 11.5 : 15,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                                SizedBox(height: compact ? 9 : 14),
-                                Text(
-                                  character.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: skin.text,
-                                    fontSize: compact ? 34 : 44,
-                                    fontWeight: FontWeight.w900,
-                                    height: 1.0,
-                                    letterSpacing: 1.0,
-                                  ),
-                                ),
-                                SizedBox(height: compact ? 10 : 16),
-                                Text(
-                                  character.description,
-                                  maxLines: compact ? 4 : 3,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: skin.mutedText.withOpacity(0.96),
-                                    fontSize: compact ? 13.5 : 19,
-                                    height: 1.28,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                SizedBox(height: compact ? 12 : 22),
-                                KorlixActionButton(
-                                  label: compact ? 'View' : 'View Character',
-                                  size: KorlixButtonSize.compact,
-                                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text(
-                                      'Open Settings → View characters to preview and unlock more characters.',
-                                    )),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: compact ? 11 : 12,
-                          child: Container(
-                            height: double.infinity,
-                            color: Colors.black.withOpacity(0.16),
-                            child: KorlixCharacterIntroPreview(
-                              key: ValueKey(character.assetPath),
-                              assetPath: character.assetPath,
-                              muted: !character.soundOn,
-                              showSoundButton: character.soundOn,
-                              autoplay: true,
-                              loop: true,
-                              fillParent: true,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    if (_loading)
-                      Positioned(
-                        left: 12,
-                        right: 12,
-                        bottom: 12,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.76),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(
-                              color: skin.primary.withOpacity(0.48),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: skin.primary,
-                                ),
-                              ),
-                              SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  '${character.name} is preparing your answer...',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: skin.text,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 520),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder: (child, animation) {
-                        final slide = Tween<Offset>(
-                          begin: const Offset(0, 0.04),
-                          end: Offset.zero,
-                        ).animate(animation);
-
-                        return FadeTransition(
-                          opacity: animation,
-                          child: SlideTransition(position: slide, child: child),
-                        );
-                      },
-                      child: activeResult == null
-                          ? const SizedBox.shrink()
-                          : _buildNeonAnswerReadyFrame(
-                              child: Container(
-                                key: ValueKey(
-                                  '${activeResult.title}-${activeResult.command}-${activeResult.content.hashCode}',
-                                ),
-                                width: double.infinity,
-                                height: _answerMinimized
-                                    ? null
-                                    : double.infinity,
-                                padding: EdgeInsets.all(compact ? 13 : 16),
-                                // CYBER PANEL FRONT: this is the visible ANSWER READY card face.
-                                // CYBER PANEL FRONT: visible ANSWER READY card face.
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(20),
-                                  color: skin.panelDeep,
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      skin.panelSoft,
-                                      skin.panel,
-                                      skin.panelDeep,
-                                    ],
-                                    stops: [0.0, 0.52, 1.0],
-                                  ),
-                                  border: Border.all(
-                                    color: skin.border.withValues(alpha: 0.62),
-                                    width: 1.15,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: skin.glow.withValues(alpha: 0.16),
-                                      blurRadius: 18,
-                                      spreadRadius: 0.8,
-                                      offset: const Offset(-2, -1),
-                                    ),
-                                    BoxShadow(
-                                      color: skin.secondary.withValues(
-                                        alpha: 0.16,
-                                      ),
-                                      blurRadius: 20,
-                                      spreadRadius: 0.8,
-                                      offset: const Offset(2, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: _answerMinimized
-                                      ? MainAxisSize.min
-                                      : MainAxisSize.max,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          Icons.auto_awesome_rounded,
-                                          color: skin.primary,
-                                          size: 18,
-                                        ),
-                                        SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            'ANSWER READY',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: skin.primary,
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w900,
-                                              letterSpacing: 0.6,
-                                            ),
-                                          ),
-                                        ),
-                                        // Minimize/Maximize button
-                                        IconButton(enableFeedback: false,
-                                          onPressed: korlixSoundAction(() => setState(
-                                            () => _answerMinimized =
-                                                !_answerMinimized,
-                                          )),
-                                          tooltip: _answerMinimized
-                                              ? 'Maximize'
-                                              : 'Minimize',
-                                          icon: Icon(
-                                            _answerMinimized
-                                                ? Icons.keyboard_arrow_down
-                                                : Icons.keyboard_arrow_up,
-                                            color: skin.primary,
-                                            size: 18,
-                                          ),
-                                        ),
-                                        IconButton(enableFeedback: false,
-                                          onPressed: korlixSoundAction(() {
-                                            setState(() {
-                                              _featuredAnswerDismissed = true;
-                                            });
-                                          }),
-                                          icon: Icon(Icons.close_rounded),
-                                          color: skin.text,
-                                          tooltip: 'Close',
-                                          visualDensity: VisualDensity.compact,
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(
-                                            minWidth: 34,
-                                            minHeight: 34,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    // Body content — hidden when minimized
-                                    if (!_answerMinimized) ...[
-                                      SizedBox(height: 8),
-                                      Expanded(
-                                        child:
-                                            _buildAnswerReadyConversationView(
-                                              activeResult,
-                                              compact: compact,
-                                            ),
-                                      ),
-                                    ], // end if (!_answerMinimized)
-                                  ],
-                                ),
-                              ),
-                            ),
-                    ),
-                  ],
-                ),
-              );
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+      child: AnimatedBuilder(
+        animation: _characters,
+        builder: (context, _) => Column(children: [
+          KorlixCharacterOrbit(
+            selectedId: kKorlixSelectedCharacterNotifier.value,
+            availableIds: _characters.availableIds,
+            loading: _characters.loading,
+            saving: _characters.saving,
+            error: _characters.error,
+            onRetry: _characters.load,
+            onSelected: (id) async {
+              stopKorlixCharacterSpeechGlobally();
+              await _characters.select(id);
             },
-          );
-        },
+            previewBuilder: (character) => KorlixCharacterIntroPreview(
+              key: ValueKey(character.video),
+              assetPath: character.video,
+              muted: true,
+              showSoundButton: true,
+              autoplay: !MediaQuery.disableAnimationsOf(context),
+              loop: true,
+              fillParent: true,
+              dragSurface: true,
+            ),
+          ),
+          if (_loading) Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Text('${korlixCharacterFor(kKorlixSelectedCharacterNotifier.value).name} is preparing your answer…'),
+          ),
+        ]),
       ),
     );
   }

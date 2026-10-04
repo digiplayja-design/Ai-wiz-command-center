@@ -86,6 +86,11 @@ flutter:
     - assets/meeting_copilot/korlix_logo.jpeg
 
     - assets/meeting_copilot/nova_canonical.webp
+    - assets/characters/jj/portrait.jpg
+    - assets/characters/phil/portrait.jpg
+    - assets/characters/chee_chai_chee/portrait.jpg
+    - assets/characters/yuna/portrait.jpg
+    - assets/characters/ji-a/portrait.jpg
     - assets/characters/chee_chai_chee/intro.mp4
     - assets/characters/ji-a/intro.mp4
     - assets/characters/yuna/intro.mp4

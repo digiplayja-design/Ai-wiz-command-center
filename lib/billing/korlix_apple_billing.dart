@@ -619,7 +619,7 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
                   icon: Icons.auto_awesome_rounded,
                   features: const <String>[
                     'Higher text generation limits',
-                    'Access to up to 3 characters',
+                    'All characters, included on every plan',
                     'PDF and export access',
                     'Saved settings access',
                     'Reduced or no ads',
@@ -635,7 +635,7 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
                   accent: const Color(0xFFFFD166),
                   icon: Icons.workspace_premium_rounded,
                   features: const <String>[
-                    'Access to all Korlix characters',
+                    'All characters, included on every plan',
                     'Highest personal generation limits',
                     'LIVE CONVO fair-use allowance',
                     'OCR, handwriting, and scanned-image reading',
@@ -757,7 +757,7 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
       icon: Icons.bolt_rounded,
       features: const <String>[
         '3 generations per day',
-        'Access to 1 character',
+        'All characters, included on every plan',
         'Ads included',
         'Limited saved settings',
       ],
@@ -774,7 +774,7 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
       current: service.currentTier == 'enterprise',
       icon: Icons.business_center_rounded,
       features: const <String>[
-        'All available characters',
+        'All characters, included on every plan',
         'Team seats and admin controls',
         'Custom text, video, and usage limits',
         'Priority support and onboarding',
