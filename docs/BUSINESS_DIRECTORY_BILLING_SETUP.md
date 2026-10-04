@@ -114,18 +114,30 @@ so later default-portal changes cannot alter Directory billing behavior.
 - The return page now keeps membership guidance in its own banner so the
   asynchronous business search cannot overwrite it. The URL alone never
   confirms payment, activates membership, or grants a badge.
+- The deployed return banner was visually checked after the business results
+  loaded; membership guidance remained visible.
+- Real Stripe-signed sandbox delivery reached the deployed webhook on October
+  4 at 19:12:53 UTC. Event `evt_1UMuq8Lx6hd5l5Vohv7XCrd1` was acknowledged,
+  with zero pending webhooks reported by Stripe. The expiring delivery check
+  recorded receipt without payment-provider reads or membership writes.
+  Sandbox endpoint `we_1UMuoaLx6hd5l5VohXmT4K27` was disabled afterward; its
+  temporary runtime variables are cleared as part of deployment cleanup.
 - Local checks cover credential gating, cached read-only connection probing,
   rejected signatures, asynchronous payment failure, fixed prices, paused
   management, ownership, duplicate/stale observations, and test/live isolation.
+- All 29 backend checks passed, including expiring sandbox receipt isolation
+  and unchanged live reconciliation through the same webhook route.
 - Flutter Directory tests and the release web build passed.
 
-Still required: signed Stripe webhook delivery into the application with an
-isolated sandbox runtime configuration, renewal time-travel testing, and review
-of tax configuration. The connector exposed test-clock creation but did not
-expose advancement or webhook test delivery during this session. Dashboard
-sign-in remains unverified, so these tests are not yet complete. The hosted
-Checkout and portal checks above used synthetic Stripe objects and did not
-activate any real business listing in the application.
+Still required: renewal time-travel testing and review of tax configuration.
+The connector exposed test-clock creation but did not expose advancement.
+The user's own Stripe Dashboard is signed into the sandbox; the agent's browser
+Dashboard sign-in remains unavailable. A fresh synthetic clock-bound monthly
+subscription `sub_1UMurhLx6hd5l5VoRMxFV3yf` has a paid 499-cent initial invoice
+and first period end `1793812741`. Clock `clock_1UMt4YLx6hd5l5Voa2Aonl7V`
+is ready at `1791134341`; advancing to `1793899141` in Workbench Shell is the
+next verification step. The hosted Checkout, portal and delivery checks used
+synthetic Stripe objects and did not activate any real business listing.
 
 Keep production checkout and the new webhook endpoint paused until those
 checks are complete. The previous Clover endpoint remains disabled; only the
