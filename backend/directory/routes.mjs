@@ -10,7 +10,7 @@ export function registerDirectory(app,{database,requireUser,environment=process.
  const admin=user=>admins.has(user?.id?.toLowerCase());
  const command=(user,action,business,p)=>persistence.command(user?.id,admin(user),action,business,p);
  const wrap=(fn,auth=false)=>async(q,r)=>{r.set('Cache-Control','no-store');try{if(!persistence)fail('Directory storage is not configured.',503);let user=null;if(auth){try{user=await requireUser(q);}catch{fail('Sign in to manage your business.',401);}if(!user?.id||user.is_anonymous)fail('Sign in with a permanent account.',401);rate('owner:'+user.id,80);}else rate('public:'+ip(q),120);await fn(q,r,user);}catch(e){r.status(e instanceof DirectoryError?e.status:503).json({error:e instanceof DirectoryError?e.message:'Directory request could not be completed. Please retry.'});}};
- app.get(root+'/health',(q,r)=>r.json({version:1,freeListings:true,publicBrowsing:true,paymentsReady:pay.ready,livePayments:pay.live,adminConfigured:admins.size>0,prices:{currency:'USD',monthlyCents:499,yearlyCents:4900}}));
+ app.get(root+'/health',async(q,r)=>{r.set('Cache-Control','no-store');const paymentConnection=pay.checkConnection?await pay.checkConnection():'unchecked';r.json({version:1,freeListings:true,publicBrowsing:true,paymentsReady:pay.ready,paymentCredentialsConfigured:pay.configured===true,checkoutEnabled:pay.enabled===true,paymentConnection,paymentApiVersion:pay.apiVersion,livePayments:pay.live,adminConfigured:admins.size>0,prices:{currency:'USD',monthlyCents:499,yearlyCents:4900}});});
  app.get(root+'/businesses',wrap(async(q,r)=>r.json({...await command(null,'browse',null,{q:text(q.query.q,120),category:text(q.query.category,80),city:text(q.query.city,100),...(q.query.ids?{ids:text(q.query.ids,2000).split(',').slice(0,50).map(id)}:{}),offset:Math.min(10000,Math.max(0,Number(q.query.offset)||0))}),categories:CATEGORIES})));
  app.get(root+'/businesses/:slug',wrap(async(q,r)=>r.json(await command(null,'public',null,{slug:text(q.params.slug,120,true)}))));
  app.post(root+'/businesses/:id/report',wrap(async(q,r)=>{rate('report:'+ip(q),5,3600000);if(q.body?.website)fail('Report could not be submitted.');r.json(await command(null,'report',id(q.params.id),{reason:text(q.body?.reason,1000,true)}));}));
@@ -60,8 +60,9 @@ export function registerDirectory(app,{database,requireUser,environment=process.
  async function apply(s){if(!s)return;return command(null,'billing_apply',id(s.business_id),s);}
  app.post(root+'/owner/:id/membership',wrap(async(q,r,u)=>{
   const business=id(q.params.id),snapshot=await command(u,'get',business);if(snapshot.business.owner_id!==u.id)fail('Only the owner can manage membership.',403);
-  const action=q.body?.action;if(!pay.ready)fail('Membership checkout is not configured yet. You can still create a free listing and apply for verification.',503);
+  const action=q.body?.action;if(!pay.configured&&!pay.ready)fail('Membership checkout is not configured yet. You can still create a free listing and apply for verification.',503);
   if(action==='checkout'){
+   if(!pay.ready)fail('New membership checkout is paused. Free listings and existing membership management remain available.',503);
    if(q.body?.acceptRecurring!==true||!Object.hasOwn(PRICES,q.body?.interval))fail('Review and accept the recurring price first.');
    let expired_generation;
    const previous={...snapshot.membership,business_id:business};
@@ -88,7 +89,7 @@ export function registerDirectory(app,{database,requireUser,environment=process.
     if(o?.metadata?.korlix_directory)await apply(await pay.subscription(o.id));
    }else if(['invoice.paid','invoice.payment_failed','invoice.payment_action_required','invoice.marked_uncollectible'].includes(event.type)){
     const sub=o?.parent?.subscription_details?.subscription||o?.subscription;if(sub){const m=await command(null,'billing_lookup',null,{subscription_id:typeof sub==='string'?sub:sub.id});if(m)await apply(await pay.subscription(typeof sub==='string'?sub:sub.id));}
-   }else if(['checkout.session.completed','checkout.session.async_payment_succeeded'].includes(event.type)){
+   }else if(['checkout.session.completed','checkout.session.async_payment_succeeded','checkout.session.async_payment_failed'].includes(event.type)){
     if(o?.metadata?.korlix_directory&&o.subscription)await apply(await pay.subscription(typeof o.subscription==='string'?o.subscription:o.subscription.id));
    }else if(['charge.refunded','charge.dispute.created'].includes(event.type)){
     const customer=await pay.chargeCustomer(event.type==='charge.refunded'?o.id:typeof o.charge==='string'?o.charge:o.charge.id);
