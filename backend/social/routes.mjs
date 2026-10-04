@@ -6,7 +6,8 @@ import { registerDomino } from './domino.mjs';
 import { registerSocialAttachments, socialAttachments } from './attachments.mjs';
 import { registerSocialAlbums } from './albums.mjs';
 import { createSocialPush } from './push.mjs';
-export function registerSocial(app, { database, requireUser, logger = console, env = process.env, pushSender, autoStart = true } = {}) {
+import { registerSocialDiscover } from './discover.mjs';
+export function registerSocial(app, { database, requireUser, logger = console, env = process.env, pushSender, newsResearch, autoStart = true } = {}) {
   const callConfig = createSocialCallConfig({env,logger});
   logger.info?.('Social calling relay readiness', socialRelayReadiness(env));
   const actions = new Set(['bootstrap', 'members', 'member', 'wall', 'connections', 'messages', 'message', 'topics', 'topic', 'blocks', 'reports',
@@ -31,6 +32,7 @@ export function registerSocial(app, { database, requireUser, logger = console, e
   registerSocialAlbums(app, { database, authenticate, logger });
   registerDomino(app, { database, authenticate, env, logger });
   registerSocialAttachments(app, { database, authenticate, logger });
+  registerSocialDiscover(app, {database, authenticate, logger, research:newsResearch, autoStart});
   const push = createSocialPush({ database, authenticate, env, logger, sender: pushSender, autoStart });
   push.register(app);
   const route = async (req, res) => {
@@ -52,7 +54,8 @@ export function registerSocial(app, { database, requireUser, logger = console, e
       const groupReport = action === 'report' && data.kind === 'group_message';
       const groupAction = groupActions.has(action) || groupReport || action === 'moderate';
       const mediaChat = chatActions.has(action) || ['group_messages','group_message','group_send'].includes(action);
-      const result = await database.rpc(['dump_schedule','dump_cancel'].includes(action) ? 'korlix_social_dump_v1' : mediaChat ? 'korlix_social_media_chat_v1' : groupAction ? 'korlix_social_groups_v1' : callActions.has(action) ? 'korlix_social_calls_v1' : 'korlix_social_v1', { p_actor: user.id, p_action: groupReport ? 'group_report' : action, p_data: data });
+      const discoverReport = action === 'report' && ['video','news'].includes(data.kind);
+      const result = await database.rpc(discoverReport || action === 'moderate' ? 'korlix_social_discover_v1' : ['dump_schedule','dump_cancel'].includes(action) ? 'korlix_social_dump_v1' : mediaChat ? 'korlix_social_media_chat_v1' : groupAction ? 'korlix_social_groups_v1' : callActions.has(action) ? 'korlix_social_calls_v1' : 'korlix_social_v1', { p_actor: user.id, p_action: groupReport ? 'group_report' : action, p_data: data });
       if (result.error) {
         const code = result.error.code;
         const status = { P0001: 400, P0002: 404, '42501': 403, '23505': 409, '40001': 409, '23514': 400, '22P02': 400, '22003': 400, '54000': 429 }[code];

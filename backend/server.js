@@ -3,6 +3,7 @@ import { registerChatMemory, prepareChatMemory } from './chat_memory/memory.mjs'
 import { resumeTextPolicy } from './resume_studio/policy.mjs';
 import { registerEmailEnhancer, enhanceEmail } from './email_enhancer/enhancer.mjs';
 import { registerSocial } from './social/routes.mjs';
+import { researchDiscoverNews } from './social/discover_news.mjs';
 import { socialPushConfig } from './social/push.mjs';
 import { socialRelayReadiness } from './social/calls.mjs';
 import { registerAgentStudio } from './agent_studio/routes.mjs';
@@ -3722,7 +3723,8 @@ app.get("/api/health", (req, res) => {
     studyStudio: {version:1,savedProgress:true,flashcards:true,practiceQuiz:true},
     appStudio: {version:2,interactivePreview:true,savedProjects:true,versionHistory:true,webExport:true,
       hostedCustomerPortals:true,sharedRecords:true,privateUploads:true},
-    social: {version:2,callRecovery:true,callHistory:true,
+    social: {version:3,callRecovery:true,callHistory:true,
+      discover:{videos:true,newsConfigured:Boolean(process.env.OPENAI_API_KEY),maxVideoSeconds:60,maxUploadMB:50},
       relayMode:socialRelayReadiness().mode,webPushConfigured:socialPushConfig().enabled,
       nativePushConfigured:false},
     musicStudio: {version:2,savedLibrary:true,savedDrafts:true,provider:'musicapi.ai',providerConfigured:Boolean(process.env.MUSICAPI_KEY||process.env.MUSICAPI_API_KEY||process.env.MUSICAPI_AI_KEY)},
@@ -12662,7 +12664,8 @@ const bookkeepingStorage = supabaseUrl && supabaseServiceRoleKey ? createClient(
   auth: { autoRefreshToken: false, persistSession: false },
   global: { fetch: (url, init = {}) => fetch(url, { ...init, signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(45000)]) : AbortSignal.timeout(45000) }) },
 }) : null;
-const socialCommunication = registerSocial(app, {database:upgradedFeatureDatabase,requireUser});
+const socialCommunication = registerSocial(app, {database:upgradedFeatureDatabase,requireUser,
+  newsResearch:process.env.OPENAI_API_KEY ? () => researchDiscoverNews(new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})) : null});
 process.once('SIGTERM',()=>socialCommunication.stop());
 process.once('SIGINT',()=>socialCommunication.stop());
 const appPortals = registerAppPortals(app, {
