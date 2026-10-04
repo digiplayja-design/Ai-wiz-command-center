@@ -15,7 +15,7 @@ class KnovaWelcomeController extends ChangeNotifier {
     required this.sounds,
     KnovaWelcomePlayer? player,
     http.Client? client,
-  }) : _url = Uri.parse('$backendBaseUrl/api/welcome/rici-v2.wav'),
+  }) : _url = Uri.parse('$backendBaseUrl/api/welcome/rici-v3.wav'),
        _player = player ?? createKnovaWelcomePlayer(),
        _client = client ?? http.Client() {
     sounds.addListener(_soundChanged);

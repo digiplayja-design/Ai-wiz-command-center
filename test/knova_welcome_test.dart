@@ -142,7 +142,7 @@ void main() {
       final f = Fixture();
       addTearDown(f.dispose);
       await f.controller.preload();
-      expect(f.requests.single.url.path, '/api/welcome/rici-v2.wav');
+      expect(f.requests.single.url.path, '/api/welcome/rici-v3.wav');
       f.controller.prepareGesture();
       expect(f.player.activations, 1);
       expect(f.player.plays, 0);
