@@ -9,6 +9,7 @@ import '../bookkeeping/bookkeeping_file_save.dart';
 import '../sounds/korlix_sound_actions.dart';
 import '../sounds/korlix_sound_service.dart';
 import 'directory_client.dart';
+import 'directory_style.dart';
 
 class DirectoryScreen extends StatefulWidget {
   const DirectoryScreen({super.key, required this.client});
@@ -893,7 +894,11 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
     IconData icon = Icons.arrow_forward,
   }) => OutlinedButton.icon(
     onPressed: korlixSoundAction(_busy ? null : action),
-    style: const ButtonStyle(enableFeedback: false),
+    style: OutlinedButton.styleFrom(
+      minimumSize: const Size(0, 46),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+    ).copyWith(enableFeedback: false),
     icon: Icon(icon),
     label: Text(label),
   );
@@ -908,7 +913,13 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
       );
     }
     return Scaffold(
+      backgroundColor: DirectoryVisuals.dark(context)
+          ? const Color(0xff101a2d)
+          : const Color(0xfff8faff),
       appBar: AppBar(
+        backgroundColor: DirectoryVisuals.dark(context)
+            ? const Color(0xff101a2d)
+            : const Color(0xfff8faff),
         title: const Text('KORLIX Business Directory'),
         actions: [
           IconButton(
@@ -927,36 +938,38 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Your business deserves to be found.',
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Create a free public storefront. Share your services, company photos and contact details. No paid KORLIX plan required.',
-                  ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      FilledButton.icon(
-                        onPressed: _busy
-                            ? null
-                            : () => _run(() => _edit(create: true)),
-                        icon: const Icon(Icons.add_business),
-                        label: const Text('Add business — free'),
-                      ),
-                      _button(
-                        'Explore public directory',
-                        () => _run(
-                          () => _open(
-                            'https://www.korlixdeveloper.com/business-directory/',
+                  DirectoryHero(
+                    actions: Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: DirectoryVisuals.violet,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(0, 46),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 14,
+                            ),
                           ),
+                          onPressed: _busy
+                              ? null
+                              : () => _run(() => _edit(create: true)),
+                          icon: const Icon(Icons.add_business),
+                          label: const Text('Add business — free'),
                         ),
-                        icon: Icons.public,
-                      ),
-                    ],
+                        _button(
+                          'Explore public directory',
+                          () => _run(
+                            () => _open(
+                              'https://www.korlixdeveloper.com/business-directory/',
+                            ),
+                          ),
+                          icon: Icons.public,
+                        ),
+                      ],
+                    ),
                   ),
                   if (_busy)
                     const Padding(
@@ -1008,18 +1021,19 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
                         'Your first listing starts here. Add your business, upload company photos, then submit it for review.',
                       ),
                     ),
+                  const SizedBox(height: 14),
                   for (final b in _businesses)
-                    Card(
-                      child: ListTile(
-                        selected: b['id'] == _id,
-                        leading: const Icon(Icons.storefront),
-                        title: Text(b['draft']?['name'] ?? 'Business'),
-                        subtitle: Text(
+                    DirectoryListingCard(
+                      name: b['draft']?['name'] ?? 'Business',
+                      category: b['draft']?['category'] ?? '',
+                      location: [b['draft']?['city'], b['draft']?['country']]
+                          .whereType<String>()
+                          .where((v) => v.isNotEmpty)
+                          .join(' · '),
+                      status:
                           'Free listing: ${_listingLabel(b)}\nOptional badge: ${_verificationLabel(b['verification_state'])}',
-                        ),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => _run(() => _select(b['id'])),
-                      ),
+                      selected: b['id'] == _id,
+                      onTap: () => _run(() => _select(b['id'])),
                     ),
                   if (_admin) ...[
                     const SizedBox(height: 24),
