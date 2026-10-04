@@ -1,3 +1,4 @@
+import 'crm_directory_screen.dart';
 import '../live_convo/korlix_live_convo_test_screen.dart';
 import '../privacy/korlix_third_party_ai_consent.dart';
 import 'crm_email_screen.dart';
@@ -165,6 +166,14 @@ class _ContactsScreenState extends State<ContactsScreen> {
       _notify('Contact saved');
       await _load();
     }
+  }
+
+  Future<void> _openDirectorySync() async {
+    if (_locked || widget.client.sessionChanged) return;
+    final showImported=await Navigator.of(context).push<bool>(MaterialPageRoute<bool>(builder:(_)=>Theme(data:CrmStyle.theme,child:CrmDirectoryScreen(client:widget.client))));
+    if(!mounted||_locked)return;
+    if(showImported==true)setState((){_source='directory';_offset=0;_segment='';_category='';_search.clear();});
+    await _load();
   }
 
   Future<void> _openEmail({CrmJson? contact, CrmJson? draft}) async {
@@ -1028,6 +1037,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                     _choice('Source', _source, const {
                       '': 'All sources',
                       'funnel': 'Funnel Studio',
+                      'directory': 'Business Directory',
                       'manual': 'Manual',
                       'phone': 'Phone',
                       'email': 'Email',
@@ -1664,6 +1674,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
         Wrap(spacing:10,runSpacing:8,children:[
           FilledButton.icon(key:const Key('crm-autonomous-email'),onPressed:_operation||_locked?null:()=>_action(()=>_openEmail()),icon:const Icon(Icons.mark_email_read_outlined),label:const Text('Autonomous email')),
           OutlinedButton.icon(key:const Key('crm-k-nova'),onPressed:_operation||_locked?null:()=>_action(_openCrmVoice),icon:const Icon(Icons.graphic_eq_rounded,color:CrmStyle.violet),label:const Text('K-Nova')),
+          OutlinedButton.icon(key:const Key('crm-directory-sync'),onPressed:_operation||_locked?null:()=>_action(_openDirectorySync),icon:const Icon(Icons.storefront_outlined,color:CrmStyle.gold),label:const Text('Auto-pull listings')),
         ]),
         const SizedBox(height:16),
         _summary(mobile),
@@ -1837,7 +1848,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                 Expanded(
                                   child: LayoutBuilder(
                                     builder: (context, box) {
-                                      final minimum = mobile ? 740.0 : 804.0;
+                                      const minimum = 804.0;
                                       final extra = _filtersOpen ? 150.0 : 0.0;
                                       final height =
                                           box.maxHeight < minimum + extra
