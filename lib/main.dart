@@ -37,6 +37,8 @@ import 'theme/korlix_theme.dart';
 import 'theme/korlix_action_button.dart';
 import 'theme/korlix_action_grid.dart';
 import 'auth/korlix_welcome_confirmation.dart';
+import 'auth/knova_welcome_controller.dart';
+import 'auth/knova_welcome_card.dart';
 import 'auth/korlix_october_welcome.dart';
 import 'auth/korlix_login_preferences.dart';
 import 'auth/korlix_portal_launch.dart';
@@ -685,6 +687,7 @@ Uri _assertValidKorlixBackendUri(String rawUri) {
 
 class _AuthGateState extends State<AuthGate> {
   bool _booting = true;
+  late final KnovaWelcomeController _welcome;
   bool _portalLaunchScheduled = false;
 
   void _schedulePortalLaunch() {
@@ -722,17 +725,21 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void initState() {
     super.initState();
+    _welcome = KnovaWelcomeController(backendBaseUrl: kKorlixBackendBaseUrl, sounds: kKorlixSounds);
+    unawaited(_welcome.preload());
     kKorlixAuthRevision.addListener(_handleAuthRevisionChanged);
     _restoreSession();
   }
 
   @override
   void dispose() {
+    _welcome.dispose();
     kKorlixAuthRevision.removeListener(_handleAuthRevisionChanged);
     super.dispose();
   }
 
   void _handleAuthRevisionChanged() {
+    if (!_signedIn) _welcome.signedOut();
     if (mounted) {
       setState(() {});
     }
@@ -790,9 +797,11 @@ class _AuthGateState extends State<AuthGate> {
     setState(() {
       korlixSetInMemorySession(session);
     });
+    unawaited(_welcome.signedIn());
   }
 
   Future<void> _handleSignOut() async {
+    _welcome.signedOut();
     try {
       await KorlixDeviceStore.ensureLoaded();
 
@@ -859,7 +868,7 @@ class _AuthGateState extends State<AuthGate> {
     }
 
     if (!_signedIn) {
-      return AuthScreen(onSignedIn: _handleSignedIn);
+      return AuthScreen(onSignedIn: _handleSignedIn, onSignInGesture: _welcome.prepareGesture);
     }
 
     _schedulePortalLaunch();
@@ -912,6 +921,10 @@ class _AuthGateState extends State<AuthGate> {
             ),
           ),
         ),
+        Positioned(
+          top: 64, left: 16, right: 16,
+          child: SafeArea(child: Align(alignment: Alignment.topCenter, child: KnovaWelcomeCard(controller: _welcome))),
+        ),
       ],
     );
   }
@@ -921,8 +934,9 @@ class AuthScreen extends StatefulWidget {
   final Future<void> Function(KorlixAuthSession) onSignedIn;
   final http.Client? client;
   final DateTime? seasonalDate;
+  final VoidCallback? onSignInGesture;
 
-  const AuthScreen({super.key, required this.onSignedIn, this.client, this.seasonalDate});
+  const AuthScreen({super.key, required this.onSignedIn, this.client, this.seasonalDate, this.onSignInGesture});
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -1061,6 +1075,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Future<void> _submit() async {
     if (_loading || _resetLoading) return;
+    widget.onSignInGesture?.call();
     await _preferencesLoaded;
     if (!mounted || _loading || _resetLoading) return;
     final signingUp = _isSignUp;

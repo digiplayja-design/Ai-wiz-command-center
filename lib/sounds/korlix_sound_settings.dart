@@ -10,6 +10,7 @@ class KorlixSoundSettings {
     this.messages = true,
     this.calls = true,
     this.bells = true,
+    this.welcomeVoice = true,
     this.volume = .65,
     this.pack = KorlixSoundPack.signature,
     this.quietHours = false,
@@ -17,7 +18,7 @@ class KorlixSoundSettings {
     this.quietEndMinute = 420,
   });
 
-  final bool enabled, clicks, messages, calls, bells, quietHours;
+  final bool enabled, clicks, messages, calls, bells, welcomeVoice, quietHours;
   final double volume;
   final KorlixSoundPack pack;
   final int quietStartMinute, quietEndMinute;
@@ -28,6 +29,7 @@ class KorlixSoundSettings {
     bool? messages,
     bool? calls,
     bool? bells,
+    bool? welcomeVoice,
     double? volume,
     KorlixSoundPack? pack,
     bool? quietHours,
@@ -39,6 +41,7 @@ class KorlixSoundSettings {
     messages: messages ?? this.messages,
     calls: calls ?? this.calls,
     bells: bells ?? this.bells,
+    welcomeVoice: welcomeVoice ?? this.welcomeVoice,
     volume: (volume ?? this.volume).clamp(0, 1).toDouble(),
     pack: pack ?? this.pack,
     quietHours: quietHours ?? this.quietHours,
@@ -56,6 +59,7 @@ class KorlixSoundSettings {
     'messages': messages,
     'calls': calls,
     'bells': bells,
+    'welcomeVoice': welcomeVoice,
     'volume': volume,
     'pack': pack.name,
     'quietHours': quietHours,
@@ -78,6 +82,7 @@ class KorlixSoundSettings {
       messages: flag('messages', true),
       calls: flag('calls', true),
       bells: flag('bells', true),
+      welcomeVoice: flag('welcomeVoice', true),
       volume: volume is num && volume.isFinite
           ? volume.toDouble().clamp(0, 1)
           : .65,

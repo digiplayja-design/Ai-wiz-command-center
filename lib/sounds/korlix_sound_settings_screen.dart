@@ -598,6 +598,17 @@ class _KorlixSoundSettingsScreenState extends State<KorlixSoundSettingsScreen> {
                                 _save(settings.copyWith(quietHours: value)),
                             accent: _violet,
                           ),
+                          const SizedBox(height: 18),
+                          _switch(
+                            id: 'welcome',
+                            title: 'K-Nova welcome voice',
+                            description:
+                                'A spoken introduction after you sign in. Uses your volume and quiet hours. No AI GAS is used.',
+                            value: settings.welcomeVoice,
+                            onChanged: (value) =>
+                                _save(settings.copyWith(welcomeVoice: value)),
+                            accent: _cyan,
+                          ),
                           if (settings.quietHours) ...[
                             const SizedBox(height: 16),
                             Wrap(

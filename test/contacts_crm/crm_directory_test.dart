@@ -10,6 +10,7 @@ import 'package:ai_wiz_command_center/contacts_crm/contacts_screen.dart';
 import 'contacts_screen_test.dart' as fixtures;
 
 class Fixture {
+  bool failSave = false;
   final calls = <({String method, String path, CrmJson body})>[];
   CrmJson settings = {
     'version': 1,
@@ -49,6 +50,11 @@ class Fixture {
           'preview_only': true,
         });
       if (r.method == 'PUT') {
+        if (failSave)
+          return http.Response(
+            jsonEncode({'error': 'Directory settings changed. Refresh first.'}),
+            409,
+          );
         settings = {
           ...settings,
           'version': (settings['version'] as int) + 1,
@@ -86,6 +92,90 @@ Future<void> tap(WidgetTester t, Finder f) async {
 }
 
 void main() {
+  testWidgets(
+    'First enable saves default filters after confirmation, then uses the returned version',
+    (t) async {
+      final f = Fixture();
+      f.settings['version'] = 0;
+      await t.pumpWidget(
+        MaterialApp(home: CrmDirectoryScreen(client: f.client)),
+      );
+      await t.pumpAndSettle();
+      expect(
+        t
+            .widget<OutlinedButton>(find.byKey(const Key('directory-toggle')))
+            .onPressed,
+        isNotNull,
+      );
+      await tap(t, find.byKey(const Key('directory-toggle')));
+      await tap(t, find.text('Cancel'));
+      expect(f.calls.where((c) => c.method != 'GET'), isEmpty);
+      await tap(t, find.byKey(const Key('directory-toggle')));
+      await tap(t, find.text('Enable auto-pull').last);
+      final writes = f.calls.where((c) => c.method != 'GET').toList();
+      expect(writes.length, 2);
+      expect(writes[0].method, 'PUT');
+      expect(writes[0].body['version'], 0);
+      expect(writes[0].body['filters']['city'], '');
+      expect(writes[1].body['version'], 1);
+      expect(writes[1].body['enabled'], true);
+      expect(f.settings['enabled'], true);
+      await t.pumpWidget(const SizedBox());
+      f.client.dispose();
+    },
+  );
+  testWidgets(
+    'Changed filters are saved on enable, and Pause works without saving or discarding edits',
+    (t) async {
+      final f = Fixture();
+      f.settings['enabled'] = true;
+      await t.pumpWidget(
+        MaterialApp(home: CrmDirectoryScreen(client: f.client)),
+      );
+      await t.pumpAndSettle();
+      await t.enterText(find.byKey(const Key('directory-city')), 'Kingston');
+      await tap(t, find.byKey(const Key('directory-toggle')));
+      expect(f.settings['enabled'], false);
+      expect(f.calls.where((c) => c.method == 'PUT'), isEmpty);
+      expect(
+        t
+            .widget<TextField>(find.byKey(const Key('directory-city')))
+            .controller!
+            .text,
+        'Kingston',
+      );
+      await tap(t, find.byKey(const Key('directory-toggle')));
+      await tap(t, find.text('Enable auto-pull').last);
+      expect(f.settings['enabled'], true);
+      expect(f.settings['filters']['city'], 'Kingston');
+      expect(f.calls.last.body['version'], 3);
+      await t.pumpWidget(const SizedBox());
+      f.client.dispose();
+    },
+  );
+  testWidgets('A failed save cannot enable or run imports', (t) async {
+    final f = Fixture();
+    f.settings['version'] = 0;
+    f.failSave = true;
+    await t.pumpWidget(MaterialApp(home: CrmDirectoryScreen(client: f.client)));
+    await t.pumpAndSettle();
+    await tap(t, find.byKey(const Key('directory-toggle')));
+    await tap(t, find.text('Enable auto-pull').last);
+    expect(f.calls.where((c) => c.path.endsWith('/actions')), isEmpty);
+    expect(find.textContaining('Directory settings changed'), findsOneWidget);
+    expect(
+      t
+          .widget<IconButton>(
+            find.byWidgetPredicate(
+              (w) => w is IconButton && w.tooltip == 'Refresh import status',
+            ),
+          )
+          .onPressed,
+      isNotNull,
+    );
+    await t.pumpWidget(const SizedBox());
+    f.client.dispose();
+  });
   for (final width in [390.0, 1024.0])
     testWidgets('Listing filters, preview and controls fit width $width', (
       t,
@@ -109,7 +199,7 @@ void main() {
         t
             .widget<FilledButton>(find.byKey(const Key('directory-pull-now')))
             .onPressed,
-        isNull,
+        isNotNull,
       );
       await tap(t, find.byKey(const Key('directory-preview')));
       expect(f.calls.last.body['filters']['city'], 'Kingston');

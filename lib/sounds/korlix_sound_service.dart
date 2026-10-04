@@ -60,6 +60,15 @@ class KorlixSoundService extends ChangeNotifier {
   bool get ready => !_disposed && _player.ready;
   bool get blocked => _blocked;
   bool get quiet => _quietOwners.isNotEmpty;
+  bool get canPlayWelcome =>
+      !_disposed &&
+      _foreground &&
+      _settings.enabled &&
+      _settings.welcomeVoice &&
+      _settings.volume > 0 &&
+      !quiet &&
+      _rings.isEmpty &&
+      !_settings.isQuietAt(_now());
   String? get storageError => _storageError;
 
   void _notify() {
@@ -259,6 +268,7 @@ class KorlixSoundService extends ChangeNotifier {
     _foreground = value;
     if (!value) _silence();
     _syncRing();
+    _notify();
   }
 
   void setQuiet(Object owner, bool active) {
@@ -269,6 +279,7 @@ class KorlixSoundService extends ChangeNotifier {
     if (!changed) return;
     if (active) _silence();
     _syncRing();
+    _notify();
   }
 
   void setRinging(
@@ -282,6 +293,7 @@ class KorlixSoundService extends ChangeNotifier {
     if (!ringing) {
       _rings.remove(owner);
       _syncRing();
+      _notify();
       return;
     }
     final now = _now();
@@ -304,6 +316,7 @@ class KorlixSoundService extends ChangeNotifier {
     );
     if (!allowed) _silencedCalls.add(id);
     _syncRing();
+    _notify();
   }
 
   void _syncRing() {

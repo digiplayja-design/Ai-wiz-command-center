@@ -22,6 +22,7 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
       _loading = true,
       _busy = false,
       _dirty = false,
+      _hasLoaded = false,
       _locked = false;
   String? _error, _notice;
   @override
@@ -52,8 +53,9 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
     });
   }
 
-  void _setSettings(CrmJson settings) {
+  void _setSettings(CrmJson settings, {bool keepEdits = false}) {
     _settings = settings;
+    if (keepEdits) return;
     final f = crmMap(settings['filters']);
     _query.text = f['q'] ?? '';
     _category = f['category'] ?? '';
@@ -73,6 +75,7 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
             .whereType<String>()
             .toList();
         _loading = false;
+        _hasLoaded = true;
         _error = null;
       });
     } catch (e) {
@@ -83,6 +86,33 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
         });
       }
     }
+  }
+
+  Future<void> _refresh() async {
+    if (_busy || _locked) return;
+    if (_dirty) {
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Reload saved filters?'),
+          content: const Text(
+            'This replaces your unsaved filter changes with the latest saved settings.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Keep editing'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Reload'),
+            ),
+          ],
+        ),
+      );
+      if (discard != true || !mounted || _locked) return;
+    }
+    await _run(_load);
   }
 
   CrmJson get _filters => {
@@ -165,7 +195,7 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
           ),
           content: SingleChildScrollView(
             child: Text(
-              '$_filterSummary\n\nAdd up to 100 currently matching KORLIX Business Directory listings as CRM leads${automatic ? ' each hour' : ''}. Existing and archived contacts are skipped.\n\nEmail and call permission will remain unset for imported leads.',
+              '$_filterSummary\n\n${_dirty || (_settings['version'] ?? 0) == 0 ? 'These filters will be saved automatically. ${!automatic && _settings['enabled'] == true ? 'Auto-pull will pause when the new filters are saved. ' : ''}\n\n' : ''}Add up to 100 currently matching KORLIX Business Directory listings as CRM leads${automatic ? ' each hour' : ''}. Existing and archived contacts are skipped.\n\nEmail and call permission will remain unset for imported leads.',
             ),
           ),
           actions: [
@@ -182,13 +212,25 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
       ) ??
       false;
   Future<void> _action(String action, {bool? enabled}) async {
-    if (_busy || _dirty || _locked || (_settings['version'] ?? 0) == 0) return;
+    if (_busy || _locked || !_hasLoaded) return;
     if ((action == 'run' || enabled == true) &&
         !await _confirm(enabled == true)) {
       return;
     }
     if (!mounted || _locked) return;
     await _run(() async {
+      // Activation is one clear action, including the first default selection.
+      // Pausing never saves or discards unsaved filter edits.
+      final pausing = action == 'toggle' && enabled == false;
+      if (!pausing && (_dirty || (_settings['version'] ?? 0) == 0)) {
+        final saved = await widget.client.request(
+          'PUT',
+          '/directory-sync',
+          body: {'version': _settings['version'] ?? 0, 'filters': _filters},
+        );
+        if (!mounted || _locked) return;
+        setState(() => _setSettings(crmMap(saved['settings'])));
+      }
       final r = await widget.client.request(
         'POST',
         '/directory-sync/actions',
@@ -211,7 +253,7 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
         }
       } else {
         setState(() {
-          _setSettings(crmMap(r['settings']));
+          _setSettings(crmMap(r['settings']), keepEdits: pausing && _dirty);
           _notice = enabled == true
               ? 'Auto-pull is on. The first check starts shortly.'
               : 'Auto-pull paused.';
@@ -231,7 +273,7 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
   Widget build(BuildContext context) {
     final saved = (_settings['version'] ?? 0) > 0,
         enabled = _settings['enabled'] == true,
-        canRun = !_busy && !_dirty && saved;
+        canRun = !_busy && _hasLoaded;
     return Theme(
       data: CrmStyle.theme,
       child: Scaffold(
@@ -240,7 +282,7 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
           actions: [
             IconButton(
               tooltip: 'Refresh import status',
-              onPressed: _busy || _dirty || _locked ? null : _load,
+              onPressed: _busy || _locked ? null : _refresh,
               icon: const Icon(Icons.refresh),
             ),
           ],
@@ -431,11 +473,11 @@ class _CrmDirectoryScreenState extends State<CrmDirectoryScreen> {
                               ),
                             ],
                           ),
-                          if (_dirty)
+                          if (_dirty || !saved)
                             const Padding(
                               padding: EdgeInsets.only(top: 10),
                               child: Text(
-                                'Save these changes before pulling or enabling imports. Saving pauses automatic imports.',
+                                'Enable auto-pull or Pull now will save these filters for you. Save filters alone keeps imports paused.',
                                 style: TextStyle(
                                   color: CrmStyle.gold,
                                   fontSize: 12,
