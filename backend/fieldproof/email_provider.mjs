@@ -78,7 +78,7 @@ function pdfAttachments(value) {
   });
 }
 
-function wire(input, from) {
+function wire(input, from, namespace) {
   if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !INPUT_KEYS.has(key))) invalid();
   if (typeof input.id !== 'string' || !UUID.test(input.id)) invalid();
   if (typeof input.subject !== 'string' || !input.subject.trim() || input.subject.length > 200 || CONTROLS.test(input.subject)) invalid();
@@ -89,7 +89,7 @@ function wire(input, from) {
     text: content(input.text, true),
     // Resend returns this server-owned tag in signed delivery webhooks, allowing
     // a bounce to find its authorized dispatch even before its HTTP receipt saves.
-    tags: [{ name: 'fieldproof_delivery', value: input.id.toLowerCase() }],
+    tags: [{ name: namespace === 'workforce' ? 'workforce_delivery' : 'fieldproof_delivery', value: input.id.toLowerCase() }],
     // The caller must derive this from fresh authenticated account data, never
     // from a job's customer email or an arbitrary user-supplied setting.
     reply_to: address(input.replyTo),
@@ -98,7 +98,7 @@ function wire(input, from) {
   if (html) payload.html = html;
   const attachments = pdfAttachments(input.attachments);
   if (attachments.length) payload.attachments = attachments;
-  return { body: JSON.stringify(payload), idempotencyKey: `fp-email:${input.id.toLowerCase()}` };
+  return { body: JSON.stringify(payload), idempotencyKey: `${namespace === 'workforce' ? 'wf' : 'fp'}-email:${input.id.toLowerCase()}` };
 }
 
 async function responseBody(response) {
@@ -126,7 +126,8 @@ function retryAfter(response) {
     ? Math.min(3600, Math.max(1, Number(seconds))) : null;
 }
 
-export function createFieldProofEmailProvider({ environment = process.env, fetchImpl = globalThis.fetch } = {}) {
+export function createFieldProofEmailProvider({ environment = process.env, fetchImpl = globalThis.fetch, namespace = 'fieldproof' } = {}) {
+  if (!['fieldproof', 'workforce'].includes(namespace)) throw new Error('Unknown transactional email namespace');
   const configuration = () => {
     const apiKey = environment.RESEND_API_KEY;
     let from = null;
@@ -148,7 +149,7 @@ export function createFieldProofEmailProvider({ environment = process.env, fetch
     async send(input) {
       const config = configuration();
       if (!config.ready) failure('fieldproof_email_provider_unavailable', 'FieldProof email delivery is not configured.');
-      const request = wire(input, config.from);
+      const request = wire(input, config.from, namespace);
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 30000);
       let response, body = null;
@@ -183,3 +184,5 @@ export function createFieldProofEmailProvider({ environment = process.env, fetch
     },
   });
 }
+
+export { address as validateTransactionalEmailAddress };

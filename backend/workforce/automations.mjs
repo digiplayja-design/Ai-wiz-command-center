@@ -10,15 +10,20 @@ export const automationTemplates = Object.freeze({
 });
 export function automationInput(body = {}) {
   if (!['missed_update', 'missed_shift', 'daily_summary'].includes(body.kind)) fail('Choose an automation type.');
-  if (!['email', 'call_review'].includes(body.channel)) fail('Choose email or call review.');
-  if (body.kind === 'daily_summary' && body.channel !== 'email') fail('Daily summaries use email.');
+  if (!['email', 'call_review', 'workspace_email'].includes(body.channel)) fail('Choose email or call review.');
+  if (body.kind === 'daily_summary' && body.channel === 'call_review') fail('Daily summaries use email.');
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(body.local_time || '')) fail('Choose a local delivery time.');
   if (!Array.isArray(body.days) || !body.days.length || body.days.length > 7) fail('Select at least one weekday.');
   const days = [...new Set(body.days.map(d => integer(d, 0, 6)))].sort();
+  const delivery_mode = body.delivery_mode || 'review', send_start = body.send_start || '08:00', send_end = body.send_end || '18:00';
+  if (!['review','automatic'].includes(delivery_mode)) fail('Choose draft review or automatic email.');
+  if (![send_start,send_end].every(v=>/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) || send_start >= send_end) fail('Choose a sending window that starts before it ends.');
+  if (body.channel==='workspace_email' && body.kind==='daily_summary' && (body.local_time<send_start||body.local_time>=send_end)) fail('Choose a summary time inside the sending window.');
   return {
+    delivery_mode, send_start, send_end,
     id: id(body.id), name: text(body.name, 100, true), kind: body.kind, channel: body.channel,
     member_id: body.kind === 'daily_summary' ? null : body.member_id ? id(body.member_id) : null,
-    recipient_id: body.channel === 'email' ? id(body.recipient_id) : null,
+    recipient_id: body.channel !== 'call_review' ? id(body.recipient_id) : null,
     delay_minutes: integer(body.delay_minutes, 0, 240), local_time: body.local_time,
     days, daily_limit: integer(body.daily_limit, 1, 50),
   };
@@ -97,7 +102,7 @@ export function approvedRuleMatches(raw, rule) {
 }
 
 export function createWorkforceAutomations({ database, persistence, loadAgentProfile, environment = process.env, store,
-  emailStore, delivery, now = Date.now, autoStart = true, logger = console } = {}) {
+  emailStore, delivery, workspaceEmail, now = Date.now, autoStart = true, logger = console } = {}) {
   const state = store || createAutomationStore(database);
   const mailStore = emailStore || createKorlixAgentEmailSupabaseStore(database);
   const mail = delivery || createKorlixAgentEmailDeliveryService({ environment, store: mailStore, loadAgentProfile, now: () => new Date(now()) });
@@ -129,6 +134,10 @@ export function createWorkforceAutomations({ database, persistence, loadAgentPro
     }
     if (body.confirmed !== true) fail('Review the recipient, timing, and message before enabling.');
     if (!r.active_plan) fail('An active Enterprise plan is required.', 403, 'WORKFORCE_PLAN_REQUIRED');
+    if (r.channel === 'workspace_email') {
+      if (!workspaceEmail) fail('Workforce email is unavailable.',503,'WORKFORCE_EMAIL_UNAVAILABLE');
+      if (r.delivery_mode === 'automatic') { const cap = await workspaceEmail.capabilities(user); if (!cap.ready) fail(cap.reason,409,'WORKFORCE_EMAIL_UNAVAILABLE'); }
+    }
     let approval = {};
     if (r.channel === 'email') {
       const cap = await capabilities(user);
@@ -167,6 +176,7 @@ export function createWorkforceAutomations({ database, persistence, loadAgentPro
       const current = { ...await ruleAt(rule.owner_id, rule.org_id, rule.id), owner_email: rule.owner_email };
       if (!current.enabled || !current.active_plan || !(await events(current)).some(e => e.event_key === job.event_key)) return done('cancelled', 'condition_resolved_or_paused');
       if (current.channel === 'call_review') return done('review', 'review_required_no_call_placed');
+      if (current.channel === 'workspace_email') return await workspaceEmail.process(current, job, done);
       if (!bound(rule.owner_id)) return done('blocked', 'nova_owner_binding_changed');
       const rawRule = await mailStore.getRule(rule.owner_id, binding.agentId, current.email_rule_id);
       if (!approvedRuleMatches(rawRule, current)) return done('blocked', 'email_rule_changed_reapproval_required');
@@ -210,7 +220,7 @@ export function createWorkforceAutomations({ database, persistence, loadAgentPro
   const initial = autoStart ? setTimeout(() => void tick(), 10000) : null;
   timer?.unref?.(); initial?.unref?.();
   return {
-    async get(user, org) { return { ...await cmd(user, 'state', org), ...await capabilities(user), templates: automationTemplates, worker_last_tick: lastTick }; },
+    async get(user, org) { return { ...await cmd(user, 'state', org), ...await capabilities(user), workspace_email: workspaceEmail ? await workspaceEmail.capabilities(user) : null, templates: automationTemplates, worker_last_tick: lastTick }; },
     create: (user, org, body) => cmd(user, 'create', org, automationInput(body)), setEnabled,
     async pauseAll(user, org) {
       const before = await cmd(user, 'state', org);

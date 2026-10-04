@@ -36,6 +36,7 @@ import { registerContractRadar } from './contract_radar/routes.mjs';
 import { createSamAdapter } from './contract_radar/sam.mjs';
 import { registerFieldProof } from './fieldproof/routes.mjs';
 import { registerFieldProofEmails } from './fieldproof/emails.mjs';
+import { createWorkforceEmails, registerWorkforceEmailPublicRoutes } from './workforce/emails.mjs';
 import { registerFieldProofEmailWebhook } from './fieldproof/email_webhook.mjs';
 import { createFieldProofEmailProvider } from './fieldproof/email_provider.mjs';
 import { fieldProofVoiceInstructions, fieldProofVoiceSessionGuard } from './fieldproof/voice.mjs';
@@ -3736,7 +3737,8 @@ app.get("/api/health", (req, res) => {
       discovery:'regional_official_sources',directSamConfigured:createSamAdapter().ready(),
       pdfImport:true,deadlineMonitoring:true,automaticMonitoringUsesAiCredits:false,
       automaticSubmission:false},
-    workforce: {version:2,voice:true,businessProfiles:true,industryTemplates:12,teamTypes:5,taskBoard:true},
+    workforce: {version:3,voice:true,businessProfiles:true,industryTemplates:12,teamTypes:5,taskBoard:true,
+      email:{version:1,workspaceRecipients:true,draftReview:true,automaticReminders:true,dailySummaries:true,enabledByDefault:false,providerConfigured:createFieldProofEmailProvider({environment:process.env,namespace:'workforce'}).status().ready}},
     fieldProof: {version:3,model:CHAT_MODEL,reasoningEffort:CHAT_EFFORT,creditCost:FIELDPROOF_CREDIT_COST,maxPhotos:24,originalEvidence:true,voice:true,industryTemplates:14,readings:true,punchList:true,batchPhotos:true,
       email:{version:1,customerReports:true,followUps:true,supervisorSummaries:true,perAccountSettings:true,enabledByDefault:false,providerConfigured:createFieldProofEmailProvider({environment:process.env}).status().ready}},
     aiVisibility: {version: 1, model: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, method: 'openai_web_samples_v1', sampleCount: 3, creditCost: VISIBILITY_CREDIT_COST},
@@ -12743,6 +12745,8 @@ const fieldProofEmails = registerFieldProofEmails(app, {
 });
 // Share the existing verified Resend webhook; its Agent Email handler runs next.
 registerFieldProofEmailWebhook(app,{emailService:fieldProofEmails,environment:process.env});
+const workforceEmails=createWorkforceEmails({database:fieldProofEmailDatabase,environment:process.env});
+registerWorkforceEmailPublicRoutes(app,{service:workforceEmails,environment:process.env});
 process.once('SIGTERM',()=>fieldProofEmails.stop());
 process.once('SIGINT',()=>fieldProofEmails.stop());
 registerAiVisibility(app, {database: supabaseAdmin, requireUser,
@@ -12886,7 +12890,7 @@ registerBookkeeping(app, { database: supabaseAdmin, requireUser, receiptOptions:
 } });
 registerContactsCrm(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }); // K137_ENTERPRISE_CONTACTS
 registerDirectory(app, {database: supabaseAdmin, requireUser});
-registerWorkforce(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }); // K138_WORKFORCE
+registerWorkforce(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1, workspaceEmail: workforceEmails }); // K138_WORKFORCE
 registerFunnels(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1, autoStartScheduler: true }); // K141_FUNNEL_SCHEDULING
 
 installKorlixAgentEmailDraftRoutes(app, {
