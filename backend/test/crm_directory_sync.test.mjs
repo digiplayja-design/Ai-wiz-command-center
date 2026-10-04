@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import {PGlite} from '@electric-sql/pglite';
+import test from 'node:test';import assert from 'node:assert/strict';import {readFile,readdir} from 'node:fs/promises';import {PGlite} from '@electric-sql/pglite';
 import {directorySyncFilters,createCrmDirectorySync} from '../contacts_crm/directory_sync.mjs';
 const owner='11111111-1111-4111-8111-111111111111',other='22222222-2222-4222-8222-222222222222',basic='33333333-3333-4333-8333-333333333333';
 let db;const cmd=async(action,p={},user=owner)=>(await db.query('select korlix_crm_directory_v1($1,$2,$3) result',[user,action,JSON.stringify(p)])).rows[0].result;
@@ -6,6 +6,8 @@ const filters=(extra={})=>({q:'',category:'',city:'',country:'',verified_only:fa
 async function business(name,extra={},state='published',draft={name:'PRIVATE draft',secret:'PRIVATE evidence'}){return (await db.query("insert into korlix_directory_businesses(owner_id,slug,owner_name,draft,published,state,verification_note,evidence_note) values($1,$2,'PRIVATE owner',$3,$4,$5,'PRIVATE verification','PRIVATE evidence') returning *",[other,name.toLowerCase().replaceAll(' ','-'),JSON.stringify(draft),state==='draft'?null:JSON.stringify({name,category:'Construction & Trades',email:name.toLowerCase().replaceAll(' ','')+'@example.test',phone:'',description:'Public plumbing business',city:'Kingston',country:'Jamaica',website:'https://example.test',address:'Public street',public_contact_name:'Public contact',...extra}),state])).rows[0];}
 test.before(async()=>{db=new PGlite();await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create schema storage;create table auth.users(id uuid primary key);create table user_profiles(id uuid primary key,tier text);create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table korlix_agent_email_recipients(id uuid primary key default gen_random_uuid(),user_id uuid,email text,active boolean default true,consent_status text default 'transactional_only',source_reference text,suppressed_at timestamptz,suppression_reason text,updated_at timestamptz);grant usage on schema public to anon,authenticated,service_role;grant select on user_profiles to service_role;grant all on korlix_agent_email_recipients to service_role;`);
  for(const f of ['20260921162128_enterprise_contacts_crm.sql','20261002184255_business_directory_verified_membership.sql','20261004122927_crm_directory_auto_pull.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+f,import.meta.url),'utf8'));
+ const migration=process.env.CRM_DIRECTORY_MIGRATION || new URL('../../supabase/migrations/'+(await readdir(new URL('../../supabase/migrations/',import.meta.url))).find(f=>f.endsWith('_crm_directory_immediate_enable.sql')),import.meta.url);
+ await db.exec(await readFile(migration,'utf8'));
  for(const u of [owner,other,basic]){await db.query('insert into auth.users values($1)',[u]);await db.query('insert into user_profiles values($1,$2)',[u,u===basic?'basic':'enterprise']);}
  await db.exec('set role service_role');});
 test.after(async()=>db?.close());
@@ -35,8 +37,9 @@ test('Existing email/phone matches, including archived contacts, are skipped wit
 test('Hourly worker is idempotent, rechecks visibility and access, and settings reject stale versions',async()=>{
  const b=await business('Hourly Lead',{city:'Hourly'});let s=(await cmd('state')).settings;s=(await cmd('save',{version:s.version,filters:filters({city:'Hourly'})})).settings;
  await assert.rejects(cmd('toggle',{version:s.version-1,enabled:true,confirmed:true}),/settings changed/);await assert.rejects(cmd('toggle',{version:s.version,enabled:true}),/confirm automatic/);
+ await db.query("update korlix_directory_businesses set state='hidden' where id=$1",[b.id]);
  s=(await cmd('toggle',{version:s.version,enabled:true,confirmed:true})).settings;
- await db.query("update korlix_directory_businesses set state='hidden' where id=$1",[b.id]);await cmd('tick',{},null);assert.equal((await cmd('state')).settings.last_result.imported,0);
+ await cmd('tick',{},null);assert.equal((await cmd('state')).settings.last_result.imported,0);
  await db.query("update korlix_directory_businesses set state='published' where id=$1",[b.id]);await db.query("update korlix_crm_directory_sync set next_run_at=now()-interval '1 minute' where user_id=$1",[owner]);await cmd('tick',{},null);assert.equal((await cmd('state')).settings.last_result.imported,1);assert.equal((await cmd('tick',{},null)).processed,0);
  await db.query("update korlix_crm_directory_sync set next_run_at=now()-interval '1 minute' where user_id=$1",[owner]);await cmd('tick',{},null);assert.equal((await cmd('state')).settings.last_result.imported,0);
  await db.exec('reset role');await db.query("update user_profiles set tier='basic' where id=$1",[owner]);await db.exec('set role service_role');await db.query("update korlix_crm_directory_sync set next_run_at=now()-interval '1 minute' where user_id=$1",[owner]);await cmd('tick',{},null);assert.equal((await db.query('select enabled from korlix_crm_directory_sync where user_id=$1',[owner])).rows[0].enabled,false);await assert.rejects(cmd('state'),/Enterprise required/);
@@ -54,4 +57,53 @@ test('Large directories advance in bounded batches without repeating imported li
  assert.equal((await cmd('run',{version:s.version,confirmed:true},other)).imported,100);
  preview=await cmd('preview',{filters:s.filters},other);assert.equal(preview.available_in_batch,5);assert.equal(preview.more_available,false);
  await db.query("update korlix_crm_directory_sync set last_run_at=now()-interval '1 minute' where user_id=$1",[other]);assert.equal((await cmd('run',{version:s.version,confirmed:true},other)).imported,5);assert.equal((await cmd('preview',{filters:s.filters},other)).available_in_batch,0);
+});
+
+test('Enabling imports immediately, returns the result, and keeps an existing schedule on repeated enable',async()=>{
+ await business('Instant Lead',{city:'Instant City'});
+ let s=(await cmd('state',{},other)).settings;
+ s=(await cmd('save',{version:s.version,filters:filters({city:'Instant City'})},other)).settings;
+ const enabled=await cmd('toggle',{version:s.version,enabled:true,confirmed:true},other);
+ assert.equal(enabled.initial_result.imported,1);
+ assert.equal(enabled.initial_result.automatic,true);
+ assert.equal(enabled.settings.last_result.imported,1);
+ assert.equal(enabled.settings.enabled,true);
+ assert.equal(Date.parse(enabled.settings.next_run_at)-Date.parse(enabled.settings.last_run_at),3600000);
+ assert.equal((await db.query("select count(*)::int n from korlix_contacts where user_id=$1 and name='Instant Lead'",[other])).rows[0].n,1);
+ const again=await cmd('toggle',{version:enabled.settings.version,enabled:true,confirmed:true},other);
+ assert.equal(again.initial_result.skipped,true);
+ assert.equal(again.settings.next_run_at,enabled.settings.next_run_at);
+ assert.equal(again.settings.imported_total,enabled.settings.imported_total);
+ assert.equal((await cmd('tick',{},null)).processed,0);
+ const paused=await cmd('toggle',{version:again.settings.version,enabled:false},other);
+ assert.equal(paused.settings.next_run_at,null);
+ assert.equal(paused.initial_result,null);
+});
+test('Failed first import rolls back enabling and allows a safe retry',async()=>{
+ await business('Retry Lead',{city:'Retry City'});
+ let s=(await cmd('state',{},other)).settings;
+ s=(await cmd('save',{version:s.version,filters:filters({city:'Retry City'})},other)).settings;
+ await db.exec(`reset role;
+ create function fail_test_directory_insert() returns trigger language plpgsql as $$begin if new.name='Retry Lead' then raise exception 'Simulated import failure'; end if; return new;end$$;
+ create trigger fail_test_directory_insert before insert on korlix_contacts for each row execute function fail_test_directory_insert();
+ set role service_role;`);
+ await assert.rejects(cmd('toggle',{version:s.version,enabled:true,confirmed:true},other),/Simulated import failure/);
+ const after=(await cmd('state',{},other)).settings;
+ assert.equal(after.enabled,false);assert.equal(after.version,s.version);assert.equal(after.imported_total,s.imported_total);
+ await db.exec('reset role;drop trigger fail_test_directory_insert on korlix_contacts;drop function fail_test_directory_insert();set role service_role;');
+ assert.equal((await cmd('toggle',{version:s.version,enabled:true,confirmed:true},other)).initial_result.imported,1);
+});
+test('Worker runs on startup and every minute, exposes completion, and stops cleanly',async(t)=>{
+ t.mock.timers.enable({apis:['setInterval']});
+ const calls=[];
+ const service=createCrmDirectorySync({database:{rpc:async(name,args)=>{calls.push(args);return {data:{processed:0}};}}});
+ try {
+  service.start();await new Promise(setImmediate);
+  assert.equal(calls.length,1);assert.equal(service.health().started,true);
+  assert.ok(service.health().lastCompletedAt);assert.equal(service.health().lastError,null);
+  service.start();t.mock.timers.tick(60000);await new Promise(setImmediate);
+  assert.equal(calls.length,2);assert.deepEqual(calls[1],{p_actor:null,p_action:'tick',p:{}});
+  service.stop();t.mock.timers.tick(120000);await new Promise(setImmediate);
+  assert.equal(calls.length,2);assert.equal(service.health().started,false);
+ } finally {service.stop();t.mock.timers.reset();}
 });

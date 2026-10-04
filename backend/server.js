@@ -3720,7 +3720,7 @@ app.get("/api/health", (req, res) => {
       pdfImport:true,deadlineMonitoring:true,automaticMonitoringUsesAiCredits:false,
       automaticSubmission:false},
     welcomeVoice: korlixWelcomeAudio.status(),
-    contactsCrm: {version:3,voice:true,directoryImport:{version:1,source:'korlix_directory',automatic:true,intervalMinutes:60,batchLimit:100,enabledByDefault:false},email:{version:1,followUpDates:true,draftReview:true,automaticFollowUps:true,enabledByDefault:false,providerConfigured:createFieldProofEmailProvider({environment:process.env,namespace:'crm'}).status().ready}},
+    contactsCrm: {version:3,voice:true,directoryImport:{version:2,source:'korlix_directory',automatic:true,immediateOnEnable:true,intervalMinutes:60,batchLimit:100,enabledByDefault:false,worker:crmDirectorySync.health()},email:{version:1,followUpDates:true,draftReview:true,automaticFollowUps:true,enabledByDefault:false,providerConfigured:createFieldProofEmailProvider({environment:process.env,namespace:'crm'}).status().ready}},
     workforce: {version:3,voice:true,businessProfiles:true,industryTemplates:12,teamTypes:5,taskBoard:true,
       email:{version:1,workspaceRecipients:true,draftReview:true,automaticReminders:true,dailySummaries:true,enabledByDefault:false,providerConfigured:createFieldProofEmailProvider({environment:process.env,namespace:'workforce'}).status().ready}},
     fieldProof: {version:3,model:CHAT_MODEL,reasoningEffort:CHAT_EFFORT,creditCost:FIELDPROOF_CREDIT_COST,maxPhotos:24,originalEvidence:true,voice:true,industryTemplates:14,readings:true,punchList:true,batchPhotos:true,

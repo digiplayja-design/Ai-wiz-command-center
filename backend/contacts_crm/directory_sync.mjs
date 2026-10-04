@@ -8,7 +8,7 @@ export function directorySyncFilters(input={}){
  result.verified_only=input.verified_only===true;return result;
 }
 export function createCrmDirectorySync({database}={}){
- let timer=null,running=false,stopped=false;
+ let timer=null,running=false,stopped=false,lastStartedAt=null,lastCompletedAt=null,lastError=null;
  const command=async(actor,action,p={})=>{if(!database)fail('Business listing imports are temporarily unavailable.',503);const {data,error}=await database.rpc('korlix_crm_directory_v1',{p_actor:actor,p_action:action,p});if(error){const m=/CRM(403|404|409)?: (.+)/.exec(error.message||'');fail(m?m[2]:'Business listing imports are temporarily unavailable. Refresh before trying again.',m?Number(m[1]||400):503);}return data;};
  const version=p=>{if(!Number.isInteger(p.version)||p.version<0)fail('Refresh the listing settings first.');return p.version;};
  const action=async(user,action,p={})=>{
@@ -26,6 +26,7 @@ export function createCrmDirectorySync({database}={}){
   }
   fail('Choose a supported listing import action.');
  };
- const tick=async()=>{if(stopped||running||!database)return;running=true;try{await command(null,'tick');}catch{console.warn('[CRM directory] Automatic imports temporarily unavailable.');}finally{running=false;}};
- return {action,tick,start(){if(timer||!database)return;stopped=false;timer=setInterval(()=>void tick(),60000);timer.unref?.();void tick();},stop(){stopped=true;if(timer)clearInterval(timer);timer=null;}};
+ const tick=async()=>{if(stopped||running||!database)return;running=true;lastStartedAt=new Date().toISOString();try{await command(null,'tick');lastCompletedAt=new Date().toISOString();lastError=null;}catch{lastError='Automatic imports temporarily unavailable.';console.warn('[CRM directory] Automatic imports temporarily unavailable.');}finally{running=false;}};
+ const health=()=>({configured:Boolean(database),started:timer!==null,running,intervalSeconds:60,lastStartedAt,lastCompletedAt,lastError});
+ return {action,tick,health,start(){if(timer||!database)return;stopped=false;timer=setInterval(()=>void tick(),60000);timer.unref?.();void tick();},stop(){stopped=true;if(timer)clearInterval(timer);timer=null;}};
 }
