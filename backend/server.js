@@ -4,6 +4,8 @@ import {registerWelcomeAudio} from './welcome/audio.mjs';
 import {createCrmDirectorySync} from './contacts_crm/directory_sync.mjs';
 import {crmVoiceSessionGuard,crmVoiceInstructions} from './contacts_crm/voice.mjs';
 import { registerDirectory } from './directory/routes.mjs';
+import {registerWebBilling} from './web_billing/routes.mjs';
+import {billingStore as createWebBillingStore} from './web_billing/core.mjs';
 import { registerChatMemory, prepareChatMemory } from './chat_memory/memory.mjs';
 import { resumeTextPolicy } from './resume_studio/policy.mjs';
 import { registerEmailEnhancer, enhanceEmail } from './email_enhancer/enhancer.mjs';
@@ -224,6 +226,7 @@ app.use(express.json({
       req.korlixAgentEmailRawBody = Buffer.from(buffer);
     }
     if (url.split("?",1)[0] === "/api/directory/billing/webhook") req.korlixDirectoryRawBody = Buffer.from(buffer);
+    if (url.split("?",1)[0] === "/api/billing/web/webhook") req.korlixWebBillingRawBody = Buffer.from(buffer);
     if (url.split("?",1)[0] === "/api/scheduling/payments/webhook") req.korlixSchedulingRawBody = Buffer.from(buffer);
     // K135Z_GATE6H_ZOOM_RAW_BODY_BEGIN
     const zoomPath = url.split("?", 1)[0];
@@ -1141,7 +1144,7 @@ async function getOrCreateProfile(user) {
   }
 
   if (existingProfile) {
-    return existingProfile;
+    return createWebBillingStore(supabaseAdmin).profile(user.id);
   }
 
   const { data: insertedProfile, error: insertError } = await supabaseAdmin
@@ -11670,6 +11673,10 @@ app.get("/api/billing/apple/status", async (req, res) => {
       tier: String(profile?.tier || "basic").toLowerCase(),
       entitlement,
       refreshWarning,
+      webSubscriptionActive: await (async () => {
+        const {membership} = await createWebBillingStore(supabaseAdmin).command(user.id, 'snapshot');
+        return !!membership?.subscription_id && !['canceled', 'incomplete_expired'].includes(membership.state);
+      })(),
     });
   } catch (error) {
     return res.status(error?.statusCode || 500).json({
@@ -12888,6 +12895,7 @@ registerBookkeeping(app, { database: supabaseAdmin, requireUser, receiptOptions:
 } });
 registerContactsCrm(app, { directorySync:crmDirectorySync, crmEmails, database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }); // K137_ENTERPRISE_CONTACTS
 registerDirectory(app, {database: supabaseAdmin, requireUser});
+registerWebBilling(app, {database: supabaseAdmin, requireUser, loadProfile: getOrCreateProfile});
 registerWorkforce(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1, workspaceEmail: workforceEmails }); // K138_WORKFORCE
 registerFunnels(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1, autoStartScheduler: true }); // K141_FUNNEL_SCHEDULING
 
