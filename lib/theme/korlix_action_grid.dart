@@ -2,8 +2,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'korlix_theme.dart';
 
-/// Equal dimensions across sections. Two columns, including an unfinished row.
-/// Extent grows with accessibility text size rather than clipping labels.
+/// Equal dimensions across sections. Large text uses one column on narrow screens
+/// so feature names and descriptions remain readable without splitting words.
 class KorlixActionGrid extends StatelessWidget {
   const KorlixActionGrid({
     super.key,
@@ -18,8 +18,9 @@ class KorlixActionGrid extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) {
       const gap = 12.0;
-      final width = (box.maxWidth - gap) / 2;
       final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+      final columns = scale >= 1.5 && (box.maxWidth - gap) / 2 < 180 ? 1 : 2;
+      final width = (box.maxWidth - gap * (columns - 1)) / columns;
       final extraLines = width < 180
           ? (compact ? 24.0 : 112.0) * math.max(0, scale - 1)
           : 0.0;
@@ -29,14 +30,14 @@ class KorlixActionGrid extends StatelessWidget {
           (width < 125 ? 16 : 0);
       return Column(
         children: [
-          for (var index = 0; index < children.length; index += 2) ...[
+          for (var index = 0; index < children.length; index += columns) ...[
             if (index > 0) const SizedBox(height: gap),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(width: width, height: height, child: children[index]),
-                const SizedBox(width: gap),
-                if (index + 1 < children.length)
+                if (columns == 2) const SizedBox(width: gap),
+                if (columns == 2 && index + 1 < children.length)
                   SizedBox(
                     width: width,
                     height: height,

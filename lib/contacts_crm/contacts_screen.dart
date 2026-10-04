@@ -1834,6 +1834,14 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                 onPressed: _load,
                                 child: const Text('Check access again'),
                               ),
+                              if (Navigator.of(context).canPop()) ...[
+                                const SizedBox(height: 12),
+                                TextButton.icon(
+                                  onPressed: () => Navigator.pop(context),
+                                  icon: const Icon(Icons.arrow_back_rounded),
+                                  label: const Text('Back to Korlix'),
+                                ),
+                              ],
                             ],
                           ),
                         ),

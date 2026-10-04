@@ -138,7 +138,7 @@ void main() {
     },
   );
 
-  testWidgets('two-column buttons stay equal across sections and large text', (
+  testWidgets('buttons stay equal and large text uses readable columns', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -194,10 +194,17 @@ void main() {
         for (var i = 0; i < 6; i++) {
           expect(tester.getSize(buttons.at(i)), size);
         }
-        expect(
-          tester.getTopLeft(buttons.at(0)).dy,
-          tester.getTopLeft(buttons.at(1)).dy,
-        );
+        if (width < 500 && scale == 2) {
+          expect(
+            tester.getTopLeft(buttons.at(1)).dy,
+            greaterThan(tester.getTopLeft(buttons.at(0)).dy),
+          );
+        } else {
+          expect(
+            tester.getTopLeft(buttons.at(0)).dy,
+            tester.getTopLeft(buttons.at(1)).dy,
+          );
+        }
         expect(
           tester.getTopLeft(buttons.at(2)).dx,
           tester.getTopLeft(buttons.at(0)).dx,

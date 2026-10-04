@@ -40,6 +40,8 @@ import 'auth/korlix_welcome_confirmation.dart';
 import 'auth/knova_welcome_controller.dart';
 import 'auth/rici_welcome_button.dart';
 import 'navigation/home_tool_catalog.dart';
+import 'navigation/home_quick_access.dart';
+import 'navigation/home_tool_finder.dart';
 import 'characters/character_catalog.dart';
 import 'characters/character_orbit.dart';
 import 'characters/character_selection_controller.dart';
@@ -5133,6 +5135,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   SocialNotifications get _socialNotifications =>
       SocialAlertScope.maybeOf(context)!.notifications;
   bool _socialOpening = false;
+  bool _contactsOpening = false;
+  bool _toolFinderOpening = false;
+  final _commandPanelKey = GlobalKey();
   bool _showSavedTopicsPanel = false;
   final ScrollController _savedTopicsScrollController = ScrollController();
   final TextEditingController _renameTopicController = TextEditingController();
@@ -9183,6 +9188,9 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 child: Column(
                   children: [
                     _buildMockupHomeHeader(),
+                    HomeQuickAccess(
+                      onFindTool: _openHomeToolFinder,
+                    ),
                     SocialNotificationBanner(
                       notifications: _socialNotifications,
                       onOpen: (conversation) => _openKorlixSocial(conversation: conversation),
@@ -9197,7 +9205,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                       _buildResults(),
                       const SizedBox(height: 18),
                     ],
-                    KorlixSkinFrame(palette: korlixSkinPaletteFor(kKorlixThemeNotifier.value), skinId: screenSkin, child: _buildCommandPanel()),
+                    KorlixSkinFrame(key: _commandPanelKey, palette: korlixSkinPaletteFor(kKorlixThemeNotifier.value), skinId: screenSkin, child: _buildCommandPanel()),
                   ],
                 ),
               ),
@@ -9730,10 +9738,78 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   Future<void> _openContactsCrm() async {
-    // Server-verified CRM access must not depend on a stale home tier cache.
-    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
-      ContactsScreen(characterId:normalizeKorlixCharacterId(kKorlixSelectedCharacterNotifier.value),language:_t.label,client: ContactsClient(backendBaseUrl: kKorlixBackendBaseUrl,
-        headersBuilder: _authHeaders,sessionChanges:kKorlixAuthRevision))));
+    if (_contactsOpening) return;
+    _contactsOpening = true;
+    stopKorlixCharacterSpeechGlobally();
+    // Always open the real CRM. Its authenticated API verifies account access.
+    try {
+      final route = MaterialPageRoute<void>(builder: (_) => ContactsScreen(
+        characterId: normalizeKorlixCharacterId(kKorlixSelectedCharacterNotifier.value),
+        language: _t.label,
+        client: ContactsClient(backendBaseUrl: kKorlixBackendBaseUrl,
+          headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision),
+      ));
+      await Navigator.of(context).push(route);
+      await route.completed;
+    } finally { _contactsOpening = false; }
+  }
+
+  List<QuickAction> get _homeQuickActions {
+    final actions = _t.quickActions.where((a) => !_isCreditReportActionSafeUi(a)).toList();
+    if (!actions.any((a) => a.label.toLowerCase() == 'email enhancer')) {
+      actions.add(const QuickAction(label: 'Email enhancer', prompt: ''));
+    }
+    return actions;
+  }
+
+  Future<void> _openHomeToolFinder() async {
+    if (_toolFinderOpening) return;
+    _toolFinderOpening = true;
+    stopKorlixCharacterSpeechGlobally();
+    HomeToolEntry? selected;
+    try {
+      final route = MaterialPageRoute<HomeToolEntry>(builder: (_) => HomeToolFinder(
+        tools: searchableHomeTools(
+          quickActionLabels: _homeQuickActions.map((action) => action.label),
+          enterprise: _currentTier.trim().toLowerCase() == 'enterprise',
+        ),
+      ));
+      selected = await Navigator.of(context).push(route);
+      await route.completed;
+    } finally { _toolFinderOpening = false; }
+    if (!mounted || selected == null) return;
+    final tool = selected.label;
+    switch (tool) {
+      case 'Contacts CRM': await _openContactsCrm(); return;
+      case 'KORLIX Social': await _openKorlixSocial(); return;
+    }
+    if (_loading) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Wait for your current answer, then open this tool.'),
+      ));
+      return;
+    }
+    switch (tool) {
+      case 'Live Convo': await _openLiveConvoAudioTest(); return;
+      case 'Upload': await _handleUploadPressed(); return;
+      case 'Voice': await _handleVoiceInput(); return;
+      case 'Camera Ask': await _capturePhotoAndAskShortcut(); return;
+      case 'Locator': await _showLocatorOptions(); return;
+    }
+    final actions = _homeQuickActions.where((a) => homeToolIdentity(a.label) == selected!.identity);
+    if (actions.isNotEmpty) {
+      _useQuickAction(actions.first);
+    } else {
+      _selectUtilityTool(tool);
+    }
+    // A few tools prepare the home composer instead of opening another route.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final panel = _commandPanelKey.currentContext;
+      if (!mounted || panel == null || ModalRoute.of(context)?.isCurrent != true) return;
+      unawaited(Scrollable.ensureVisible(panel,
+        duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero : const Duration(milliseconds: 250)));
+    });
   }
 
   Future<void> _openScheduling() async {
@@ -12876,15 +12952,20 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       label: label, icon: icon, onPressed: onPressed, subtitle: subtitle,
       tile: true, selected: selected, locked: locked,
     );
-    Widget toolTile(String label) => tile(label, korlixToolIcon(label),
-      (_loading || _customAccessLoading) && !_isIncludedTextWorkspace(label) ? null : () => _selectUtilityTool(label));
+    Widget toolTile(String label) => label == 'Contacts CRM'
+      ? KorlixActionButton(
+          key: const ValueKey('home-crm'), label: 'CRM',
+          colorIdentity: 'Contacts CRM', icon: Icons.contact_page_outlined,
+          subtitle: 'Contacts & follow-ups', tile: true,
+          onPressed: _openContactsCrm,
+        )
+      : tile(label, korlixToolIcon(label),
+          (_loading || _customAccessLoading) && !_isIncludedTextWorkspace(label)
+            ? null : () => _selectUtilityTool(label));
     bool businessAction(QuickAction action) => const {
       'create an app', 'email enhancer', 'negocios', 'crear plan', 'ideas de contenido', 'idées contenu',
     }.contains(action.label.toLowerCase());
-    final quickActions = t.quickActions.where((a) => !_isCreditReportActionSafeUi(a)).toList();
-    if (!quickActions.any((a) => a.label.toLowerCase() == 'email enhancer')) {
-      quickActions.add(const QuickAction(label: 'Email enhancer', prompt: 'Open Email Enhancer.'));
-    }
+    final quickActions = _homeQuickActions;
 
     Widget answerReadyBody() => _buildAnswerReadyConversationView(
       activeResult, compact: MediaQuery.sizeOf(context).width < 430);

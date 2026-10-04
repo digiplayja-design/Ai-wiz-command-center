@@ -1,5 +1,7 @@
 /// Shared by the home sections and More tools so each feature has one entry.
 const homeBusinessTools = <String>[
+  // Keep CRM first and visible independently of the home tier request.
+  'Contacts CRM',
   'Logo Studio',
   'Inventory Studio',
   'Bookkeeping 2027',
@@ -10,9 +12,6 @@ const homeBusinessTools = <String>[
   'Contract Radar',
   'Workforce',
   'Business Directory',
-  // Keep the entry visible even while the home tier request is loading/fails.
-  // CRM verifies Enterprise access on its own authenticated API.
-  'Contacts CRM',
 ];
 const homeEnterpriseTools = <String>['Funnel Studio', 'Payroll'];
 const homePersonalTools = <String>[
@@ -60,4 +59,110 @@ List<String> moreHomeTools({
         return !mainTools.contains(homeToolIdentity(tool));
       })
       .toList(growable: false);
+}
+
+class HomeToolEntry {
+  const HomeToolEntry(
+    this.label,
+    this.description,
+    this.group, [
+    this.keywords = '',
+  ]);
+  final String label, description, group, keywords;
+  String get identity => homeToolIdentity(label);
+  bool matches(String query) {
+    final haystack = '$label $description $group $keywords'.toLowerCase();
+    return query
+        .toLowerCase()
+        .trim()
+        .split(RegExp(r'\s+'))
+        .every(haystack.contains);
+  }
+}
+
+const _toolDetails = <String, String>{
+  'Contacts CRM': 'Contacts, leads, follow-ups and autonomous email',
+  'Workforce': 'Team tasks, work updates and email reminders',
+  'Business Directory': 'Find business listings and build connections',
+  'KORLIX Social': 'News, user videos, people and messages',
+  'Live Convo': 'Talk with Rici in a live conversation',
+  'Upload': 'Bring files and photos into your conversation',
+  'Voice': 'Speak or type a message to Rici',
+  'Camera Ask': 'Take a photo and ask about what you see',
+  'Locator': 'Find places nearby',
+  'Logo Studio': 'Design a logo for your brand',
+  'Inventory Studio': 'Track stock, products and inventory',
+  'Bookkeeping 2027': 'Organize your business finances',
+  'KORLIX 2MEETU': 'Schedule meetings and appointments',
+  'FieldProof': 'Document jobs and field work',
+  'SEO Agent': 'Improve how your website is found',
+  'AI Visibility': 'Check your presence in AI answers',
+  'Contract Radar': 'Find and track contract opportunities',
+  'Funnel Studio': 'Build business funnels · Enterprise',
+  'Payroll': 'Manage payroll · Enterprise',
+  'Live Studio': 'Create a live session',
+  'The Pod and You': 'Create a podcast with AI',
+  'Tax Prep': 'Organize tax preparation',
+  'BabyBlend': 'Explore family photo blends',
+  'Virtual Closet': 'Organize outfits and style ideas',
+  'Cybersecurity Defender': 'Review digital security',
+  'Study Studio': 'Learn a topic and build study guides',
+  'App Studio': 'Turn an app idea into a project',
+  'Music Studio': 'Create music and explore song ideas',
+  'Voice-scribe': 'Transcribe and work with spoken content',
+  'Copy Box': 'Write and refine your copy',
+  'Background remover': 'Remove the background from a photo',
+  'Songwriter': 'Start writing a song',
+  'Email enhancer': 'Draft and improve an email',
+};
+
+/// The finder uses the same active catalog and real quick actions as home.
+/// It never adds inactive utilities or duplicate translated aliases.
+List<HomeToolEntry> searchableHomeTools({
+  required Iterable<String> quickActionLabels,
+  required bool enterprise,
+}) {
+  final entries = <String, HomeToolEntry>{};
+  void add(String label, String group) {
+    final identity = homeToolIdentity(label);
+    entries.putIfAbsent(
+      identity,
+      () => HomeToolEntry(
+        label,
+        _toolDetails[label] ??
+            (group == 'Quick actions'
+                ? 'Start this task with Rici'
+                : 'Open $label'),
+        group,
+        identity == 'contacts crm'
+            ? 'customers clients contacts crm import auto pull directory rici'
+            : '',
+      ),
+    );
+  }
+
+  for (final tool in ['Live Convo', 'Upload', 'Voice', 'Camera Ask']) {
+    add(tool, 'Start here');
+  }
+  add('KORLIX Social', 'Personal');
+  for (final tool in homeBusinessTools) {
+    add(tool, 'Business');
+  }
+  if (enterprise) {
+    for (final tool in homeEnterpriseTools) {
+      add(tool, 'Business');
+    }
+  }
+  for (final tool in homePersonalTools) {
+    add(tool, 'Personal');
+  }
+  add('Locator', 'Personal');
+  for (final tool in _activeTools) {
+    if (!enterprise && homeEnterpriseTools.contains(tool)) continue;
+    add(tool, 'Create & learn');
+  }
+  for (final tool in quickActionLabels) {
+    add(tool, 'Quick actions');
+  }
+  return entries.values.toList(growable: false);
 }
