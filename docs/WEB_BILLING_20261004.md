@@ -56,3 +56,11 @@ To pause new purchases, set `KORLIX_WEB_STRIPE_ENABLED=false`; keep the key, web
 Supabase advisors report the expected no-policy informational notice for the two server-only tables; grants were independently checked. Other pre-existing database findings were outside this billing change: a CRM SECURITY DEFINER view, publicly executable legacy custom-access/video RPCs, mutable search paths and disabled leaked-password protection. Follow-up guidance: https://supabase.com/docs/guides/database/database-linter?lint=0010_security_definer_view and https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable . These findings do not justify granting browser access to the new billing records.
 
 Live paid checkout completion remains an owner acceptance check; sandbox success is not evidence of a real production charge.
+
+## Deployment result
+
+- Backend code commit `ca3e70557bfd31338705535d6a8b30a6eb8647c1`; Render deployment `dep-db1c5ougekts73d54a6g` live at 21:20:13 UTC.
+- Frontend commit `9ea25c13f42b2ec0fdb1c063db3cdddaa285cf0c`; Render deployment `dep-db1c6anavr4c73b7l590` live at 21:22:36 UTC.
+- Production web billing health: configured, checkout enabled, live mode, connection verified, amounts 3499/12499 cents. Unauthenticated status/checkout returned 401; unsigned webhook returned 400. Main backend health and existing Directory billing health returned 200; Directory remains live/verified at its original prices.
+- Production billing tables still contained zero memberships and zero event receipts immediately after deployment; QA inserted no production billing fixtures.
+- The deployed pricing page was visually inspected in the browser. The `/app/?billing=plans` entry loads the app and requires sign-in in the unauthenticated cloud browser. No credentials or live payment were entered. Private billing interaction is covered by the client/widget and server/database tests above; a signed-in production purchase is not claimed as verified.
