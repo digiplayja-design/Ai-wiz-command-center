@@ -152,6 +152,50 @@ class RadarClient {
   }
 
   Future<Map<String, dynamic>> load() => _request('GET', '');
+  Future<Map<String, dynamic>> monitor() => _request('GET', '/monitor');
+  Future<Map<String, dynamic>> saveMonitorSettings(Map<String, dynamic> data) =>
+      _request('PUT', '/monitor/settings', data);
+  Future<Map<String, dynamic>> saveSearch(Map<String, dynamic> data) =>
+      _request('POST', '/monitor/searches', data);
+  Future<void> removeSearch(String id) async {
+    await _request('DELETE', '/monitor/searches/${Uri.encodeComponent(id)}', {
+      'confirmed': true,
+    });
+  }
+
+  Future<void> markAlertRead(String id) async {
+    await _request(
+      'POST',
+      '/monitor/alerts/${Uri.encodeComponent(id)}/read',
+      {},
+    );
+  }
+
+  Future<void> markAllAlertsRead() async {
+    await _request('POST', '/monitor/alerts/read-all', {});
+  }
+
+  Future<void> clearAlerts() async {
+    await _request('DELETE', '/monitor/alerts', {'confirmed': true});
+  }
+
+  Future<Map<String, dynamic>> directSearch(Map<String, dynamic> data) =>
+      _request('POST', '/direct-search', data);
+  Future<Map<String, dynamic>> saveDirectNotice(String noticeId) => _request(
+    'POST',
+    '/direct-search/save',
+    {'request_key': radarRequestKey(), 'notice_id': noticeId},
+  );
+  Future<Map<String, dynamic>> extractPdf(String name, Uint8List bytes) async {
+    if (bytes.isEmpty || bytes.length > 5 * 1024 * 1024) {
+      throw const RadarException('Choose a PDF up to 5 MB.');
+    }
+    final request = http.MultipartRequest('POST', _uri('/documents'))
+      ..headers.addAll(headersBuilder())
+      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: name));
+    return _json(await _send(request));
+  }
+
   Future<Map<String, dynamic>> saveProfile(Map<String, dynamic> data) async {
     final profile = (await _request('PUT', '/profile', data))['profile'];
     if (profile is! Map || profile['data'] is! Map) {

@@ -16,6 +16,8 @@ import 'social_albums.dart';
 import 'social_call_controller.dart';
 import 'social_groups.dart';
 import 'social_invite_screen.dart';
+import 'social_notification_settings.dart';
+import 'social_call_history.dart';
 import 'domino/domino_screen.dart';
 
 class SocialScreen extends StatefulWidget {
@@ -184,6 +186,11 @@ class _SocialScreenState extends State<SocialScreen>
     SocialMap? incoming,
   }) async {
     if (_callOpen || !client.available || !mounted) return;
+    final hostedCalls = SocialAlertScope.maybeOf(context)?.calls;
+    if (hostedCalls != null) {
+      await hostedCalls.start(peer, video, incoming: incoming);
+      return;
+    }
     final sessionClient = client;
     final notifications = _notifications;
     if (notifications != null && !notifications.beginCall()) return;
@@ -727,6 +734,14 @@ class _SocialScreenState extends State<SocialScreen>
                 tooltip: 'Member options',
                 onSelected: (a) => _memberAction(a, p),
                 itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: 'calls',
+                    child: Text('Call history'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'notifications',
+                    child: Text('Notification settings'),
+                  ),
                   if (pending || accepted)
                     PopupMenuItem(
                       value: 'remove',
@@ -1137,7 +1152,23 @@ class _SocialScreenState extends State<SocialScreen>
         if (_profile != null)
           PopupMenuButton<String>(
             tooltip: 'Social settings',
-            onSelected: (v) => v == 'wall'
+            onSelected: (v) => v == 'notifications'
+                ? Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          SocialNotificationSettings(client: client),
+                    ),
+                  )
+                : v == 'calls'
+                ? Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => SocialCallHistory(
+                        client: client,
+                        onCall: (peer, video) => _openCall(peer, video),
+                      ),
+                    ),
+                  )
+                : v == 'wall'
                 ? _profileWall(_profile!)
                 : v == 'profile'
                 ? _editProfile()
@@ -1145,6 +1176,11 @@ class _SocialScreenState extends State<SocialScreen>
                 ? _albums(_profile!, owned: true)
                 : _manage(v),
             itemBuilder: (_) => [
+              const PopupMenuItem(value: 'calls', child: Text('Call history')),
+              const PopupMenuItem(
+                value: 'notifications',
+                child: Text('Notification settings'),
+              ),
               const PopupMenuItem(
                 value: 'wall',
                 child: Text('My profile & wall'),

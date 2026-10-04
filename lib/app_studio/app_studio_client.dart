@@ -40,6 +40,19 @@ class AppStudioClient {
   String? _scope;
   bool _closed = false, _changed = false;
   VoidCallback? onAccessDenied;
+  final Set<VoidCallback> _accessListeners = {};
+  bool get sessionChanged => _closed || _changed;
+  void addAccessDeniedListener(VoidCallback listener) =>
+      _accessListeners.add(listener);
+  void removeAccessDeniedListener(VoidCallback listener) =>
+      _accessListeners.remove(listener);
+  void _deny() {
+    onAccessDenied?.call();
+    for (final listener in List<VoidCallback>.from(_accessListeners)) {
+      listener();
+    }
+  }
+
   String? _readScope([Map<String, String>? headers]) {
     try {
       final value = (headers ?? headersBuilder()).entries
@@ -63,7 +76,7 @@ class AppStudioClient {
         sessionChanges != null &&
         (_scope == null || _scope != _readScope())) {
       _changed = true;
-      onAccessDenied?.call();
+      _deny();
     }
   }
 
@@ -77,7 +90,7 @@ class AppStudioClient {
         headers != null &&
         _scope != _readScope(headers)) {
       _changed = true;
-      onAccessDenied?.call();
+      _deny();
     }
     if (_changed) {
       throw const AppStudioException(
@@ -92,6 +105,7 @@ class AppStudioClient {
     _closed = true;
     sessionChanges?.removeListener(_checkSession);
     onAccessDenied = null;
+    _accessListeners.clear();
     if (_ownsClient) _http.close();
   }
 
@@ -109,7 +123,7 @@ class AppStudioClient {
       if (response.statusCode < 200 || response.statusCode >= 300) {
         if (response.statusCode == 401) {
           _changed = true;
-          onAccessDenied?.call();
+          _deny();
         }
         String? error;
         try {
@@ -246,5 +260,131 @@ class AppStudioClient {
       );
     }
     return b;
+  }
+
+  Map<String, dynamic> _portal(dynamic value, [String? expected]) {
+    if (value is! Map ||
+        value['id'] is! String ||
+        value['name'] is! String ||
+        value['published'] is! bool ||
+        value['version'] is! int ||
+        (expected != null && value['id'] != expected)) {
+      throw const AppStudioException(
+        'The portal response was incomplete. Refresh before continuing.',
+      );
+    }
+    return Map<String, dynamic>.from(value);
+  }
+
+  Future<Map<String, dynamic>> portalSetup(String projectId) async {
+    final result = await _request('GET', '/projects/$projectId/portal');
+    if (result['portal'] != null) _portal(result['portal'], projectId);
+    if (result['members'] is! List || result['invites'] is! List) {
+      throw const AppStudioException('Your portal setup could not be loaded.');
+    }
+    return result;
+  }
+
+  Future<Map<String, dynamic>> savePortal(
+    String projectId,
+    Map<String, dynamic> body,
+  ) async {
+    final result = await _request('PUT', '/projects/$projectId/portal', body);
+    _portal(result['portal'], projectId);
+    return result;
+  }
+
+  Future<List<Map<String, dynamic>>> portals() async {
+    final result = await _request('GET', '/portals');
+    if (result['portals'] is! List) {
+      throw const AppStudioException('Your portals could not be loaded.');
+    }
+    return (result['portals'] as List).map((value) => _portal(value)).toList();
+  }
+
+  Future<Map<String, dynamic>> portal(String id) async {
+    final result = await _request('GET', '/portals/$id');
+    _portal(result['portal'], id);
+    return result;
+  }
+
+  Future<Map<String, dynamic>> joinPortal(
+    String code, {
+    String? portalId,
+  }) async {
+    final result = await _request('POST', '/portals/join', {
+      'code': code,
+      'portal_id': ?portalId,
+      'confirmed': true,
+    });
+    _portal(result['portal'], portalId);
+    return result;
+  }
+
+  Future<Map<String, dynamic>> invitePortal(
+    String id,
+    Map<String, dynamic> body,
+  ) async {
+    final result = await _request('POST', '/portals/$id/invites', body);
+    final join = Uri.tryParse(result['join_url']?.toString() ?? '');
+    if (result['invite'] is! Map ||
+        result['invite']['id'] is! String ||
+        result['invite']['role'] != body['role'] ||
+        result['invite']['email'] != body['email'] ||
+        !RegExp(
+          r'^[A-Za-z0-9_-]{43}$',
+        ).hasMatch(result['code']?.toString() ?? '') ||
+        join == null ||
+        join.scheme != 'https' ||
+        join.userInfo.isNotEmpty ||
+        join.queryParameters['app_portal'] != id ||
+        join.fragment != 'invite=${result['code']}') {
+      throw const AppStudioException(
+        'The invitation could not be confirmed. Refresh your invitations before creating another.',
+      );
+    }
+    return result;
+  }
+
+  Future<void> revokePortalInvite(String id, String inviteId) async {
+    final result = await _request('DELETE', '/portals/$id/invites/$inviteId', {
+      'confirmed': true,
+    });
+    if (result['revoked'] != true) {
+      throw const AppStudioException(
+        'Revocation was not confirmed. Refresh your portal.',
+      );
+    }
+  }
+
+  Future<void> removePortalMember(String id, String memberId) async {
+    final result = await _request('DELETE', '/portals/$id/members/$memberId', {
+      'confirmed': true,
+    });
+    if (result['removed'] != true) {
+      throw const AppStudioException(
+        'Removal was not confirmed. Refresh your portal.',
+      );
+    }
+  }
+
+  Future<Uri> launchPortal(String id) async {
+    final result = await _request('POST', '/portals/$id/session', {
+      'confirmed': true,
+    });
+    final url = Uri.tryParse(result['launch_url']?.toString() ?? '');
+    final backend = Uri.parse(backendBaseUrl);
+    if (url == null ||
+        url.scheme != 'https' ||
+        url.userInfo.isNotEmpty ||
+        url.origin != backend.origin ||
+        (url.path != '/portals/$id' && url.path != '/portals/$id/') ||
+        url.hasQuery ||
+        !RegExp(r'^launch=[A-Za-z0-9_-]{43}$').hasMatch(url.fragment)) {
+      throw const AppStudioException(
+        'The secure portal link was not confirmed. Refresh and try again.',
+      );
+    }
+    return url;
   }
 }

@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../sounds/korlix_sound_service.dart';
 import 'radar_client.dart';
 import 'radar_results.dart';
+import 'radar_monitor_screen.dart';
+import 'radar_pdf.dart';
 
 const _navy = Color(0xFF082C41),
     _cyan = Color(0xFF007BA8),
@@ -44,6 +46,7 @@ class ContractRadarScreen extends StatefulWidget {
     required this.ensureConsent,
     this.openLink,
     this.copyText,
+    this.pickPdf,
     this.disposeClient = true,
   });
   final RadarClient client;
@@ -51,6 +54,7 @@ class ContractRadarScreen extends StatefulWidget {
   final Future<bool> Function(Uri)? openLink;
   final Future<void> Function(String)? copyText;
   final bool disposeClient;
+  final Future<RadarPdf?> Function()? pickPdf;
   @override
   State<ContractRadarScreen> createState() => _ContractRadarScreenState();
 }
@@ -74,7 +78,12 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
   Map<String, dynamic>? _profile, _job, _search;
   Map<String, dynamic>? _editorDraft;
   String? _editorDraftFor;
-  BuildContext? _dialogContext;
+  BuildContext? _dialogContext, _monitorContext;
+  Map<String, dynamic> _capabilities = {};
+  Map<String, dynamic>? _directResults;
+  String _geography = 'us', _source = 'web';
+  String? _savedSearchKey, _savedSearchSignature;
+  final _samState = TextEditingController();
   List<Map<String, dynamic>> _saved = [];
   String? _selectedId, _error, _notice, _requestKey, _signature;
   String _stageFilter = 'all';
@@ -107,6 +116,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
     for (final node in _profileFocus.values) {
       node.dispose();
     }
+    _samState.dispose();
     _focus.dispose();
     _filter.dispose();
     _scroll.dispose();
@@ -120,6 +130,12 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
   void _lock() {
     if (!mounted) return;
     _timer?.cancel();
+    final monitor = _monitorContext;
+    if (monitor != null && monitor.mounted) {
+      final route = ModalRoute.of(monitor);
+      if (route != null) Navigator.of(monitor).removeRoute(route);
+    }
+    _monitorContext = null;
     final dialog = _dialogContext;
     if (dialog != null && dialog.mounted) {
       final route = ModalRoute.of(dialog);
@@ -129,6 +145,11 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
     setState(() {
       _locked = true;
       _profile = null;
+      _capabilities = {};
+      _directResults = null;
+      _samState.clear();
+      _savedSearchKey = null;
+      _savedSearchSignature = null;
       _saved = [];
       _job = null;
       _search = null;
@@ -163,9 +184,13 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
       if (!mounted || _locked) return;
       setState(() {
         _profile = d['profile'] == null ? null : _map(d['profile']);
+        _capabilities = _map(d['capabilities']);
         _saved = _rows(d['opportunities']);
         if (!_loadedProfile) {
           final p = _map(_profile?['data']);
+          _geography = ['us', 'ca', 'uk', 'jm'].contains(p['geography'])
+              ? _s(p['geography'])
+              : 'us';
           for (final e in _editors.entries) {
             e.value.text = _s(p[e.key]);
           }
@@ -273,7 +298,10 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
 
   Future<bool> _saveProfile({bool forSearch = false}) async {
     if (_working || _locked) return false;
-    final p = {for (final e in _editors.entries) e.key: e.value.text.trim()};
+    final p = {
+      for (final e in _editors.entries) e.key: e.value.text.trim(),
+      'geography': _geography,
+    };
     final missing = _requiredProfileErrors.keys
         .where((k) => p[k]!.isEmpty)
         .firstOrNull;
@@ -354,7 +382,117 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
     if (_profile == null || _profileDirty) {
       if (!await _saveProfile(forSearch: true)) return;
     }
-    if (mounted && !_locked) await _start('discover');
+    if (mounted && !_locked) {
+      if (_source == 'sam') {
+        await _directSearch();
+      } else {
+        setState(() => _directResults = null);
+        await _start('discover');
+      }
+    }
+  }
+
+  Future<void> _directSearch() async {
+    final query = _focus.text.trim().isEmpty
+        ? _editors['services']!.text.trim()
+        : _focus.text.trim();
+    if (query.length > 160) {
+      setState(
+        () => _error =
+            'Use a search focus up to 160 characters for direct SAM.gov search.',
+      );
+      return;
+    }
+    await _act(
+      () async {
+        final result = await widget.client.directSearch({
+          'query': _focus.text.trim().isEmpty
+              ? _editors['services']!.text.trim()
+              : _focus.text.trim(),
+          'naics': radarFirstNaics(_editors['naics']!.text),
+          'state': _samState.text.trim().toUpperCase(),
+        });
+        if (mounted && !_locked) {
+          setState(() {
+            _directResults = result;
+            _resetResultFilters();
+          });
+        }
+      },
+      success:
+          'Direct SAM.gov results are ready. Check the official notice before preparing a bid.',
+    );
+  }
+
+  Future<void> _saveDirect(Map<String, dynamic> data) async {
+    await _act(() async {
+      final result = await widget.client.saveDirectNotice(_s(data['noticeId']));
+      if (mounted && !_locked) {
+        setState(() => _selectedId = _s(_map(result['opportunity'])['id']));
+      }
+    }, success: 'SAM.gov notice saved. Enable monitoring to track changes.');
+  }
+
+  Future<void> _saveCurrentSearch() async {
+    if (_profile == null || _profileDirty) {
+      if (!await _saveProfile()) return;
+    }
+    if (!mounted || _locked) return;
+    final query = _focus.text.trim().isEmpty
+        ? _editors['services']!.text.trim()
+        : _focus.text.trim();
+    if (query.length > 160) {
+      setState(
+        () => _error =
+            'Use a search focus up to 160 characters to save a monitored search.',
+      );
+      return;
+    }
+    final signature =
+        '$query|${radarFirstNaics(_editors['naics']!.text)}|${_samState.text.trim().toUpperCase()}';
+    if (_savedSearchSignature != signature) {
+      _savedSearchSignature = signature;
+      _savedSearchKey = radarRequestKey();
+    }
+    await _act(
+      () async {
+        await widget.client.saveSearch({
+          'request_key': _savedSearchKey,
+          'name': query.length > 80 ? query.substring(0, 80) : query,
+          'query': query,
+          'naics': radarFirstNaics(_editors['naics']!.text),
+          'state': _samState.text.trim().toUpperCase(),
+          'enabled': true,
+        });
+      },
+      success:
+          'Search saved. Daily checks start only after you turn on monitoring in Saved searches & alerts.',
+    );
+  }
+
+  Future<void> _openMonitor() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (c) {
+          _monitorContext = c;
+          return RadarMonitorScreen(
+            client: widget.client,
+            openLink: _open,
+            openOpportunity: (id) {
+              Navigator.of(c).pop();
+              if (mounted && !_locked) {
+                setState(() {
+                  _selectedId = id;
+                  _tab = 1;
+                });
+              }
+            },
+          );
+        },
+      ),
+    );
+    _monitorContext = null;
+    if (mounted && !_locked) await _load();
   }
 
   void _resetResultFilters() {
@@ -466,7 +604,7 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
     if (_working) return;
     if (await _confirm(
           'Clear Contract Radar?',
-          'Remove your business profile, saved opportunities and search/review history from Contract Radar.',
+          'Remove your business profile, saved opportunities, saved searches, monitoring settings, alerts and search/review history from Contract Radar.',
         ) &&
         mounted &&
         !_locked) {
@@ -474,6 +612,10 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
         await widget.client.clear();
         if (mounted && !_locked) {
           _loadedProfile = false;
+          _directResults = null;
+          _samState.clear();
+          _savedSearchKey = null;
+          _savedSearchSignature = null;
           _profileDirty = false;
           _profileAttempted = false;
           _profileSaveError = null;
@@ -520,6 +662,8 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
         _dialogContext = c;
         return _OpportunityEditor(
           current: current,
+          client: widget.client,
+          pickPdf: widget.pickPdf ?? pickRadarPdf,
           initial: _editorDraftFor == draftFor ? _editorDraft : null,
         );
       },
@@ -708,7 +852,9 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            d['source'] == 'official_search'
+            d['source'] == 'sam_api'
+                ? 'Direct SAM.gov notice · check current amendments'
+                : d['source'] == 'official_search'
                 ? 'Search-derived lead · verify notice and amendments'
                 : 'Imported information · verify with the buyer',
             style: const TextStyle(color: _muted, fontSize: 12),
@@ -733,7 +879,9 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
                   key: ValueKey('radar-save-result-$resultIndex'),
                   onPressed: _working || alreadySaved
                       ? null
-                      : () => _saveFound(resultIndex),
+                      : () => _directResults != null
+                            ? _saveDirect(d)
+                            : _saveFound(resultIndex),
                   icon: Icon(
                     alreadySaved
                         ? Icons.bookmark_added
@@ -799,6 +947,28 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       ..._requiredProfileErrors.keys.map(_profileField),
+      DropdownButtonFormField<String>(
+        key: ValueKey('radar-geography-$_geography'),
+        initialValue: _geography,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Official sources to search',
+        ),
+        items: const [
+          DropdownMenuItem(value: 'us', child: Text('United States')),
+          DropdownMenuItem(value: 'ca', child: Text('Canada')),
+          DropdownMenuItem(value: 'uk', child: Text('United Kingdom')),
+          DropdownMenuItem(value: 'jm', child: Text('Jamaica')),
+        ],
+        onChanged: _working
+            ? null
+            : (v) => setState(() {
+                _geography = v ?? 'us';
+                _profileDirty = true;
+                if (_geography != 'us') _source = 'web';
+              }),
+      ),
+      const SizedBox(height: 14),
       ExpansionTile(
         tilePadding: EdgeInsets.zero,
         title: const Text('More business details (optional)'),
@@ -843,7 +1013,9 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
 
   Widget _discover() {
     final profile = _map(_profile?['data']);
-    final results = _rows(_map(_search?['result'])['opportunities']);
+    final results = _rows(
+      (_directResults ?? _map(_search?['result']))['opportunities'],
+    );
     final visible = filterRadarResults(
       results,
       query: _resultFilter.text,
@@ -883,6 +1055,53 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
                 ),
                 const SizedBox(height: 16),
               ],
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ChoiceChip(
+                    key: const Key('radar-source-web'),
+                    label: const Text('Official web search'),
+                    selected: _source == 'web',
+                    onSelected: _working
+                        ? null
+                        : (_) => setState(() => _source = 'web'),
+                  ),
+                  if (_geography == 'us')
+                    ChoiceChip(
+                      key: const Key('radar-source-sam'),
+                      label: const Text('Direct SAM.gov · 0 credits'),
+                      selected: _source == 'sam',
+                      onSelected: _working
+                          ? null
+                          : (_) => setState(() => _source = 'sam'),
+                    ),
+                ],
+              ),
+              if (_source == 'sam' && _capabilities['directSamReady'] != true)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    'Direct SAM.gov needs the site owner to connect a SAM.gov API key. Choose Official web search to keep finding opportunities.',
+                  ),
+                ),
+              if (_source == 'sam')
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: TextField(
+                    key: const Key('radar-sam-state'),
+                    controller: _samState,
+                    maxLength: 2,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: const InputDecoration(
+                      labelText: 'U.S. state code (optional)',
+                      hintText: 'NY',
+                      helperText:
+                          'Uses the first NAICS code in your business profile.',
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 16),
               TextField(
                 key: const Key('radar-search-focus'),
                 controller: _focus,
@@ -908,7 +1127,12 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
                 children: [
                   FilledButton.icon(
                     key: const Key('radar-discover'),
-                    onPressed: _working ? null : _findContracts,
+                    onPressed:
+                        _working ||
+                            (_source == 'sam' &&
+                                _capabilities['directSamReady'] != true)
+                        ? null
+                        : _findContracts,
                     icon: const Icon(Icons.search),
                     label: Text(
                       _savingProfile
@@ -924,16 +1148,53 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
                 ],
               ),
               const SizedBox(height: 14),
-              const Text(
-                'Searches SAM.gov (U.S. federal) and NYC City Record. Coverage is selective.',
+              Text(
+                _source == 'sam'
+                    ? 'Direct SAM.gov covers U.S. federal notices. It does not include every local or private contract.'
+                    : switch (_geography) {
+                        'ca' =>
+                          'Searches official Canadian procurement sources. Coverage is selective.',
+                        'uk' =>
+                          'Searches official UK procurement sources. Coverage is selective.',
+                        'jm' =>
+                          'Searches official Jamaican procurement sources. Coverage is selective.',
+                        _ =>
+                          'Searches SAM.gov, NYC City Record and New York State OGS. Coverage is selective.',
+                      },
                 style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
               ),
               const SizedBox(height: 6),
-              const Text(
-                '1 credit per successful search · Ultra Premium / Enterprise. No results or a failed search = no credit charged.',
+              Text(
+                _source == 'sam'
+                    ? 'Direct SAM.gov lookup: 0 AI credits. Optional AI bid reviews are charged only when you request them.'
+                    : '1 credit per successful search · Ultra Premium / Enterprise. No results or a failed search = no credit charged.',
                 style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
               ),
               const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  TextButton.icon(
+                    key: const Key('radar-monitor-open'),
+                    onPressed: _working ? null : _openMonitor,
+                    icon: const Icon(Icons.notifications_active_outlined),
+                    label: const Text('Saved searches & alerts'),
+                  ),
+                  if (_geography == 'us')
+                    TextButton.icon(
+                      key: const Key('radar-save-search'),
+                      onPressed: _working ? null : _saveCurrentSearch,
+                      icon: const Icon(Icons.bookmark_add_outlined),
+                      label: const Text('Save this search'),
+                    ),
+                ],
+              ),
+              if (_geography == 'us')
+                const Text(
+                  'Saved automatic searches use SAM.gov with these keywords, the first NAICS code and any state filter. Turn on daily monitoring separately.',
+                  style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
+                ),
               TextButton.icon(
                 onPressed: _working ? null : () => _editOpportunity(),
                 icon: const Icon(Icons.add, size: 18),
@@ -943,14 +1204,14 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
           ),
         ),
         const SizedBox(height: 20),
-        if (_search != null) ...[
+        if (_directResults != null || _search != null) ...[
           _heading(
             'Latest completed search',
             subtitle:
                 'Open the official notice to check requirements, deadlines and amendments.',
           ),
           Text(
-            'Searched: ${_s(_map(_search?['result'])['searchedAt']).replaceFirst('T', ' ')}',
+            'Searched: ${_s((_directResults ?? _map(_search?['result']))['searchedAt']).replaceFirst('T', ' ')}',
             style: const TextStyle(color: _muted, fontSize: 12),
           ),
           const SizedBox(height: 12),
@@ -1756,7 +2017,14 @@ class _ContractRadarScreenState extends State<ContractRadarScreen> {
 }
 
 class _OpportunityEditor extends StatefulWidget {
-  const _OpportunityEditor({this.current, this.initial});
+  const _OpportunityEditor({
+    this.current,
+    this.initial,
+    required this.client,
+    required this.pickPdf,
+  });
+  final RadarClient client;
+  final Future<RadarPdf?> Function() pickPdf;
   final Map<String, dynamic>? current;
   final Map<String, dynamic>? initial;
   @override
@@ -1766,6 +2034,9 @@ class _OpportunityEditor extends StatefulWidget {
 class _OpportunityEditorState extends State<_OpportunityEditor> {
   final _form = GlobalKey<FormState>();
   late final Map<String, TextEditingController> _fields;
+  bool _extracting = false;
+  String? _pdfError;
+  Map<String, dynamic>? _pdfPreview;
   bool get editing => widget.current != null;
   @override
   void initState() {
@@ -1798,9 +2069,103 @@ class _OpportunityEditorState extends State<_OpportunityEditor> {
     super.dispose();
   }
 
+  Future<void> _importPdf() async {
+    if (_extracting) return;
+    setState(() {
+      _extracting = true;
+      _pdfError = null;
+    });
+    try {
+      final file = await widget.pickPdf();
+      if (!mounted || file == null) return;
+      final result = await widget.client.extractPdf(file.name, file.bytes);
+      if (!mounted) return;
+      setState(() => _pdfPreview = result);
+    } catch (e) {
+      if (mounted) setState(() => _pdfError = '$e');
+    } finally {
+      if (mounted) setState(() => _extracting = false);
+    }
+  }
+
+  Widget _extractionPreview() {
+    final result = _pdfPreview!;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Review extracted RFP text',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            Text(
+              '${result['filename'] ?? 'PDF'} · ${result['pageCount'] ?? '?'} pages',
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Check dates, tables and requirements against the original PDF before using this text.',
+            ),
+            if (result['truncated'] == true)
+              const Text(
+                'Text is incomplete: the 18,000-character limit was reached. Add any missing requirements yourself.',
+              ),
+            for (final warning in (result['warnings'] as List? ?? []))
+              Text('$warning'),
+            const SizedBox(height: 12),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 280),
+              child: SingleChildScrollView(
+                child: SelectableText(
+                  _s(result['text']),
+                  key: const Key('radar-pdf-preview-text'),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                TextButton(
+                  onPressed: () => setState(() => _pdfPreview = null),
+                  child: const Text('Discard extracted text'),
+                ),
+                FilledButton(
+                  key: const Key('radar-pdf-use-text'),
+                  onPressed: _s(result['text']).trim().isEmpty
+                      ? null
+                      : () => setState(() {
+                          _fields['noticeText']!.text = _s(result['text']);
+                          if (_fields['title']!.text.trim().isEmpty) {
+                            _fields['title']!.text = _s(result['filename'])
+                                .replaceFirst(
+                                  RegExp(r'\.pdf$', caseSensitive: false),
+                                  '',
+                                );
+                          }
+                          _pdfPreview = null;
+                        }),
+                  child: Text(
+                    _fields['noticeText']!.text.isEmpty
+                        ? 'Use this text'
+                        : 'Replace with this text',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: Text(editing ? 'RFP text & notes' : 'Paste an opportunity'),
+    title: Text(
+      editing ? 'RFP text & notes' : 'Paste or upload an opportunity',
+    ),
     content: SizedBox(
       width: 620,
       child: SingleChildScrollView(
@@ -1809,6 +2174,25 @@ class _OpportunityEditorState extends State<_OpportunityEditor> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              OutlinedButton.icon(
+                key: const Key('radar-upload-pdf'),
+                onPressed: _extracting ? null : _importPdf,
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                label: Text(
+                  _extracting ? 'Extracting PDF…' : 'Upload an RFP PDF',
+                ),
+              ),
+              const Text(
+                'PDF up to 5 MB / 60 pages. Text extraction uses no AI credits. Scanned PDFs need selectable text first.',
+              ),
+              if (_extracting) const LinearProgressIndicator(),
+              if (_pdfError != null)
+                Text(
+                  _pdfError!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              if (_pdfPreview != null) _extractionPreview(),
+              const SizedBox(height: 16),
               if (!editing)
                 ...['title', 'agency', 'location', 'sourceUrl', 'deadline'].map(
                   (k) => Padding(
@@ -1900,15 +2284,17 @@ class _OpportunityEditorState extends State<_OpportunityEditor> {
       ),
       FilledButton(
         key: const Key('radar-save-rfp'),
-        onPressed: () {
-          if (!_form.currentState!.validate()) return;
-          Navigator.pop(context, {
-            for (final e in _fields.entries)
-              if ((editing && ['noticeText', 'notes'].contains(e.key)) ||
-                  (!editing && e.key != 'notes'))
-                e.key: e.value.text.trim(),
-          });
-        },
+        onPressed: _extracting
+            ? null
+            : () {
+                if (!_form.currentState!.validate()) return;
+                Navigator.pop(context, {
+                  for (final e in _fields.entries)
+                    if ((editing && ['noticeText', 'notes'].contains(e.key)) ||
+                        (!editing && e.key != 'notes'))
+                      e.key: e.value.text.trim(),
+                });
+              },
         child: const Text('Save opportunity'),
       ),
     ],

@@ -4,6 +4,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import '../sounds/korlix_sound_service.dart';
 import 'social_client.dart';
 import 'social_audio_output.dart';
+import 'social_call_background.dart';
 import 'social_audio_output_native.dart'
     if (dart.library.js_interop) 'social_audio_output_web.dart';
 
@@ -35,9 +36,28 @@ class SocialCallIo {
       });
   Future<void> prepare() async {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      await rtc.Helper.setAppleAudioConfiguration(
+        rtc.AppleAudioConfiguration(
+          appleAudioCategory: rtc.AppleAudioCategory.playAndRecord,
+          appleAudioMode: rtc.AppleAudioMode.voiceChat,
+          appleAudioCategoryOptions: {
+            rtc.AppleAudioCategoryOption.allowBluetooth,
+          },
+        ),
+      );
       await rtc.Helper.ensureAudioSession();
     }
   }
+
+  Future<rtc.MediaStream> captureVideo() =>
+      rtc.navigator.mediaDevices.getUserMedia({
+        'audio': false,
+        'video': {
+          'facingMode': 'user',
+          'width': {'ideal': 640},
+          'height': {'ideal': 480},
+        },
+      });
 
   Future<void> configure() async {
     if (!kIsWeb &&
@@ -74,6 +94,10 @@ class SocialCallMedia extends ChangeNotifier {
 
   rtc.RTCPeerConnection? _peer;
   rtc.RTCRtpSender? _audioSender;
+  rtc.RTCRtpSender? _videoSender;
+  rtc.MediaStream? _replacementVideo;
+  bool _cameraSuspended = false, _repairingCamera = false;
+  bool get cameraSuspended => _cameraSuspended;
   rtc.MediaStreamTrack? _microphoneTrack;
   rtc.MediaStream? _replacementAudio, _pendingAudio;
   bool _microphoneEnded = false, repairingMicrophone = false;
@@ -238,7 +262,7 @@ class SocialCallMedia extends ChangeNotifier {
       if (_closed) return;
       if (track.kind != 'audio') {
         track.onEnded = () {
-          if (!_closed) onState?.call('device-ended');
+          if (!_closed && !_cameraSuspended) onState?.call('device-ended');
         };
       }
       final sender = await peer.addTrack(track, stream);
@@ -247,6 +271,7 @@ class SocialCallMedia extends ChangeNotifier {
       if (track.kind == 'audio' && track.id == _microphoneTrack?.id) {
         _audioSender = sender;
       }
+      if (track.kind == 'video') _videoSender = sender;
     }
     if (_closed) return;
     await io.configure();
@@ -300,6 +325,12 @@ class SocialCallMedia extends ChangeNotifier {
     if (_closed) throw StateError('Call closed');
     await _peer!.setLocalDescription(description);
     return description.sdp!;
+  }
+
+  Future<String> restartOffer() async {
+    await _peer!.restartIce();
+    if (_closed) throw StateError('Call closed');
+    return offer();
   }
 
   Future<String> answer() async {
@@ -397,12 +428,68 @@ class SocialCallMedia extends ChangeNotifier {
     }
   }
 
-  void toggleCamera() {
+  Future<void> toggleCamera() async {
+    if (_closed || !ready || _repairingCamera) return;
+    if (_cameraSuspended) {
+      await _restoreCamera();
+      return;
+    }
     camera = !camera;
     for (final track in _stream?.getVideoTracks() ?? <rtc.MediaStreamTrack>[]) {
       track.enabled = camera;
     }
     notifyListeners();
+  }
+
+  /// Stop capture, not just transmission, when a native app leaves view.
+  /// Reopening the camera always requires another explicit camera-button tap.
+  Future<void> suspendCamera() async {
+    if (_closed || _cameraSuspended) return;
+    _cameraSuspended = true;
+    camera = false;
+    local.srcObject = null;
+    for (final track in [
+      ...?_stream?.getVideoTracks(),
+      ...?_replacementVideo?.getVideoTracks(),
+    ]) {
+      track.onEnded = null;
+      track.enabled = false;
+      try {
+        await track.stop();
+      } catch (_) {}
+    }
+    try {
+      await _videoSender?.replaceTrack(null);
+    } catch (_) {}
+    if (!_closed) notifyListeners();
+  }
+
+  Future<void> _restoreCamera() async {
+    if (_videoSender == null) return;
+    _repairingCamera = true;
+    rtc.MediaStream? fresh;
+    try {
+      fresh = await io.captureVideo();
+      if (_closed) return;
+      final track = fresh.getVideoTracks().first;
+      await _videoSender!.replaceTrack(track);
+      if (_closed) return;
+      if (_replacementVideo != null) await _releaseStream(_replacementVideo!);
+      _replacementVideo = fresh;
+      fresh = null;
+      local.srcObject = _replacementVideo;
+      _cameraSuspended = false;
+      camera = true;
+      track.onEnded = () {
+        if (!_closed && !_cameraSuspended) onState?.call('device-ended');
+      };
+      notifyListeners();
+    } catch (_) {
+      // Keep video off and preserve the audio call. Another tap can retry.
+    } finally {
+      if (fresh != null) await _releaseStream(fresh);
+      _repairingCamera = false;
+    }
   }
 
   Future<void> switchCamera() async {
@@ -443,12 +530,15 @@ class SocialCallMedia extends ChangeNotifier {
     final stream = _stream,
         peer = _peer,
         replacement = _replacementAudio,
+        replacementVideo = _replacementVideo,
         pending = _pendingAudio;
     _stream = null;
     _peer = null;
     _replacementAudio = null;
+    _replacementVideo = null;
     _pendingAudio = null;
     _audioSender = null;
+    _videoSender = null;
     _microphoneTrack?.enabled = false;
     for (final track in pending?.getTracks() ?? <rtc.MediaStreamTrack>[]) {
       track.enabled = false;
@@ -457,10 +547,15 @@ class SocialCallMedia extends ChangeNotifier {
     for (final track in stream?.getTracks() ?? <rtc.MediaStreamTrack>[]) {
       track.enabled = false;
     }
+    for (final track
+        in replacementVideo?.getTracks() ?? <rtc.MediaStreamTrack>[]) {
+      track.enabled = false;
+    }
     await audioClosing;
     try {
       if (stream != null) await _releaseStream(stream);
       if (replacement != null) await _releaseStream(replacement);
+      if (replacementVideo != null) await _releaseStream(replacementVideo);
       if (pending != null) await _releaseStream(pending);
     } catch (_) {}
     try {
@@ -493,7 +588,9 @@ class SocialCallController extends ChangeNotifier {
     SocialCallMedia? media,
     KorlixSoundService? sounds,
     DateTime? ringExpiresAt,
+    SocialCallBackground? background,
   }) : media = media ?? SocialCallMedia(),
+       background = background ?? SocialCallBackground(),
        sounds = sounds ?? kKorlixSounds,
        // Only incoming invitations inherit the app-wide alert's deadline.
        _ringExpiresAt = incoming != null ? ringExpiresAt : null,
@@ -501,10 +598,13 @@ class SocialCallController extends ChangeNotifier {
        id = incoming?['id'] ?? socialId(),
        state = incoming?['state'] ?? 'preparing' {
     client.addListener(_session);
-    this.media.onCandidate = (candidate) =>
-        unawaited(_sendSignal('candidate', candidate));
+    this.media.onCandidate = (candidate) => unawaited(
+      _sendSignal('candidate', {...candidate, 'generation': _generation}),
+    );
     this.media.onState = _mediaState;
     this.media.addListener(_notify);
+    this.background.onStopped = () =>
+        unawaited(end('Call ended by your device.'));
   }
   final SocialClient client;
   final SocialMap peer;
@@ -512,10 +612,12 @@ class SocialCallController extends ChangeNotifier {
   final String id;
   final SocialCallMedia media;
   final KorlixSoundService sounds;
+  final SocialCallBackground background;
   DateTime? _ringExpiresAt;
   bool _closingMedia = false;
   String state, status = '', error = '';
   bool busy = false, ended = false, connected = false, relay = false;
+  bool recoverySupported = false;
   String relayStatus = '';
   bool _disposed = false,
       _polling = false,
@@ -524,6 +626,14 @@ class SocialCallController extends ChangeNotifier {
   bool _started = false;
   bool _answerStarted = false;
   int _cursor = 0;
+  int _generation = 0, _remoteGeneration = -1, _recoveries = 0;
+  bool _recovering = false;
+  DateTime? _lastRecovery;
+  String get connectionDetails => _recoveries > 0
+      ? 'Network recovery $_recoveries of 3 · ${relay ? 'Call relay available' : 'Direct connection'}'
+      : relay
+      ? 'Call relay available'
+      : 'Direct connection';
   Timer? _timer, _clock;
   DateTime? connectedAt, _acceptedAt, _disconnectedAt;
   DateTime _lastResponse = DateTime.now();
@@ -584,7 +694,7 @@ class SocialCallController extends ChangeNotifier {
         : 'Preparing your ${video ? 'camera and microphone' : 'microphone'}…';
     _clock = Timer.periodic(const Duration(seconds: 1), (_) {
       if (ended) return;
-      if (!busy && DateTime.now().difference(_lastResponse).inSeconds > 25) {
+      if (!busy && DateTime.now().difference(_lastResponse).inSeconds > 45) {
         unawaited(end('Connection lost. Please try calling again.'));
       } else if (_acceptedAt != null &&
           !connected &&
@@ -597,8 +707,12 @@ class SocialCallController extends ChangeNotifier {
           ),
         );
       } else if (_disconnectedAt != null &&
-          DateTime.now().difference(_disconnectedAt!).inSeconds > 15) {
+          DateTime.now().difference(_disconnectedAt!).inSeconds > 40) {
         unawaited(end('The connection was interrupted. Please call again.'));
+      } else if (_disconnectedAt != null &&
+          (_lastRecovery == null ||
+              DateTime.now().difference(_lastRecovery!).inSeconds >= 10)) {
+        unawaited(reconnect());
       }
       if (media.ready && DateTime.now().second.isEven) {
         unawaited(media.checkAudio());
@@ -618,6 +732,7 @@ class SocialCallController extends ChangeNotifier {
           ..._data,
           'peer': peer['id'],
           'mode': video ? 'video' : 'audio',
+          'protocol': 2,
         });
         if (ended) {
           // A canceled request can finish after the first end attempt reached
@@ -670,6 +785,8 @@ class SocialCallController extends ChangeNotifier {
     relayStatus =
         '${config['relayStatus'] ?? (relay ? 'ready' : 'not-configured')}';
     await media.open(video, config['iceServers'] as List? ?? []);
+    if (!ended) await background.start(id);
+    if (ended) await background.stop();
   }
 
   void _startPolling() {
@@ -692,7 +809,10 @@ class SocialCallController extends ChangeNotifier {
     try {
       await _openMedia();
       if (ended) return;
-      final result = await client.post('call_accept', _data);
+      final result = await client.post('call_accept', {
+        ..._data,
+        'protocol': 2,
+      });
       if (ended) return;
       _lastResponse = DateTime.now();
       _applyCall(socialMap(result['call']));
@@ -708,6 +828,7 @@ class SocialCallController extends ChangeNotifier {
     if (ended || call.isEmpty) return;
     if (_acceptedAt != null && call['state'] == 'ringing') return;
     state = call['state'] ?? state;
+    recoverySupported = call['recovery_supported'] == true;
     _syncSounds();
     if (!['ringing', 'accepted'].contains(state)) {
       unawaited(
@@ -746,32 +867,46 @@ class SocialCallController extends ChangeNotifier {
         _offered = true;
         final sdp = await media.offer();
         if (ended) return;
-        await _sendSignal('offer', {'sdp': sdp});
+        await _sendSignal('offer', {'sdp': sdp, 'generation': _generation});
       }
       for (final signal in socialItems(result['signals'])) {
         if (ended) return;
         final kind = signal['kind'], payload = socialMap(signal['payload']);
+        final generation = (payload['generation'] as num?)?.toInt() ?? 0;
         if ((kind == 'offer' && incoming || kind == 'answer' && !incoming) &&
-            !_description) {
+            generation >= _generation &&
+            generation != _remoteGeneration &&
+            (incoming || generation == _generation)) {
           if (!media.ready) {
             return; // Answering permission dialog may still be open.
           }
+          _generation = generation;
           await media.description(kind, payload['sdp']);
           if (ended) return;
           _description = true;
+          _remoteGeneration = generation;
           for (final candidate in _candidates) {
-            if (!ended) await media.candidate(candidate);
+            if (!ended && (candidate['generation'] ?? 0) == generation) {
+              await _applyCandidate(candidate);
+            }
           }
           _candidates.clear();
           if (kind == 'offer' && !ended) {
-            await _sendSignal('answer', {'sdp': await media.answer()});
+            await _sendSignal('answer', {
+              'sdp': await media.answer(),
+              'generation': generation,
+            });
           }
         } else if (kind == 'candidate') {
-          if (_description) {
-            await media.candidate(payload);
-          } else {
+          if (_description && generation == _generation) {
+            await _applyCandidate(payload);
+          } else if (generation >= _generation && _candidates.length < 128) {
             _candidates.add(payload);
           }
+        } else if (kind == 'restart_request' &&
+            !incoming &&
+            generation == _generation) {
+          unawaited(reconnect());
         } else if (kind == 'media') {
           media.remoteStatus(payload);
         }
@@ -795,7 +930,10 @@ class SocialCallController extends ChangeNotifier {
     final signalId = socialId();
     _outbox = _outbox
         .then((_) async {
-          if (ended) return;
+          if (ended ||
+              kind != 'media' && (payload['generation'] ?? 0) < _generation) {
+            return;
+          }
           final data = {
             ..._data,
             'kind': kind,
@@ -804,7 +942,13 @@ class SocialCallController extends ChangeNotifier {
           };
           try {
             await client.post('call_signal', data);
-          } catch (_) {
+          } catch (e) {
+            if (e is SocialException && e.status == 409) {
+              // A peer can restart ICE while an earlier candidate is in
+              // flight. The next poll supplies the current offer.
+              unawaited(poll());
+              return;
+            }
             if (!ended && client.available) {
               await client.post('call_signal', data);
             }
@@ -818,6 +962,15 @@ class SocialCallController extends ChangeNotifier {
     return _outbox;
   }
 
+  Future<void> _applyCandidate(SocialMap candidate) async {
+    try {
+      await media.candidate(candidate);
+    } catch (_) {
+      // One unusable route must not discard a working relay or other ICE
+      // candidates. Connection-state recovery and its deadline remain active.
+    }
+  }
+
   void _mediaState(String value) {
     if (ended) return;
     if (value == 'connected') {
@@ -826,10 +979,12 @@ class SocialCallController extends ChangeNotifier {
       _disconnectedAt = null;
       status = 'Connected';
       _publishMedia();
-    } else if (value == 'disconnected') {
+    } else if (value == 'disconnected' || value == 'failed') {
+      connected = false;
       _disconnectedAt ??= DateTime.now();
       status = 'Reconnecting…';
-    } else if (['failed', 'closed', 'device-ended'].contains(value)) {
+      unawaited(reconnect());
+    } else if (['closed', 'device-ended'].contains(value)) {
       unawaited(
         end(
           value == 'device-ended'
@@ -839,6 +994,91 @@ class SocialCallController extends ChangeNotifier {
       );
     }
     _notify();
+  }
+
+  /// One caller produces offers, so simultaneous network changes cannot create
+  /// SDP glare. A bounded, server-versioned restart keeps the same call ID.
+  Future<void> reconnect() async {
+    if (ended ||
+        !recoverySupported ||
+        state != 'accepted' ||
+        !media.ready ||
+        _recovering ||
+        _recoveries >= 3 ||
+        _lastRecovery != null &&
+            DateTime.now().difference(_lastRecovery!).inSeconds < 8) {
+      return;
+    }
+    _recovering = true;
+    _lastRecovery = DateTime.now();
+    _recoveries++;
+    _disconnectedAt ??= DateTime.now();
+    status = 'Reconnecting · attempt $_recoveries of 3…';
+    _notify();
+    try {
+      if (incoming) {
+        await _sendSignal('restart_request', {'generation': _generation});
+      } else {
+        final result = await client.post('call_restart', {
+          ..._data,
+          'generation': _generation,
+        });
+        if (ended) return;
+        final call = socialMap(result['call']);
+        final generation = (call['generation'] as num?)?.toInt();
+        if (call['state'] != 'accepted' ||
+            generation == null ||
+            generation <= _generation) {
+          throw const SocialException(
+            'The other device could not restart this call.',
+          );
+        }
+        _generation = generation;
+        _description = false;
+        _candidates.clear();
+        final sdp = await media.restartOffer();
+        if (!ended) {
+          await _sendSignal('offer', {'sdp': sdp, 'generation': generation});
+        }
+      }
+    } catch (e) {
+      if (!ended &&
+          e is SocialException &&
+          [401, 403, 404].contains(e.status)) {
+        await end('$e', notifyServer: false);
+      } else if (!ended) {
+        status = 'Waiting for the network · recovery $_recoveries of 3';
+      }
+    } finally {
+      _recovering = false;
+      _notify();
+    }
+  }
+
+  void resume() {
+    if (ended) return;
+    _lastResponse = DateTime.now();
+    unawaited(poll());
+    if (_disconnectedAt != null) unawaited(reconnect());
+  }
+
+  void backgrounded() {
+    if (ended || kIsWeb) return;
+    if (!background.ready || !media.ready) {
+      unawaited(
+        end(
+          'This device cannot keep the call active in the background. Keep KORLIX open to call.',
+        ),
+      );
+      return;
+    }
+    if (video) {
+      unawaited(
+        media.suspendCamera().then((_) {
+          if (!ended) _publishMedia();
+        }),
+      );
+    }
   }
 
   void toggleMicrophone() {
@@ -856,8 +1096,11 @@ class SocialCallController extends ChangeNotifier {
 
   void toggleCamera() {
     if (ended || !media.ready || !video) return;
-    media.toggleCamera();
-    _publishMedia();
+    unawaited(
+      media.toggleCamera().then((_) {
+        if (!ended) _publishMedia();
+      }),
+    );
   }
 
   void _publishMedia() {
@@ -881,6 +1124,7 @@ class SocialCallController extends ChangeNotifier {
     _timer?.cancel();
     _clock?.cancel();
     _candidates.clear();
+    unawaited(background.stop());
     unawaited(
       media.close().whenComplete(() {
         _closingMedia = false;

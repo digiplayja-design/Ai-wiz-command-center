@@ -71,6 +71,12 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
+        <!-- Explicit, active Social calls only. Never restarted after termination. -->
+        <service android:name=".KorlixSocialCallService"
+            android:exported="false"
+            android:stopWithTask="true"
+            android:foregroundServiceType="microphone|mediaPlayback" />
+
         <!-- Fix: Override WorkManager SystemForegroundService for Android 14 -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"

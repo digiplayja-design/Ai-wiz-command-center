@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../bookkeeping/bookkeeping_file_save.dart';
 import 'app_studio_client.dart';
 import 'app_preview.dart';
+import 'app_portal_screen.dart';
 
 typedef AppFileSaver = Future<void> Function(Uint8List, String, String, Rect);
 const appStarters = <Map<String, String>>[
@@ -455,10 +456,23 @@ class _AppStudioScreenState extends State<AppStudioScreen> {
       );
     }
   });
+  Future<void> _portals({bool currentProject = false}) async {
+    if (blocked || currentProject && !hasSpec) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AppPortalScreen(
+          client: widget.client,
+          project: currentProject ? Map<String, dynamic>.from(_project!) : null,
+          disposeClient: false,
+        ),
+      ),
+    );
+  }
+
   Future<void> _remove(Map<String, dynamic> p) async {
     if (!await _confirm(
       'Delete ${p['name']}?',
-      'The saved idea and all app versions will be removed. Download the project first if you want a copy.',
+      'The saved idea, all app versions and any hosted customer portal will be removed, including its requests and memberships. Download the prototype first if you want a copy.',
       'Delete project',
     )) {
       return;
@@ -635,6 +649,11 @@ class _AppStudioScreenState extends State<AppStudioScreen> {
                                         _load();
                                         _top();
                                       },
+                              ),
+                              ActionChip(
+                                avatar: const Icon(Icons.public, size: 18),
+                                label: const Text('My portals'),
+                                onPressed: blocked ? null : () => _portals(),
                               ),
                               if (_project != null)
                                 ChoiceChip(
@@ -857,7 +876,7 @@ class _AppStudioScreenState extends State<AppStudioScreen> {
       ),
       const SizedBox(height: 22),
       Text(
-        'Built for useful data apps: records, forms, search and status boards. Each result is a local web prototype; shared accounts, live payments and external connections require further development.',
+        'Build useful prototypes with records, forms, search and status boards. Publish a customer portal from any saved design for shared requests, replies and private files. Other custom app features remain in your local prototype.',
         style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
       ),
     ],
@@ -988,10 +1007,23 @@ class _AppStudioScreenState extends State<AppStudioScreen> {
                 ),
               ],
             ),
-            FilledButton.icon(
-              onPressed: blocked || !hasSpec ? null : _export,
-              icon: const Icon(Icons.download_outlined),
-              label: const Text('Export app'),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                FilledButton.icon(
+                  onPressed: blocked || !hasSpec
+                      ? null
+                      : () => _portals(currentProject: true),
+                  icon: const Icon(Icons.rocket_launch_outlined),
+                  label: const Text('Customer portal'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: blocked || !hasSpec ? null : _export,
+                  icon: const Icon(Icons.download_outlined),
+                  label: const Text('Export app'),
+                ),
+              ],
             ),
           ],
         ),

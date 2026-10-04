@@ -85,3 +85,7 @@ List<RadarResult> filterRadarResults(
   }
   return matches;
 }
+
+/// SAM's direct endpoint accepts one NAICS code. Preserve the full profile.
+String radarFirstNaics(String value) =>
+    RegExp(r'(?<![0-9])[0-9]{2,6}(?![0-9])').firstMatch(value)?.group(0) ?? '';

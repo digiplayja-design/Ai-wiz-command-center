@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import '../sounds/korlix_sound_service.dart';
@@ -18,6 +19,8 @@ class SocialCallScreen extends StatefulWidget {
     this.media,
     this.sounds,
     this.ringExpiresAt,
+    this.controller,
+    this.onMinimize,
   });
   final SocialClient client;
   final SocialMap peer;
@@ -26,6 +29,10 @@ class SocialCallScreen extends StatefulWidget {
   final SocialCallMedia? media;
   final KorlixSoundService? sounds;
   final DateTime? ringExpiresAt;
+
+  /// A hosted controller belongs to the app, not this temporary route.
+  final SocialCallController? controller;
+  final VoidCallback? onMinimize;
   @override
   State<SocialCallScreen> createState() => _SocialCallScreenState();
 }
@@ -35,15 +42,17 @@ class _SocialCallScreenState extends State<SocialCallScreen>
   late SocialMap _displayPeer = widget.peer;
   Timer? _presencePoll;
   bool _checkingPresence = false, _foreground = true;
-  late final call = SocialCallController(
-    client: widget.client,
-    peer: widget.peer,
-    video: widget.video,
-    incoming: widget.incoming,
-    media: widget.media,
-    sounds: widget.sounds,
-    ringExpiresAt: widget.ringExpiresAt,
-  );
+  late final call =
+      widget.controller ??
+      SocialCallController(
+        client: widget.client,
+        peer: widget.peer,
+        video: widget.video,
+        incoming: widget.incoming,
+        media: widget.media,
+        sounds: widget.sounds,
+        ringExpiresAt: widget.ringExpiresAt,
+      );
   @override
   void initState() {
     super.initState();
@@ -95,15 +104,12 @@ class _SocialCallScreenState extends State<SocialCallScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
-    // `inactive` can be a microphone permission prompt. Hidden/background calls
-    // end so the app never silently keeps publishing camera or microphone.
-    if ([
-      AppLifecycleState.hidden,
-      AppLifecycleState.paused,
-      AppLifecycleState.detached,
-    ].contains(state)) {
-      unawaited(call.end('Call ended when you left Social.'));
+    if (_foreground) call.resume();
+    if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      call.backgrounded();
     }
+    if (state == AppLifecycleState.detached) unawaited(call.end('Call ended'));
   }
 
   @override
@@ -111,7 +117,7 @@ class _SocialCallScreenState extends State<SocialCallScreen>
     _presencePoll?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     call.removeListener(_change);
-    call.dispose();
+    if (widget.controller == null) call.dispose();
     super.dispose();
   }
 
@@ -439,6 +445,12 @@ class _SocialCallScreenState extends State<SocialCallScreen>
       appBar: AppBar(
         title: Text(widget.video ? 'Video call' : 'Audio call'),
         actions: [
+          if (widget.onMinimize != null && !call.ended)
+            IconButton(
+              tooltip: 'Minimize call and keep using KORLIX',
+              onPressed: widget.onMinimize,
+              icon: const Icon(Icons.picture_in_picture_alt_rounded),
+            ),
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: Icon(Icons.people_alt_outlined, color: s.primary),
@@ -464,6 +476,19 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                       ),
                     ),
                     const SizedBox(height: 16),
+                    if (widget.onMinimize != null && !call.ended)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          kIsWeb
+                              ? 'Minimize to keep using KORLIX during your call. Keep this browser open; device sleep or closing the tab can interrupt it.'
+                              : call.background.ready
+                              ? 'Your audio can continue when KORLIX is in the background. Your camera turns off; tap Camera to turn it back on after returning.'
+                              : 'Minimize to keep using KORLIX. Keep the app in the foreground on this device. Background audio also needs notification permission on Android.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: s.mutedText, height: 1.4),
+                        ),
+                      ),
                     SocialPanel(
                       padding: EdgeInsets.zero,
                       accent: s.primary,

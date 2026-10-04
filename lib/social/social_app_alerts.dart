@@ -5,10 +5,13 @@ import 'package:flutter/material.dart';
 import '../sounds/korlix_sound_service.dart';
 import 'social_alert_overlay.dart';
 import 'social_alert_scope.dart';
-import 'social_call_screen.dart';
+import 'social_call_session.dart';
 import 'social_client.dart';
 import 'social_notifications.dart';
 import 'social_screen.dart';
+import 'social_push_platform.dart';
+import 'social_push_native.dart'
+    if (dart.library.js_interop) 'social_push_web.dart';
 
 /// Lives above the root Navigator, so pushed tools and dialogs keep receiving
 /// Social alerts without replacing their routes or interrupting their drafts.
@@ -45,6 +48,9 @@ class SocialAppAlerts extends StatefulWidget {
 class _SocialAppAlertsState extends State<SocialAppAlerts>
     with WidgetsBindingObserver {
   late final SocialNotifications _notifications;
+  late final SocialCallSession _calls;
+  final _push = createSocialPushPlatform();
+  bool _pushOpening = false, _pushLaunchPending = false;
   bool _declining = false;
   String? _callError;
   SocialClient? _lastClient;
@@ -70,6 +76,16 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
         );
     _lastClient = _notifications.client;
     _sounds = widget.sounds ?? kKorlixSounds;
+    _calls = SocialCallSession(
+      notifications: _notifications,
+      navigatorKey: widget.navigatorKey,
+      sounds: _sounds,
+      beforeOpenCall: widget.beforeOpenCall,
+    );
+    _calls.addListener(_callChanged);
+    _pushLaunchPending = _push.launchRequested;
+    _push.onOpen(() => unawaited(_openPush()));
+    unawaited(_syncPush());
     // A restored unread count or a pre-existing popup is not a new message.
     _messageRevision = _notifications.messageRevision;
     _notifications.addListener(_changed);
@@ -82,6 +98,60 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
       );
       _changed();
       unawaited(_notifications.refreshCalls());
+      if (_pushLaunchPending) unawaited(_openPush());
+    });
+  }
+
+  Future<void> _syncPush() async {
+    try {
+      await _push.syncOwner(socialPushOwner(widget.headersBuilder()));
+    } catch (_) {}
+  }
+
+  Future<void> _openPush() async {
+    if (_pushOpening || !mounted || !_notifications.available) return;
+    final navigator = widget.navigatorKey.currentState;
+    final owner = _notifications.client;
+    if (navigator == null || owner == null) return;
+    _pushOpening = true;
+    _pushLaunchPending = false;
+    try {
+      if (_calls.current != null) {
+        await _calls.restore();
+        return;
+      }
+      await _notifications.refreshCalls();
+      if (!mounted ||
+          !identical(owner, _notifications.client) ||
+          !owner.available) {
+        return;
+      }
+      final incoming = _notifications.incomingCall;
+      if (incoming != null) {
+        await _openCall(incoming);
+        return;
+      }
+      final client =
+          widget.clientBuilder?.call() ??
+          SocialClient(
+            baseUrl: widget.baseUrl,
+            headersBuilder: widget.headersBuilder,
+            sessionChanges: widget.sessionChanges,
+          );
+      await navigator.push<void>(
+        MaterialPageRoute<void>(
+          settings: const RouteSettings(name: '/social/push'),
+          builder: (_) => SocialScreen(client: client),
+        ),
+      );
+    } finally {
+      _pushOpening = false;
+    }
+  }
+
+  void _callChanged() {
+    scheduleMicrotask(() {
+      if (mounted) setState(() {});
     });
   }
 
@@ -90,6 +160,12 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
     final id = _notifications.incomingCall?['id']?.toString();
     final replaced = !identical(client, _lastClient);
     if (replaced) {
+      unawaited(_syncPush());
+      if (_pushLaunchPending) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => unawaited(_openPush()),
+        );
+      }
       _silencedCalls.clear();
       _ringExpiresAt = null;
       _sounds.setRinging(this, false);
@@ -133,6 +209,12 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _notifications.setForeground(state == AppLifecycleState.resumed);
+    if (state == AppLifecycleState.resumed) _calls.resume();
+    if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      _calls.current?.backgrounded();
+    }
+    if (state == AppLifecycleState.detached) unawaited(_calls.end());
   }
 
   Future<void> _openMessage(SocialUnreadConversation conversation) async {
@@ -183,31 +265,12 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
     final ringExpiresAt = _ringExpiresAt;
     _silenceCall('${incoming['id']}');
     unawaited(_sounds.activate());
-    if (!_notifications.beginCall()) return;
-    try {
-      widget.beforeOpenCall?.call();
-      // Opening a ringing call never opens the microphone or camera. The
-      // existing call screen still requires the user's explicit Answer tap.
-      final route = MaterialPageRoute<void>(
-        settings: const RouteSettings(name: '/social/incoming-call'),
-        builder: (_) => SocialCallScreen(
-          client: client,
-          peer: socialMap(incoming['peer']),
-          video: incoming['mode'] == 'video',
-          incoming: incoming,
-          sounds: _sounds,
-          ringExpiresAt: ringExpiresAt,
-        ),
-      );
-      await navigator.push<void>(route);
-      // A pop result arrives before its exit animation finishes. Keep the
-      // receiver reserved until the call screen has disposed its media.
-      await route.completed;
-    } finally {
-      if (mounted && identical(client, _notifications.client)) {
-        _notifications.endCall();
-      }
-    }
+    await _calls.start(
+      socialMap(incoming['peer']),
+      incoming['mode'] == 'video',
+      incoming: incoming,
+      ringExpiresAt: ringExpiresAt,
+    );
   }
 
   Future<void> _declineCall(SocialMap incoming) async {
@@ -254,6 +317,9 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _push.onOpen(null);
+    _calls.removeListener(_callChanged);
+    _calls.dispose();
     _notifications.removeListener(_changed);
     _sounds.setRinging(this, false);
     if (widget.notifications == null) _notifications.dispose();
@@ -264,6 +330,7 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
   Widget build(BuildContext context) => SocialAlertScope(
     notifications: _notifications,
     routeObserver: widget.routeObserver,
+    calls: _calls,
     child: SocialAlertOverlay(
       notifications: _notifications,
       onOpenMessage: _openMessage,
@@ -271,7 +338,12 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
       onDeclineCall: _declineCall,
       callActionBusy: _declining,
       callError: _callError,
-      child: widget.child,
+      child: Column(
+        children: [
+          Expanded(child: widget.child),
+          if (_calls.minimized) SocialActiveCallBar(session: _calls),
+        ],
+      ),
     ),
   );
 }

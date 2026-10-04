@@ -101,7 +101,11 @@
       .getRegistrations()
       .then(function (registrations) {
         registrations.forEach(function (registration) {
-          registration.unregister().catch(function () {});
+          // Keep the separate, explicitly enabled Social push subscription.
+          const worker = registration.active || registration.waiting || registration.installing;
+          if (worker && new URL(worker.scriptURL).pathname.endsWith('/flutter_service_worker.js')) {
+            registration.unregister().catch(function () {});
+          }
         });
       })
       .catch(function () {});

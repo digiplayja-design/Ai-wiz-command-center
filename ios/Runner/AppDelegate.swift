@@ -5,6 +5,8 @@ import UIKit
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var soundEffects: KorlixSoundEffects?
+  private var socialCalls: FlutterMethodChannel?
+  private var socialCallId: String?
 
   override func application(
     _ application: UIApplication,
@@ -17,6 +19,27 @@ import UIKit
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "KorlixSoundEffects") {
       soundEffects = KorlixSoundEffects(messenger: registrar.messenger())
+      socialCalls = FlutterMethodChannel(name: "korlix/social_call_background", binaryMessenger: registrar.messenger())
+      socialCalls?.setMethodCallHandler { [weak self] call, result in
+        guard let self = self,
+              let args = call.arguments as? [String: Any],
+              let id = args["id"] as? String else { result(false); return }
+        if call.method == "start" {
+          let modes = Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String] ?? []
+          // WebRTC owns activation and teardown. This lease only confirms that
+          // its foreground, permissioned play-and-record session can continue.
+          let session = AVAudioSession.sharedInstance()
+          let ready = UIApplication.shared.applicationState == .active && modes.contains("audio") &&
+            session.category == .playAndRecord && session.recordPermission == .granted &&
+            (self.socialCallId == nil || self.socialCallId == id)
+          if ready { self.socialCallId = id }
+          result(ready)
+        } else if call.method == "stop" {
+          if self.socialCallId == id { self.socialCallId = nil }
+          // Do not deactivate the shared audio session underneath another tool.
+          result(true)
+        } else { result(FlutterMethodNotImplemented) }
+      }
     }
   }
 }

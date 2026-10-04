@@ -1,5 +1,9 @@
 package com.korlixdeveloper.korlixai
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.media.AudioAttributes
 import android.media.SoundPool
 import android.os.Handler
@@ -13,6 +17,24 @@ import java.io.File
 
 class MainActivity: FlutterActivity() {
     private var soundEffects: KorlixSoundEffects? = null
+    private var socialCalls: MethodChannel? = null
+    private var foreground = false
+    private val pendingCalls = mutableMapOf<String, MethodChannel.Result>()
+    private var notificationPermissionCall: String? = null
+    private var approvedCall: String? = null
+
+    private fun launchSocialCall(id: String) {
+        if (!pendingCalls.containsKey(id) || !KorlixSocialCallService.authorized.contains(id)) return
+        if (!foreground) { approvedCall = id; return }
+        approvedCall = null
+        try {
+            val intent = Intent(this, KorlixSocialCallService::class.java).putExtra("id", id)
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
+        } catch (_: Exception) {
+            KorlixSocialCallService.authorized.remove(id)
+            pendingCalls.remove(id)?.success(false)
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -20,19 +42,75 @@ class MainActivity: FlutterActivity() {
             MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "korlix/sound_effects"),
             cacheDir
         )
+        socialCalls = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "korlix/social_call_background")
+        KorlixSocialCallService.onStarted = { id, ready -> pendingCalls.remove(id)?.success(ready) }
+        KorlixSocialCallService.onStopped = { id -> socialCalls?.invokeMethod("stopped", mapOf("id" to id)) }
+        socialCalls?.setMethodCallHandler { call, result ->
+            val id = call.argument<String>("id")
+            if (id == null || !id.matches(Regex("[A-Za-z0-9-]{1,80}"))) {
+                result.success(false)
+            } else if (call.method == "stop") {
+                KorlixSocialCallService.authorized.remove(id)
+                if (approvedCall == id) approvedCall = null
+                pendingCalls.remove(id)?.success(false)
+                if (KorlixSocialCallService.activeId == id) stopService(Intent(this, KorlixSocialCallService::class.java))
+                result.success(true)
+            } else if (call.method == "start") {
+                // Start while the Activity is visible, after getUserMedia has
+                // granted RECORD_AUDIO. Require a visible notification too.
+                val microphone = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                val notifications = Build.VERSION.SDK_INT < 33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                if (!foreground || !microphone || pendingCalls.containsKey(id) || notificationPermissionCall != null) {
+                    result.success(false)
+                } else {
+                    pendingCalls[id] = result
+                    KorlixSocialCallService.authorized.add(id)
+                    if (!notifications && Build.VERSION.SDK_INT >= 33) {
+                        notificationPermissionCall = id
+                        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 4817)
+                    } else { launchSocialCall(id) }
+                }
+            } else { result.notImplemented() }
+        }
     }
 
     override fun onResume() {
         super.onResume()
+        foreground = true
+        approvedCall?.let(::launchSocialCall)
         soundEffects?.foreground = true
     }
 
     override fun onPause() {
+        foreground = false
         soundEffects?.pause()
         super.onPause()
     }
 
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != 4817) return
+        val id = notificationPermissionCall ?: return
+        notificationPermissionCall = null
+        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            launchSocialCall(id)
+        } else {
+            KorlixSocialCallService.authorized.remove(id)
+            pendingCalls.remove(id)?.success(false)
+        }
+    }
+
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        pendingCalls.values.forEach { it.success(false) }
+        pendingCalls.clear()
+        approvedCall = null
+        notificationPermissionCall = null
+        KorlixSocialCallService.authorized.clear()
+        stopService(Intent(this, KorlixSocialCallService::class.java))
+        KorlixSocialCallService.onStarted = null
+        KorlixSocialCallService.onStopped = null
+        socialCalls?.setMethodCallHandler(null)
+        socialCalls = null
         soundEffects?.close()
         soundEffects = null
         super.cleanUpFlutterEngine(flutterEngine)

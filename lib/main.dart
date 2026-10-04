@@ -28,6 +28,7 @@ import 'study_studio/study_client.dart';
 import 'study_studio/study_screen.dart';
 import 'app_studio/app_studio_client.dart';
 import 'app_studio/app_studio_screen.dart';
+import 'app_studio/app_portal_screen.dart';
 import 'music_studio/music_client.dart';
 import 'music_studio/music_studio_screen.dart';
 import 'music_studio/music_voice.dart';
@@ -38,6 +39,7 @@ import 'theme/korlix_action_grid.dart';
 import 'auth/korlix_welcome_confirmation.dart';
 import 'auth/korlix_october_welcome.dart';
 import 'auth/korlix_login_preferences.dart';
+import 'auth/korlix_portal_launch.dart';
 import 'input_tools/upload_studio.dart';
 import 'input_tools/voice_composer.dart';
 import 'locator/locator_screen.dart';
@@ -148,6 +150,8 @@ bool kSupabaseReady = false;
 String? kKorlixAccessToken;
 String? kKorlixRefreshToken;
 String? kKorlixUserEmail;
+KorlixPortalLaunch? _korlixInitialPortalLaunch;
+bool _korlixPortalLaunchRequested = false;
 
 final ValueNotifier<int> kKorlixAuthRevision = ValueNotifier<int>(0);
 
@@ -200,6 +204,9 @@ Future<void> main() async {
     () async {
       WidgetsFlutterBinding.ensureInitialized();
       _installKorlixErrorSurface();
+      _korlixPortalLaunchRequested =
+          Uri.base.queryParametersAll.containsKey('app_portal');
+      _korlixInitialPortalLaunch = captureKorlixPortalLaunch();
 
       // Paint the app immediately. On web, waiting for startup services before
       // runApp can create a white screen if a plugin/storage/network step stalls.
@@ -380,6 +387,9 @@ class CheeChaiCheeApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return KorlixThemeScope(builder: (context, theme) => MaterialApp(
       navigatorKey: _korlixNavigatorKey,
+      // Invitation fragments are credentials for explicit acceptance, not
+      // Flutter route names. Account sign-in always happens first.
+      initialRoute: _korlixPortalLaunchRequested ? '/' : null,
       navigatorObservers: <NavigatorObserver>[
         kKorlixMeetingCopilotAuthObserver,
         _korlixSocialRouteObserver,
@@ -675,6 +685,36 @@ Uri _assertValidKorlixBackendUri(String rawUri) {
 
 class _AuthGateState extends State<AuthGate> {
   bool _booting = true;
+  bool _portalLaunchScheduled = false;
+
+  void _schedulePortalLaunch() {
+    final launch = _korlixInitialPortalLaunch;
+    if (launch == null || _portalLaunchScheduled || !_signedIn) return;
+    _portalLaunchScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_signedIn) {
+        _portalLaunchScheduled = false;
+        return;
+      }
+      _korlixInitialPortalLaunch = null;
+      final client = AppStudioClient(
+        backendBaseUrl: kKorlixBackendBaseUrl,
+        headersBuilder: () => {
+          ...KorlixDeviceStore.headers(),
+          if (kKorlixAccessToken?.isNotEmpty == true)
+            'Authorization': 'Bearer $kKorlixAccessToken',
+        },
+        sessionChanges: kKorlixAuthRevision,
+      );
+      unawaited(Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => AppPortalScreen(
+          client: client,
+          portalId: launch.portalId,
+          inviteToken: launch.inviteToken,
+        ),
+      )));
+    });
+  }
 
   bool get _signedIn =>
       kKorlixAccessToken != null && kKorlixAccessToken!.isNotEmpty;
@@ -821,6 +861,8 @@ class _AuthGateState extends State<AuthGate> {
     if (!_signedIn) {
       return AuthScreen(onSignedIn: _handleSignedIn);
     }
+
+    _schedulePortalLaunch();
 
     return Stack(
       children: [
