@@ -1311,7 +1311,7 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 10),
           child: Text(
-            'Paid checkout is not available yet. Free listings and verification applications are open. No payment will be taken.',
+            'New paid subscriptions are unavailable right now. Free listings and verification applications remain open.',
           ),
         ),
       if (_me['paymentsReady'] == true && _me['livePayments'] != true)
