@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
-import { automationInput, automationEvents, localDay, previousDay, approvedRuleMatches, automationTemplates, createWorkforceAutomations } from '../workforce/automations.mjs';
+import { automationInput, automationEvents, automationSummary, localDay, previousDay, approvedRuleMatches, automationTemplates, createWorkforceAutomations } from '../workforce/automations.mjs';
 import { defaults } from '../workforce/core.mjs';
 
 const [owner, employee, other, recipient] = Array.from({length:4}, () => randomUUID());
@@ -21,13 +21,20 @@ test.before(async () => {
   db=new PGlite();
   await db.exec('create role anon; create role authenticated; create role service_role bypassrls; create schema auth; create schema storage; create table auth.users(id uuid primary key); create table user_profiles(id uuid primary key,tier text); create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]); grant usage on schema public to service_role; grant select,update on user_profiles to service_role;');
   for(const u of [owner,employee,other]) { await db.query('insert into auth.users values($1)',[u]); await db.query('insert into user_profiles values($1,$2)',[u,u===employee?'basic':'enterprise']); }
-  for(const f of ['20260922000006_enterprise_workforce.sql','20260922013258_workforce_automations.sql','20261004042716_workforce_autonomous_email.sql']) await db.exec(await readFile(new URL('../../supabase/migrations/'+f,import.meta.url),'utf8'));
+  for(const f of ['20260922000006_enterprise_workforce.sql','20260922013258_workforce_automations.sql','20261004042716_workforce_autonomous_email.sql','20261004112034_workforce_reminder_instructions.sql']) await db.exec(await readFile(new URL('../../supabase/migrations/'+f,import.meta.url),'utf8'));
   await db.exec('set role service_role');
   org=(await work(owner,'owner@example.com','create',null,{name:'Team',display_name:'Owner',timezone:'UTC'})).id;
   otherOrg=(await work(other,'other@example.com','create',null,{name:'Other',display_name:'Other',timezone:'UTC'})).id;
   await db.query("insert into korlix_workforce_members(org_id,user_id,role,display_name,email) values($1,$2,'employee','Employee','employee@example.com')",[org,employee]);
 });
 test.after(async()=>db?.close());
+
+test('Long summaries stay within the queue limit while preserving all custom instructions',()=>{
+  const instructions='Owner instructions. '.repeat(75);
+  const summary=automationSummary('Recorded work. '.repeat(600),instructions);
+  assert(summary.length<=4000);assert(summary.endsWith(instructions));
+  assert.match(summary,/Additional entries omitted/);
+});
 
 test('Private RPC, owner-only configuration, immutable idempotent creation, fresh Enterprise gates', async()=>{
   for(const role of ['anon','authenticated']) {

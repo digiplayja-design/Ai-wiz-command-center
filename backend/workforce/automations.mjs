@@ -21,6 +21,7 @@ export function automationInput(body = {}) {
   if (body.channel==='workspace_email' && body.kind==='daily_summary' && (body.local_time<send_start||body.local_time>=send_end)) fail('Choose a summary time inside the sending window.');
   return {
     delivery_mode, send_start, send_end,
+    instructions: text(body.instructions, 1500),
     id: id(body.id), name: text(body.name, 100, true), kind: body.kind, channel: body.channel,
     member_id: body.kind === 'daily_summary' ? null : body.member_id ? id(body.member_id) : null,
     recipient_id: body.channel !== 'call_review' ? id(body.recipient_id) : null,
@@ -37,7 +38,12 @@ export function localDay(now, timezone) {
   return { date, minutes: Number(parts.hour) * 60 + Number(parts.minute), weekday: new Date(date + 'T12:00:00Z').getUTCDay() };
 }
 export const previousDay = date => new Date(Date.parse(date + 'T12:00:00Z') - 86400000).toISOString().slice(0, 10);
-const cut = v => v.length > 3600 ? v.slice(0, 3480) + '\n\nAdditional entries omitted. Open Workforce for the complete report.' : v;
+const cut = (v, limit = 3600) => {
+  const note = '\n\nAdditional entries omitted. Open Workforce for the complete report.';
+  return v.length > limit ? v.slice(0, limit - note.length) + note : v;
+};
+export const automationSummary = (report, instructions = '') =>
+  cut(report, 3600 - (instructions ? instructions.length + 2 : 0)) + (instructions ? `\n\n${instructions}` : '');
 const validMember = (r, m) => m.active && (!r.member_id || r.member_id === m.user_id);
 
 // Evaluate only current conditions. A delayed email is cancelled if its condition
@@ -67,7 +73,7 @@ export function automationEvents(rule, raw, now = Date.now()) {
     const due = (Number(p.interval_minutes || 60) + Number(p.grace_minutes || 0) + rule.delay_minutes) * 60;
     if (since < due) return [];
     return [{ event_key: `update:${s.id}:${last?.id || 'start'}`, subject: 'Work update reminder', member_id: member.user_id, expires_at: ttl,
-      body: `${scope}\n${member.display_name} has a work update due.\n\nPlease open Workforce → My day and record completed work, quantities, and any blockers.\nThis reminder reflects recorded updates, not a judgement of productivity.` }];
+      body: `${scope}\n${member.display_name} has a work update due.\n\n${rule.instructions || 'Please open Workforce → My day and record completed work, quantities, and any blockers.'}\nThis reminder reflects recorded updates, not a judgement of productivity.` }];
   });
   return raw.schedule.flatMap(s => {
     const member = members.get(s.user_id), start = Date.parse(s.starts_at), end = Date.parse(s.ends_at);
@@ -75,7 +81,7 @@ export function automationEvents(rule, raw, now = Date.now()) {
     if (raw.shifts.some(x => x.user_id === s.user_id && Date.parse(x.clock_in) < end && Date.parse(x.clock_out || new Date(now).toISOString()) >= start)) return [];
     return [{ event_key: `shift:${s.id}:${s.version}`, subject: 'Scheduled shift check-in', member_id: member.user_id,
       expires_at: new Date(Math.min(end, now + 2 * 3600000)).toISOString(),
-      body: `${scope}\nNo clock-in is recorded for ${member.display_name}'s scheduled shift starting ${new Date(start).toLocaleString('en-US', { timeZone: raw.organization.timezone })} (${raw.organization.timezone}).\n\nPlease check in through Workforce or contact your employer if plans have changed. This alert is based on attendance records; it does not establish an absence.` }];
+      body: `${scope}\nNo clock-in is recorded for ${member.display_name}'s scheduled shift starting ${new Date(start).toLocaleString('en-US', { timeZone: raw.organization.timezone })} (${raw.organization.timezone}).\n\n${rule.instructions || 'Please check in through Workforce or contact your employer if plans have changed.'}\nThis alert is based on attendance records; it does not establish an absence.` }];
   });
 }
 
@@ -163,7 +169,7 @@ export function createWorkforceAutomations({ database, persistence, loadAgentPro
     const list = automationEvents(rule, raw, now());
     for (const e of list) if (e.report_date) {
       const report = await rawSnapshot(rule, { from: e.report_date, to: e.report_date });
-      e.body = cut(dailyBrief(enrichSnapshot(report, now())));
+      e.body = automationSummary(dailyBrief(enrichSnapshot(report, now())), rule.instructions);
     }
     return list;
   }
@@ -204,7 +210,7 @@ export function createWorkforceAutomations({ database, persistence, loadAgentPro
         if (stopped) break;
         try {
           await cmd(rule.owner_id, 'checked', rule.org_id, { rule_id: rule.id });
-          for (const event of (await events(rule)).slice(0, 500)) await cmd(rule.owner_id, 'enqueue', rule.org_id, { rule_id: rule.id, ...event });
+          for (const event of (await events(rule)).slice(0, 500)) await cmd(rule.owner_id, 'enqueue', rule.org_id, { rule_id: rule.id, version: rule.version, ...event });
           for (let i = 0; i < 5; i++) {
             const job = await cmd(rule.owner_id, 'claim', rule.org_id, { rule_id: rule.id });
             if (!job) break;
@@ -222,6 +228,9 @@ export function createWorkforceAutomations({ database, persistence, loadAgentPro
   return {
     async get(user, org) { return { ...await cmd(user, 'state', org), ...await capabilities(user), workspace_email: workspaceEmail ? await workspaceEmail.capabilities(user) : null, templates: automationTemplates, worker_last_tick: lastTick }; },
     create: (user, org, body) => cmd(user, 'create', org, automationInput(body)), setEnabled,
+    update: (user, org, body) => cmd(user, 'update', org, {
+      ...automationInput(body), rule_id: id(body.id), version: integer(body.version, 1, 2147483646),
+    }),
     async pauseAll(user, org) {
       const before = await cmd(user, 'state', org);
       const result = await cmd(user, 'pause_all', org);

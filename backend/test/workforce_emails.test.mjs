@@ -24,7 +24,7 @@ const jobs=async r=>(await auto(owner,'state')).jobs.filter(x=>x.rule_id===r.id)
 test.before(async()=>{
  db=new PGlite();await db.exec('create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create schema storage;create table auth.users(id uuid primary key);create table user_profiles(id uuid primary key,tier text);create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);grant usage on schema public to service_role;grant select,update on user_profiles to service_role;');
  for(const u of [owner,employee,other]){await db.query('insert into auth.users values($1)',[u]);await db.query('insert into user_profiles values($1,$2)',[u,u===employee?'basic':'enterprise']);}
- for(const f of ['20260922000006_enterprise_workforce.sql','20260922013258_workforce_automations.sql','20261004042716_workforce_autonomous_email.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+f,import.meta.url),'utf8'));
+ for(const f of ['20260922000006_enterprise_workforce.sql','20260922013258_workforce_automations.sql','20261004042716_workforce_autonomous_email.sql','20261004112034_workforce_reminder_instructions.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+f,import.meta.url),'utf8'));
  await db.exec('set role service_role');org=(await work(owner,'owner@example.com','create',null,{name:'Team',display_name:'Owner',timezone:'UTC'})).id;
  await db.query("insert into korlix_workforce_members(org_id,user_id,role,display_name,email)values($1,$2,'employee','Employee','employee@example.com')",[org,employee]);
  await work(employee,'employee@example.com','clock_in',org,{request_id:randomUUID(),flags:[]});
@@ -60,6 +60,40 @@ test('review mode prepares exact drafts and approval sends only while conditions
 test('revocation cancels queued drafts and cannot be undone by stale approvals',async()=>{
  const {r,c}=await rule('review');await worker.tick();const j=(await jobs(r))[0];await mail.recipientAction(owner,org,'revoke',{id:c.id});
  await assert.rejects(mail.review(owner,org,{action:'approve',job_id:j.id,version:j.version,confirmed:true}),/authorized/);await worker.tick();assert.equal(calls.length,0);assert.equal((await jobs(r))[0].status,'cancelled');
+});
+test('editing saves exact instructions on the same rule and replaces unsent drafts after reapproval',async()=>{
+ const {r}=await rule('review',{instructions:'Old instructions'});
+ await worker.tick();const before=(await jobs(r))[0];assert.match(before.body,/Old instructions/);
+ const body={...r,local_time:r.local_time.slice(0,5),send_start:r.send_start.slice(0,5),send_end:r.send_end.slice(0,5),instructions:'Report completed meters, failed radios and blockers.\nInclude today’s total.'};
+ const saved=await worker.update(owner,org,body);
+ assert.equal(saved.id,r.id);assert.equal(saved.version,r.version+1);assert.equal(saved.enabled,false);
+ assert.equal((await auto(owner,'state')).rules.find(x=>x.id===r.id).instructions,body.instructions);
+ await assert.rejects(worker.update(owner,org,{...body,instructions:'Stale edit'}),/changed/);
+ await assert.rejects(worker.update(employee,org,{...body,version:saved.version}),/owner access/);
+ await assert.rejects(mail.review(owner,org,{action:'approve',job_id:before.id,version:before.version,confirmed:true}),/authorized/);
+ assert.equal((await jobs(r))[0].status,'cancelled');assert.equal(calls.length,0);
+ const active=await worker.setEnabled(owner,org,{rule_id:r.id,version:saved.version,enabled:true,confirmed:true});
+ // A worker holding the old rule must not reintroduce the old body.
+ await auto(owner,'enqueue',org,{rule_id:r.id,version:r.version,event_key:before.event_key,subject:before.subject,body:'Old instructions',expires_at:before.expires_at,member_id:employee});
+ assert.equal((await jobs(r))[0].status,'cancelled');
+ await worker.tick();const fresh=(await jobs(r))[0];
+ assert.equal((await jobs(r)).length,1);assert.equal(fresh.id,before.id);assert.equal(fresh.status,'draft');
+ assert(fresh.body.includes(body.instructions));assert(!fresh.body.includes('Old instructions'));assert(fresh.version>before.version);
+ await assert.rejects(mail.review(owner,org,{action:'approve',job_id:fresh.id,version:before.version,confirmed:true}),/changed|Refresh/);
+ await mail.review(owner,org,{action:'approve',job_id:fresh.id,version:fresh.version,confirmed:true});
+ await worker.tick();assert.equal(calls.length,1);assert(calls[0].text.includes(body.instructions));
+ // Editing a sent event never turns it into another email.
+ await worker.update(owner,org,{...body,version:active.version,instructions:'Future reminders only'});
+ const latest=(await auto(owner,'state')).rules.find(x=>x.id===r.id);
+ await worker.setEnabled(owner,org,{rule_id:r.id,version:latest.version,enabled:true,confirmed:true});
+ await worker.tick();assert.equal(calls.length,1);
+});
+test('instruction validation rejects overlong input and old clients retain idempotent creation',async()=>{
+ assert.throws(()=>automationInput({id:randomUUID(),name:'Reminder',kind:'missed_update',channel:'call_review',local_time:'08:00',days:[1],delay_minutes:0,daily_limit:5,instructions:'x'.repeat(1501)}),/1500/);
+ const body=automationInput({id:randomUUID(),name:'Legacy client',kind:'missed_update',channel:'call_review',local_time:'08:00',days:[1],delay_minutes:0,daily_limit:5});
+ delete body.instructions;
+ const first=await auto(owner,'create',org,body), retry=await auto(owner,'create',org,body);
+ assert.equal(first.instructions,'');assert.equal(retry.id,first.id);
 });
 test('ambiguous transport outcomes never retry and provider events reconcile without sending',async()=>{
  const {r}=await rule();fault=Object.assign(new Error('Timeout'),{outcome:'uncertain',retryable:true});await worker.tick();await worker.tick();assert.equal(calls.length,1);

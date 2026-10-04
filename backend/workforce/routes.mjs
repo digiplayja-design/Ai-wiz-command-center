@@ -207,6 +207,8 @@ export function registerWorkforce(
     res.json(await automationReady().get(u.id, id(req.params.org)))));
   app.post(base + "/:org/automations", wrap(async (req, res, u) =>
     res.status(201).json(await automationReady().create(u.id, id(req.params.org), req.body))));
+  app.post(base + "/:org/automations/update", wrap(async (req, res, u) =>
+    res.json(await automationReady().update(u.id, id(req.params.org), req.body || {}))));
   app.post(base + "/:org/automations/toggle", wrap(async (req, res, u) =>
     res.json(await automationReady().setEnabled(u.id, id(req.params.org), req.body || {}))));
   app.post(base + "/:org/automations/pause-all", wrap(async (req, res, u) =>
