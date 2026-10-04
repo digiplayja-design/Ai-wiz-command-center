@@ -88,11 +88,11 @@ cancellation at the end of the billing period. Plan/quantity updates and the
 public portal login link are disabled. Set the configuration ID explicitly
 so later default-portal changes cannot alter Directory billing behavior.
 
-## Verification and remaining activation work (October 4, 2026)
+## Verification and activation (October 4, 2026)
 
 - Live Stripe account verification completed; charges and payouts enabled.
 - The restricted live runtime credential was verified through the deployed
-  adapter and its pinned Endive API. New checkout remains explicitly paused.
+  adapter and its pinned Endive API before checkout activation.
 - Sandbox monthly/yearly Checkout Sessions were created with totals 499/4900
   cents. The monthly hosted Checkout was completed using Stripe's documented
   test card and a synthetic customer: Stripe returned a complete, paid session,
@@ -128,19 +128,34 @@ so later default-portal changes cannot alter Directory billing behavior.
 - All 29 backend checks passed, including expiring sandbox receipt isolation
   and unchanged live reconciliation through the same webhook route.
 - Flutter Directory tests and the release web build passed.
+- The user advanced the sandbox clock using the Dashboard's simulation controls
+  to November 5. Stripe completed the advance and produced renewal invoice
+  `in_1UMv0pLx6hd5l5VoarmSKPM6` with `billing_reason=subscription_cycle`,
+  `status=paid` and `amount_paid=499`. Subscription
+  `sub_1UMurhLx6hd5l5VoRMxFV3yf` remained active and its paid period extended to
+  December 4, 2026 at 17:19:01 UTC. The actual provider response passed the
+  adapter's membership validation; the live adapter rejected the test-mode
+  response. The synthetic subscription was canceled afterward as cleanup.
+- The temporary sandbox delivery variables were confirmed cleared on the
+  deployed service. The old Clover endpoint and temporary sandbox endpoint
+  remain disabled. The live Endive endpoint
+  `we_1UMtFQ22E1oIiTRbqPqBVeqp` is enabled with the required events.
 
-Still required: renewal time-travel testing and review of tax configuration.
-The connector exposed test-clock creation but did not expose advancement.
-The user's own Stripe Dashboard is signed into the sandbox; the agent's browser
-Dashboard sign-in remains unavailable. A fresh synthetic clock-bound monthly
-subscription `sub_1UMurhLx6hd5l5VoRMxFV3yf` has a paid 499-cent initial invoice
-and first period end `1793812741`. Clock `clock_1UMt4YLx6hd5l5Voa2Aonl7V`
-is ready at `1791134341`; advancing to `1793899141` in Workbench Shell is the
-next verification step. The hosted Checkout, portal and delivery checks used
-synthetic Stripe objects and did not activate any real business listing.
+Production checkout is activated by deploying
+`KORLIX_DIRECTORY_STRIPE_ENABLED=true`. Confirm that the deployed Directory
+health reports `checkoutEnabled=true`, `paymentsReady=true`,
+`paymentConnection=verified`, `livePayments=true`, and a disabled sandbox probe.
+The existing approved prices remain USD 4.99/month and USD 49/year. Free listings
+remain free. Other KORLIX billing features are outside this integration.
 
-Keep production checkout and the new webhook endpoint paused until those
-checks are complete. The previous Clover endpoint remains disabled; only the
-new Endive endpoint should be enabled at activation. Automatic tax is not
-configured by this change; confirm applicable registrations and tax treatment
-before enabling tax collection.
+The hosted Checkout, portal, delivery and renewal checks used synthetic Stripe
+objects and did not activate a real business listing or charge a live customer.
+A signed-in owner opening checkout with the deployed restricted live key is the
+remaining owner-flow check; the read-only runtime credential check validates
+portal access, not every write permission. Do not describe an actual live
+customer payment as verified until one has occurred normally.
+
+Live tax configuration was reviewed: no active Stripe Tax registrations were
+configured. This activation leaves automatic tax collection disabled and does
+not add tax registrations. Applicable registrations and tax treatment must be
+confirmed before enabling tax collection.
