@@ -66,6 +66,7 @@ Future<void> mount(
                 'id': recipient,
                 'email': 'employer@example.com',
                 'displayName': 'Employer',
+                'name': 'Employer',
                 'active': true,
                 'consentStatus': 'transactional_only',
               },
@@ -80,6 +81,7 @@ Future<void> mount(
           'jobs': jobs,
           'active_plan': true,
           'email_ready': ready,
+          'workspace_email': {'ready': ready, 'reply_to': 'owner@example.com'},
           'outbound_calling_enabled': false,
         }),
         200,
@@ -226,8 +228,79 @@ void main() {
       await click(tester, find.text('Save paused'));
       expect(calls.length, 1);
       expect(calls.single['recipient_id'], recipient);
+      expect(calls.single['channel'], 'workspace_email');
+      expect(calls.single['delivery_mode'], 'review');
+      expect(calls.single['send_start'], '08:00');
       expect(calls.single.containsKey('enabled'), false);
       expect(find.text('Review & enable'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'Recipient approval saves permission without enabling rules or sending',
+    (tester) async {
+      final calls = <WfJson>[];
+      await mount(tester, rules: [], calls: calls, width: 390);
+      await click(tester, find.text('Add email recipient'));
+      final button = find.widgetWithText(FilledButton, 'Approve recipient');
+      expect(tester.widget<FilledButton>(button).onPressed, isNull);
+      await tester.enterText(find.byType(TextFormField).at(0), 'Supervisor');
+      await tester.enterText(
+        find.byType(TextFormField).at(1),
+        'supervisor@example.com',
+      );
+      await click(tester, find.byType(CheckboxListTile));
+      await click(tester, button);
+      expect(
+        calls.single['path'],
+        '/api/workforce/$org/automations/email-recipients',
+      );
+      expect(calls.single['confirmed'], true);
+      expect(calls.single['email'], 'supervisor@example.com');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'Workforce draft review shows the recipient and exact body before approval',
+    (tester) async {
+      final calls = <WfJson>[];
+      final directRule = {
+        ...rule(channel: 'workspace_email', enabled: true),
+        'delivery_mode': 'review',
+        'send_start': '08:00:00',
+        'send_end': '18:00:00',
+      };
+      await mount(
+        tester,
+        rules: [directRule],
+        calls: calls,
+        width: 390,
+        jobs: [
+          {
+            'id': 'draft-one',
+            'version': 3,
+            'subject': 'Daily summary',
+            'body': 'Two completed updates and one blocker.',
+            'recipient_email': 'supervisor@example.com',
+            'status': 'draft',
+            'created_at': '2026-10-04T08:00:00Z',
+            'expires_at': '2026-10-04T10:00:00Z',
+          },
+        ],
+      );
+      await click(tester, find.text('Review draft'));
+      expect(find.text('To: supervisor@example.com').last, findsOneWidget);
+      expect(
+        find.text('Two completed updates and one blocker.').last,
+        findsOneWidget,
+      );
+      expect(calls, isEmpty);
+      await click(tester, find.text('Approve this email'));
+      expect(calls.single['action'], 'approve');
+      expect(calls.single['version'], 3);
+      expect(calls.single['confirmed'], true);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     },

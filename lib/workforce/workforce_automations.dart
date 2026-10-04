@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'workforce_client.dart';
 import 'workforce_style.dart';
+import 'workforce_email_recipient.dart';
 
 const _kinds = <String, (String, IconData, String)>{
   'missed_update': (
@@ -43,6 +44,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
   List<WfJson> _recipients = [];
   String? _error;
   bool _busy = false, _loading = false, _visible = true, _dialog = false;
+  int _generation = 0;
   String _history = 'all';
   Timer? _poll;
   String get _base => '/${widget.orgId}/automations';
@@ -52,6 +54,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    widget.client.addAccessDeniedListener(_accessDenied);
     _load();
     _poll = Timer.periodic(const Duration(seconds: 30), (_) {
       if (_visible && !_busy && !_dialog) _load();
@@ -64,28 +67,69 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
     if (_visible && !_dialog) _load();
   }
 
+  void _accessDenied() {
+    _generation++;
+    _poll?.cancel();
+    if (!mounted) return;
+    if (_dialog) Navigator.of(context, rootNavigator: true).pop();
+    setState(() {
+      _data = null;
+      _recipients = [];
+      _error = 'Sign in again and reopen Workforce.';
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant WorkforceAutomations oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.orgId != widget.orgId || oldWidget.client != widget.client) {
+      oldWidget.client.removeAccessDeniedListener(_accessDenied);
+      widget.client.addAccessDeniedListener(_accessDenied);
+      _generation++;
+      _loading = false;
+      _data = null;
+      _recipients = [];
+      _load();
+    }
+  }
+
   @override
   void dispose() {
+    widget.client.removeAccessDeniedListener(_accessDenied);
     _poll?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   Future<void> _load() async {
-    if (_loading) return;
+    if (_loading || widget.client.sessionChanged) return;
     _loading = true;
+    final generation = _generation, org = widget.orgId;
+    final base = _base;
     try {
-      final data = await widget.client.request('GET', _base);
+      final data = await widget.client.request('GET', base);
       List<WfJson> recipients = [];
       try {
         recipients = wfRows(
           (await widget.client.request(
             'GET',
-            '/${widget.orgId}/email-recipients',
+            '/$org/email-recipients',
           ))['recipients'],
         );
       } catch (_) {}
-      if (mounted) {
+      final workspaceRecipients = wfRows(
+        (await widget.client.request(
+          'GET',
+          '$base/email-recipients',
+        ))['recipients'],
+      );
+      recipients = [
+        ...recipients,
+        ...workspaceRecipients.map((r) => {...r, 'workspace': true}),
+      ];
+      if (mounted &&
+          generation == _generation &&
+          !widget.client.sessionChanged) {
         setState(() {
           _data = data;
           _recipients = recipients;
@@ -93,7 +137,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && generation == _generation) {
         setState(() {
           _error = e.toString();
           if (e is WorkforceException && [401, 403].contains(e.status)) {
@@ -103,7 +147,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
         });
       }
     } finally {
-      _loading = false;
+      if (generation == _generation) _loading = false;
     }
   }
 
@@ -191,6 +235,76 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
     );
     _dialog = false;
     if (mounted) await _load();
+  }
+
+  Future<void> _addRecipient() async {
+    _dialog = true;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => WorkforceEmailRecipientDialog(
+        client: widget.client,
+        path: '$_base/email-recipients',
+      ),
+    );
+    _dialog = false;
+    if (mounted) await _load();
+  }
+
+  Future<void> _reviewEmail(WfJson job) async {
+    _dialog = true;
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Review email draft'),
+        content: SizedBox(
+          width: 560,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('To: ${job['recipient_email'] ?? 'Approved recipient'}'),
+                Text(
+                  'Replies to: ${wfMap(_data?['workspace_email'])['reply_to'] ?? 'Your verified account email'}',
+                ),
+                const SizedBox(height: 12),
+                Text('Workforce · ${job['subject']}'),
+                const SizedBox(height: 12),
+                SelectableText(job['body'].toString()),
+                const SizedBox(height: 12),
+                const Text(
+                  'The email includes a KORLIX footer and a link to stop future workspace emails.',
+                ),
+                Text('Expires: ${_time(job['expires_at'])}'),
+                const SizedBox(height: 12),
+                const Text(
+                  'Approval queues this email within its sending window. KORLIX rechecks the current work record before sending.',
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Back'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Approve this email'),
+          ),
+        ],
+      ),
+    );
+    _dialog = false;
+    if (!mounted || approved != true) return;
+    await _act('/email-review', {
+      'action': 'approve',
+      'job_id': job['id'],
+      'version': job['version'],
+      'confirmed': true,
+    });
   }
 
   Widget _card(Widget child, {Color? border}) => Material(
@@ -309,7 +423,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
         ),
         const SizedBox(height: 8),
         _text(
-          '*Latest 100 activity records. Accepted means the email provider accepted it; delivery is tracked in KORLIX Email Center.',
+          '*Latest 100 activity records. Provider accepted and delivered are separate statuses. Email Center rules retain their existing delivery history.',
           size: 11,
         ),
         const SizedBox(height: 24),
@@ -322,10 +436,10 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
                 runSpacing: 8,
                 children: [
                   WfBadge(
-                    _data!['email_ready'] == true
-                        ? 'Email Autopilot ready'
+                    wfMap(_data!['workspace_email'])['ready'] == true
+                        ? 'Workforce email ready'
                         : 'Email setup needed',
-                    color: _data!['email_ready'] == true
+                    color: wfMap(_data!['workspace_email'])['ready'] == true
                         ? WfStyle.cyan
                         : WfStyle.gold,
                     dot: true,
@@ -335,8 +449,8 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
               ),
               const SizedBox(height: 12),
               _text(
-                _data!['reason']?.toString() ??
-                    'Your KORLIX Email Center recipient permissions, quiet hours, and daily sending limits apply to every email.',
+                wfMap(_data!['workspace_email'])['reason']?.toString() ??
+                    'Choose draft review or automatic sending. Replies go to your verified account email. Each rule has its own sending window, with a maximum of 100 Workforce emails per owner in 24 hours.',
               ),
               const SizedBox(height: 8),
               _text(
@@ -347,6 +461,61 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
                 _text(
                   'Renew Enterprise to enable automations. You can still pause them and review history.',
                   color: WfStyle.gold,
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 22),
+        _card(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Text(
+                    'Autonomous email',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _busy || _data!['active_plan'] != true
+                        ? null
+                        : _addRecipient,
+                    icon: const Icon(Icons.person_add_alt_1, size: 18),
+                    label: const Text('Add email recipient'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _text(
+                'Approve the people who may receive workspace records. New rules start paused; draft review requires approval for each message.',
+              ),
+              if (!_recipients.any((r) => r['workspace'] == true))
+                _text(
+                  'Add your first recipient, then choose a recipe below.',
+                  color: WfStyle.cyan,
+                ),
+              for (final recipient in _recipients.where(
+                (r) => r['workspace'] == true,
+              ))
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(recipient['name'].toString()),
+                  subtitle: Text(
+                    '${recipient['email']} · ${recipient['active'] == true ? 'Approved' : wfLabel(recipient['stopped_reason'])}',
+                  ),
+                  trailing: recipient['active'] == true
+                      ? TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () => _act('/email-recipients/revoke', {
+                                  'id': recipient['id'],
+                                }),
+                          child: const Text('Stop'),
+                        )
+                      : null,
                 ),
             ],
           ),
@@ -460,7 +629,13 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
                         dot: true,
                       ),
                       WfBadge(
-                        r['channel'] == 'email' ? 'Email' : 'Call review',
+                        r['channel'] == 'workspace_email'
+                            ? (r['delivery_mode'] == 'automatic'
+                                  ? 'Automatic email'
+                                  : 'Review drafts')
+                            : r['channel'] == 'email'
+                            ? 'Email Center'
+                            : 'Call review',
                         color: WfStyle.violet,
                       ),
                     ],
@@ -476,10 +651,14 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
                         : 'Scope: ${_person(r['member_id'])}',
                   ),
                   _text(
-                    r['channel'] == 'email'
+                    r['channel'] != 'call_review'
                         ? 'To: ${_recipient(r['recipient_id'])}'
                         : 'Destination: owner’s call review queue',
                   ),
+                  if (r['channel'] == 'workspace_email')
+                    _text(
+                      'Sending window: ${r['send_start'].toString().substring(0, 5)}–${r['send_end'].toString().substring(0, 5)} · ${widget.timezone}',
+                    ),
                   if (r['last_error'] != null)
                     _text(
                       'KORLIX could not check this automation. Refresh or review its settings.',
@@ -491,6 +670,16 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
                         _busy ||
                             (r['enabled'] != true &&
                                 (_data!['active_plan'] != true ||
+                                    (r['channel'] == 'workspace_email' &&
+                                        (!_recipientAvailable(
+                                              r['recipient_id'],
+                                            ) ||
+                                            (r['delivery_mode'] ==
+                                                    'automatic' &&
+                                                wfMap(
+                                                      _data!['workspace_email'],
+                                                    )['ready'] !=
+                                                    true))) ||
                                     (r['channel'] == 'email' &&
                                         (_data!['email_ready'] != true ||
                                             !_recipientAvailable(
@@ -512,7 +701,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
           ),
         const SizedBox(height: 25),
         const Text(
-          'Activity & call reviews',
+          'Email drafts & activity',
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 12),
@@ -521,6 +710,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
           children: [
             for (final entry in {
               'all': 'All activity',
+              'draft': 'Email drafts',
               'review': 'Call reviews',
               'blocked': 'Needs attention',
             }.entries)
@@ -571,7 +761,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
                   _text(_time(j['created_at']), size: 11),
                   if (j['status'] == 'blocked')
                     _text(
-                      'Review the rule and delivery details in KORLIX Email Center. A new send has not been assumed safe.',
+                      'Delivery needs attention. Check the recipient and sender settings; this message has not been sent again.',
                       color: WfStyle.gold,
                     ),
                   ExpansionTile(
@@ -599,6 +789,41 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
                         ),
                     ],
                   ),
+                  if (j['status'] == 'draft') ...[
+                    _text(
+                      'To: ${j['recipient_email'] ?? 'Approved recipient'}',
+                    ),
+                    _text('Expires: ${_time(j['expires_at'])}', size: 11),
+                    Wrap(
+                      spacing: 10,
+                      children: [
+                        FilledButton(
+                          onPressed:
+                              _busy ||
+                                  wfMap(_data!['workspace_email'])['ready'] !=
+                                      true
+                              ? null
+                              : () => _reviewEmail(j),
+                          child: const Text('Review draft'),
+                        ),
+                        TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () => _act('/email-review', {
+                                  'action': 'cancel',
+                                  'job_id': j['id'],
+                                  'version': j['version'],
+                                }),
+                          child: const Text('Discard'),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (j['status'] == 'unknown')
+                    _text(
+                      'The provider outcome is unknown. KORLIX will not automatically resend this email.',
+                      color: WfStyle.gold,
+                    ),
                   if (j['status'] == 'review') ...[
                     _text(
                       'No call has been placed. Check the attendance record and the person’s contact preferences before following up.',
@@ -618,7 +843,7 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
           ),
         const SizedBox(height: 16),
         _text(
-          'Pause stops queued work. An email already handed to the provider cannot be recalled. Automations follow workspace time (${widget.timezone}); KORLIX Email Center may defer emails outside its sending window.',
+          'Pause stops queued work. An email already handed to the provider cannot be recalled. Automations follow workspace time (${widget.timezone}); emails wait for their sending window and expire when the reminder is no longer relevant.',
           size: 11,
         ),
       ],
@@ -633,6 +858,9 @@ class _WorkforceAutomationsState extends State<WorkforceAutomations>
 
   String _status(dynamic value) => switch (value) {
     'sent' => 'Provider accepted',
+    'draft' => 'Draft needs approval',
+    'sending' => 'Sending',
+    'unknown' => 'Outcome unknown',
     'review' => 'Call review needed',
     'reviewed' => 'Reviewed',
     'processing' => 'Processing',
@@ -670,7 +898,10 @@ class _EnableDialogState extends State<_EnableDialog> {
   bool _confirmed = false;
   @override
   Widget build(BuildContext context) {
-    final email = widget.rule['channel'] == 'email';
+    final email = widget.rule['channel'] != 'call_review';
+    final drafts =
+        widget.rule['channel'] == 'workspace_email' &&
+        widget.rule['delivery_mode'] == 'review';
     return AlertDialog(
       title: const Text('Review your automation'),
       content: SizedBox(
@@ -692,6 +923,10 @@ class _EnableDialogState extends State<_EnableDialog> {
               ),
               const SizedBox(height: 8),
               Text(widget.timing),
+              if (widget.rule['channel'] == 'workspace_email')
+                Text(
+                  '${drafts ? 'Review each draft' : 'Send automatically'} · ${widget.rule['send_start'].toString().substring(0, 5)}–${widget.rule['send_end'].toString().substring(0, 5)}',
+                ),
               Text(
                 'Days: ${(widget.rule['days'] as List).map((d) => _week[d as int]).join(' · ')}',
               ),
@@ -730,7 +965,9 @@ class _EnableDialogState extends State<_EnableDialog> {
                 onChanged: (v) => setState(() => _confirmed = v == true),
                 title: Text(
                   email
-                      ? 'I approve recurring emails with this scope, recipient and timing.'
+                      ? drafts
+                            ? 'Prepare drafts with this scope, recipient and timing. I will approve each email before sending.'
+                            : 'I approve recurring emails with this scope, recipient and timing.'
                       : 'Create review items automatically. No outbound calls will be placed.',
                   style: const TextStyle(fontSize: 13),
                 ),
@@ -775,7 +1012,11 @@ class _AutomationFormState extends State<_AutomationForm> {
   late final TextEditingController _name;
   final _delay = TextEditingController(text: '10'),
       _limit = TextEditingController(text: '5');
-  String _channel = 'email', _member = '', _recipient = '', _time = '08:00';
+  String _mode = 'review', _start = '08:00', _end = '18:00';
+  String _channel = 'workspace_email',
+      _member = '',
+      _recipient = '',
+      _time = '08:00';
   final Set<int> _days = {1, 2, 3, 4, 5};
   bool _saving = false;
   String? _error;
@@ -814,7 +1055,10 @@ class _AutomationFormState extends State<_AutomationForm> {
           'kind': widget.kind,
           'channel': _channel,
           'member_id': _member.isEmpty ? null : _member,
-          'recipient_id': _channel == 'email' ? _recipient : null,
+          'recipient_id': _channel != 'call_review' ? _recipient : null,
+          'delivery_mode': _mode,
+          'send_start': _start,
+          'send_end': _end,
           'delay_minutes': int.parse(_delay.text),
           'local_time': _time,
           'days': _days.toList()..sort(),
@@ -832,6 +1076,8 @@ class _AutomationFormState extends State<_AutomationForm> {
     }
   }
 
+  bool _validTime(String? v) =>
+      RegExp(r'^([01]\d|2[0-3]):[0-5]\d$').hasMatch(v ?? '');
   Widget _gap() => const SizedBox(height: 18);
   String? _number(String? v, int low, int high) {
     final n = int.tryParse(v ?? '');
@@ -875,8 +1121,8 @@ class _AutomationFormState extends State<_AutomationForm> {
                   isExpanded: true,
                   items: [
                     const DropdownMenuItem(
-                      value: 'email',
-                      child: Text('Automatic email'),
+                      value: 'workspace_email',
+                      child: Text('Workforce email'),
                     ),
                     if (widget.kind != 'daily_summary')
                       const DropdownMenuItem(
@@ -889,7 +1135,7 @@ class _AutomationFormState extends State<_AutomationForm> {
                       : (v) => setState(() => _channel = v!),
                 ),
                 _gap(),
-                if (_channel == 'email') ...[
+                if (_channel == 'workspace_email') ...[
                   DropdownButtonFormField<String>(
                     initialValue: _recipient.isEmpty ? null : _recipient,
                     decoration: const InputDecoration(
@@ -899,6 +1145,7 @@ class _AutomationFormState extends State<_AutomationForm> {
                     items: [
                       for (final r in widget.recipients.where(
                         (r) =>
+                            r['workspace'] == true &&
                             r['active'] == true &&
                             !['unsubscribed', 'suppressed'].contains(
                               r['consentStatus'] ?? r['consent_status'],
@@ -921,8 +1168,57 @@ class _AutomationFormState extends State<_AutomationForm> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Add or approve recipients in KORLIX Email Center. Choose an employer for a team-wide summary, or the employee for their own reminder.',
+                    'Add recipients in Autonomous email. Choose a supervisor authorized to see team records, or the employee for their own reminder.',
                     style: TextStyle(color: WfStyle.muted, fontSize: 12),
+                  ),
+                  _gap(),
+                  DropdownButtonFormField<String>(
+                    initialValue: _mode,
+                    decoration: const InputDecoration(
+                      labelText: 'Delivery mode',
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'review',
+                        child: Text('Review drafts'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'automatic',
+                        child: Text('Send automatically'),
+                      ),
+                    ],
+                    onChanged: _saving
+                        ? null
+                        : (v) => setState(() => _mode = v!),
+                  ),
+                  _gap(),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          initialValue: _start,
+                          decoration: const InputDecoration(
+                            labelText: 'Send after (HH:MM)',
+                          ),
+                          onChanged: (v) => _start = v,
+                          validator: (v) => _validTime(v) ? null : 'Use HH:MM',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          initialValue: _end,
+                          decoration: const InputDecoration(
+                            labelText: 'Send before (HH:MM)',
+                          ),
+                          onChanged: (v) => _end = v,
+                          validator: (v) =>
+                              _validTime(v) && _start.compareTo(v!) < 0
+                              ? null
+                              : 'End after start',
+                        ),
+                      ),
+                    ],
                   ),
                   _gap(),
                 ] else ...[
