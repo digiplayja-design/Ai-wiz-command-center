@@ -1669,7 +1669,8 @@ class KorlixCharacterIntroPreview extends StatefulWidget {
 
 class _KorlixCharacterIntroPreviewState
     extends State<KorlixCharacterIntroPreview> {
-  static const int _maxAutoLoops = 3;
+  // First play plus one repeat, then mute and hold the final frame.
+  static const int _maxAutoLoops = 2;
 
   final Object _soundQuietOwner = Object();
   VideoPlayerController? _controller;
@@ -1678,6 +1679,7 @@ class _KorlixCharacterIntroPreviewState
   bool _soundOn = false;
   int _completedLoops = 0;
   bool _handlingEnd = false;
+  int _playbackRevision = 0;
 
   @override
   void initState() {
@@ -1706,6 +1708,7 @@ class _KorlixCharacterIntroPreviewState
   }
 
   Future<void> _loadVideo() async {
+    ++_playbackRevision;
     final oldController = _controller;
     _releaseVideoGestures?.call();
     _releaseVideoGestures = null;
@@ -1775,8 +1778,9 @@ class _KorlixCharacterIntroPreviewState
     }
 
     final value = controller.value;
+    if (_completedLoops >= (widget.loop ? _maxAutoLoops : 1)) return;
 
-    if (!value.isInitialized || !value.isPlaying) {
+    if (!value.isInitialized || (!value.isPlaying && !value.isCompleted)) {
       return;
     }
 
@@ -1786,9 +1790,8 @@ class _KorlixCharacterIntroPreviewState
       return;
     }
 
-    final remaining = duration - value.position;
-
-    if (remaining <= const Duration(milliseconds: 250)) {
+    // Use the actual completion signal; do not cut off the final words.
+    if (value.isCompleted || value.position >= duration) {
       _handleVideoReachedEnd();
     }
   }
@@ -1801,15 +1804,24 @@ class _KorlixCharacterIntroPreviewState
     }
 
     _handlingEnd = true;
+    final revision = _playbackRevision;
     _completedLoops += 1;
 
     final allowedLoops = widget.loop ? _maxAutoLoops : 1;
 
     try {
+      // Settle the player's own end-of-stream pause before seeking the repeat.
+      await controller.pause();
+      if (!mounted || revision != _playbackRevision || controller != _controller) {
+        return;
+      }
       if (_completedLoops >= allowedLoops) {
         await _stopTalkingCompletely(seekToEnd: true);
       } else {
         await controller.seekTo(Duration.zero);
+        if (!mounted || revision != _playbackRevision || controller != _controller) {
+          return;
+        }
         await controller.play();
       }
     } finally {
@@ -1818,6 +1830,8 @@ class _KorlixCharacterIntroPreviewState
   }
 
   Future<void> _stopTalkingCompletely({bool seekToEnd = false}) async {
+    ++_playbackRevision;
+    _completedLoops = widget.loop ? _maxAutoLoops : 1;
     kKorlixSounds.setQuiet(_soundQuietOwner, false);
     final controller = _controller;
 
@@ -1846,35 +1860,19 @@ class _KorlixCharacterIntroPreviewState
   }
 
   Future<void> _toggleSound() async {
+    if (!_soundOn) {
+      await _replayWithSound();
+      return;
+    }
     final controller = _controller;
-
-    if (controller == null) {
-      return;
-    }
-
-    final next = !_soundOn;
-    kKorlixSounds.setQuiet(_soundQuietOwner, next);
-
+    if (controller == null) return;
     try {
-      await controller.setVolume(next ? 1.0 : 0.0);
-
-      if (next && !controller.value.isPlaying) {
-        _completedLoops = 0;
-        await controller.seekTo(Duration.zero);
-        await controller.play();
-      }
+      await controller.setVolume(0.0);
     } catch (_) {
-      kKorlixSounds.setQuiet(_soundQuietOwner, false);
       return;
     }
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _soundOn = next;
-    });
+    kKorlixSounds.setQuiet(_soundQuietOwner, false);
+    if (mounted) setState(() => _soundOn = false);
   }
 
   Future<void> _replayWithSound() async {
@@ -1884,11 +1882,19 @@ class _KorlixCharacterIntroPreviewState
       return;
     }
 
+    final revision = ++_playbackRevision;
     kKorlixSounds.setQuiet(_soundQuietOwner, true);
     try {
+      // Seek while the old cycle is still exhausted to ignore stale end events.
+      await controller.seekTo(Duration.zero);
+      if (!mounted || revision != _playbackRevision || controller != _controller) {
+        return;
+      }
       _completedLoops = 0;
       await controller.setVolume(1.0);
-      await controller.seekTo(Duration.zero);
+      if (!mounted || revision != _playbackRevision || controller != _controller) {
+        return;
+      }
       await controller.play();
     } catch (_) {
       kKorlixSounds.setQuiet(_soundQuietOwner, false);
@@ -1906,6 +1912,7 @@ class _KorlixCharacterIntroPreviewState
 
   @override
   void dispose() {
+    ++_playbackRevision;
     kKorlixSounds.setQuiet(_soundQuietOwner, false);
     kKorlixStopCharacterSpeechSignal.removeListener(_handleGlobalStopSignal);
     _controller?.removeListener(_handleVideoProgress);
@@ -1969,7 +1976,11 @@ class _KorlixCharacterIntroPreviewState
                   _soundOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
                 ),
                 color: const Color(0xFFE4EBEE),
-                tooltip: _soundOn ? 'Mute' : 'Unmute',
+                tooltip: _soundOn
+                    ? 'Mute'
+                    : _completedLoops >= _maxAutoLoops
+                    ? 'Replay intro (2 plays)'
+                    : 'Unmute',
               ),
             ),
           ),
@@ -2147,7 +2158,8 @@ class KorlixCharacterIntroVideo extends StatefulWidget {
 }
 
 class _KorlixCharacterIntroVideoState extends State<KorlixCharacterIntroVideo> {
-  static const int _maxAutoLoops = 3;
+  // First play plus one repeat, then mute and hold the final frame.
+  static const int _maxAutoLoops = 2;
 
   late final VideoPlayerController _controller;
   bool _ready = false;
@@ -2201,7 +2213,7 @@ class _KorlixCharacterIntroVideoState extends State<KorlixCharacterIntroVideo> {
 
     final value = _controller.value;
 
-    if (!value.isInitialized || !value.isPlaying) {
+    if (!value.isInitialized || (!value.isPlaying && !value.isCompleted)) {
       return;
     }
 
@@ -2211,9 +2223,8 @@ class _KorlixCharacterIntroVideoState extends State<KorlixCharacterIntroVideo> {
       return;
     }
 
-    final remaining = duration - value.position;
-
-    if (remaining <= const Duration(milliseconds: 250)) {
+    // Use the actual completion signal; do not cut off the final words.
+    if (value.isCompleted || value.position >= duration) {
       _handleVideoReachedEnd();
     }
   }
@@ -2227,6 +2238,8 @@ class _KorlixCharacterIntroVideoState extends State<KorlixCharacterIntroVideo> {
     _completedLoops += 1;
 
     try {
+      await _controller.pause();
+      if (!mounted) return;
       if (_completedLoops >= _maxAutoLoops) {
         await _stopCompletely(seekToEnd: true);
       } else {
