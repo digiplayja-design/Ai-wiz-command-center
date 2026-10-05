@@ -56,4 +56,8 @@ The Free service is live at [korlix-2meetu-return-sandbox.onrender.com](https://
 - Saved result captured: `2026-10-05T15:50:11.427Z`
 - Private access expires: `2026-10-08T15:50:11.427Z`
 
-All nine focused tests and the live HTTPS route/access checks passed. The served browser script matched the committed source exactly, and authenticated data reported canceled / refunded / refund succeeded. Production scheduling, web billing, and directory checkout remain disabled. The private link is supplied separately to the user; actual iPad rendering is pending. This saved display does not complete the separate paid-booking or original Stripe redirect acceptance checks.
+All nine focused tests and the live HTTPS route/access checks passed. The served browser script matched the committed source exactly, and authenticated data reported canceled / refunded / refund succeeded. Production scheduling, web billing, and directory checkout remain disabled. The private link is supplied separately to the user.
+
+**Actual iPad rendering passed at 16:15 UTC (12:15 PM Eastern).** User screenshots `IMG_3097.png` and `IMG_3098.png` show the saved-result banner, **Appointment canceled.**, test-mode USD 1.00 **refunded**, and **Full refund: succeeded**. Only **Reload saved result** and **Copy private booking link** are displayed as action buttons; no payment or booking-change button is shown. Button interactions were not demonstrated. This confirms display of the saved result and does not complete the separate paid-booking or original Stripe redirect acceptance checks.
+
+Minor copy follow-up: the inherited email helper still suggests adding the appointment to a calendar, while the preview banner correctly states calendar downloads are unavailable. This did not block the saved-result display check.
