@@ -13,6 +13,7 @@ import {
   beginHostedAcceptanceTransaction as begin,
   validateHostedAcceptanceDatabase,
   bootstrapHostedAcceptanceDatabase,
+  hostedDatabaseDiagnostic,
 } from "./hosted_acceptance_database.mjs";
 export { bootstrapHostedAcceptanceDatabase } from "./hosted_acceptance_database.mjs";
 
@@ -125,11 +126,22 @@ async function readWebhook(req) {
   return Buffer.concat(chunks);
 }
 
-export async function createHostedAcceptanceServer(config, { pool, fetcher = fetch, now = Date.now } = {}) {
+export function hostedStartupDiagnostic(error, stage) {
+  const stages = new Set(["database_driver", "database_bootstrap", "payment_module", "payment_flow", "payment_status"]);
+  const codes = new Set(["ERR_ASSERTION", "ERR_MODULE_NOT_FOUND", "MODULE_NOT_FOUND", "ENOENT", "EACCES", "ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENOTFOUND"]);
+  const code = typeof error?.code === "string" && (codes.has(error.code) || /^[0-9]{2}[0-9A-Z]{3}$/.test(error.code)) ? error.code : "startup_failed";
+  const database = hostedDatabaseDiagnostic(error);
+  return { event: "hosted_acceptance_startup_blocked", stage: stages.has(stage) ? stage : "startup", code,
+    ...(database ? { database } : {}) };
+}
+
+export async function createHostedAcceptanceServer(config, { pool, fetcher = fetch, now = Date.now,
+  diagnostic = entry => console.error(JSON.stringify(entry)) } = {}) {
   let ownedPool = false, databaseReady = false, databaseState = null, identity = null, running = false;
   let flow = null, view = null, flowState = null;
   if (config.paymentRuntime) view = await import("./hosted_acceptance_return.mjs");
   if (config.database) {
+    let startupStage = "database_driver";
     try {
       if (!pool) {
         const require = createRequire(new URL("./hosted-runtime/package.json", import.meta.url));
@@ -137,14 +149,21 @@ export async function createHostedAcceptanceServer(config, { pool, fetcher = fet
         pool = new Pool(config.database); ownedPool = true;
         pool.on("error", () => { databaseReady = false; identity = null; });
       }
+      startupStage = "database_bootstrap";
       databaseState = await bootstrapHostedAcceptanceDatabase(config, pool, { now });
       databaseReady = true;
       if (config.paymentRuntime) {
+        startupStage = "payment_module";
         const { createHostedAcceptanceFlow } = await import("./hosted_acceptance_flow.mjs");
+        startupStage = "payment_flow";
         flow = await createHostedAcceptanceFlow(config, { pool, fetcher, now });
+        startupStage = "payment_status";
         flowState = await flow.status();
       }
-    } catch { databaseReady = false; }
+    } catch (error) {
+      databaseReady = false;
+      diagnostic(hostedStartupDiagnostic(error, startupStage));
+    }
   }
   const health = () => {
     const expired = now() >= config.expiresAt;
@@ -323,7 +342,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     const server = await createHostedAcceptanceServer(config);
     const port = Number(process.env.PORT || 10000);
     assert(Number.isInteger(port) && port > 0 && port <= 65535, "Invalid service port.");
-    server.listen(port, "0.0.0.0", () => console.log("Hosted sandbox acceptance ready; private controls enforce the durable payment gate."));
+    server.listen(port, "0.0.0.0", () => console.log("Hosted sandbox acceptance listening; inspect /health for readiness."));
     process.once("SIGTERM", () => { server.close(); server.closeAllConnections(); });
   } catch {
     console.error("Hosted acceptance staging configuration rejected; no configuration values displayed.");

@@ -12,6 +12,67 @@ const SCHEMA_VERSION = "scheduling-ledger-v1";
 const sha = value => createHash("sha256").update(value).digest("hex");
 const fail = (status, code) => { throw Object.assign(new Error(code), { status, code }); };
 
+// Startup diagnostics contain only fixed identifiers. Never expose PostgreSQL
+// messages: they may contain SQL, credentials, object names or user data.
+const ASSERTIONS = new Map([
+  ["Dedicated database identity mismatch.", "database_identity"],
+  ["Dedicated database contains unrelated objects.", "foreign_objects"],
+  ["Dedicated database guard is invalid.", "guard_invalid"],
+  ["Dedicated database guard shape mismatch.", "guard_shape"],
+  ["Dedicated database guard has unexpected behavior.", "guard_behavior"],
+  ["Dedicated database guard constraints were changed.", "guard_constraints"],
+  ["Dedicated database belongs to another acceptance configuration.", "guard_binding"],
+  ["The dedicated database credential is required.", "database_credential"],
+  ["Scheduling migration changed; review and version the sandbox schema explicitly.", "migration_checksum"],
+  ["Scheduling migration privilege block is not the reviewed terminal block.", "migration_terminal_block"],
+  ["Unexpected role dependency outside scheduling privilege block.", "migration_role_dependency"],
+  ["Sandbox schema has unexpected default privileges or foreign grants.", "catalog_privileges"],
+  ["Dedicated sandbox tables differ from the approved schema.", "catalog_tables"],
+  ["Dedicated synthetic auth schema differs from the approved schema.", "catalog_auth"],
+  ["Dedicated sandbox objects must be owned by the isolated runtime.", "catalog_owners"],
+  ["Unexpected sandbox executable object.", "catalog_functions"],
+  ["Unexpected sandbox trigger, rule or policy.", "catalog_hooks"],
+  ["Sandbox scheduling RLS must remain enabled and owner accessible.", "catalog_rls"],
+  ["Sandbox control-table shape mismatch.", "catalog_control_shape"],
+  ["Sandbox schema manifest is invalid.", "schema_manifest"],
+  ["Sandbox schema drift detected.", "schema_fingerprint"],
+  ["Sandbox acceptance run is invalid.", "run_binding"],
+  ["Unexpected scheduling function.", "function_permissions_scope"],
+]);
+const NODE_CODES = new Set(["ERR_ASSERTION", "ENOENT", "EACCES", "ETIMEDOUT", "ECONNREFUSED", "ECONNRESET"]);
+const DIAGNOSTIC_STAGES = new Set([
+  "bootstrap_stage_one", "bootstrap_stage_two", "begin_transaction", "guard_identity", "guard_inventory", "guard_dependencies",
+  "guard_validate", "guard_create", "guard_permissions", "guard_insert", "runtime_presence", "runtime_identity", "runtime_inventory",
+  "migration_source_one", "migration_source_two", "runtime_scaffold", "runtime_migration_one", "runtime_migration_two",
+  "runtime_table_permissions", "runtime_sequence_permissions", "runtime_function_inventory", "runtime_function_permissions",
+  "runtime_control_tables", "runtime_seed", "runtime_manifest_insert", "runtime_validate", "runtime_manifest_read", "runtime_run_read",
+  "catalog_schemas", "catalog_objects", "catalog_relations", "catalog_columns", "catalog_constraints", "catalog_indexes",
+  "catalog_functions", "catalog_triggers", "catalog_rules", "catalog_policies", "catalog_sequences", "catalog_defaults",
+  "catalog_foreignGrants", "catalog_assertions", "commit",
+]);
+const validCode = code => typeof code === "string" &&
+  (NODE_CODES.has(code) || code === "UNCLASSIFIED" || /^[0-9A-Z]{5}$/.test(code));
+export function hostedDatabaseDiagnostic(error) {
+  const value = error?.hostedAcceptanceDiagnostic;
+  if (!value || !DIAGNOSTIC_STAGES.has(value.stage) || !validCode(value.code)) return null;
+  if (value.assertion !== undefined && ![...ASSERTIONS.values(), "unclassified_assertion"].includes(value.assertion)) return null;
+  return { stage: value.stage, code: value.code, ...(value.assertion ? { assertion: value.assertion } : {}) };
+}
+function diagnose(error, stage) {
+  if (!error || typeof error !== "object") error = new Error("Hosted acceptance database operation failed.");
+  if (!error.hostedAcceptanceDiagnostic) {
+    const code = validCode(error.code)
+      ? error.code : "UNCLASSIFIED";
+    const assertion = code === "ERR_ASSERTION" ? [...ASSERTIONS].find(([message]) =>
+      error.message === message || error.message?.startsWith(message + "\n"))?.[1] || "unclassified_assertion" : null;
+    error.hostedAcceptanceDiagnostic = Object.freeze({ stage, code, ...(assertion ? { assertion } : {}) });
+  }
+  return error;
+}
+async function step(stage, fn) {
+  try { return await fn(); } catch (error) { throw diagnose(error, stage); }
+}
+
 export async function beginHostedAcceptanceTransaction(client) {
   await client.query("BEGIN");
   await client.query("SET LOCAL search_path = pg_catalog, public");
@@ -23,20 +84,20 @@ export async function beginHostedAcceptanceTransaction(client) {
 }
 
 async function inspectDatabase(client) {
-  const identity = await client.query("SELECT current_database() AS database, current_user AS owner");
+  const identity = await step("guard_identity", () => client.query("SELECT current_database() AS database, current_user AS owner"));
   assert.equal(identity.rows[0]?.database, EXPECTED_DATABASE, "Dedicated database identity mismatch.");
-  const unsafe = await client.query(`SELECT
+  const unsafe = await step("guard_inventory", () => client.query(`SELECT
     (SELECT count(*) FROM pg_namespace WHERE nspname !~ '^pg_' AND nspname NOT IN ('public','information_schema')) AS schemas,
     (SELECT count(*) FROM pg_extension WHERE extname <> 'plpgsql') AS extensions,
     (SELECT count(*) FROM pg_event_trigger) AS event_triggers,
     (SELECT count(*) FROM pg_largeobject_metadata) AS large_objects,
     (SELECT count(*) FROM pg_foreign_server) AS foreign_servers,
     (SELECT count(*) FROM pg_publication) AS publications,
-    (SELECT count(oid) FROM pg_subscription WHERE subdbid=(SELECT oid FROM pg_database WHERE datname=current_database())) AS subscriptions`);
+    (SELECT count(oid) FROM pg_subscription WHERE subdbid=(SELECT oid FROM pg_database WHERE datname=current_database())) AS subscriptions`));
   assert(unsafe.rows[0] && Object.values(unsafe.rows[0]).every(v => Number(v) === 0), "Dedicated database contains unrelated objects.");
-  const objects = await client.query(`SELECT d.classid::regclass::text AS catalog, d.objid::text AS id, d.objsubid AS subid
+  const objects = await step("guard_dependencies", () => client.query(`SELECT d.classid::regclass::text AS catalog, d.objid::text AS id, d.objsubid AS subid
     FROM pg_depend d WHERE d.refclassid='pg_namespace'::regclass
-    AND d.refobjid='public'::regnamespace ORDER BY d.classid,d.objid,d.objsubid`);
+    AND d.refobjid='public'::regnamespace ORDER BY d.classid,d.objid,d.objsubid`));
   return { owner: identity.rows[0].owner, objects: objects.rows };
 }
 
@@ -84,26 +145,26 @@ async function bootstrapStageOne(config, pool, { now = Date.now } = {}) {
   assert(config.database, "The dedicated database credential is required.");
   const client = await pool.connect();
   try {
-    await beginHostedAcceptanceTransaction(client);
+    await step("begin_transaction", () => beginHostedAcceptanceTransaction(client));
     let inspection = await inspectDatabase(client);
     if (inspection.objects.length === 0) {
-      await client.query(`CREATE TABLE public.${TABLE} (
+      await step("guard_create", () => client.query(`CREATE TABLE public.${TABLE} (
         singleton boolean PRIMARY KEY CHECK(singleton),
         format text NOT NULL CHECK(format='${FORMAT}'),
         config_hash text NOT NULL CHECK(config_hash ~ '^[a-f0-9]{64}$'),
         created_at timestamptz NOT NULL, verified_at timestamptz, evidence jsonb
-      )`);
-      await client.query(`REVOKE ALL ON public.${TABLE} FROM PUBLIC`);
-      await client.query(`INSERT INTO public.${TABLE}(singleton,format,config_hash,created_at) VALUES(true,$1,$2,$3)`,
-        [FORMAT, config.bindingHash, new Date(now()).toISOString()]);
+      )`));
+      await step("guard_permissions", () => client.query(`REVOKE ALL ON public.${TABLE} FROM PUBLIC`));
+      await step("guard_insert", () => client.query(`INSERT INTO public.${TABLE}(singleton,format,config_hash,created_at) VALUES(true,$1,$2,$3)`,
+        [FORMAT, config.bindingHash, new Date(now()).toISOString()]));
       inspection = await inspectDatabase(client);
     }
-    const state = await validateState(client, config, inspection);
-    await client.query("COMMIT");
+    const state = await step("guard_validate", () => validateState(client, config, inspection));
+    await step("commit", () => client.query("COMMIT"));
     return { createdAt: new Date(state.created_at).toISOString(), lastVerifiedAt: state.verified_at ? new Date(state.verified_at).toISOString() : null };
   } catch (error) {
     await client.query("ROLLBACK").catch(() => {});
-    throw error;
+    throw diagnose(error, "bootstrap_stage_one");
   } finally { client.release(); }
 }
 
@@ -127,7 +188,8 @@ const RUN_COLUMNS = [["singleton", "boolean", true], ["run_id", "uuid", true], [
 
 async function runtimeSql() {
   const parts = [];
-  for (const [name, checksum] of MIGRATIONS) {
+  for (const [index, [name, checksum]] of MIGRATIONS.entries()) {
+    await step(index === 0 ? "migration_source_one" : "migration_source_two", async () => {
     const original = await readFile(new URL("../../../supabase/migrations/" + name, import.meta.url), "utf8");
     assert.equal(sha(original), checksum, "Scheduling migration changed; review and version the sandbox schema explicitly.");
     const marker = "\ndo $$ declare t text; f record; begin\n";
@@ -138,21 +200,22 @@ async function runtimeSql() {
     assert(!/\b(?:anon|authenticated|service_role)\b/.test(sql.replace(/^\s*--.*$/gm, "")),
       "Unexpected role dependency outside scheduling privilege block.");
     parts.push(sql);
+    });
   }
   return parts;
 }
 
 async function inspectRuntimeDatabase(client) {
-  const identity = await client.query("SELECT current_database() AS database, current_user AS owner");
+  const identity = await step("runtime_identity", () => client.query("SELECT current_database() AS database, current_user AS owner"));
   assert.equal(identity.rows[0]?.database, EXPECTED_DATABASE, "Dedicated database identity mismatch.");
-  const unsafe = await client.query(`SELECT
+  const unsafe = await step("runtime_inventory", () => client.query(`SELECT
     (SELECT count(*) FROM pg_namespace WHERE nspname !~ '^pg_' AND nspname NOT IN ('public','auth','information_schema')) AS schemas,
     (SELECT count(*) FROM pg_extension WHERE extname <> 'plpgsql') AS extensions,
     (SELECT count(*) FROM pg_event_trigger) AS event_triggers,
     (SELECT count(*) FROM pg_largeobject_metadata) AS large_objects,
     (SELECT count(*) FROM pg_foreign_server) AS foreign_servers,
     (SELECT count(*) FROM pg_publication) AS publications,
-    (SELECT count(*) FROM pg_subscription WHERE subdbid=(SELECT oid FROM pg_database WHERE datname=current_database())) AS subscriptions`);
+    (SELECT count(*) FROM pg_subscription WHERE subdbid=(SELECT oid FROM pg_database WHERE datname=current_database())) AS subscriptions`));
   assert(unsafe.rows[0] && Object.values(unsafe.rows[0]).every(v => Number(v) === 0),
     "Dedicated database contains unrelated objects.");
   return { owner: identity.rows[0].owner };
@@ -219,7 +282,7 @@ async function catalog(client) {
         LATERAL aclexplode(at.attacl) a WHERE n.nspname IN ('public','auth') AND a.grantee<>c.relowner) AS columns`,
   };
   const result = {};
-  for (const [key, sql] of Object.entries(queries)) result[key] = (await client.query(sql)).rows;
+  for (const [key, sql] of Object.entries(queries)) result[key] = (await step("catalog_" + key, () => client.query(sql))).rows;
   return result;
 }
 
@@ -251,39 +314,43 @@ function assertRuntimeCatalog(snapshot, owner) {
 async function validateRuntime(client, config) {
   const inspection = await inspectRuntimeDatabase(client);
   // Still validate the original sentinel's exact shape, ACLs and binding.
-  const state = await validateState(client, config, inspection, false);
-  const rows = (await client.query(`SELECT singleton,version,source_hash,catalog_hash FROM public.${SCHEMA_TABLE}`)).rows;
+  const state = await step("guard_validate", () => validateState(client, config, inspection, false));
+  const rows = (await step("runtime_manifest_read", () => client.query(`SELECT singleton,version,source_hash,catalog_hash FROM public.${SCHEMA_TABLE}`))).rows;
   assert(rows.length === 1 && rows[0].singleton === true && rows[0].version === SCHEMA_VERSION &&
     rows[0].source_hash === SOURCE_HASH && /^[a-f0-9]{64}$/.test(rows[0].catalog_hash), "Sandbox schema manifest is invalid.");
   const snapshot = await catalog(client);
-  assertRuntimeCatalog(snapshot, inspection.owner);
+  await step("catalog_assertions", () => assertRuntimeCatalog(snapshot, inspection.owner));
   assert.equal(sha(JSON.stringify(snapshot)), rows[0].catalog_hash, "Sandbox schema drift detected.");
-  const runs = (await client.query(`SELECT singleton,run_id,host_id,event_id,booking_id,enabled,created_at FROM public.${RUN_TABLE}`)).rows;
+  const runs = (await step("runtime_run_read", () => client.query(`SELECT singleton,run_id,host_id,event_id,booking_id,enabled,created_at FROM public.${RUN_TABLE}`))).rows;
   assert(runs.length === 1 && runs[0].singleton === true, "Sandbox acceptance run is invalid.");
   return { state, run: runs[0] };
 }
 
 async function installRuntime(client, config, { now }) {
   const parts = await runtimeSql();
-  await client.query(`CREATE SCHEMA auth;
+  await step("runtime_scaffold", () => client.query(`CREATE SCHEMA auth;
     REVOKE ALL ON SCHEMA auth FROM PUBLIC;
     CREATE TABLE auth.users(id uuid PRIMARY KEY,email_confirmed_at timestamptz,is_anonymous boolean);
     CREATE TABLE public.user_profiles(id uuid PRIMARY KEY,tier text,is_disabled boolean);
-    REVOKE ALL ON auth.users,public.user_profiles FROM PUBLIC`);
-  for (const sql of parts) await client.query(sql);
+    REVOKE ALL ON auth.users,public.user_profiles FROM PUBLIC`));
+  for (const [index, sql] of parts.entries()) await step(index === 0 ? "runtime_migration_one" : "runtime_migration_two", () => client.query(sql));
+  await step("runtime_table_permissions", async () => {
   for (const table of SCHEDULE_TABLES) {
     await client.query(`ALTER TABLE public.${table} ENABLE ROW LEVEL SECURITY`);
     await client.query(`REVOKE ALL ON public.${table} FROM PUBLIC`);
   }
-  await client.query("REVOKE ALL ON SEQUENCE public.korlix_schedule_audit_id_seq FROM PUBLIC");
-  const functions = (await client.query(`SELECT oid::regprocedure::text AS signature FROM pg_proc
-    WHERE pronamespace='public'::regnamespace ORDER BY oid::regprocedure::text`)).rows;
+  });
+  await step("runtime_sequence_permissions", () => client.query("REVOKE ALL ON SEQUENCE public.korlix_schedule_audit_id_seq FROM PUBLIC"));
+  const functions = (await step("runtime_function_inventory", () => client.query(`SELECT oid::regprocedure::text AS signature FROM pg_proc
+    WHERE pronamespace='public'::regnamespace ORDER BY oid::regprocedure::text`))).rows;
+  await step("runtime_function_permissions", async () => {
   for (const f of functions) {
     // The schema was empty except the reviewed sentinel before checked SQL ran.
     assert(/^(?:public\.)?korlix_schedule_[a-z_]+_v[12]\(/.test(f.signature), "Unexpected scheduling function.");
     await client.query(`REVOKE ALL ON FUNCTION ${f.signature} FROM PUBLIC`);
   }
-  await client.query(`CREATE TABLE public.${RUN_TABLE}(
+  });
+  await step("runtime_control_tables", () => client.query(`CREATE TABLE public.${RUN_TABLE}(
     singleton boolean PRIMARY KEY CHECK(singleton),run_id uuid NOT NULL,host_id uuid NOT NULL,
     event_id uuid,booking_id uuid,enabled boolean NOT NULL DEFAULT false,created_at timestamptz NOT NULL
   );
@@ -292,23 +359,25 @@ async function installRuntime(client, config, { now }) {
     source_hash text NOT NULL CHECK(source_hash ~ '^[a-f0-9]{64}$'),
     catalog_hash text NOT NULL CHECK(catalog_hash ~ '^[a-f0-9]{64}$')
   );
-  REVOKE ALL ON public.${RUN_TABLE},public.${SCHEMA_TABLE} FROM PUBLIC`);
+  REVOKE ALL ON public.${RUN_TABLE},public.${SCHEMA_TABLE} FROM PUBLIC`));
+  await step("runtime_seed", async () => {
   const runId = randomUUID(), hostId = randomUUID();
   await client.query(`INSERT INTO public.${RUN_TABLE}(singleton,run_id,host_id,enabled,created_at)
     VALUES(true,$1,$2,false,$3)`, [runId, hostId, new Date(now()).toISOString()]);
   await client.query("INSERT INTO auth.users(id,email_confirmed_at,is_anonymous) VALUES($1,$2,false)",
     [hostId, new Date(now()).toISOString()]);
   await client.query("INSERT INTO public.user_profiles(id,tier,is_disabled) VALUES($1,'basic',false)", [hostId]);
+  });
   const inspection = await inspectRuntimeDatabase(client), snapshot = await catalog(client);
-  assertRuntimeCatalog(snapshot, inspection.owner);
-  await client.query(`INSERT INTO public.${SCHEMA_TABLE}(singleton,version,source_hash,catalog_hash) VALUES(true,$1,$2,$3)`,
-    [SCHEMA_VERSION, SOURCE_HASH, sha(JSON.stringify(snapshot))]);
+  await step("catalog_assertions", () => assertRuntimeCatalog(snapshot, inspection.owner));
+  await step("runtime_manifest_insert", () => client.query(`INSERT INTO public.${SCHEMA_TABLE}(singleton,version,source_hash,catalog_hash) VALUES(true,$1,$2,$3)`,
+    [SCHEMA_VERSION, SOURCE_HASH, sha(JSON.stringify(snapshot))]));
 }
 
 /** Call inside a transaction protected by beginHostedAcceptanceTransaction. */
 export async function validateHostedAcceptanceDatabase(client, config) {
   if (!config.paymentRuntime) return validateState(client, config, await inspectDatabase(client));
-  return (await validateRuntime(client, config)).state;
+  return (await step("runtime_validate", () => validateRuntime(client, config))).state;
 }
 
 export async function bootstrapHostedAcceptanceDatabase(config, pool, { now = Date.now } = {}) {
@@ -316,23 +385,23 @@ export async function bootstrapHostedAcceptanceDatabase(config, pool, { now = Da
   assert(config.database, "The dedicated database credential is required.");
   const client = await pool.connect();
   try {
-    await beginHostedAcceptanceTransaction(client);
-    const installed = (await client.query("SELECT to_regclass('public.korlix_hosted_acceptance_schema') IS NOT NULL AS installed")).rows[0]?.installed;
+    await step("begin_transaction", () => beginHostedAcceptanceTransaction(client));
+    const installed = (await step("runtime_presence", () => client.query("SELECT to_regclass('public.korlix_hosted_acceptance_schema') IS NOT NULL AS installed"))).rows[0]?.installed;
     if (!installed) {
       const inspection = await inspectDatabase(client);
       // Stage two upgrades an existing validated stage-one sentinel only.
       // It never adopts unknown or partially provisioned application objects.
-      await validateState(client, config, inspection);
+      await step("guard_validate", () => validateState(client, config, inspection));
       await installRuntime(client, config, { now });
     }
-    const { state, run } = await validateRuntime(client, config);
-    await client.query("COMMIT");
+    const { state, run } = await step("runtime_validate", () => validateRuntime(client, config));
+    await step("commit", () => client.query("COMMIT"));
     return { createdAt: new Date(state.created_at).toISOString(),
       lastVerifiedAt: state.verified_at ? new Date(state.verified_at).toISOString() : null,
       schemaVersion: SCHEMA_VERSION, runId: run.run_id, hostId: run.host_id,
       eventId: run.event_id, bookingId: run.booking_id, enabled: run.enabled };
   } catch (error) {
     await client.query("ROLLBACK").catch(() => {});
-    throw error;
+    throw diagnose(error, "bootstrap_stage_two");
   } finally { client.release(); }
 }

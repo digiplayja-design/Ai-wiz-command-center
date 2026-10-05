@@ -105,6 +105,14 @@ Authenticated `POST /acceptance/verify` returned HTTP 200 with `databaseReady:tr
 
 The only remaining blocker was `payment_runtime_not_implemented`. Readiness remained `blocked`, with `checkoutEnabled:false`, `paymentsConnected:false` and `webhookEnabled:false`. This verifies the hosted database and sandbox identity access; it does not establish payment, webhook or customer-redirect acceptance.
 
+## Scheduling-v2 deployment evidence
+
+### Upgrade blocked — 2026-10-05 23:44 UTC
+
+Deploy `dep-db23c6b0hr2s73bbh2l0` of commit `ae1b1c4bcb2becd71306d93f798b254243e6b201` became live at `2026-10-05T23:44:08.382813Z`, with `KORLIX_HOSTED_ACCEPTANCE_PAYMENT_RUNTIME=scheduling-v2` configured. The hosted `/health` response reported `databaseReady:false`, and authenticated private status reported `database:null`. The upgrade failed closed before a booking was created. The cause was not established by those responses; investigation is in progress.
+
+The webhook signing secret and endpoint ID are still missing, and the existing identity-only restricted key is unchanged. This deployment does not establish a successful hosted schema upgrade, payment, signed event delivery, redirect or refund.
+
 ## Current configuration
 
 The dedicated Node 24 service uses auto-deploy off and no environment group. Build with `npm ci --prefix backend/test/manual/hosted-runtime --ignore-scripts --no-audit --no-fund && node --check backend/test/manual/hosted_stripe_acceptance.mjs`; start with `node backend/test/manual/hosted_stripe_acceptance.mjs`. `SKIP_INSTALL_DEPS=true` avoids installing the unrelated root app dependencies.
@@ -167,8 +175,8 @@ The historical stage-one suite passed ten focused tests in `backend/test/manual/
 | New scheduling-v2 evidence | Status |
 | --- | --- |
 | Reviewed code and focused test counts | 60/60 tests passed across database, payment flow, HTTP integration, return UI and stage-one boundaries. Database/flow/HTTP fixtures execute real PostgreSQL catalogs and production scheduling SQL in PGlite; Stripe is mocked. Independent review found no remaining critical isolation or locking issues. |
-| Hosted deployment ID, commit and live timestamp | Pending root verification |
-| Hosted schema upgrade and endpoint configuration | Pending root verification |
+| Hosted deployment ID, commit and live timestamp | `dep-db23c6b0hr2s73bbh2l0`, commit `ae1b1c4bcb2becd71306d93f798b254243e6b201`, live `2026-10-05T23:44:08.382813Z`; upgrade blocked as recorded above |
+| Hosted schema upgrade and endpoint configuration | Blocked: hosted `databaseReady:false` and private `database:null`; webhook secret and endpoint ID not yet configured |
 | New genuine sandbox payment and signed completion delivery | Not yet proven |
 | Actual Stripe-to-HTTPS return and ledger-only status display | Not yet proven |
 | Duplicate delivery, restart recovery and full refund | Not yet proven for the new hosted run |

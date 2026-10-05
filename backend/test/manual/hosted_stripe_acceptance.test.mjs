@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { request as httpRequest } from "node:http";
 import {
-  hostedAcceptanceConfig, bootstrapHostedAcceptanceDatabase, createHostedAcceptanceServer,
+  hostedAcceptanceConfig, bootstrapHostedAcceptanceDatabase, createHostedAcceptanceServer, hostedStartupDiagnostic,
   EXPECTED_DATABASE, EXPECTED_DATABASE_HOST, EXPECTED_PLATFORM, EXPECTED_MERCHANT,
 } from "./hosted_stripe_acceptance.mjs";
 
@@ -26,6 +26,23 @@ function environment(changes = {}) {
 const configured = (changes = {}) => hostedAcceptanceConfig(environment(changes), NOW);
 const json = (value, status = 200) => new Response(JSON.stringify(value), {
   status, headers: { "content-type": "application/json" },
+});
+
+test("startup diagnostics retain failure location and SQLSTATE without credentials or raw errors", async () => {
+  const secret = "rk_test_fixture_secret_not_for_logs";
+  const config = configured({ DATABASE_URL: DSN });
+  const entries = [];
+  const error = Object.assign(new Error("Could not connect " + DSN + " " + secret), { code: "42501", detail: secret });
+  const server = await runningServer(config, { pool: { connect: async () => { throw error; } }, diagnostic: entry => entries.push(entry) });
+  try {
+    assert.equal((await server.request("/health", { method: "GET" })).data.databaseReady, false);
+    assert.deepEqual(entries, [{ event: "hosted_acceptance_startup_blocked", stage: "database_bootstrap", code: "42501" }]);
+    assert(!JSON.stringify(entries).includes(secret));
+    assert(!JSON.stringify(entries).includes(DSN));
+    assert.deepEqual(hostedStartupDiagnostic({ code: secret }, secret), {
+      event: "hosted_acceptance_startup_blocked", stage: "startup", code: "startup_failed",
+    });
+  } finally { await server.close(); }
 });
 const merchant = (changes = {}) => ({
   id: EXPECTED_MERCHANT, object: "v2.core.account", livemode: false, dashboard: "full",
