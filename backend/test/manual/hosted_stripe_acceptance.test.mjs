@@ -107,7 +107,7 @@ async function runningServer(config, options = {}) {
           response.on("data", chunk => chunks.push(chunk));
           response.on("end", () => {
             const text = Buffer.concat(chunks).toString("utf8");
-            resolve({ status: response.statusCode, headers: new Headers(response.headers), text, data: JSON.parse(text) });
+            resolve({ status: response.statusCode, headers: new Headers(response.headers), text, data: /^application\/json/.test(response.headers["content-type"] || "") ? JSON.parse(text) : null });
           });
         });
         request.on("error", reject);
@@ -308,4 +308,42 @@ test("upstream errors do not disclose credentials and failed database isolation 
     assert.equal((await blocked.request("/health", { method: "GET" })).data.databaseReady, false);
     assert.equal((await blocked.request("/acceptance/verify")).status, 503);
   } finally { await blocked.close(); }
+});
+
+
+test("payment runtime is explicit and exposes only its same-origin return shell when unconfigured", async () => {
+  assert.throws(() => configured({ PAYMENT_RUNTIME: "true" }));
+  assert.throws(() => configured({ WEBHOOK_ENDPOINT_ID: "we_fixture" }));
+  const config = configured({ PAYMENT_RUNTIME: "scheduling-v2", WEBHOOK_SECRET: "whsec_fixture", WEBHOOK_ENDPOINT_ID: "we_fixture" });
+  assert.equal(config.paymentRuntime, true);
+  assert.equal(config.encryptionKey, "ab79d101c286fd54".repeat(4));
+  const server = await runningServer(config, { fetcher: () => assert.fail("Unconfigured runtime must not contact Stripe") });
+  try {
+    const shell = await server.request("/book/manage", { method: "GET", auth: false });
+    assert.equal(shell.status, 200);
+    assert(shell.text.includes('/acceptance/assets/return.js'));
+    assert.equal(shell.headers.get("cache-control"), "no-store");
+    assert.equal(shell.headers.get("referrer-policy"), "no-referrer");
+    assert(shell.headers.get("content-security-policy").includes("connect-src 'self'"));
+    for (const path of ["/acceptance/assets/return.js", "/acceptance/assets/return.css"])
+      assert.equal((await server.request(path, { method: "GET", auth: false })).status, 200);
+    assert.equal((await server.request("/book/manage?token=" + token, { method: "GET", auth: false })).status, 404);
+    assert.equal((await server.request("/book/manage", { method: "GET", headers: { host: "attacker.example" } })).status, 404);
+    const body = JSON.stringify({ booking_id: "d8d5cac4-b461-43c0-8f06-07c38e1bce63", manage_token: "0".repeat(64) });
+    for (const headers of [{}, { origin: "https://attacker.example" }, { origin: config.origin, "sec-fetch-site": "cross-site" }])
+      assert.equal((await server.request("/acceptance/customer/status", { body, auth: false, headers })).status, 403);
+    assert.equal((await server.request("/acceptance/customer/status", { body, auth: false, headers: { origin: config.origin } })).status, 503);
+    assert.equal((await server.request("/acceptance/customer/status", { body: "{}", auth: false, headers: { origin: config.origin } })).status, 400);
+    for (const command of ["enable", "pause", "book", "checkout", "refund", "tick"]) {
+      assert.equal((await server.request("/acceptance/" + command, { auth: false })).status, 401);
+      assert.equal((await server.request("/acceptance/" + command, { headers: { origin: config.origin } })).status, 403);
+      assert.equal((await server.request("/acceptance/" + command)).status, 503);
+    }
+    const health = (await server.request("/health", { method: "GET", auth: false })).data;
+    assert.equal(health.stage, "hosted-payment-runtime");
+    assert.equal(health.checkoutEnabled, false);
+    assert.equal(health.paymentsConnected, false);
+    assert.equal(health.webhookEnabled, false);
+    for (const value of [token, config.encryptionKey, config.webhook]) assert(!JSON.stringify(health).includes(value));
+  } finally { await server.close(); }
 });

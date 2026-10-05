@@ -1,6 +1,8 @@
 # Hosted Stripe sandbox staging
 
-This is a separate, disabled foundation for durable provider acceptance. It is not the production backend, the saved-result display service, or a public version of the loopback acceptance harness. It does not yet accept payment webhooks, create bookings or Checkout sessions, issue refunds, or serve a customer return flow.
+This isolated runtime implements durable sandbox booking storage, a Stripe-signed webhook receiver, an HTTPS customer return page, and private controls for one synthetic USD 1.00 Checkout and full refund. Payment issuance starts paused. The current implementation is under local review and testing; its hosted payment deployment and acceptance evidence are pending verification below.
+
+The credentials last verified on the hosted service provide identity reads only. A new hosted payment, its Stripe-to-customer return, and its full refund have not yet been proven. Production checkout remains paused, and the separate saved-result display is not payment acceptance evidence.
 
 ## Why a separate runtime is needed
 
@@ -29,17 +31,52 @@ The Free database is temporary, expires after 30 days, and has no managed backup
 
 ## Runtime contract
 
-Entry point: `backend/test/manual/hosted_stripe_acceptance.mjs`. The isolated dependency directory is `backend/test/manual/hosted-runtime`, with pinned `pg@8.23.1`. Production entry points and dependency manifests are unchanged; staging reuses the existing provider identity adapter behind a GET-only request guard.
+Entry point: `backend/test/manual/hosted_stripe_acceptance.mjs`. Supporting modules are `hosted_acceptance_database.mjs`, `hosted_acceptance_flow.mjs` and `hosted_acceptance_return.mjs` in the same directory. The isolated dependency directory is `backend/test/manual/hosted-runtime`, with pinned `pg@8.23.1`. Production entry points and dependency manifests are unchanged. The sandbox reuses the production scheduling SQL, connected-payment handlers and Stripe adapter behind an exact request allowlist; it does not mount the full production routing surface.
 
-- Public `/health` is safe to inspect and always reports checkout, payment connectivity and webhook processing disabled for this staging implementation.
-- Missing database or Stripe credentials leave readiness blocked; they do not cause fake successful verification.
-- Private status/verification requests require a new service-specific token in the Authorization header. Browser-origin requests and tokens in URLs are rejected.
-- The database URL must identify the exact new internal host and database. A private sentinel binds the database to this staging service. Existing unrelated application objects or a mismatched sentinel are refused.
-- The sentinel binds the origin, database, expected accounts and encryption-key hash. Control-token rotation or expiry refresh does not change that binding. Bootstrap and verification use a transaction and advisory lock.
-- Stripe verification is limited to independent read-only checks of the expected sandbox platform and merchant. A live key or a key for another account cannot establish readiness.
-- No booking, Checkout, refund, webhook, OAuth, scheduling-owner, email or calendar operations are available.
+### Durable database and one-booking boundary
 
-## Configuration
+- The database URL must identify the exact dedicated internal host and database. The existing private sentinel binds the origin, database, expected accounts and encryption-key hash. Control-token rotation or expiry refresh does not alter this binding.
+- `KORLIX_HOSTED_ACCEPTANCE_PAYMENT_RUNTIME=scheduling-v2` opts into the scheduling schema upgrade. Before upgrading, the runtime validates the stage-one sentinel and refuses unrelated objects. It checksum-verifies the original `20260930152919_scheduling_engine.sql` and `20260930163605_scheduling_connected.sql` migrations, then changes only their terminal privilege blocks in memory. The source migration files remain unchanged.
+- The dedicated database gets minimal synthetic `auth.users` and `public.user_profiles` tables. Scheduling functions remain `SECURITY INVOKER`, table RLS stays enabled, and public grants are revoked. The runtime uses the dedicated table-owning database user and creates no PostgreSQL roles. This exercises production scheduling behavior, **not production role/ACL separation**: table ownership bypasses non-FORCE RLS, including the production separation around audit mutation.
+- A versioned schema manifest and catalog fingerprint reject unrelated objects or schema drift after restart. Bootstrap uses a transaction and advisory lock; payment commands use the same lock keys with a session lock to serialize the complete operation.
+- One permanent run row owns one synthetic host, event and booking. The booking association is committed before outbound payment effects. Repeated booking requests return that booking; they do not mint another test booking. Stable idempotency keys and the persisted, encrypted Checkout request support recovery without widening the test scope.
+- The original hold lasts 50 minutes; Checkout expires 40 minutes after creation of the payment ledger entry. Retries and restarts do not extend either deadline. A checkout attempt without enough remaining time is refused.
+- After the database upgrade, do not switch this database back to the stage-one runtime or deploy stage-one-only code. Pause new issuance through the durable `pause` control. A fresh database would require a separately reviewed setup.
+
+### Stripe and customer behavior
+
+- Every provider request is restricted to Stripe, the pinned API version `2026-09-30.endive`, the expected sandbox platform or connected merchant, and the owned test booking. Live keys and other account identities cannot establish readiness. Checkout and refund writes are bounded to USD 1.00 and the synthetic guest; application fees, transfers and `on_behalf_of` fields are refused.
+- New Checkout issuance requires the durable enable flag, unexpired test access, fresh identity checks and matching endpoint configuration. Missing credentials or failed checks leave readiness blocked. No application or platform transaction fee is set.
+- Webhook handling verifies the raw-body signature and requires the expected connected merchant, `livemode:false`, an allowed event type and the owned Checkout Session or PaymentIntent. Payment observations use independent Stripe reads. Processed event receipts make duplicate deliveries idempotent.
+- Endpoint configuration evidence and connected-account delivery evidence are separate. `GET /v1/webhook_endpoints/{id}` verifies the endpoint ID, URL, enabled status, sandbox mode, version and exact event list. Its documented response has no `connect` flag; its `application` field is not a documented equivalent. A valid signed event from the expected merchant establishes connected-delivery evidence.
+- Stripe success and cancel URLs both use `/book/manage#BOOKING_ID.MANAGE_TOKEN`. The fragment stays in the browser rather than the request URL. Same-origin JavaScript posts the booking ID and private token to the customer-status endpoint, which reads only the saved booking ledger. Returning from Stripe or refreshing the page does not contact Stripe, reconcile a payment or infer success from the URL.
+- Customer pages show explicit sandbox/payment state, use local assets, escaping, a restrictive CSP, `no-store` and `no-referrer`. They make no booking-email or calendar-delivery claims. No public booking creation, OAuth, scheduling-owner, email, calendar or general worker controls are exposed.
+- Expiry stops enable, booking and Checkout creation. Existing signed events, private status/pause/refund controls, refund retry processing and customer ledger reads remain available to settle and inspect the owned booking.
+
+### Routes
+
+| Method and route | Purpose |
+| --- | --- |
+| `GET /health` | Public readiness and block reasons; readiness does not claim acceptance has passed |
+| `GET /book/manage` | Customer return shell; booking credentials are supplied through its URL fragment |
+| `GET /acceptance/assets/return.css` and `GET /acceptance/assets/return.js` | Local customer-page assets |
+| `POST /acceptance/customer/status` | Same-origin, rate-limited ledger read requiring the owned booking ID and private manage token |
+| `POST /acceptance/payments/webhook` | Stripe-signed events for the expected sandbox merchant and booking |
+| `POST /acceptance/status` | Private durable run, booking and event-receipt status |
+| `POST /acceptance/verify` | Private database and read-only platform/merchant identity verification |
+| `POST /acceptance/enable` | Fresh identity/endpoint checks, synthetic host/event setup and durable issuance enable |
+| `POST /acceptance/pause` | Durable pause of new issuance |
+| `POST /acceptance/book` | Create or reuse the sole synthetic booking |
+| `POST /acceptance/checkout` | Create or reuse its bounded Checkout Session |
+| `POST /acceptance/refund` | Request and process its full sandbox refund |
+| `POST /acceptance/tick` | Retry pending refund work for the owned booking |
+| `POST /acceptance/fee-proof` | Read the owned PaymentIntent and expanded Charge to verify zero platform fees |
+
+Private controls require the service-specific bearer token in the Authorization header and an empty JSON body. Browser-origin private commands and credentials in URLs are rejected. All routes reject query strings; error responses are sanitized.
+
+## Historical deployment and verification evidence
+
+These records describe the identity-only stage-one deployments. Their disabled or absent payment routes are historical observations, not the current scheduling-v2 route contract above.
 
 ### Deployment approval blocker — 2026-10-05 UTC
 
@@ -68,14 +105,19 @@ Authenticated `POST /acceptance/verify` returned HTTP 200 with `databaseReady:tr
 
 The only remaining blocker was `payment_runtime_not_implemented`. Readiness remained `blocked`, with `checkoutEnabled:false`, `paymentsConnected:false` and `webhookEnabled:false`. This verifies the hosted database and sandbox identity access; it does not establish payment, webhook or customer-redirect acceptance.
 
+## Current configuration
+
 The dedicated Node 24 service uses auto-deploy off and no environment group. Build with `npm ci --prefix backend/test/manual/hosted-runtime --ignore-scripts --no-audit --no-fund && node --check backend/test/manual/hosted_stripe_acceptance.mjs`; start with `node backend/test/manual/hosted_stripe_acceptance.mjs`. `SKIP_INSTALL_DEPS=true` avoids installing the unrelated root app dependencies.
 
 | Environment variable | Configuration |
 | --- | --- |
 | `KORLIX_HOSTED_ACCEPTANCE_MODE` | `isolated-postgres-sandbox-v1` |
+| `KORLIX_HOSTED_ACCEPTANCE_PAYMENT_RUNTIME` | `scheduling-v2` opts into the durable scheduling upgrade; issuance remains paused until the private enable control succeeds |
 | `KORLIX_HOSTED_ACCEPTANCE_DATABASE_HOST` | Exact internal host above |
 | `KORLIX_HOSTED_ACCEPTANCE_DATABASE_URL` | Dedicated database's Internal Database URL; configured privately in Render |
 | `KORLIX_HOSTED_ACCEPTANCE_STRIPE_KEY` | Dedicated restricted key from KORLIX 2MEETU Testing sandbox; configured privately in Render |
+| `KORLIX_HOSTED_ACCEPTANCE_WEBHOOK_SECRET` | The new endpoint's `whsec_…` signing secret; configured privately in Render, separate from the API key |
+| `KORLIX_HOSTED_ACCEPTANCE_WEBHOOK_ENDPOINT_ID` | Exact new sandbox `we_…` endpoint ID; the current runtime verifies it through the v1 Webhook Endpoints API |
 | `KORLIX_HOSTED_ACCEPTANCE_TOKEN_HASH` | SHA-256 of a fresh private 32-byte token |
 | `KORLIX_HOSTED_ACCEPTANCE_ENCRYPTION_KEY` | Fresh private 32-byte hexadecimal value |
 | `KORLIX_HOSTED_ACCEPTANCE_EXPIRES_AT` | Short test-access expiry, at most seven days |
@@ -83,7 +125,7 @@ The dedicated Node 24 service uses auto-deploy off and no environment group. Bui
 
 Do not copy production environment groups, Supabase credentials, provider keys, the local ledger encryption key, control token, CLI config or keyring. No secret values or private links belong in this document or Git.
 
-Identity verification performs only `GET /v1/account` and `GET /v2/core/accounts/{id}` with `configuration.merchant` and `defaults` included. The user's final restricted-key review showed these selected Read permissions:
+The private identity verification performs only `GET /v1/account` and `GET /v2/core/accounts/{id}` with `configuration.merchant` and `defaults` included. The user's last saved restricted-key review showed these selected Read permissions:
 
 | Dashboard resource | Selected Read scopes |
 | --- | --- |
@@ -91,10 +133,45 @@ Identity verification performs only `GET /v1/account` and `GET /v2/core/accounts
 | Accounts v2 | Own account and connected accounts |
 | Merchant Configuration | Own account and connected accounts |
 
-Recipient Configuration was removed and no Write permissions were selected. The origin of the mirrored connected-account selections was not established; this records the reviewed configuration that passed, not proof that every selection is required or an automatic dependency. Checkout/refund writes are not required by this staging implementation. A generic HTTP 503 `readiness_verification_failed` response does not identify its cause: permissions, provider/network failures, identity mismatches and database failures can share that response. Do not substitute a live or production-attached key to pass the check.
+Recipient Configuration was removed and no Write permissions were selected. The origin of the mirrored connected-account selections was not established; this records the reviewed configuration that passed, not proof that every selection is required or an automatic dependency. Those identity-only permissions do not authorize the new Checkout/refund flow. A generic HTTP 503 `readiness_verification_failed` response does not identify its cause: permissions, provider/network failures, identity mismatches and database failures can share that response. Do not substitute a live or production-attached key to pass the check.
+
+### iPad setup for the new payment flow
+
+Use **KORLIX 2MEETU Testing sandbox**, platform `acct_1UN1QuLwavBaepoe`, throughout. Keep the existing identity reads. Under **API keys**, open the dedicated key's overflow menu, choose **Edit key/permissions**, and add these resource permissions:
+
+| Dashboard resource | In your account | In connected accounts | Purpose |
+| --- | --- | --- | --- |
+| Webhook Endpoints, Event Destinations | Read | None | Read the expected endpoint configuration |
+| Checkout Sessions | None | Write | Create and read the owned test Checkout Session |
+| Charges and Refunds | None | Write | Read its charge and create/read its full refund |
+| Payment Intents | None | Read | Read the payment intent for payment/fee evidence |
+
+The current [Stripe permissions catalog](https://docs.stripe.com/stripe-apps/reference/permissions) groups refunds under **Charges and Refunds**. Write includes Read. Apply permissions to individual resources rather than whole categories. No documented Checkout dependency was found requiring extra Products, Prices, Customers or Payment Intents Write permissions; if the UI adds dependent permissions, review the displayed explanation instead of assuming why they appeared. Editing permissions does not require replacing the key's existing value in Render. See [restricted API keys](https://docs.stripe.com/keys/restricted-api-keys).
+
+Then create the endpoint:
+
+1. Open **Workbench → Webhooks → Add destination** (or **Create an event destination**).
+2. Set **Events from** to **Connected accounts**.
+3. Select snapshot events and API version **2026-09-30.endive**. Select exactly `checkout.session.completed`, `checkout.session.expired`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed` and `charge.refunded`.
+4. Choose **Webhook endpoint** and enter `https://korlix-2meetu-payment-sandbox.onrender.com/acceptance/payments/webhook`.
+5. Create the destination. Open its details and copy the endpoint ID. Reveal its signing secret and paste it directly into `KORLIX_HOSTED_ACCEPTANCE_WEBHOOK_SECRET` on the [payment sandbox's Render Environment page](https://dashboard.render.com/web/srv-db1tevlg1s2s73bn4s60/env). Set `KORLIX_HOSTED_ACCEPTANCE_WEBHOOK_ENDPOINT_ID` to the copied `we_…` ID. Keep secret values out of chat, screenshots and Git.
+
+If the current Dashboard creates a destination with a different ID format, review that object before changing the runtime configuration. The implemented verifier supports v1 `we_…` endpoints. Stripe's [v2 Event Destination object](https://docs.stripe.com/api/v2/core/event_destinations/object) exposes `events_from`, `event_payload` and `snapshot_api_version`, but v2 retrieval is not interchangeable with the implemented v1 verifier.
+
+The [v1 endpoint response](https://docs.stripe.com/api/webhook_endpoints/retrieve) omits the creation-time `connect` flag. The Dashboard selection establishes the intended setup; actual [connected-account delivery](https://docs.stripe.com/connect/webhooks) must be demonstrated by a verified signed event with the expected merchant's top-level `account` value. Neither a configured endpoint nor a successful identity check proves payment acceptance.
 
 ## Remaining acceptance work
 
-Ten focused tests pass in `backend/test/manual/hosted_stripe_acceptance.test.mjs`. They cover isolated configuration, database guard creation/restart and refusal of foreign objects, private HTTP access, absent payment routes, missing credentials, serialized identity reads, mismatched Stripe identity, expiry and sanitized errors. Those tests use provider and PostgreSQL test doubles; the real hosted database and Stripe identity evidence is recorded separately above. An additional local PGlite catalog smoke check exercised guard creation and matching restart, with only the database-name identity query substituted for the dedicated fixture name.
+The historical stage-one suite passed ten focused tests in `backend/test/manual/hosted_stripe_acceptance.test.mjs`, covering isolated configuration, database guards, private access, absent payment routes, identity reads, expiry and sanitized errors. It used provider and PostgreSQL test doubles. A separate local PGlite catalog smoke check exercised guard creation and matching restart, substituting only the dedicated fixture's database-name identity query. These are historical results, not a test count for scheduling-v2.
 
-Database and credential identity verification are complete. Next, implement and review the durable scheduling ledger, tightly scoped synthetic booking provisioning, Stripe-signed webhook handling, private customer return page and controlled one-run Checkout issuance. Then run one new genuine sandbox checkout to establish the new paid transition and actual HTTPS Stripe redirect. Existing refunded records must not be reset, relabeled unpaid or treated as a new transition. Until that test passes, paid-booking and redirect acceptance remain open. All production checkout flags remain false.
+| New scheduling-v2 evidence | Status |
+| --- | --- |
+| Reviewed code and focused test counts | 60/60 tests passed across database, payment flow, HTTP integration, return UI and stage-one boundaries. Database/flow/HTTP fixtures execute real PostgreSQL catalogs and production scheduling SQL in PGlite; Stripe is mocked. Independent review found no remaining critical isolation or locking issues. |
+| Hosted deployment ID, commit and live timestamp | Pending root verification |
+| Hosted schema upgrade and endpoint configuration | Pending root verification |
+| New genuine sandbox payment and signed completion delivery | Not yet proven |
+| Actual Stripe-to-HTTPS return and ledger-only status display | Not yet proven |
+| Duplicate delivery, restart recovery and full refund | Not yet proven for the new hosted run |
+| Zero platform transaction fee evidence | Not yet proven for the new hosted run |
+
+The next acceptance run must use the new owned booking, matching signed events and the actual Stripe redirect. Existing refunded records must not be reset, relabeled unpaid or treated as a new paid transition. Record provider IDs, signed-delivery evidence, resulting ledger state and sanitized test output without private links or secrets. All production checkout flags remain false.
