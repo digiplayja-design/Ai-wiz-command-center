@@ -80,6 +80,81 @@ test("Stripe diagnostics discard malformed provider codes and request IDs", asyn
   assert.deepEqual(records, [{ stage: "account_v2", status: 400, code: "unclassified", requestId: undefined }]);
 });
 
+const legacyMerchant = () => ({
+  id: pay.account_id, object: "account",
+  business_profile: { name: "Sandbox business" },
+  controller: { stripe_dashboard: { type: "full" }, fees: { payer: "account" },
+    losses: { payments: "stripe" }, requirement_collection: "stripe" },
+  charges_enabled: true, payouts_enabled: true,
+  capabilities: { card_payments: "active" },
+});
+const v2Failure = (code, status = 400) => new Response(JSON.stringify({ error: { code } }), { status });
+
+test("OAuth can verify a v1 account identity without granting payment readiness", async () => {
+  for (const code of ["v1_account_instead_of_v2_account", "account_not_yet_compatible_with_v2"]) {
+    const calls = [];
+    const adapter = stripeProvider(config("false"), {
+      diagnostic: () => {},
+      fetcher: async (url, options) => {
+        calls.push(new URL(url).pathname);
+        assert.equal(options.method, "GET");
+        assert.equal(options.headers["Stripe-Account"], undefined);
+        return calls.length === 1 ? v2Failure(code) : response(legacyMerchant());
+      },
+    });
+    const identity = await adapter.identity({ account_id: pay.account_id, livemode: false }, { allowPendingCompatibility: true });
+    assert.equal(identity.id, pay.account_id);
+    assert.equal(identity.livemode, false);
+    assert.equal(identity.charges_enabled, false, "Legacy active flags cannot authorize checkout");
+    assert.equal(identity.readiness_source, "v1_identity_only");
+    assert.equal(identity.card_payments_status, "pending_v2_verification");
+    assert.deepEqual(calls, ["/v2/core/accounts/" + pay.account_id, "/v1/accounts/" + pay.account_id]);
+  }
+});
+
+test("OAuth identity compatibility rejects the wrong account and platform-controlled responsibilities", async () => {
+  for (const change of [
+    (a) => { a.id = "acct_other"; },
+    (a) => { a.object = "other"; },
+    (a) => { a.controller.stripe_dashboard.type = "express"; },
+    (a) => { a.controller.fees.payer = "application"; },
+    (a) => { a.controller.losses.payments = "application"; },
+    (a) => { delete a.controller; },
+  ]) {
+    const legacy = legacyMerchant(); change(legacy);
+    const adapter = stripeProvider(config("false"), {
+      diagnostic: () => {},
+      fetcher: async (url) => new URL(url).pathname.startsWith("/v2/")
+        ? v2Failure("v1_account_instead_of_v2_account") : response(legacy),
+    });
+    await assert.rejects(adapter.identity({ account_id: pay.account_id, livemode: false },
+      { allowPendingCompatibility: true }), { status: 409 });
+  }
+});
+
+test("compatibility does not bypass authorization failures or permit checkout without v2 readiness", async () => {
+  for (const code of ["accounts_v2_access_blocked", "not_found", "api_key_expired"]) {
+    let calls = 0;
+    const adapter = stripeProvider(config("false"), {
+      diagnostic: () => {}, fetcher: async () => { calls++; return v2Failure(code); },
+    });
+    await assert.rejects(adapter.identity({ account_id: pay.account_id, livemode: false },
+      { allowPendingCompatibility: true }));
+    assert.equal(calls, 1);
+  }
+  let calls = 0;
+  const adapter = stripeProvider(config("true"), {
+    diagnostic: () => {},
+    fetcher: async (_url, options) => {
+      calls++;
+      assert.equal(options.method, "GET", "Unverified accounts cannot create payments");
+      return v2Failure("v1_account_instead_of_v2_account");
+    },
+  });
+  await assert.rejects(adapter.checkout(pay, wire()));
+  assert.equal(calls, 1);
+});
+
 test("Stripe payment activation is explicit and does not invalidate saved grants", async () => {
   for (const flag of [undefined, "false", "TRUE", "1", "", true]) {
     const c = config(flag);

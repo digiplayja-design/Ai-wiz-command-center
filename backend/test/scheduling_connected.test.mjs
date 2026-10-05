@@ -238,6 +238,15 @@ async function fixtureFetch(url, options = {}) {
     body: options.body,
     headers: options.headers,
   });
+  if (u.hostname === "connect.stripe.com" && u.pathname === "/oauth/token")
+    return json({ stripe_user_id: "acct_oauthlegacy", scope: "read_write", livemode: false });
+  if (u.pathname === "/v2/core/accounts/acct_oauthlegacy")
+    return json({ error: { code: "v1_account_instead_of_v2_account" } }, 400);
+  if (u.pathname === "/v1/accounts/acct_oauthlegacy")
+    return json({ id: "acct_oauthlegacy", object: "account", business_profile: { name: "Legacy fixture" },
+      controller: { stripe_dashboard: { type: "full" }, fees: { payer: "account" },
+        losses: { payments: "stripe" }, requirement_collection: "stripe" },
+      charges_enabled: true, payouts_enabled: true });
   if (u.hostname === "api.stripe.com" && u.pathname.startsWith("/v2/core/accounts/"))
     return json({
       id: u.pathname.split("/").at(-1), object: "v2.core.account", livemode: false,
@@ -493,6 +502,26 @@ test("OAuth requires signed-in start, one-use handoff, same-browser state, and o
   );
   await http("/connections/" + c.id + "/disconnect", { confirmed: true });
 });
+test("Stripe OAuth completes and requires owner confirmation while v2 compatibility is pending", async () => {
+  const { data: attempt } = await http("/connections/stripe/start", { confirmed: true }, other);
+  const launch = new URL(attempt.url);
+  const started = await http(launch.pathname.replace("/api/scheduling", "") + launch.search, null, null, 303);
+  const browser = started.headers.get("set-cookie").split(";")[0];
+  const authorization = new URL(started.headers.get("location"));
+  const callback = "/connect/stripe/callback?state=" + authorization.searchParams.get("state") + "&code=fixture-legacy";
+  const result = await http(callback, null, null, 200, { cookie: browser });
+  assert(result.data.includes("Account verified"));
+  await http("/connections/attempts/" + attempt.id + "/confirm", { confirmed: true }, host, 400);
+  await http("/connections/attempts/" + attempt.id + "/confirm", { confirmed: true }, other);
+  const listing = (await http("/connections", null, other)).data;
+  const connected = listing.connections.find((c) => c.remote_id === "acct_oauthlegacy");
+  assert.equal(connected.state, "connected");
+  assert.equal(connected.charges_enabled, false);
+  assert.equal(connected.livemode, false);
+  assert(!JSON.stringify(listing).includes("sealed_grant"));
+  await http("/connections/" + connected.id + "/disconnect", { confirmed: true }, other);
+});
+
 test("calendar providers fail closed on incomplete pagination, bad times, and empty access tokens", async () => {
   const g = calendarProvider(settings.providers.google, {
     fetcher: async () => json({ items: [], nextPageToken: "repeat" }),

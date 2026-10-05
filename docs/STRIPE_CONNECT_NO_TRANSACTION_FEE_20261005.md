@@ -6,7 +6,7 @@ Decision recorded 2026-10-05: businesses use KORLIX to collect payments from the
 
 Use Accounts v2 (`/v2/core/accounts`) for new business accounts, with `dashboard: "full"`, `defaults.responsibilities.fees_collector: "stripe"` and `defaults.responsibilities.losses_collector: "stripe"`. Direct-charge businesses need `configuration.merchant` and requested `card_payments` capability; payout capability is requested automatically. Do not use a legacy account `type` for new account creation.
 
-The current patch retrieves already connected accounts through v2. It does not create accounts. Stripe documents that v1-created accounts can be read through v2, although newly created accounts can take time to become available; any unavailable or incompatible account remains unable to start checkout.
+The current patch checks already connected accounts through v2. It does not create accounts. Stripe documents that v1-created accounts can take time to become available through v2. For the explicit `v1_account_instead_of_v2_account` or `account_not_yet_compatible_with_v2` HTTP 400 errors, OAuth callback and owner confirmation may verify identity through `/v1/accounts/{id}` instead. This identity-only path still requires the exact authorized account ID, full Dashboard access, account-paid Stripe fees, and Stripe-managed losses/requirements. It always records payment readiness as false, regardless of legacy payment flags. Checkout never uses this compatibility path and still requires fresh v2 capability verification.
 
 ## Charge pattern
 
@@ -111,7 +111,11 @@ The user's 2026-10-05 01:26 UTC screenshot verifies that OAuth is enabled in the
 
 Diagnostic support now logs only the Stripe operation phase, HTTP status, validated error code and request ID. It excludes raw URLs, credentials, authorization codes, provider messages and customer data. An optional `KORLIX_SCHEDULING_STRIPE_PROBE_ACCOUNT` performs one read-only account verification on startup, only when scheduling checkout is paused, settings are configured and the key has a test prefix. It does not persist a connection or create a payment. Stripe documents that newly created v1 accounts can take up to ten minutes to become available to v2 reads; the actual failure still needs to be identified, and authorization codes must never be replayed.
 
-Actual key authentication, completed OAuth authorization, v2 capability reads, signed delivery and payment acceptance remain open. Focused diagnostics regression: 55 tests passed, including provider-error redaction.
+### OAuth compatibility correction
+
+Diagnostic deployment `dep-db1fvtfavr4c73bnv1t0` (`55238686a4adb0ec39ed029849949b2540c83957`) reproduced HTTP 400 `v1_account_instead_of_v2_account` at 01:40:33 UTC, using the saved scheduling credentials and the exact account created in the failed OAuth attempt. This confirms the account lookup incompatibility. The correction allows verified OAuth account identity and explicit owner confirmation to complete while v2 eligibility is pending. It does not grant payment readiness using legacy `charges_enabled` or `payouts_enabled` values, and it does not fall back for authentication, authorization, missing-account or platform-access errors. Account mode continues to be verified against the OAuth token exchange and configured key context.
+
+The initial failed authorization code must not be replayed; the user must initiate a fresh connection from 2MEETU after deployment. Completed user authorization, v2 payment readiness, signed delivery and payment acceptance remain open. Diagnostics regression passed 55 tests; the compatibility regression additionally covers rejected account/responsibility mismatches, no payment creation without v2 readiness, and a full fixture OAuth callback plus owner confirmation.
 
 ## Open launch items
 

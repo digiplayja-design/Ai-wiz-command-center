@@ -320,7 +320,7 @@ export function schedulingConnected({
       const secrets = cipher.open(attempt.sealed_secrets, attempt.id),
         code = text(q.query.code, 4000);
       const grant = await adapters[c.name].exchange(code, secrets.verifier),
-        identity = await adapters[c.name].identity(grant);
+        identity = await adapters[c.name].identity(grant, { allowPendingCompatibility: true });
       await oauth("complete", attempt.id, {
         config_hash: c.fingerprint,
         sealed_grant: cipher.seal(grant, attempt.id),
@@ -343,7 +343,7 @@ export function schedulingConnected({
       if (a.config_hash !== c.fingerprint)
         fail("Connection settings changed. Start again.", 409);
       const grant = cipher.open(a.sealed_grant, a.id),
-        identity = await adapters[a.provider].identity(grant);
+        identity = await adapters[a.provider].identity(grant, { allowPendingCompatibility: true });
       if (identity.id !== a.identity.id)
         fail("The connected account changed. Start again.", 409);
       r.json(
@@ -729,9 +729,10 @@ export function schedulingConnected({
   if (autoStart && paymentsConfigured && !providers.stripe.enabled &&
       /^(sk|rk)_test_/.test(providers.stripe.key) &&
       /^acct_[A-Za-z0-9]+$/.test(probeAccount || "")) {
-    void adapters.stripe.identity({ account_id: probeAccount, livemode: false })
+    void adapters.stripe.identity({ account_id: probeAccount, livemode: false }, { allowPendingCompatibility: true })
       .then((identity) => console.info("[Scheduling Stripe] " + JSON.stringify({
         stage: "sandbox_readiness_probe", verified: true,
+        source: identity.readiness_source,
         cardPayments: identity.card_payments_status,
         payouts: identity.payouts_status,
       })))

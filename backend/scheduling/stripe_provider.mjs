@@ -71,7 +71,7 @@ export function stripeProvider(config, { fetcher = fetch, diagnostic = (value) =
     if (accountId && !account(accountId))
       throw new ProviderError("Invalid merchant account.");
     const { data } = await request(
-      path.startsWith("/v2/") ? "account_v2" : "payment_api",
+      path.startsWith("/v2/") ? "account_v2" : path.startsWith("/accounts/") ? "account_identity_v1" : "payment_api",
       "https://api.stripe.com" + (path.startsWith("/v2/") ? path : "/v1" + path),
       {
         method,
@@ -169,14 +169,41 @@ export function stripeProvider(config, { fetcher = fetch, diagnostic = (value) =
         );
       return { account_id: data.stripe_user_id, livemode: data.livemode };
     },
-    async identity(grant) {
+    async identity(grant, { allowPendingCompatibility = false } = {}) {
       if (!account(grant.account_id) || grant.livemode !== livemode)
         throw new ProviderError("Reconnect your merchant account.", 409);
       const query = new URLSearchParams({
         "include[0]": "configuration.merchant",
         "include[1]": "defaults",
       });
-      const a = await api("/v2/core/accounts/" + grant.account_id + "?" + query);
+      let a;
+      try {
+        a = await api("/v2/core/accounts/" + grant.account_id + "?" + query);
+      } catch (error) {
+        // OAuth can return an account that Stripe cannot yet expose through
+        // v2. Verify its identity for owner confirmation without declaring
+        // it payment-ready. Checkout never enables this compatibility path.
+        if (!allowPendingCompatibility || error.upstream?.status !== 400 ||
+            !["v1_account_instead_of_v2_account", "account_not_yet_compatible_with_v2"]
+              .includes(error.upstream?.code)) throw error;
+        const legacy = await api("/accounts/" + grant.account_id);
+        if (legacy.id !== grant.account_id || legacy.object !== "account" ||
+            legacy.controller?.stripe_dashboard?.type !== "full" ||
+            legacy.controller?.fees?.payer !== "account" ||
+            legacy.controller?.losses?.payments !== "stripe" ||
+            legacy.controller?.requirement_collection !== "stripe")
+          throw new ProviderError(
+            "Connect an independent Stripe business account with Stripe-managed processing fees.", 409);
+        return {
+          id: legacy.id,
+          label: String(legacy.business_profile?.name || legacy.company?.name || legacy.id).slice(0, 250),
+          charges_enabled: false,
+          card_payments_status: "pending_v2_verification",
+          payouts_status: "pending_v2_verification",
+          readiness_source: "v1_identity_only",
+          livemode,
+        };
+      }
       if (
         a.id !== grant.account_id ||
         a.object !== "v2.core.account" ||
@@ -201,6 +228,7 @@ export function stripeProvider(config, { fetcher = fetch, diagnostic = (value) =
         charges_enabled: cards === "active" && payouts === "active",
         card_payments_status: cards || "unavailable",
         payouts_status: payouts || "unavailable",
+        readiness_source: "accounts_v2",
         livemode,
       };
     },
