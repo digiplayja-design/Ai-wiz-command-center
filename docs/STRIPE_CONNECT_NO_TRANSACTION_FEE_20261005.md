@@ -235,6 +235,10 @@ The durable sandbox configuration requires the new database's internal URL and a
 
 The staging implementation and all ten focused tests passed and were committed as `1941e6acc84c1cdc39c37fd93823bbf91ef2c1b8`. Automatic approval review rejected creation of `korlix-2meetu-payment-sandbox` because its fresh token hash and encryption key require explicit approval for transfer to Render. No web service was created, no workaround was attempted, and no production credential was included. The code and database are prepared; the separate web deployment awaits that approval. Production checkout remains paused.
 
+The user subsequently approved the exact deployment at 16:58:36 UTC. Service `srv-db1tevlg1s2s73bn4s60` was created on the Free Ohio plan with auto-deploy off; deploy `dep-db1tevtg1s2s73bn4t70` of `d771d2cc44b0fbb8dcc602406ea9f3fcdeb236ac` became live at 17:00:10 UTC. It has fresh service-specific security values but still no database URL or Stripe API key. Production health reads at 16:59 UTC again confirmed all three checkout switches false. The deployment-approval blocker is resolved; database and provider identity configuration, and the actual paid-booking/redirect runtime and acceptance, remain outstanding.
+
+Nine live HTTPS boundary checks passed at 17:02:06 UTC, including safe blocked health, authenticated private status, rejected unauthenticated/browser-origin/query-token requests, unavailable payment/webhook/booking routes, and blocked verification without the database credential. All used no-store response headers. No provider request ran. Next configuration is the dedicated Internal Database URL and sandbox restricted test key saved directly in the new service's Render Environment settings.
+
 ## Open launch items
 
 Actual sandbox OAuth authorization/owner confirmation, isolated merchant v2 readiness, direct payment reconciliation, zero application fee, full refund while paused, signed payment-completion replay/duplicate handling, signed refund-event handling, original signed expiry-event delivery to the deployed endpoint, and actual iPad display of the saved refunded result are verified above. Remaining provider acceptance is:

@@ -45,7 +45,22 @@ Entry point: `backend/test/manual/hosted_stripe_acceptance.mjs`. The isolated de
 
 Implementation and ten focused tests are committed as `1941e6acc84c1cdc39c37fd93823bbf91ef2c1b8`. Creating the intended Free Ohio web service `korlix-2meetu-payment-sandbox` was rejected by automatic approval review before a service was created. The stated reason was transmission of a fresh bearer-token hash and encryption key to an external Render destination without explicit approval for that secret-bearing deployment. No alternate route or reduced-guard deployment was attempted. The dedicated database already exists; the web deployment remains pending user approval. No live Stripe key, production credential or database URL was included in the rejected request.
 
-The concrete pending deployment uses the existing GitHub repository and release branch, auto-deploy off, Node 24, the isolated build/start commands below, and newly generated service-specific security values. It starts without a database URL or Stripe key and exposes only blocked health plus authenticated identity-readiness commands. Approval would allow this staging deployment only; it would not enable payment processing or finish provider acceptance.
+The concrete deployment uses the existing GitHub repository and release branch, auto-deploy off, Node 24, the isolated build/start commands below, and newly generated service-specific security values. It starts without a database URL or Stripe key and exposes only blocked health plus authenticated identity-readiness commands.
+
+### Approved deployment — 2026-10-05 17:00 UTC
+
+The user explicitly approved this secret-bearing Free staging deployment at 16:58:36 UTC. Render created `korlix-2meetu-payment-sandbox`, service `srv-db1tevlg1s2s73bn4s60`, with fresh service-specific security values and no database URL or Stripe key. Deploy `dep-db1tevtg1s2s73bn4t70` of commit `d771d2cc44b0fbb8dcc602406ea9f3fcdeb236ac` became live at 17:00:10 UTC. The Free Ohio Node service has auto-deploy off and no shared environment group. This resolves the deployment-approval blocker above; provider acceptance remains open.
+
+- [Service Dashboard](https://dashboard.render.com/web/srv-db1tevlg1s2s73bn4s60)
+- [Environment configuration](https://dashboard.render.com/web/srv-db1tevlg1s2s73bn4s60/env)
+- [Dedicated database](https://dashboard.render.com/d/dpg-db1svtm0tbcc73caq380-a)
+- [Public health](https://korlix-2meetu-payment-sandbox.onrender.com/health)
+
+Production scheduling, web billing and Directory health each returned HTTP 200 and `checkoutEnabled:false` at 16:59 UTC. The new service's error-log query through 17:00:49 UTC returned no entries. Production services and credentials were not changed.
+
+Nine live HTTPS checks passed at 17:02:06 UTC: health and authenticated private status returned 200; missing authentication returned 401; a browser Origin returned 403; URL-token, webhook, checkout and customer booking routes returned 404; private verification without the database URL returned 503. All responses used `Cache-Control:no-store`. Health reports missing database credential, missing Stripe test key and payment runtime not implemented. Checkout, payment connectivity and webhooks are all false. This verifies deployed staging boundaries, not database bootstrap or Stripe identity. No provider operation ran.
+
+Next, enter the new database's **Internal Database URL** as `KORLIX_HOSTED_ACCEPTANCE_DATABASE_URL`, and a restricted test key from **KORLIX 2MEETU Testing sandbox** as `KORLIX_HOSTED_ACCEPTANCE_STRIPE_KEY`, directly in this service's Environment page. Save and deploy the environment change, then run authenticated readiness verification. Keep secret values out of chat and Git. Identity verification will still leave the payment runtime disabled.
 
 The dedicated Node 24 service uses auto-deploy off and no environment group. Build with `npm ci --prefix backend/test/manual/hosted-runtime --ignore-scripts --no-audit --no-fund && node --check backend/test/manual/hosted_stripe_acceptance.mjs`; start with `node backend/test/manual/hosted_stripe_acceptance.mjs`. `SKIP_INSTALL_DEPS=true` avoids installing the unrelated root app dependencies.
 
