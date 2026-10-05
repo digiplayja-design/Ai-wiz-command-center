@@ -225,6 +225,14 @@ The user supplied `IMG_3097.png` and `IMG_3098.png`, showing the dedicated HTTPS
 
 This completes actual iPad rendering verification for the saved, already-refunded result. The screenshots do not demonstrate button interactions, a fresh Stripe status read, a Stripe-to-booking redirect, or a deployed paid-booking transition. No new payment or refund was requested for this check. Production checkout remains paused; this checkpoint changes documentation only.
 
+### Hosted acceptance foundation and credential blocker — 2026-10-05 UTC
+
+A post-refund replay of the original second completion event was attempted using a temporary ledger copy. It stopped before starting a listener, harness or resend: Stripe CLI `whoami` exited 1 with `authenticated:false`. The original ledger remains unchanged, no provider operation ran, and the temporary copy was removed. Even a successful replay of that refunded booking would only establish terminal-state idempotency; it cannot establish a new paid transition or replace the Checkout's original `.invalid` return URL.
+
+A dedicated Free PostgreSQL 17 instance, `dpg-db1svtm0tbcc73caq380-a`, was created in Ohio for `korlix_2meetu_acceptance`. External access is disabled. This is separate from production and from the saved-result display; it expires on 2026-11-04. A separate staging entry point and isolated `pg@8.23.1` dependency directory were prepared for hosted identity verification. The staging runtime has only safe health and authenticated private readiness commands, no booking/payment/refund/webhook routes, and always reports payment readiness blocked.
+
+The durable sandbox configuration requires the new database's internal URL and a dedicated restricted test key from **KORLIX 2MEETU Testing sandbox**, entered directly in the new Render service. CLI credentials and production secrets are not transferred. Database identity/bootstrap and sandbox identity remain unverified until that configuration is supplied. This foundation is not completion of the paid-booking or redirect acceptance test. See [hosted sandbox staging](STRIPE_HOSTED_SANDBOX_STAGING.md).
+
 ## Open launch items
 
 Actual sandbox OAuth authorization/owner confirmation, isolated merchant v2 readiness, direct payment reconciliation, zero application fee, full refund while paused, signed payment-completion replay/duplicate handling, signed refund-event handling, original signed expiry-event delivery to the deployed endpoint, and actual iPad display of the saved refunded result are verified above. Remaining provider acceptance is:
