@@ -11,6 +11,7 @@ import { registerScheduling } from "../../scheduling/routes.mjs";
 import { event, secret } from "../../scheduling/core.mjs";
 import { providerCipher, providerSettings } from "../../scheduling/provider_core.mjs";
 import { stripeProvider } from "../../scheduling/stripe_provider.mjs";
+import { createCliSessionFetch } from "./stripe_cli_session_transport.mjs";
 
 const PUBLIC_ORIGIN = "https://korlix-acceptance.invalid";
 const EVENTS = new Set(["checkout.session.completed", "checkout.session.expired",
@@ -23,8 +24,21 @@ const privateWrite = (path, value) => writeFile(path, JSON.stringify(value), { m
 
 export function acceptanceConfig(input = {}) {
   assert.equal(input.KORLIX_ACCEPTANCE_RUN, "isolated-stripe-sandbox", "Explicit isolated acceptance opt-in is required.");
-  const key = input.KORLIX_ACCEPTANCE_STRIPE_SECRET_KEY || "";
-  assert.match(key, /^(?:sk|rk|rkcs)_test_[A-Za-z0-9]+$/, "A dedicated acceptance test API key is required.");
+  const authMode = input.KORLIX_ACCEPTANCE_AUTH_MODE || "api_key";
+  assert(["api_key", "cli_session"].includes(authMode), "Choose api_key or cli_session authentication.");
+  const context = input.KORLIX_ACCEPTANCE_CLI_CONTEXT;
+  let key;
+  if (authMode === "cli_session") {
+    assert(!Object.entries(input).some(([name, value]) => value && /(?:^|_)STRIPE_(?:SECRET_KEY|API_KEY)$/.test(name)), "CLI mode must not be supplied API keys.");
+    assert.match(context || "", /^[A-Za-z][A-Za-z0-9_]{5,199}$/, "Supply the exact authorized CLI sandbox context.");
+    assert(!ATTACHED_PLATFORM_IDS.has(context), "The production-attached context cannot be used.");
+    assert(typeof input.KORLIX_ACCEPTANCE_CLI_CONFIG === "string" && input.KORLIX_ACCEPTANCE_CLI_CONFIG.startsWith("/"), "Supply a dedicated absolute CLI config path.");
+    // Opaque adapter fingerprint marker, never a key or outbound credential.
+    key = "manual-cli-session:" + context;
+  } else {
+    key = input.KORLIX_ACCEPTANCE_STRIPE_SECRET_KEY || "";
+    assert.match(key, /^(?:sk|rk|rkcs)_test_[A-Za-z0-9]+$/, "A dedicated acceptance test API key is required.");
+  }
   const webhook = input.KORLIX_ACCEPTANCE_WEBHOOK_SECRET || "";
   assert.match(webhook, /^whsec_[A-Za-z0-9]+$/, "A CLI acceptance signing secret is required.");
   const platform = input.KORLIX_ACCEPTANCE_PLATFORM_ID;
@@ -33,11 +47,15 @@ export function acceptanceConfig(input = {}) {
   assert(!ATTACHED_PLATFORM_IDS.has(platform) && !ATTACHED_PLATFORM_IDS.has(merchant), "The live account and production-attached sandbox cannot be used by this harness.");
   const port = Number(input.KORLIX_ACCEPTANCE_PORT ?? 8787);
   assert(Number.isInteger(port) && (port === 0 || (port >= 1024 && port <= 65535)), "Use a loopback port from 1024 through 65535, or 0 for a free port.");
-  return { key, webhook, platform, merchant, port };
+  return { key, webhook, platform, merchant, port, authMode, context, cliConfig: input.KORLIX_ACCEPTANCE_CLI_CONFIG };
 }
 
-export async function createAcceptanceHarness({ environment = {}, fetcher = fetch, resumeDirectory } = {}) {
+export async function createAcceptanceHarness({ environment = {}, fetcher, cliRunner, resumeDirectory } = {}) {
   const config = acceptanceConfig(environment); // Validate before disk, network, or database work.
+  assert(config.authMode !== "cli_session" || fetcher === undefined, "CLI mode requires its guarded CLI transport.");
+  const transport = config.authMode === "cli_session" ? createCliSessionFetch({ configPath: config.cliConfig,
+    expectedContext: config.context, expectedPlatform: config.platform, merchant: config.merchant, marker: config.key,
+    childEnvironment: process.env, ...(cliRunner ? { runner: cliRunner } : {}) }) : (fetcher || fetch);
   const directory = resumeDirectory ? resolve(resumeDirectory) : await mkdtemp(join(tmpdir(), "korlix-stripe-acceptance-"));
   let state;
   if (resumeDirectory) {
@@ -45,8 +63,11 @@ export async function createAcceptanceHarness({ environment = {}, fetcher = fetc
     assert.equal(state.format, "isolated-stripe-acceptance-v1");
     assert.equal(state.platform, config.platform, "Resume sandbox mismatch.");
     assert.equal(state.merchant, config.merchant, "Resume merchant mismatch.");
+    assert.equal(state.authMode || "api_key", config.authMode, "Resume authentication mode mismatch.");
+    if (config.authMode === "cli_session") assert.equal(state.context, config.context, "Resume CLI context mismatch.");
   } else {
     state = { format: "isolated-stripe-acceptance-v1", platform: config.platform, merchant: config.merchant,
+      authMode: config.authMode, ...(config.context ? { context: config.context } : {}),
       host: randomUUID(), encryptionKey: randomBytes(32).toString("base64"),
       controlToken: secret(), bookings: {}, eventId: null, slug: null };
     await privateWrite(join(directory, "private-state.json"), state);
@@ -109,7 +130,7 @@ export async function createAcceptanceHarness({ environment = {}, fetcher = fetc
       }
     }
     outboundCount++;
-    return fetcher(url, { ...options, redirect: "error" });
+    return transport(url, { ...options, redirect: "error" });
   }
   const provider = stripeProvider(settings.providers.stripe, { fetcher: guardedFetch, diagnostic: () => {} });
   let readiness = null;
