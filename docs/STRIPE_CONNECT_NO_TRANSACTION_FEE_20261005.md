@@ -107,7 +107,11 @@ Render deployment `dep-db1fn56gekts73dk6q00` of commit `35550916783dcf049d7bdf48
 
 This is configuration staging in the previously unconfigured, dedicated scheduling integration on the existing backend. It is not an isolated acceptance environment and does not authorize production test bookings. Existing web subscription and Directory credentials were not changed. An isolated acceptance environment remains required for actual end-to-end test bookings.
 
-OAuth was off and redirects empty in the last observed settings screenshot; the user was instructed to enable OAuth and register `https://chee-chai-chee-backend.onrender.com/api/scheduling/connect/stripe/callback`, but the saved settings have not yet been verified. Registering a callback or storing the public client ID does not verify authorization or payment processing. Actual key authentication, OAuth authorization, v2 capability reads, signed delivery and payment acceptance remain open.
+The user's 2026-10-05 01:26 UTC screenshot verifies that OAuth is enabled in the sandbox and `https://chee-chai-chee-backend.onrender.com/api/scheduling/connect/stripe/callback` is saved as the default redirect. The user then initiated authorization from 2MEETU and chose Stripe's blank test account. Stripe created `acct_1UN0lvLxhlZExezM`; a Stripe read shows a full-dashboard account with Stripe fee/loss responsibility and payment/payout capabilities not yet enabled. The callback returned HTTP 503 at 01:32:57 UTC with a generic provider error, so the KORLIX connection did not complete.
+
+Diagnostic support now logs only the Stripe operation phase, HTTP status, validated error code and request ID. It excludes raw URLs, credentials, authorization codes, provider messages and customer data. An optional `KORLIX_SCHEDULING_STRIPE_PROBE_ACCOUNT` performs one read-only account verification on startup, only when scheduling checkout is paused, settings are configured and the key has a test prefix. It does not persist a connection or create a payment. Stripe documents that newly created v1 accounts can take up to ten minutes to become available to v2 reads; the actual failure still needs to be identified, and authorization codes must never be replayed.
+
+Actual key authentication, completed OAuth authorization, v2 capability reads, signed delivery and payment acceptance remain open. Focused diagnostics regression: 55 tests passed, including provider-error redaction.
 
 ## Open launch items
 

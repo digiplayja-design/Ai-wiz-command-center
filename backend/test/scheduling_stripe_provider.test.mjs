@@ -47,6 +47,39 @@ const response = (value) => new Response(JSON.stringify(value), {
   headers: { "content-type": "application/json" },
 });
 
+test("Stripe diagnostics identify the failed phase without exposing provider secrets", async () => {
+  for (const phase of ["oauth_exchange", "account_v2"]) {
+    const records = [];
+    const adapter = stripeProvider(config("false"), {
+      diagnostic: (value) => records.push(value),
+      fetcher: async () => new Response(JSON.stringify(phase === "oauth_exchange"
+        ? { error: "invalid_grant", error_description: "ac_private sk_test_private" }
+        : { error: { code: "account_not_yet_compatible_with_v2", message: "private user@example.test" } }), {
+        status: 400, headers: { "request-id": "req_fixture", "content-type": "application/json" },
+      }),
+    });
+    await assert.rejects(phase === "oauth_exchange"
+      ? adapter.exchange("ac_private")
+      : adapter.identity({ account_id: "acct_fixture", livemode: false }));
+    assert.deepEqual(records, [{ stage: phase, status: 400,
+      code: phase === "oauth_exchange" ? "invalid_grant" : "account_not_yet_compatible_with_v2",
+      requestId: "req_fixture" }]);
+    assert(!JSON.stringify(records).includes("private"));
+  }
+});
+
+test("Stripe diagnostics discard malformed provider codes and request IDs", async () => {
+  const records = [];
+  const adapter = stripeProvider(config("false"), {
+    diagnostic: (value) => records.push(value),
+    fetcher: async () => new Response(JSON.stringify({ error: { code: "customer@example.test" } }), {
+      status: 400, headers: { "request-id": "https://example.test/?secret=private" },
+    }),
+  });
+  await assert.rejects(adapter.identity({ account_id: "acct_fixture", livemode: false }));
+  assert.deepEqual(records, [{ stage: "account_v2", status: 400, code: "unclassified", requestId: undefined }]);
+});
+
 test("Stripe payment activation is explicit and does not invalidate saved grants", async () => {
   for (const flag of [undefined, "false", "TRUE", "1", "", true]) {
     const c = config(flag);

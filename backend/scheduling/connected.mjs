@@ -723,6 +723,22 @@ export function schedulingConnected({
     console.info(
       `[Scheduling] Provider setup: google=${providers.google.ready}; microsoft=${providers.microsoft.ready}; stripe=${paymentsConfigured}; checkout=${paymentsReady}.`,
     );
+  // Optional, read-only sandbox diagnostic. Never sends a payment request,
+  // modifies a connection, or runs with a live key or enabled checkout.
+  const probeAccount = environment.KORLIX_SCHEDULING_STRIPE_PROBE_ACCOUNT;
+  if (autoStart && paymentsConfigured && !providers.stripe.enabled &&
+      /^(sk|rk)_test_/.test(providers.stripe.key) &&
+      /^acct_[A-Za-z0-9]+$/.test(probeAccount || "")) {
+    void adapters.stripe.identity({ account_id: probeAccount, livemode: false })
+      .then((identity) => console.info("[Scheduling Stripe] " + JSON.stringify({
+        stage: "sandbox_readiness_probe", verified: true,
+        cardPayments: identity.card_payments_status,
+        payouts: identity.payouts_status,
+      })))
+      .catch(() => console.warn("[Scheduling Stripe] " + JSON.stringify({
+        stage: "sandbox_readiness_probe", verified: false,
+      })));
+  }
   return {
     capabilities,
     paymentsReady,

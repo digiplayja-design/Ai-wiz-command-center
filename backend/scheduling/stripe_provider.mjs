@@ -53,13 +53,25 @@ export function checkoutWire(pay, manageUrl) {
     cancel_url: manageUrl,
   }).toString();
 }
-export function stripeProvider(config, { fetcher = fetch } = {}) {
+export function stripeProvider(config, { fetcher = fetch, diagnostic = (value) =>
+  console.warn("[Scheduling Stripe] " + JSON.stringify(value)) } = {}) {
   const livemode = /^sk_live_/.test(config.key) || /^rk_live_/.test(config.key);
+  async function request(stage, url, options) {
+    try {
+      return await providerRequest(fetcher, url, options);
+    } catch (error) {
+      // Deliberately omit provider messages and all request/response payloads.
+      diagnostic({ stage, status: error.upstream?.status || 0,
+        code: error.upstream?.code || "transport_error",
+        requestId: error.upstream?.requestId });
+      throw error;
+    }
+  }
   async function api(path, accountId, { method = "GET", wire, key } = {}) {
     if (accountId && !account(accountId))
       throw new ProviderError("Invalid merchant account.");
-    const { data } = await providerRequest(
-      fetcher,
+    const { data } = await request(
+      path.startsWith("/v2/") ? "account_v2" : "payment_api",
       "https://api.stripe.com" + (path.startsWith("/v2/") ? path : "/v1" + path),
       {
         method,
@@ -131,8 +143,8 @@ export function stripeProvider(config, { fetcher = fetch } = {}) {
       return u.href;
     },
     async exchange(code) {
-      const { data } = await providerRequest(
-        fetcher,
+      const { data } = await request(
+        "oauth_exchange",
         "https://connect.stripe.com/oauth/token",
         {
           method: "POST",

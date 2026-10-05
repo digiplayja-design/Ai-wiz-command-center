@@ -95,7 +95,7 @@ export async function providerRequest(
   }
   if (!response.ok && !allowedStatuses.includes(response.status)) {
     const code = data.error?.code || data.error;
-    throw new ProviderError(
+    const error = new ProviderError(
       response.status === 401 || code === "invalid_grant"
         ? "Reconnect this account to restore access."
         : response.status === 429
@@ -106,6 +106,16 @@ export async function providerRequest(
         ? "reconnect_required"
         : "provider_unavailable",
     );
+    // Allow diagnostics to identify the upstream failure without preserving
+    // response bodies, authorization codes, URLs, or credential headers.
+    error.upstream = {
+      status: response.status,
+      code: typeof code === "string" && /^[a-z][a-z0-9_]{0,100}$/.test(code)
+        ? code : "unclassified",
+      requestId: /^req_[A-Za-z0-9]{1,100}$/.test(response.headers.get("request-id") || "")
+        ? response.headers.get("request-id") : undefined,
+    };
+    throw error;
   }
   return { status: response.status, data };
 }
