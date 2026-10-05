@@ -6,7 +6,7 @@ This is a separate, disabled foundation for durable provider acceptance. It is n
 
 Both genuine sandbox payments in the existing local ledger are fully refunded. Their old Checkout sessions retain the `.invalid` return URLs. Replaying those completion events can test terminal-state idempotency, but cannot prove a new paid-booking transition or a Stripe-to-booking redirect. On 2026-10-05 at 16:27 UTC, the attempted terminal replay stopped at CLI identity validation: the dedicated configuration reported `authenticated:false`. No listener, harness, resend, new payment or refund ran. The original ledger was unchanged, and the temporary copy was removed.
 
-The Stripe connector currently exposes only the original Korlix INC live account and sandbox. The isolated testing sandbox is separate. CLI OAuth credentials are not exported to Render. The hosted service needs a dedicated sandbox restricted API key, entered directly in Render's environment settings.
+The Stripe connector currently exposes only the original Korlix INC live account and sandbox. The isolated testing sandbox is separate. CLI OAuth credentials are not exported to Render. The user entered a dedicated sandbox restricted API key directly in the hosted service's Render environment settings; its identity verification passed on 2026-10-05 at 23:17:35.121 UTC.
 
 ## Isolated identities and storage
 
@@ -23,7 +23,7 @@ The Stripe connector currently exposes only the original Korlix INC live account
 | Created | 2026-10-05 16:27:34 UTC |
 | Expires | 2026-11-04 16:27:34 UTC |
 
-External database access is disabled (`ipAllowList: []`). Render reports the instance available. Its hosted MCP SQL tool cannot query databases with external access disabled; this restriction remains intact. The new web service will use the internal connection. Database identity and bootstrap still require runtime verification after its internal URL is configured.
+External database access is disabled (`ipAllowList: []`). Render reports the instance available. Its hosted MCP SQL tool cannot query databases with external access disabled; this restriction remains intact. The new web service uses the internal connection. Database bootstrap completed at 2026-10-05 23:16:42.854 UTC, and authenticated runtime verification subsequently passed.
 
 The Free database is temporary, expires after 30 days, and has no managed backups. Preserve any future test evidence before expiry. Do not upgrade or attach production data automatically. See [Render Free instance limits](https://render.com/docs/free).
 
@@ -43,7 +43,7 @@ Entry point: `backend/test/manual/hosted_stripe_acceptance.mjs`. The isolated de
 
 ### Deployment approval blocker — 2026-10-05 UTC
 
-Implementation and ten focused tests are committed as `1941e6acc84c1cdc39c37fd93823bbf91ef2c1b8`. Creating the intended Free Ohio web service `korlix-2meetu-payment-sandbox` was rejected by automatic approval review before a service was created. The stated reason was transmission of a fresh bearer-token hash and encryption key to an external Render destination without explicit approval for that secret-bearing deployment. No alternate route or reduced-guard deployment was attempted. The dedicated database already exists; the web deployment remains pending user approval. No live Stripe key, production credential or database URL was included in the rejected request.
+Implementation and ten focused tests are committed as `1941e6acc84c1cdc39c37fd93823bbf91ef2c1b8`. Creating the intended Free Ohio web service `korlix-2meetu-payment-sandbox` was rejected by automatic approval review before a service was created. The stated reason was transmission of a fresh bearer-token hash and encryption key to an external Render destination without explicit approval for that secret-bearing deployment. No alternate route or reduced-guard deployment was attempted. The dedicated database already existed; at that point, the web deployment was pending user approval. No live Stripe key, production credential or database URL was included in the rejected request.
 
 The concrete deployment uses the existing GitHub repository and release branch, auto-deploy off, Node 24, the isolated build/start commands below, and newly generated service-specific security values. It starts without a database URL or Stripe key and exposes only blocked health plus authenticated identity-readiness commands.
 
@@ -60,7 +60,13 @@ Production scheduling, web billing and Directory health each returned HTTP 200 a
 
 Nine live HTTPS checks passed at 17:02:06 UTC: health and authenticated private status returned 200; missing authentication returned 401; a browser Origin returned 403; URL-token, webhook, checkout and customer booking routes returned 404; private verification without the database URL returned 503. All responses used `Cache-Control:no-store`. Health reports missing database credential, missing Stripe test key and payment runtime not implemented. Checkout, payment connectivity and webhooks are all false. This verifies deployed staging boundaries, not database bootstrap or Stripe identity. No provider operation ran.
 
-Next, enter the new database's **Internal Database URL** as `KORLIX_HOSTED_ACCEPTANCE_DATABASE_URL`, and a restricted test key from **KORLIX 2MEETU Testing sandbox** as `KORLIX_HOSTED_ACCEPTANCE_STRIPE_KEY`, directly in this service's Environment page. Save and deploy the environment change, then run authenticated readiness verification. Keep secret values out of chat and Git. Identity verification will still leave the payment runtime disabled.
+### Database and sandbox identity verified — 2026-10-05 23:17 UTC
+
+The user configured the dedicated Internal Database URL and restricted sandbox key directly in this service's Environment page. Deploy `dep-db22vjss728c73assmi0` of commit `1ab9451cac746f20a2e1925ab11100d54b256a63` became live at 23:16:44.178995 UTC. The database guard was bootstrapped at 23:16:42.854 UTC. No Stripe secret values were returned to the assistant or recorded in verification evidence.
+
+Authenticated `POST /acceptance/verify` returned HTTP 200 with `databaseReady:true` and `identityVerified:true`. Its evidence matched platform `acct_1UN1QuLwavBaepoe`, merchant `acct_1UN1WiLwavcz7g46`, `livemode:false`, `source:accounts_v2`, `cardPayments:active` and `payouts:active`. Both `identity.checkedAt` and `database.lastVerifiedAt` were `2026-10-05T23:17:35.121Z`.
+
+The only remaining blocker was `payment_runtime_not_implemented`. Readiness remained `blocked`, with `checkoutEnabled:false`, `paymentsConnected:false` and `webhookEnabled:false`. This verifies the hosted database and sandbox identity access; it does not establish payment, webhook or customer-redirect acceptance.
 
 The dedicated Node 24 service uses auto-deploy off and no environment group. Build with `npm ci --prefix backend/test/manual/hosted-runtime --ignore-scripts --no-audit --no-fund && node --check backend/test/manual/hosted_stripe_acceptance.mjs`; start with `node backend/test/manual/hosted_stripe_acceptance.mjs`. `SKIP_INSTALL_DEPS=true` avoids installing the unrelated root app dependencies.
 
@@ -68,8 +74,8 @@ The dedicated Node 24 service uses auto-deploy off and no environment group. Bui
 | --- | --- |
 | `KORLIX_HOSTED_ACCEPTANCE_MODE` | `isolated-postgres-sandbox-v1` |
 | `KORLIX_HOSTED_ACCEPTANCE_DATABASE_HOST` | Exact internal host above |
-| `KORLIX_HOSTED_ACCEPTANCE_DATABASE_URL` | New database's Internal Database URL; enter directly in Render |
-| `KORLIX_HOSTED_ACCEPTANCE_STRIPE_KEY` | Dedicated key from KORLIX 2MEETU Testing sandbox; enter directly in Render |
+| `KORLIX_HOSTED_ACCEPTANCE_DATABASE_URL` | Dedicated database's Internal Database URL; configured privately in Render |
+| `KORLIX_HOSTED_ACCEPTANCE_STRIPE_KEY` | Dedicated restricted key from KORLIX 2MEETU Testing sandbox; configured privately in Render |
 | `KORLIX_HOSTED_ACCEPTANCE_TOKEN_HASH` | SHA-256 of a fresh private 32-byte token |
 | `KORLIX_HOSTED_ACCEPTANCE_ENCRYPTION_KEY` | Fresh private 32-byte hexadecimal value |
 | `KORLIX_HOSTED_ACCEPTANCE_EXPIRES_AT` | Short test-access expiry, at most seven days |
@@ -77,10 +83,18 @@ The dedicated Node 24 service uses auto-deploy off and no environment group. Bui
 
 Do not copy production environment groups, Supabase credentials, provider keys, the local ledger encryption key, control token, CLI config or keyring. No secret values or private links belong in this document or Git.
 
-Initial identity verification requires read access to the account resources used by `/v1/account` and `/v2/core/accounts/{id}`. Use a dedicated restricted test key with the appropriate Accounts/Core Accounts permissions, including relevant Connect permissions. A restricted key may need its permissions adjusted after a sanitized 403 result; do not switch to a live or production-attached key to pass the check. Checkout/refund write permissions are not required by this staging implementation.
+Identity verification performs only `GET /v1/account` and `GET /v2/core/accounts/{id}` with `configuration.merchant` and `defaults` included. The user's final restricted-key review showed these selected Read permissions:
+
+| Dashboard resource | Selected Read scopes |
+| --- | --- |
+| Accounts | Own account |
+| Accounts v2 | Own account and connected accounts |
+| Merchant Configuration | Own account and connected accounts |
+
+Recipient Configuration was removed and no Write permissions were selected. The origin of the mirrored connected-account selections was not established; this records the reviewed configuration that passed, not proof that every selection is required or an automatic dependency. Checkout/refund writes are not required by this staging implementation. A generic HTTP 503 `readiness_verification_failed` response does not identify its cause: permissions, provider/network failures, identity mismatches and database failures can share that response. Do not substitute a live or production-attached key to pass the check.
 
 ## Remaining acceptance work
 
-Ten focused tests pass in `backend/test/manual/hosted_stripe_acceptance.test.mjs`. They cover isolated configuration, database guard creation/restart and refusal of foreign objects, private HTTP access, absent payment routes, missing credentials, serialized identity reads, mismatched Stripe identity, expiry and sanitized errors. Provider responses and PostgreSQL boundaries are test doubles; this is not verification of the hosted database or a real Stripe key. An additional local PGlite catalog smoke check exercised guard creation and matching restart, with only the database-name identity query substituted for the dedicated fixture name.
+Ten focused tests pass in `backend/test/manual/hosted_stripe_acceptance.test.mjs`. They cover isolated configuration, database guard creation/restart and refusal of foreign objects, private HTTP access, absent payment routes, missing credentials, serialized identity reads, mismatched Stripe identity, expiry and sanitized errors. Those tests use provider and PostgreSQL test doubles; the real hosted database and Stripe identity evidence is recorded separately above. An additional local PGlite catalog smoke check exercised guard creation and matching restart, with only the database-name identity query substituted for the dedicated fixture name.
 
-After database and credential identity verification, implement and review the durable scheduling ledger, tightly scoped synthetic booking provisioning, Stripe-signed webhook handling, private customer return page and controlled one-run Checkout issuance. Then run one new genuine sandbox checkout to establish the new paid transition and actual HTTPS Stripe redirect. Existing refunded records must not be reset, relabeled unpaid or treated as a new transition. Until that test passes, paid-booking and redirect acceptance remain open. All production checkout flags remain false.
+Database and credential identity verification are complete. Next, implement and review the durable scheduling ledger, tightly scoped synthetic booking provisioning, Stripe-signed webhook handling, private customer return page and controlled one-run Checkout issuance. Then run one new genuine sandbox checkout to establish the new paid transition and actual HTTPS Stripe redirect. Existing refunded records must not be reset, relabeled unpaid or treated as a new transition. Until that test passes, paid-booking and redirect acceptance remain open. All production checkout flags remain false.
