@@ -15,6 +15,7 @@ test("acceptance config rejects ambient production settings, live keys and attac
     { KORLIX_ACCEPTANCE_PLATFORM_ID: "acct_1UMI5OLx6hd5l5Vo" }, { KORLIX_ACCEPTANCE_MERCHANT_ID: "acct_fixtureplatform" },
     { KORLIX_ACCEPTANCE_PORT: "443" }]) assert.throws(() => acceptanceConfig({ ...env, ...change }));
   assert.equal(acceptanceConfig(env).port, 0);
+  assert.equal(acceptanceConfig(env).requestTimeoutMs, 15000);
 });
 
 test("isolated harness verifies identities, blocks pauses, processes signed payment and refund without production calls", async () => {

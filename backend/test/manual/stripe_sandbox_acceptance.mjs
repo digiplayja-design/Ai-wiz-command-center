@@ -47,7 +47,8 @@ export function acceptanceConfig(input = {}) {
   assert(!ATTACHED_PLATFORM_IDS.has(platform) && !ATTACHED_PLATFORM_IDS.has(merchant), "The live account and production-attached sandbox cannot be used by this harness.");
   const port = Number(input.KORLIX_ACCEPTANCE_PORT ?? 8787);
   assert(Number.isInteger(port) && (port === 0 || (port >= 1024 && port <= 65535)), "Use a loopback port from 1024 through 65535, or 0 for a free port.");
-  return { key, webhook, platform, merchant, port, authMode, context, cliConfig: input.KORLIX_ACCEPTANCE_CLI_CONFIG };
+  return { key, webhook, platform, merchant, port, authMode, context, cliConfig: input.KORLIX_ACCEPTANCE_CLI_CONFIG,
+    requestTimeoutMs: authMode === "cli_session" ? 45000 : 15000 };
 }
 
 export async function createAcceptanceHarness({ environment = {}, fetcher, cliRunner, resumeDirectory } = {}) {
@@ -132,16 +133,16 @@ export async function createAcceptanceHarness({ environment = {}, fetcher, cliRu
     outboundCount++;
     return transport(url, { ...options, redirect: "error" });
   }
-  const provider = stripeProvider(settings.providers.stripe, { fetcher: guardedFetch, diagnostic: () => {} });
+  const provider = stripeProvider(settings.providers.stripe, { fetcher: guardedFetch, requestTimeoutMs: config.requestTimeoutMs, diagnostic: () => {} });
   let readiness = null;
   async function verify() {
     const response = await guardedFetch("https://api.stripe.com/v1/account", {
-      headers: { Authorization: "Bearer " + config.key, "Stripe-Version": settings.providers.stripe.version }, signal: AbortSignal.timeout(15000) });
+      headers: { Authorization: "Bearer " + config.key, "Stripe-Version": settings.providers.stripe.version }, signal: AbortSignal.timeout(config.requestTimeoutMs) });
     assert.equal(response.status, 200, "Sandbox platform identity lookup failed.");
     const identity = await response.json();
     assert(identity.object === "account" && identity.id === config.platform && identity.livemode !== true, "Sandbox platform identity mismatch.");
     const endpointResponse = await guardedFetch("https://api.stripe.com/v1/webhook_endpoints?limit=100", {
-      headers: { Authorization: "Bearer " + config.key, "Stripe-Version": settings.providers.stripe.version }, signal: AbortSignal.timeout(15000) });
+      headers: { Authorization: "Bearer " + config.key, "Stripe-Version": settings.providers.stripe.version }, signal: AbortSignal.timeout(config.requestTimeoutMs) });
     assert.equal(endpointResponse.status, 200, "Sandbox webhook isolation lookup failed.");
     const endpoints = await endpointResponse.json();
     // Fresh sandbox only: fail closed if pagination or any enabled persisted
@@ -188,7 +189,7 @@ export async function createAcceptanceHarness({ environment = {}, fetcher, cliRu
     service = registerScheduling(application, { database, environment: { ...env, KORLIX_SCHEDULING_STRIPE_ENABLED: String(active) },
       requireUser: async (q) => safeEqual(q.headers.authorization, "Bearer " + state.controlToken)
         ? { id: state.host, email: "sandbox-host@example.test", email_confirmed_at: "2026-01-01", is_anonymous: false } : null,
-      autoStartWorker: false, fetcher: guardedFetch });
+      autoStartWorker: false, fetcher: guardedFetch, stripeRequestTimeoutMs: config.requestTimeoutMs });
     enabled = active;
   }
   mount(false);
@@ -202,7 +203,8 @@ export async function createAcceptanceHarness({ environment = {}, fetcher, cliRu
   }
   async function seed() {
     if (state.eventId) return;
-    await verify();
+    // Private helper; enable performs fresh provider verification immediately
+    // before calling this. Avoid duplicating three CLI identity/API roundtrips.
     const grant = { account_id: config.merchant, livemode: false };
     await db.query("insert into korlix_schedule_connections(owner_id,provider,remote_id,label,sealed_grant,config_hash,enabled,charges_enabled,livemode)values($1,'stripe',$2,'Isolated sandbox merchant',$3,$4,true,true,false)",
       [state.host, config.merchant, cipher.seal(grant, `${state.host}:stripe:${config.merchant}`), settings.providers.stripe.fingerprint]);
@@ -280,7 +282,7 @@ export async function createAcceptanceHarness({ environment = {}, fetcher, cliRu
         const id = q.body.bookingId; known(id); const p = await payment("private", id);
         assert(/^pi_[A-Za-z0-9_]+$/.test(p.payment_intent_id || ""), "Payment confirmation is required first.");
         const response = await guardedFetch("https://api.stripe.com/v1/payment_intents/" + p.payment_intent_id + "?expand[]=latest_charge", {
-          headers: { Authorization: "Bearer " + config.key, "Stripe-Version": settings.providers.stripe.version, "Stripe-Account": config.merchant }, signal: AbortSignal.timeout(15000) });
+          headers: { Authorization: "Bearer " + config.key, "Stripe-Version": settings.providers.stripe.version, "Stripe-Account": config.merchant }, signal: AbortSignal.timeout(config.requestTimeoutMs) });
         assert.equal(response.status, 200); const intent = await response.json(); const charge = intent.latest_charge;
         assert.equal(intent.livemode, false); assert.equal(charge?.livemode, false); assert.equal(charge?.amount, 100);
         assert.equal(charge?.application_fee, null); assert.equal(charge?.application_fee_amount, null);

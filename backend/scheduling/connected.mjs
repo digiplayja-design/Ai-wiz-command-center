@@ -36,6 +36,7 @@ export function schedulingConnected({
   publicRoot,
   notifications,
   fetcher = fetch,
+  stripeRequestTimeoutMs = 15000,
   now = Date.now,
   autoStart = true,
 }) {
@@ -44,7 +45,7 @@ export function schedulingConnected({
       Object.entries(providers).map(([name, config]) => [
         name,
         name === "stripe"
-          ? stripeProvider(config, { fetcher })
+          ? stripeProvider(config, { fetcher, requestTimeoutMs: stripeRequestTimeoutMs })
           : calendarProvider(config, { fetcher, now }),
       ]),
     );

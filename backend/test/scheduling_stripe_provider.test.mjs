@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { providerSettings } from "../scheduling/provider_core.mjs";
+import { providerRequest, providerSettings } from "../scheduling/provider_core.mjs";
 import { checkoutWire, stripeProvider } from "../scheduling/stripe_provider.mjs";
 
 const env = {
@@ -45,6 +45,27 @@ const merchant = () => ({
 const wire = () => checkoutWire(pay, "https://example.test/book/manage");
 const response = (value) => new Response(JSON.stringify(value), {
   headers: { "content-type": "application/json" },
+});
+
+test("provider request timeout is bounded and custom Stripe budgets actually cancel slow transports", async () => {
+  let calls = 0, aborted = 0;
+  const delayed = async (_url, { signal }) => new Promise((resolve, reject) => {
+    calls++;
+    const abort = () => { aborted++; clearTimeout(timer); reject(new Error("Fixture transport aborted.")); };
+    const timer = setTimeout(() => { signal.removeEventListener("abort", abort); resolve(response(merchant())); }, 40);
+    if (signal.aborted) abort(); else signal.addEventListener("abort", abort, { once: true });
+  });
+  for (const invalid of [0, -1, 60001, 1.5, "45000", NaN, Infinity])
+    await assert.rejects(providerRequest(delayed, "https://example.test", {}, [], invalid), RangeError);
+  assert.equal(calls, 0, "Invalid budgets must fail before fetching.");
+  const ordinary = stripeProvider(config("false"), { fetcher: delayed, diagnostic: () => {} });
+  assert.equal((await ordinary.identity({ account_id: pay.account_id, livemode: false })).charges_enabled, true);
+  const short = stripeProvider(config("false"), { fetcher: delayed, requestTimeoutMs: 5, diagnostic: () => {} });
+  await assert.rejects(short.identity({ account_id: pay.account_id, livemode: false }), /could not be confirmed/);
+  assert.equal(aborted, 1);
+  const longer = stripeProvider(config("false"), { fetcher: delayed, requestTimeoutMs: 500, diagnostic: () => {} });
+  assert.equal((await longer.identity({ account_id: pay.account_id, livemode: false })).charges_enabled, true);
+  assert.equal(aborted, 1);
 });
 
 test("Stripe diagnostics identify the failed phase without exposing provider secrets", async () => {

@@ -26,9 +26,11 @@ The same sandbox must be selected in the Stripe CLI. Browser login is a separate
 
 In CLI mode, omit all Stripe API-key variables, including `STRIPE_API_KEY` and `KORLIX_ACCEPTANCE_STRIPE_SECRET_KEY`; supplying one rejects startup. Set the CLI context separately from the expected `/v1/account` platform ID: they must be independently verified rather than assumed identical. For this workspace, the prepared config path is `/workspace/scratch/3f6fe4659caf/stripe-acceptance-auth/config.toml`. Its parent directory is private. A dedicated config file does **not** guarantee separate OAuth credentials or active-context state: CLI 1.53 also uses a global keyring.
 
-Before every API call, the transport requires OAuth `whoami --format json` to name the expected context in test mode and list test authorization for it. It then pins the request itself: platform calls use the exact `Stripe-Context`, connected-account calls use the exact `context/merchant` `Stripe-Account`, and all calls set `Stripe-Livemode: false`. CLI 1.53 applies these explicit custom headers after its credential-derived headers, so an active-context change between commands cannot reroute the API call. Arbitrary headers, endpoints, live mode and API-key overrides are disallowed. Child processes receive only a small environment allowlist; inherited API keys, alternate sockets, proxies and other Stripe overrides are removed. A plain opaque string supplies the local adapter's fingerprint; it is never a key and never reaches network authentication.
+Before every API call, the transport requires OAuth `whoami --format json` to name the expected context in test mode and list test authorization for it. It then pins the request itself: platform calls use the exact `Stripe-Context`, connected-account calls use the exact `context/merchant` `Stripe-Account`, and all calls set `Stripe-Livemode: false`. CLI 1.53 applies these explicit custom headers after its credential-derived headers, so an active-context change between commands cannot reroute the API call. Arbitrary headers, endpoints, live mode and API-key overrides are disallowed. Child processes receive only a small environment allowlist; inherited API keys, alternate sockets and other Stripe overrides are removed. Standard proxy and Go certificate variables from the trusted execution runtime are retained because managed workspaces may require them for network access. A plain opaque string supplies the local adapter's fingerprint; it is never a key and never reaches network authentication.
 
-The transport checks actual verbose request headers, final HTTP status and request ID. A CLI exit code of zero is not payment success. Errors preserve only a validated machine-readable Stripe error code and generic text; raw CLI diagnostics and credentials are not printed. Calls have a 15-second timeout, bounded output and cancellation. This path remains manual acceptance tooling and is not imported into production.
+The transport checks actual verbose request headers, final HTTP status and request ID. A CLI exit code of zero is not payment success. Errors preserve only a validated machine-readable Stripe error code and generic text; raw CLI diagnostics and credentials are not printed. Each CLI child has a 15-second timeout with bounded output and cancellation. The manual CLI harness injects a 45-second overall Stripe request budget to accommodate both the identity preflight and API process. Its API-key mode and all production defaults retain the original 15 seconds; there is no production environment override. The reusable request helper accepts only explicit integer budgets from 1 through 60,000 milliseconds. This CLI path remains manual acceptance tooling and is not imported into production.
+
+The child environment explicitly sets `STRIPE_NO_AUTO_UPDATE=1` and `DO_NOT_TRACK=1`, ignoring inherited values for both. These documented CLI controls prevent deferred update checks and telemetry from consuming the provider timeout after an API response. They are fixed execution settings; no authentication, endpoint, socket or mode override is inherited.
 
 Start the listener with the installed CLI (adjust its path if necessary):
 
@@ -40,6 +42,8 @@ Start the listener with the installed CLI (adjust its path if necessary):
 ```
 
 The listener's startup output contains a signing secret. Capture that output privately and set the acceptance webhook variable without displaying it in chat. No Dashboard endpoint or public tunnel is needed. Do not use `--live`. Verify the selected sandbox before starting the listener and do not switch its active context during the run. The API transport's per-request pinning does not configure the separate listener. Keep the listener running for the payment and refund checks.
+
+Run the listener, harness and local command client in the **same persistent shell/runtime and network namespace**. In this execution environment, separate shell tool jobs can have separate loopback networks even when they share files. A listener in one job cannot reach a harness in another job through `127.0.0.1`. Use one persistent orchestration process to launch both children and issue local HTTP commands; do not assume separate tool calls share localhost.
 
 From the repository root, with the dedicated environment variables loaded:
 
@@ -71,7 +75,7 @@ url = 'http://127.0.0.1:8787/acceptance/' + command
 request = urllib.request.Request(url, data=None if body is None else json.dumps(body).encode(),
     headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
 try:
-    with urllib.request.urlopen(request, timeout=60) as response:
+    with urllib.request.urlopen(request, timeout=240) as response:
         print(response.read().decode())
 except urllib.error.HTTPError as error:
     print(error.read().decode())
@@ -84,7 +88,7 @@ Run the sequence below, substituting the returned `bookingId` where shown:
 
 1. `acceptance status` — verify local checkout is off and there are no bookings.
 2. `acceptance verify '{}'` — verifies the API key's platform ID and the merchant's v2 identity, sandbox mode, fee/loss responsibility, and active capabilities. A failure must be resolved before a payment test.
-3. `acceptance enable '{"confirmed":true}'` — enables only the local harness and seeds its synthetic event.
+3. `acceptance enable '{"confirmed":true}'` — performs fresh platform, endpoint-isolation and merchant verification, then enables only the local harness and seeds its synthetic event. CLI identity preflights add latency; the local helper allows up to four minutes for a command without extending any individual provider or subprocess timeout.
 4. `acceptance book '{"confirmed":true}'` — creates one local USD 1.00 payment hold, returning its booking ID.
 5. `acceptance pause '{}'`, then `acceptance checkout '{"bookingId":"BOOKING_ID","confirmed":true}'` — expect checkout rejection and no Stripe payment creation.
 6. Enable locally again, then repeat `checkout` for that booking within nine minutes of its creation. Open the returned hosted sandbox Checkout URL on the iPad and complete it using Stripe test payment details. Never enter a real card.
@@ -111,4 +115,4 @@ node --test backend/test/manual/stripe_cli_session_transport.offline.test.mjs
 
 This verifies forbidden configuration, zero provider calls on startup, mismatched-platform/active-webhook/pending-capability rejection before writes, control authentication/browser rejection, paused checkout, signed fixture confirmation, duplicate-delivery handling, fee inspection, full refund while paused, and recovery of the persistent local ledger. It is not evidence of real Stripe acceptance.
 
-The transport tests also verify explicit CLI authentication mode, rejection of API keys/native-fetch fallback, exact post-selection header pins, removal of ambient credential/socket overrides, preservation of GET query and POST form values/idempotency keys, wrong-context/abort rejection before API execution, HTTP errors with a zero process exit, and rejection of malformed or missing status evidence. No test starts a real CLI session or contacts Stripe.
+The transport tests also verify explicit CLI authentication mode, rejection of API keys/native-fetch fallback, exact post-selection header pins, removal of ambient credential/socket overrides while retaining managed runtime proxy/CA settings, preservation of GET query and POST form values/idempotency keys, wrong-context/abort rejection before API execution, HTTP errors with a zero process exit, and rejection of malformed or missing status evidence. No test starts a real CLI session or contacts Stripe.

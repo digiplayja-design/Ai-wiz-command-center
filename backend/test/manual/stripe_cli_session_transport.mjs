@@ -5,9 +5,16 @@ import { isAbsolute } from "node:path";
 const CLI = "/workspace/scratch/3f6fe4659caf/bin/stripe";
 const failure = () => new Error("Stripe CLI acceptance request could not be verified.");
 const check = (condition) => { if (!condition) throw failure(); };
-const cleanEnvironment = (environment) => Object.fromEntries(
-  ["HOME", "PATH", "USER", "LOGNAME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "LANG", "LC_ALL", "TMPDIR"]
-    .filter((key) => typeof environment[key] === "string").map((key) => [key, environment[key]]));
+const cleanEnvironment = (environment) => ({ ...Object.fromEntries(
+  // Keep the trusted execution runtime's networking configuration: managed
+  // workspaces can require an egress proxy and its CA. Stripe-specific auth,
+  // socket, endpoint, or mode overrides remain excluded.
+  ["HOME", "PATH", "USER", "LOGNAME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "LANG", "LC_ALL", "TMPDIR",
+    "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy", "SSL_CERT_FILE", "SSL_CERT_DIR"]
+    .filter((key) => typeof environment[key] === "string").map((key) => [key, environment[key]])),
+  // Fixed CLI controls avoid its deferred update/telemetry requests consuming
+  // the provider's timeout after the actual Stripe API response has arrived.
+  STRIPE_NO_AUTO_UPDATE: "1", DO_NOT_TRACK: "1" });
 
 function execute(file, args, options) {
   return new Promise((resolve) => {

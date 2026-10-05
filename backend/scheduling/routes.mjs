@@ -34,6 +34,7 @@ export function registerScheduling(
     now = Date.now,
     autoStartWorker = true,
     fetcher = fetch,
+    stripeRequestTimeoutMs = 15000,
     generateAI,
   } = {},
 ) {
@@ -190,6 +191,7 @@ export function registerScheduling(
     publicRoot,
     notifications,
     fetcher,
+    stripeRequestTimeoutMs,
     now,
     autoStart: autoStartWorker,
   });

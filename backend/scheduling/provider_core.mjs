@@ -63,13 +63,16 @@ export async function providerRequest(
   url,
   options = {},
   allowedStatuses = [],
+  timeoutMs = 15000,
 ) {
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60000)
+    throw new RangeError("Provider timeout must be an integer from 1 through 60000 milliseconds.");
   let response, data;
   try {
     response = await fetcher(url, {
       ...options,
       redirect: "error",
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const reader = response.body?.getReader();
     if (!reader) throw Error();

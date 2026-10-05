@@ -23,19 +23,26 @@ test("CLI mode cannot accept API credentials or fall through to native fetch", a
     KORLIX_ACCEPTANCE_PLATFORM_ID: base.expectedPlatform, KORLIX_ACCEPTANCE_MERCHANT_ID: merchant,
     KORLIX_ACCEPTANCE_WEBHOOK_SECRET: "whsec_fixture" };
   assert.equal(acceptanceConfig(env).key, marker);
+  assert.equal(acceptanceConfig(env).requestTimeoutMs, 45000);
   for (const key of ["STRIPE_API_KEY", "KORLIX_ACCEPTANCE_STRIPE_SECRET_KEY", "KORLIX_SCHEDULING_STRIPE_SECRET_KEY"])
     assert.throws(() => acceptanceConfig({ ...env, [key]: "sk_live_shouldnotappear" }));
   await assert.rejects(createAcceptanceHarness({ environment: env, fetcher: fetch }), /guarded CLI transport/);
 });
 
-test("CLI pins context and connected account after whoami, strips ambient auth and preserves query/form values", async () => {
+test("CLI pins context, preserves managed proxy/CA networking, strips Stripe overrides and retains query/form values", async () => {
   const calls = [];
   let expected = evidence();
   const transport = createCliSessionFetch({ ...base,
-    childEnvironment: { HOME: "/private/home", PATH: "/usr/bin", STRIPE_API_KEY: "sk_live_neverforward", STRIPE_CLI_UNIX_SOCKET: "/tmp/evil", HTTPS_PROXY: "http://evil", KORLIX_ACCEPTANCE_STRIPE_SECRET_KEY: "bad" },
+    childEnvironment: { HOME: "/private/home", PATH: "/usr/bin", STRIPE_API_KEY: "sk_live_neverforward", STRIPE_CLI_UNIX_SOCKET: "/tmp/evil",
+      STRIPE_API_BASE: "https://disallowed.example", HTTPS_PROXY: "http://runtime-proxy:8080", NO_PROXY: "127.0.0.1,localhost",
+      https_proxy: "http://runtime-proxy:8080", no_proxy: "127.0.0.1,localhost", SSL_CERT_FILE: "/runtime/ca.pem", SSL_CERT_DIR: "/runtime/certs",
+      STRIPE_NO_AUTO_UPDATE: "0", DO_NOT_TRACK: "0", KORLIX_ACCEPTANCE_STRIPE_SECRET_KEY: "bad" },
     runner: async (file, args, options) => {
       calls.push({ file, args, options });
-      assert.deepEqual(options.env, { HOME: "/private/home", PATH: "/usr/bin" });
+      assert.deepEqual(options.env, { HOME: "/private/home", PATH: "/usr/bin", HTTPS_PROXY: "http://runtime-proxy:8080",
+        NO_PROXY: "127.0.0.1,localhost", https_proxy: "http://runtime-proxy:8080", no_proxy: "127.0.0.1,localhost",
+        SSL_CERT_FILE: "/runtime/ca.pem", SSL_CERT_DIR: "/runtime/certs", STRIPE_NO_AUTO_UPDATE: "1", DO_NOT_TRACK: "1" });
+      assert.deepEqual(Object.keys(options.env).filter((key) => key.startsWith("STRIPE_")), ["STRIPE_NO_AUTO_UPDATE"]);
       assert.equal(options.maxBuffer, 4 * 1024 * 1024); assert.equal(options.timeout, 15000);
       assert(!args.some((value) => value.includes(marker) || value === "--api-key" || value === "--live"));
       if (args.includes("whoami")) return { exitCode: 0, stdout: JSON.stringify(identity()), stderr: "" };

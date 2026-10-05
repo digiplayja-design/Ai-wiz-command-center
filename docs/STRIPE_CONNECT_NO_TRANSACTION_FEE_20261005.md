@@ -135,9 +135,19 @@ The user's October 4, 2026 10:21 PM America/New_York screenshot confirms **KORLI
 
 The manual runner now supports explicit `cli_session` authorization without extracting or accepting an API key. It verifies the authorized test context before calls and pins the actual request to that sandbox and merchant, while preserving the original payment readiness checks. All six local harness/transport tests pass using fixtures. This does not validate the production API key's permissions or establish actual Stripe payment acceptance. The user's browser approval is the next prerequisite. No production runtime, deployment, or live checkout setting changed for this work.
 
+### CLI authorization and independent sandbox verification
+
+The user completed Stripe CLI browser authorization on 2026-10-05 at 02:56:45 UTC. CLI OAuth identity is `acct_1UN1QuLwavBaepoe`, **KORLIX 2MEETU Testing sandbox**, in test mode, with only that sandbox listed in the authorized contexts. An independent `/v1/account` request returned the same platform ID (`req_YlnAFnap0z6TRt`). No API key or OAuth token was extracted from the CLI session.
+
+The intended full-dashboard test merchant is `acct_1UN1WiLwavcz7g46`. Its actual Accounts v2 response (`req_v2gYNVmFfIoQWZQXW`) reports `livemode=false`, full Dashboard access, Stripe fee/loss/requirements collection, active card payments and active payouts. The separate Express sample merchant was not selected. The new sandbox's persisted webhook list is empty and unpaginated (`req_wyAqKTnF9rJR8L`), so its local acceptance events cannot be delivered to the existing production webhook through a copied endpoint.
+
+Runtime testing exposed two manual-runner issues: its child environment omitted managed proxy/CA settings, and CLI authorization plus API subprocess overhead exceeded the ordinary 15-second provider deadline. The transport now retains trusted runtime networking settings while excluding credential, socket and API endpoint overrides. It explicitly disables CLI auto-update and telemetry. A bounded code dependency allows only the manual CLI harness to use a 45-second overall request budget; each CLI subprocess retains its 15-second limit and cancellation. Production defaults and all checkout switches remain unchanged. The focused suite passed 66 tests, including actual abort behavior; the final manual-only follow-up passed six tests after removing redundant readiness reads. Listener, harness and local client must run in one persistent network namespace.
+
+These reads establish readiness for the isolated merchant. Payment confirmation, duplicate event delivery, actual zero application fee and refund results still require the KORLIX-created test Checkout. No production deployment was made for these manual-runner changes.
+
 ## Open launch items
 
-Accounts v2 readiness and isolated 2MEETU payment/webhook/refund acceptance remain unverified. Actual sandbox OAuth authorization and owner confirmation are verified by the user's screenshots above. Confirm the initial supported merchant countries and service categories before international onboarding; a US company account alone does not establish support in every country. Appointment tax calculation is not included in this release. Tax treatment for KORLIX's own subscriptions remains a separate launch gate, including the user's pending Ohio registration work.
+Accounts v2 readiness is verified for the isolated merchant above; isolated 2MEETU payment/webhook/refund acceptance remains incomplete. Actual sandbox OAuth authorization and owner confirmation are verified by the user's screenshots above. Confirm the initial supported merchant countries and service categories before international onboarding; a US company account alone does not establish support in every country. Appointment tax calculation is not included in this release. Tax treatment for KORLIX's own subscriptions remains a separate launch gate, including the user's pending Ohio registration work.
 
 ## Stripe references
 

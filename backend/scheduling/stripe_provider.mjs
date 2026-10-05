@@ -53,12 +53,12 @@ export function checkoutWire(pay, manageUrl) {
     cancel_url: manageUrl,
   }).toString();
 }
-export function stripeProvider(config, { fetcher = fetch, diagnostic = (value) =>
+export function stripeProvider(config, { fetcher = fetch, requestTimeoutMs = 15000, diagnostic = (value) =>
   console.warn("[Scheduling Stripe] " + JSON.stringify(value)) } = {}) {
   const livemode = /^sk_live_/.test(config.key) || /^rk_live_/.test(config.key);
   async function request(stage, url, options) {
     try {
-      return await providerRequest(fetcher, url, options);
+      return await providerRequest(fetcher, url, options, [], requestTimeoutMs);
     } catch (error) {
       // Deliberately omit provider messages and all request/response payloads.
       diagnostic({ stage, status: error.upstream?.status || 0,
