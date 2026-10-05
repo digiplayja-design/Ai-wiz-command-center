@@ -165,6 +165,10 @@ The resumed listener and harness were stopped after the successful refund and du
 
 A follow-up public health read during the 04:00 UTC hour independently confirmed `checkoutEnabled=false` for all three deployed integrations. Scheduling reports `livePayments=false`; web subscriptions and Directory report `livePayments=true` because their existing credentials are live, while their checkout switches remain false. Credential mode does not mean sales are enabled. No operational configuration or production deployment changed during this acceptance sequence.
 
+### Return-page behavior checked offline — 2026-10-05 UTC
+
+The six focused tests in `backend/test/scheduling_return_page.test.mjs` passed against the actual shipped `booking.js` and Express return-page route. The page waits for its private manage response, does not trust payment-success query parameters, renders confirmed payment and full-refund cancellation correctly, rejects malformed private links, and polls pending payments only while visible and unsettled. The static route and assets retain their private-page security headers. Browser DOM and payment responses in these tests are fixtures; this is not evidence of an actual iPad redirect, visual rendering, deployed webhook delivery, or a real payment-completion event. No production code or deployment changed for these tests.
+
 ## Open launch items
 
 Actual sandbox OAuth authorization/owner confirmation, isolated merchant v2 readiness, direct payment reconciliation, zero application fee, full refund while paused, and signed refund-event/replay handling are verified above. Remaining provider acceptance is:
