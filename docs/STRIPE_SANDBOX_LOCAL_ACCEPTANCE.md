@@ -37,13 +37,16 @@ Start the listener with the installed CLI (adjust its path if necessary):
 ```bash
 /workspace/scratch/3f6fe4659caf/bin/stripe listen \
   --config /workspace/scratch/3f6fe4659caf/stripe-acceptance-auth/config.toml \
+  --timeout 120 \
   --events checkout.session.completed,checkout.session.expired,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,charge.refunded \
   --forward-connect-to http://127.0.0.1:8787/api/scheduling/payments/webhook
 ```
 
-The listener's startup output contains a signing secret. Capture that output privately and set the acceptance webhook variable without displaying it in chat. No Dashboard endpoint or public tunnel is needed. Do not use `--live`. Verify the selected sandbox before starting the listener and do not switch its active context during the run. The API transport's per-request pinning does not configure the separate listener. Keep the listener running for the payment and refund checks.
+The listener's startup output contains a signing secret. Capture that output privately and set the acceptance webhook variable without displaying it in chat. No Dashboard endpoint or public tunnel is needed. Do not use `--live`. Verify the selected sandbox before starting the listener and do not switch its active context during the run. The API transport's per-request pinning does not configure the separate listener. `--timeout 120` gives the forwarded local handler enough time for its independent Stripe reads under the manual CLI request budget; it does not extend the application's 45-second per-request budget. Keep the listener running for the payment and refund checks.
 
 Run the listener, harness and local command client in the **same persistent shell/runtime and network namespace**. In this execution environment, separate shell tool jobs can have separate loopback networks even when they share files. A listener in one job cannot reach a harness in another job through `127.0.0.1`. Use one persistent orchestration process to launch both children and issue local HTTP commands; do not assume separate tool calls share localhost.
+
+The execution session must also survive the entire wait for the user to complete hosted Checkout, including conversation turns. A persisted ledger does not keep the listener running. Check process liveness before handing off the Checkout URL and again when the user returns. If the session stopped, resume the same ledger with checkout paused and recover through independent reconciliation; do not claim that the original payment webhook was received. A later signed refund event verifies only that refund-event path. Before reopening a ledger, ensure its previous process has stopped so there is only one PGlite writer.
 
 From the repository root, with the dedicated environment variables loaded:
 
