@@ -116,7 +116,7 @@ export function createCliSessionFetch({ configPath, expectedContext, expectedPla
       if (paymentWrite) { check(/^korlix-scheduling-(checkout|refund)-[a-f0-9-]{36}$/.test(idempotency || "")); args.push("--idempotency", idempotency); }
       else check(!idempotency);
       if (options.signal?.aborted) throw failure();
-      const runOptions = { env, timeout: 15000, maxBuffer: 4 * 1024 * 1024, signal: options.signal };
+      const runOptions = { env, timeout: 30000, maxBuffer: 4 * 1024 * 1024, signal: options.signal };
       verifyCliIdentity(await runner(CLI, [...prefix, "whoami", "--format", "json"], runOptions), expectedContext);
       if (options.signal?.aborted) throw failure();
       const response = parseCliResponse(await runner(CLI, args, runOptions), {

@@ -43,7 +43,7 @@ test("CLI pins context, preserves managed proxy/CA networking, strips Stripe ove
         NO_PROXY: "127.0.0.1,localhost", https_proxy: "http://runtime-proxy:8080", no_proxy: "127.0.0.1,localhost",
         SSL_CERT_FILE: "/runtime/ca.pem", SSL_CERT_DIR: "/runtime/certs", STRIPE_NO_AUTO_UPDATE: "1", DO_NOT_TRACK: "1" });
       assert.deepEqual(Object.keys(options.env).filter((key) => key.startsWith("STRIPE_")), ["STRIPE_NO_AUTO_UPDATE"]);
-      assert.equal(options.maxBuffer, 4 * 1024 * 1024); assert.equal(options.timeout, 15000);
+      assert.equal(options.maxBuffer, 4 * 1024 * 1024); assert.equal(options.timeout, 30000);
       assert(!args.some((value) => value.includes(marker) || value === "--api-key" || value === "--live"));
       if (args.includes("whoami")) return { exitCode: 0, stdout: JSON.stringify(identity()), stderr: "" };
       // The active global context could switch here; these final custom header
