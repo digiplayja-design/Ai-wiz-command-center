@@ -123,6 +123,12 @@ Correction commit `d682b32acde91522b570ac8c6ba9a24ccb8074aa` deployed as `dep-db
 
 The user initiated a fresh authorization flow. Their 2026-10-04 9:51 PM America/New_York screenshot shows the backend's **Account verified** callback page. Their 9:53 PM screenshot shows **Korlix INC sandbox**, **connected · enabled**, **TEST MODE — no real payments**, and **Stripe onboarding incomplete** in 2MEETU Connections. This verifies that the actual user OAuth callback and explicit owner-confirmation flow completed. The connection's enabled flag is separate from checkout activation; payment readiness remains false and live sales remain disabled. No sandbox payment, signed Stripe event delivery, or refund has been verified by this milestone.
 
+### Isolated acceptance preparation
+
+The manual [local acceptance harness](STRIPE_SANDBOX_LOCAL_ACCEPTANCE.md) now exercises the real scheduling routes against a private PGlite ledger. Its two offline tests pass, covering platform and webhook isolation, v2 readiness rejection, paused checkout, signed fixture confirmation, duplicate events, full refund while paused, and restart recovery. These are fixture results, not actual Stripe payment or delivery evidence. Production code and checkout switches were not changed for this preparation.
+
+The next browser step is to create a separate sandbox named **KORLIX 2MEETU Testing**, without copying existing account settings. Its merchant readiness and test authorization must be configured before provider acceptance can run. The harness explicitly rejects the sandbox already attached to the running backend and any enabled persisted webhook endpoint. It currently requires its own test API credential; Stripe CLI browser authorization alone is not an SDK key. No CLI login or new sandbox was created during preparation, and no actual payment or refund was attempted.
+
 ## Open launch items
 
 Accounts v2 readiness and isolated 2MEETU payment/webhook/refund acceptance remain unverified. Actual sandbox OAuth authorization and owner confirmation are verified by the user's screenshots above. Confirm the initial supported merchant countries and service categories before international onboarding; a US company account alone does not establish support in every country. Appointment tax calculation is not included in this release. Tax treatment for KORLIX's own subscriptions remains a separate launch gate, including the user's pending Ohio registration work.
