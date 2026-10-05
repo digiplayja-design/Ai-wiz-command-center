@@ -46,7 +46,7 @@ The listener's startup output contains a signing secret. Capture that output pri
 
 Run the listener, harness and local command client in the **same persistent shell/runtime and network namespace**. In this execution environment, separate shell tool jobs can have separate loopback networks even when they share files. A listener in one job cannot reach a harness in another job through `127.0.0.1`. Use one persistent orchestration process to launch both children and issue local HTTP commands; do not assume separate tool calls share localhost.
 
-The execution session must also survive the entire wait for the user to complete hosted Checkout, including conversation turns. A persisted ledger does not keep the listener running. Check process liveness before handing off the Checkout URL and again when the user returns. If the session stopped, resume the same ledger with checkout paused and recover through independent reconciliation; do not claim that the original payment webhook was received. A later signed refund event verifies only that refund-event path. Before reopening a ledger, ensure its previous process has stopped so there is only one PGlite writer.
+The execution session must also survive the entire wait for the user to complete hosted Checkout, including conversation turns. In this workspace, sessions have become unavailable across user turns even when the private checkpoint still said `waiting_for_signed_payment` and had no shutdown timestamp. Do not rely on these work sessions for uninterrupted listening across turns. A persisted ledger or a saved `ready: true` field does not prove that a listener is alive. Check process liveness before handing off the Checkout URL and again when the user returns. If the session is unavailable, resume the same ledger with checkout paused and use the original-event recovery procedure below; do not request another payment merely to recover its event. Before reopening a ledger, ensure its previous process has stopped so there is only one PGlite writer.
 
 From the repository root, with the dedicated environment variables loaded:
 
@@ -59,6 +59,32 @@ Startup prints only the local API address, private run-directory path, and contr
 ```bash
 node backend/test/manual/stripe_sandbox_acceptance.mjs --serve --resume /absolute/run-directory
 ```
+
+## Recover an existing payment event after listener interruption
+
+Stripe documents [`events resend`](https://docs.stripe.com/cli/events/resend) as resending an existing event to the CLI's local webhook endpoint when no `--webhook-endpoint` is supplied. CLI 1.53.0's [implementation](https://github.com/stripe/stripe-cli/blob/v1.53.0/pkg/cmd/resource/events_resend.go) adds `for_stripecli=true` to `POST /v1/events/{event}/retry` in that case. This requests a new delivery of the original event; it does not create another payment or require a persisted/public webhook endpoint.
+
+1. Preserve the unavailable session's checkpoint and the ledger's existing receipt IDs before restarting. Restart the listener, harness and local command client together in one current execution/network namespace, with the original ledger resumed and checkout paused. Capture the current listener secret privately into the harness environment. Verify actual process liveness and the local `status` response rather than trusting old readiness files.
+2. Run `whoami --format json` with the dedicated CLI config in the sanitized environment described above. Require the exact isolated platform context `acct_1UN1QuLwavBaepoe`, `mode: test`, and test authorization for that context. The independently verified merchant for this run is `acct_1UN1WiLwavcz7g46`. Stop on a mismatch; do not switch to the production account or its attached sandbox. Confirm endpoint isolation remains satisfied. Do not export OAuth credentials or print tokens/secrets.
+3. Use read-only Stripe requests with the same identity preflight and account/mode/header checks to retrieve the existing Checkout session and its exact `checkout.session.completed` event. Do not select an event solely by recency. Match the event's connected account to the expected merchant, its `data.object.id` to the resumed ledger's `checkoutId`, and both `client_reference_id` and `metadata.korlix_booking` to that ledger's booking ID. Require sandbox mode, `payment_status: paid`, USD currency and an amount of 100 cents; verify the session's PaymentIntent belongs to that payment. Preserve the baseline ledger state and receipt IDs. Do not invoke `reconcile` or `tick` first when assessing whether the webhook itself performs confirmation.
+4. With the current listener active, resend only that verified event using the same dedicated CLI session. Run the following in the sanitized environment, replacing `evt_VERIFIED_PAYMENT_EVENT` with the retrieved ID. Capture the response privately and inspect only safe event, request and status fields:
+
+   ```bash
+   /workspace/scratch/3f6fe4659caf/bin/stripe \
+     --config /workspace/scratch/3f6fe4659caf/stripe-acceptance-auth/config.toml \
+     events resend evt_VERIFIED_PAYMENT_EVENT \
+     --account acct_1UN1WiLwavcz7g46 \
+     --request-header 'Stripe-Context: acct_1UN1QuLwavBaepoe' \
+     --request-header 'Stripe-Livemode: false' \
+     --stripe-version 2026-09-30.endive \
+     --confirm
+   ```
+
+   For this Connect resend command, `--account` is a request-body parameter naming the originating merchant; Stripe explicitly says to use it instead of `--stripe-account`. Omit `--webhook-endpoint` so delivery targets the CLI listener, and never add `--live`. Keep the same authenticated config and platform context for listener and resend. The reviewed documentation does not specify every server-side user/device routing detail, so verify receipt rather than assuming delivery from an API response.
+5. A successful resend response alone does not pass the webhook check. Require the original event ID to arrive at the actual handler with a fresh valid Stripe signature, pass its normal connected-account and independent Checkout lookup, create one matching receipt, and change the existing booking from unpaid to `paymentState: paid` and `bookingState: confirmed` without manual reconciliation. If the booking hold has expired, retain the actual resulting state and resolve the payment through the normal refund path; do not force confirmation or reset timestamps to make the check pass.
+6. After verified delivery, run `duplicate` within the signature window, then `fee-proof` and the normal full-refund procedure while checkout remains paused. Require the actual original payment event for the duplicate check, and verify both the refund outcome and any separately received signed refund event. Stop the processes only after the payment/refund outcome is resolved.
+
+Record this evidence as **a signed replay of the original payment event after listener recovery**, not proof of uninterrupted first delivery. If no payment receipt existed before replay, retain that fact. A later signed refund event alone proves only the refund-event path. If supported replay cannot be received, independent `reconcile` can still safely resolve the existing payment and permit its refund, but the signed payment-delivery check remains unverified. Do not manufacture a webhook signature or create another checkout to disguise missing evidence. These instructions describe the supported recovery procedure; they do not assert that a particular replay has passed.
 
 ## Local commands
 
