@@ -233,6 +233,8 @@ A dedicated Free PostgreSQL 17 instance, `dpg-db1svtm0tbcc73caq380-a`, was creat
 
 The durable sandbox configuration requires the new database's internal URL and a dedicated restricted test key from **KORLIX 2MEETU Testing sandbox**, entered directly in the new Render service. CLI credentials and production secrets are not transferred. Database identity/bootstrap and sandbox identity remain unverified until that configuration is supplied. This foundation is not completion of the paid-booking or redirect acceptance test. See [hosted sandbox staging](STRIPE_HOSTED_SANDBOX_STAGING.md).
 
+The staging implementation and all ten focused tests passed and were committed as `1941e6acc84c1cdc39c37fd93823bbf91ef2c1b8`. Automatic approval review rejected creation of `korlix-2meetu-payment-sandbox` because its fresh token hash and encryption key require explicit approval for transfer to Render. No web service was created, no workaround was attempted, and no production credential was included. The code and database are prepared; the separate web deployment awaits that approval. Production checkout remains paused.
+
 ## Open launch items
 
 Actual sandbox OAuth authorization/owner confirmation, isolated merchant v2 readiness, direct payment reconciliation, zero application fee, full refund while paused, signed payment-completion replay/duplicate handling, signed refund-event handling, original signed expiry-event delivery to the deployed endpoint, and actual iPad display of the saved refunded result are verified above. Remaining provider acceptance is:

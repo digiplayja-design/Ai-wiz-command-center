@@ -41,6 +41,12 @@ Entry point: `backend/test/manual/hosted_stripe_acceptance.mjs`. The isolated de
 
 ## Configuration
 
+### Deployment approval blocker — 2026-10-05 UTC
+
+Implementation and ten focused tests are committed as `1941e6acc84c1cdc39c37fd93823bbf91ef2c1b8`. Creating the intended Free Ohio web service `korlix-2meetu-payment-sandbox` was rejected by automatic approval review before a service was created. The stated reason was transmission of a fresh bearer-token hash and encryption key to an external Render destination without explicit approval for that secret-bearing deployment. No alternate route or reduced-guard deployment was attempted. The dedicated database already exists; the web deployment remains pending user approval. No live Stripe key, production credential or database URL was included in the rejected request.
+
+The concrete pending deployment uses the existing GitHub repository and release branch, auto-deploy off, Node 24, the isolated build/start commands below, and newly generated service-specific security values. It starts without a database URL or Stripe key and exposes only blocked health plus authenticated identity-readiness commands. Approval would allow this staging deployment only; it would not enable payment processing or finish provider acceptance.
+
 The dedicated Node 24 service uses auto-deploy off and no environment group. Build with `npm ci --prefix backend/test/manual/hosted-runtime --ignore-scripts --no-audit --no-fund && node --check backend/test/manual/hosted_stripe_acceptance.mjs`; start with `node backend/test/manual/hosted_stripe_acceptance.mjs`. `SKIP_INSTALL_DEPS=true` avoids installing the unrelated root app dependencies.
 
 | Environment variable | Configuration |
