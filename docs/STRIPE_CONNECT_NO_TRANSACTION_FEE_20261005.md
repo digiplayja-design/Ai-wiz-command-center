@@ -201,6 +201,14 @@ The successful delivery verifies deployed routing, signature acceptance, connect
 
 Fresh public health reads returned HTTP 200 with **`checkoutEnabled=false` for scheduling, web billing, and Directory**. Render still reports deployment `dep-db1g31hsrm7s73bh6eqg` of `d682b32acde91522b570ac8c6ba9a24ccb8074aa` live, with auto-deploy off. Recording this result made no deployment, credential, webhook-configuration, or production-booking change.
 
+### Return state from the real refunded ledger — 2026-10-05 UTC
+
+After deployed expiry delivery passed, a separate check reused the two completed sandbox payments without issuing another Checkout or payment. No acceptance Node process was active. A temporary copy of the preserved isolated ledger was resumed with checkout paused; the original ledger was retained untouched. The CLI runner was replaced with a rejecting boundary so any attempted provider operation would fail, and the check asserted zero provider calls.
+
+For bookings `34359df5-2c9e-4d00-8336-2e5a6c5b9f9d` and `e218569c-0fb2-4f9f-ae96-8fb017266b98`, the shipped return script requested the real local `/api/scheduling/manage` route using each saved private management token. The returned persisted state was `canceled` / `refunded` / refund `succeeded`. With the DOM boundary from the existing return-page tests, the script rendered **Appointment canceled.** and the successful full refund, hid checkout/cancel/reschedule, offered a calendar update, and stopped settled-payment polling. The route-served script matched the repository source.
+
+Before/after status projections, including booking/payment states and receipt IDs, were identical; outbound provider calls and CLI attempts were both zero. The harness was closed and its temporary ledger copy removed. This connects real persisted sandbox evidence to the manage API and return rendering logic, beyond fixture-only payment responses. It is **not browser rendering, an iPad redirect, or deployed paid-booking confirmation**. The original `.invalid` Checkout return URLs remain unsuitable for a real mobile flow. A separate durable HTTPS test app with isolated storage is still needed for that check; the authenticated loopback control harness must not be exposed publicly. No production setting or deployment changed.
+
 ## Open launch items
 
 Actual sandbox OAuth authorization/owner confirmation, isolated merchant v2 readiness, direct payment reconciliation, zero application fee, full refund while paused, signed payment-completion replay/duplicate handling, signed refund-event handling, and original signed expiry-event delivery to the deployed endpoint are verified above. Remaining provider acceptance is:
