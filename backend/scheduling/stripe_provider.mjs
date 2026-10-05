@@ -34,7 +34,7 @@ export function checkoutWire(pay, manageUrl) {
   const b = pay.booking;
   return new URLSearchParams({
     mode: "payment",
-    "payment_method_types[0]": "card",
+    integration_identifier: "korlix_2meetu_dzwqhxnr",
     customer_email: b.guest_email,
     client_reference_id: b.id,
     "metadata[korlix_booking]": b.id,
@@ -60,7 +60,7 @@ export function stripeProvider(config, { fetcher = fetch } = {}) {
       throw new ProviderError("Invalid merchant account.");
     const { data } = await providerRequest(
       fetcher,
-      "https://api.stripe.com/v1" + path,
+      "https://api.stripe.com" + (path.startsWith("/v2/") ? path : "/v1" + path),
       {
         method,
         headers: {
@@ -160,25 +160,65 @@ export function stripeProvider(config, { fetcher = fetch } = {}) {
     async identity(grant) {
       if (!account(grant.account_id) || grant.livemode !== livemode)
         throw new ProviderError("Reconnect your merchant account.", 409);
-      const a = await api("/accounts/" + grant.account_id);
-      if (a.id !== grant.account_id || a.type !== "standard")
+      const query = new URLSearchParams({
+        "include[0]": "configuration.merchant",
+        "include[1]": "defaults",
+      });
+      const a = await api("/v2/core/accounts/" + grant.account_id + "?" + query);
+      if (
+        a.id !== grant.account_id ||
+        a.object !== "v2.core.account" ||
+        a.livemode !== livemode ||
+        a.dashboard !== "full" ||
+        a.defaults?.responsibilities?.fees_collector !== "stripe" ||
+        a.defaults?.responsibilities?.losses_collector !== "stripe"
+      )
         throw new ProviderError(
-          "Connect a Stripe Standard merchant account.",
+          "Connect an independent Stripe business account with Stripe-managed processing fees.",
           409,
         );
+      const capabilities = a.configuration?.merchant?.capabilities;
+      const cards = capabilities?.card_payments?.status;
+      const payouts = capabilities?.stripe_balance?.payouts?.status;
       return {
         id: a.id,
         label: String(
-          a.business_profile?.name ||
-            a.settings?.dashboard?.display_name ||
-            a.email ||
-            a.id,
+          a.display_name || a.defaults?.profile?.doing_business_as || a.id,
         ).slice(0, 250),
-        charges_enabled: a.charges_enabled === true,
+        // Keep the existing storage projection; decisions use v2 capabilities.
+        charges_enabled: cards === "active" && payouts === "active",
+        card_payments_status: cards || "unavailable",
+        payouts_status: payouts || "unavailable",
         livemode,
       };
     },
     async checkout(pay, wire) {
+      if (config.enabled !== true)
+        throw new ProviderError(
+          "New booking payments are temporarily paused.",
+          503,
+        );
+      const payload = new URLSearchParams(wire);
+      if (
+        [...payload.keys()].some((k) =>
+          /application_fee|transfer_data|on_behalf_of/.test(k),
+        )
+      )
+        throw new ProviderError(
+          "Booking payments must go directly to the business without a KORLIX transaction fee.",
+          409,
+        );
+      // Recheck the actual merchant on every create/retry instead of trusting
+      // the account's readiness snapshot from when it was first connected.
+      const merchant = await this.identity({
+        account_id: pay.account_id,
+        livemode: pay.livemode,
+      });
+      if (!merchant.charges_enabled)
+        throw new ProviderError(
+          "The business must finish its Stripe payment and payout setup before accepting payments.",
+          409,
+        );
       return session(
         await api("/checkout/sessions", pay.account_id, {
           method: "POST",

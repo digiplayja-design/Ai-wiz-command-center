@@ -48,16 +48,19 @@ export function schedulingConnected({
           : calendarProvider(config, { fetcher, now }),
       ]),
     );
-  const paymentsReady = providers.stripe.ready && !!providers.stripe.webhook;
+  const paymentsConfigured = providers.stripe.ready && !!providers.stripe.webhook;
+  const paymentsReady = paymentsConfigured && providers.stripe.enabled;
   const capabilities = {
     calendar_sync: providers.google.ready || providers.microsoft.ready,
     payments: paymentsReady,
+    payment_configuration_ready: paymentsConfigured,
+    platform_fee_percent: 0,
     team_scheduling: true,
     providers: Object.fromEntries(
       Object.entries(providers).map(([name, c]) => [
         name,
         {
-          configured: c.ready && (name !== "stripe" || paymentsReady),
+          configured: c.ready && (name !== "stripe" || paymentsConfigured),
           callback: c.callback,
         },
       ]),
@@ -108,7 +111,7 @@ export function schedulingConnected({
     if (
       !Object.hasOwn(providers, name) ||
       !providers[name].ready ||
-      (name === "stripe" && !paymentsReady)
+      (name === "stripe" && !paymentsConfigured)
     )
       fail(
         "This provider needs administrator setup before it can be connected.",
@@ -215,6 +218,18 @@ export function schedulingConnected({
     ]);
     return { ...connections, teams };
   }
+  app.get(base + "/payments/health", (_q, r) => {
+    r.set("Cache-Control", "no-store").json({
+      version: "connect_no_transaction_fee_20261005",
+      configured: paymentsConfigured,
+      checkoutEnabled: paymentsReady,
+      livePayments: adapters.stripe.livemode,
+      platformFeePercent: 0,
+      chargePattern: "direct",
+      accountReadiness: "accounts_v2",
+      apiVersion: providers.stripe.version,
+    });
+  });
   app.get(
     base + "/connections",
     route(
@@ -450,7 +465,7 @@ export function schedulingConnected({
       ),
     );
   async function ensureCheckout(id) {
-    if (!paymentsReady) fail("Booking payments need administrator setup.", 503);
+    if (!paymentsReady) fail("New booking payments are temporarily paused.", 503);
     const p = await payment("private", id);
     checkConfig(p.connection);
     if (p.booking.state !== "awaiting_payment" || p.checkout_id) return;
@@ -478,7 +493,7 @@ export function schedulingConnected({
     await payment("checkout_saved", id, verified);
   }
   async function reconcile(id) {
-    if (!paymentsReady) return;
+    if (!paymentsConfigured) return;
     const p = await payment("private", id);
     checkConfig(p.connection);
     if (p.payment_state !== "unpaid") return;
@@ -555,7 +570,7 @@ export function schedulingConnected({
   app.post(base + "/payments/webhook", async (q, r) => {
     r.set("Cache-Control", "no-store");
     if (
-      !paymentsReady ||
+      !paymentsConfigured ||
       !stripeSignature(
         q.korlixSchedulingRawBody,
         q.get("stripe-signature"),
@@ -579,6 +594,7 @@ export function schedulingConnected({
           "checkout.session.completed",
           "checkout.session.expired",
           "checkout.session.async_payment_succeeded",
+          "checkout.session.async_payment_failed",
         ].includes(e.type)
       ) {
         const found = await payment("lookup", null, {
@@ -667,7 +683,7 @@ export function schedulingConnected({
             }).catch(() => {});
           }
         }
-      if (paymentsReady)
+      if (paymentsConfigured)
         for (const due of await payment("due")) {
           try {
             await reconcile(due.booking_id);
@@ -697,7 +713,7 @@ export function schedulingConnected({
       working = false;
     }
   }
-  if (autoStart && (capabilities.calendar_sync || paymentsReady)) {
+  if (autoStart && (capabilities.calendar_sync || paymentsConfigured)) {
     timer = setInterval(() => {
       void tick();
     }, 30000);
@@ -705,11 +721,12 @@ export function schedulingConnected({
   }
   if (autoStart)
     console.info(
-      `[Scheduling] Provider setup: google=${providers.google.ready}; microsoft=${providers.microsoft.ready}; stripe=${paymentsReady}.`,
+      `[Scheduling] Provider setup: google=${providers.google.ready}; microsoft=${providers.microsoft.ready}; stripe=${paymentsConfigured}; checkout=${paymentsReady}.`,
     );
   return {
     capabilities,
     paymentsReady,
+    paymentsConfigured,
     checkAvailability,
     refresh,
     dashboard,

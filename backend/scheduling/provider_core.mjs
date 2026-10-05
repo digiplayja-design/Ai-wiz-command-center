@@ -130,11 +130,15 @@ export function providerSettings(environment, publicRoot) {
       secret,
       callback,
       ready,
+      // Saving credentials must not enable new customer payments.
+      enabled:
+        name === "stripe" &&
+        environment.KORLIX_SCHEDULING_STRIPE_ENABLED === "true",
       tenant: "common",
       key: stripeKey,
       webhook: environment.KORLIX_SCHEDULING_STRIPE_WEBHOOK_SECRET || "",
       version:
-        environment.KORLIX_SCHEDULING_STRIPE_API_VERSION || "2025-09-30.clover",
+        environment.KORLIX_SCHEDULING_STRIPE_API_VERSION || "2026-09-30.endive",
     };
     providers[name].fingerprint = createHash("sha256")
       .update(

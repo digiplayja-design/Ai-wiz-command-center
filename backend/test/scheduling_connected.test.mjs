@@ -43,6 +43,7 @@ const env = {
   KORLIX_SCHEDULING_STRIPE_CLIENT_ID: "ca_fixture",
   KORLIX_SCHEDULING_STRIPE_SECRET_KEY: "sk_test_fixture",
   KORLIX_SCHEDULING_STRIPE_WEBHOOK_SECRET: "whsec_fixture",
+  KORLIX_SCHEDULING_STRIPE_ENABLED: "true",
 };
 const settings = providerSettings(env, env.KORLIX_SCHEDULING_PUBLIC_URL),
   cipher = providerCipher(env);
@@ -237,6 +238,15 @@ async function fixtureFetch(url, options = {}) {
     body: options.body,
     headers: options.headers,
   });
+  if (u.hostname === "api.stripe.com" && u.pathname.startsWith("/v2/core/accounts/"))
+    return json({
+      id: u.pathname.split("/").at(-1), object: "v2.core.account", livemode: false,
+      dashboard: "full", display_name: "Fixture business",
+      defaults: {responsibilities: {fees_collector: "stripe", losses_collector: "stripe"}},
+      configuration: {merchant: {capabilities: {
+        card_payments: {status: "active"}, stripe_balance: {payouts: {status: "active"}},
+      }}},
+    });
   if (u.hostname === "oauth2.googleapis.com")
     return json({
       access_token: "fixture-access",
@@ -773,6 +783,8 @@ test("payment holds reserve capacity, hide meeting links, and wait for provider 
   const wire = new URLSearchParams(calls.at(-1).body);
   assert(!wire.has("application_fee_amount"));
   assert(!wire.has("payment_intent_data[application_fee_amount]"));
+  assert(![...wire.keys()].some(k => k.startsWith("payment_method_types")));
+  assert.equal(wire.get("integration_identifier"), "korlix_2meetu_dzwqhxnr");
   assert(wire.get("success_url").includes("#" + b.id + "." + raw));
   const session = sessions.get(p.checkout_id);
   session.payment_status = "paid";
@@ -887,6 +899,104 @@ test("Stripe signatures authenticate exact raw bytes and enforce replay time tol
     !stripeSignature(raw, `t=${t},v1=${signature}`, "key", Date.now() + 301000),
   );
   assert(!stripeSignature(raw, `t=${t},t=${t},v1=${signature}`, "key"));
+});
+test("pausing blocks paid bookings and checkout but preserves free bookings, signed confirmations and refunds", async () => {
+  const open = await paidFixture(40);
+  const unstarted = await paidFixture(41);
+  await service.connected.ensureCheckout(open.b.id);
+  const p = await pay("private", open.b.id);
+  const app = express();
+  app.use(express.json({ verify: (q, _r, b) => {
+    q.korlixSchedulingRawBody = Buffer.from(b);
+  } }));
+  const paused = registerScheduling(app, {
+    database: { rpc: async (n, args) => {
+      try { return { data: await rpc(n, args) }; }
+      catch (error) { return { error }; }
+    } },
+    requireUser: async () => null,
+    environment: { ...env, KORLIX_SCHEDULING_STRIPE_ENABLED: "false" },
+    autoStartWorker: false,
+    fetcher: fixtureFetch,
+  });
+  const pausedServer = app.listen(0, "127.0.0.1");
+  await new Promise((r) => pausedServer.once("listening", r));
+  const url = "http://127.0.0.1:" + pausedServer.address().port + "/api/scheduling";
+  const request = (path, body, headers = {}) => fetch(url + path, {
+    method: body ? "POST" : "GET",
+    headers: { "content-type": "application/json", ...headers },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  try {
+    const health = await request("/payments/health");
+    assert.equal(health.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await health.json(), {
+      version: "connect_no_transaction_fee_20261005",
+      configured: true,
+      checkoutEnabled: false,
+      livePayments: false,
+      platformFeePercent: 0,
+      chargePattern: "direct",
+      accountReadiness: "accounts_v2",
+      apiVersion: "2026-09-30.endive",
+    });
+    const before = fetchCalls.length;
+    for (const fixture of [open, unstarted]) {
+      const r = await request("/manage/checkout", {
+        booking_id: fixture.b.id, manage_token: fixture.raw, confirmed: true,
+      });
+      assert.equal(r.status, 503);
+      assert.match((await r.json()).error, /paused/);
+    }
+    assert.equal(fetchCalls.length, before);
+    assert.equal((await pay("private", unstarted.b.id)).checkout_id, null);
+
+    // Exercise the public route so clients cannot bypass the server's switch.
+    const free = await create(await user());
+    for (const [e, expected] of [[unstarted.e, 400], [free, 201]]) {
+      const c = await request("/public/" + e.slug + "/context", {});
+      const data = await c.json();
+      const booked = await request("/public/" + e.slug + "/book", {
+        context_token: data.context_token,
+        request_id: randomUUID(), manage_token: secret(), starts_at: time(42),
+        guest_name: "Paused fixture", guest_email: "guest@example.test",
+        guest_timezone: "UTC", answers: {}, confirmed: true,
+      }, { cookie: c.headers.get("set-cookie").split(";")[0] });
+      const result = await booked.json();
+      assert.equal(booked.status, expected, JSON.stringify(result));
+      if (expected === 400) assert.match(result.error, /Payments are unavailable/);
+      else assert.equal(result.booking.state, "confirmed");
+    }
+
+    Object.assign(sessions.get(p.checkout_id), {
+      payment_status: "paid", status: "complete", payment_intent: "pi_pausedfixture",
+    });
+    const event = {
+      id: "evt_pausedconfirmation", account: p.account_id, livemode: false,
+      type: "checkout.session.async_payment_succeeded",
+      data: { object: { id: p.checkout_id } },
+    };
+    const t = Math.floor(Date.now() / 1000);
+    const signature = createHmac("sha256", env.KORLIX_SCHEDULING_STRIPE_WEBHOOK_SECRET)
+      .update(t + "." + JSON.stringify(event)).digest("hex");
+    const received = await request("/payments/webhook", event, {
+      "stripe-signature": `t=${t},v1=${signature}`,
+    });
+    assert.equal(received.status, 200, await received.text());
+    const confirmed = await pay("private", open.b.id);
+    assert.equal(confirmed.booking.state, "confirmed");
+    assert.equal(confirmed.payment_state, "paid");
+    await pay("refund_request", open.b.id, {
+      actor: open.u, revision: confirmed.booking.revision, confirmed: true,
+    });
+    await paused.connected.tick();
+    assert.equal((await pay("private", open.b.id)).payment_state, "refunded");
+  } finally {
+    paused.connected.stop();
+    paused.notifications.stop();
+    pausedServer.closeAllConnections();
+    await new Promise((r) => pausedServer.close(r));
+  }
 });
 test("webhooks cannot confirm a payment with a forged signature or redirect-like request", async () => {
   const { b } = await paidFixture(28);
