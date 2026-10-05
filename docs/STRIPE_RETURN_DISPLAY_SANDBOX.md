@@ -45,3 +45,15 @@ node --test backend/test/manual/stripe_return_preview.test.mjs
 ```
 
 After deployment, verify health, page/assets, valid display access, rejection of a wrong token, and absence of payment/action routes. Then ask the user to open the new private HTTPS link on their iPad and confirm **Appointment canceled**, **refunded**, **Full refund: succeeded**, and no payment button. That screenshot can establish actual iPad rendering of this saved result. The original `.invalid` Checkout URLs and end-to-end paid return still remain separate limitations.
+
+## Deployment checkpoint — 2026-10-05
+
+The Free service is live at [korlix-2meetu-return-sandbox.onrender.com](https://korlix-2meetu-return-sandbox.onrender.com), with auto-deploy off:
+
+- Service: `srv-db1sgdtg1s2s73bjmuvg`
+- Deploy: `dep-db1sge5g1s2s73bjn1hg`, live at 15:55 UTC
+- Code: `bf10b93c65e00c829362462f412d1734ace9e422`
+- Saved result captured: `2026-10-05T15:50:11.427Z`
+- Private access expires: `2026-10-08T15:50:11.427Z`
+
+All nine focused tests and the live HTTPS route/access checks passed. The served browser script matched the committed source exactly, and authenticated data reported canceled / refunded / refund succeeded. Production scheduling, web billing, and directory checkout remain disabled. The private link is supplied separately to the user; actual iPad rendering is pending. This saved display does not complete the separate paid-booking or original Stripe redirect acceptance checks.

@@ -209,6 +209,16 @@ For bookings `34359df5-2c9e-4d00-8336-2e5a6c5b9f9d` and `e218569c-0fb2-4f9f-ae96
 
 Before/after status projections, including booking/payment states and receipt IDs, were identical; outbound provider calls and CLI attempts were both zero. The harness was closed and its temporary ledger copy removed. This connects real persisted sandbox evidence to the manage API and return rendering logic, beyond fixture-only payment responses. It is **not browser rendering, an iPad redirect, or deployed paid-booking confirmation**. The original `.invalid` Checkout return URLs remain unsuitable for a real mobile flow. A separate durable HTTPS test app with isolated storage is still needed for that check; the authenticated loopback control harness must not be exposed publicly. No production setting or deployment changed.
 
+### HTTPS saved-result display available — 2026-10-05 15:55 UTC
+
+A separate Free Node service, [korlix-2meetu-return-sandbox](https://korlix-2meetu-return-sandbox.onrender.com), is live on Render. Service `srv-db1sgdtg1s2s73bjmuvg`, deploy `dep-db1sge5g1s2s73bjn1hg`, runs commit `bf10b93c65e00c829362462f412d1734ace9e422`; auto-deploy is off. It has no datastore, disk, worker, environment group, or provider credentials. The authenticated acceptance harness remains loopback-only.
+
+The display uses a sanitized public projection of the already fully refunded second booking, captured at `2026-10-05T15:50:11.427Z`. Timestamps were normalized without changing their instants. Private and unused fields were excluded. A fresh display-only token was generated; only its hash is configured on the service. Access expires at `2026-10-08T15:50:11.427Z`. Neither the token nor its private link is recorded in Git.
+
+The original production browser script is served unchanged, with a page banner identifying the saved result. There are no payment clients or mutation routes. All nine focused tests passed. Live HTTPS checks returned 200 for health, the page, byte-identical browser script, and authenticated saved data; a wrong token returned 404, a foreign origin 403, and checkout/webhook routes 404. The saved state is canceled / refunded / refund succeeded, with `livemode=false`; responses exclude checkout and meeting links and use private response headers. Fresh production scheduling, web billing, and directory health checks all reported `checkoutEnabled:false`.
+
+The user's actual iPad screenshot remains pending. This verifies HTTPS availability and read-only access to a saved refunded result. It does not establish an original Stripe redirect, a fresh Stripe status read, deployed paid-booking confirmation, or a durable end-to-end payment acceptance environment. See [the saved-result display guide](STRIPE_RETURN_DISPLAY_SANDBOX.md). No production setting or deployment changed.
+
 ## Open launch items
 
 Actual sandbox OAuth authorization/owner confirmation, isolated merchant v2 readiness, direct payment reconciliation, zero application fee, full refund while paused, signed payment-completion replay/duplicate handling, signed refund-event handling, and original signed expiry-event delivery to the deployed endpoint are verified above. Remaining provider acceptance is:
