@@ -71,7 +71,7 @@ Businesses use Stripe's risk tooling for their direct payments. KORLIX still enf
 ## Implementation and rollout
 
 1. **Prepared and locally tested:** explicit off-by-default payment switch; v2 merchant readiness; direct Checkout with dynamic eligible payment methods and no application fee; preserved payment confirmation and refund handling during a pause; public health status with no secrets.
-2. **Stripe sandbox activation blocked:** the connector's idempotent `EnableConnect` operation returned a read timeout twice. Activation is not verified. Complete/check it in the Stripe Dashboard after approved browser fallback.
+2. **Stripe sandbox Connect verified:** although `EnableConnect` previously timed out twice, the user's Dashboard and a subsequent `GetAccounts` read confirm Connect is available in `Korlix INC sandbox`. Two test connected accounts already exist. One has full Stripe Dashboard access, account-paid processing fees and Stripe loss responsibility in the v1 controller projection; its v2 capability read and use by the KORLIX app remain unverified. The Dashboard's existing $200 test activity is not evidence that the new 2MEETU integration has passed acceptance.
 3. **Configure an isolated sandbox environment:** sandbox OAuth client, API credentials and connected-account webhook signing secret must belong to the same sandbox. Preserve the scheduling encryption key for that environment; store secrets only in the backend secret store. Never switch the production backend to sandbox credentials for a test.
 4. **Run provider acceptance:** authorize a test business; inspect its v2 settings/capabilities; complete and verify a test Checkout; test decline, duplicate delivery, delayed success/failure, refund and a paused checkout; confirm actual charge fee and account ownership. These tests have not yet been performed against Stripe.
 5. **Build new-business onboarding:** add v2 account creation and the selected embedded components with owner-bound sessions and current requirements handling. Validate separately from existing-account OAuth.
@@ -97,9 +97,15 @@ node --test backend/test/scheduling.test.mjs backend/test/scheduling_connected.t
 
 Result on 2026-10-05: **53 passed, 0 failed**. Provider responses in these tests are fixtures. Coverage includes full booking lifecycle and ownership checks, invalid account/mode/responsibilities, unavailable payment/payout capabilities, rejected fee/transfer injection, explicit activation, free bookings during pause, signed confirmation during pause, and completed queued refunds during pause. No real charges or refunds were made.
 
+### Configuration checkpoint — 2026-10-05 UTC
+
+The user supplied public sandbox OAuth client ID `ca_VNdRanZuoOmsl6nhhnunPkqTdRYu9hVo`. It is staged as `KORLIX_SCHEDULING_STRIPE_CLIENT_ID` on the disabled scheduling integration. Render deployment `dep-db1f8rs9v7es73f9nl3g` of application commit `70e23e2a158ff2383ff69b5abe9e146928747eae` is live. The scheduling, web subscription and Directory enable flags are all explicitly `false`.
+
+No secret API keys were requested through chat or copied from other production settings. Matching sandbox API credentials and the connected-account webhook are still required before acceptance. Listing sandbox webhook endpoints found only a disabled historical Directory test endpoint, not a scheduling endpoint. OAuth was off and redirects empty in the last observed settings screenshot; the user was instructed to enable OAuth and register the existing backend callback, but the saved settings have not yet been verified. Registering a callback or storing the public client ID does not verify authorization or payment processing. An isolated acceptance environment remains required for actual end-to-end test bookings.
+
 ## Open launch items
 
-Sandbox activation and actual payment acceptance remain unverified. Confirm the initial supported merchant countries and service categories before international onboarding; a US company account alone does not establish support in every country. Appointment tax calculation is not included in this release. Tax treatment for KORLIX's own subscriptions remains a separate launch gate, including the user's pending Ohio registration work.
+Actual OAuth authorization, Accounts v2 readiness and 2MEETU payment acceptance remain unverified. Confirm the initial supported merchant countries and service categories before international onboarding; a US company account alone does not establish support in every country. Appointment tax calculation is not included in this release. Tax treatment for KORLIX's own subscriptions remains a separate launch gate, including the user's pending Ohio registration work.
 
 ## Stripe references
 
