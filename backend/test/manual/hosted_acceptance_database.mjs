@@ -52,11 +52,17 @@ const DIAGNOSTIC_STAGES = new Set([
 ]);
 const validCode = code => typeof code === "string" &&
   (NODE_CODES.has(code) || code === "UNCLASSIFIED" || /^[0-9A-Z]{5}$/.test(code));
+const PRIVILEGE_COUNTS = ["defaultAclEntries", "defaultAclForeignGrants", "tableForeignGrants", "functionForeignGrants", "columnForeignGrants"];
+function privilegeCounts(value) {
+  if (!value || PRIVILEGE_COUNTS.some(key => !Number.isSafeInteger(value[key]) || value[key] < 0)) return null;
+  return Object.fromEntries(PRIVILEGE_COUNTS.map(key => [key, value[key]]));
+}
 export function hostedDatabaseDiagnostic(error) {
   const value = error?.hostedAcceptanceDiagnostic;
   if (!value || !DIAGNOSTIC_STAGES.has(value.stage) || !validCode(value.code)) return null;
   if (value.assertion !== undefined && ![...ASSERTIONS.values(), "unclassified_assertion"].includes(value.assertion)) return null;
-  return { stage: value.stage, code: value.code, ...(value.assertion ? { assertion: value.assertion } : {}) };
+  const counts = value.assertion === "catalog_privileges" ? privilegeCounts(value.counts) : null;
+  return { stage: value.stage, code: value.code, ...(value.assertion ? { assertion: value.assertion } : {}), ...(counts ? { counts } : {}) };
 }
 function diagnose(error, stage) {
   if (!error || typeof error !== "object") error = new Error("Hosted acceptance database operation failed.");
@@ -268,7 +274,8 @@ async function catalog(client) {
       s.seqmax::text,s.seqmin::text,s.seqcache::text,s.seqcycle
       FROM pg_sequence s JOIN pg_class c ON c.oid=s.seqrelid JOIN pg_namespace n ON n.oid=c.relnamespace
       WHERE n.nspname IN ('public','auth') ORDER BY n.nspname,c.relname`,
-    defaults: `SELECT pg_get_userbyid(d.defaclrole) AS owner,coalesce(n.nspname,'') AS schema,d.defaclobjtype,d.defaclacl::text AS acl
+    defaults: `SELECT pg_get_userbyid(d.defaclrole) AS owner,coalesce(n.nspname,'') AS schema,d.defaclobjtype,d.defaclacl::text AS acl,
+      (SELECT count(*) FROM aclexplode(d.defaclacl) a WHERE a.grantee<>d.defaclrole) AS foreign_grants
       FROM pg_default_acl d LEFT JOIN pg_namespace n ON n.oid=d.defaclnamespace
       WHERE d.defaclnamespace=0 OR n.nspname IN ('public','auth') ORDER BY owner,schema,d.defaclobjtype`,
     foreignGrants: `SELECT
@@ -287,9 +294,27 @@ async function catalog(client) {
 }
 
 function assertRuntimeCatalog(snapshot, owner) {
-  assert(snapshot.defaults.length === 0 && snapshot.foreignGrants.length === 1 &&
-    Object.values(snapshot.foreignGrants[0]).every(value => Number(value) === 0),
+  const counts = {
+    defaultAclEntries: snapshot.defaults.length,
+    defaultAclForeignGrants: snapshot.defaults.reduce((sum, row) => sum + Number(row.foreign_grants), 0),
+    tableForeignGrants: Number(snapshot.foreignGrants[0]?.relations),
+    functionForeignGrants: Number(snapshot.foreignGrants[0]?.functions),
+    columnForeignGrants: Number(snapshot.foreignGrants[0]?.columns),
+  };
+  try {
+    // Explicit restrictive defaults (for example revoking PUBLIC's default
+    // function EXECUTE) are safe. A default ACL's existence is not a grant.
+    // Inspect each ACL's effective recipients, including PUBLIC (OID zero),
+    // while retaining every exact ACL entry in the persisted fingerprint.
+    assert(privilegeCounts(counts) && counts.defaultAclForeignGrants === 0 && snapshot.foreignGrants.length === 1 &&
+      counts.tableForeignGrants === 0 && counts.functionForeignGrants === 0 && counts.columnForeignGrants === 0,
     "Sandbox schema has unexpected default privileges or foreign grants.");
+  } catch (error) {
+    const annotated = diagnose(error, "catalog_assertions");
+    annotated.hostedAcceptanceDiagnostic = Object.freeze({ ...annotated.hostedAcceptanceDiagnostic,
+      ...(privilegeCounts(counts) ? { counts: Object.freeze(counts) } : {}) });
+    throw annotated;
+  }
   const tables = snapshot.relations.filter(r => r.relkind === "r");
   assert.deepEqual(tables.filter(r => r.nspname === "public").map(r => r.relname).sort(), EXPECTED_TABLES,
     "Dedicated sandbox tables differ from the approved schema.");

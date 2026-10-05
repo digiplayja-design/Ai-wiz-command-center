@@ -5,6 +5,7 @@ import {
   beginHostedAcceptanceTransaction,
   validateHostedAcceptanceDatabase,
   bootstrapHostedAcceptanceDatabase,
+  hostedDatabaseDiagnostic,
 } from "./hosted_acceptance_database.mjs";
 
 // These tests execute the real bootstrap, migrations, and catalog queries in
@@ -17,6 +18,7 @@ const CONFIG = Object.freeze({
   bindingHash: "39a168de".repeat(8),
   paymentRuntime: false,
 });
+
 const RUNTIME_CONFIG = Object.freeze({ ...CONFIG, paymentRuntime: true });
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 
@@ -154,4 +156,73 @@ test("hosted acceptance bootstrap uses real PostgreSQL and refuses restart drift
     assert(queries.some(sql => /create table public\.korlix_schedule_profiles/i.test(sql)),
       "The runtime must execute the scheduling migrations.");
   });
+});
+
+test("restrictive owner-only default privileges permit stage two and remain fingerprinted", async (t) => {
+  const { db, client, pool } = await databaseFixture();
+  t.after(() => db.close());
+  const originalRoles = await roles(client);
+  const initialState = await bootstrapHostedAcceptanceDatabase(CONFIG, pool, { now: () => NOW });
+  await client.query("ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC");
+  const defaults = (await client.query(`SELECT d.defaclobjtype,d.defaclrole::text AS owner,a.grantee::text AS grantee
+    FROM pg_default_acl d,LATERAL aclexplode(d.defaclacl) a
+    WHERE d.defaclnamespace=0 ORDER BY d.defaclobjtype,a.grantee`)).rows;
+  assert.equal(defaults.length, 1, "The regression requires a real explicit default ACL row.");
+  assert.equal(defaults[0].defaclobjtype, "f");
+  assert.equal(defaults[0].grantee, defaults[0].owner);
+
+  const runtimeState = await bootstrapHostedAcceptanceDatabase(RUNTIME_CONFIG, pool, { now: () => NOW + 1000 });
+  assert.equal(runtimeState.createdAt, initialState.createdAt);
+  assert.match(runtimeState.runId, UUID);
+  assert.match(runtimeState.hostId, UUID);
+  assert.deepEqual(await bootstrapHostedAcceptanceDatabase(RUNTIME_CONFIG, pool, { now: () => NOW + 2000 }), runtimeState);
+  assert.deepEqual(await roles(client), originalRoles);
+
+  await beginHostedAcceptanceTransaction(client);
+  try {
+    // Another restrictive default is safe in isolation, but changing the
+    // accepted catalog must still invalidate its stored fingerprint.
+    await client.query("ALTER DEFAULT PRIVILEGES REVOKE USAGE ON TYPES FROM PUBLIC");
+    await assert.rejects(validateHostedAcceptanceDatabase(client, RUNTIME_CONFIG), error => {
+      assert.equal(error.code, "ERR_ASSERTION");
+      assert.equal(hostedDatabaseDiagnostic(error)?.assertion, "schema_fingerprint");
+      return true;
+    });
+  } finally { await client.query("ROLLBACK"); }
+  assert.deepEqual(await bootstrapHostedAcceptanceDatabase(RUNTIME_CONFIG, pool), runtimeState);
+});
+
+test("foreign default grants refuse stage two and roll back only the attempted runtime", async (t) => {
+  const { db, client, pool } = await databaseFixture();
+  t.after(() => db.close());
+  const originalRoles = await roles(client);
+  const initialState = await bootstrapHostedAcceptanceDatabase(CONFIG, pool, { now: () => NOW });
+  const guardBefore = (await client.query("SELECT * FROM public.korlix_hosted_acceptance_state")).rows;
+  await client.query("ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO PUBLIC");
+  const defaultSnapshot = () => client.query(`SELECT defaclrole::text,defaclnamespace::text,defaclobjtype,defaclacl::text
+    FROM pg_default_acl ORDER BY defaclrole,defaclnamespace,defaclobjtype`);
+  const defaultsBefore = (await defaultSnapshot()).rows;
+  assert.equal(defaultsBefore.length, 1);
+  assert.match(defaultsBefore[0].defaclacl, /[,{]=r\//);
+
+  await assert.rejects(bootstrapHostedAcceptanceDatabase(RUNTIME_CONFIG, pool, { now: () => NOW + 1000 }), error => {
+    assert.equal(error.code, "ERR_ASSERTION");
+    const diagnostic = hostedDatabaseDiagnostic(error);
+    assert.deepEqual(diagnostic, {
+      stage: "catalog_assertions", code: "ERR_ASSERTION", assertion: "catalog_privileges",
+      counts: {
+        defaultAclEntries: 1, defaultAclForeignGrants: 1,
+        tableForeignGrants: 0, functionForeignGrants: 0, columnForeignGrants: 0,
+      },
+    });
+    return true;
+  });
+  assert.deepEqual((await client.query("SELECT * FROM public.korlix_hosted_acceptance_state")).rows, guardBefore);
+  assert.deepEqual((await defaultSnapshot()).rows, defaultsBefore);
+  assert.deepEqual((await client.query(`SELECT tablename FROM pg_tables
+    WHERE schemaname='public' ORDER BY tablename`)).rows,
+  [{ tablename: "korlix_hosted_acceptance_state" }]);
+  assert.equal((await client.query("SELECT count(*)::int AS count FROM pg_namespace WHERE nspname='auth'")).rows[0].count, 0);
+  assert.deepEqual(await bootstrapHostedAcceptanceDatabase(CONFIG, pool), initialState);
+  assert.deepEqual(await roles(client), originalRoles);
 });
