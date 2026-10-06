@@ -212,6 +212,7 @@ test("foreign default grants refuse stage two and roll back only the attempted r
       stage: "catalog_assertions", code: "ERR_ASSERTION", assertion: "catalog_privileges",
       counts: {
         defaultAclEntries: 1, defaultAclForeignGrants: 1,
+        applicableDefaultAclForeignGrants: 1, otherRoleDefaultAclEntries: 0,
         tableForeignGrants: 0, functionForeignGrants: 0, columnForeignGrants: 0,
       },
     });
@@ -224,5 +225,45 @@ test("foreign default grants refuse stage two and roll back only the attempted r
   [{ tablename: "korlix_hosted_acceptance_state" }]);
   assert.equal((await client.query("SELECT count(*)::int AS count FROM pg_namespace WHERE nspname='auth'")).rows[0].count, 0);
   assert.deepEqual(await bootstrapHostedAcceptanceDatabase(CONFIG, pool), initialState);
+  assert.deepEqual(await roles(client), originalRoles);
+});
+
+test("another creator's foreign default grants allow runtime startup but remain fingerprinted", async (t) => {
+  const { db, client, pool } = await databaseFixture();
+  t.after(() => db.close());
+  // Only fixture setup creates this synthetic provider role. The application
+  // client retains its CREATE ROLE rejection and never switches identities.
+  await db.exec("CREATE ROLE fixture_managed_database_admin NOLOGIN");
+  await db.exec("ALTER DEFAULT PRIVILEGES FOR ROLE fixture_managed_database_admin GRANT SELECT ON TABLES TO PUBLIC");
+  const originalRoles = await roles(client);
+  await assert.rejects(client.query("CREATE ROLE fixture_runtime_forbidden"), /must not create PostgreSQL roles/);
+  assert.deepEqual(await roles(client), originalRoles);
+  const otherDefaults = (await client.query(`SELECT pg_get_userbyid(d.defaclrole) AS creator,
+    d.defaclrole=(SELECT oid FROM pg_roles WHERE rolname=current_user) AS applicable,
+    (SELECT count(*)::int FROM aclexplode(d.defaclacl) a WHERE a.grantee<>d.defaclrole) AS foreign_grants
+    FROM pg_default_acl d WHERE d.defaclnamespace=0`)).rows;
+  assert.deepEqual(otherDefaults, [{ creator: "fixture_managed_database_admin", applicable: false, foreign_grants: 1 }]);
+
+  const initialState = await bootstrapHostedAcceptanceDatabase(CONFIG, pool, { now: () => NOW });
+  const runtimeState = await bootstrapHostedAcceptanceDatabase(RUNTIME_CONFIG, pool, { now: () => NOW + 1000 });
+  assert.equal(runtimeState.createdAt, initialState.createdAt);
+  assert.match(runtimeState.runId, UUID);
+  assert.match(runtimeState.hostId, UUID);
+  assert.deepEqual(await bootstrapHostedAcceptanceDatabase(RUNTIME_CONFIG, pool, { now: () => NOW + 2000 }), runtimeState);
+  assert.equal((await client.query(`SELECT count(*)::int AS foreign_grants
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace,
+    LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a
+    WHERE n.nspname IN ('public','auth') AND c.relkind='r' AND a.grantee<>c.relowner`)).rows[0].foreign_grants, 0);
+
+  await beginHostedAcceptanceTransaction(client);
+  try {
+    await client.query("ALTER DEFAULT PRIVILEGES FOR ROLE fixture_managed_database_admin GRANT INSERT ON TABLES TO PUBLIC");
+    await assert.rejects(validateHostedAcceptanceDatabase(client, RUNTIME_CONFIG), error => {
+      assert.equal(error.code, "ERR_ASSERTION");
+      assert.equal(hostedDatabaseDiagnostic(error)?.assertion, "schema_fingerprint");
+      return true;
+    });
+  } finally { await client.query("ROLLBACK"); }
+  assert.deepEqual(await bootstrapHostedAcceptanceDatabase(RUNTIME_CONFIG, pool), runtimeState);
   assert.deepEqual(await roles(client), originalRoles);
 });

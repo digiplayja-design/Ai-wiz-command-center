@@ -52,7 +52,8 @@ const DIAGNOSTIC_STAGES = new Set([
 ]);
 const validCode = code => typeof code === "string" &&
   (NODE_CODES.has(code) || code === "UNCLASSIFIED" || /^[0-9A-Z]{5}$/.test(code));
-const PRIVILEGE_COUNTS = ["defaultAclEntries", "defaultAclForeignGrants", "tableForeignGrants", "functionForeignGrants", "columnForeignGrants"];
+const PRIVILEGE_COUNTS = ["defaultAclEntries", "defaultAclForeignGrants", "applicableDefaultAclForeignGrants",
+  "otherRoleDefaultAclEntries", "tableForeignGrants", "functionForeignGrants", "columnForeignGrants"];
 function privilegeCounts(value) {
   if (!value || PRIVILEGE_COUNTS.some(key => !Number.isSafeInteger(value[key]) || value[key] < 0)) return null;
   return Object.fromEntries(PRIVILEGE_COUNTS.map(key => [key, value[key]]));
@@ -297,6 +298,9 @@ function assertRuntimeCatalog(snapshot, owner) {
   const counts = {
     defaultAclEntries: snapshot.defaults.length,
     defaultAclForeignGrants: snapshot.defaults.reduce((sum, row) => sum + Number(row.foreign_grants), 0),
+    applicableDefaultAclForeignGrants: snapshot.defaults.filter(row => row.owner === owner)
+      .reduce((sum, row) => sum + Number(row.foreign_grants), 0),
+    otherRoleDefaultAclEntries: snapshot.defaults.filter(row => row.owner !== owner).length,
     tableForeignGrants: Number(snapshot.foreignGrants[0]?.relations),
     functionForeignGrants: Number(snapshot.foreignGrants[0]?.functions),
     columnForeignGrants: Number(snapshot.foreignGrants[0]?.columns),
@@ -304,9 +308,13 @@ function assertRuntimeCatalog(snapshot, owner) {
   try {
     // Explicit restrictive defaults (for example revoking PUBLIC's default
     // function EXECUTE) are safe. A default ACL's existence is not a grant.
-    // Inspect each ACL's effective recipients, including PUBLIC (OID zero),
-    // while retaining every exact ACL entry in the persisted fingerprint.
-    assert(privilegeCounts(counts) && counts.defaultAclForeignGrants === 0 && snapshot.foreignGrants.length === 1 &&
+    // PostgreSQL applies only the current creator's defaults, not defaults of
+    // roles it belongs to. `owner` is current_user from the identity query;
+    // each default's owner is pg_get_userbyid(defaclrole). Reject foreign
+    // recipients (including PUBLIC) in that creator's defaults. Defaults of
+    // other roles remain in the exact fingerprint; actual object ACLs are
+    // independently checked below regardless of where a grant originated.
+    assert(privilegeCounts(counts) && counts.applicableDefaultAclForeignGrants === 0 && snapshot.foreignGrants.length === 1 &&
       counts.tableForeignGrants === 0 && counts.functionForeignGrants === 0 && counts.columnForeignGrants === 0,
     "Sandbox schema has unexpected default privileges or foreign grants.");
   } catch (error) {
