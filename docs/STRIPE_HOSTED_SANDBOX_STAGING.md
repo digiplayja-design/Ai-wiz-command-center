@@ -1,6 +1,6 @@
 # Hosted Stripe sandbox staging
 
-This isolated runtime implements durable sandbox booking storage, a Stripe-signed webhook receiver, an HTTPS customer return page, and private controls for one synthetic USD 1.00 Checkout and full refund. Payment issuance starts paused. The current implementation is under local review and testing; its hosted payment deployment and acceptance evidence are pending verification below.
+This isolated runtime implements durable sandbox booking storage, a Stripe-signed webhook receiver, an HTTPS customer return page, and private controls for one synthetic USD 1.00 Checkout and full refund. The hosted schema upgrade, identity verification and HTTPS boundaries have passed; the local suite passed 64/64 tests. Payment issuance remains paused pending endpoint setup and the genuine sandbox acceptance run below.
 
 The credentials last verified on the hosted service provide identity reads only. A new hosted payment, its Stripe-to-customer return, and its full refund have not yet been proven. Production checkout remains paused, and the separate saved-result display is not payment acceptance evidence.
 
@@ -109,9 +109,27 @@ The only remaining blocker was `payment_runtime_not_implemented`. Readiness rema
 
 ### Upgrade blocked — 2026-10-05 23:44 UTC
 
-Deploy `dep-db23c6b0hr2s73bbh2l0` of commit `ae1b1c4bcb2becd71306d93f798b254243e6b201` became live at `2026-10-05T23:44:08.382813Z`, with `KORLIX_HOSTED_ACCEPTANCE_PAYMENT_RUNTIME=scheduling-v2` configured. The hosted `/health` response reported `databaseReady:false`, and authenticated private status reported `database:null`. The upgrade failed closed before a booking was created. The cause was not established by those responses; investigation is in progress.
+Deploy `dep-db23c6b0hr2s73bbh2l0` of commit `ae1b1c4bcb2becd71306d93f798b254243e6b201` became live at `2026-10-05T23:44:08.382813Z`, with `KORLIX_HOSTED_ACCEPTANCE_PAYMENT_RUNTIME=scheduling-v2` configured. The hosted `/health` response reported `databaseReady:false`, and authenticated private status reported `database:null`. The upgrade failed closed before a booking was created. The cause was not established by those initial responses; subsequent diagnostics are recorded below.
 
 The webhook signing secret and endpoint ID are still missing, and the existing identity-only restricted key is unchanged. This deployment does not establish a successful hosted schema upgrade, payment, signed event delivery, redirect or refund.
+
+### Default-privilege diagnosis and correction — 2026-10-06 00:00 UTC
+
+Diagnostic commit `ae93b9101aff6996c1404c5b70c2ef4f395a4cba` identified the database rejection as `catalog_privileges`. The first ACL correction, `8ef3222`, remained blocked: diagnostics showed four default-ACL entries containing 15 foreign grants, while actual table, function and column foreign-grant counts were all zero.
+
+Correction `03856ab34ed992b43d75236158d87e3bbba731f2` scopes the default-ACL denial to the current object-creating role. It continues to fingerprint all default-ACL entries and requires zero foreign grants on the actual application tables, functions and columns. This follows [PostgreSQL 17 default-privilege semantics](https://www.postgresql.org/docs/17/sql-alterdefaultprivileges.html): new objects use the current creator's defaults, not defaults inherited from other roles. Focused tests cover allowing another creator's defaults and rejecting later drift. The full local suite passed **64/64 tests**.
+
+Deploy `dep-db23k73bc2fs73f436gg` for correction `03856ab34ed992b43d75236158d87e3bbba731f2` was created at `2026-10-06T00:00:28.664417Z` and became live at `2026-10-06T00:01:09.600047Z`. Hosted verification then passed as recorded below.
+
+### Hosted ledger and HTTPS boundaries verified — 2026-10-06 00:02 UTC
+
+Eleven HTTPS checks completed at `2026-10-06T00:02:07.509723Z`. Public health returned HTTP 200 with `databaseReady:true`. Authenticated `POST /acceptance/verify` returned HTTP 200 with `identityVerified:true`, checked at `2026-10-06T00:01:33.245Z`, matching the expected platform and merchant with `livemode:false`, `source:accounts_v2`, `cardPayments:active` and `payouts:active`.
+
+The durable schema reported `schemaVersion:scheduling-ledger-v1` and run `33290d13-b099-474b-b13d-56f0960c1454`. Event and booking IDs were null, `enabled:false`, `outboundCount:0`, `receivedEvents:[]` and `booking:null`. The flow outbound counter excludes the separate identity-verification reads. No Checkout or refund was created. The only reported health blockers were `webhook_signing_secret_missing`, `webhook_endpoint_id_missing` and `sandbox_checkout_paused`.
+
+Unauthenticated private access returned 401; a browser Origin on private controls returned 403; an unknown customer booking returned 404; the return HTML, CSS and JavaScript returned 200; a query-string token returned 404. Every checked response used `Cache-Control:no-store`. These results establish the hosted ledger, identity access and HTTP boundaries. They do not establish endpoint configuration, a genuine payment, signed connected-account delivery, an actual Stripe return or a refund.
+
+The production backend still had auto-deploy off and live commit `d682b32acde91522b570ac8c6ba9a24ccb8074aa` (deploy `dep-db22qkcs728c73asc5b0`, live `2026-10-05T23:06:08.590359Z`); these sandbox branch pushes caused no new production deployment.
 
 ## Current configuration
 
@@ -174,9 +192,10 @@ The historical stage-one suite passed ten focused tests in `backend/test/manual/
 
 | New scheduling-v2 evidence | Status |
 | --- | --- |
-| Reviewed code and focused test counts | 60/60 tests passed across database, payment flow, HTTP integration, return UI and stage-one boundaries. Database/flow/HTTP fixtures execute real PostgreSQL catalogs and production scheduling SQL in PGlite; Stripe is mocked. Independent review found no remaining critical isolation or locking issues. |
-| Hosted deployment ID, commit and live timestamp | `dep-db23c6b0hr2s73bbh2l0`, commit `ae1b1c4bcb2becd71306d93f798b254243e6b201`, live `2026-10-05T23:44:08.382813Z`; upgrade blocked as recorded above |
-| Hosted schema upgrade and endpoint configuration | Blocked: hosted `databaseReady:false` and private `database:null`; webhook secret and endpoint ID not yet configured |
+| Reviewed code and focused test counts | 64/64 tests passed across database, payment flow, HTTP integration, return UI and stage-one boundaries, including the corrected creator-specific default-ACL checks. Database/flow/HTTP fixtures execute real PostgreSQL catalogs and production scheduling SQL in PGlite; Stripe is mocked. Independent review found no remaining critical isolation or locking issues. |
+| Hosted deployment ID, commit and live timestamp | Commit `03856ab34ed992b43d75236158d87e3bbba731f2`, deploy `dep-db23k73bc2fs73f436gg`, live `2026-10-06T00:01:09.600047Z` |
+| Hosted schema upgrade, identity and HTTP boundaries | Passed: `scheduling-ledger-v1`, expected sandbox identities, paused empty run and 11 HTTPS checks completed `2026-10-06T00:02:07.509723Z` |
+| Webhook endpoint configuration | Pending: webhook secret and endpoint ID are not yet configured |
 | New genuine sandbox payment and signed completion delivery | Not yet proven |
 | Actual Stripe-to-HTTPS return and ledger-only status display | Not yet proven |
 | Duplicate delivery, restart recovery and full refund | Not yet proven for the new hosted run |
