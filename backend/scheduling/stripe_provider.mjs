@@ -89,6 +89,25 @@ export function stripeProvider(config, { fetcher = fetch, requestTimeoutMs = 150
     );
     return data;
   }
+  async function setupRequest(stage, path, body, key) {
+    try {
+      const { data } = await request(stage, "https://api.stripe.com" + path, {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + config.key,
+          "Stripe-Version": config.version,
+          "Content-Type": "application/json",
+          ...(key ? { "Idempotency-Key": key } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+      return data;
+    } catch (error) {
+      if ([401, 403].includes(error.upstream?.status))
+        throw new ProviderError("Stripe merchant setup needs administrator permission. Your saved setup can be resumed once access is restored.", 503);
+      throw error;
+    }
+  }
   function session(s, pay) {
     if (
       !id(s.id, "cs") ||
@@ -131,6 +150,41 @@ export function stripeProvider(config, { fetcher = fetch, requestTimeoutMs = 150
   }
   return {
     livemode,
+    async createMerchant(setup) {
+      const a = await setupRequest("merchant_create", "/v2/core/accounts", {
+        contact_email: setup.contact_email,
+        display_name: setup.display_name,
+        identity: { country: setup.country },
+        dashboard: "full",
+        defaults: { responsibilities: { fees_collector: "stripe", losses_collector: "stripe" } },
+        configuration: { merchant: { capabilities: { card_payments: { requested: true } } } },
+        include: ["configuration.merchant", "defaults"],
+        metadata: { korlix_setup: setup.id },
+      }, "korlix-merchant-" + setup.id);
+      if (!account(a.id) || a.object !== "v2.core.account" || a.livemode !== livemode ||
+          a.dashboard !== "full" || a.defaults?.responsibilities?.fees_collector !== "stripe" ||
+          a.defaults?.responsibilities?.losses_collector !== "stripe")
+        throw new ProviderError("Stripe merchant creation could not be verified. Resume this saved setup before trying a different account.", 409);
+      return { id: a.id, livemode };
+    },
+    async onboardingLink(accountId, { returnUrl, refreshUrl }) {
+      if (!account(accountId)) throw new ProviderError("Invalid merchant account.", 409);
+      const link = await setupRequest("merchant_onboarding_link", "/v2/core/account_links", {
+        account: accountId,
+        use_case: { type: "account_onboarding", account_onboarding: {
+          return_url: returnUrl, refresh_url: refreshUrl,
+          collection_options: { fields: "eventually_due" },
+        } },
+      });
+      let url;
+      try { url = new URL(link.url); } catch {}
+      if (link.object !== "v2.core.account_link" || link.account !== accountId ||
+          link.livemode !== livemode || !url || url.protocol !== "https:" ||
+          !["connect.stripe.com", "accounts.stripe.com"].includes(url.hostname) ||
+          url.username || url.password || url.port)
+        throw new ProviderError("Stripe returned an invalid setup link. Resume setup to try again.", 409);
+      return url.href;
+    },
     authorizationUrl(state) {
       const u = new URL("https://connect.stripe.com/oauth/authorize");
       u.search = new URLSearchParams({

@@ -283,3 +283,166 @@ test("direct checkout uses the verified merchant, dynamic methods and an idempot
   assert(![...payload.keys()].some((k) => /application_fee|transfer_data|payment_method_types/.test(k)));
   assert.equal(payload.get("integration_identifier"), "korlix_2meetu_dzwqhxnr");
 });
+
+const merchantSetup = Object.freeze({
+  id: "bc8c2be4-6b57-45dc-8270-34e7c1dc227e",
+  contact_email: "owner@example.test",
+  display_name: "Owner's appointment business",
+  country: "US",
+});
+const onboardingRedirects = Object.freeze({
+  returnUrl: "https://example.test/merchant/setup/return",
+  refreshUrl: "https://example.test/merchant/setup/refresh",
+});
+const accountLink = (url = "https://accounts.stripe.com/r/acct_fixture#alu_test_fixture") => ({
+  object: "v2.core.account_link", account: pay.account_id, livemode: false,
+  url, expires_at: new Date(Date.now() + 10 * 60000).toISOString(),
+});
+
+test("merchant creation recovers an uncertain response with the same JSON request and durable idempotency key", async () => {
+  const calls = [];
+  const paused = config("false");
+  const adapter = stripeProvider(paused, {
+    diagnostic: () => {},
+    fetcher: async (url, options) => {
+      calls.push({ url, ...options });
+      if (calls.length === 1) throw new Error("Fixture response lost after Stripe accepted creation");
+      const a = merchant();
+      a.configuration.merchant.capabilities.card_payments.status = "pending";
+      a.configuration.merchant.capabilities.stripe_balance.payouts.status = "pending";
+      return response(a);
+    },
+  });
+  // Caller fields cannot change the platform's fee model or chosen merchant configuration.
+  const setup = Object.freeze({ ...merchantSetup, dashboard: "express", account: "acct_other",
+    application_fee_amount: 100, configuration: { recipient: {} } });
+  await assert.rejects(adapter.createMerchant(setup), /could not be confirmed/);
+  assert.deepEqual(await adapter.createMerchant(setup), { id: pay.account_id, livemode: false });
+  assert.equal(calls.length, 2);
+  for (const call of calls) {
+    assert.equal(call.url, "https://api.stripe.com/v2/core/accounts");
+    assert.equal(call.method, "POST");
+    assert.equal(call.headers["Content-Type"], "application/json");
+    assert.equal(call.headers["Stripe-Version"], "2026-09-30.endive");
+    assert.equal(call.headers["Stripe-Account"], undefined);
+    assert.equal(call.headers["Idempotency-Key"], "korlix-merchant-" + merchantSetup.id);
+    assert.deepEqual(JSON.parse(call.body), {
+      contact_email: merchantSetup.contact_email,
+      display_name: merchantSetup.display_name,
+      identity: { country: "US" }, dashboard: "full",
+      defaults: { responsibilities: { fees_collector: "stripe", losses_collector: "stripe" } },
+      configuration: { merchant: { capabilities: { card_payments: { requested: true } } } },
+      include: ["configuration.merchant", "defaults"], metadata: { korlix_setup: merchantSetup.id },
+    });
+  }
+  assert.equal(calls[0].body, calls[1].body);
+  assert.equal(paused.enabled, false);
+  await assert.rejects(adapter.checkout(pay, wire()), { status: 503 });
+  assert.equal(calls.length, 2, "Merchant setup must not enable paused checkout.");
+});
+
+test("merchant creation refuses invalid identity, mode and controller responses", async () => {
+  for (const change of [
+    (a) => { a.id = "acct_invalid/other"; },
+    (a) => { a.id = "customer_fixture"; },
+    (a) => { delete a.id; },
+    (a) => { a.object = "account"; },
+    (a) => { a.livemode = true; },
+    (a) => { a.livemode = "false"; },
+    (a) => { a.dashboard = "express"; },
+    (a) => { a.defaults.responsibilities.fees_collector = "application"; },
+    (a) => { a.defaults.responsibilities.losses_collector = "application"; },
+    (a) => { delete a.defaults; },
+  ]) {
+    const a = merchant(); change(a);
+    const adapter = stripeProvider(config("false"), { fetcher: async () => response(a) });
+    await assert.rejects(adapter.createMerchant(merchantSetup), { status: 409 });
+  }
+});
+
+test("onboarding uses the server-bound merchant and a fresh link for each authenticated resume", async () => {
+  const calls = [];
+  const urls = ["https://accounts.stripe.com/r/acct_fixture#alu_test_first",
+    "https://connect.stripe.com/setup/s/fixture-second"];
+  const adapter = stripeProvider(config("false"), {
+    fetcher: async (url, options) => {
+      calls.push({ url, ...options });
+      return response(accountLink(urls[calls.length - 1]));
+    },
+  });
+  for (const expected of urls)
+    assert.equal(await adapter.onboardingLink(pay.account_id, onboardingRedirects), expected);
+  assert.equal(calls.length, 2);
+  for (const call of calls) {
+    assert.equal(call.url, "https://api.stripe.com/v2/core/account_links");
+    assert.equal(call.method, "POST");
+    assert.equal(call.headers["Content-Type"], "application/json");
+    assert.equal(call.headers["Stripe-Version"], "2026-09-30.endive");
+    assert.equal(call.headers["Stripe-Account"], undefined);
+    assert.equal(call.headers["Idempotency-Key"], undefined,
+      "A resumed link must not replay the original consumed single-use URL.");
+    assert.deepEqual(JSON.parse(call.body), {
+      account: pay.account_id,
+      use_case: { type: "account_onboarding", account_onboarding: {
+        return_url: onboardingRedirects.returnUrl, refresh_url: onboardingRedirects.refreshUrl,
+        collection_options: { fields: "eventually_due" },
+      } },
+    });
+  }
+});
+
+test("onboarding rejects wrong account and mode plus forged or unsafe Stripe link destinations", async () => {
+  const invalidUrls = [
+    "http://accounts.stripe.com/setup",
+    "https://accounts.stripe.com.attacker.test/setup",
+    "https://attacker.accounts.stripe.com/setup",
+    "https://connect.stripe.com.attacker.test/setup",
+    "https://accounts.stripe.com@attacker.test/setup",
+    "https://owner:private@accounts.stripe.com/setup",
+    "https://accounts.stripe.com:8443/setup",
+    "https://checkout.stripe.com/setup",
+    "javascript:alert(1)", "//accounts.stripe.com/setup", "not a URL", null,
+  ];
+  const invalidLinks = invalidUrls.map((url) => accountLink(url));
+  for (const change of [
+    (link) => { link.account = "acct_other"; },
+    (link) => { delete link.account; },
+    (link) => { link.object = "account_link"; },
+    (link) => { link.livemode = true; },
+    (link) => { link.livemode = "false"; },
+  ]) { const link = accountLink(); change(link); invalidLinks.push(link); }
+  for (const link of invalidLinks) {
+    const adapter = stripeProvider(config("false"), { fetcher: async () => response(link) });
+    await assert.rejects(adapter.onboardingLink(pay.account_id, onboardingRedirects), { status: 409 });
+  }
+  const adapter = stripeProvider(config("false"), {
+    fetcher: () => assert.fail("Malformed account IDs must fail before contacting Stripe"),
+  });
+  for (const value of ["acct_other/links", "acct_fixture?other=1", "", null])
+    await assert.rejects(adapter.onboardingLink(value, onboardingRedirects), { status: 409 });
+});
+
+test("merchant setup authorization failures preserve resumability without exposing provider payloads", async () => {
+  for (const status of [401, 403]) {
+    for (const stage of ["merchant_create", "merchant_onboarding_link"]) {
+      const records = [];
+      const adapter = stripeProvider(config("false"), {
+        diagnostic: (value) => records.push(value),
+        fetcher: async () => new Response(JSON.stringify({ error: {
+          code: "permission_denied", message: "sk_test_private owner-private@example.test alu_private",
+        } }), { status, headers: { "request-id": "req_fixtureSetup", "content-type": "application/json" } }),
+      });
+      await assert.rejects(stage === "merchant_create"
+        ? adapter.createMerchant(merchantSetup)
+        : adapter.onboardingLink(pay.account_id, onboardingRedirects), (error) => {
+        assert.equal(error.status, 503);
+        assert.match(error.message, /administrator permission/);
+        assert.match(error.message, /resumed/);
+        assert(!JSON.stringify(error).includes("private"));
+        return true;
+      });
+      assert.deepEqual(records, [{ stage, status, code: "permission_denied", requestId: "req_fixtureSetup" }]);
+      assert(!JSON.stringify(records).includes("private"));
+    }
+  }
+});

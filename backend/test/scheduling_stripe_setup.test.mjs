@@ -1,0 +1,125 @@
+import test from 'node:test';
+import {PGlite} from '@electric-sql/pglite';
+import {readFile} from 'node:fs/promises';
+import {randomUUID} from 'node:crypto';
+import assert from 'node:assert/strict';
+const migrationDirectory=new URL('../../supabase/migrations/',import.meta.url);
+
+test('durable merchant setup preserves ownership, review consent, and unsettled payments', async () => {
+  const db=new PGlite();
+  try {
+    await db.exec('create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key,email_confirmed_at timestamptz,is_anonymous boolean);create table user_profiles(id uuid primary key,tier text,is_disabled boolean);grant usage on schema public,auth to service_role,anon,authenticated;grant select,insert,update on user_profiles,auth.users to service_role;');
+    for(const filename of ['20260930152919_scheduling_engine.sql','20260930163605_scheduling_connected.sql','20261006022449_scheduling_stripe_readiness_refresh.sql','20261006030649_scheduling_stripe_merchant_setup.sql']) await db.exec(await readFile(new URL(filename,migrationDirectory),'utf8'));
+    await db.exec('set role service_role');
+    let checks=0;
+    const ok=(a,b)=>{assert.deepEqual(a,b);checks++};
+    const denies=async (f,re)=>{await assert.rejects(f,re);checks++};
+    const rpc=async(actor,action,id=null,data={})=>(await db.query('select korlix_schedule_stripe_setup_v1($1,$2,$3,$4) value',[actor,action,id,data])).rows[0].value;
+    async function user(){const id=randomUUID();await db.query('insert into auth.users values($1,now(),false)',[id]);await db.query("insert into user_profiles values($1,'basic',false)",[id]);await db.query("insert into korlix_schedule_profiles(owner_id,display_name,timezone) values($1,'Test host','UTC')",[id]);return id;}
+    const host=await user(),other=await user(),stale=await user();
+    const base={config_hash:'fixture-fingerprint',livemode:false}, creation={...base,confirmed:true,country:'US',display_name:'Synthetic merchant',contact_email:'merchant@example.test'};
+    ok(await rpc(host,'status',null,base),null);
+    await denies(()=>rpc(host,'prepare',null,{...creation,confirmed:false}),/Confirm merchant setup/);
+    await denies(()=>rpc(host,'prepare',null,{...creation,country:'us'}),/Provide a country/);
+    const s=await rpc(host,'prepare',null,creation);
+    ok(s.account_id,null);
+    ok((await rpc(host,'prepare',null,{...creation,country:'invalid',contact_email:'bad',display_name:'Changed'})).display_name,'Synthetic merchant');
+    await denies(()=>rpc(host,'prepare',null,{...creation,config_hash:'changed'}),/configuration changed/);
+    await denies(()=>rpc(other,'private',s.id),/not found/);
+    await denies(()=>rpc(host,'created',s.id,{...base,livemode:true,account_id:'acct_merchant'}),/configuration changed/);
+    const args={...base,account_id:'acct_merchant'};
+    ok((await rpc(host,'created',s.id,args)).account_id,'acct_merchant');
+    ok((await rpc(host,'created',s.id,args)).account_id,'acct_merchant');
+    await denies(()=>rpc(host,'created',s.id,{...args,account_id:'acct_changed'}),/does not match/);
+    const safe=await rpc(host,'status',null,base);
+    ok(safe.configuration_matches,true);ok('contact_email' in safe,false);ok('review_hash' in safe,false);ok('config_hash' in safe,false);
+    ok((await rpc(host,'status',null,{...base,config_hash:'changed'})).configuration_matches,false);
+    const identity={id:'acct_merchant',livemode:false,label:'Merchant verified',readiness_source:'accounts_v2',card_payments_status:'pending',payouts_status:'pending',charges_enabled:false};
+    let confirm={...args,confirmed:true,review_hash:'a'.repeat(64),identity,sealed_grant:'encrypted-fixture'};
+    await denies(()=>rpc(host,'confirm',s.id,confirm),/review expired/);
+    await rpc(host,'review',s.id,{...args,review_hash:confirm.review_hash});
+    await denies(()=>rpc(host,'confirm',s.id,{...confirm,identity:{...identity,readiness_source:'v1_identity_only'}}),/could not be verified/);
+    await denies(()=>rpc(host,'confirm',s.id,{...confirm,identity:{...identity,charges_enabled:true}}),/capabilities could not be verified/);
+    await denies(()=>rpc(host,'confirm',s.id,{...confirm,confirmed:false}),/review expired/);
+    const saved=await rpc(host,'confirm',s.id,confirm);
+    ok(saved.saved,true);
+    let connection=(await db.query('select * from korlix_schedule_connections where id=$1',[saved.id])).rows[0];
+    ok(connection.charges_enabled,false);ok(connection.enabled,true);ok(connection.remote_id,'acct_merchant');
+    await denies(()=>rpc(host,'confirm',s.id,confirm),/review expired/);
+    await rpc(host,'review',s.id,{...args,review_hash:confirm.review_hash});
+    await db.query('update korlix_schedule_connections set revision=revision+1 where id=$1',[saved.id]);
+    await denies(()=>rpc(host,'confirm',s.id,confirm),/connection changed/);
+    await rpc(host,'review',s.id,{...args,review_hash:confirm.review_hash});
+    await db.query("update korlix_schedule_stripe_setup set review_expires_at=now()-interval '1 second' where id=$1",[s.id]);
+    await denies(()=>rpc(host,'confirm',s.id,confirm),/review expired/);
+    await rpc(host,'review',s.id,{...args,review_hash:'b'.repeat(64)});
+    await denies(()=>rpc(host,'confirm',s.id,confirm),/review expired/);
+    confirm={...confirm,review_hash:'b'.repeat(64),identity:{...identity,card_payments_status:'active',payouts_status:'active',charges_enabled:true}};
+    await rpc(host,'confirm',s.id,confirm);
+    ok((await db.query('select charges_enabled from korlix_schedule_connections where id=$1',[saved.id])).rows[0].charges_enabled,true);
+    await db.query("update korlix_schedule_connections set enabled=false,state='disconnected',revision=revision+1,sealed_grant=null where id=$1",[saved.id]);
+    await denies(()=>rpc(host,'confirm',s.id,confirm),/review expired/);
+    ok((await db.query('select enabled from korlix_schedule_connections where id=$1',[saved.id])).rows[0].enabled,false);
+    await rpc(host,'review',s.id,{...args,review_hash:'c'.repeat(64)});
+    await rpc(host,'confirm',s.id,{...confirm,review_hash:'c'.repeat(64)});
+    ok((await db.query('select enabled from korlix_schedule_connections where id=$1',[saved.id])).rows[0].enabled,true);
+    const otherSetup=await rpc(other,'prepare',null,creation);
+    await denies(()=>rpc(other,'created',otherSetup.id,args),/another KORLIX host/);
+    const staleSetup=await rpc(stale,'prepare',null,creation);
+    await db.query("update korlix_schedule_stripe_setup set created_at=now()-interval '29 days' where id=$1",[staleSetup.id]);
+    await denies(()=>rpc(stale,'created',staleSetup.id,{...args,account_id:'acct_stale'}),/administrator recovery/);
+    ok((await rpc(stale,'prepare',null,creation)).id,staleSetup.id);
+    await rpc(other,'created',otherSetup.id,{...base,account_id:'acct_next'});
+    const oldConnection=(await db.query("insert into korlix_schedule_connections(owner_id,provider,remote_id,label,sealed_grant,config_hash,enabled,charges_enabled,livemode) values($1,'stripe','acct_old','Old merchant','old-encrypted','fixture-fingerprint',true,true,false) returning id",[other])).rows[0].id;
+    const event=(await db.query("insert into korlix_schedule_events(owner_id,slug,title,duration_minutes) values($1,'onboarding-switch-fixture','Fixture appointment',30) returning id",[other])).rows[0].id;
+    const booking=(await db.query("insert into korlix_schedule_bookings(owner_id,event_id,request_id,request_hash,manage_hash,guest_name,guest_email,guest_timezone,starts_at,ends_at,busy_start,busy_end,cancel_until,state,snapshot,hold_expires_at) values($1,$2,$3,$4,$5,'Synthetic guest','guest@example.test','UTC',now()+interval '2 days',now()+interval '2 days 30 minutes',now()+interval '2 days',now()+interval '2 days 30 minutes',now()+interval '1 day','awaiting_payment','{}',now()+interval '10 minutes') returning id",[other,event,randomUUID(),'d'.repeat(64),'e'.repeat(64)])).rows[0].id;
+    await db.query("insert into korlix_schedule_payments(booking_id,connection_id,account_id,livemode,amount_cents,currency,checkout_expires_at) values($1,$2,'acct_old',false,100,'usd',now()+interval '30 minutes')",[booking,oldConnection]);
+    const switchArgs={...base,account_id:'acct_next',review_hash:'f'.repeat(64)};
+    ok((await rpc(other,'review',otherSetup.id,switchArgs)).replaces_existing,true);
+    const switchConfirm={...switchArgs,confirmed:true,identity:{...identity,id:'acct_next'},sealed_grant:'new-encrypted'};
+    await denies(()=>rpc(other,'confirm',otherSetup.id,switchConfirm),/Complete open payments and refunds/);
+    await db.query("update korlix_schedule_bookings set state='canceled',hold_expires_at=null where id=$1",[booking]);
+    await db.query("update korlix_schedule_payments set checkout_wire='fixture-request' where booking_id=$1",[booking]);
+    await denies(()=>rpc(other,'confirm',otherSetup.id,switchConfirm),/Complete open payments and refunds/);
+    await db.query("update korlix_schedule_payments set payment_state='paid',refund_state='pending',checkout_closed=true where booking_id=$1",[booking]);
+    await denies(()=>rpc(other,'confirm',otherSetup.id,switchConfirm),/Complete open payments and refunds/);
+    ok((await db.query('select enabled from korlix_schedule_connections where id=$1',[oldConnection])).rows[0].enabled,true);
+    await db.query("update korlix_schedule_payments set payment_state='refunded',refund_state='succeeded' where booking_id=$1",[booking]);
+    const switched=await rpc(other,'confirm',otherSetup.id,switchConfirm);
+    ok((await db.query('select enabled,sealed_grant from korlix_schedule_connections where id=$1',[oldConnection])).rows[0],{enabled:false,sealed_grant:'old-encrypted'});
+    ok((await db.query('select remote_id,enabled from korlix_schedule_connections where id=$1',[switched.id])).rows[0],{remote_id:'acct_next',enabled:true});
+    ok((await rpc(other,'review',otherSetup.id,switchArgs)).replaces_existing,false);
+    await db.query('update user_profiles set is_disabled=true where id=$1',[other]);
+    await denies(()=>rpc(other,'status',null,base),/Save your verified host profile/);
+    await denies(()=>rpc(other,'confirm',otherSetup.id,switchConfirm),/Save your verified host profile/);
+    // A provider account reserved during onboarding is owner-bound before any
+    // connection exists. The older OAuth path must not claim another owner's
+    // reservation or disable its current merchant on the failed transaction.
+    const reservedOwner=await user();
+    const reservedSetup=await rpc(reservedOwner,'prepare',null,creation);
+    await rpc(reservedOwner,'created',reservedSetup.id,{...base,account_id:'acct_reserved'});
+    async function oauthAttempt(actor){
+      const id=randomUUID();
+      await db.query("insert into korlix_schedule_oauth(id,owner_id,provider,ticket_hash,state_hash,sealed_secrets,identity,config_hash,status) values($1,$2,'stripe',$3,$4,'fixture-secret',$5,'fixture-fingerprint','ready')",[id,actor,randomUUID(),randomUUID(),{...identity,id:'acct_reserved'}]);
+      return id;
+    }
+    const wrongAttempt=await oauthAttempt(host);
+    const finish=async(actor,id)=>(await db.query("select korlix_schedule_connections_v2($1,'finish',$2,$3) value",[actor,id,{confirmed:true,config_hash:base.config_hash,sealed_grant:'fixture-encrypted'}])).rows[0].value;
+    await denies(()=>finish(host,wrongAttempt),/another KORLIX host/);
+    ok((await db.query('select enabled from korlix_schedule_connections where id=$1',[saved.id])).rows[0].enabled,true);
+    ok((await db.query('select status from korlix_schedule_oauth where id=$1',[wrongAttempt])).rows[0].status,'ready');
+    await denies(()=>db.query("update korlix_schedule_connections set remote_id='acct_reserved' where id=$1",[saved.id]),/another KORLIX host/);
+    await denies(()=>db.query("insert into korlix_schedule_connections(owner_id,provider,remote_id,label,config_hash) values($1,'stripe','acct_reserved','Reserved fixture','fixture-fingerprint')",[host]),/another KORLIX host/);
+    ok((await finish(reservedOwner,await oauthAttempt(reservedOwner))).saved,true);
+    ok((await db.query("select prosecdef,has_function_privilege('anon',oid,'execute') anon,has_function_privilege('authenticated',oid,'execute') authenticated,has_function_privilege('service_role',oid,'execute') service from pg_proc where oid='korlix_schedule_stripe_setup_owner_guard_v1()'::regprocedure")).rows[0],{prosecdef:false,anon:false,authenticated:false,service:true});
+    const privileges=(await db.query("select prosecdef,has_function_privilege('anon',oid,'execute') anon,has_function_privilege('authenticated',oid,'execute') authenticated,has_function_privilege('service_role',oid,'execute') service from pg_proc where oid='korlix_schedule_stripe_setup_v1(uuid,text,uuid,jsonb)'::regprocedure")).rows[0];
+    ok(privileges,{prosecdef:false,anon:false,authenticated:false,service:true});
+    ok((await db.query("select relrowsecurity,has_table_privilege('anon',oid,'select') anon,has_table_privilege('authenticated',oid,'select') authenticated,has_table_privilege('service_role',oid,'select') service from pg_class where oid='korlix_schedule_stripe_setup'::regclass")).rows[0],{relrowsecurity:true,anon:false,authenticated:false,service:true});
+    await db.exec('set role authenticated');
+    await denies(()=>rpc(host,'status',null,base),/permission denied/);
+    await denies(()=>db.query('select * from korlix_schedule_stripe_setup'),/permission denied/);
+    assert.equal(checks,56);
+  } finally {
+    await db.close();
+  }
+});

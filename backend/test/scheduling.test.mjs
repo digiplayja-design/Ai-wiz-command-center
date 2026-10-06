@@ -169,6 +169,9 @@ test.before(async () => {
       "utf8",
     ),
   );
+  await db.exec(await readFile(new URL(
+    "../../supabase/migrations/20261006030649_scheduling_stripe_merchant_setup.sql", import.meta.url,
+  ), "utf8"));
   await db.exec("set role service_role");
   host = await user();
   other = await user();

@@ -16,6 +16,7 @@ import {
   challenge,
 } from "./provider_core.mjs";
 import { calendarProvider, calendarWire } from "./calendar_provider.mjs";
+import { stripeOnboarding } from "./stripe_onboarding.mjs";
 import {
   stripeProvider,
   stripeSignature,
@@ -51,6 +52,12 @@ export function schedulingConnected({
     );
   const paymentsConfigured = providers.stripe.ready && !!providers.stripe.webhook;
   const paymentsReady = paymentsConfigured && providers.stripe.enabled;
+  const onboardingConfigured = paymentsConfigured && (!adapters.stripe.livemode ||
+    environment.KORLIX_SCHEDULING_STRIPE_ONBOARDING_ENABLED === "true");
+  const merchantSetup = stripeOnboarding({
+    app, base, route, call, config: providers.stripe, adapter: adapters.stripe,
+    cipher, publicRoot, enabled: onboardingConfigured, now,
+  });
   const capabilities = {
     calendar_sync: providers.google.ready || providers.microsoft.ready,
     payments: paymentsReady,
@@ -63,6 +70,9 @@ export function schedulingConnected({
         {
           configured: c.ready && (name !== "stripe" || paymentsConfigured),
           callback: c.callback,
+          ...(name === "stripe" ? {
+            onboarding_configured: onboardingConfigured, livemode: adapters.stripe.livemode,
+          } : {}),
         },
       ]),
     ),
@@ -248,17 +258,19 @@ export function schedulingConnected({
     return subject;
   }
   async function dashboard(actor) {
-    const [connections, teams] = await Promise.all([
+    const [connections, teams, merchant_setup] = await Promise.all([
       refreshedConnections(actor, { keepWorkspaceAvailable: true }),
       team(actor, "list"),
+      merchantSetup.status(actor),
     ]);
-    return { ...connections, teams };
+    return { ...connections, teams, merchant_setup };
   }
   app.get(base + "/payments/health", (_q, r) => {
     r.set("Cache-Control", "no-store").json({
       version: "connect_no_transaction_fee_20261005",
       configured: paymentsConfigured,
       checkoutEnabled: paymentsReady,
+      merchantSetupEnabled: onboardingConfigured,
       livePayments: adapters.stripe.livemode,
       platformFeePercent: 0,
       chargePattern: "direct",

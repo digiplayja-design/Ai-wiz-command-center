@@ -110,6 +110,7 @@ const pub = (a, slug = null, d = {}) =>
   rpc("korlix_schedule_public_v1", { p_action: a, p_slug: slug, p_data: d });
 const pay = (a, id = null, d = {}) =>
   rpc("korlix_schedule_payment_v2", { p_action: a, p_id: id, p_data: d });
+const authenticatedUsers = new Set();
 async function user() {
   const id = randomUUID();
   await db.query("insert into auth.users values($1,now(),false)", [id]);
@@ -121,6 +122,7 @@ async function user() {
     weekly,
     overrides: [],
   });
+  authenticatedUsers.add(id);
   return id;
 }
 async function create(u = host, changes = {}) {
@@ -227,6 +229,17 @@ const json = (data, status = 200) =>
     headers: { "content-type": "application/json" },
   });
 const merchantReplies = new Map();
+const createdMerchants = new Map();
+let loseNextMerchantResponse = false;
+const merchantAccount = (id, status = "active", changes = {}) => ({
+  id, object: "v2.core.account", livemode: false,
+  dashboard: "full", display_name: "Fixture business",
+  defaults: { responsibilities: { fees_collector: "stripe", losses_collector: "stripe" } },
+  configuration: { merchant: { capabilities: {
+    card_payments: { status }, stripe_balance: { payouts: { status } },
+  } } },
+  ...changes,
+});
 let fetchCalls = [],
   sessions = new Map(),
   calendarEvents = [],
@@ -243,6 +256,34 @@ async function fixtureFetch(url, options = {}) {
     const reply = merchantReplies.get(u.pathname);
     if (reply.before) await reply.before();
     return json(reply.body, reply.status || 200);
+  }
+  if (u.hostname === "api.stripe.com" && u.pathname === "/v2/core/accounts" && options.method === "POST") {
+    const key = options.headers["Idempotency-Key"];
+    assert(key, "Merchant creation must have an idempotency key");
+    let saved = createdMerchants.get(key);
+    if (saved && saved.body !== options.body)
+      return json({ error: { code: "idempotency_error" } }, 409);
+    if (!saved) {
+      const body = JSON.parse(options.body);
+      saved = { body: options.body, account: merchantAccount("acct_setup" + secret().slice(0, 16), "pending", {
+        display_name: body.display_name,
+      }) };
+      createdMerchants.set(key, saved);
+      merchantReplies.set("/v2/core/accounts/" + saved.account.id, { body: saved.account });
+    }
+    if (loseNextMerchantResponse) {
+      loseNextMerchantResponse = false;
+      throw Error("Fixture response lost after Stripe persisted the merchant");
+    }
+    return json(saved.account);
+  }
+  if (u.hostname === "api.stripe.com" && u.pathname === "/v2/core/account_links" && options.method === "POST") {
+    const body = JSON.parse(options.body);
+    return json({
+      object: "v2.core.account_link", account: body.account, livemode: false,
+      expires_at: new Date(Date.now() + 300000).toISOString(),
+      url: "https://accounts.stripe.com/r/" + body.account + "#alu_test_" + secret(),
+    });
   }
   if (u.hostname === "connect.stripe.com" && u.pathname === "/oauth/token")
     return json({ stripe_user_id: "acct_oauthlegacy", scope: "read_write", livemode: false });
@@ -356,6 +397,7 @@ test.before(async () => {
     "20260930152919_scheduling_engine.sql",
     "20260930163605_scheduling_connected.sql",
     "20261006022449_scheduling_stripe_readiness_refresh.sql",
+    "20261006030649_scheduling_stripe_merchant_setup.sql",
   ])
     await db.exec(
       await readFile(
@@ -386,10 +428,10 @@ test.before(async () => {
       },
     },
     requireUser: async (q) =>
-      [host, other, third].includes(q.headers.authorization)
+      authenticatedUsers.has(q.headers.authorization)
         ? {
             id: q.headers.authorization,
-            email: "host@example.test",
+            email: q.headers.authorization + "@example.test",
             email_confirmed_at: "2026-01-01",
             is_anonymous: false,
           }
@@ -1078,6 +1120,7 @@ test("pausing blocks paid bookings and checkout but preserves free bookings, sig
       version: "connect_no_transaction_fee_20261005",
       configured: true,
       checkoutEnabled: false,
+      merchantSetupEnabled: true,
       livePayments: false,
       platformFeePercent: 0,
       chargePattern: "direct",
@@ -1504,4 +1547,239 @@ test("merchant disconnect waits for provider reconciliation even after an unpaid
   await service.connected.reconcile(b.id);
   await conn(u, "disconnect", c.id, { confirmed: true });
   assert.equal((await conn(u, "private", c.id)).state, "disconnected");
+});
+
+const merchantSetupPath = "/stripe/merchant-setup";
+const setupInput = { confirmed: true, country: "US", display_name: "Owner fixture business" };
+const merchantCreateCalls = (since = 0) => fetchCalls.slice(since).filter(c =>
+  c.method === "POST" && new URL(c.url).pathname === "/v2/core/accounts");
+const setupRow = async (u) => (await db.query(
+  "select * from korlix_schedule_stripe_setup where owner_id=$1 and not livemode", [u],
+)).rows[0];
+
+function assertPublicSetup(s) {
+  assert.deepEqual(Object.keys(s).sort(), [
+    "id", "livemode", "country", "display_name", "account_id", "created_at",
+    "confirmed_at", "configuration_matches",
+  ].sort());
+  for (const key of ["owner_id", "contact_email", "config_hash", "review_hash", "review_expires_at", "sealed_grant"])
+    assert.equal(s[key], undefined);
+}
+
+test("merchant setup requires authenticated active owner consent and isolates another owner's saved setup", async () => {
+  const u = await user(), stranger = await user();
+  const before = fetchCalls.length;
+  await http(merchantSetupPath + "/start", setupInput, null, 401);
+  await http(merchantSetupPath + "/start", { ...setupInput, confirmed: false }, u, 400);
+  await http(merchantSetupPath + "/start", { ...setupInput, confirmed: "true" }, u, 400);
+  for (const country of ["XX", "CA"]) {
+    const rejected = await http(merchantSetupPath + "/start", { ...setupInput, country }, u, 400);
+    assert.match(rejected.data.error, /United States businesses/);
+  }
+  assert.equal(fetchCalls.length, before);
+  assert.equal(await setupRow(u), undefined);
+  await db.query("update user_profiles set is_disabled=true where id=$1", [u]);
+  await http(merchantSetupPath + "/start", setupInput, u, 403);
+  assert.equal(fetchCalls.length, before);
+  await db.query("update user_profiles set is_disabled=false where id=$1", [u]);
+
+  const started = (await http(merchantSetupPath + "/start", setupInput, u)).data;
+  assertPublicSetup(started.setup);
+  assert.equal(started.setup.confirmed_at, null);
+  const afterStart = fetchCalls.length;
+  await http(`${merchantSetupPath}/${started.setup.id}/resume`, { confirmed: true }, stranger, 404);
+  await http(`${merchantSetupPath}/${started.setup.id}/review`, null, stranger, 404);
+  await http(`${merchantSetupPath}/${started.setup.id}/confirm`, { confirmed: true, review_token: secret() }, stranger, 404);
+  await http(`${merchantSetupPath}/${started.setup.id}/resume`, { confirmed: true }, null, 401);
+  assert.equal(fetchCalls.length, afterStart);
+  assert.equal((await http("/", null, stranger)).data.merchant_setup, null);
+  assert.equal((await setupRow(u)).contact_email, u + "@example.test");
+});
+
+test("merchant setup retries a lost create response using its frozen owner request and resumes the same account", async () => {
+  const u = await user(), before = fetchCalls.length;
+  const merchantCount = createdMerchants.size;
+  loseNextMerchantResponse = true;
+  await http(merchantSetupPath + "/start", { ...setupInput, contact_email: "attacker@example.test" }, u, 503);
+  const pending = await setupRow(u);
+  assert(pending?.id);
+  assert.equal(pending.account_id, null);
+  assert.equal(pending.contact_email, u + "@example.test");
+  assert.equal(createdMerchants.size, merchantCount + 1, "Stripe persisted the account before the response was lost");
+  const retried = (await http(merchantSetupPath + "/start", {
+    confirmed: true, country: "CA", display_name: "Changed name must not create a second merchant",
+  }, u)).data;
+  assert.equal(retried.setup.id, pending.id);
+  assert.equal(retried.setup.country, "US");
+  assert.equal(retried.setup.display_name, setupInput.display_name);
+  const creates = merchantCreateCalls(before);
+  assert.equal(creates.length, 2);
+  assert.equal(creates[0].headers["Idempotency-Key"], creates[1].headers["Idempotency-Key"]);
+  assert.equal(creates[0].body, creates[1].body);
+  assert.equal(createdMerchants.size, merchantCount + 1);
+
+  const resumed = (await http(`${merchantSetupPath}/${pending.id}/resume`, { confirmed: true }, u)).data;
+  const repeated = (await http(merchantSetupPath + "/start", { confirmed: true }, u)).data;
+  assert.equal(resumed.setup.account_id, retried.setup.account_id);
+  assert.equal(repeated.setup.account_id, retried.setup.account_id);
+  assert.equal(merchantCreateCalls(before).length, 2);
+  assert.notEqual(resumed.url, retried.url, "A used link can be replaced without making a new merchant");
+  assert.equal(new URL(resumed.url).hostname, "accounts.stripe.com");
+  assert.equal((await conn(u, "list")).connections.length, 0, "Opening hosted setup must not connect the merchant");
+  const links = fetchCalls.slice(before).filter(c => new URL(c.url).pathname === "/v2/core/account_links");
+  for (const request of links) {
+    const body = JSON.parse(request.body);
+    assert.equal(body.account, retried.setup.account_id);
+    assert.equal(body.use_case.account_onboarding.return_url,
+      "https://example.test/api/scheduling/stripe/merchant-setup/return");
+    assert.equal(body.use_case.account_onboarding.refresh_url,
+      "https://example.test/api/scheduling/stripe/merchant-setup/refresh");
+  }
+});
+
+test("merchant review leaves an existing connection intact until owner confirmation and saves pending readiness safely", async () => {
+  const u = await user(), old = await connection(u, "stripe", { enabled: true });
+  const { setup } = (await http(merchantSetupPath + "/start", setupInput, u)).data;
+  const path = `${merchantSetupPath}/${setup.id}`;
+  assert.equal((await conn(u, "private", old.id)).enabled, true);
+  const beforeReview = (await conn(u, "list")).connections;
+  assert.deepEqual(beforeReview.map(c => c.id), [old.id]);
+  const reviewed = await http(path + "/review", null, u);
+  assert.equal(reviewed.headers.get("cache-control"), "no-store");
+  assert.equal(reviewed.data.replaces_existing, true);
+  assert.equal(reviewed.data.identity.id, setup.account_id);
+  assert.equal(reviewed.data.identity.charges_enabled, false);
+  assert.equal(reviewed.data.identity.card_payments_status, "pending");
+  assert.equal(reviewed.data.identity.payouts_status, "pending");
+  assert.match(reviewed.data.review_token, /^[a-f0-9]{64}$/);
+  assert.equal((await setupRow(u)).review_hash, hash(reviewed.data.review_token));
+  assert.equal((await conn(u, "private", old.id)).enabled, true);
+  assertPublicSetup(reviewed.data.setup);
+  const noConsent = { confirmed: false, review_token: reviewed.data.review_token };
+  await http(path + "/confirm", noConsent, u, 400);
+  await http(path + "/confirm", { confirmed: true, review_token: secret() }, u, 409);
+  assert.equal((await conn(u, "private", old.id)).enabled, true);
+  const saved = (await http(path + "/confirm", {
+    confirmed: true, review_token: reviewed.data.review_token,
+    identity: { id: "acct_attacker", charges_enabled: true, livemode: true },
+  }, u)).data;
+  assert.equal(saved.saved, true);
+  const merchant = await conn(u, "private", saved.id);
+  assert.equal(merchant.remote_id, setup.account_id);
+  assert.equal(merchant.charges_enabled, false);
+  assert.equal(merchant.livemode, false);
+  assert.equal(merchant.enabled, true);
+  assert.equal((await conn(u, "private", old.id)).enabled, false);
+  assert.equal(cipher.open(merchant.sealed_grant, `${u}:stripe:${setup.account_id}`).account_id, setup.account_id);
+  assert((await setupRow(u)).confirmed_at);
+  assert.equal((await setupRow(u)).review_hash, null);
+  const afterConfirm = fetchCalls.length;
+  await http(path + "/confirm", { confirmed: true, review_token: reviewed.data.review_token }, u, 409);
+  assert.equal(fetchCalls.length, afterConfirm, "Replaying a consumed review cannot repeat provider work");
+  const dashboard = await http("/", null, u);
+  assertPublicSetup(dashboard.data.merchant_setup);
+  assert.equal(dashboard.data.connections.find(c => c.id === saved.id).charges_enabled, false);
+  assert(!JSON.stringify(dashboard.data).includes(reviewed.data.review_token));
+  assert(!JSON.stringify(dashboard.data).includes(merchant.sealed_grant));
+});
+
+test("merchant confirmation rejects a stale connection review and rechecks current Stripe readiness", async () => {
+  const u = await user(), old = await connection(u, "stripe", { enabled: true });
+  const { setup } = (await http(merchantSetupPath + "/start", setupInput, u)).data;
+  const path = `${merchantSetupPath}/${setup.id}`;
+  const review = (await http(path + "/review", null, u)).data;
+  await db.query("update korlix_schedule_connections set revision=revision+1 where id=$1", [old.id]);
+  await http(path + "/confirm", { confirmed: true, review_token: review.review_token }, u, 409);
+  assert.equal((await conn(u, "private", old.id)).enabled, true);
+  assert.equal((await conn(u, "list")).connections.length, 1);
+
+  const freshReview = (await http(path + "/review", null, u)).data;
+  assert.equal(freshReview.identity.charges_enabled, false);
+  merchantReplies.set("/v2/core/accounts/" + setup.account_id, {
+    body: merchantAccount(setup.account_id, "active", { display_name: "Fresh verified business" }),
+  });
+  const saved = (await http(path + "/confirm", { confirmed: true, review_token: freshReview.review_token }, u)).data;
+  const merchant = await conn(u, "private", saved.id);
+  assert.equal(merchant.charges_enabled, true, "Confirmation uses a new Stripe check instead of the review payload");
+  assert.equal(merchant.label, "Fresh verified business");
+});
+
+test("merchant setup blocks uncertain creation outside the idempotency window and rejects changed configuration", async () => {
+  const u = await user();
+  loseNextMerchantResponse = true;
+  await http(merchantSetupPath + "/start", setupInput, u, 503);
+  const saved = await setupRow(u);
+  await db.query("update korlix_schedule_stripe_setup set created_at=now()-interval '30 days' where id=$1", [saved.id]);
+  let before = fetchCalls.length;
+  await http(`${merchantSetupPath}/${saved.id}/resume`, { confirmed: true }, u, 409);
+  await http(merchantSetupPath + "/start", setupInput, u, 409);
+  assert.equal(fetchCalls.length, before, "An uncertain old creation must not mint a second merchant");
+  await db.query("update korlix_schedule_stripe_setup set created_at=now(),config_hash='changed' where id=$1", [saved.id]);
+  before = fetchCalls.length;
+  await http(`${merchantSetupPath}/${saved.id}/resume`, { confirmed: true }, u, 409);
+  assert.equal(fetchCalls.length, before);
+  const dashboard = (await http("/", null, u)).data;
+  assert.equal(dashboard.merchant_setup.configuration_matches, false);
+  assertPublicSetup(dashboard.merchant_setup);
+});
+
+test("public merchant return and refresh pages do not issue links, trust query values, or modify a connection", async () => {
+  const before = fetchCalls.length;
+  for (const action of ["return", "refresh"]) {
+    const page = await http(`${merchantSetupPath}/${action}?account=acct_attacker&return_url=https://evil.example&review_token=secret-value`, null, null);
+    assert.equal(page.headers.get("cache-control"), "no-store");
+    assert.equal(page.headers.get("referrer-policy"), "no-referrer");
+    assert.match(page.headers.get("content-security-policy"), /default-src 'none'/);
+    assert.match(page.data, /https:\/\/www\.korlixdeveloper\.com\/app\//);
+    assert.match(page.data, /does not confirm payment readiness/);
+    assert(!page.data.includes("acct_attacker"));
+    assert(!page.data.includes("evil.example"));
+    assert(!page.data.includes("secret-value"));
+  }
+  assert.equal(fetchCalls.length, before);
+});
+
+test("sandbox merchant setup remains available with checkout paused while live merchant creation stays explicitly gated", async () => {
+  const u = await user();
+  for (const live of [false, true]) {
+    const app = express();
+    app.use(express.json());
+    const isolated = registerScheduling(app, {
+      database: { rpc: async (n, p) => {
+        try { return { data: await rpc(n, p) }; } catch (error) { return { error }; }
+      } },
+      requireUser: async q => q.headers.authorization === u ? {
+        id: u, email: u + "@example.test", email_confirmed_at: "2026-01-01", is_anonymous: false,
+      } : null,
+      environment: {
+        ...env, KORLIX_SCHEDULING_STRIPE_ENABLED: "false",
+        KORLIX_SCHEDULING_STRIPE_SECRET_KEY: live ? "sk_live_fixture" : env.KORLIX_SCHEDULING_STRIPE_SECRET_KEY,
+      },
+      autoStartWorker: false, fetcher: fixtureFetch,
+    });
+    const local = app.listen(0, "127.0.0.1");
+    await new Promise(resolve => local.once("listening", resolve));
+    const url = "http://127.0.0.1:" + local.address().port + "/api/scheduling";
+    try {
+      const dashboard = await (await fetch(url, { headers: { authorization: u } })).json();
+      assert.equal(dashboard.capabilities.payments, false);
+      assert.equal(dashboard.capabilities.platform_fee_percent, 0);
+      assert.equal(dashboard.capabilities.providers.stripe.onboarding_configured, !live);
+      assert.equal(dashboard.capabilities.providers.stripe.livemode, live);
+      const health = await (await fetch(url + "/payments/health")).json();
+      assert.equal(health.checkoutEnabled, false);
+      const before = fetchCalls.length;
+      const response = await fetch(url + merchantSetupPath + "/start", {
+        method: "POST", headers: { authorization: u, "content-type": "application/json" }, body: JSON.stringify(setupInput),
+      });
+      assert.equal(response.status, live ? 503 : 200, await response.text());
+      if (live) assert.equal(fetchCalls.length, before);
+      assert.equal(fetchCalls.slice(before).some(c => new URL(c.url).pathname === "/v1/checkout/sessions"), false);
+    } finally {
+      isolated.connected.stop();
+      isolated.notifications.stop();
+      local.closeAllConnections();
+      await new Promise(resolve => local.close(resolve));
+    }
+  }
 });

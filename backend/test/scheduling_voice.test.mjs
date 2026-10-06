@@ -195,6 +195,7 @@ test.before(async () => {
   for (const name of [
     "20260930152919_scheduling_engine.sql",
     "20260930163605_scheduling_connected.sql",
+    "20261006030649_scheduling_stripe_merchant_setup.sql",
   ])
     await db.exec(
       await readFile(
