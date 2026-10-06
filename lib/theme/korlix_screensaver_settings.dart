@@ -44,7 +44,7 @@ class _KorlixScreensaverSettingsState extends State<KorlixScreensaverSettings> {
               key: const Key('smoke-screensaver-toggle'),
               title: const Text('Smoke screensaver'),
               subtitle: const Text(
-                'Soft drifting smoke after 30 seconds of inactivity. Tap anywhere to return.',
+                'Smoke rises over your current screen after 30 seconds of inactivity. Tap anywhere to clear.',
               ),
               value: _controller.enabled,
               onChanged: (enabled) => unawaited(_toggle(enabled)),

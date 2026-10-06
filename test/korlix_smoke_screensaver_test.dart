@@ -438,6 +438,15 @@ void main() {
           ).readAsBytes().then(ByteData.sublistView),
         );
       await loader.load();
+      final sdk = Platform.environment['KORLIX_FLUTTER_ROOT'];
+      if (sdk != null) {
+        await (FontLoader('MaterialIcons')..addFont(
+              File(
+                '$sdk/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
+              ).readAsBytes().then(ByteData.sublistView),
+            ))
+            .load();
+      }
     });
     for (final (name, size, theme) in [
       ('phone-dark', const Size(390, 844), 'korlix_blue'),
@@ -449,43 +458,75 @@ void main() {
         controller,
         size: size,
         theme: theme,
-        reduced: true,
         child: Scaffold(
+          appBar: AppBar(title: const Text('KORLIX AI')),
           body: ListView(
-            padding: const EdgeInsets.all(32),
+            padding: const EdgeInsets.all(24),
             children: [
-              const Text(
-                'Your KORLIX workspace',
-                style: TextStyle(fontSize: 28),
+              const Text('Your AI, your way.', style: TextStyle(fontSize: 28)),
+              const SizedBox(height: 8),
+              const Text('Create, connect and get things done.'),
+              const SizedBox(height: 28),
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 14,
+                crossAxisSpacing: 14,
+                childAspectRatio: 1.25,
+                children: [
+                  for (final (label, icon) in [
+                    ('Live Convo', Icons.mic_rounded),
+                    ('The Pod and You', Icons.podcasts),
+                    ('Korlix Social', Icons.people_outline),
+                    ('Workforce', Icons.work_outline),
+                    ('Music Studio', Icons.graphic_eq),
+                    ('Imagine a picture', Icons.auto_awesome),
+                    ('Study / Learn', Icons.school_outlined),
+                    ('2MEETU', Icons.calendar_month_outlined),
+                  ])
+                    Card(
+                      margin: EdgeInsets.zero,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(icon, size: 36),
+                          const SizedBox(height: 12),
+                          Text(label, textAlign: TextAlign.center),
+                        ],
+                      ),
+                    ),
+                ],
               ),
-              const SizedBox(height: 32),
-              for (var i = 0; i < 4; i++)
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text('Create · Connect · Learn'),
-                  ),
-                ),
+              const SizedBox(height: 24),
+              const TextField(
+                decoration: InputDecoration(hintText: 'Ask Korlix anything…'),
+              ),
             ],
           ),
         ),
       );
-      controller.preview();
-      await tester.pumpAndSettle();
       final boundary = tester.renderObject<RenderRepaintBoundary>(
         find.byKey(const Key('smoke-export')),
       );
-      await tester.runAsync(() async {
-        final image = await boundary.toImage(pixelRatio: 1.5);
+      Future<void> export(String frame) => tester.runAsync(() async {
+        final image = await boundary.toImage(pixelRatio: 1);
         try {
           final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-          final file = File('$output/$name.png');
+          final file = File('$output/$name-$frame.png');
           await file.parent.create(recursive: true);
           await file.writeAsBytes(bytes!.buffer.asUint8List());
         } finally {
           image.dispose();
         }
       });
+      await export('original');
+      controller.preview();
+      await tester.pump();
+      for (var second = 1; second <= 14; second++) {
+        await tester.pump(const Duration(seconds: 1));
+        if ([3, 8, 14].contains(second)) await export('after-$second');
+      }
       await unmount(tester);
       controller.dispose();
     }

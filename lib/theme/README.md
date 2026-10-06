@@ -50,6 +50,13 @@ appearance picker has a device-local switch and a Preview smoke action;
 previewing does not change the saved switch. The preference is stored under
 `korlix_smoke_screensaver_v1` with serialized writes and stale-restore protection.
 
+The revised effect rises from the bottom over the unchanged live screen. Icons,
+text and cards stay visible through the billows: there is no full-screen tint,
+background blur, center wordmark or replacement screen. Only the smoke is
+softened. Plumes expand, curl and dissipate as they rise; their combined opacity
+is capped at 46%, including overlaps. Tablet plumes keep finer detail instead
+of scaling into a broad fog.
+
 The first tap, scroll or keypress wakes the app without activating the control
 underneath. The existing navigator stays mounted, preserving drafts, podcast
 playback and calls. Incoming social alerts and the active-call bar remain above
@@ -76,3 +83,9 @@ CI=true flutter test --no-pub test/korlix_smoke_screensaver_test.dart test/pod_s
 ```
 
 Set `KORLIX_SMOKE_PREVIEWS` to export phone and tablet smoke review images.
+Set `KORLIX_FLUTTER_ROOT` to load the SDK's Material icon font for those images.
+The transparent rising-smoke revision passed 57 screensaver/podcast checks;
+the final tablet density adjustment passed all 12 screensaver checks again.
+The export captures the original screen and frames at 3, 8 and 14 seconds;
+phone and tablet frames were reviewed in dark and light themes. Static
+analysis reported no issues for the changed code.
