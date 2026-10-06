@@ -51,6 +51,19 @@ test('automatic email has one immutable event, verified reply-to and private opt
  assert.equal(calls[0].to,c.email);assert.equal(calls[0].replyTo,'owner@example.com');assert.match(calls[0].text,/Stop these workspace emails: https:/);
  const j=(await jobs(r))[0];assert.equal(j.status,'sent');assert.equal(j.email_payload,undefined);assert.equal(j.lease_token,undefined);assert.equal(j.recipient_email,c.email);
 });
+test('paired employee and manager reminders send one separate email each per overdue update',async()=>{
+ const employeeReminder=await rule('automatic',{name:'Employee reminder'});
+ const managerReminder=await rule('automatic',{name:'Manager alert',instructions:'Review the overdue update in Workforce.'});
+ await worker.tick();await worker.tick();
+ assert.equal(calls.length,2);
+ assert.deepEqual(new Set(calls.map(x=>x.to)),new Set([employeeReminder.c.email,managerReminder.c.email]));
+ const employeeJob=(await jobs(employeeReminder.r))[0],managerJob=(await jobs(managerReminder.r))[0];
+ assert.equal(employeeJob.event_key,managerJob.event_key);
+ assert.notEqual(employeeJob.id,managerJob.id);
+ assert.equal(employeeJob.status,'sent');assert.equal(managerJob.status,'sent');
+ assert.equal(employeeJob.recipient_email,employeeReminder.c.email);
+ assert.equal(managerJob.recipient_email,managerReminder.c.email);
+});
 test('review mode prepares exact drafts and approval sends only while conditions still apply',async()=>{
  const {r}=await rule('review');await worker.tick();assert.equal(calls.length,0);let j=(await jobs(r))[0];assert.equal(j.status,'draft');
  await assert.rejects(mail.review(owner,org,{action:'approve',job_id:j.id,version:j.version,confirmed:false}),/approve/);
