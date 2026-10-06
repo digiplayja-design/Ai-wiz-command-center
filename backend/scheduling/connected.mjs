@@ -130,6 +130,18 @@ export function schedulingConnected({
       );
     return config;
   }
+  async function refreshMerchant(actor, id) {
+    const c = await connection(actor, "private", id);
+    if (c.provider !== "stripe" || !c.enabled) fail("Choose your active merchant connection.");
+    checkConfig(c);
+    const grant = cipher.open(c.sealed_grant, binding(c));
+    const identity = await adapters.stripe.identity(grant, { allowPendingCompatibility: true });
+    if (identity.id !== c.remote_id || identity.livemode !== c.livemode)
+      fail("The connected account changed. Reconnect this merchant.", 409);
+    return connection(actor, "stripe_readiness", c.id, {
+      revision: c.revision, config_hash: c.config_hash, identity,
+    });
+  }
   function cookie(q, name) {
     return (q.get("cookie") || "")
       .split(";")
@@ -234,11 +246,17 @@ export function schedulingConnected({
   app.get(
     base + "/connections",
     route(
-      async (q, r, u) =>
-        r.json({
+      async (q, r, u) => {
+        const listed = await connection(u.id, "list");
+        for (const c of listed.connections || []) {
+          if (c.provider === "stripe" && c.state === "connected" && c.enabled)
+            await refreshMerchant(u.id, c.id);
+        }
+        r.set("Cache-Control", "no-store").json({
           ...(await connection(u.id, "list")),
           providers: capabilities.providers,
-        }),
+        });
+      },
       true,
     ),
   );
@@ -351,6 +369,7 @@ export function schedulingConnected({
         await connection(u.id, "finish", a.id, {
           confirmed: true,
           config_hash: c.fingerprint,
+          identity,
           sealed_grant: cipher.seal(
             grant,
             binding({

@@ -226,6 +226,7 @@ const json = (data, status = 200) =>
     status,
     headers: { "content-type": "application/json" },
   });
+const merchantReplies = new Map();
 let fetchCalls = [],
   sessions = new Map(),
   calendarEvents = [],
@@ -238,6 +239,11 @@ async function fixtureFetch(url, options = {}) {
     body: options.body,
     headers: options.headers,
   });
+  if (u.hostname === "api.stripe.com" && merchantReplies.has(u.pathname)) {
+    const reply = merchantReplies.get(u.pathname);
+    if (reply.before) await reply.before();
+    return json(reply.body, reply.status || 200);
+  }
   if (u.hostname === "connect.stripe.com" && u.pathname === "/oauth/token")
     return json({ stripe_user_id: "acct_oauthlegacy", scope: "read_write", livemode: false });
   if (u.pathname === "/v2/core/accounts/acct_oauthlegacy")
@@ -349,6 +355,7 @@ test.before(async () => {
   for (const file of [
     "20260930152919_scheduling_engine.sql",
     "20260930163605_scheduling_connected.sql",
+    "20261006022449_scheduling_stripe_readiness_refresh.sql",
   ])
     await db.exec(
       await readFile(
@@ -520,6 +527,91 @@ test("Stripe OAuth completes and requires owner confirmation while v2 compatibil
   assert.equal(connected.livemode, false);
   assert(!JSON.stringify(listing).includes("sealed_grant"));
   await http("/connections/" + connected.id + "/disconnect", { confirmed: true }, other);
+});
+
+test("merchant verification refresh saves fresh confirmation and capability transitions without reconnecting", async () => {
+  const path = "/v2/core/accounts/acct_oauthlegacy";
+  const account = (status = "active", changes = {}) => ({
+    id: "acct_oauthlegacy", object: "v2.core.account", livemode: false,
+    dashboard: "full", display_name: "Verified business",
+    defaults: { responsibilities: { fees_collector: "stripe", losses_collector: "stripe" } },
+    configuration: { merchant: { capabilities: {
+      card_payments: { status }, stripe_balance: { payouts: { status } },
+    } } }, ...changes,
+  });
+  try {
+    const { data: attempt } = await http("/connections/stripe/start", { confirmed: true }, other);
+    const launch = new URL(attempt.url);
+    const started = await http(launch.pathname.replace("/api/scheduling", "") + launch.search, null, null, 303);
+    const browser = started.headers.get("set-cookie").split(";")[0];
+    const authorization = new URL(started.headers.get("location"));
+    await http("/connect/stripe/callback?state=" + authorization.searchParams.get("state") + "&code=fixture-legacy", null, null, 200, { cookie: browser });
+    assert.equal((await conn(other, "ready", attempt.id)).identity.charges_enabled, false);
+    merchantReplies.set(path, { body: account() });
+    await http("/connections/attempts/" + attempt.id + "/confirm", { confirmed: true, identity: { id: "acct_attacker" } }, other);
+    const saved = (await conn(other, "list")).connections.find(c => c.remote_id === "acct_oauthlegacy");
+    // Inspect SQL directly so a subsequent GET cannot hide stale confirmation.
+    assert.equal(saved.charges_enabled, true);
+    const original = await conn(other, "private", saved.id);
+    merchantReplies.set(path, { body: account("pending") });
+    let listed = await http("/connections", null, other);
+    assert.equal(listed.data.connections.find(c => c.id === saved.id).charges_enabled, false);
+    assert.equal(listed.headers.get("cache-control"), "no-store");
+    merchantReplies.set(path, { body: account() });
+    listed = await http("/connections", null, other);
+    assert.equal(listed.data.connections.find(c => c.id === saved.id).charges_enabled, true);
+    const refreshed = await conn(other, "private", saved.id);
+    assert.equal(refreshed.sealed_grant, original.sealed_grant);
+    assert.equal(refreshed.config_hash, original.config_hash);
+    assert.equal(refreshed.enabled, original.enabled);
+    await http("/connections", null, other);
+    assert.equal((await conn(other, "private", saved.id)).revision, refreshed.revision);
+    assert(!JSON.stringify(listed.data).includes("sealed_grant"));
+    const before = fetchCalls.length;
+    await http("/connections", null, null, 401);
+    assert.equal(fetchCalls.length, before);
+    assert(!(await http("/connections", null, third)).data.connections.some(c => c.id === saved.id));
+    for (const changes of [{ id: "acct_wrong" }, { livemode: true }, { dashboard: "express" }]) {
+      merchantReplies.set(path, { body: account("active", changes) });
+      await http("/connections", null, other, 409);
+      assert.deepEqual(await conn(other, "private", saved.id), refreshed);
+    }
+    merchantReplies.set(path, { status: 503, body: { error: { message: "secret provider detail" } } });
+    const failed = await http("/connections", null, other, 503);
+    assert(!JSON.stringify(failed.data).includes("secret provider detail"));
+    assert.deepEqual(await conn(other, "private", saved.id), refreshed);
+    const verifiedIdentity = { id: original.remote_id, label: "Verified business", livemode: false,
+      charges_enabled: true, readiness_source: "accounts_v2", card_payments_status: "active", payouts_status: "active" };
+    for (const changes of [{ revision: original.revision }, { config_hash: "changed" },
+      { identity: { ...verifiedIdentity, id: "acct_wrong" } },
+      { identity: { ...verifiedIdentity, livemode: true } },
+      { identity: { ...verifiedIdentity, readiness_source: "v1_identity_only" } }]) {
+      await assert.rejects(conn(other, "stripe_readiness", saved.id, {
+        revision: refreshed.revision, config_hash: refreshed.config_hash, identity: verifiedIdentity, ...changes,
+      }));
+    }
+    await assert.rejects(conn(third, "stripe_readiness", saved.id, {
+      revision: refreshed.revision, config_hash: refreshed.config_hash, identity: verifiedIdentity,
+    }));
+    merchantReplies.set(path, { body: account(), before: async () => {
+      merchantReplies.set(path, { body: account() });
+      await conn(other, "disconnect", saved.id, { confirmed: true });
+    } });
+    await http("/connections", null, other, 409);
+    const disconnected = await conn(other, "private", saved.id);
+    assert.equal(disconnected.state, "disconnected");
+    assert.equal(disconnected.enabled, false);
+    assert.equal(disconnected.sealed_grant, null);
+  } finally { merchantReplies.delete(path); }
+});
+
+test("merchant refresh RPC retains service-only invoker permissions", async () => {
+  const { rows: [policy] } = await db.query(`select p.prosecdef,
+    has_function_privilege('anon',p.oid,'execute') as anon,
+    has_function_privilege('authenticated',p.oid,'execute') as authenticated,
+    has_function_privilege('service_role',p.oid,'execute') as service
+    from pg_proc p where p.oid='public.korlix_schedule_connections_v2(uuid,text,uuid,jsonb)'::regprocedure`);
+  assert.deepEqual(policy, { prosecdef: false, anon: false, authenticated: false, service: true });
 });
 
 test("calendar providers fail closed on incomplete pagination, bad times, and empty access tokens", async () => {

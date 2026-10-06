@@ -55,3 +55,11 @@ Actual provider declines, delayed success/failure and late-payment automatic-ref
 The source review compared deployed `d682b32` with `bfeb4172`. Production scheduling differences only thread an optional request-timeout parameter whose production default remains 15 seconds. Deploying the current branch alone does not add merchant onboarding or resolve the readiness-refresh gap.
 
 Reference reviewed: [Stripe go-live checklist](https://docs.stripe.com/get-started/checklist/go-live), including separate live configuration, registered production webhooks and delayed/duplicate/out-of-order event handling. No live readiness decision in this report relies solely on deprecated v1 capability projections.
+
+## Merchant readiness refresh implementation — 2026-10-06
+
+The backend now rechecks the signed-in owner's active Stripe merchant when Connections reloads, and persists the fresh identity at OAuth confirmation. Capability approval and withdrawal update the saved readiness without reconnecting. Account ID, mode, configuration fingerprint, owner and revision checks reject stale or mismatched responses, including a disconnect during the provider request. Unchanged results do not advance the revision. Provider failures return an error rather than reporting stale status as refreshed.
+
+Migration `20261006022449_scheduling_stripe_readiness_refresh.sql` must precede the backend release. It replaces only the existing service-only, security-invoker connection RPC and remains compatible with older callers. It does not change checkout switches, credentials, grants, or merchant account bindings.
+
+Validation: 68 focused scheduling, connected-account, voice, Stripe-provider and return-page tests passed. Coverage includes confirmation with fresh readiness, approval/withdrawal, wrong owner/account/mode/configuration, provider failures, stale revisions and disconnect races. These are local provider fixtures and SQL tests; an authenticated owner must still check their actual merchant through Connections. All other production readiness gates above remain applicable.
