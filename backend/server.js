@@ -35,6 +35,8 @@ import { registerWorkforce } from './workforce/routes.mjs'; // K138_WORKFORCE
 import {createCrmEmails,registerCrmEmailPublicRoutes} from './contacts_crm/emails.mjs';
 import { registerContactsCrm } from './contacts_crm/routes.mjs'; // K137_ENTERPRISE_CONTACTS
 import { registerBookkeeping } from './bookkeeping/routes.mjs';
+import { registerReceiptWiz } from './receipt_wiz/routes.mjs';
+import { scanReceiptWiz } from './receipt_wiz/core.mjs';
 import { bookkeepingVoiceInstructions, bookkeepingVoiceSessionGuard } from './bookkeeping/voice.mjs';
 import { registerBabyBlend } from './babyblend/routes.mjs';
 import { createPortrait as createBabyBlendPortrait } from './babyblend/ai.mjs';
@@ -12806,6 +12808,13 @@ registerScheduling(app, {
         client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY, maxRetries: 0, timeout: 90000 }),
       })
     : undefined,
+});
+registerReceiptWiz(app, {database: supabaseAdmin, storageDatabase: bookkeepingStorage, requireUser,
+  scanReceipt: process.env.OPENAI_API_KEY ? async ({receipt,bytes}) => scanReceiptWiz({receipt,bytes,
+    client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0,timeout:90000}),
+    createResponse:createTextResponse,
+    model:process.env.OPENAI_DOCUMENT_MODEL || process.env.OPENAI_ULTRA_MODEL || process.env.OPENAI_MODEL || 'gpt-6-astra',
+  }) : undefined,
 });
 registerBookkeeping(app, { database: supabaseAdmin, requireUser, receiptOptions: {
   storageDatabase: bookkeepingStorage,

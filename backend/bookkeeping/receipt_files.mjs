@@ -29,8 +29,8 @@ export async function inspectReceipt(buffer,filename){
  name=name.replace(/\.[^.]{1,10}$/,'')+'.'+ext;
  return {original:buffer,preview,metadata:{filename:name,mime_type:mime,byte_size:buffer.length,sha256:digest(buffer),pages,preview_size:preview?.length??0,preview_sha256:preview?digest(preview):null}};
 }
-export function createReceiptStorage(database){
- const bucket=database.storage.from(RECEIPT_BUCKET);
+export function createReceiptStorage(database,bucketName=RECEIPT_BUCKET){
+ const bucket=database.storage.from(bucketName);
  return {
   async upload(path,bytes,mime){
    const result=await bucket.upload(path,bytes,{contentType:mime,upsert:false,cacheControl:'0'});
