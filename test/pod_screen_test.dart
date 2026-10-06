@@ -61,6 +61,8 @@ class _FakePod extends PodClient {
     : super(backendBaseUrl: 'https://pod.test', headersBuilder: () => {});
   final List<String> events;
   bool allowed = true, cancelPreparing = true;
+  bool smallTalkEnabled = false, rotateRoles = false;
+  int heartbeatFailures = 0;
   Map<String, dynamic> current = _episode();
   final pending = <Completer<Map<String, dynamic>>>[];
   final actions = <String>[];
@@ -83,6 +85,7 @@ class _FakePod extends PodClient {
     'catalog': [],
     'access': {
       'allowed': allowed,
+      'smallTalk': smallTalkEnabled,
       'durations': [300, 600, 900],
       'maxSeconds': 900,
     },
@@ -153,7 +156,13 @@ class _FakePod extends PodClient {
     final turn = {
       'id': 'turn-${playedPrepared.length + 1}',
       'seq': playedPrepared.length + 1,
-      'speaker': 'analyst',
+      'speaker': rotateRoles
+          ? [
+              'host',
+              'analyst',
+              if (current['hostCount'] == 3) 'challenger',
+            ][playedPrepared.length % (current['hostCount'] as int)]
+          : 'analyst',
       'text': 'The next perspective stays private until playback.',
       'sourceIds': <String>[],
     };
@@ -182,6 +191,10 @@ class _FakePod extends PodClient {
   @override
   Future<Map<String, dynamic>> control(String id, String action) async {
     actions.add(action);
+    if (action == 'heartbeat' && heartbeatFailures > 0) {
+      heartbeatFailures--;
+      throw const PodException('Temporary network issue', 503);
+    }
     if (['pause', 'interrupt', 'end'].contains(action)) {
       if (cancelPreparing) {
         for (final pending in preparing) {
@@ -213,6 +226,18 @@ class _FakePod extends PodClient {
     }
     return current;
   }
+
+  @override
+  Future<Map<String, dynamic>> smallTalk(String id, String clip) async => {
+    'id': clip,
+    'speaker': clip.split('-').first,
+    'text': 'A little room for another perspective.',
+    'audio': {
+      'mime': 'audio/wav',
+      'base64': base64Encode(Uint8List(48044)),
+      'durationSeconds': 1,
+    },
+  };
 
   @override
   Future<String> transcribe(
@@ -255,6 +280,7 @@ class _FakeMedia extends PodMedia {
   final List<String> events;
   int activations = 0, plays = 0, stops = 0, recordings = 0, cancellations = 0;
   bool failPlay = false, autoStart = true;
+  int overlaps = 0;
   VoidCallback? playbackStarted;
   Completer<void>? playback;
   Completer<void>? microphonePermission;
@@ -281,6 +307,7 @@ class _FakeMedia extends PodMedia {
   @override
   Future<void> play(Uint8List wav, {VoidCallback? onStarted}) async {
     plays++;
+    if (playing) overlaps++;
     if (failPlay) {
       failPlay = false;
       throw const PodMediaException(
@@ -436,6 +463,167 @@ void _foreground(WidgetTester tester) {
 }
 
 void main() {
+  for (final hosts in [2, 3]) {
+    testWidgets(
+      '$hosts-person small talk finishes before prepared speech and stops on pause',
+      (tester) async {
+        final events = <String>[];
+        final client = _FakePod(events)..smallTalkEnabled = true;
+        final media = _FakeMedia(events);
+        await _mount(tester, client, media, events);
+        await _listen(tester);
+        final welcome = _turnResponse();
+        (welcome['episode'] as Map)['hostCount'] = hosts;
+        client.complete(0, welcome);
+        await tester.pumpAndSettle();
+        media.finish();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 900));
+        await tester.pump();
+        expect(media.plays, 2);
+        expect(find.byKey(const Key('pod-small-talk-caption')), findsOneWidget);
+        client.completePreparation(0);
+        await tester.pump();
+        expect(
+          media.plays,
+          2,
+          reason: 'Do not cut across the filler sentence.',
+        );
+        expect(client.playedPrepared, hasLength(1));
+        expect(media.overlaps, 0);
+        media.finish();
+        await tester.pumpAndSettle();
+        expect(media.plays, 3);
+        expect(media.overlaps, 0);
+        expect(find.byKey(const Key('pod-small-talk-caption')), findsNothing);
+        media.finish();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 900));
+        await tester.pump();
+        expect(find.byKey(const Key('pod-small-talk-caption')), findsOneWidget);
+        await tester.ensureVisible(find.byKey(const Key('pod-pause-resume')));
+        await tester.tap(find.byKey(const Key('pod-pause-resume')));
+        await tester.pumpAndSettle();
+        expect(media.playing, isFalse);
+        expect(client.actions, contains('pause'));
+        final count = media.plays;
+        await tester.pump(const Duration(seconds: 3));
+        expect(media.plays, count);
+        expect(media.overlaps, 0);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+      },
+    );
+
+    testWidgets(
+      'full 15-minute $hosts-person playback reaches its deadline without a 36-turn stall',
+      (tester) async {
+        final events = <String>[];
+        final client = _FakePod(events)..rotateRoles = true;
+        final media = _FakeMedia(events);
+        var now = _time;
+        client.current = {
+          ..._episode(),
+          'durationSeconds': 900,
+          'hostCount': hosts,
+        };
+        await _mount(tester, client, media, events, now: () => now);
+        await _listen(tester);
+        final welcome = _turnResponse(remaining: 900);
+        (welcome['episode'] as Map<String, dynamic>).addAll({
+          'durationSeconds': 900,
+          'hostCount': hosts,
+        });
+        client.complete(0, welcome);
+        await tester.pumpAndSettle();
+        for (var turn = 0; turn < 59; turn++) {
+          now = now.add(const Duration(seconds: 15));
+          await tester.pump(const Duration(seconds: 15));
+          await tester.pump();
+          client.completePreparation(turn);
+          await tester.pump();
+          media.finish();
+          await tester.pumpAndSettle();
+          expect(media.playing, isTrue, reason: 'Turn $turn should hand off.');
+          expect(client.actions.where((a) => a == 'pause'), isEmpty);
+        }
+        expect(media.plays, 60);
+        expect(media.overlaps, 0);
+        now = _time.add(const Duration(minutes: 15));
+        await tester.pump(const Duration(seconds: 15));
+        await tester.pumpAndSettle();
+        expect(client.actions.where((a) => a == 'end'), hasLength(1));
+        expect(media.playing, isFalse);
+        expect(media.plays, 60);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+      },
+    );
+  }
+  testWidgets('small talk also covers downloading an already prepared voice', (
+    tester,
+  ) async {
+    final events = <String>[];
+    final client = _FakePod(events)..smallTalkEnabled = true;
+    final media = _FakeMedia(events);
+    await _mount(tester, client, media, events);
+    await _listen(tester);
+    client.complete(0, _turnResponse());
+    await tester.pumpAndSettle();
+    client.completePreparation(0);
+    await tester.pump();
+    client.consuming = Completer<Map<String, dynamic>>();
+    media.finish();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pump();
+    expect(media.plays, 2);
+    expect(find.byKey(const Key('pod-small-talk-caption')), findsOneWidget);
+    client.consuming!.complete(_turnResponse());
+    await tester.pump();
+    expect(media.plays, 2);
+    media.finish();
+    await tester.pumpAndSettle();
+    expect(media.plays, 3);
+    expect(media.overlaps, 0);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets(
+    'one transient heartbeat failure recovers without stopping speech',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events)..heartbeatFailures = 1;
+      final media = _FakeMedia(events);
+      await _mount(tester, client, media, events);
+      await _listen(tester);
+      client.complete(0, _turnResponse());
+      await tester.pumpAndSettle();
+      final stops = media.stops;
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(
+        client.actions.where((a) => a == 'heartbeat').length,
+        greaterThanOrEqualTo(2),
+      );
+      expect(client.actions, isNot(contains('pause')));
+      expect(media.stops, stops);
+      expect(media.playing, isTrue);
+      client.heartbeatFailures = 2;
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(client.actions, contains('pause'));
+      expect(media.playing, isFalse);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+    },
+  );
+
   testWidgets('screen lock pauses once and Resume reuses interrupted audio', (
     tester,
   ) async {

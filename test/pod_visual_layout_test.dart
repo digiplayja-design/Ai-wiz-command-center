@@ -34,6 +34,7 @@ class _SetupClient extends PodClient {
     'catalog': [],
     'access': {
       'allowed': true,
+      'smallTalk': true,
       'durations': [300, 600, 900],
       'maxSeconds': 900,
     },

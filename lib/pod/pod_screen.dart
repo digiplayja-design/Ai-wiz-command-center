@@ -11,6 +11,7 @@ import 'pod_media.dart';
 import 'pod_artwork.dart';
 import 'pod_wake_lock.dart';
 import 'pod_transition_audio.dart';
+import 'pod_small_talk.dart';
 
 const _navy = Color(0xFF080D20);
 const _panel = Color(0xFF11192E);
@@ -82,6 +83,9 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
   late final PodMedia _media;
   late final PodWakeLock _wakeLock;
   late final PodTransitionAudio _transition;
+  late final PodSmallTalk _smallTalk;
+  bool _smallTalkEnabled = true;
+  String? _smallTalkText;
   final _topic = TextEditingController();
   final _contribution = TextEditingController();
   final _scroll = ScrollController();
@@ -171,6 +175,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     _media.addListener(_mediaChanged);
     _wakeLock = widget.wakeLock ?? createPodWakeLock();
     _wakeLock.addListener(_wakeLockChanged);
+    _smallTalk = PodSmallTalk(widget.client.smallTalk);
     _transition = widget.transitionAudio ?? createPodTransitionAudio();
     _transition.addListener(_transitionChanged);
     widget.client.onAccessDenied = _lock;
@@ -247,7 +252,8 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
             _busy &&
             !_recording &&
             !_transcribing &&
-            _musicEnabled,
+            _musicEnabled &&
+            _smallTalkText == null,
         remaining: _remaining == null ? null : Duration(seconds: _remaining!),
       ),
     );
@@ -316,6 +322,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       _error = null;
       _notice = null;
       _speaking = null;
+      _smallTalkText = null;
       _topic.clear();
       _contribution.clear();
       _recordedContributionWav = null;
@@ -340,6 +347,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     _wakeLock.dispose();
     _transition.removeListener(_transitionChanged);
     _transition.dispose();
+    _smallTalk.dispose();
     // Give the authenticated end request a chance to complete before closing its
     // transport. Server deadline/heartbeat leases also bound a lost connection.
     final id = _live ? _s(_episode['id']) : null;
@@ -471,6 +479,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
         _listening = false;
         _busy = false;
         _speaking = null;
+        _smallTalkText = null;
         _recording = false;
         _transcribing = false;
         _sendingContribution = false;
@@ -511,11 +520,22 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     final epoch = _epoch;
     _heartbeatBusy = true;
     try {
-      final result = await widget.client.control(
-        _s(_episode['id']),
-        'heartbeat',
-      );
-      if (_current(epoch)) _acceptEpisode(result);
+      for (var attempt = 0; attempt < 2; attempt++) {
+        try {
+          final result = await widget.client.control(
+            _s(_episode['id']),
+            'heartbeat',
+          );
+          if (_current(epoch)) _acceptEpisode(result);
+          break;
+        } on PodException catch (error) {
+          final transient =
+              error.status == 0 || error.status == 429 || error.status >= 500;
+          if (attempt != 0 || !transient) rethrow;
+          await Future<void>.delayed(const Duration(seconds: 3));
+          if (!_current(epoch) || !_foreground || !_live) return;
+        }
+      }
     } catch (e) {
       if (_current(epoch)) {
         await _pause(
@@ -628,6 +648,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     setState(() {
       _busy = true;
       _speaking = null;
+      _smallTalkText = null;
       _preparingSince = _now;
     });
     _syncTransition();
@@ -763,6 +784,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     setState(() {
       _busy = true;
       _speaking = null;
+      _smallTalkText = null;
       _preparingSince = _now;
     });
     _syncTransition();
@@ -772,18 +794,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
           'The next voice is not ready. Pause and resume to continue.',
         );
       }
-      await prepared.settled.future;
-      if (!_current(epoch) ||
-          !_foreground ||
-          !_listening ||
-          !_live ||
-          _remaining == 0 ||
-          !identical(_preparedTurn, prepared)) {
-        return;
-      }
-      if (prepared.error != null) throw prepared.error!;
-      _preparedTurn = null;
-      await _playPrepared(epoch, prepared.requestId);
+      await _playPrepared(epoch, prepared.requestId, preparation: prepared);
     } catch (error) {
       if (_current(epoch)) {
         await _pause(
@@ -794,19 +805,93 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _playPrepared(int epoch, String requestId) async {
-    if (_preparedTurn?.requestId == requestId) _preparedTurn = null;
-    // Retain this ID until audio reaches this screen. If a response is lost after
-    // commit, explicit Resume recovers the SAME turn without generating again.
-    _unheardPreparedId = requestId;
-    final settled = Completer<void>();
-    _nextSettled = settled.future;
-    try {
-      final result = await widget.client.playPrepared(
+  Future<void> _fillGap(Future<void> waiting, int epoch) async {
+    if (!_smallTalkEnabled || _access['smallTalk'] != true) return;
+    bool canPlay() =>
+        _current(epoch) &&
+        _foreground &&
+        _listening &&
+        _live &&
+        _smallTalkEnabled &&
+        !_recording &&
+        !_composing &&
+        (_remaining ?? 0) > 0;
+    await _smallTalk.fillWhile(
+      waiting,
+      canPlay: canPlay,
+      remaining: () => Duration(seconds: _remaining ?? 0),
+      beforePlay: () => _transition.setWaiting(false),
+      play: (clip) async {
+        if (!canPlay()) return;
+        try {
+          await _media.play(
+            clip.wav,
+            onStarted: () {
+              if (canPlay()) {
+                setState(() {
+                  _speaking = clip.speaker;
+                  _smallTalkText = clip.text;
+                });
+              }
+            },
+          );
+        } catch (_) {
+          if (_current(epoch)) await _media.stop();
+        } finally {
+          if (_current(epoch)) {
+            setState(() {
+              _speaking = null;
+              _smallTalkText = null;
+            });
+            _syncTransition();
+          }
+        }
+      },
+    );
+  }
+
+  Future<void> _playPrepared(
+    int epoch,
+    String requestId, {
+    _PreparedPodTurn? preparation,
+  }) async {
+    Future<Map<String, dynamic>> fetchAudio() async {
+      if (preparation != null) {
+        await preparation.settled.future;
+        if (!_current(epoch) ||
+            !_foreground ||
+            !_listening ||
+            !_live ||
+            _remaining == 0) {
+          return {};
+        }
+        if (!identical(_preparedTurn, preparation)) {
+          throw const PodException(
+            'The prepared voice changed. Resume to continue.',
+          );
+        }
+        if (preparation.error != null) throw preparation.error!;
+      }
+      if (_preparedTurn?.requestId == requestId) _preparedTurn = null;
+      // Retain this ID through a lost claim response; Resume reuses that turn.
+      _unheardPreparedId = requestId;
+      return widget.client.playPrepared(
         _s(_episode['id']),
         requestId: requestId,
         version: (_episode['version'] as num).toInt(),
       );
+    }
+
+    final settled = Completer<void>();
+    _nextSettled = settled.future;
+    try {
+      final fetching = fetchAudio();
+      // One gap budget covers preparation AND transfer of the prepared audio.
+      await _fillGap(
+        fetching.then<void>((_) {}, onError: (Object _) {}),
+        epoch,
+      );
+      final result = await fetching;
       if (!_current(epoch) || !_foreground || !_listening) {
         _retainBackgroundAudio(result, epoch);
         return;
@@ -859,6 +944,12 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
           _speaking = _pendingSpeaker;
         });
         _prepareAhead(epoch);
+        if (_smallTalkEnabled && _access['smallTalk'] == true) {
+          _smallTalk.warm(
+            _s(_episode['id']),
+            (_episode['hostCount'] as num?)?.toInt() ?? 2,
+          );
+        }
       },
     );
     if (!_current(epoch) ||
@@ -912,6 +1003,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       _sendingContribution = false;
       _startingRecording = false;
       _speaking = null;
+      _smallTalkText = null;
       if (message != null) _notice = message;
       if (error != null) _error = error;
     });
@@ -1113,6 +1205,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       _sendingContribution = false;
       _startingRecording = false;
       _speaking = null;
+      _smallTalkText = null;
       _episode = {
         ..._episode,
         'state': 'ended',
@@ -2390,6 +2483,27 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
               ),
             ],
           ),
+          if (_access['smallTalk'] == true)
+            SwitchListTile.adaptive(
+              key: const Key('pod-small-talk'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text(
+                'Small talk between voices',
+                style: TextStyle(fontSize: 12, color: _muted),
+              ),
+              value: _smallTalkEnabled,
+              onChanged: (value) {
+                setState(() => _smallTalkEnabled = value);
+                if (!value && _smallTalkText != null) unawaited(_media.stop());
+                if (value && _listening && _live) {
+                  _smallTalk.warm(
+                    _s(_episode['id']),
+                    (_episode['hostCount'] as num?)?.toInt() ?? 2,
+                  );
+                }
+              },
+              activeThumbColor: _cyan,
+            ),
           if (_musicEnabled && _transition.waiting && _transition.blocked) ...[
             const SizedBox(height: 6),
             const Text(
@@ -2594,6 +2708,19 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
                 : 'Two or three AI perspectives, a question worth exploring, and a seat at the table for you.',
             style: const TextStyle(color: _muted, height: 1.6),
           ),
+          if (_smallTalkText != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(
+                _smallTalkText!,
+                key: const Key('pod-small-talk-caption'),
+                style: const TextStyle(
+                  color: _gold,
+                  fontStyle: FontStyle.italic,
+                  height: 1.5,
+                ),
+              ),
+            ),
           if (preparing) ...[
             const SizedBox(height: 14),
             Container(
@@ -2860,6 +2987,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
   Widget _turn(Map<String, dynamic> turn) {
     final speaker = _s(turn['speaker']);
     final active =
+        _smallTalkText == null &&
         _speaking == speaker &&
         _maps(_episode['turns']).lastOrNull?['id'] == turn['id'];
     return Container(

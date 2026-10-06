@@ -258,8 +258,17 @@ class PodClient {
           'POST',
           '/episodes/${Uri.encodeComponent(id)}/control',
           {'action': action},
+          action == 'heartbeat'
+              ? const Duration(seconds: 8)
+              : const Duration(seconds: 25),
         ))['episode'],
       );
+  Future<Map<String, dynamic>> smallTalk(String id, String clip) => _request(
+    'POST',
+    '/episodes/${Uri.encodeComponent(id)}/small-talk/${Uri.encodeComponent(clip)}',
+    {},
+    const Duration(seconds: 40),
+  );
   Future<Map<String, dynamic>> contribute(
     String id,
     String text, {
