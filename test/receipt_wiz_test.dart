@@ -44,7 +44,12 @@ class FakeVault {
   Map<String, dynamic> saved = receipt();
   final requests = <http.Request>[];
   int uploads = 0, scans = 0;
-  bool duplicate = false, failScan = false, failUpload = false;
+  bool duplicate = false,
+      failScan = false,
+      failUpload = false,
+      failSave = false;
+  Completer<void>? saveGate;
+  Map<String, dynamic>? scanResult;
   Future<http.Response> handle(http.Request r) async {
     requests.add(r);
     final path = r.url.path;
@@ -63,7 +68,7 @@ class FakeVault {
           503,
         );
       }
-      data = {'receipt': saved, 'integrations': {}};
+      data = {'receipt': scanResult ?? saved, 'integrations': {}};
     } else if (r.method == 'POST') {
       uploads++;
       if (failUpload) {
@@ -71,6 +76,13 @@ class FakeVault {
       }
       data = {'receipt': saved, 'reused': duplicate, 'integrations': {}};
     } else if (r.method == 'PUT') {
+      await saveGate?.future;
+      if (failSave) {
+        return http.Response(
+          jsonEncode({'error': 'Save interrupted. Try again.'}),
+          503,
+        );
+      }
       final b = jsonDecode(r.body);
       saved = {
         ...saved,
@@ -147,6 +159,209 @@ Future<void> mount(
 
 void main() {
   setUp(() {});
+  Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+    await tester.ensureVisible(finder);
+    await tester.tap(finder);
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'save, scan next and view inbox form one continuous capture flow',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final f = FakeVault();
+      var captures = 0;
+      await mount(
+        tester,
+        ReceiptWizScreen(
+          client: f.client(),
+          ensureConsent: () async => true,
+          capture: () async {
+            captures++;
+            return BookkeepingPickedReceipt(
+              'receipt.pdf',
+              Uint8List.fromList([37, 80, 68, 70]),
+            );
+          },
+        ),
+      );
+      await tapVisible(tester, find.byKey(const Key('receipt-wiz-camera')));
+      await tapVisible(tester, find.text('Save receipt'));
+      expect(find.byKey(const Key('scan-next-receipt')), findsNothing);
+      await tapVisible(tester, find.byKey(const Key('save-reviewed-receipt')));
+      expect(find.text('Receipt saved'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('scan-next-receipt')));
+      await tester.pumpAndSettle();
+      expect(captures, 2);
+      expect(f.uploads, 1);
+      expect(find.text('Check your receipt'), findsOneWidget);
+      await tapVisible(tester, find.text('Save receipt'));
+      await tapVisible(tester, find.text('Save for later'));
+      expect(find.text('Saved for later review'), findsOneWidget);
+      expect(f.uploads, 2);
+      await tester.tap(find.byKey(const Key('view-saved-receipts')));
+      await tester.pumpAndSettle();
+      expect(find.text('Your receipt inbox'), findsOneWidget);
+      expect(find.byType(ReceiptWizReview), findsNothing);
+      expect(find.byType(ReceiptWizPhotoReview), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'failed or pending saves cannot advance; existing receipts can scan next',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final f = FakeVault()..failSave = true;
+      var captures = 0;
+      await mount(
+        tester,
+        ReceiptWizScreen(
+          client: f.client(),
+          ensureConsent: () async => true,
+          inboxOnly: true,
+          capture: () async {
+            captures++;
+            return null;
+          },
+        ),
+      );
+      await tapVisible(tester, find.text('The Paper Shop'));
+      await tapVisible(tester, find.byKey(const Key('save-reviewed-receipt')));
+      expect(find.byKey(const Key('scan-next-receipt')), findsNothing);
+      expect(find.textContaining('Save interrupted.'), findsOneWidget);
+      f.failSave = false;
+      f.saveGate = Completer<void>();
+      await tester.tap(find.byKey(const Key('save-reviewed-receipt')));
+      await tester.pump();
+      expect(find.byKey(const Key('scan-next-receipt')), findsNothing);
+      await tester.pageBack();
+      await tester.pump();
+      expect(find.byType(ReceiptWizReview), findsOneWidget);
+      f.saveGate!.complete();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('scan-next-receipt')));
+      await tester.pumpAndSettle();
+      expect(captures, 1);
+      expect(find.text('Your receipt inbox'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'vault lock explains account access without asking for a password',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final f = FakeVault();
+      await mount(
+        tester,
+        ReceiptWizScreen(client: f.client(), ensureConsent: () async => true),
+      );
+      await tester.tap(find.text('PRIVATE VAULT'));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('There is no separate vault password.'),
+        findsOneWidget,
+      );
+      expect(find.byType(TextField), findsNothing);
+      await tester.tap(find.text('Got it'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'rescan suggestions include editable items and notes; validation protects saved data',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final f = FakeVault()..saved = receipt(reviewed: true);
+      f.scanResult = {
+        ...f.saved,
+        'scan': {
+          'state': 'ready',
+          'suggestion': {
+            ...details(),
+            'items': ['Blue pens'],
+            'warnings': ['Check the faded date.'],
+          },
+        },
+      };
+      final client = f.client();
+      await mount(
+        tester,
+        ReceiptWizReview(
+          client: client,
+          receipt: f.saved,
+          ensureConsent: () async => true,
+        ),
+      );
+      await tapVisible(tester, find.text('Read receipt again'));
+      await tapVisible(tester, find.text('More receipt details'));
+      final items = find.byKey(const Key('receipt-items'));
+      expect(tester.widget<TextFormField>(items).controller!.text, 'Blue pens');
+      expect(find.text('Check the faded date.'), findsOneWidget);
+      await tester.ensureVisible(items);
+      await tester.enterText(items, 'Blue pens\nPrinter paper');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      final date = find.byKey(const Key('receipt-date'));
+      await tester.ensureVisible(date);
+      await tester.enterText(date, '2026-02-30');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      await tapVisible(tester, find.byKey(const Key('save-reviewed-receipt')));
+      expect(f.requests.where((r) => r.method == 'PUT'), isEmpty);
+      expect(find.text('Use a valid date: YYYY-MM-DD'), findsOneWidget);
+      await tester.ensureVisible(date);
+      await tester.enterText(date, '2026-10-06');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      await tapVisible(tester, find.byKey(const Key('save-reviewed-receipt')));
+      expect(f.saved['details']['items'], ['Blue pens', 'Printer paper']);
+      expect(f.saved['details']['warnings'], ['Check the faded date.']);
+      expect(find.byKey(const Key('scan-next-receipt')), findsOneWidget);
+      await tester.ensureVisible(date);
+      await tester.enterText(date, '2026-10-07');
+      await tester.pump();
+      expect(find.byKey(const Key('scan-next-receipt')), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      client.dispose();
+    },
+  );
+
+  testWidgets('save confirmation fits narrow phones and enlarged text', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    for (final (size, scale) in [
+      (const Size(320, 568), 1.0),
+      (const Size(390, 844), 1.8),
+      (const Size(844, 390), 1.0),
+    ]) {
+      final f = FakeVault();
+      final client = f.client();
+      await mount(
+        tester,
+        ReceiptWizReview(
+          client: client,
+          receipt: f.saved,
+          ensureConsent: () async => true,
+        ),
+        size: size,
+        textScale: scale,
+      );
+      await tapVisible(tester, find.byKey(const Key('save-reviewed-receipt')));
+      expect(find.byKey(const Key('scan-next-receipt')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      client.dispose();
+    }
+  });
   testWidgets(
     'free scanner and inbox fit phones, landscape, tablets and large text',
     (tester) async {
@@ -213,6 +428,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(exported, contains('The Paper Shop'));
       expect(f.requests.last.url.queryParameters['tax_workspace_id'], 'tax');
+      await tapVisible(tester, find.text('Reset filters'));
+      expect(f.requests.last.url.queryParameters.containsKey('query'), isFalse);
+      expect(f.requests.last.url.queryParameters['year'], '2026');
+      expect(f.requests.last.url.queryParameters['business_id'], 'business');
     },
   );
   testWidgets(
@@ -460,10 +679,17 @@ void main() {
         ReceiptWizScreen(client: f.client(), ensureConsent: () async => true),
         size: size,
       );
-      for (final tab in ['scan', 'inbox']) {
+      for (final tab in ['scan', 'inbox', 'saved']) {
         if (tab == 'inbox') {
           await tester.tap(find.text('Receipts'));
           await tester.pumpAndSettle();
+        }
+        if (tab == 'saved') {
+          await tapVisible(tester, find.text('The Paper Shop'));
+          await tapVisible(
+            tester,
+            find.byKey(const Key('save-reviewed-receipt')),
+          );
         }
         final boundary = tester.renderObject<RenderRepaintBoundary>(
           find.byKey(const Key('receipt-export')),

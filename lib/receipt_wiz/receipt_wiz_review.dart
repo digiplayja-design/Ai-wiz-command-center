@@ -113,6 +113,8 @@ class _ReceiptWizPhotoReviewState extends State<ReceiptWizPhotoReview> {
   );
 }
 
+enum ReceiptWizReviewAction { scanNext, viewReceipts }
+
 class ReceiptWizReview extends StatefulWidget {
   const ReceiptWizReview({
     super.key,
@@ -133,8 +135,15 @@ class ReceiptWizReview extends StatefulWidget {
 class _ReceiptWizReviewState extends State<ReceiptWizReview> {
   late Map<String, dynamic> _receipt;
   final _fields = <String, TextEditingController>{};
+  final _items = TextEditingController();
+  List<String> _warnings = [];
   String _category = 'Uncategorized';
-  bool _busy = false, _locked = false, _dirty = false;
+  bool _busy = false,
+      _locked = false,
+      _dirty = false,
+      _saved = false,
+      _requireComplete = false,
+      _waitingForScan = false;
   String? _error, _notice;
   Uint8List? _preview;
   int _operation = 0;
@@ -144,6 +153,7 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
   void initState() {
     super.initState();
     _receipt = widget.receipt;
+    _waitingForScan = wizMap(_receipt['scan'])['state'] == 'scanning';
     _notice = widget.notice;
     for (final key in [
       'merchant',
@@ -170,6 +180,8 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
     _category = wizCategories.contains(d['category'])
         ? d['category']
         : 'Uncategorized';
+    _items.text = (d['items'] as List? ?? []).whereType<String>().join('\n');
+    _warnings = (d['warnings'] as List? ?? []).whereType<String>().toList();
     _dirty = false;
   }
 
@@ -183,6 +195,9 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
       for (final c in _fields.values) {
         c.clear();
       }
+      _items.clear();
+      _warnings = [];
+      _saved = false;
       _dirty = false;
       _error = _notice = null;
       _busy = false;
@@ -196,6 +211,7 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
     for (final c in _fields.values) {
       c.dispose();
     }
+    _items.dispose();
     _preview = null;
     super.dispose();
   }
@@ -243,11 +259,19 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
 
   Future<void> _save(bool reviewed) async {
     if (!_alive || _busy) return;
-    if (reviewed && !_form.currentState!.validate()) return;
+    _requireComplete = reviewed;
+    final valid = _form.currentState!.validate();
+    final itemsError = _itemsError();
+    if (!valid || itemsError != null) {
+      setState(() => _error = itemsError);
+      return;
+    }
     final op = ++_operation;
     setState(() {
       _busy = true;
+      _saved = false;
       _error = null;
+      _notice = null;
     });
     try {
       final details = {
@@ -257,6 +281,8 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
               ? e.value.text.trim().toUpperCase()
               : e.value.text.trim(),
         'category': _category,
+        'items': _itemLines,
+        'warnings': _warnings,
       };
       final data = await widget.client.request(
         'PUT',
@@ -271,6 +297,8 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
       setState(() {
         _receipt = wizMap(data['receipt']);
         _setFields();
+        _saved = true;
+        _waitingForScan = false;
         _notice = data['possible_duplicate'] == true
             ? 'Saved. Another receipt has the same merchant, date and total. Check your inbox for a possible duplicate.'
             : 'Saved in your private receipt inbox and connected finance inboxes.';
@@ -288,6 +316,7 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
     final op = ++_operation;
     setState(() {
       _busy = true;
+      _saved = false;
       _error = null;
       _notice = 'Reading the receipt. Your original is already saved.';
     });
@@ -302,15 +331,9 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
         _receipt = wizMap(data['receipt']);
         _setFields();
         final scan = wizMap(_receipt['scan']);
-        final suggestion = wizMap(scan['suggestion']);
-        if (suggestion.isNotEmpty) {
-          for (final e in _fields.entries) {
-            e.value.text = suggestion[e.key]?.toString() ?? '';
-          }
-          _category = suggestion['category'] ?? 'Uncategorized';
-          _dirty = true;
-        }
-        _notice = scan['state'] == 'scanning'
+        _waitingForScan = scan['state'] == 'scanning';
+        _applySuggestion(scan);
+        _notice = _waitingForScan
             ? 'This scan is still running. Refresh to check it.'
             : 'Review the extracted details, then save your corrections.';
       });
@@ -324,7 +347,10 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
   Future<void> _refresh() async {
     if (_busy || !await _discard() || !_alive) return;
     final op = ++_operation;
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _saved = false;
+    });
     try {
       final d = await widget.client.request('GET', '/${_receipt['id']}');
       if (_alive && op == _operation) {
@@ -332,6 +358,17 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
           _receipt = wizMap(d['receipt']);
           _setFields();
           _error = null;
+          _notice = null;
+          if (_waitingForScan) {
+            final scan = wizMap(_receipt['scan']);
+            _waitingForScan = scan['state'] == 'scanning';
+            _applySuggestion(scan);
+            _notice = _waitingForScan
+                ? 'This scan is still running. Refresh to check it.'
+                : scan['state'] == 'ready'
+                ? 'Review the extracted details, then save your corrections.'
+                : 'The scan did not finish. Your original is saved; retry reading or enter the details.';
+          }
         });
       }
     } catch (e) {
@@ -419,6 +456,96 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
     });
   }
 
+  List<String> get _itemLines => _items.text
+      .split('\n')
+      .map((s) => s.trim())
+      .where((s) => s.isNotEmpty)
+      .toList();
+
+  String? _itemsError() {
+    final lines = _itemLines;
+    if (lines.length > 40 ||
+        lines.any(
+          (s) => s.length > 180 || RegExp(r'[\x00-\x1f\x7f]').hasMatch(s),
+        )) {
+      return 'Use up to 40 item lines, 180 characters each.';
+    }
+    return null;
+  }
+
+  void _applySuggestion(Map<String, dynamic> scan) {
+    final suggestion = wizMap(scan['suggestion']);
+    if (scan['state'] != 'ready' || suggestion.isEmpty) return;
+    for (final e in _fields.entries) {
+      e.value.text = suggestion[e.key]?.toString() ?? '';
+    }
+    _category = wizCategories.contains(suggestion['category'])
+        ? suggestion['category']
+        : 'Uncategorized';
+    _items.text = (suggestion['items'] as List? ?? []).whereType<String>().join(
+      '\n',
+    );
+    _warnings = (suggestion['warnings'] as List? ?? [])
+        .whereType<String>()
+        .toList();
+    _dirty = true;
+  }
+
+  void _finish(ReceiptWizReviewAction action) {
+    if (!_alive || _busy || _dirty || !_saved) return;
+    Navigator.of(context).pop(action);
+  }
+
+  Widget _savedActions() => ColoredBox(
+    color: const Color(0xFFEAF8F5),
+    child: SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              _receipt['reviewed'] == true
+                  ? 'Receipt saved'
+                  : 'Saved for later review',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: wizTeal,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  key: const Key('scan-next-receipt'),
+                  onPressed: _busy
+                      ? null
+                      : () => _finish(ReceiptWizReviewAction.scanNext),
+                  icon: const Icon(Icons.document_scanner_outlined),
+                  label: const Text('Scan next receipt'),
+                ),
+                OutlinedButton.icon(
+                  key: const Key('view-saved-receipts'),
+                  onPressed: _busy
+                      ? null
+                      : () => _finish(ReceiptWizReviewAction.viewReceipts),
+                  icon: const Icon(Icons.receipt_long_outlined),
+                  label: const Text('View receipts'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
   Widget _field(
     String key,
     String label, {
@@ -430,7 +557,11 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
     enabled: !_busy,
     onChanged: (_) => setState(() => _dirty = true),
     maxLines: lines,
-    maxLength: key == 'description' ? 1000 : null,
+    maxLength: key == 'description'
+        ? 1000
+        : key == 'merchant'
+        ? 160
+        : null,
     keyboardType: ['total', 'subtotal', 'tax', 'tip'].contains(key)
         ? const TextInputType.numberWithOptions(decimal: true)
         : TextInputType.text,
@@ -439,6 +570,7 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
         : TextCapitalization.none,
     decoration: InputDecoration(
       labelText: label,
+      errorMaxLines: 3,
       suffixIcon: key == 'date'
           ? IconButton(
               tooltip: 'Choose receipt date',
@@ -448,8 +580,26 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
           : null,
     ),
     validator: (v) {
-      if (required && (v ?? '').trim().isEmpty) {
+      final value = (v ?? '').trim();
+      if (required && _requireComplete && value.isEmpty) {
         return 'Add $label or save for later';
+      }
+      if (value.isEmpty) return null;
+      if (key == 'date') {
+        final date = DateTime.tryParse(value);
+        if (!RegExp(r'^20\d{2}-\d{2}-\d{2}$').hasMatch(value) ||
+            date == null ||
+            bookkeepingDate(date) != value) {
+          return 'Use a valid date: YYYY-MM-DD';
+        }
+      }
+      if (['total', 'subtotal', 'tax', 'tip'].contains(key) &&
+          !RegExp(r'^\d{1,10}(\.\d{1,2})?$').hasMatch(value)) {
+        return 'Use an amount such as 28.40';
+      }
+      if (key == 'currency' &&
+          !RegExp(r'^[A-Z]{3}$').hasMatch(value.toUpperCase())) {
+        return 'Use 3 letters, such as USD';
       }
       return null;
     },
@@ -458,14 +608,18 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
   Widget build(BuildContext context) => Theme(
     data: wizTheme(context),
     child: PopScope(
-      canPop: !_dirty,
+      canPop: !_dirty && !_busy,
       onPopInvokedWithResult: (didPop, result) async {
+        if (_busy) return;
         if (!didPop && await _discard() && mounted) {
           setState(() => _dirty = false);
           if (context.mounted) Navigator.pop(context);
         }
       },
       child: Scaffold(
+        bottomNavigationBar: _saved && !_dirty && !_locked
+            ? _savedActions()
+            : null,
         appBar: AppBar(
           title: const Text('Review receipt'),
           actions: [
@@ -671,7 +825,7 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
                           ExpansionTile(
                             title: const Text('More receipt details'),
                             subtitle: const Text(
-                              'Subtotal, tax, tip and detected items',
+                              'Subtotal, tax, tip and editable items',
                             ),
                             children: [
                               Padding(
@@ -698,21 +852,25 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
                                   ],
                                 ),
                               ),
-                              for (final item
-                                  in (wizMap(_receipt['details'])['items']
-                                          as List? ??
-                                      []))
-                                ListTile(
-                                  dense: true,
-                                  leading: const Icon(Icons.check, size: 16),
-                                  title: Text('$item'),
+                              TextFormField(
+                                key: const Key('receipt-items'),
+                                controller: _items,
+                                enabled: !_busy,
+                                minLines: 3,
+                                maxLines: 8,
+                                decoration: const InputDecoration(
+                                  labelText: 'Receipt items (optional)',
+                                  helperText:
+                                      'One item per line · Up to 40 items, 180 characters each',
+                                  helperMaxLines: 3,
                                 ),
+                                onChanged: (_) => setState(() => _dirty = true),
+                                validator: (_) => _itemsError(),
+                              ),
+                              const SizedBox(height: 16),
                             ],
                           ),
-                          for (final warning
-                              in (wizMap(_receipt['details'])['warnings']
-                                      as List? ??
-                                  []))
+                          for (final warning in _warnings)
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: 5),
                               child: Row(
@@ -724,7 +882,7 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
                                     size: 18,
                                   ),
                                   const SizedBox(width: 8),
-                                  Expanded(child: Text('$warning')),
+                                  Expanded(child: Text(warning)),
                                 ],
                               ),
                             ),

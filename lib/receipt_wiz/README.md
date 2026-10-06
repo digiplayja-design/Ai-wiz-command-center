@@ -19,6 +19,19 @@ the existing receipt; reviewed saves warn about another merchant/date/total
 match. Search, category/year/review filters, pagination, original download and
 CSV export are included. Export keeps filters and neutralizes formula cells.
 
+After either reviewed saving or saving for later succeeds, a persistent footer
+offers **Scan next receipt** and **View receipts**. Continuous scanning reopens
+the camera, including from an existing or connected inbox, without accumulating
+review routes. Canceled capture returns to the inbox. Pending, failed, dirty or
+expired-session states cannot advance; back navigation is blocked during a save.
+Receipt items are editable one per line (40 maximum, 180 characters each), and
+rescan results carry their own items and warnings. Refreshing a pending rescan
+can recover its suggestions without losing the stored original. Dates, amounts
+and currency receive inline validation, including on partially completed saves.
+Reset filters restores the connected inbox's initial year and preserves its
+workspace scope. Tapping the vault lock explains that receipts use the current
+Korlix account sign-in; there is no separate vault password or PIN.
+
 Bookkeeping's dashboard and receipt library, and Tax Prep's selected year, have
 an embedded entry to the shared Receipt Wiz inbox. These views read the same
 private record, not detached copies. Correcting a receipt updates every inbox.
@@ -44,7 +57,7 @@ owner checks and serialized quotas. Direct browser table/function access is
 revoked; RLS and explicit restrictive deny policies are enabled. Storage has
 its own restrictive policy. No public original URLs are generated.
 
-Validation: 55 Flutter checks passed across the new flow, existing receipt and
+Validation: the Flutter suite covers the new flow, existing receipt and
 Tax Prep screens, home catalog/navigation, 320px/390px phones, landscape,
 1024px tablets and enlarged text. This includes manual fallback, duplicates,
 corrections, CSV scope and session replacement. 45 backend checks cover actual
@@ -52,6 +65,10 @@ SQL/RPC behavior in PGlite, HTTP routes, ownership, private storage grants,
 upload/delete recovery, scan expiry, quotas surviving deletion, safe CSV and
 existing finance regressions. Provider replies and media permissions are mocked;
 physical camera capture and live-provider OCR need a signed-in device check.
+Follow-up coverage includes a continuous two-receipt session, failed/pending
+save protection, next scanning from an existing inbox, vault access explanation,
+item/scan-note corrections, invalid dates, scoped filter reset and the saved
+footer on narrow phones, landscape and enlarged text.
 Changed Dart code and tests pass static analysis. Phone/tablet renders reviewed.
 
 ```bash

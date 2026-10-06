@@ -133,17 +133,26 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
 
   Future<void> _choose(bool camera) async {
     if (!_alive || _uploading) return;
+    var scanNext = true;
+    while (scanNext && _alive) {
+      scanNext = await _captureAndSave(camera);
+      camera = true;
+    }
+  }
+
+  Future<bool> _captureAndSave(bool camera) async {
+    if (!_alive || _uploading) return false;
     setState(() => _uploading = true);
     try {
       BookkeepingPickedReceipt? photo;
       var again = true;
       while (again && mounted && _alive) {
-        if (!mounted) return;
+        if (!mounted) return false;
         photo = await (camera
             ? (widget.capture?.call() ??
                   captureReceiptWiz(context, widget.client))
             : (widget.picker?.call() ?? pickBookkeepingReceipt()));
-        if (!mounted || !_alive || photo == null) return;
+        if (!mounted || !_alive || photo == null) return false;
         if (photo.bytes.isEmpty || photo.bytes.length > 8 * 1024 * 1024) {
           throw const ReceiptWizException('Choose a photo or PDF up to 8 MB.');
         }
@@ -153,13 +162,13 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
                 ReceiptWizPhotoReview(photo: photo!, client: widget.client),
           ),
         );
-        if (!_alive || choice == null) return;
+        if (!_alive || choice == null) return false;
         again = !choice;
       }
-      if (!mounted || !_alive || photo == null) return;
+      if (!mounted || !_alive || photo == null) return false;
       _pending = photo;
       _uploadKey = bookkeepingRequestKey();
-      await _process();
+      return await _process();
     } catch (e) {
       if (_alive) {
         setState(() {
@@ -170,10 +179,16 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
     } finally {
       if (_alive) setState(() => _uploading = false);
     }
+    return false;
   }
 
-  Future<void> _process() async {
-    if (!_alive || _pending == null) return;
+  Future<void> _retryUpload() async {
+    if (!_alive || _uploading) return;
+    if (await _process() && _alive) await _choose(true);
+  }
+
+  Future<bool> _process() async {
+    if (!_alive || _pending == null) return false;
     setState(() {
       _uploading = true;
       _error = null;
@@ -185,7 +200,7 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
         _pending!.name,
         _pending!.bytes,
       );
-      if (!mounted || !_alive) return;
+      if (!mounted || !_alive) return false;
       var receipt = wizMap(data['receipt']);
       _integrations = wizMap(data['integrations']);
       if (receipt['state'] != 'ready') {
@@ -194,7 +209,7 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
               'This upload is still finishing. Keep this screen open, wait two minutes, then retry the same file.',
         );
         await _load();
-        return;
+        return false;
       }
       _pending = null;
       _uploadKey = null;
@@ -213,10 +228,10 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
             '/${receipt['id']}/scan',
             body: {'confirmed': true, 'request_key': bookkeepingRequestKey()},
           );
-          if (!mounted || !_alive) return;
+          if (!mounted || !_alive) return false;
           receipt = wizMap(scan['receipt']);
         } catch (e) {
-          if (!mounted || !_alive) return;
+          if (!mounted || !_alive) return false;
           note =
               'Your original is saved. ${e.toString()} You can add the details now or retry scanning.';
         }
@@ -224,9 +239,9 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
         note =
             'Original saved. Add the details below; automatic reading is optional.';
       }
-      if (!mounted || !_alive) return;
+      if (!mounted || !_alive) return false;
       _notice = null;
-      await _open(receipt, notice: note);
+      return await _open(receipt, notice: note);
     } catch (e) {
       if (_alive) {
         setState(() {
@@ -237,12 +252,13 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
     } finally {
       if (_alive) setState(() => _uploading = false);
     }
+    return false;
   }
 
-  Future<void> _open(Map<String, dynamic> receipt, {String? notice}) async {
-    if (!mounted || !_alive) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+  Future<bool> _open(Map<String, dynamic> receipt, {String? notice}) async {
+    if (!mounted || !_alive) return false;
+    final action = await Navigator.of(context).push<ReceiptWizReviewAction>(
+      MaterialPageRoute<ReceiptWizReviewAction>(
         builder: (_) => ReceiptWizReview(
           client: widget.client,
           receipt: receipt,
@@ -256,7 +272,26 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
       setState(() => _inboxTab = true);
       await _load();
     }
+    return _alive && action == ReceiptWizReviewAction.scanNext;
   }
+
+  Future<void> _showVaultPrivacy() => showDialog<void>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: const Text('Your private receipt vault'),
+      content: const SingleChildScrollView(
+        child: Text(
+          'Your vault opens with your Korlix sign-in. There is no separate vault password.\n\nThe lock means your receipts are private to your account. Your Bookkeeping and Tax Prep receipt inboxes use the same saved records. Sign out of Korlix when using a shared device.',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(c),
+          child: const Text('Got it'),
+        ),
+      ],
+    ),
+  );
 
   Future<void> _export() async {
     if (!_alive || _uploading) return;
@@ -310,7 +345,14 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
               icon: Icons.auto_awesome_outlined,
               color: wizMint,
             ),
-            wizChip('PRIVATE VAULT', icon: Icons.lock_outline, color: wizMint),
+            ActionChip(
+              avatar: const Icon(Icons.lock_outline, color: wizMint, size: 16),
+              label: const Text('PRIVATE VAULT'),
+              labelStyle: const TextStyle(color: wizMint, fontSize: 11),
+              backgroundColor: Colors.white.withValues(alpha: .06),
+              side: BorderSide(color: wizMint.withValues(alpha: .3)),
+              onPressed: _showVaultPrivacy,
+            ),
           ],
         ),
         const SizedBox(height: 18),
@@ -568,6 +610,24 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
               _filter();
             },
           ),
+          if (_search.text.isNotEmpty ||
+              _category != null ||
+              _needsReview ||
+              _year != widget.initialYear)
+            TextButton.icon(
+              onPressed: () {
+                _debounce?.cancel();
+                setState(() {
+                  _search.clear();
+                  _category = null;
+                  _needsReview = false;
+                  _year = widget.initialYear;
+                });
+                _filter();
+              },
+              icon: const Icon(Icons.filter_alt_off_outlined),
+              label: const Text('Reset filters'),
+            ),
           SizedBox(
             width: 210,
             child: DropdownButtonFormField<String>(
@@ -626,7 +686,10 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
               const Icon(Icons.receipt_long_outlined, size: 44, color: wizTeal),
               const SizedBox(height: 12),
               Text(
-                _search.text.isNotEmpty || _category != null || _needsReview
+                _search.text.isNotEmpty ||
+                        _category != null ||
+                        _needsReview ||
+                        _year != null
                     ? 'No receipts match these filters.'
                     : 'Your receipts belong here.',
                 style: const TextStyle(
@@ -690,7 +753,11 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        onTap: _uploading ? null : () => _open(r),
+        onTap: _uploading
+            ? null
+            : () async {
+                if (await _open(r) && _alive) await _choose(true);
+              },
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -780,6 +847,11 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: 'Receipt vault privacy',
+            onPressed: _locked ? null : _showVaultPrivacy,
+            icon: const Icon(Icons.lock_outline),
+          ),
+          IconButton(
             tooltip: 'Refresh receipts',
             onPressed: _loading || _locked ? null : _load,
             icon: const Icon(Icons.refresh),
@@ -845,7 +917,7 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
                             spacing: 12,
                             children: [
                               FilledButton(
-                                onPressed: _process,
+                                onPressed: _retryUpload,
                                 child: const Text('Retry saving this receipt'),
                               ),
                               TextButton(
