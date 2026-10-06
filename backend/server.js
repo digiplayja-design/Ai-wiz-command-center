@@ -69,6 +69,7 @@ const { registerK135zZoomRoutes, createK135zServerRuntime } = k135zGate5Routes;
 // K135Z_GATE5_ESM_IMPORTS_END
 
 import express from "express";
+import {createKorlixSignupHandler, KORLIX_MINIMUM_AGE, KORLIX_SIGNUP_POLICY_VERSION} from "./korlix_signup_eligibility.mjs";
 import crypto from "crypto";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -2184,80 +2185,13 @@ app.post("/api/support/password-reset", async (req, res) => {
 });
 
 
-app.post("/api/auth/signup", async (req, res) => {
-  try {
-    if (!supabaseAuth) {
-      return res.status(500).json({
-        error: "Supabase auth is not configured on the backend.",
-      });
-    }
-
-    const email = String(req.body.email || "").trim().toLowerCase();
-    const password = String(req.body.password || "").trim();
-    const deviceInfo = getRequestDeviceInfo(req);
-
-    if (!email || !password) {
-      return res.status(400).json({
-        error: "Email and password are required.",
-      });
-    }
-
-    if (password.length < 6) {
-      return res.status(400).json({
-        error: "Password must be at least 6 characters.",
-      });
-    }
-
-    const { data, error } = await supabaseAuth.auth.signUp({
-      email,
-      password,
-    });
-
-    if (error) {
-      return res.status(error.status || 400).json({
-        error: getKorlixUserFacingError(error),
-      });
-    }
-
-    let profile = null;
-    let deviceSession = null;
-
-    if (data.user && data.session) {
-      profile = await getOrCreateProfile(data.user);
-      deviceSession = await registerDeviceSession({
-        userId: data.user.id,
-        profile,
-        deviceInfo,
-      });
-    }
-
-    res.json({
-      success: true,
-      message: data.session
-        ? "Account created and signed in."
-        : "Account created. Check your email to confirm your account, then sign in.",
-      user: data.user
-        ? {
-            id: data.user.id,
-            email: data.user.email,
-          }
-        : null,
-      profile,
-      deviceSession,
-      session: data.session
-        ? {
-            access_token: data.session.access_token,
-            refresh_token: data.session.refresh_token,
-            expires_at: data.session.expires_at,
-          }
-        : null,
-    });
-  } catch (error) {
-    res.status(error.statusCode || 500).json({
-      error: getKorlixUserFacingError(error),
-    });
-  }
-});
+app.post("/api/auth/signup", createKorlixSignupHandler({
+  supabaseAuth,
+  getRequestDeviceInfo,
+  getOrCreateProfile,
+  registerDeviceSession,
+  getUserFacingError: getKorlixUserFacingError,
+}));
 
 app.post("/api/auth/signin", async (req, res) => {
   try {
@@ -3696,6 +3630,7 @@ app.get("/api/health", (req, res) => {
     status: "Korlix AI backend is healthy",
     supabaseConfigured: Boolean(supabaseAdmin),
     supabaseAuthConfigured: Boolean(supabaseAuth),
+    signupEligibility: {minimumAge: KORLIX_MINIMUM_AGE, policyVersion: KORLIX_SIGNUP_POLICY_VERSION, method: "self_declaration", parentPermissionUnder18: true},
     supabaseHost,
     openAIConfigured: Boolean(process.env.OPENAI_API_KEY),
     chatModel: CHAT_MODEL,
