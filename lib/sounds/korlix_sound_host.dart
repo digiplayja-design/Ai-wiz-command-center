@@ -46,7 +46,7 @@ class _KorlixSoundHostState extends State<KorlixSoundHost>
     _sounds.setForeground(state == AppLifecycleState.resumed);
   }
 
-  void _activate(PointerDownEvent _) {
+  void _activate(PointerEvent _) {
     // Activation is silent. Only real action callbacks produce click sounds.
     // Keep this call synchronous with the gesture for mobile browser policies.
     if (!_sounds.ready && _sounds.settings.enabled && !_sounds.quiet) {
@@ -65,6 +65,9 @@ class _KorlixSoundHostState extends State<KorlixSoundHost>
   Widget build(BuildContext context) => Listener(
     behavior: HitTestBehavior.translucent,
     onPointerDown: _activate,
+    // Touch-down is not an activation gesture in WebKit. Retry on release,
+    // including after an interrupted/backgrounded audio context.
+    onPointerUp: _activate,
     child: widget.child,
   );
 }

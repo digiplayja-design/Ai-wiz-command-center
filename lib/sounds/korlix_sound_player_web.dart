@@ -25,6 +25,10 @@ class _WebSoundPlayer implements KorlixSoundPlayer {
       return Future.value(false);
     }
     try {
+      if (_context?.state == 'closed') {
+        _context = null;
+        _buffers.clear();
+      }
       final context = _context ??= web.AudioContext(
         web.AudioContextOptions(latencyHint: 'interactive'.toJS),
       );
@@ -34,6 +38,13 @@ class _WebSoundPlayer implements KorlixSoundPlayer {
         }).toJS;
         web.document.addEventListener('visibilitychange', _visibilityListener);
       }
+      // Prime WebKit's output in the gesture itself with a zero-filled frame.
+      // This makes no audible sound and does not change the effects' volume.
+      final prime = context.createBufferSource();
+      prime.buffer = context.createBuffer(1, 1, context.sampleRate);
+      prime.connect(context.destination);
+      prime.onended = ((web.Event _) => prime.disconnect()).toJS;
+      prime.start();
       // Invoked synchronously from the user gesture; never after decoding.
       return context.resume().toDart.then(
         (_) => ready,

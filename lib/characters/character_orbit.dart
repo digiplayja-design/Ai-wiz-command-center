@@ -43,6 +43,8 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
   double _windDirection = 1;
   bool _dragging = false;
   bool _dragBreezeStarted = false;
+  bool _dragBreezePlayed = false;
+  bool _dragCancelled = false;
   int _breezeRequest = 0;
   KorlixSoundService get _sounds => widget.soundService ?? kKorlixSounds;
   int get _selectedIndex =>
@@ -96,9 +98,12 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
     );
   }
 
-  void _playBreeze() {
+  void _playBreeze({bool fromDrag = false}) {
     final sounds = _sounds;
-    if (!sounds.settings.enabled || !sounds.settings.clicks || sounds.quiet) {
+    if (!_enabled ||
+        !sounds.settings.enabled ||
+        !sounds.settings.clicks ||
+        sounds.quiet) {
       return;
     }
     final request = ++_breezeRequest;
@@ -115,6 +120,7 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
             elapsed.elapsed > const Duration(milliseconds: 250)) {
           return;
         }
+        if (fromDrag) _dragBreezePlayed = true;
         await sounds.play(KorlixSound.orbitBreeze);
       } catch (_) {
         // Audio availability must not interfere with choosing a character.
@@ -159,6 +165,16 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
 
   void _finishDrag([double velocity = 0]) {
     setState(() => _dragging = false);
+    if (_dragCancelled) {
+      _snap(_selectedIndex);
+      return;
+    }
+    // A first touch-drag can be blocked until touch release on iPhone. Retry
+    // here even if the orbit landed exactly on a portrait, and supersede the
+    // earlier activation so its eventual resolution cannot replay the breeze.
+    if (_dragBreezeStarted && !_dragBreezePlayed) {
+      _playBreeze(fromDrag: true);
+    }
     final projected = _rotation.value + (velocity / 2200).clamp(-_step, _step);
     final available = [
       for (var i = 0; i < 5; i++)
@@ -418,7 +434,10 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
             onHorizontalDragStart: _enabled
                 ? (_) {
                     _rotation.stop();
+                    _breezeRequest++;
                     _dragBreezeStarted = false;
+                    _dragBreezePlayed = false;
+                    _dragCancelled = false;
                     setState(() => _dragging = true);
                   }
                 : null,
@@ -428,7 +447,7 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
                     _showWind(event.delta.dx);
                     if (!_dragBreezeStarted && event.delta.dx != 0) {
                       _dragBreezeStarted = true;
-                      _playBreeze();
+                      _playBreeze(fromDrag: true);
                     }
                   }
                 : null,
@@ -437,78 +456,88 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
                 : null,
             onHorizontalDragCancel: _enabled
                 ? () {
+                    _breezeRequest++;
                     setState(() => _dragging = false);
                     _snap(_selectedIndex);
                   }
                 : null,
-            child: SizedBox(
-              height: 318,
-              child: AnimatedBuilder(
-                animation: Listenable.merge([_rotation, _wind]),
-                builder: (context, _) {
-                  final showWind = _wind.value < 1;
-                  final positions = [
-                    for (var index = 0; index < 5; index++)
-                      (index: index, angle: index * _step + _rotation.value),
-                  ];
-                  positions.sort(
-                    (a, b) => math.cos(a.angle).compareTo(math.cos(b.angle)),
-                  );
-                  return Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: CustomPaint(
-                            painter: _OrbitRings(
-                              skin,
-                              radiusX,
-                              radiusY,
-                              centerY,
+            // Flutter reports pointer cancellation as drag-end once a drag
+            // has won the gesture arena. Observe cancellation before that end.
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerCancel: (_) {
+                _dragCancelled = true;
+                _breezeRequest++;
+              },
+              child: SizedBox(
+                height: 318,
+                child: AnimatedBuilder(
+                  animation: Listenable.merge([_rotation, _wind]),
+                  builder: (context, _) {
+                    final showWind = _wind.value < 1;
+                    final positions = [
+                      for (var index = 0; index < 5; index++)
+                        (index: index, angle: index * _step + _rotation.value),
+                    ];
+                    positions.sort(
+                      (a, b) => math.cos(a.angle).compareTo(math.cos(b.angle)),
+                    );
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(
+                              painter: _OrbitRings(
+                                skin,
+                                radiusX,
+                                radiusY,
+                                centerY,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      if (showWind)
-                        _windLayer(
-                          skin,
-                          radiusX,
-                          radiusY,
-                          centerY,
-                          front: false,
-                        ),
-                      Positioned(
-                        left: width / 2 - 22,
-                        top: centerY - 22,
-                        child: ExcludeSemantics(
-                          child: Icon(
-                            Icons.auto_awesome_rounded,
-                            color: skin.primary.withValues(alpha: .35),
-                            size: 44,
+                        if (showWind)
+                          _windLayer(
+                            skin,
+                            radiusX,
+                            radiusY,
+                            centerY,
+                            front: false,
+                          ),
+                        Positioned(
+                          left: width / 2 - 22,
+                          top: centerY - 22,
+                          child: ExcludeSemantics(
+                            child: Icon(
+                              Icons.auto_awesome_rounded,
+                              color: skin.primary.withValues(alpha: .35),
+                              size: 44,
+                            ),
                           ),
                         ),
-                      ),
-                      for (final point in positions)
-                        _satellite(
-                          point.index,
-                          point.angle,
-                          width,
-                          radiusX,
-                          radiusY,
-                          centerY,
-                          skin,
-                        ),
-                      if (showWind)
-                        _windLayer(
-                          skin,
-                          radiusX,
-                          radiusY,
-                          centerY,
-                          front: true,
-                        ),
-                    ],
-                  );
-                },
+                        for (final point in positions)
+                          _satellite(
+                            point.index,
+                            point.angle,
+                            width,
+                            radiusX,
+                            radiusY,
+                            centerY,
+                            skin,
+                          ),
+                        if (showWind)
+                          _windLayer(
+                            skin,
+                            radiusX,
+                            radiusY,
+                            centerY,
+                            front: true,
+                          ),
+                      ],
+                    );
+                  },
+                ),
               ),
             ),
           ),

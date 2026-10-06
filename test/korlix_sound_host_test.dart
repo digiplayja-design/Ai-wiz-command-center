@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ai_wiz_command_center/sounds/korlix_sound_host.dart';
@@ -6,6 +8,35 @@ import 'package:ai_wiz_command_center/sounds/korlix_sound_service.dart';
 import 'korlix_sound_service_test.dart' show FakePlayer, MemoryStore;
 
 void main() {
+  testWidgets('touch release retries activation blocked on touch-down', (
+    t,
+  ) async {
+    final blocked = Completer<bool>()..complete(false);
+    final player = FakePlayer()..activationGate = blocked;
+    final service = KorlixSoundService(player: player, store: MemoryStore());
+    await t.pumpWidget(
+      MaterialApp(
+        home: KorlixSoundHost(
+          service: service,
+          child: const Scaffold(body: SizedBox.expand()),
+        ),
+      ),
+    );
+    await t.pump();
+    final touch = await t.startGesture(t.getCenter(find.byType(Scaffold)));
+    await t.pump();
+    expect(player.activations, 1);
+    expect(service.ready, isFalse);
+    player.activationGate = null;
+    await touch.up();
+    await t.pump();
+    expect(player.activations, 2);
+    expect(service.ready, isTrue);
+    expect(player.plays, isEmpty);
+    await t.pumpWidget(const SizedBox());
+    service.dispose();
+  });
+
   testWidgets('host restores preferences and unlocks silently on a gesture', (
     t,
   ) async {

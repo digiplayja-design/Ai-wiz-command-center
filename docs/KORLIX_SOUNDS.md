@@ -47,6 +47,10 @@ workflow; this release does not add a new timed in-app reminder scheduler.
 
 - `KorlixSoundHost` restores preferences and tracks app lifecycle across routes.
   Its pointer listener only attempts silent audio activation, never click playback.
+  Activation runs on both press and release because WebKit requires touch release.
+  Web Audio primes its output with one silent frame in that gesture. If a first
+  orbit drag is blocked during movement, release retries it once; a breeze that
+  already started is not repeated, and cancelled/obsolete requests cannot replay.
 - This is **foreground-only** audio. Hiding, locking or leaving the app stops its
   effects. There is no closed-app push delivery, background call service, CallKit
   or Android telecom integration in this change.
