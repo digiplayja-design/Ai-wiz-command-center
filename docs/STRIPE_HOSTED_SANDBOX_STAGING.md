@@ -1,8 +1,8 @@
 # Hosted Stripe sandbox staging
 
-This isolated runtime implements durable sandbox booking storage, a Stripe-signed webhook receiver, an HTTPS customer return page, and private controls for one synthetic USD 1.00 Checkout and full refund. The hosted schema upgrade, identity verification and HTTPS boundaries have passed; the local suite passed 64/64 tests. Payment issuance remains paused pending endpoint setup and the genuine sandbox acceptance run below.
+This isolated runtime implements durable sandbox booking storage, a Stripe-signed webhook receiver, an HTTPS customer return page, and private controls for one synthetic USD 1.00 Checkout and full refund. The hosted schema upgrade, identity verification and HTTPS boundaries have passed; the local suite passed 64/64 tests. A new hosted sandbox payment, signed completion delivery, actual iPad return, zero platform transaction fee, restart recovery, full refund, signed refund delivery and the final customer refund display have been verified. Sandbox issuance is paused. Duplicate-delivery evidence remains pending below.
 
-The credentials last verified on the hosted service provide identity reads only. A new hosted payment, its Stripe-to-customer return, and its full refund have not yet been proven. Production checkout remains paused, and the separate saved-result display is not payment acceptance evidence.
+The hosted credentials now support the verified sandbox identity, endpoint, Checkout, payment-evidence and refund operations. The exact final key permission review is not recorded here; earlier identity-only selections are preserved as history. Production checkout remains paused, and the separate saved-result display is not payment acceptance evidence.
 
 ## Why a separate runtime is needed
 
@@ -111,7 +111,7 @@ The only remaining blocker was `payment_runtime_not_implemented`. Readiness rema
 
 Deploy `dep-db23c6b0hr2s73bbh2l0` of commit `ae1b1c4bcb2becd71306d93f798b254243e6b201` became live at `2026-10-05T23:44:08.382813Z`, with `KORLIX_HOSTED_ACCEPTANCE_PAYMENT_RUNTIME=scheduling-v2` configured. The hosted `/health` response reported `databaseReady:false`, and authenticated private status reported `database:null`. The upgrade failed closed before a booking was created. The cause was not established by those initial responses; subsequent diagnostics are recorded below.
 
-The webhook signing secret and endpoint ID are still missing, and the existing identity-only restricted key is unchanged. This deployment does not establish a successful hosted schema upgrade, payment, signed event delivery, redirect or refund.
+At that deployment, the webhook signing secret and endpoint ID were missing, and the existing identity-only restricted key was unchanged. That deployment did not establish a successful hosted schema upgrade, payment, signed event delivery, redirect or refund.
 
 ### Default-privilege diagnosis and correction — 2026-10-06 00:00 UTC
 
@@ -130,6 +130,30 @@ The durable schema reported `schemaVersion:scheduling-ledger-v1` and run `33290d
 Unauthenticated private access returned 401; a browser Origin on private controls returned 403; an unknown customer booking returned 404; the return HTML, CSS and JavaScript returned 200; a query-string token returned 404. Every checked response used `Cache-Control:no-store`. These results establish the hosted ledger, identity access and HTTP boundaries. They do not establish endpoint configuration, a genuine payment, signed connected-account delivery, an actual Stripe return or a refund.
 
 The production backend still had auto-deploy off and live commit `d682b32acde91522b570ac8c6ba9a24ccb8074aa` (deploy `dep-db22qkcs728c73asc5b0`, live `2026-10-05T23:06:08.590359Z`); these sandbox branch pushes caused no new production deployment.
+
+### New hosted payment, signed completion and customer return — 2026-10-06 00:45 UTC
+
+After the user saved the webhook configuration, deploy `dep-db2452p7lnhs73dhijbg` became live at `2026-10-06T00:36:40.258187Z`, running code from commit `03856ab34ed992b43d75236158d87e3bbba731f2`. The private enable control returned HTTP 200 at `2026-10-06T00:38:01.697Z`, verifying the expected sandbox platform and merchant, pinned API version, exact endpoint URL and five required event types for endpoint `we_1UNMHiLwavBaepoeRhLuhdwH`.
+
+One new hosted booking, `4884ad38-72f2-495f-93bf-0002449e633f`, created Checkout Session `cs_test_a1Bb9qg1CpN7HOKd9qFAV2cBLYdN0GT2gcKwzaqxu6IqaHBXYm9zueaykr` for USD 1.00 (100 cents) in test mode. The user completed this Checkout and supplied an iPad screenshot of the actual sandbox return page at approximately 20:43 EDT on October 5 (00:43 UTC on October 6), showing the appointment confirmed and payment paid. This was the new hosted return, not the separate saved-result display.
+
+Private status at `2026-10-06T00:44:44.997404Z` independently showed booking `confirmed`, payment `paid` and refund state `none`. The durable receipt recorded signed event `evt_1UNMTzLwavcz7g46DqfG1f7b`, type `checkout.session.completed`, from the exact merchant `acct_1UN1WiLwavcz7g46`. Its PaymentIntent was `pi_3UNMTxLwavcz7g461NNvq3U9`. Together, the signed receipt and ledger state establish the new paid-booking transition; the return-page read did not perform provider reconciliation.
+
+The private fee-proof control returned HTTP 200 at `2026-10-06T00:45:30.499263Z`. It independently read the owned PaymentIntent and expanded Charge `ch_3UNMTxLwavcz7g4610gLCLHt`, verifying USD 1.00, `livemode:false`, `applicationFee:null`, `applicationFeeAmount:null` and `platformFeePercent:0`. This verifies zero platform transaction fee for this sandbox payment; it does not describe Stripe's own processing fees.
+
+Restart-proof deploy `dep-db249q97lnhs73di1dng` started at `2026-10-06T00:46:33.061681Z`, using documentation-only commit `dba7941384be3e56e117b9e2b3c782726d3f9f88`; payment runtime code is unchanged. The restart and refund results are recorded next. Duplicate delivery has not yet been tested for this hosted payment. No private booking link, token or secret is included in this evidence.
+
+### Restart recovery and full refund — 2026-10-06 00:48 UTC
+
+Restart-proof deploy `dep-db249q97lnhs73di1dng` became live at `2026-10-06T00:47:00.733895Z`. Verification at `2026-10-06T00:47:49.701600Z` found `databaseReady:true` and recovered the identical confirmed/paid booking, Checkout Session, PaymentIntent and signed completion receipt from the durable ledger. The new process had `outboundCount:0` and `readiness:null`, distinguishing recovered database state from fresh provider-readiness evidence.
+
+The customer-status endpoint returned HTTP 200 with confirmed/paid content and made zero provider requests. Fresh enable at `2026-10-06T00:47:56.945Z` revalidated the expected identity and endpoint without creating another Checkout Session.
+
+The private refund control returned HTTP 200 at `2026-10-06T00:48:18.302950Z` for the same booking, with booking `canceled`, payment `refunded`, refund state `succeeded` and refund ID `re_3UNMTxLwavcz7g461O84M7jR`. It was a full USD 1.00 test refund. At that initial response, the receipt list still contained only the completion event; refund delivery was verified separately afterward.
+
+Final verification at `2026-10-06T00:49:06.227010Z` found signed `charge.refunded` receipt `evt_3UNMTxLwavcz7g46170Oaicj` from `acct_1UN1WiLwavcz7g46`, alongside the original Checkout completion receipt. The same booking remained canceled/refunded with refund `re_3UNMTxLwavcz7g461O84M7jR` succeeded. The customer-status endpoint returned HTTP 200 with heading `Appointment canceled.`, a Refunded display and no paid-confirmation text.
+
+After the private pause control, `checkoutEnabled:false` and `flow.enabled:false`, while `databaseReady`, `paymentsConnected`, `webhookEnabled` and `identityVerified` remained true. The only blocker was `sandbox_checkout_paused`; the process outbound counter was seven since restart. This preserves webhook settlement and ledger inspection while pausing new issuance. Duplicate delivery has not yet been tested; the next check is a Stripe resend of the original `checkout.session.completed` event without creating another payment.
 
 ## Current configuration
 
@@ -151,7 +175,7 @@ The dedicated Node 24 service uses auto-deploy off and no environment group. Bui
 
 Do not copy production environment groups, Supabase credentials, provider keys, the local ledger encryption key, control token, CLI config or keyring. No secret values or private links belong in this document or Git.
 
-The private identity verification performs only `GET /v1/account` and `GET /v2/core/accounts/{id}` with `configuration.merchant` and `defaults` included. The user's last saved restricted-key review showed these selected Read permissions:
+The private identity verification performs only `GET /v1/account` and `GET /v2/core/accounts/{id}` with `configuration.merchant` and `defaults` included. The user's earlier identity-only restricted-key review showed these selected Read permissions:
 
 | Dashboard resource | Selected Read scopes |
 | --- | --- |
@@ -159,9 +183,9 @@ The private identity verification performs only `GET /v1/account` and `GET /v2/c
 | Accounts v2 | Own account and connected accounts |
 | Merchant Configuration | Own account and connected accounts |
 
-Recipient Configuration was removed and no Write permissions were selected. The origin of the mirrored connected-account selections was not established; this records the reviewed configuration that passed, not proof that every selection is required or an automatic dependency. Those identity-only permissions do not authorize the new Checkout/refund flow. A generic HTTP 503 `readiness_verification_failed` response does not identify its cause: permissions, provider/network failures, identity mismatches and database failures can share that response. Do not substitute a live or production-attached key to pass the check.
+At that review, Recipient Configuration was removed and no Write permissions were selected. The origin of the mirrored connected-account selections was not established; this records the reviewed configuration that passed, not proof that every selection is required or an automatic dependency. Subsequent successful hosted operations establish access for the operations exercised in the evidence above; the original identity-only permission table is not the current payment permission inventory. A generic HTTP 503 `readiness_verification_failed` response does not identify its cause: permissions, provider/network failures, identity mismatches and database failures can share that response. Do not substitute a live or production-attached key to pass the check.
 
-### iPad setup for the new payment flow
+### iPad setup reference
 
 Use **KORLIX 2MEETU Testing sandbox**, platform `acct_1UN1QuLwavBaepoe`, throughout. Keep the existing identity reads. Under **API keys**, open the dedicated key's overflow menu, choose **Edit key/permissions**, and add these resource permissions:
 
@@ -193,12 +217,17 @@ The historical stage-one suite passed ten focused tests in `backend/test/manual/
 | New scheduling-v2 evidence | Status |
 | --- | --- |
 | Reviewed code and focused test counts | 64/64 tests passed across database, payment flow, HTTP integration, return UI and stage-one boundaries, including the corrected creator-specific default-ACL checks. Database/flow/HTTP fixtures execute real PostgreSQL catalogs and production scheduling SQL in PGlite; Stripe is mocked. Independent review found no remaining critical isolation or locking issues. |
-| Hosted deployment ID, commit and live timestamp | Commit `03856ab34ed992b43d75236158d87e3bbba731f2`, deploy `dep-db23k73bc2fs73f436gg`, live `2026-10-06T00:01:09.600047Z` |
+| Hosted deployment ID, commit and live timestamp | Current deploy `dep-db249q97lnhs73di1dng`, documentation-only commit `dba7941384be3e56e117b9e2b3c782726d3f9f88`, live `2026-10-06T00:47:00.733895Z`; payment runtime unchanged from `03856ab34ed992b43d75236158d87e3bbba731f2` |
 | Hosted schema upgrade, identity and HTTP boundaries | Passed: `scheduling-ledger-v1`, expected sandbox identities, paused empty run and 11 HTTPS checks completed `2026-10-06T00:02:07.509723Z` |
-| Webhook endpoint configuration | Pending: webhook secret and endpoint ID are not yet configured |
-| New genuine sandbox payment and signed completion delivery | Not yet proven |
-| Actual Stripe-to-HTTPS return and ledger-only status display | Not yet proven |
-| Duplicate delivery, restart recovery and full refund | Not yet proven for the new hosted run |
-| Zero platform transaction fee evidence | Not yet proven for the new hosted run |
+| Webhook endpoint configuration | Passed: private enable returned 200 at `2026-10-06T00:38:01.697Z` for the exact sandbox endpoint, URL, version and five events |
+| New genuine sandbox payment and signed completion delivery | Passed: confirmed/paid ledger and the expected merchant's signed `checkout.session.completed` receipt verified at `2026-10-06T00:44:44.997404Z` |
+| Actual Stripe-to-HTTPS return and ledger-only status display | Passed: user completed the new Checkout and supplied an iPad screenshot showing the actual sandbox return confirmed and paid |
+| Duplicate delivery | Not yet tested for the new hosted payment |
+| Restart recovery | Passed at `2026-10-06T00:47:49.701600Z`: identical paid booking, Checkout, PaymentIntent and signed receipt recovered; customer-status read returned confirmed/paid with zero provider requests |
+| Full refund | Passed: private refund returned 200 at `2026-10-06T00:48:18.302950Z`; same booking canceled, USD 1.00 test payment refunded, refund `succeeded` |
+| Signed refund delivery | Passed at `2026-10-06T00:49:06.227010Z`: expected merchant's signed `charge.refunded` receipt stored alongside the original completion receipt |
+| Final customer refund display | Passed: HTTP 200 with `Appointment canceled.`, Refunded display and no paid-confirmation text |
+| Final sandbox state | Paused: `checkoutEnabled:false`, `flow.enabled:false`; database, identity, payment connectivity and webhook remain ready; only blocker `sandbox_checkout_paused` |
+| Zero platform transaction fee evidence | Passed: independent PaymentIntent/Charge read returned null application fee fields and `platformFeePercent:0` at `2026-10-06T00:45:30.499263Z` |
 
-The next acceptance run must use the new owned booking, matching signed events and the actual Stripe redirect. Existing refunded records must not be reset, relabeled unpaid or treated as a new paid transition. Record provider IDs, signed-delivery evidence, resulting ledger state and sanitized test output without private links or secrets. All production checkout flags remain false.
+The remaining hosted check is duplicate delivery: resend the original `checkout.session.completed` event through Stripe and verify that the same canceled/refunded booking and successful refund remain unchanged. This must not create another payment or refund. Existing refunded records must not be reset, relabeled unpaid or treated as a new paid transition. Preserve provider IDs, signed-delivery evidence, resulting ledger state and sanitized test output without private links or secrets. All production checkout flags remain false.
