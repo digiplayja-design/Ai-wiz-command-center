@@ -214,7 +214,7 @@ class KorlixSoundService extends ChangeNotifier {
       _settings.volume *
       switch (sound) {
         KorlixSound.click => .25,
-        KorlixSound.orbitBreeze => .5,
+        KorlixSound.orbitBreeze => .25,
         _ => 1.0,
       };
 
