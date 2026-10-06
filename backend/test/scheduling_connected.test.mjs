@@ -529,7 +529,7 @@ test("Stripe OAuth completes and requires owner confirmation while v2 compatibil
   await http("/connections/" + connected.id + "/disconnect", { confirmed: true }, other);
 });
 
-test("merchant verification refresh saves fresh confirmation and capability transitions without reconnecting", async () => {
+for (const refreshPath of ["/connections", "/"]) test(`merchant verification refresh through ${refreshPath} saves fresh confirmation and capability transitions without reconnecting`, async () => {
   const path = "/v2/core/accounts/acct_oauthlegacy";
   const account = (status = "active", changes = {}) => ({
     id: "acct_oauthlegacy", object: "v2.core.account", livemode: false,
@@ -554,30 +554,52 @@ test("merchant verification refresh saves fresh confirmation and capability tran
     assert.equal(saved.charges_enabled, true);
     const original = await conn(other, "private", saved.id);
     merchantReplies.set(path, { body: account("pending") });
-    let listed = await http("/connections", null, other);
+    let listed = await http(refreshPath, null, other);
     assert.equal(listed.data.connections.find(c => c.id === saved.id).charges_enabled, false);
     assert.equal(listed.headers.get("cache-control"), "no-store");
     merchantReplies.set(path, { body: account() });
-    listed = await http("/connections", null, other);
+    listed = await http(refreshPath, null, other);
     assert.equal(listed.data.connections.find(c => c.id === saved.id).charges_enabled, true);
     const refreshed = await conn(other, "private", saved.id);
     assert.equal(refreshed.sealed_grant, original.sealed_grant);
     assert.equal(refreshed.config_hash, original.config_hash);
     assert.equal(refreshed.enabled, original.enabled);
-    await http("/connections", null, other);
+    await http(refreshPath, null, other);
     assert.equal((await conn(other, "private", saved.id)).revision, refreshed.revision);
     assert(!JSON.stringify(listed.data).includes("sealed_grant"));
     const before = fetchCalls.length;
-    await http("/connections", null, null, 401);
+    await http(refreshPath, null, null, 401);
     assert.equal(fetchCalls.length, before);
-    assert(!(await http("/connections", null, third)).data.connections.some(c => c.id === saved.id));
+    assert(!(await http(refreshPath, null, third)).data.connections.some(c => c.id === saved.id));
     for (const changes of [{ id: "acct_wrong" }, { livemode: true }, { dashboard: "express" }]) {
       merchantReplies.set(path, { body: account("active", changes) });
-      await http("/connections", null, other, 409);
+      const mismatch = await http(refreshPath, null, other, refreshPath === "/" ? 200 : 409);
+      if (refreshPath === "/") {
+        const view = mismatch.data.connections.find(c => c.id === saved.id);
+        assert.equal(view.charges_enabled, false);
+        assert.match(view.last_error, /Payment readiness is unverified/);
+        assert.equal(view.state, "connected");
+      }
       assert.deepEqual(await conn(other, "private", saved.id), refreshed);
     }
     merchantReplies.set(path, { status: 503, body: { error: { message: "secret provider detail" } } });
-    const failed = await http("/connections", null, other, 503);
+    const failed = await http(refreshPath, null, other, refreshPath === "/" ? 200 : 503);
+    if (refreshPath === "/") {
+      assert(failed.data.profile);
+      assert(Array.isArray(failed.data.events));
+      assert.match(failed.data.connections.find(c => c.id === saved.id).last_error, /could not be refreshed/);
+      // A changed provider configuration must leave reconnect controls available.
+      await db.query("update korlix_schedule_connections set config_hash=$1 where id=$2", ["changed", saved.id]);
+      const changed = (await http(refreshPath, null, other)).data.connections.find(c => c.id === saved.id);
+      assert.equal(changed.state, "connected");
+      assert.equal(changed.charges_enabled, false);
+      assert.match(changed.last_error, /reconnect/);
+      await db.query("update korlix_schedule_connections set config_hash=$1 where id=$2", [refreshed.config_hash, saved.id]);
+      merchantReplies.set(path, { body: account() });
+      const recovered = (await http(refreshPath, null, other)).data.connections.find(c => c.id === saved.id);
+      assert.equal(recovered.charges_enabled, true);
+      assert.equal(recovered.last_error, null);
+    }
     assert(!JSON.stringify(failed.data).includes("secret provider detail"));
     assert.deepEqual(await conn(other, "private", saved.id), refreshed);
     const verifiedIdentity = { id: original.remote_id, label: "Verified business", livemode: false,
@@ -597,7 +619,8 @@ test("merchant verification refresh saves fresh confirmation and capability tran
       merchantReplies.set(path, { body: account() });
       await conn(other, "disconnect", saved.id, { confirmed: true });
     } });
-    await http("/connections", null, other, 409);
+    const raced = await http(refreshPath, null, other, refreshPath === "/" ? 200 : 409);
+    if (refreshPath === "/") assert.equal(raced.data.connections.find(c => c.id === saved.id).state, "disconnected");
     const disconnected = await conn(other, "private", saved.id);
     assert.equal(disconnected.state, "disconnected");
     assert.equal(disconnected.enabled, false);

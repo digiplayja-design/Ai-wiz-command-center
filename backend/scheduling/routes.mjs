@@ -217,7 +217,7 @@ export function registerScheduling(
     base,
     route(async (_q, r, u) => {
       const d = await ownerCall(u.id, "dashboard");
-      r.json({
+      r.set("Cache-Control", "no-store").json({
         ...d,
         ...(d.profile
           ? await connected.dashboard(u.id)

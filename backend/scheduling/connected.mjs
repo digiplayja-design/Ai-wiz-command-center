@@ -142,6 +142,29 @@ export function schedulingConnected({
       revision: c.revision, config_hash: c.config_hash, identity,
     });
   }
+  async function refreshedConnections(actor, { keepWorkspaceAvailable = false } = {}) {
+    const listed = await connection(actor, "list");
+    const unverified = new Set();
+    for (const c of listed.connections || []) {
+      if (c.provider !== "stripe" || c.state !== "connected" || !c.enabled) continue;
+      try {
+        await refreshMerchant(actor, c.id);
+      } catch (error) {
+        if (!keepWorkspaceAvailable) throw error;
+        unverified.add(c.id);
+      }
+    }
+    // Reread after provider I/O so a concurrent disconnect remains visible.
+    const fresh = await connection(actor, "list");
+    return {
+      ...fresh,
+      connections: (fresh.connections || []).map(c =>
+        unverified.has(c.id) && c.state === "connected" && c.enabled
+          ? { ...c, charges_enabled: false,
+              last_error: "Stripe status could not be refreshed. Payment readiness is unverified; the onboarding label above is not a fresh Stripe result. Retry Refresh connections or reconnect this account." }
+          : c),
+    };
+  }
   function cookie(q, name) {
     return (q.get("cookie") || "")
       .split(";")
@@ -226,7 +249,7 @@ export function schedulingConnected({
   }
   async function dashboard(actor) {
     const [connections, teams] = await Promise.all([
-      connection(actor, "list"),
+      refreshedConnections(actor, { keepWorkspaceAvailable: true }),
       team(actor, "list"),
     ]);
     return { ...connections, teams };
@@ -247,13 +270,8 @@ export function schedulingConnected({
     base + "/connections",
     route(
       async (q, r, u) => {
-        const listed = await connection(u.id, "list");
-        for (const c of listed.connections || []) {
-          if (c.provider === "stripe" && c.state === "connected" && c.enabled)
-            await refreshMerchant(u.id, c.id);
-        }
         r.set("Cache-Control", "no-store").json({
-          ...(await connection(u.id, "list")),
+          ...(await refreshedConnections(u.id)),
           providers: capabilities.providers,
         });
       },
