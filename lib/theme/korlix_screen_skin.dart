@@ -9,6 +9,10 @@ const korlixScreenSkinIds = [
   'bubbles',
   'aurora',
   'prism',
+  'mesh',
+  'contour',
+  'orbit',
+  'linen',
 ];
 final kKorlixScreenSkinNotifier = ValueNotifier<String>('classic');
 String korlixNormalizeScreenSkin(String value) =>
@@ -19,6 +23,10 @@ String korlixScreenSkinLabel(String id) => switch (id) {
   'bubbles' => 'Bubbles',
   'aurora' => 'Aurora',
   'prism' => 'Prism',
+  'mesh' => 'Color Mesh',
+  'contour' => 'Contour',
+  'orbit' => 'Orbit',
+  'linen' => 'Linen',
   _ => 'Classic',
 };
 String korlixScreenSkinDescription(String id) => switch (id) {
@@ -27,6 +35,10 @@ String korlixScreenSkinDescription(String id) => switch (id) {
   'bubbles' => 'Iridescent bubbles with a playful, rounded frame.',
   'aurora' => 'Soft ribbons of light around a calm workspace.',
   'prism' => 'Geometric facets with a cut-crystal finish.',
+  'mesh' => 'Blended pools of color with a soft, satin finish.',
+  'contour' => 'Fine flowing lines and a quiet, sculpted frame.',
+  'orbit' => 'Luminous orbital rings and scattered points of light.',
+  'linen' => 'A subtle woven texture with a clean, tactile edge.',
   _ => 'A clean screen with no decorative wrapper.',
 };
 
@@ -75,25 +87,49 @@ class KorlixSkinFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     // The widget structure remains stable when changing skins, preserving drafts.
     final decorated = skinId != 'classic';
-    final radius = skinId == 'bubbles' ? 36.0 : 24.0;
+    final radius = switch (skinId) {
+      'bubbles' || 'mesh' => 32.0,
+      'prism' || 'glass_break' => 12.0,
+      'linen' || 'contour' => 18.0,
+      _ => 24.0,
+    };
+    final quiet = skinId == 'linen' || skinId == 'contour';
     return Container(
-      padding: EdgeInsets.all(decorated ? 10 : 0),
+      padding: EdgeInsets.all(decorated ? 8 : 0),
       decoration: BoxDecoration(
-        color: decorated ? palette.panel.withValues(alpha: .88) : null,
+        gradient: decorated
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color.alphaBlend(
+                    palette.primary.withValues(alpha: quiet ? .04 : .14),
+                    palette.panel,
+                  ),
+                  palette.panel.withValues(alpha: .94),
+                  Color.alphaBlend(
+                    palette.secondary.withValues(alpha: quiet ? .03 : .10),
+                    palette.panel,
+                  ),
+                ],
+                stops: const [0, .5, 1],
+              )
+            : null,
         borderRadius: BorderRadius.circular(radius),
         border: decorated
             ? Border.all(
-                color: palette.primary.withValues(alpha: .38),
-                width: 1.3,
+                color: palette.primary.withValues(alpha: quiet ? .22 : .42),
+                width: skinId == 'prism' ? 1.6 : 1,
               )
             : null,
         boxShadow: decorated
             ? [
                 BoxShadow(
-                  color: palette.glow.withValues(
-                    alpha: palette.isLight ? .10 : .16,
+                  color: (quiet ? palette.text : palette.glow).withValues(
+                    alpha: quiet ? .04 : (palette.isLight ? .10 : .16),
                   ),
-                  blurRadius: 26,
+                  blurRadius: quiet ? 10 : 26,
+                  offset: const Offset(0, 5),
                 ),
               ]
             : null,
@@ -137,6 +173,14 @@ class KorlixScreenSkinPainter extends CustomPainter {
         _aurora(canvas, size);
       case 'prism':
         _prism(canvas, size);
+      case 'mesh':
+        _mesh(canvas, size);
+      case 'contour':
+        _contour(canvas, size);
+      case 'orbit':
+        _orbit(canvas, size);
+      case 'linen':
+        _linen(canvas, size);
       default:
         break;
     }
@@ -383,6 +427,139 @@ class KorlixScreenSkinPainter extends CustomPainter {
         );
       }
     }
+  }
+
+  void _mesh(Canvas canvas, Size s) {
+    for (final (x, y, radius, color) in [
+      (-.08, .13, .90, palette.primary),
+      (.95, .25, .85, palette.secondary),
+      (.70, .92, .90, palette.tertiary),
+    ]) {
+      final area = Rect.fromCircle(
+        center: Offset(s.width * x, s.height * y),
+        radius: math.min(s.width, s.height) * radius,
+      );
+      canvas.drawRect(
+        Offset.zero & s,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [
+              color.withValues(alpha: palette.isLight ? .22 : .33),
+              color.withValues(alpha: 0),
+            ],
+            stops: const [0, 1],
+          ).createShader(area),
+      );
+    }
+    _contour(canvas, s, soft: true);
+  }
+
+  void _contour(Canvas canvas, Size s, {bool soft = false}) {
+    for (var i = 0; i < 16; i++) {
+      final inset = i * .038;
+      final path = Path()
+        ..moveTo(s.width * (-.12 + inset), 0)
+        ..cubicTo(
+          s.width * (.90 + inset),
+          s.height * .28,
+          s.width * (-.48 + inset),
+          s.height * .61,
+          s.width * (.72 + inset),
+          s.height,
+        );
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = i % 4 == 0 ? 1.2 : .6
+          ..color = (i.isEven ? palette.primary : palette.secondary).withValues(
+            alpha: soft ? .065 : (i % 4 == 0 ? .20 : .09),
+          ),
+      );
+    }
+  }
+
+  void _orbit(Canvas canvas, Size s) {
+    final scale = math.min(s.width, s.height);
+    for (final (x, y, angle) in [(.87, .15, -.55), (.06, .87, .5)]) {
+      final center = Offset(s.width * x, s.height * y);
+      final halo = Rect.fromCircle(center: center, radius: scale * .58);
+      canvas.drawCircle(
+        center,
+        scale * .58,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [
+              palette.primary.withValues(alpha: .16),
+              palette.primary.withValues(alpha: 0),
+            ],
+          ).createShader(halo),
+      );
+      canvas.save();
+      canvas.translate(center.dx, center.dy);
+      canvas.rotate(angle);
+      for (var ring = 0; ring < 4; ring++) {
+        final oval = Rect.fromCenter(
+          center: Offset.zero,
+          width: scale * (.62 + ring * .17),
+          height: scale * (.30 + ring * .11),
+        );
+        canvas.drawOval(
+          oval,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = ring == 1 ? 2 : .8
+            ..shader = SweepGradient(
+              colors: [
+                palette.primary.withValues(alpha: .03),
+                palette.primary.withValues(alpha: .56),
+                palette.secondary.withValues(alpha: .15),
+                palette.primary.withValues(alpha: .03),
+              ],
+            ).createShader(oval),
+        );
+      }
+      canvas.restore();
+    }
+    for (var i = 0; i < 24; i++) {
+      final point = Offset(
+        s.width * ((i * .618 + .07) % 1),
+        s.height * ((i * .381 + .05) % 1),
+      );
+      canvas.drawCircle(
+        point,
+        i % 5 == 0 ? 1.8 : .8,
+        Paint()
+          ..color = palette.primary.withValues(alpha: i % 5 == 0 ? .55 : .22),
+      );
+    }
+  }
+
+  void _linen(Canvas canvas, Size s) {
+    final stepX = math.max(3.0, s.width / 128);
+    final stepY = math.max(3.0, s.height / 192);
+    final thread = Paint()
+      ..strokeWidth = .45
+      ..color = palette.text.withValues(alpha: .045);
+    for (var x = 0.0; x < s.width; x += stepX) {
+      canvas.drawLine(Offset(x, 0), Offset(x, s.height), thread);
+    }
+    for (var y = 0.0; y < s.height; y += stepY) {
+      canvas.drawLine(Offset(0, y), Offset(s.width, y), thread);
+    }
+    final edge = Rect.fromLTWH(
+      10,
+      10,
+      math.max(0, s.width - 20),
+      math.max(0, s.height - 20),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(edge, const Radius.circular(18)),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = palette.primary.withValues(alpha: .12),
+    );
   }
 
   @override

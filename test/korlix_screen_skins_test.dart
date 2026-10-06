@@ -15,7 +15,7 @@ void main() {
     () async {
       final palette = korlixSkinPaletteFor('pure_white');
       expect(korlixThemeIds.length, 12);
-      expect(korlixScreenSkinIds.length, 6);
+      expect(korlixScreenSkinIds.length, 10);
       for (final color in [
         palette.backgroundTop,
         palette.backgroundMid,
@@ -164,7 +164,7 @@ void main() {
   );
 
   testWidgets(
-    'all 72 combinations paint and preserve interactive controls and drafts',
+    'all 120 combinations paint and preserve interactive controls and drafts',
     (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
@@ -209,7 +209,7 @@ void main() {
           expect(tester.takeException(), isNull);
         }
       }
-      expect(taps, 72);
+      expect(taps, 120);
     },
   );
 
