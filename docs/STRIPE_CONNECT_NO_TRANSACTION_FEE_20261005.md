@@ -1,5 +1,7 @@
 # KORLIX merchant payments — subscription-only Connect plan
 
+Current checkpoint: the single hosted USD 1.00 sandbox sequence has passed. The [2026-10-06 production readiness review](STRIPE_PRODUCTION_READINESS_20261006.md) records the remaining merchant-readiness, live-configuration and onboarding gaps. Older acceptance statements below are historical; production checkout remains paused.
+
 Decision recorded 2026-10-05: businesses use KORLIX to collect payments from their own customers. The existing KORLIX subscription is the platform's monetization; KORLIX adds no transaction fee. Businesses still pay their own Stripe processing fees. Begin with 2MEETU appointments, then extend the connection to Funnel checkout and Bookkeeping invoices in later work.
 
 ## Account configuration
