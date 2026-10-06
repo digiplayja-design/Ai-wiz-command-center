@@ -18,13 +18,15 @@ Writes are serialized and storage failures are shown with a retry action.
 Quiet hours follow the device's local clock, support overnight ranges, and mute
 all effects. Equal start and end times mean all day. Defaults are sounds enabled,
 65% volume, Signature pack and quiet hours off; clicks use one-quarter of the
-selected volume.
+selected volume. The character orbit breeze uses half the selected volume and
+shares the **Clicks & movement** switch.
 
 ## Connected events
 
 | Sound | Current hooks |
 | --- | --- |
 | Click | Shared `KorlixActionButton`, wrapped main-screen/login/settings actions, and Directory shared buttons. Native button activation handles touch and keyboard; typing, scrolling and canceled gestures do not create clicks. |
+| Orbit breeze | A locally synthesized 420 ms airy sweep when a horizontal drag starts moving the character orbit, or a character tap/arrow initiates a rotation. One sweep per drag, including its final snap; no idle, rebuild, restored-selection or vertical-scroll sound. |
 | Message | A new Social message alert, including outside the Social screen. Restored unread counts and account replacement do not replay old alerts. |
 | Ringtone/ringback | Incoming Social calls and outgoing call ringing. Global alerts and the call screen share the controller. Answer, decline, connection, cancellation, expiry and teardown stop ringing. |
 | Bell | Fresh completed main-chat text generation and Contract Radar jobs transitioning from running to completed. Loaded historical results do not ring. |
@@ -50,7 +52,8 @@ workflow; this release does not add a new timed in-app reminder scheduler.
   extend that original deadline. A call silenced by mute, quiet hours, background
   state or a quiet lease does not unexpectedly restart when that condition ends.
 - Event IDs deduplicate within a bounded, ten-minute in-memory window. Cooldowns
-  are 80 ms for clicks, 900 ms for messages and 350 ms for other one-shot tones.
+  are 80 ms for clicks, 420 ms for orbit breezes, 900 ms for messages and 350 ms
+  for other one-shot tones.
   Muted events are consumed rather than queued for later playback.
 - Each output channel cancels superseded playback and rejects late asynchronous
   preparation. Session changes stop rings/effects and clear prior-account event

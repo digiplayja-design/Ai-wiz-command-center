@@ -10,6 +10,7 @@ final _cache = <(KorlixSound, KorlixSoundPack, bool), Uint8List>{};
 Duration korlixSoundDuration(KorlixSound sound, {bool outgoing = false}) =>
     switch (sound) {
       KorlixSound.click => const Duration(milliseconds: 45),
+      KorlixSound.orbitBreeze => const Duration(milliseconds: 420),
       KorlixSound.bell => const Duration(milliseconds: 650),
       KorlixSound.message => const Duration(milliseconds: 280),
       KorlixSound.success => const Duration(milliseconds: 480),
@@ -69,6 +70,28 @@ Uint8List korlixSoundWav(
     switch (sound) {
       case KorlixSound.click:
         note(0, 0.045, base * 1.9, gain: 0.34);
+      case KorlixSound.orbitBreeze:
+        // An airy, filtered-noise sweep with rounded ends, not a pitched beep.
+        // A fixed seed keeps the original effect stable and cacheable.
+        final noise = math.Random(2718);
+        final brightness = switch (pack) {
+          KorlixSoundPack.signature => 1.0,
+          KorlixSoundPack.classic => 0.78,
+          KorlixSoundPack.soft => 0.55,
+        };
+        var air = 0.0;
+        var body = 0.0;
+        for (var i = 0; i < count; i++) {
+          final progress = i / (count - 1);
+          final swell = math.sin(math.pi * progress);
+          final cutoff = (650 + 3000 * swell) * brightness;
+          final coefficient = 1 - math.exp(-2 * math.pi * cutoff / _sampleRate);
+          air += coefficient * (noise.nextDouble() * 2 - 1 - air);
+          body += 0.055 * (air - body);
+          final flutter =
+              0.9 + 0.1 * math.sin(2 * math.pi * 5 * i / _sampleRate);
+          samples[i] = (air - body) * math.pow(swell, 1.5) * flutter * 0.65;
+        }
       case KorlixSound.bell:
         note(0, 0.65, base, bell: true);
         note(0.10, 0.50, base * 1.5, gain: 0.16, bell: true);

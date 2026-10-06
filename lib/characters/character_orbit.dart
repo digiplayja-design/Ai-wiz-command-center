@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+import '../sounds/korlix_sound_service.dart';
 import '../theme/korlix_theme.dart';
 import 'character_catalog.dart';
 
@@ -17,6 +20,7 @@ class KorlixCharacterOrbit extends StatefulWidget {
     this.error,
     this.onRetry,
     this.previewBuilder,
+    this.soundService,
   });
   final String selectedId;
   final Set<String> availableIds;
@@ -25,6 +29,7 @@ class KorlixCharacterOrbit extends StatefulWidget {
   final String? error;
   final VoidCallback? onRetry;
   final Widget Function(KorlixCharacter)? previewBuilder;
+  final KorlixSoundService? soundService;
   @override
   State<KorlixCharacterOrbit> createState() => _KorlixCharacterOrbitState();
 }
@@ -34,6 +39,9 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
   static const _step = 2 * math.pi / 5;
   late final AnimationController _rotation;
   bool _dragging = false;
+  bool _dragBreezeStarted = false;
+  int _breezeRequest = 0;
+  KorlixSoundService get _sounds => widget.soundService ?? kKorlixSounds;
   int get _selectedIndex =>
       korlixCharacters.indexWhere((c) => c.id == widget.selectedId).clamp(0, 4);
   bool get _enabled =>
@@ -77,11 +85,42 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
     );
   }
 
-  void _choose(int index) {
+  void _playBreeze() {
+    final sounds = _sounds;
+    if (!sounds.settings.enabled || !sounds.settings.clicks || sounds.quiet) {
+      return;
+    }
+    final request = ++_breezeRequest;
+    final elapsed = Stopwatch()..start();
+    // Activate within the gesture for mobile browsers. Sound never delays
+    // selection, and a late activation must not play after the spin or teardown.
+    unawaited(() async {
+      try {
+        final ready = sounds.ready || await sounds.activate();
+        if (!ready ||
+            !mounted ||
+            request != _breezeRequest ||
+            !identical(sounds, _sounds) ||
+            elapsed.elapsed > const Duration(milliseconds: 250)) {
+          return;
+        }
+        await sounds.play(KorlixSound.orbitBreeze);
+      } catch (_) {
+        // Audio availability must not interfere with choosing a character.
+      } finally {
+        elapsed.stop();
+      }
+    }());
+  }
+
+  void _choose(int index, {bool breeze = true}) {
     if (!_enabled ||
         !widget.availableIds.contains(korlixCharacters[index].id)) {
       _snap(_selectedIndex);
       return;
+    }
+    if (breeze && (_targetFor(index) - _rotation.value).abs() > 0.01) {
+      _playBreeze();
     }
     _snap(index);
     unawaited(widget.onSelected(korlixCharacters[index].id));
@@ -113,11 +152,12 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
         ((_targetFor(index) - projected + math.pi) % (2 * math.pi) - math.pi)
             .abs();
     available.sort((a, b) => distance(a).compareTo(distance(b)));
-    _choose(available.first);
+    _choose(available.first, breeze: !_dragBreezeStarted);
   }
 
   @override
   void dispose() {
+    _breezeRequest++;
     _rotation.dispose();
     super.dispose();
   }
@@ -205,6 +245,7 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
                   IconButton.filledTonal(
                     key: const ValueKey('orbit-previous'),
                     tooltip: 'Previous character',
+                    enableFeedback: false,
                     onPressed: _enabled ? () => _advance(-1) : null,
                     icon: const Icon(Icons.arrow_back_rounded),
                   ),
@@ -234,6 +275,7 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
                   IconButton.filledTonal(
                     key: const ValueKey('orbit-next'),
                     tooltip: 'Next character',
+                    enableFeedback: false,
                     onPressed: _enabled ? () => _advance(1) : null,
                     icon: const Icon(Icons.arrow_forward_rounded),
                   ),
@@ -355,12 +397,17 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
             onHorizontalDragStart: _enabled
                 ? (_) {
                     _rotation.stop();
+                    _dragBreezeStarted = false;
                     setState(() => _dragging = true);
                   }
                 : null,
             onHorizontalDragUpdate: _enabled
                 ? (event) {
                     _rotation.value += event.delta.dx / (radiusX * 1.1);
+                    if (!_dragBreezeStarted && event.delta.dx != 0) {
+                      _dragBreezeStarted = true;
+                      _playBreeze();
+                    }
                   }
                 : null,
             onHorizontalDragEnd: _enabled

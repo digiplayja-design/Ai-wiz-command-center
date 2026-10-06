@@ -93,8 +93,7 @@ class KorlixSoundService extends ChangeNotifier {
       _enforceSettings();
     } catch (_) {
       if (_disposed || revision != _settingsRevision) return;
-      _storageError =
-          'Saved sound settings could not be read. Choose your preferences again.';
+      _storageError = 'Saved sound settings could not be read. Choose your preferences again.';
     }
     _notify();
   }
@@ -166,7 +165,7 @@ class KorlixSoundService extends ChangeNotifier {
       !_settings.isQuietAt(_now());
 
   bool _category(KorlixSound sound) => switch (sound) {
-    KorlixSound.click => _settings.clicks,
+    KorlixSound.click || KorlixSound.orbitBreeze => _settings.clicks,
     KorlixSound.message => _settings.messages,
     KorlixSound.ringtone => _settings.calls,
     _ => _settings.bells,
@@ -184,6 +183,7 @@ class KorlixSoundService extends ChangeNotifier {
     if (!_audible || !_category(sound) || _ringIdentity != null) return;
     final cooldown = switch (sound) {
       KorlixSound.click => const Duration(milliseconds: 80),
+      KorlixSound.orbitBreeze => const Duration(milliseconds: 420),
       KorlixSound.message => const Duration(milliseconds: 900),
       _ => const Duration(milliseconds: 350),
     };
@@ -211,7 +211,12 @@ class KorlixSoundService extends ChangeNotifier {
   }
 
   double _volume(KorlixSound sound) =>
-      _settings.volume * (sound == KorlixSound.click ? .25 : 1);
+      _settings.volume *
+      switch (sound) {
+        KorlixSound.click => .25,
+        KorlixSound.orbitBreeze => .5,
+        _ => 1.0,
+      };
 
   Future<void> preview(KorlixSound sound) async {
     if (!_audible || _ringIdentity != null) return;

@@ -526,9 +526,9 @@ class _KorlixSoundSettingsScreenState extends State<KorlixSoundSettingsScreen> {
                         final categories = [
                           _category(
                             id: 'clicks',
-                            title: 'Clicks',
+                            title: 'Clicks & movement',
                             description:
-                                'A soft tap when you use app controls.',
+                                'Soft taps and a breeze when characters spin.',
                             icon: Icons.touch_app_rounded,
                             accent: _cyan,
                             value: settings.clicks,

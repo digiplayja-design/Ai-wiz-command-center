@@ -1,4 +1,12 @@
-enum KorlixSound { click, bell, message, success, warning, ringtone }
+enum KorlixSound {
+  click,
+  bell,
+  message,
+  success,
+  warning,
+  ringtone,
+  orbitBreeze,
+}
 
 enum KorlixSoundPack { signature, classic, soft }
 
