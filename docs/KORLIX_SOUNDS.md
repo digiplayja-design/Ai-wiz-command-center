@@ -18,8 +18,8 @@ Writes are serialized and storage failures are shown with a retry action.
 Quiet hours follow the device's local clock, support overnight ranges, and mute
 all effects. Equal start and end times mean all day. Defaults are sounds enabled,
 65% volume, Signature pack and quiet hours off; clicks use one-quarter of the
-selected volume. The character orbit breeze uses one-quarter of the selected volume and
-shares the **Clicks & movement** switch.
+selected volume. The character orbit breeze uses 8.75% of the selected volume
+and shares the **Clicks & movement** switch.
 
 ## Connected events
 
