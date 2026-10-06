@@ -39,6 +39,10 @@ class _SchedulingConnectedPanelState extends State<SchedulingConnectedPanel> {
   String? _error;
   bool _busy = false;
   SchedulingMap get _cap => schedulingMap(widget.data['capabilities']);
+  SchedulingMap get _stripe =>
+      schedulingMap(schedulingMap(_cap['providers'])['stripe']);
+  SchedulingMap get _merchantSetup =>
+      schedulingMap(widget.data['merchant_setup']);
   List<SchedulingMap> get _connections =>
       schedulingItems(widget.data['connections']);
   List<SchedulingMap> get _teams => schedulingItems(widget.data['teams']);
@@ -202,6 +206,195 @@ class _SchedulingConnectedPanelState extends State<SchedulingConnectedPanel> {
     });
   }
 
+  Future<void> _openMerchantSetup(SchedulingMap result) async {
+    widget.client.guard();
+    final uri = Uri.tryParse('${result['url']}');
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        !const {
+          'connect.stripe.com',
+          'accounts.stripe.com',
+        }.contains(uri.host) ||
+        uri.userInfo.isNotEmpty ||
+        uri.port != 443) {
+      throw const SchedulingException(
+        'The Stripe setup link could not be verified. Try continuing setup again.',
+      );
+    }
+    if (!await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+      webOnlyWindowName: '_self',
+    )) {
+      throw const SchedulingException(
+        'Stripe could not open. Choose Continue Stripe setup to try again.',
+      );
+    }
+    widget.client.guard();
+    await widget.refresh();
+    _notice(
+      'After Stripe setup, return here and review and confirm your account.',
+    );
+  }
+
+  Future<void> _startMerchantSetup() async {
+    final name = TextEditingController(
+      text: '${schedulingMap(widget.data['profile'])['display_name'] ?? ''}',
+    );
+    final country = TextEditingController(text: 'US');
+    final form = GlobalKey<FormState>();
+    final testMode = _stripe['livemode'] != true;
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Set up your Stripe business'),
+        content: SizedBox(
+          width: 460,
+          child: SingleChildScrollView(
+            child: Form(
+              key: form,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    testMode
+                        ? 'This creates a sandbox Stripe business account for this KORLIX account. No real payments are taken.'
+                        : 'This creates a Stripe business account for this KORLIX account.',
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Customers pay your business directly. KORLIX charges no transaction fee; Stripe processing fees apply. Enter bank and verification details only on Stripe. Your current merchant stays connected until you review and confirm the new account.',
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    key: const ValueKey('merchant-display-name'),
+                    controller: name,
+                    maxLength: 100,
+                    decoration: const InputDecoration(
+                      labelText: 'Business name',
+                    ),
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Enter your business name.'
+                        : null,
+                  ),
+                  TextFormField(
+                    key: const ValueKey('merchant-country'),
+                    controller: country,
+                    readOnly: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Business country',
+                      helperText:
+                          'Setup is currently available for United States businesses only.',
+                      helperMaxLines: 2,
+                    ),
+                    validator: (value) => value?.trim().toUpperCase() == 'US'
+                        ? null
+                        : 'Stripe business setup is currently available in the United States only.',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (form.currentState!.validate()) Navigator.pop(dialog, true);
+            },
+            child: const Text('Create Stripe account'),
+          ),
+        ],
+      ),
+    );
+    final displayName = name.text.trim(),
+        countryCode = country.text.trim().toUpperCase();
+    Future<void>.delayed(const Duration(seconds: 1), () {
+      name.dispose();
+      country.dispose();
+    });
+    if (accepted != true || !mounted) return;
+    await _run(() async {
+      final result = await widget.client.post('stripe/merchant-setup/start', {
+        'confirmed': true,
+        'display_name': displayName,
+        'country': countryCode,
+      });
+      await _openMerchantSetup(result);
+    });
+  }
+
+  Future<void> _resumeMerchantSetup() async {
+    final id = '${_merchantSetup['id']}';
+    if (!await _confirm(
+      'Continue Stripe setup?',
+      'Open Stripe to finish this business account’s verification. Bank and identity details stay on Stripe. Return here to review and confirm the account before replacing your current merchant.',
+      'Continue to Stripe',
+    )) {
+      return;
+    }
+    if (!mounted) return;
+    await _run(() async {
+      final result = await widget.client.post(
+        'stripe/merchant-setup/$id/resume',
+        {'confirmed': true},
+      );
+      await _openMerchantSetup(result);
+    });
+  }
+
+  Future<void> _reviewMerchantSetup() async {
+    final id = '${_merchantSetup['id']}';
+    await _run(() async {
+      final result = await widget.client.get(
+        'stripe/merchant-setup/$id/review',
+      );
+      widget.client.guard();
+      if (!mounted) return;
+      final identity = schedulingMap(result['identity']);
+      final reviewToken = result['review_token'];
+      if (reviewToken is! String || reviewToken.isEmpty) {
+        throw const SchedulingException(
+          'Refresh and review the Stripe account again.',
+        );
+      }
+      final ready = identity['charges_enabled'] == true;
+      final description = [
+        '${identity['label']} (${identity['id']})',
+        identity['livemode'] == true
+            ? 'Live Stripe account.'
+            : 'TEST MODE — no real payments.',
+        ready
+            ? 'Stripe payment capabilities are active. Checkout remains subject to KORLIX payment availability.'
+            : 'Stripe verification is still pending. You can save this account, but payments remain unavailable until verification is complete.',
+        if (result['replaces_existing'] == true)
+          'Confirming replaces the Stripe merchant connected to this KORLIX account.',
+        'Customers pay your business directly. KORLIX charges no transaction fee; Stripe processing fees apply.',
+      ].join('\n\n');
+      if (!await _confirm(
+        'Confirm your Stripe business?',
+        description,
+        'Confirm account',
+      )) {
+        return;
+      }
+      await widget.client.post('stripe/merchant-setup/$id/confirm', {
+        'confirmed': true,
+        'review_token': reviewToken,
+      });
+      await widget.refresh();
+      _notice(
+        ready
+            ? 'Stripe business account saved.'
+            : 'Account saved. Complete Stripe verification before taking payments.',
+      );
+    });
+  }
+
   Future<void> _calendars(SchedulingMap c) async {
     await _run(() async {
       await widget.client.post('connections/${c['id']}/calendars');
@@ -338,16 +531,55 @@ class _SchedulingConnectedPanelState extends State<SchedulingConnectedPanel> {
                 schedulingMap(_cap['providers'])[provider],
               )['configured'] !=
               true) ...[
-            const Chip(label: Text('Administrator setup required')),
-            const Text(
-              'The provider’s application credentials must be configured before accounts can connect.',
-            ),
+            if (provider != 'stripe' ||
+                _stripe['onboarding_configured'] != true) ...[
+              const Chip(label: Text('Administrator setup required')),
+              const Text(
+                'The provider’s application credentials must be configured before accounts can connect.',
+              ),
+            ],
           ] else
             OutlinedButton.icon(
               onPressed: _busy ? null : () => _connect(provider),
               icon: const Icon(Icons.add_link),
               label: const Text('Connect account'),
             ),
+          if (provider == 'stripe' &&
+              _stripe['onboarding_configured'] == true) ...[
+            const SizedBox(height: 10),
+            if (_merchantSetup.isEmpty)
+              FilledButton.icon(
+                onPressed: _busy ? null : _startMerchantSetup,
+                icon: const Icon(Icons.business_outlined),
+                label: const Text('Set up Stripe business'),
+              )
+            else ...[
+              Text(
+                'Business setup: ${_merchantSetup['display_name']}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              Text(
+                _merchantSetup['livemode'] == true
+                    ? 'Finish verification on Stripe, then review the account here.'
+                    : 'Sandbox setup — no real payments. Finish on Stripe, then review the account here.',
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton(
+                    onPressed: _busy ? null : _resumeMerchantSetup,
+                    child: const Text('Continue Stripe setup'),
+                  ),
+                  FilledButton(
+                    onPressed: _busy ? null : _reviewMerchantSetup,
+                    child: const Text('Review and confirm business'),
+                  ),
+                ],
+              ),
+            ],
+          ],
           for (final c in _connections.where((c) => c['provider'] == provider))
             Padding(
               padding: const EdgeInsets.only(top: 18),
