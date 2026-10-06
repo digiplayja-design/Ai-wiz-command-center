@@ -58,6 +58,8 @@ import 'theme/korlix_theme_picker.dart';
 import 'theme/korlix_screen_skin.dart';
 import 'theme/korlix_appearance_preferences.dart';
 import 'theme/korlix_appearance_picker.dart';
+import 'theme/korlix_screensaver_controller.dart';
+import 'theme/korlix_smoke_screensaver.dart';
 export 'theme/korlix_theme.dart';
 import 'chat/chat_request.dart';
 import 'bookkeeping/bookkeeping_client.dart';
@@ -392,6 +394,7 @@ String korlixFriendlyErrorMessage(Object error) {
 
 final _korlixNavigatorKey = GlobalKey<NavigatorState>();
 final _korlixSocialRouteObserver = RouteObserver<ModalRoute<dynamic>>();
+final _korlixScreensaverObserver = KorlixScreensaverObserver(kKorlixScreensaver);
 
 class CheeChaiCheeApp extends StatelessWidget {
   const CheeChaiCheeApp({super.key});
@@ -406,6 +409,7 @@ class CheeChaiCheeApp extends StatelessWidget {
       navigatorObservers: <NavigatorObserver>[
         kKorlixMeetingCopilotAuthObserver,
         _korlixSocialRouteObserver,
+        _korlixScreensaverObserver,
       ],
       builder: (context, child) => KorlixSoundHost(child: SocialAppAlerts(
         baseUrl: kKorlixBackendBaseUrl,
@@ -418,7 +422,8 @@ class CheeChaiCheeApp extends StatelessWidget {
         navigatorKey: _korlixNavigatorKey,
         routeObserver: _korlixSocialRouteObserver,
         beforeOpenCall: stopKorlixCharacterSpeechGlobally,
-        child: child ?? const SizedBox.shrink(),
+        child: KorlixSmokeScreensaver(sessionChanges: kKorlixAuthRevision,
+          child: child ?? const SizedBox.shrink()),
       )),
 
       routes: <String, WidgetBuilder>{

@@ -7,6 +7,8 @@ import 'package:ai_wiz_command_center/pod/pod_media.dart';
 import 'package:ai_wiz_command_center/pod/pod_screen.dart';
 import 'package:ai_wiz_command_center/pod/pod_wake_lock.dart';
 import 'package:ai_wiz_command_center/pod/pod_transition_audio.dart';
+import 'package:ai_wiz_command_center/theme/korlix_screensaver_controller.dart';
+import 'package:ai_wiz_command_center/theme/korlix_smoke_screensaver.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -417,6 +419,7 @@ Future<void> _mount(
   DateTime Function()? now,
   PodWakeLock? wakeLock,
   PodTransitionAudio? transitionAudio,
+  KorlixScreensaverController? screensaver,
 }) async {
   tester.view.physicalSize = const Size(1200, 1600);
   tester.view.devicePixelRatio = 1;
@@ -424,6 +427,9 @@ Future<void> _mount(
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
     MaterialApp(
+      builder: (context, child) => screensaver == null
+          ? child!
+          : KorlixSmokeScreensaver(controller: screensaver, child: child!),
       home: PodScreen(
         client: client,
         media: media,
@@ -464,6 +470,42 @@ void _foreground(WidgetTester tester) {
 
 void main() {
   for (final hosts in [2, 3]) {
+    testWidgets(
+      '$hosts-person pod keeps playing beneath smoke and after waking',
+      (tester) async {
+        final events = <String>[];
+        final client = _FakePod(events);
+        final media = _FakeMedia(events);
+        final screensaver = KorlixScreensaverController();
+        await _mount(tester, client, media, events, screensaver: screensaver);
+        await _listen(tester);
+        final welcome = _turnResponse();
+        (welcome['episode'] as Map)['hostCount'] = hosts;
+        client.complete(0, welcome);
+        await tester.pumpAndSettle();
+        final stops = media.stops;
+        await tester.pump(const Duration(seconds: 30));
+        await tester.pump(const Duration(seconds: 2));
+        expect(find.byKey(const Key('smoke-screensaver')), findsOneWidget);
+        expect(media.playing, isTrue);
+        expect(media.stops, stops);
+        expect(client.actions, isNot(contains('pause')));
+        await tester.tapAt(const Offset(20, 80));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('smoke-screensaver')), findsNothing);
+        expect(media.playing, isTrue);
+        client.completePreparation(0);
+        media.finish();
+        await tester.pumpAndSettle();
+        expect(media.plays, 2);
+        expect(media.overlaps, 0);
+        expect(client.actions, isNot(contains('pause')));
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+        screensaver.dispose();
+      },
+    );
+
     testWidgets(
       '$hosts-person small talk finishes before prepared speech and stops on pause',
       (tester) async {

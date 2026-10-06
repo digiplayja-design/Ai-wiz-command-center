@@ -41,3 +41,38 @@ The optional visual-export case uses `KORLIX_APPEARANCE_PREVIEWS` for its output
 directory and `KORLIX_FLUTTER_ROOT` to load the SDK's Material icon font. Without
 those variables, that one export test is skipped. Existing installed mobile
 apps need a new build to include the appearance update.
+
+## Smoke screensaver
+
+The app-wide smoke layer appears after 30 seconds without touch, mouse,
+scrolling, keyboard or text-edit activity. It is enabled by default. The
+appearance picker has a device-local switch and a Preview smoke action;
+previewing does not change the saved switch. The preference is stored under
+`korlix_smoke_screensaver_v1` with serialized writes and stale-restore protection.
+
+The first tap, scroll or keypress wakes the app without activating the control
+underneath. The existing navigator stays mounted, preserving drafts, podcast
+playback and calls. Incoming social alerts and the active-call bar remain above
+the smoke. Navigation, account changes and backgrounding clear it; returning
+to the foreground starts a fresh idle interval. It does not override the
+device's screen-lock settings.
+
+Smoke is drawn locally with bounded particle and ribbon counts. Its ticker
+exists only while visible and is capped at 25 updates per second. Reduced
+motion uses a still image. Automatic activation is disabled when accessible
+navigation is enabled, while the manual preview remains available with an
+accessible dismiss action.
+
+Validation: static analysis reported no issues; the combined screensaver,
+appearance, podcast and remembered-login suite passed 100 tests, with one
+unrelated optional appearance-image export skipped. Checks include exact idle
+timing, held input, first-event swallowing, draft/focus restoration, lifecycle
+and route changes, saved settings, reduced motion and continued playback for
+two- and three-person podcasts. Phone and tablet smoke renders were reviewed.
+These checks use Flutter test rendering and mocked media, not physical devices.
+
+```bash
+CI=true flutter test --no-pub test/korlix_smoke_screensaver_test.dart test/pod_screen_test.dart
+```
+
+Set `KORLIX_SMOKE_PREVIEWS` to export phone and tablet smoke review images.
