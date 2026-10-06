@@ -1,6 +1,6 @@
 # Hosted Stripe sandbox staging
 
-This isolated runtime implements durable sandbox booking storage, a Stripe-signed webhook receiver, an HTTPS customer return page, and private controls for one synthetic USD 1.00 Checkout and full refund. The hosted schema upgrade, identity verification and HTTPS boundaries have passed; the local suite passed 64/64 tests. A new hosted sandbox payment, signed completion delivery, actual iPad return, zero platform transaction fee, restart recovery, full refund, signed refund delivery and the final customer refund display have been verified. Sandbox issuance is paused. Duplicate-delivery evidence remains pending below.
+This isolated runtime implements durable sandbox booking storage, a Stripe-signed webhook receiver, an HTTPS customer return page, and private controls for one synthetic USD 1.00 Checkout and full refund. The hosted schema upgrade, identity verification and HTTPS boundaries have passed; the local suite passed 64/64 tests. The new hosted acceptance sequence is complete for this single USD 1.00 test: payment, signed completion delivery, actual iPad return, zero platform transaction fee, restart recovery, full refund, signed refund delivery, final customer refund display and duplicate-delivery state preservation have been verified. Sandbox issuance and production checkout remain paused. These results establish the bounded sandbox sequence, not general production readiness.
 
 The hosted credentials now support the verified sandbox identity, endpoint, Checkout, payment-evidence and refund operations. The exact final key permission review is not recorded here; earlier identity-only selections are preserved as history. Production checkout remains paused, and the separate saved-result display is not payment acceptance evidence.
 
@@ -141,7 +141,7 @@ Private status at `2026-10-06T00:44:44.997404Z` independently showed booking `co
 
 The private fee-proof control returned HTTP 200 at `2026-10-06T00:45:30.499263Z`. It independently read the owned PaymentIntent and expanded Charge `ch_3UNMTxLwavcz7g4610gLCLHt`, verifying USD 1.00, `livemode:false`, `applicationFee:null`, `applicationFeeAmount:null` and `platformFeePercent:0`. This verifies zero platform transaction fee for this sandbox payment; it does not describe Stripe's own processing fees.
 
-Restart-proof deploy `dep-db249q97lnhs73di1dng` started at `2026-10-06T00:46:33.061681Z`, using documentation-only commit `dba7941384be3e56e117b9e2b3c782726d3f9f88`; payment runtime code is unchanged. The restart and refund results are recorded next. Duplicate delivery has not yet been tested for this hosted payment. No private booking link, token or secret is included in this evidence.
+Restart-proof deploy `dep-db249q97lnhs73di1dng` started at `2026-10-06T00:46:33.061681Z`, using documentation-only commit `dba7941384be3e56e117b9e2b3c782726d3f9f88`; payment runtime code is unchanged. The restart, refund and subsequent duplicate-delivery evidence are recorded next. No private booking link, token or secret is included in this evidence.
 
 ### Restart recovery and full refund — 2026-10-06 00:48 UTC
 
@@ -153,7 +153,13 @@ The private refund control returned HTTP 200 at `2026-10-06T00:48:18.302950Z` fo
 
 Final verification at `2026-10-06T00:49:06.227010Z` found signed `charge.refunded` receipt `evt_3UNMTxLwavcz7g46170Oaicj` from `acct_1UN1WiLwavcz7g46`, alongside the original Checkout completion receipt. The same booking remained canceled/refunded with refund `re_3UNMTxLwavcz7g461O84M7jR` succeeded. The customer-status endpoint returned HTTP 200 with heading `Appointment canceled.`, a Refunded display and no paid-confirmation text.
 
-After the private pause control, `checkoutEnabled:false` and `flow.enabled:false`, while `databaseReady`, `paymentsConnected`, `webhookEnabled` and `identityVerified` remained true. The only blocker was `sandbox_checkout_paused`; the process outbound counter was seven since restart. This preserves webhook settlement and ledger inspection while pausing new issuance. Duplicate delivery has not yet been tested; the next check is a Stripe resend of the original `checkout.session.completed` event without creating another payment.
+After the private pause control, `checkoutEnabled:false` and `flow.enabled:false`, while `databaseReady`, `paymentsConnected`, `webhookEnabled` and `identityVerified` remained true. The only blocker was `sandbox_checkout_paused`; the process outbound counter was seven since restart. This preserves webhook settlement and ledger inspection while pausing new issuance.
+
+### Duplicate completion delivery and state preservation — 2026-10-06 01:00 UTC
+
+The user's Stripe Dashboard screenshot records a manual resend of the original `checkout.session.completed` event `evt_1UNMTzLwavcz7g46DqfG1f7b` at `2026-10-06T00:55:48Z`. It identifies the expected merchant `acct_1UN1WiLwavcz7g46` and API version `2026-09-30.endive`, and shows HTTP 200 with `received:true` and `duplicate:true`.
+
+Independent private-status verification returned HTTP 200 at `2026-10-06T01:00:23.892571Z`. Compared with the 00:49 UTC baseline, the exact booking object was unchanged: canceled/refunded with refund `succeeded` and the same refund ID. Both stored receipt objects were unchanged, and `outboundCount` remained seven; the duplicate caused no new provider requests. `flow.enabled:false`, `checkoutEnabled:false` and `databaseReady:true` also remained intact. Together, the acknowledgment and independent comparison complete duplicate-delivery verification without another payment or refund.
 
 ## Current configuration
 
@@ -222,7 +228,7 @@ The historical stage-one suite passed ten focused tests in `backend/test/manual/
 | Webhook endpoint configuration | Passed: private enable returned 200 at `2026-10-06T00:38:01.697Z` for the exact sandbox endpoint, URL, version and five events |
 | New genuine sandbox payment and signed completion delivery | Passed: confirmed/paid ledger and the expected merchant's signed `checkout.session.completed` receipt verified at `2026-10-06T00:44:44.997404Z` |
 | Actual Stripe-to-HTTPS return and ledger-only status display | Passed: user completed the new Checkout and supplied an iPad screenshot showing the actual sandbox return confirmed and paid |
-| Duplicate delivery | Not yet tested for the new hosted payment |
+| Duplicate delivery | Passed: resend at `2026-10-06T00:55:48Z` returned 200 with `duplicate:true`; independent status at `2026-10-06T01:00:23.892571Z` found the exact refunded booking and both receipt objects unchanged, outbound counter still seven and issuance still paused |
 | Restart recovery | Passed at `2026-10-06T00:47:49.701600Z`: identical paid booking, Checkout, PaymentIntent and signed receipt recovered; customer-status read returned confirmed/paid with zero provider requests |
 | Full refund | Passed: private refund returned 200 at `2026-10-06T00:48:18.302950Z`; same booking canceled, USD 1.00 test payment refunded, refund `succeeded` |
 | Signed refund delivery | Passed at `2026-10-06T00:49:06.227010Z`: expected merchant's signed `charge.refunded` receipt stored alongside the original completion receipt |
@@ -230,4 +236,4 @@ The historical stage-one suite passed ten focused tests in `backend/test/manual/
 | Final sandbox state | Paused: `checkoutEnabled:false`, `flow.enabled:false`; database, identity, payment connectivity and webhook remain ready; only blocker `sandbox_checkout_paused` |
 | Zero platform transaction fee evidence | Passed: independent PaymentIntent/Charge read returned null application fee fields and `platformFeePercent:0` at `2026-10-06T00:45:30.499263Z` |
 
-The remaining hosted check is duplicate delivery: resend the original `checkout.session.completed` event through Stripe and verify that the same canceled/refunded booking and successful refund remain unchanged. This must not create another payment or refund. Existing refunded records must not be reset, relabeled unpaid or treated as a new paid transition. Preserve provider IDs, signed-delivery evidence, resulting ledger state and sanitized test output without private links or secrets. All production checkout flags remain false.
+The new hosted acceptance sequence is complete for this one synthetic USD 1.00 test. No further resend, payment or refund is needed for this sequence. Preserve the refunded booking, both event receipts and the sanitized evidence without private links or secrets. The next step is a separate production-readiness review; these sandbox results do not authorize production checkout or establish general production readiness. All production checkout flags remain false.
