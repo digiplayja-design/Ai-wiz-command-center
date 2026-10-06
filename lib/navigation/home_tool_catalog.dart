@@ -15,6 +15,7 @@ const homeBusinessTools = <String>[
 ];
 const homeEnterpriseTools = <String>['Funnel Studio', 'Payroll'];
 const homePersonalTools = <String>[
+  'THE RECEIPT WIZ',
   'Live Studio',
   'The Pod and You',
   'Tax Prep',
@@ -103,6 +104,8 @@ const _toolDetails = <String, String>{
   'Live Studio': 'Create a live session',
   'The Pod and You': 'Create a podcast with AI',
   'Tax Prep': 'Organize tax preparation',
+  'THE RECEIPT WIZ':
+      'Free receipt scanner, automatic categories and connected finance inboxes',
   'BabyBlend': 'Explore family photo blends',
   'Virtual Closet': 'Organize outfits and style ideas',
   'Cybersecurity Defender': 'Review digital security',

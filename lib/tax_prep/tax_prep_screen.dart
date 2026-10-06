@@ -1,3 +1,4 @@
+import '../receipt_wiz/receipt_wiz_entry.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -1265,6 +1266,7 @@ class _TaxPrepScreenState extends State<TaxPrepScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          ReceiptWizEntry(client:widget.client,year:_year,taxWorkspaceId:_w['id'] as String?),
                           LayoutBuilder(
                             builder: (c, s) {
                               final year = SizedBox(

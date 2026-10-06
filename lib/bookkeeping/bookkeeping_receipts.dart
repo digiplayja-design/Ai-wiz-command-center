@@ -1,3 +1,4 @@
+import '../receipt_wiz/receipt_wiz_entry.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -386,6 +387,7 @@ class _BookkeepingReceiptsState extends State<BookkeepingReceipts> {
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (_target == null) ReceiptWizEntry(client:widget.client,businessId:widget.businessId,onReturn:_load),
                   Row(
                     children: [
                       Expanded(

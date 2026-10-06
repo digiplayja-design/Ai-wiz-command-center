@@ -1,0 +1,238 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+
+class ReceiptWizException implements Exception {
+  const ReceiptWizException(this.message, [this.status = 0]);
+  final String message;
+  final int status;
+  @override
+  String toString() => message;
+}
+
+class ReceiptWizClient {
+  ReceiptWizClient({
+    required this.backendBaseUrl,
+    required this.headersBuilder,
+    http.Client? client,
+    this.sessionChanges,
+  }) : _http = client ?? http.Client(),
+       _ownsClient = client == null {
+    if (sessionChanges != null) {
+      _sessionScope = _readSessionScope();
+      sessionChanges!.addListener(_checkSession);
+    }
+  }
+  final String backendBaseUrl;
+  final Map<String, String> Function() headersBuilder;
+  final http.Client _http;
+  final bool _ownsClient;
+  final Listenable? sessionChanges;
+  String? _sessionScope;
+  bool _sessionChanged = false, _accessDenied = false, _disposed = false;
+  bool get sessionChanged => _sessionChanged || _accessDenied;
+  static const _changed = ReceiptWizException(
+    'Sign in again and reopen ReceiptWiz to continue.',
+    401,
+  );
+  void Function()? onAccessDenied;
+  final Set<void Function()> _accessListeners = {};
+  void addAccessDeniedListener(void Function() listener) =>
+      _accessListeners.add(listener);
+  void removeAccessDeniedListener(void Function() listener) =>
+      _accessListeners.remove(listener);
+
+  // A UI lifetime key only, never proof of authentication or entitlement.
+  // Refresh rotates the token while retaining the issuer/user/session tuple.
+  // No token, email, metadata or signature is retained in this key.
+  String? _readSessionScope([Map<String, String>? headers]) {
+    try {
+      final values = (headers ?? headersBuilder()).entries.where(
+        (e) => e.key.toLowerCase() == 'authorization',
+      );
+      if (values.length != 1) return null;
+      final bearer = RegExp(
+        r'^Bearer\s+(\S+)$',
+        caseSensitive: false,
+      ).firstMatch(values.single.value.trim());
+      final parts = bearer?.group(1)?.split('.');
+      if (parts == null || parts.length != 3 || parts.any((p) => p.isEmpty)) {
+        return null;
+      }
+      final claims = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      if (claims is! Map) return null;
+      final scope = [claims['iss'], claims['sub'], claims['session_id']];
+      if (scope.any((v) => v is! String || v.trim().isEmpty)) return null;
+      return jsonEncode(scope);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _notifyAccessDenied() {
+    if (_accessDenied) return;
+    _accessDenied = true;
+    onAccessDenied?.call();
+    for (final listener in _accessListeners.toList()) {
+      listener();
+    }
+  }
+
+  void _checkSession() {
+    if (_disposed || _sessionChanged || sessionChanges == null) return;
+    if (_sessionScope == null || _readSessionScope() != _sessionScope) {
+      _sessionChanged = true;
+      _notifyAccessDenied();
+    }
+  }
+
+  void _ensureSession([Map<String, String>? requestHeaders]) {
+    if (_disposed) {
+      throw const ReceiptWizException('ReceiptWiz is closed. Open it again.');
+    }
+    _checkSession();
+    if (!_sessionChanged &&
+        sessionChanges != null &&
+        requestHeaders != null &&
+        _readSessionScope(requestHeaders) != _sessionScope) {
+      _sessionChanged = true;
+      _notifyAccessDenied();
+    }
+    if (sessionChanged) throw _changed;
+  }
+
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    sessionChanges?.removeListener(_checkSession);
+    _accessListeners.clear();
+    onAccessDenied = null;
+    if (_ownsClient) _http.close();
+  }
+
+  Future<Map<String, dynamic>> request(
+    String method,
+    String path, {
+    Map<String, String>? query,
+    Map<String, dynamic>? body,
+  }) async {
+    final uri = Uri.parse(
+      '${backendBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/receipt-wiz$path',
+    ).replace(queryParameters: query);
+    final req = http.Request(method, uri)
+      ..headers.addAll({
+        ...headersBuilder(),
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      });
+    if (body != null) req.body = jsonEncode(body);
+    return _send(req);
+  }
+
+  Future<Map<String, dynamic>> upload(
+    String requestKey,
+    String name,
+    Uint8List bytes,
+  ) async {
+    if (bytes.isEmpty || bytes.length > 8 * 1024 * 1024) {
+      throw const ReceiptWizException('Choose a receipt file up to 8 MB.');
+    }
+    final req =
+        http.MultipartRequest(
+            'POST',
+            Uri.parse(
+              '${backendBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/receipt-wiz',
+            ),
+          )
+          ..headers.addAll({
+            ...headersBuilder(),
+            'Accept': 'application/json',
+            'X-Receipt-Request-Key': requestKey,
+          })
+          ..files.add(
+            http.MultipartFile.fromBytes('receipt', bytes, filename: name),
+          );
+    return _send(req);
+  }
+
+  Future<Uint8List> receiptBytes(String receipt, {bool preview = false}) async {
+    final req = http.Request(
+      'GET',
+      Uri.parse(
+        '${backendBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/receipt-wiz/$receipt/${preview ? 'preview' : 'file'}',
+      ),
+    )..headers.addAll({...headersBuilder(), 'Accept': 'application/octet-stream'});
+    return (await _response(req)).bodyBytes;
+  }
+
+  Future<Map<String, dynamic>> _send(http.BaseRequest req) async {
+    final response = await _response(req);
+    try {
+      return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+    } catch (_) {
+      throw const ReceiptWizException(
+        'ReceiptWiz returned an unreadable response. Please try again.',
+      );
+    }
+  }
+
+  Future<http.Response> _response(http.BaseRequest req) async {
+    var active = true;
+    try {
+      await Future<void>.value();
+      _ensureSession(req.headers);
+      final response = await (() async {
+        final streamed = await _http.send(req);
+        // A timed-out request must not revoke a newer successful session or
+        // consume a response body after its UI has moved on.
+        if (!active) {
+          unawaited(streamed.stream.listen(null).cancel());
+          throw TimeoutException('Expired receipt-wiz request');
+        }
+        try {
+          _ensureSession();
+        } catch (_) {
+          unawaited(streamed.stream.listen(null).cancel());
+          rethrow;
+        }
+        if (streamed.statusCode == 401 || streamed.statusCode == 403) {
+          _notifyAccessDenied();
+          unawaited(streamed.stream.listen(null).cancel());
+          throw ReceiptWizException(_changed.message, streamed.statusCode);
+        }
+        return http.Response.fromStream(streamed);
+      })().timeout(const Duration(seconds: 100));
+      _ensureSession();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        String? error;
+        try {
+          error = (jsonDecode(response.body) as Map)['error']?.toString();
+        } catch (_) {
+          /* Use generic message. */
+        }
+        throw ReceiptWizException(
+          error ??
+              'ReceiptWiz could not complete this request. Refresh before retrying.',
+          response.statusCode,
+        );
+      }
+      return response;
+    } on TimeoutException {
+      _ensureSession();
+      throw const ReceiptWizException(
+        'This is taking longer than expected. Refresh before trying again.',
+      );
+    } on http.ClientException {
+      _ensureSession();
+      throw const ReceiptWizException(
+        'Check your connection. Refresh before retrying a save.',
+      );
+    } finally {
+      active = false;
+    }
+  }
+}

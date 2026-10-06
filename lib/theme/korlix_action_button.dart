@@ -526,6 +526,7 @@ IconData korlixToolIcon(String label) => switch (label.toLowerCase()) {
   'email enhancer' => Icons.mark_email_read_outlined,
   'logo studio' => Icons.polyline_outlined,
   'tax prep' => Icons.receipt_long_outlined,
+  'the receipt wiz' => Icons.document_scanner_outlined,
   'babyblend' => Icons.child_care_rounded,
   'fieldproof' => Icons.fact_check_outlined,
   'ai visibility' => Icons.insights_rounded,

@@ -1,3 +1,4 @@
+import '../receipt_wiz/receipt_wiz_entry.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'bookkeeping_client.dart';
@@ -477,6 +478,7 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                ReceiptWizEntry(client:widget.client,businessId:_business?['id'] as String?),
                                 if (_busy)
                                   const LinearProgressIndicator(minHeight: 3),
                                 if (_error != null)

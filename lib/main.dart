@@ -64,6 +64,7 @@ export 'theme/korlix_theme.dart';
 import 'chat/chat_request.dart';
 import 'bookkeeping/bookkeeping_client.dart';
 import 'bookkeeping/bookkeeping_screen.dart';
+import 'receipt_wiz/receipt_wiz_entry.dart';
 import 'bookkeeping/bookkeeping_voice.dart';
 import 'payroll/payroll_client.dart';
 import 'payroll/payroll_screen.dart';
@@ -9668,6 +9669,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     );
   }
 
+  Future<void> _openReceiptWiz() => openReceiptWiz(context, backendBaseUrl:kKorlixBackendBaseUrl, headersBuilder:_authHeaders, sessionChanges:kKorlixAuthRevision);
+
   Future<void> _openBookkeeping() async {
     final client = BookkeepingClient(backendBaseUrl: kKorlixBackendBaseUrl,
       headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision);
@@ -9949,6 +9952,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   void _selectUtilityTool(String tool) {
+    if (tool == 'THE RECEIPT WIZ') { unawaited(_openReceiptWiz()); return; }
     if (tool == 'Inventory Studio') { unawaited(_openInventoryStudio()); return; }
     if (tool == 'Logo Studio') { unawaited(_openLogoStudio()); return; }
     if (tool == 'Cybersecurity Defender') { unawaited(_openCyberDefender()); return; }
@@ -11099,6 +11103,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       if (tool == 'Study Studio') return 'Learn with lessons, flashcards and practice quizzes';
       if (tool == 'App Studio') return 'Build, preview and export your own app';
       if (tool == 'Music Studio') return 'Create songs, save drafts and play your music library';
+      if (tool == 'THE RECEIPT WIZ') return 'Free receipt scanner, smart categories and connected finance inboxes';
       if (tool == 'Tax Prep') return 'Personal tax organizer, linked Bookkeeping records and preparer packets';
       if (tool == 'BabyBlend') return 'Imagine a fictional child portrait from two adult photos with KORLIX';
       if (tool == 'FieldProof') return 'Job photos, evidence checklists and customer handoffs with KORLIX';
@@ -13055,7 +13060,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
           onPressed: _openContactsCrm,
         )
       : tile(label, korlixToolIcon(label),
-          (_loading || _customAccessLoading) && !_isIncludedTextWorkspace(label)
+          (_loading || _customAccessLoading) && label != 'THE RECEIPT WIZ' && !_isIncludedTextWorkspace(label)
             ? null : () => _selectUtilityTool(label));
     bool businessAction(QuickAction action) => const {
       'create an app', 'email enhancer', 'negocios', 'crear plan', 'ideas de contenido', 'idées contenu',
