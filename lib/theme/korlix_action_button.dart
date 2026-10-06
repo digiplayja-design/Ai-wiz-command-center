@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../sounds/korlix_sound_actions.dart';
+import '../characters/button_climbers.dart';
 import 'korlix_button_colors.dart';
 import 'korlix_theme.dart';
 
@@ -423,7 +424,9 @@ class KorlixActionButton extends StatelessWidget {
         ),
       ),
     );
-    return iconOnly ? Tooltip(message: label, child: button) : button;
+    return KorlixClimberAnchor(
+      child: iconOnly ? Tooltip(message: label, child: button) : button,
+    );
   }
 }
 

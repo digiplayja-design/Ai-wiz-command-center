@@ -45,6 +45,7 @@ import 'navigation/home_quick_access.dart';
 import 'navigation/home_tool_finder.dart';
 import 'characters/character_catalog.dart';
 import 'characters/character_orbit.dart';
+import 'characters/button_climbers.dart';
 import 'characters/character_selection_controller.dart';
 import 'characters/character_video_gestures.dart';
 export 'characters/character_catalog.dart' show normalizeKorlixCharacterId;
@@ -9276,7 +9277,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         builder: (context, screenSkin, _) => KorlixScreenBackdrop(
         palette: korlixSkinPaletteFor(kKorlixThemeNotifier.value), skinId: screenSkin,
         child: SafeArea(
-          child: Center(
+          child: KorlixButtonClimbers(child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 980),
               child: SingleChildScrollView(
@@ -9307,7 +9308,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
               ),
             ),
           ),
-        ),
+        )),
       )),
     );
   }

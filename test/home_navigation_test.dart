@@ -21,6 +21,7 @@ import 'package:ai_wiz_command_center/main.dart' as app;
 import 'package:ai_wiz_command_center/contacts_crm/contacts_screen.dart';
 import 'package:ai_wiz_command_center/navigation/home_tool_finder.dart';
 import 'package:ai_wiz_command_center/theme/korlix_action_grid.dart';
+import 'package:ai_wiz_command_center/characters/button_climber_painter.dart';
 import 'package:ai_wiz_command_center/navigation/home_tool_catalog.dart';
 import 'package:ai_wiz_command_center/social/social_alert_scope.dart';
 import 'package:ai_wiz_command_center/social/social_notifications.dart';
@@ -127,7 +128,10 @@ void main() {
             MaterialApp(
               theme: app.korlixBuildTheme('korlix_blue'),
               builder: (context, child) => MediaQuery(
-                data: MediaQuery.of(context).copyWith(disableAnimations: true),
+                data: MediaQuery.of(context).copyWith(
+                  disableAnimations:
+                      scenario == 'loading' || scenario == 'denied',
+                ),
                 child: RepaintBoundary(key: boundary, child: child!),
               ),
               home: SocialAlertScope(
@@ -139,6 +143,17 @@ void main() {
           );
           debugDefaultTargetPlatformOverride = null;
           await frames(tester);
+          final climbers =
+              tester
+                      .widget<CustomPaint>(
+                        find.byKey(const Key('button-climbers-canvas')),
+                      )
+                      .painter!
+                  as KorlixButtonClimbersPainter;
+          expect(
+            climbers.visible.value,
+            scenario == 'failed' || scenario == 'enterprise',
+          );
           final crm = find.byKey(const ValueKey('home-crm'));
           final business = find.byWidgetPredicate(
             (w) => w is KorlixActionSection && w.title == 'For business',

@@ -89,3 +89,23 @@ the final tablet density adjustment passed all 12 screensaver checks again.
 The export captures the original screen and frames at 3, 8 and 14 seconds;
 phone and tablet frames were reviewed in dark and light themes. Static
 analysis reported no issues for the changed code.
+
+### Home button climbers
+
+`KorlixButtonClimbers` adds two silent, articulated vector characters to the home
+viewport. Registered `KorlixActionButton` render boxes provide actual button
+edges after layout, scroll, and resize. The man and woman climb up and down,
+stand on the top edge, wave, and reach their palms toward the glass on separate
+27-second cycles. Only the transparent illustration layer repaints, capped at
+30fps; button hit testing and accessibility remain with the original controls.
+
+The **Button climbers** switch in Skins & Templates saves a device preference.
+Reduced motion and accessible navigation hide the figures. Navigation, inactive
+app lifecycle, disabled tickers, and text editing suspend the animation without
+advancing its clock. Animation generates no input events and does not reset the
+smoke screensaver's idle timer. There are no media assets, requests, or AI calls.
+
+`test/button_climbers_test.dart` covers choreography, saved settings, scrolling,
+resizing, tap-through, route/lifecycle/editing pauses, accessibility, and smoke
+wake behavior. Set `KORLIX_CLIMBERS_REVIEW` and `KORLIX_FLUTTER_ROOT` to export
+phone/tablet review frames in dark and light themes.
