@@ -1,3 +1,4 @@
+import 'helpers/signup_eligibility.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -286,6 +287,7 @@ void main() {
       expect(passwordField(tester).autofillHints, [AutofillHints.newPassword]);
       await enterCredentials(tester);
       tester.testTextInput.log.clear();
+      await acceptAdultSignup(tester);
       await tap(tester, find.text('Create account'));
       expect(path, '/api/auth/signup');
       expect(signIns, 0);

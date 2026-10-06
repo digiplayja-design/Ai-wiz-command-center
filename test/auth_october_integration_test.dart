@@ -1,3 +1,4 @@
+import 'helpers/signup_eligibility.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -152,6 +153,7 @@ void main() {
       expect(find.text('Create your Korlix AI account'), findsOneWidget);
       expect(find.byType(KorlixOctoberGreeting), findsOneWidget);
       await credentials(tester);
+      await acceptAdultSignup(tester);
       await tap(tester, find.text('Create account'));
       expect(path, '/api/auth/signup');
       expect(signIns, 0);

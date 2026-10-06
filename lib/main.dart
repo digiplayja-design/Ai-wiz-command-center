@@ -37,6 +37,7 @@ import 'theme/korlix_theme.dart';
 import 'theme/korlix_action_button.dart';
 import 'theme/korlix_action_grid.dart';
 import 'auth/korlix_welcome_confirmation.dart';
+import 'auth/korlix_signup_eligibility.dart';
 import 'auth/knova_welcome_controller.dart';
 import 'auth/rici_welcome_button.dart';
 import 'navigation/home_tool_catalog.dart';
@@ -961,6 +962,9 @@ class _AuthScreenState extends State<AuthScreen> {
   String? _preferenceMessage;
 
   bool _isSignUp = false;
+  KorlixSignupAgeBand? _signupAgeBand;
+  bool _acceptedSignupPolicies = false;
+  bool _parentPermission = false;
   bool _obscurePassword = true;
   bool _loading = false;
   bool _resetLoading = false;
@@ -1089,6 +1093,18 @@ class _AuthScreenState extends State<AuthScreen> {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
+    if (signingUp) {
+      final eligibilityError = korlixSignupEligibilityError(
+        ageBand: _signupAgeBand,
+        acceptedPolicies: _acceptedSignupPolicies,
+        parentPermission: _parentPermission,
+      );
+      if (eligibilityError != null) {
+        setState(() { _error = eligibilityError; _message = null; });
+        return;
+      }
+    }
+
     if (email.isEmpty || password.isEmpty) {
       setState(() {
         _error = 'Enter your email and password.';
@@ -1123,7 +1139,17 @@ class _AuthScreenState extends State<AuthScreen> {
       final response = await post(
         Uri.parse('$kKorlixBackendBaseUrl$path'),
         headers: const {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email, 'password': password}),
+        body: jsonEncode({
+          'email': email,
+          'password': password,
+          if (signingUp) 'signup_eligibility': {
+            'age_band': _signupAgeBand!.value,
+            'terms_accepted': _acceptedSignupPolicies,
+            'privacy_acknowledged': _acceptedSignupPolicies,
+            'parent_permission': _parentPermission,
+            'policy_version': korlixSignupPolicyVersion,
+          },
+        }),
       ).timeout(const Duration(seconds: 30));
       if (!mounted) return;
 
@@ -1225,7 +1251,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     ? KorlixWelcomeConfirmation(
                         email: _confirmationEmail!,
                         onSignIn: () => setState(() { _confirmationEmail = null; _isSignUp = false; }),
-                        onChangeEmail: () => setState(() { _confirmationEmail = null; _isSignUp = true; _emailController.clear(); _passwordController.clear(); }),
+                        onChangeEmail: () => setState(() { _confirmationEmail = null; _isSignUp = true; _signupAgeBand = null; _acceptedSignupPolicies = false; _parentPermission = false; _emailController.clear(); _passwordController.clear(); }),
                       )
                     : AutofillGroup(
                     key: ValueKey('auth-autofill-$_isSignUp'),
@@ -1265,6 +1291,21 @@ class _AuthScreenState extends State<AuthScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
+                      const KorlixAgeNotice(),
+                      const SizedBox(height: 16),
+                      if (_isSignUp) ...[
+                        KorlixSignupAgeField(
+                          ageBand: _signupAgeBand,
+                          enabled: !_loading && !_resetLoading,
+                          onChanged: (value) => setState(() {
+                            _signupAgeBand = value;
+                            _acceptedSignupPolicies = false;
+                            _parentPermission = false;
+                            _error = null;
+                          }),
+                        ),
+                        const SizedBox(height: 18),
+                      ],
                       TextField(
                         key: const Key('auth-email'),
                         controller: _emailController,
@@ -1405,11 +1446,30 @@ class _AuthScreenState extends State<AuthScreen> {
                         ),
                       ],
                       const SizedBox(height: 20),
+                      if (_isSignUp)
+                        KorlixSignupAcknowledgments(
+                          ageBand: _signupAgeBand,
+                          acceptedPolicies: _acceptedSignupPolicies,
+                          parentPermission: _parentPermission,
+                          enabled: !_loading && !_resetLoading,
+                          onPoliciesChanged: (value) => setState(() {
+                            _acceptedSignupPolicies = value;
+                            _error = null;
+                          }),
+                          onParentPermissionChanged: (value) => setState(() {
+                            _parentPermission = value;
+                            _error = null;
+                          }),
+                        ),
+                      const KorlixSignupPolicyLinks(),
+                      const SizedBox(height: 10),
                       SizedBox(
                         width: double.infinity,
                         height: 54,
                         child: ElevatedButton(
-                          onPressed: korlixSoundAction(_loading ? null : _submit),
+                          onPressed: korlixSoundAction(_loading || _resetLoading ||
+                              (_isSignUp && _signupAgeBand == KorlixSignupAgeBand.under16)
+                              ? null : _submit),
                           style: korlixSoundButtonStyle(ElevatedButton.styleFrom(
                             backgroundColor: october ? const Color(0xFFFFBD69) : const Color(0xFF143B4A),
                             foregroundColor: october ? const Color(0xFF352100) : const Color(0xFFE4EBEE),
@@ -1444,6 +1504,9 @@ class _AuthScreenState extends State<AuthScreen> {
                                 _passwordController.clear();
                                 setState(() {
                                   _isSignUp = !_isSignUp;
+                                  _signupAgeBand = null;
+                                  _acceptedSignupPolicies = false;
+                                  _parentPermission = false;
                                   _obscurePassword = true;
                                   _error = null;
                                   _message = null;

@@ -1,3 +1,4 @@
+import 'helpers/signup_eligibility.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -48,6 +49,7 @@ void main() {
       await tester.tap(find.text('New here? Create account'));
       await tester.pumpAndSettle();
       await credentials(tester);
+      await acceptAdultSignup(tester);
       await tester.ensureVisible(find.text('Create account'));
       await tester.tap(find.text('Create account'));
       await tester.pumpAndSettle();
