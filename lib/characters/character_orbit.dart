@@ -59,7 +59,10 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
     _wind = AnimationController(
       vsync: this,
       value: 1,
-      duration: const Duration(milliseconds: 850),
+      duration: const Duration(milliseconds: 1600),
+      // Reduced motion uses a stationary cloud that fades gently, rather than
+      // shortening the entire effect to an imperceptible flash.
+      animationBehavior: AnimationBehavior.preserve,
     );
   }
 
@@ -122,7 +125,7 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
   }
 
   void _showWind(double movement) {
-    if (movement == 0 || MediaQuery.disableAnimationsOf(context)) return;
+    if (movement == 0) return;
     _windDirection = movement.sign;
     // A bounded pulse: fresh movement refreshes the mist, then it disperses.
     _wind.forward(from: 0);
@@ -443,9 +446,7 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
               child: AnimatedBuilder(
                 animation: Listenable.merge([_rotation, _wind]),
                 builder: (context, _) {
-                  final showWind =
-                      _wind.value < 1 &&
-                      !MediaQuery.disableAnimationsOf(context);
+                  final showWind = _wind.value < 1;
                   final positions = [
                     for (var index = 0; index < 5; index++)
                       (index: index, angle: index * _step + _rotation.value),
@@ -537,6 +538,7 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
                 progress: _wind.value,
                 direction: _windDirection,
                 front: front,
+                reducedMotion: MediaQuery.disableAnimationsOf(context),
               ),
             ),
           ),
