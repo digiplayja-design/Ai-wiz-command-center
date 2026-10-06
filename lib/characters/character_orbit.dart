@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../sounds/korlix_sound_service.dart';
 import '../theme/korlix_theme.dart';
 import 'character_catalog.dart';
+import 'character_orbit_wind.dart';
 
 /// Drag to rotate; release to snap and save. No timer or perpetual motion.
 class KorlixCharacterOrbit extends StatefulWidget {
@@ -35,9 +36,11 @@ class KorlixCharacterOrbit extends StatefulWidget {
 }
 
 class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const _step = 2 * math.pi / 5;
   late final AnimationController _rotation;
+  late final AnimationController _wind;
+  double _windDirection = 1;
   bool _dragging = false;
   bool _dragBreezeStarted = false;
   int _breezeRequest = 0;
@@ -52,6 +55,11 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
     _rotation = AnimationController.unbounded(
       vsync: this,
       value: -_selectedIndex * _step,
+    );
+    _wind = AnimationController(
+      vsync: this,
+      value: 1,
+      duration: const Duration(milliseconds: 850),
     );
   }
 
@@ -113,14 +121,23 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
     }());
   }
 
+  void _showWind(double movement) {
+    if (movement == 0 || MediaQuery.disableAnimationsOf(context)) return;
+    _windDirection = movement.sign;
+    // A bounded pulse: fresh movement refreshes the mist, then it disperses.
+    _wind.forward(from: 0);
+  }
+
   void _choose(int index, {bool breeze = true}) {
     if (!_enabled ||
         !widget.availableIds.contains(korlixCharacters[index].id)) {
       _snap(_selectedIndex);
       return;
     }
-    if (breeze && (_targetFor(index) - _rotation.value).abs() > 0.01) {
-      _playBreeze();
+    final movement = _targetFor(index) - _rotation.value;
+    if (movement.abs() > 0.01) {
+      if (breeze) _playBreeze();
+      _showWind(movement);
     }
     _snap(index);
     unawaited(widget.onSelected(korlixCharacters[index].id));
@@ -159,6 +176,7 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
   void dispose() {
     _breezeRequest++;
     _rotation.dispose();
+    _wind.dispose();
     super.dispose();
   }
 
@@ -404,6 +422,7 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
             onHorizontalDragUpdate: _enabled
                 ? (event) {
                     _rotation.value += event.delta.dx / (radiusX * 1.1);
+                    _showWind(event.delta.dx);
                     if (!_dragBreezeStarted && event.delta.dx != 0) {
                       _dragBreezeStarted = true;
                       _playBreeze();
@@ -422,8 +441,11 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
             child: SizedBox(
               height: 318,
               child: AnimatedBuilder(
-                animation: _rotation,
+                animation: Listenable.merge([_rotation, _wind]),
                 builder: (context, _) {
+                  final showWind =
+                      _wind.value < 1 &&
+                      !MediaQuery.disableAnimationsOf(context);
                   final positions = [
                     for (var index = 0; index < 5; index++)
                       (index: index, angle: index * _step + _rotation.value),
@@ -446,6 +468,14 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
                           ),
                         ),
                       ),
+                      if (showWind)
+                        _windLayer(
+                          skin,
+                          radiusX,
+                          radiusY,
+                          centerY,
+                          front: false,
+                        ),
                       Positioned(
                         left: width / 2 - 22,
                         top: centerY - 22,
@@ -467,6 +497,14 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
                           centerY,
                           skin,
                         ),
+                      if (showWind)
+                        _windLayer(
+                          skin,
+                          radiusX,
+                          radiusY,
+                          centerY,
+                          front: true,
+                        ),
                     ],
                   );
                 },
@@ -475,6 +513,35 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
           ),
         );
       },
+    ),
+  );
+
+  Widget _windLayer(
+    KorlixSkinPalette skin,
+    double rx,
+    double ry,
+    double cy, {
+    required bool front,
+  }) => Positioned.fill(
+    child: IgnorePointer(
+      child: ExcludeSemantics(
+        child: ClipRect(
+          child: RepaintBoundary(
+            child: CustomPaint(
+              painter: KorlixOrbitWindPainter(
+                skin: skin,
+                radiusX: rx,
+                radiusY: ry,
+                centerY: cy,
+                rotation: _rotation.value,
+                progress: _wind.value,
+                direction: _windDirection,
+                front: front,
+              ),
+            ),
+          ),
+        ),
+      ),
     ),
   );
 

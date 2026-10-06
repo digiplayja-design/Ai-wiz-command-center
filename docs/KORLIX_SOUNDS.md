@@ -18,7 +18,7 @@ Writes are serialized and storage failures are shown with a retry action.
 Quiet hours follow the device's local clock, support overnight ranges, and mute
 all effects. Equal start and end times mean all day. Defaults are sounds enabled,
 65% volume, Signature pack and quiet hours off; clicks use one-quarter of the
-selected volume. The character orbit breeze uses 8.75% of the selected volume
+selected volume. The character orbit breeze uses 4.375% of the selected volume
 and shares the **Clicks & movement** switch.
 
 ## Connected events
@@ -31,6 +31,11 @@ and shares the **Clicks & movement** switch.
 | Ringtone/ringback | Incoming Social calls and outgoing call ringing. Global alerts and the call screen share the controller. Answer, decline, connection, cancellation, expiry and teardown stop ringing. |
 | Bell | Fresh completed main-chat text generation and Contract Radar jobs transitioning from running to completed. Loaded historical results do not ring. |
 | Success | Confirmed Directory saves/submissions/uploads, Contract Radar profile/actions, FieldProof successful actions, and explicit Copy Box/VoiceScribe save controls after persistence succeeds. Autosave on each text edit is silent. |
+
+Character spins also show soft cloud wisps behind and in front of the orbit,
+following the direction of rotation. Each movement refreshes an 850 ms fade;
+there is no idle loop. The effect ignores pointer input, stays separate from
+sound preferences, and is omitted when reduced motion is enabled.
 
 The tone library also exposes `warning`; this is not a blanket hook for every
 error. Scheduled appointment reminders currently remain their existing email
