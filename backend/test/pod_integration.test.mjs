@@ -33,6 +33,9 @@ test.before(async()=>{
  await db.exec(await readFile(new URL(preparedMigration,dir),'utf8'));
  const riciMigration=(await readdir(dir)).find(n=>n.endsWith('_rici_pod_welcome.sql'));assert(riciMigration,'Rici welcome migration is required');
  await db.exec(await readFile(new URL(riciMigration,dir),'utf8'));
+ const continuityMigration=(await readdir(dir)).find(n=>n.endsWith('_pod_long_session_continuity.sql'));
+ await db.exec(await readFile(new URL(continuityMigration,dir),'utf8'));
+ await db.exec(await readFile(new URL(continuityMigration,dir),'utf8')); // idempotent migration
  store=createPodStore({database:{rpc:async(_name,p)=>{
   try{return {data:(await db.query('select public.korlix_pod_v1($1,$2,$3,$4) r',[p.p_actor,p.p_action,p.p_id,p.p_data])).rows[0].r};}
   catch(error){return {error};}
@@ -565,4 +568,34 @@ test('real SDK and SQL reject missing or unverified comparison background and ne
   assert.equal((await monthly()).total_tokens,139*(index+1),fixture.label);
   await store.control(owner,welcome.episode.id,'end');runtime.abort(owner,welcome.episode.id);
  }
+});
+
+for(const hostCount of [2,3])test(`15-minute ${hostCount}-person panel keeps preparing beyond 36 turns and closes within its deadline`,async()=>{
+ const longLimits={...limits,maxResponses:91};
+ let episode=(await store.create(owner,{requestId:randomUUID(),input:{...input,hostCount},limits:longLimits})).episode;
+ const roles=hostCount===3?['host','analyst','challenger']:['host','analyst'];
+ const originalTurn=providers.turn;
+ providers.turn=async args=>({...await originalTurn(args),speaker:args.closing?'host':roles[args.episode.turns.filter(t=>t.speaker!=='user').length%roles.length]});
+ let result=await next(episode);episode=result.episode;
+ assert.equal(episode.hostTurnLimit,90);
+ let elapsed=0;
+ for(let index=1;index<=60&&!episode.summary;index++){
+  elapsed=index*15;
+  // Advance the database's real deadline/heartbeat model without a 15-minute sleep.
+  await db.query("with moment as(select clock_timestamp() t) update korlix_pod_sessions set started_at=moment.t-$2*interval '1 second',deadline_at=moment.t+(900-$2)*interval '1 second',last_heartbeat_at=moment.t,accounted_at=moment.t from moment where id=$1",[episode.id,elapsed]);
+  episode=(await store.get(owner,episode.id)).episode;
+  const requestId=randomUUID(),ahead=await prepare(episode,requestId);
+  assert.equal(ahead.prepared,true);assert.equal(ahead.episode.turns.length,index);
+  result=await playPrepared(episode,requestId);episode=result.episode;
+  assert(result.audio);assert.equal(episode.state,'active');
+  assert.equal(result.turn.speaker,episode.summary?'host':roles[index%roles.length]);
+  if(elapsed<840)assert.equal(episode.summary,null);
+ }
+ assert(episode.turns.length>36);assert(elapsed>=840&&elapsed<900);assert(episode.summary);
+ assert.equal(calls.research,1);assert.equal(calls.speak,episode.turns.length);
+ assert.equal((await monthly()).session_count,1);
+ // A missed client End cannot extend the server deadline or dispatch more work.
+ await db.query("with moment as(select clock_timestamp() t) update korlix_pod_sessions set started_at=moment.t-interval '901 seconds',deadline_at=moment.t-interval '1 second',last_heartbeat_at=moment.t,accounted_at=moment.t from moment where id=$1",[episode.id]);
+ assert.equal((await store.get(owner,episode.id)).episode.state,'ended');
+ const before={...calls};await assert.rejects(prepare(episode));assert.deepEqual(calls,before);
 });

@@ -3658,6 +3658,7 @@ app.get("/api/health", (req, res) => {
       pdfImport:true,deadlineMonitoring:true,automaticMonitoringUsesAiCredits:false,
       automaticSubmission:false},
     welcomeVoice: korlixWelcomeAudio.status(),
+    pod: {version:2,smallTalk:true,maxHostTurns:90,maxSeconds:900},
     contactsCrm: {version:3,voice:true,directoryImport:{version:2,source:'korlix_directory',automatic:true,immediateOnEnable:true,intervalMinutes:60,batchLimit:100,enabledByDefault:false,worker:crmDirectorySync.health()},email:{version:1,followUpDates:true,draftReview:true,automaticFollowUps:true,enabledByDefault:false,providerConfigured:createFieldProofEmailProvider({environment:process.env,namespace:'crm'}).status().ready}},
     workforce: {version:3,voice:true,businessProfiles:true,industryTemplates:12,teamTypes:5,taskBoard:true,
       email:{version:1,workspaceRecipients:true,draftReview:true,automaticReminders:true,dailySummaries:true,enabledByDefault:false,providerConfigured:createFieldProofEmailProvider({environment:process.env,namespace:'workforce'}).status().ready}},
@@ -12717,7 +12718,7 @@ const podRegistration = registerPod(app,{database:podDatabase,requireUser,
     const tier=String(profile?.tier||'basic').trim().toLowerCase();
     if(!entitlement.unlimited&&!['ultra','enterprise'].includes(tier))return {allowed:false,status:403,reason:'The personal beta is available on Ultra Premium and Enterprise.'};
     const base=korlixLiveConvoBuild131LimitsForEntitlement(profile,entitlement);
-    const limits={...base,maxSessionSeconds:900,maxResponses:37}; // 36 Pod claims; leave room to deliver the final receipted turn.
+    const limits={...base,maxSessionSeconds:900,maxResponses:91}; // Up to 90 short turns; retain room for the final speech receipt.
     if(entitlement.unlimited)return {allowed:true,limits,unlimited:true,remainingSeconds:900};
     const {data,error:usageError}=await podDatabase.rpc('korlix_live_convo_get_usage',{
       p_user_id:user.id,p_tier:limits.tier,p_monthly_session_limit:limits.monthlySessions,

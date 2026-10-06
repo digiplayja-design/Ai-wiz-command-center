@@ -785,3 +785,16 @@ test('invalid persisted evidence modes cannot be silently upgraded or sent to an
     assert.equal(fixture.calls.length,0);
   }
 });
+
+test('long two- and three-person panels rotate roles and keep prompt history bounded',async()=>{
+ for(const hostCount of [2,3]){
+  const fixture=mock({response:turnResult('Here is another perspective.',[])});
+  const roles=hostCount===3?['host','analyst','challenger']:['host','analyst'];
+  const turns=[{speaker:'user',text:'Keep accessibility in mind.'},...Array.from({length:58},(_,i)=>({speaker:roles[i%roles.length],text:`Thought ${i}.`}))];
+  const result=await fixture.providers.turn(turnArgs({episode:{...episode,hostCount,hostTurnLimit:90,turns}}));
+  assert.equal(result.speaker,roles[58%roles.length]);
+  const sent=JSON.parse(fixture.calls[0].payload.input);
+  assert.equal(sent.transcript.length,12);assert.equal(sent.transcript.at(-1).text,'Thought 57.');
+  assert.deepEqual(sent.listenerContributions,[{speaker:'user',text:'Keep accessibility in mind.',interrupted:false}]);
+ }
+});

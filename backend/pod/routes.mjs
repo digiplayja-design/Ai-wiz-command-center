@@ -2,12 +2,14 @@ import {PodError,POD_CATALOG,podUuid,podText,podInput,podVersion,podAudioBody,pu
 import {createPodStore,POD_USAGE_LABEL} from './store.mjs';
 import {createPodRuntime} from './runtime.mjs';
 import {validatePodWav} from './providers.mjs';
+import {createPodSmallTalk,POD_SMALL_TALK} from './small_talk.mjs';
 
 const base='/api/pod';
 export function registerPod(app,{database,requireUser,access,providers,store:providedStore,logger=console,
   runtimeOptions={},startSweep=true}={}) {
   const store=providedStore||createPodStore({database,logger});
   const runtime=createPodRuntime({store,providers,access,logger,...runtimeOptions});
+  const smallTalk=createPodSmallTalk({providers,logger});
   const route=fn=>async(q,r)=>{
     r.set('Cache-Control','no-store');r.set('X-Content-Type-Options','nosniff');
     try {
@@ -35,7 +37,7 @@ export function registerPod(app,{database,requireUser,access,providers,store:pro
     const [a,list]=await Promise.all([access(u),store.list(u.id)]);
     const maxSeconds=a?.allowed?Math.min(900,a.limits?.maxSessionSeconds||900,a.remainingSeconds??900):0;
     r.json({catalog:POD_CATALOG,access:{allowed:a?.allowed===true,reason:a?.reason||null,maxSeconds,
-      durations:[300,600,900].filter(s=>s<=maxSeconds),usageLabel:POD_USAGE_LABEL},
+      durations:[300,600,900].filter(s=>s<=maxSeconds),usageLabel:POD_USAGE_LABEL,smallTalk:true},
       episodes:(list.episodes||[]).map(publicPodEpisode)});
   }));
   app.post(base+'/episodes',route(async(q,r,u)=>{
@@ -43,6 +45,14 @@ export function registerPod(app,{database,requireUser,access,providers,store:pro
     reply(r,await store.create(u.id,{requestId,input,limits:a.limits,unlimited:a.unlimited===true}));
   }));
   app.get(base+'/episodes/:id',route(async(q,r,u)=>reply(r,{episode:(await store.get(u.id,podUuid(q.params.id))).episode})));
+  app.post(base+'/episodes/:id/small-talk/:clip',route(async(q,r,u)=>{
+    await allowed(u);
+    const episode=(await store.get(u.id,podUuid(q.params.id))).episode;
+    const clip=Object.hasOwn(POD_SMALL_TALK,q.params.clip)?POD_SMALL_TALK[q.params.clip]:null;
+    if(!clip||!episode||episode.state!=='active'||!episode.deadlineAt||Date.parse(episode.deadlineAt)<=Date.now()||
+      (clip.speaker==='challenger'&&episode.hostCount!==3))throw new PodError('This studio transition is unavailable.',409);
+    r.json(await smallTalk.audio(clip.id));
+  }));
   app.post(base+'/episodes/:id/control',route(async(q,r,u)=>{
     const id=podUuid(q.params.id),action=q.body?.action;
     if(!['pause','resume','interrupt','end','heartbeat'].includes(action))throw new PodError('Choose a valid episode control.');
@@ -102,5 +112,5 @@ export function registerPod(app,{database,requireUser,access,providers,store:pro
   };
   const timer=startSweep&&database?setInterval(sweep,15000):null;timer?.unref?.();
   if(timer)void sweep();
-  return {store,runtime,stop(){clearInterval(timer);runtime.stop();}};
+  return {store,runtime,stop(){clearInterval(timer);runtime.stop();smallTalk.stop();}};
 }

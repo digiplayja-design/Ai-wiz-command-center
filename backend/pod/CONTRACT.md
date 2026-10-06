@@ -21,11 +21,11 @@ Turn fields: `id,seq,speaker` (`host|analyst|challenger|user`), `text,sourceIds:
 ## Timing, orchestration and accounting
 
 - Persist creation, version, deadline, lease and counters. Initial ready sessions expire after 3 minutes. First successful generated turn sets start/deadline atomically. Enforce the hard deadline on server dispatch/commit and client playback. Reserve the final 45 seconds for conclusion; next episode requires fresh Listen.
-- One owner, one live episode, one bounded provider call at a time. Distributed DB claim with operation/request ID and finite lease prevents duplicate calls. Expired leases must never rerun a possibly paid operation automatically; fail/require explicit new request after recording uncertain usage.
+- One owner, one live episode, one bounded discussion-provider call at a time. Distributed DB claim with operation/request ID and finite lease prevents duplicate calls. Expired leases must never rerun a possibly paid operation automatically; fail/require explicit new request after recording uncertain usage.
 - Heartbeat active-time accounting is server-derived; pause stops active-time accumulation and generation, never the absolute deadline. Disconnect grace is bounded. Keep total provider evidence separately from elapsed allowance.
 - Reuse exactly one verified existing LIVE CONVO quota reservation. Report server-derived duration, real text/research usage and real transcription usage. Do not fabricate TTS tokens; binary TTS token usage may be unknown, bounded instead by character/call/audio limits. Do not double-count transcription tokens.
 - Do not implement AI GAS monetary debits in this beta: that module is absent from the verified deployed backend. UI usageLabel: `Personal beta · uses your LIVE CONVO session and time allowance. AI usage limits also apply.` No extra AI credit/generation deductions or payment requests.
-- Apply hard per-episode budgets even for developer entitlement: <=36 host turns, <=12 contributions, <=12 transcription calls, <=30s per recording, <=480 characters per spoken turn, <=40s per synthesized turn, bounded research output, no arbitrary fetch/URLs/tools except research search. Stop on accounting failure. Provider dispatch begins only after reservation succeeds. No automatic retry of paid generation.
+- Apply hard per-episode budgets even for developer entitlement: <=90 host turns for new sessions, <=12 contributions, <=12 transcription calls, <=30s per recording, <=480 characters per spoken turn, <=40s per synthesized turn, bounded research output, no arbitrary fetch/URLs/tools except research search. Stop on accounting failure. Provider dispatch begins only after reservation succeeds. No automatic retry of paid generation.
 - Research current affairs on the next request after the welcome. Store a concise brief, actual source URLs and checkedAt; fail clearly if current sources are unavailable for politics/sports/trending. Distinguish facts, opinions, beliefs and uncertainty. No user-targeted political persuasion, fabricated events/scores/quotes, or needless partisan conflict.
 - Retain only private transcript/recap and source metadata, not user voice recordings. User can delete terminal history; no recordings/sharing enabled by default.
 
@@ -42,3 +42,52 @@ The first `next` request returns a fixed, source-free Rici welcome using only a 
 Research requests a 2,200-character brief in its structured-output schema. Internal validation tolerates a bounded overrun up to 6,000 characters and normalizes cosmetic formatting without truncating factual notes. Complete serialized briefs, including sources, are capped at 16,000 UTF-8 bytes before storage. The same bounds apply when later turns reuse the brief. Source URLs must still match retrieved evidence independently. Spoken output keeps its stricter limits. Validation failures retain real usage and content-free diagnostic codes and lengths in private receipts.
 
 Operations time out at 210 seconds, with a 215-second database lease; both remain bounded by the episode deadline and heartbeat cancellation. The web `next` timeout is 225 seconds. A previously anchored client deadline is retained across long responses so provider processing is not deducted twice.
+
+
+## October 6 continuity update
+
+New episodes reserve at most 91 responses to support up to 90 short spoken turns,
+including room for the final speech receipt. The previous fixed 36-turn ceiling
+could end a fluid 15-minute discussion early. The private episode snapshot now
+reports `hostTurnLimit` from its original quota reservation: older 37-response
+sessions still close at 36 turns. The 900-second deadline, monthly time/token
+allowances, receipt checks and bounded contribution limits remain enforced.
+Only the last 12 transcript turns and the last four listener contributions are
+sent with each new discussion prompt, alongside the verified research brief.
+This bounds input growth without dropping the current thread or recent input.
+
+Authenticated `POST /episodes/:id/small-talk/:clip` returns one of nine fixed,
+claim-free studio clips, using the normal role voices. It requires an active
+owned episode and current access; Challenger clips require three hosts. No
+user text, topic or source is accepted for synthesis. These are reusable UI
+assets, not newly researched discussion turns: at most nine syntheses per
+server process, two concurrently, 15-second synthesis timeout and ten seconds
+of audio per asset. Cache hits make no provider request. Failures are retained
+until restart to prevent paid retry loops. Asset preparation logs actual
+provider request IDs when available and does not invent text-token usage or
+modify customer quota records. Assets are shared across eligible listeners;
+no private content is stored in this cache.
+
+The client warms a small set only after actual main-voice playback starts. It
+uses the same already-unlocked voice sink, starts small talk only in a real gap
+after 800 ms, allows at most two distinct clips per gap, and awaits the current
+sentence before the next panelist. Music fades before speech. Missing assets
+fall back to the existing music; they never hold the discussion up. The small
+talk switch is separate from music. Pause, Chime in, background, sign-out and
+the deadline stop speech through the existing lifecycle controls. Warmup
+completion cannot start audio by itself.
+
+Heartbeats use an eight-second request timeout and permit one control-only
+retry after three seconds. A single transient network failure no longer
+interrupts a speaking host; sustained failure still pauses within the server's
+disconnect grace. Paid generation is never automatically retried.
+
+Validation: 172 backend tests and 83 Flutter tests passed, including accelerated
+15-minute two-/three-person playback, real SQL preparation/commit cycles beyond
+36 turns, closing/deadline enforcement, separate panel voices, filler priority,
+pause, contribution and lifecycle recovery. One existing optional visual export
+test is skipped without its export environment setting. Provider/audio hardware
+are mocked in these tests: real listening quality and phone background behavior
+still need device checks. Apply `pod_long_session_continuity` before deploying
+the backend, then deploy the frontend. Existing installed apps need a new build
+for the client changes.

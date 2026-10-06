@@ -140,7 +140,8 @@ export function createPodRuntime({store,providers,access,logger=console,now=Date
       const welcome=hostTurns===0&&!brief?.text;
       const seconds=claim.episode.deadlineAt?Math.max(0,(Date.parse(claim.episode.deadlineAt)-now())/1000):claim.episode.durationSeconds;
       if(seconds<=0)throw new PodError('This episode has reached its time limit.',409,'pod_ended');
-      const closing=!welcome&&(seconds<=60||hostTurns>=35);
+      const turnLimit=Math.min(90,claim.episode.hostTurnLimit||36);
+      const closing=!welcome&&(seconds<=45||hostTurns>=turnLimit-1);
       if(welcome) {
         // A factual-claim-free introduction reaches the listener before slow research.
         // It uses only a real speech receipt; no language-model usage is fabricated.

@@ -372,3 +372,26 @@ test('actual heartbeat loss still cancels an in-flight paused transcription and 
   assert.equal(h.calls.filter(call=>call.method==='recordUsage').length,1);
   assert.equal(h.calls.filter(call=>call.method==='finish').length,0);
 });
+
+test('small-talk assets require an active owned episode and match the selected panel',async t=>{
+ const path='/api/pod/episodes/:id/small-talk/:clip';
+ const options=clip=>({params:{id:EPISODE,clip}});
+ for(const state of ['paused','ended','ready']){
+  const h=harness(t,{state:episode({state,deadlineAt:new Date(Date.now()+60000).toISOString()})});
+  assert.equal((await h.invoke('POST',path,options('host-0'))).statusCode,409);
+  assert.equal(h.providerCalls.length,0);
+ }
+ const h=harness(t,{state:episode({deadlineAt:new Date(Date.now()+60000).toISOString()})});
+ assert.equal((await h.invoke('POST',path,options('challenger-0'))).statusCode,409);
+ assert.equal((await h.invoke('POST',path,options('constructor'))).statusCode,409);
+ const result=await h.invoke('POST',path,options('host-0'));
+ assert.equal(result.statusCode,200);assert.equal(result.body.speaker,'host');
+ assert.equal((await h.invoke('POST',path,options('host-0'))).statusCode,200);
+ assert.equal(h.providerCalls.length,1);assert.equal(h.providerCalls[0].method,'speak');
+ assert(h.calls.filter(c=>c.method==='get').every(c=>c.args[0]===ACTOR));
+ const denied=harness(t,{access:()=>({allowed:false,status:403})});
+ assert.equal((await denied.invoke('POST',path,options('host-0'))).statusCode,403);
+ assert.equal(denied.providerCalls.length,0);
+ const other=harness(t,{store:{get:async()=>{throw Object.assign(new Error('Not found'),{name:'PodStorageError',status:404});}}});
+ assert.equal((await other.invoke('POST',path,options('host-0'))).statusCode,404);assert.equal(other.providerCalls.length,0);
+});
