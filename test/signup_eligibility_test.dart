@@ -90,6 +90,11 @@ void main() {
     await tap(tester, find.byKey(const Key('signup-policy-acceptance')));
     await tap(tester, find.text('Create account'));
     expect(requests.single.url.path, '/api/auth/signup');
+    final signupBody = jsonDecode(requests.single.body);
+    final deviceId = app.KorlixDeviceStore.headers()['X-Korlix-Device-Id'];
+    expect(deviceId, isNotEmpty);
+    expect(requests.single.headers['X-Korlix-Device-Id'], deviceId);
+    expect(signupBody['device_id'], deviceId);
     expect(jsonDecode(requests.single.body)['signup_eligibility'], {
       'age_band': '18_plus',
       'terms_accepted': true,

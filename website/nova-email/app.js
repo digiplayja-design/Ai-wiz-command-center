@@ -3897,6 +3897,7 @@ function korlixJwtSecondsRemainingV2(token) {
 
 function korlixEnsureDeviceV2() {
   const storedDeviceId = firstDefined(
+    korlixMainStoredStringV3(["korlix_device_id"]),
     korlixOwnSessionValueV2("korlixNovaEmailDeviceIdV2"),
     korlixStoredStringV2([
       "korlix_device_id",
@@ -3923,6 +3924,7 @@ function korlixEnsureDeviceV2() {
   }
 
   APP.deviceLabel = firstDefined(
+    korlixMainStoredStringV3(["korlix_device_label"]),
     korlixStoredStringV2([
       "korlix_device_label",
       "device_label",

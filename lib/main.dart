@@ -568,7 +568,10 @@ class KorlixSessionStore {
     await prefs.remove(emailKey);
   }
 
-  static Future<KorlixAuthSession?> refresh(KorlixAuthSession session) async {
+  static Future<KorlixAuthSession?> refresh(
+    KorlixAuthSession session, {
+    http.Client? client,
+  }) async {
     final refreshToken = session.refreshToken;
 
     if (refreshToken == null || refreshToken.isEmpty) {
@@ -576,10 +579,18 @@ class KorlixSessionStore {
     }
 
     try {
-      final response = await http.post(
+      await KorlixDeviceStore.ensureLoaded();
+      final post = client?.post ?? http.post;
+      final response = await post(
         _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/auth/refresh'),
-        headers: const {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh_token': refreshToken}),
+        headers: {
+          'Content-Type': 'application/json',
+          ...KorlixDeviceStore.headers(),
+        },
+        body: jsonEncode({
+          'refresh_token': refreshToken,
+          ...KorlixDeviceStore.bodyFields(),
+        }),
       );
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -1144,10 +1155,14 @@ class _AuthScreenState extends State<AuthScreen> {
       final post = widget.client?.post ?? http.post;
       final response = await post(
         Uri.parse('$kKorlixBackendBaseUrl$path'),
-        headers: const {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          ...KorlixDeviceStore.headers(),
+        },
         body: jsonEncode({
           'email': email,
           'password': password,
+          ...KorlixDeviceStore.bodyFields(),
           if (signingUp) 'signup_eligibility': {
             'age_band': _signupAgeBand!.value,
             'terms_accepted': _acceptedSignupPolicies,

@@ -38,6 +38,9 @@ echo ""
 echo "Getting dependencies..."
 flutter pub get
 
+echo "Checking sign-in and refresh device compatibility..."
+flutter test --no-pub test/auth_device_session_test.dart test/signup_eligibility_test.dart
+
 echo ""
 echo "Building Flutter web release for $APP_BASE_HREF..."
 

@@ -145,3 +145,26 @@ test('actual Email Center transport rejects an in-flight response after logout',
   await assert.rejects(request, /login changed/);
   assert.equal(h.reset(), 1);
 });
+
+
+test('Email Center uses the main app device when a stale Email-only device exists', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../website/nova-email/app.js'), 'utf8');
+  const main = {korlix_device_id: 'main-device', korlix_device_label: 'Main browser'};
+  const context = {
+    APP: {token: 'current-token'},
+    firstDefined: (...values) => values.find(value => value !== undefined && value !== null && value !== ''),
+    korlixMainStoredStringV3: names => main[names[0]] || '',
+    korlixOwnSessionValueV2: () => 'stale-email-device',
+    korlixStoredStringV2: () => 'other-legacy-device',
+  };
+  vm.createContext(context);
+  vm.runInContext(source.slice(source.indexOf('function korlixEnsureDeviceV2('),
+    source.indexOf('async function korlixFetchWithTimeoutV2(')), context);
+  let headers = context.korlixAuthHeadersV2();
+  assert.equal(headers['X-Korlix-Device-Id'], 'main-device');
+  assert.equal(headers['X-Korlix-Device-Label'], 'Main browser');
+  assert.equal(headers.Authorization, 'Bearer current-token');
+  main.korlix_device_id = 'replacement-main-device';
+  headers = context.korlixAuthHeadersV2();
+  assert.equal(headers['X-Korlix-Device-Id'], 'replacement-main-device');
+});
