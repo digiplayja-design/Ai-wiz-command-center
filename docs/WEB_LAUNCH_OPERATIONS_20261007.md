@@ -103,9 +103,11 @@ Implemented locally: durable database intake, bounded protected reads, sanitized
 
 Migration `20261007214516_durable_ai_report_queue` is applied. RLS is enabled; `anon` and `authenticated` have no table privileges; `service_role` has CRUD. Read-only aggregate inspection found 0 requested deletions, 0 new durable AI reports, 0 open Social reports, 39 legacy reports marked `new`, and 1 assigned Social moderator. No report contents or user identities were accessed. The legacy backlog needs assigned staff review; one database role assignment does not establish coverage. Backend rollout verification is recorded separately.
 
-## Support follow-up checkpoint — October 7, 18:48 Eastern
+## Support follow-up checkpoint — October 7, updated after owner confirmation
 
-The user confirmed that they will be the primary support contact and that the support inbox uses Titan. Backup coverage and review cadence are not yet confirmed. Titan routed the secure mailbox login through GoDaddy, which blocked this cloud browser as unusual. Mailbox contents, receipt of mail and notification delivery were therefore not verified; no alternate path was used around that block and no message was sent.
+The owner confirmed that a team handles the support inbox and that its email reaches several team members' phones. **Support coverage is confirmed by the owner.** This updates the earlier statement that the owner would be the primary contact. No specific schedule, named roster, response deadline or 24/7 service is asserted.
+
+The inbox uses Titan. During the earlier mailbox check, Titan routed the secure login through GoDaddy, which blocked this cloud browser as unusual. Mailbox contents, receipt of mail and notification delivery were therefore not independently tested; no alternate path was used around that block and no message was sent. This is a testing limitation, not evidence that the inbox is unavailable or a blocker to accepting the owner's coverage confirmation.
 
 All 39 legacy reports were reviewed with a private ledger: 32 duplicates linked, one appropriate safety refusal closed without action, six primary cases retained open. See `LEGACY_REPORT_REVIEW_20261007.md`. The earlier count of 39 new reports above is the historical pre-review checkpoint, not the current queue.
 
@@ -113,4 +115,4 @@ Local deletion rehearsal completed with 66 passing checks, covering intake and s
 
 The frontend support fix routes saved-history reports to the durable endpoint, adds reason/details and response context, and removes automatic alias retries and false claims of queued delivery. It is tested separately and recorded on the frontend release branch.
 
-**Checklist status: partially complete.** Primary support owner and backlog review are established. Mailbox verification, backup/cadence, six unresolved cases and complete real-stack deletion fulfillment remain open.
+**Checklist status: partially complete.** Support coverage is confirmed by the owner, and backlog review is complete. Six unresolved cases and complete real-stack deletion fulfillment remain open. Independent mailbox testing was limited as described above; it is not an outstanding support-coverage requirement.
