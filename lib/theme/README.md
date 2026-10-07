@@ -92,6 +92,12 @@ analysis reported no issues for the changed code.
 
 ### Home button climbers
 
+Temporarily removed from the home screen at the owner's request on October 6, 2026.
+The appearance switch is also removed, so saved preferences cannot re-enable it.
+The home search control uses its original spacing. The animation implementation
+and artwork remain dormant for possible future revision; the notes below describe
+that dormant implementation.
+
 `KorlixButtonClimbers` adds two silent, articulated human figures to the home
 viewport. Registered `KorlixActionButton` render boxes provide actual button
 edges after layout, scroll, and resize. The man and woman climb up and down,

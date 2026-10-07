@@ -8,17 +8,14 @@ class HomeQuickAccess extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 112),
-      child: KorlixActionButton(
-        key: const ValueKey('home-find-tool'),
-        label: 'Find a tool',
-        subtitle: 'Search KORLIX by name or task',
-        icon: Icons.search_rounded,
-        expand: true,
-        onPressed: onFindTool,
-      ),
+    padding: const EdgeInsets.only(top: 18, bottom: 8),
+    child: KorlixActionButton(
+      key: const ValueKey('home-find-tool'),
+      label: 'Find a tool',
+      subtitle: 'Search KORLIX by name or task',
+      icon: Icons.search_rounded,
+      expand: true,
+      onPressed: onFindTool,
     ),
   );
 }

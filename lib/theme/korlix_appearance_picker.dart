@@ -7,7 +7,6 @@ import 'korlix_appearance_preview.dart';
 import 'korlix_look_catalog.dart';
 import 'korlix_look_library.dart';
 import 'korlix_screensaver_settings.dart';
-import '../characters/button_climbers_settings.dart';
 export 'korlix_appearance_preview.dart';
 export 'korlix_look_catalog.dart' show korlixLookTemplates;
 
@@ -231,8 +230,6 @@ class _KorlixAppearancePickerState extends State<KorlixAppearancePicker> {
                                 _hero(palette),
                                 const SizedBox(height: 12),
                                 const KorlixScreensaverSettings(),
-                                const SizedBox(height: 12),
-                                const KorlixClimbersSettings(),
                                 const SizedBox(height: 22),
                                 Text(
                                   switch (_tab) {
