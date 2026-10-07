@@ -1,0 +1,74 @@
+[
+  {
+    "file": "legal.html",
+    "status": 200,
+    "matches_release": true,
+    "sha256": "cd1fca9a6aa67de01f3bea4736922dd3bee6e625cdf4fa44bc277386fb139f74"
+  },
+  {
+    "file": "privacy-policy.html",
+    "status": 200,
+    "matches_release": true,
+    "sha256": "74d4c7144570874eeee438d451755c024635c5ff289541599c06aef21a8d4a98"
+  },
+  {
+    "file": "terms.html",
+    "status": 200,
+    "matches_release": true,
+    "sha256": "2d599fe0028fcb51580555c549d77fb8424771517c24c886965a236ac8cb86f4"
+  },
+  {
+    "file": "subscription-terms.html",
+    "status": 200,
+    "matches_release": true,
+    "sha256": "d7a30ec796397cca199b5c136785d10cbc4baa1bd3df53cdcd2083cabbc05b31"
+  },
+  {
+    "file": "delete-account.html",
+    "status": 200,
+    "matches_release": true,
+    "sha256": "3ca182765b168d8ff36b6fd087f98fe2ec9c2160a6e6934f5840dfea3b08255e"
+  },
+  {
+    "file": "ai-safety.html",
+    "status": 200,
+    "matches_release": true,
+    "sha256": "576b32fd84f140137e37f226b6861703585dd99eb505549db029d1e745f42a4a"
+  },
+  {
+    "file": "community-guidelines.html",
+    "status": 200,
+    "matches_release": true,
+    "sha256": "fb8b06bad7df0a6140f81a06a52711c83f5014dc7b0a3a37bbabbf1b14acc670"
+  },
+  {
+    "file": "child-safety.html",
+    "status": 200,
+    "matches_release": true,
+    "sha256": "23486c3ab8caa156999a1d76d58e61dbabf03d10400e5c65574e794cc363c96b"
+  },
+  {
+    "file": "support.html",
+    "status": 200,
+    "matches_release": true,
+    "sha256": "90e1c24086e34361f36b1eee681cb9c85cbb9bda98186f8a5c67289012d78437"
+  },
+  {
+    "file": "music-production.html",
+    "status": 200,
+    "matches_release": true,
+    "sha256": "a5733222e526c89867d5c3506e6d692866756d90e035b22f3e596dfcea573a26"
+  },
+  {
+    "file": "index.html",
+    "status": 200,
+    "matches_release": true,
+    "sha256": "b3a47f4ba4248317ee243cf5fc9bed95feba4ed31c0bf8150d7dde366792ed14"
+  },
+  {
+    "file": "style.css",
+    "status": 200,
+    "matches_release": true,
+    "sha256": "5f67a104c2e51025aa0d0a1089e2304a8d834694fb1acbcfec36a2ca9b421f6e"
+  }
+]

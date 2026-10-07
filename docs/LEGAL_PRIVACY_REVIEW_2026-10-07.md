@@ -87,3 +87,15 @@ These are not made complete by publishing documents:
 - YouTube developer policies: https://developers.google.com/youtube/terms/developer-policies
 
 No trading API, trading service or investment execution feature was introduced or promised.
+
+
+## Publication verified
+
+- Application/policy commit: `8561ba5594911f06226dd0b6920ff8ba21bec3bb`.
+- Render frontend deployment: `dep-db3b2s3tqb8s738681dg`, **live** at 2026-10-07 20:56:56 UTC.
+- Existing static service: `srv-d8ekf7t7vvec73dpar60`, auto-deploy remains off.
+- All nine policy documents, the new legal centre, homepage and stylesheet returned HTTP 200 and matched release bytes. Checksums: [live response checks](evidence/legal-live-checks-20261007.json).
+- Browser verified the public [Legal & Privacy centre](https://www.korlixdeveloper.com/legal.html), nine policy cards, and no horizontal overflow at the observed desktop viewport.
+- The production web app completed startup and rendered its sign-in page, age notice, Terms and Privacy links. No account was signed in and no real customer/employee record was modified during verification.
+- Visual proof: [published policy centre](evidence/korlix-legal-privacy-live-20261007.jpg).
+- This follow-up evidence commit changes documentation only. The deployed application/policy commit above remains the production release; no additional deployment is needed for these evidence files.
