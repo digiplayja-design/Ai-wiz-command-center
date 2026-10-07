@@ -43,6 +43,9 @@ echo ""
 echo "Getting dependencies..."
 flutter --suppress-analytics --no-version-check pub get
 
+echo "Checking the public web launch countdown..."
+node --test test/web_launch_countdown_test.cjs
+
 echo "Checking account security, billing, privacy, sharing and location flows..."
 RELEASE_TESTS=(
   test/auth_device_session_test.dart
@@ -57,6 +60,7 @@ RELEASE_TESTS=(
   test/privacy/korlix_third_party_ai_consent_test.dart
   test/privacy/korlix_third_party_ai_privacy_statement_test.dart
   test/privacy/korlix_privacy_settings_test.dart
+  test/launch/korlix_launch_countdown_test.dart
   test/meeting_copilot/k135z_ai_sharing_consent_test.dart
   test/workforce/workforce_location_test.dart
   test/workforce/workforce_test.dart

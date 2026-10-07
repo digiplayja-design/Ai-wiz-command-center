@@ -43,6 +43,7 @@ import 'auth/rici_welcome_button.dart';
 import 'navigation/home_tool_catalog.dart';
 import 'navigation/home_quick_access.dart';
 import 'navigation/home_tool_finder.dart';
+import 'launch/korlix_launch_countdown.dart';
 import 'characters/character_catalog.dart';
 import 'characters/character_orbit.dart';
 import 'characters/character_selection_controller.dart';
@@ -9463,6 +9464,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 child: Column(
                   children: [
                     _buildMockupHomeHeader(),
+                    if (kIsWeb) const KorlixLaunchCountdown(),
                     HomeQuickAccess(
                       onFindTool: _openHomeToolFinder,
                     ),
