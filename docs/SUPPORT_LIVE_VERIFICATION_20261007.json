@@ -1,0 +1,48 @@
+{
+  "verifiedAt": "2026-10-07T22:58:21.622619+00:00",
+  "checks": {
+    "app": {
+      "url": "https://www.korlixdeveloper.com/app/",
+      "http": 200,
+      "bytes": 3545,
+      "flutterBootstrapPresent": true
+    },
+    "bootstrap": {
+      "url": "https://www.korlixdeveloper.com/app/flutter_bootstrap.js",
+      "http": 200,
+      "bytes": 18293
+    },
+    "bundle": {
+      "url": "https://www.korlixdeveloper.com/app/main.dart.js",
+      "http": 200,
+      "bytes": 10017928,
+      "sha256": "2b11cfc3b58319e663d1eb4d41cdd95ad66968dcbd8b6e81ff6a702353581ff7",
+      "newReportMarkers": {
+        "We could not confirm whether your report was received.": true,
+        "This report is too long to send. Shorten your details and try again.": true,
+        "/api/report-output": true
+      }
+    },
+    "health": {
+      "url": "https://chee-chai-chee-backend.onrender.com/api/health",
+      "http": 200,
+      "bytes": 3790,
+      "ok": null,
+      "status": "Korlix AI backend is healthy"
+    },
+    "protected_reports": {
+      "url": "https://chee-chai-chee-backend.onrender.com/api/report-output/recent",
+      "http": 403,
+      "bytes": 142
+    }
+  },
+  "signedInSubmissionTested": false,
+  "productionReportCreated": false,
+  "deployment": {
+    "commit": "d7a71ef78035b76b19900e80e02cdbf5747a5ee9",
+    "id": "dep-db3cqk5g1s2s739ttdeg",
+    "status": "live",
+    "finishedAt": "2026-10-07T22:55:49.186196Z",
+    "flutterReleaseTestsPassed": 166
+  }
+}
