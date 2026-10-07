@@ -26,9 +26,9 @@ function fixture({authenticated=true,throws=false,delivered=true}={}) {
     app:{post:(paths,callback)=>{for(const path of paths)callbacks[path]=callback;},get:(path,callback)=>callbacks[path]=callback},
     requireUser:async()=>{if(!authenticated)throw Object.assign(new Error('secret auth diagnostic'),{statusCode:401});return {id:'real-user',email:'real@example.invalid'};},
     prepareSupportReport:createReportSubmissionGuard({idFactory:()=> 'synthetic-id'}),
-    korlixReportDeliveryV2Reports:reports,KORLIX_REPORT_DELIVERY_V2_MAX_MEMORY:1000,
-    korlixReportDeliveryV2Persist:async report=>{persisted.push(report);if(throws)throw new Error('secret filesystem path');return {saved:true,path:'/private/disk/path'};},
+    korlixReportDeliveryV2Persist:async report=>{persisted.push(report);if(throws)throw Object.assign(new Error('secret database diagnostic'),{statusCode:503});return {saved:true};},
     korlixReportDeliveryV2SendEmail:async report=>{emailed.push(report);return {delivered,response:{secret:'provider-internals'}};},
+    supabaseAdmin:{},markAiReportNotification:async()=>true,
     console:{log:(...args)=>logs.push(args),error:(...args)=>logs.push(args)},
   });
   return {persisted,emailed,logs,reports,async call(path,body={}){
@@ -59,9 +59,29 @@ test('alias rotation does not bypass per-user rate limits',async()=>{
 });
 test('delivery and persistence internals never enter accepted or error responses',async()=>{
   const accepted=await fixture({delivered:false}).call('/api/report');assert.equal(accepted.code,202);assert(!JSON.stringify(accepted.body).includes('provider'));
-  const f=fixture({throws:true});const error=await f.call('/api/report');assert.equal(error.code,500);assert(!JSON.stringify(error.body).includes('secret'));assert(!JSON.stringify(f.logs).includes('filesystem'));
+  const f=fixture({throws:true});const error=await f.call('/api/report');assert.equal(error.code,503);assert(!JSON.stringify(error.body).includes('secret'));assert(!JSON.stringify(f.logs).includes('diagnostic'));
+  assert.equal(f.emailed.length,0);assert.equal(f.logs.length,0);
 });
 test('public report health does not expose filesystem, provider, token configuration or report counts',async()=>{
   const response=await fixture().call('/api/report-output/health');
   assert.deepEqual(Object.keys(response.body).sort(),['feature','ok','reportDeliveryVersion']);assert.equal(response.code,200);
+});
+test('durable report review checks admin authority before any private database read',async()=>{
+  const start=source.indexOf('app.get("/api/report-output/recent",');
+  const end=source.indexOf('// KORLIX_REPORT_DELIVERY_V2_END',start);
+  let callback;const reads=[];
+  vm.runInNewContext(source.slice(start,end),{
+    app:{get:(_path,fn)=>{callback=fn;}},supabaseAdmin:{},
+    korlixReportDeliveryV2AdminAuthorized:req=>req.headers.authorization==='Bearer synthetic-admin',
+    listAiReports:async(_db,limit)=>{reads.push(limit);return {reportCount:1,reports:[{details:'synthetic-private-report'}]};},
+  });
+  const invoke=async(headers)=>{
+    const res={code:200,headers:{},set(k,v){this.headers[k]=v;return this;},status(c){this.code=c;return this;},json(b){this.body=b;return this;}};
+    await callback({headers,query:{limit:'999'}},res);return res;
+  };
+  const denied=await invoke({});assert.equal(denied.code,403);assert.equal(reads.length,0);
+  assert(!JSON.stringify(denied.body).includes('synthetic-private-report'));
+  const allowed=await invoke({authorization:'Bearer synthetic-admin'});
+  assert.equal(allowed.code,200);assert.equal(allowed.headers['Cache-Control'],'no-store');
+  assert.deepEqual(reads,[100]);assert.equal(allowed.body.reports[0].details,'synthetic-private-report');
 });

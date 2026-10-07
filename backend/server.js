@@ -1,6 +1,7 @@
 import {createAccountRequestLimiter} from './security/account_request_limiter.mjs';
 import {publicApiErrorHandler} from './security/http_errors.mjs';
 import {createReportSubmissionGuard} from './security/report_submission.mjs';
+import {persistAiReport, markAiReportNotification, listAiReports} from './security/ai_report_persistence.mjs';
 import {createVideoAccess} from './security/video_access.mjs';
 import riciVoice from './voice/rici_pronunciation.cjs';
 const {riciRealtimeInstructions} = riciVoice;
@@ -10552,13 +10553,6 @@ app.get("/api/video/image-to-video/content/:jobId", async (req, res) => {
 
 // KORLIX_REPORT_DELIVERY_V2_BEGIN
 const prepareSupportReport = createReportSubmissionGuard();
-const korlixReportDeliveryV2Reports =
-  global.__korlixReportDeliveryV2Reports || [];
-global.__korlixReportDeliveryV2Reports = korlixReportDeliveryV2Reports;
-
-const KORLIX_REPORT_DELIVERY_V2_MAX_MEMORY =
-  Math.max(1, Math.min(1000, Number(process.env.KORLIX_REPORT_MAX_MEMORY || 1000) || 1000));
-
 const KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL =
   process.env.KORLIX_SUPPORT_REPORT_EMAIL ||
   process.env.KORLIX_SUPPORT_EMAIL ||
@@ -10666,28 +10660,7 @@ function korlixReportDeliveryV2Html(report) {
 }
 
 async function korlixReportDeliveryV2Persist(report) {
-  const defaultPath = `${process.cwd()}/logs/korlix-ai-output-reports.jsonl`;
-  const targetPath = process.env.KORLIX_REPORTS_JSONL_PATH || defaultPath;
-
-  try {
-    const fs = await import("node:fs/promises");
-    const path = await import("node:path");
-    await fs.mkdir(path.dirname(targetPath), { recursive: true });
-    await fs.appendFile(targetPath, JSON.stringify(report) + "\n", "utf8");
-
-    return {
-      saved: true,
-      path: targetPath,
-    };
-  } catch (error) {
-    console.error("[KORLIX_REPORT_DELIVERY_V2_PERSIST_ERROR]", error);
-
-    return {
-      saved: false,
-      path: targetPath,
-      error: error && error.message ? error.message : String(error),
-    };
-  }
+  return persistAiReport(supabaseAdmin, report);
 }
 
 async function korlixReportDeliveryV2SendEmail(report) {
@@ -10716,6 +10689,7 @@ async function korlixReportDeliveryV2SendEmail(report) {
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
+      signal: AbortSignal.timeout(8000),
       headers: {
         Authorization: `Bearer ${resendKey}`,
         "Content-Type": "application/json",
@@ -10754,7 +10728,7 @@ async function korlixReportDeliveryV2SendEmail(report) {
       response: responseJson || responseText,
     };
   } catch (error) {
-    console.error("[KORLIX_REPORT_DELIVERY_V2_EMAIL_ERROR]", error);
+    console.error("[KORLIX_REPORT_DELIVERY_V2_EMAIL_ERROR]");
 
     return {
       delivered: false,
@@ -10795,13 +10769,11 @@ app.post(
       // Validate size and consume the verified account's allowance before any
       // persistence, logging, or email. Client identity fields are discarded.
       const report = prepareSupportReport({req,user});
-      korlixReportDeliveryV2Reports.unshift(report);
-      if (korlixReportDeliveryV2Reports.length > KORLIX_REPORT_DELIVERY_V2_MAX_MEMORY) {
-        korlixReportDeliveryV2Reports.splice(KORLIX_REPORT_DELIVERY_V2_MAX_MEMORY);
-      }
-      console.log("[KORLIX_AI_OUTPUT_REPORT_RECEIVED]", report.id);
+      // Never acknowledge a report or email its contents until durable intake succeeds.
       await korlixReportDeliveryV2Persist(report);
+      console.log("[KORLIX_AI_OUTPUT_REPORT_RECEIVED]", report.id);
       const supportNotification = await korlixReportDeliveryV2SendEmail(report);
+      await markAiReportNotification(supabaseAdmin, report.id, supportNotification.delivered);
       return res.status(supportNotification.delivered ? 200 : 202).json({
         ok: true,
         reportId: report.id,
@@ -10826,11 +10798,11 @@ app.get("/api/report-output/health", (_req, res) => {
   res.set("Cache-Control", "no-store").json({
     ok: true,
     feature: "ai_output_reporting",
-    reportDeliveryVersion: "v3",
+    reportDeliveryVersion: "v4",
   });
 });
 
-app.get("/api/report-output/recent", (req, res) => {
+app.get("/api/report-output/recent", async (req, res) => {
   res.set("Cache-Control", "no-store");
   if (!korlixReportDeliveryV2AdminAuthorized(req)) {
     return res.status(403).json({
@@ -10845,11 +10817,11 @@ app.get("/api/report-output/recent", (req, res) => {
     ? Math.max(1, Math.min(100, Math.floor(limitRaw)))
     : 25;
 
-  return res.json({
-    ok: true,
-    reportCount: korlixReportDeliveryV2Reports.length,
-    reports: korlixReportDeliveryV2Reports.slice(0, limit),
-  });
+  try {
+    return res.json({ok:true, ...await listAiReports(supabaseAdmin, limit)});
+  } catch {
+    return res.status(503).json({ok:false,error:"Reports are temporarily unavailable. Please try again later."});
+  }
 });
 // KORLIX_REPORT_DELIVERY_V2_END
 

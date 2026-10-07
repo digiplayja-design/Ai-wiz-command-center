@@ -87,11 +87,13 @@ test('RPC denies anon authenticated and ungranted roles',async()=>{
     await assert.rejects(()=>rpc('session_get',{key:C.hash('missing')},role),/permission denied/);
 });
 test('private schema has RLS and no direct table access for service clients',async()=>{
-  const r=JSON.parse(await sql("select json_build_object('count',count(*),'rls',bool_and(relrowsecurity)) "+
+  const tables=['capture_sources','connections','events','oauth_states','sessions','stream_terminals'];
+  const r=JSON.parse(await sql("select json_build_object('tables',json_agg(relname order by relname),'rls',bool_and(relrowsecurity)) "+
     "from pg_class where relnamespace='k135z_b5b_private'::regnamespace and relkind='r';",'k135z_local_admin'));
-  assert.equal(r.count,4);assert.equal(r.rls,true);
+  assert.deepEqual(r.tables,tables);assert.equal(r.rls,true);
   for(const role of ['service_role','anon','authenticated','gate6a_untrusted'])
-    await assert.rejects(()=>sql('select * from k135z_b5b_private.connections;',role),/permission denied/);
+    for(const table of tables)
+      await assert.rejects(()=>sql('select * from k135z_b5b_private.'+table+';',role),/permission denied/);
 });
 test('unknown operation null values and extra envelope fields are rejected',async()=>{
   await denied('unknown',{});await denied('session_get',null);
