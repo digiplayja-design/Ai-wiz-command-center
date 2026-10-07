@@ -54,7 +54,10 @@ class FakeLocationGateway extends WorkforceLocationGateway {
           if (!cancelled) controller.addError(error, stack);
         }
       },
-      onCancel: () {
+      // Return a Future created in this test's zone. A synchronous void
+      // callback uses Dart's cached null Future, whose completion can belong
+      // to an earlier real-clock test and stall a later fake-clock capture.
+      onCancel: () async {
         cancelled = true;
         cancellations++;
       },
