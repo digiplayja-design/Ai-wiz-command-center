@@ -1,6 +1,6 @@
 ## Provider hardening — password protection and headers applied
 
-Updated October 7, 2026 after user-authorized dashboard access. Supabase leaked-password protection is saved and verified; its Security Advisor warning has cleared. All ten Render header rules below are saved and verified on live responses. The app still renders its sign-in screen. PostgreSQL remains on 17.6.1.127 pending approval of an outage window for 17.11.0.003. See `DASHBOARD_STATUS_2026-10-07.md` for evidence and the remaining upgrade hold. The connected APIs do not expose these setting changes, so they were completed through the provider dashboards.
+Updated October 7, 2026 after user-authorized dashboard access. Supabase leaked-password protection is saved and verified; its Security Advisor warning has cleared. All ten Render header rules below are saved and verified on live responses. PostgreSQL was upgraded from 17.6.1.127 to stable 17.11.0.003 after explicit outage approval and is ACTIVE_HEALTHY. SQL, RLS/private-storage permissions, backend/Auth connectivity and public app startup were verified after upgrade. See `DASHBOARD_STATUS_2026-10-07.md` for evidence. The connected APIs do not expose these setting changes, so they were completed through the provider dashboards.
 
 ### Supabase leaked-password protection — completed
 

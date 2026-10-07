@@ -2,6 +2,8 @@
 
 This is the earlier security pass. See [the final pre-submission audit](PRE_APP_STORE_AUDIT_2026-10-07.md) for subsequent fixes, current dependency results and remaining release gates.
 
+Provider follow-up on October 7: leaked-password protection and Render security headers were applied and verified. The explicitly approved PostgreSQL upgrade to 17.11.0.003 completed successfully; the project is ACTIVE_HEALTHY and post-upgrade permissions, Auth/backend connectivity and app startup checks passed. The historical pending-provider statements below describe this earlier pass and are superseded by [the dashboard verification record](DASHBOARD_STATUS_2026-10-07.md).
+
 This audit found and corrected exploitable access-control and abuse weaknesses. It is a source, configuration and targeted regression review, not a guarantee that the application has no vulnerabilities.
 
 ## Scope and method
@@ -35,7 +37,7 @@ After the three audit migrations:
 - All 16 storage buckets are private.
 - Zero public SECURITY DEFINER functions are executable by anonymous or authenticated browser roles.
 - Security Advisor no longer reports the exposed-function or mutable-search-path warnings.
-- The remaining warning is disabled leaked-password protection.
+- At this earlier checkpoint, the remaining warning was disabled leaked-password protection; it was subsequently enabled and the warning cleared.
 - Informational “RLS enabled without policy” notices refer to server-only tables. A missing policy denies browser rows; it does not grant public access.
 
 Applied migration history:
@@ -72,7 +74,7 @@ The DOCX package also embeds older nanoid code. Inspected calls use fixed positi
 
 ## Compatibility and residual limits
 
-1. **Provider settings remain pending.** Enable Supabase leaked-password protection (Pro or above) and add static-site frame protection/related response headers. Exact steps are in `DASHBOARD_HARDENING.md`. The connected provider tools do not expose those settings; no dashboard change or paid-plan upgrade is claimed.
+1. **Provider settings — subsequently completed.** Supabase leaked-password protection and static-site frame protection/related response headers were applied through the authorized dashboards. The PostgreSQL security upgrade also completed after outage approval. See `DASHBOARD_STATUS_2026-10-07.md`. No paid-plan upgrade was made.
 2. **TestFlight paid testing is now opt-in.** Set `APPLE_SANDBOX_ALLOWED_USER_IDS` on the backend to exact, explicitly approved tester UUIDs. No testers were chosen or granted access during this audit. Production purchases and expired/refunded cleanup remain supported.
 3. **Legacy access tokens.** Older clients without device headers remain compatible. Signing out revokes the provider refresh session; an already issued bearer token can remain usable until expiry. This release does not claim universal instantaneous access-token invalidation.
 4. **Historical Apple tier provenance.** The existing previous-tier fallback preserves manual grants. Distinguishing every historical manually granted tier from a subscription-derived tier needs separate entitlement provenance work. The live aggregate inspection found no active Apple entitlements at audit time.

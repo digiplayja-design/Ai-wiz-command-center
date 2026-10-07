@@ -1,0 +1,152 @@
+{
+  "project_id": "uxtjzjbwtppjvnsoiijv",
+  "from_version": "17.6.1.127",
+  "to_version": "17.11.0.003",
+  "status": "ACTIVE_HEALTHY",
+  "user_authorization": "Start now",
+  "confirmation_clicked_at": "2026-10-07T13:34:07.252Z",
+  "provider_started_at": "2026-10-07T13:34:26Z",
+  "healthy_observed_at": "2026-10-07T13:40:28.739Z",
+  "latest_preupgrade_scheduled_backup": "2026-10-07T06:14:56Z",
+  "verification": {
+    "tables": {
+      "public_tables": 253,
+      "tables_without_rls": 0,
+      "tables_with_browser_maintain": 0
+    },
+    "storage": {
+      "buckets": 16,
+      "public_buckets": 0
+    },
+    "intake_policies": [
+      {
+        "name": "account_deletion_requests_server_only",
+        "check": "false",
+        "roles": [
+          "anon",
+          "authenticated"
+        ],
+        "table": "account_deletion_requests",
+        "using": "false",
+        "command": "ALL",
+        "permissive": "RESTRICTIVE"
+      },
+      {
+        "name": "reports_server_only",
+        "check": "false",
+        "roles": [
+          "anon",
+          "authenticated"
+        ],
+        "table": "reports",
+        "using": "false",
+        "command": "ALL",
+        "permissive": "RESTRICTIVE"
+      }
+    ],
+    "postgres_version": "17.11",
+    "intake_privileges": [
+      {
+        "role": "anon",
+        "table": "public.account_deletion_requests",
+        "can_write": false,
+        "can_select": false
+      },
+      {
+        "role": "anon",
+        "table": "public.reports",
+        "can_write": false,
+        "can_select": false
+      },
+      {
+        "role": "authenticated",
+        "table": "public.account_deletion_requests",
+        "can_write": false,
+        "can_select": false
+      },
+      {
+        "role": "authenticated",
+        "table": "public.reports",
+        "can_write": false,
+        "can_select": false
+      },
+      {
+        "role": "service_role",
+        "table": "public.account_deletion_requests",
+        "can_write": true,
+        "can_select": true
+      },
+      {
+        "role": "service_role",
+        "table": "public.reports",
+        "can_write": true,
+        "can_select": true
+      }
+    ],
+    "public_policy_count": 24,
+    "deletion_rpc_privileges": [
+      {
+        "role": "anon",
+        "can_execute": false
+      },
+      {
+        "role": "authenticated",
+        "can_execute": false
+      },
+      {
+        "role": "service_role",
+        "can_execute": true
+      }
+    ],
+    "browser_callable_security_definers": 0
+  },
+  "security_advisor_summary": [
+    {
+      "name": "rls_enabled_no_policy",
+      "level": "INFO"
+    }
+  ],
+  "http": {
+    "verified_at": "2026-10-07T13:40:28.992077+00:00",
+    "checks": [
+      {
+        "url": "https://chee-chai-chee-backend.onrender.com/api/health",
+        "status": 200,
+        "result": {
+          "status": "Korlix AI backend is healthy",
+          "supabaseConfigured": true,
+          "supabaseAuthConfigured": true,
+          "supabaseHost": "uxtjzjbwtppjvnsoiijv.supabase.co"
+        }
+      },
+      {
+        "url": "https://chee-chai-chee-backend.onrender.com/api/supabase-diagnostics",
+        "status": 200,
+        "result": {
+          "ok": true,
+          "status": 200,
+          "statusText": "OK",
+          "supabaseHost": "uxtjzjbwtppjvnsoiijv.supabase.co",
+          "bodyPreview": "{\"version\":\"v2.197.0\",\"name\":\"GoTrue\",\"description\":\"GoTrue is a user registration and authentication API\"}"
+        }
+      },
+      {
+        "url": "https://www.korlixdeveloper.com/app/",
+        "status": 200,
+        "headers": {
+          "Content-Security-Policy": "frame-ancestors 'self'",
+          "X-Frame-Options": "SAMEORIGIN",
+          "X-Content-Type-Options": "nosniff",
+          "Referrer-Policy": "strict-origin-when-cross-origin",
+          "Strict-Transport-Security": "max-age=86400"
+        },
+        "html_bytes": 3545
+      }
+    ]
+  },
+  "limits": [
+    "Elapsed upgrade time is not measured user-visible downtime.",
+    "No customer login, transaction, document read, email, location collection or destructive restore was performed.",
+    "Database backups do not include Storage object bytes; independent restore and receipt recovery drills remain separate release work."
+  ]
+}

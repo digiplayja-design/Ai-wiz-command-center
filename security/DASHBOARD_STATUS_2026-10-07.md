@@ -9,11 +9,22 @@ Completed using the authorized Supabase and Render dashboards. Application relea
 - **Live delivery:** HTTP 200 and the intended protections verified for `/app/`, `/app/main.dart.js` and `/nova-email/` on both `www.korlixdeveloper.com` and the Render hostname. Render's hostname retains its stronger platform HSTS value (`max-age=315360000; includeSubdomains; preload`); the custom domain serves the configured one-day value. Exact results are in `DASHBOARD_HEADER_VERIFICATION_2026-10-07.json`.
 - **Public application check:** the Flutter app renders the normal sign-in form and 16+ notice after these settings. No customer login, purchase, email or location capture was performed.
 
-## Database upgrade prepared, not started
+## Database upgrade completed
 
-Current database: **17.6.1.127**, ACTIVE_HEALTHY. Stable offered target: **17.11.0.003**. The dropdown also offered a 17.6 preview; the reviewed target is the stable 17.11 release.
+Current database: **17.11.0.003**, **ACTIVE_HEALTHY**, upgraded from 17.6.1.127. A live SQL query independently reports PostgreSQL **17.11**. The stable target was explicitly selected; the preview build was not used.
 
-The final dashboard warning states **all services will be offline for up to one hour** and **downgrade to 17.6.1.127 is unavailable**. No Confirm upgrade action was taken. A maintenance window needs explicit approval because the newly observed potential outage materially affects the live application.
+After reviewing the provider's outage/no-downgrade warning, the user authorized **“Start now.”** The scheduled backup and project health were rechecked before confirmation. Supabase records the start at **13:34:26 UTC / 09:34:26 America/New_York** on October 7. The project was observed ACTIVE_HEALTHY at **13:40:28 UTC / 09:40:28 America/New_York**, approximately six minutes later. This is observed upgrade duration, not a measurement of customer-visible downtime. The dashboard explicitly reports **Upgrade completed** and that the project is back online. No paid plan change or manual compute/storage resize was requested.
+
+Post-upgrade verification:
+
+- All **253 public tables** retain RLS; **24 public policies** remain. Zero browser MAINTAIN grants and zero browser-callable public SECURITY DEFINER functions.
+- All **16 storage buckets** remain private.
+- Report/deletion intake and the deletion RPC remain inaccessible to browser roles; service-role access remains intact. Restrictive intake policies still deny browser rows.
+- Security Advisor returned no warnings or errors, only informational RLS-without-policy guidance. Leaked-password protection's warning did not return.
+- The backend health endpoint returns HTTP 200. Its Supabase diagnostics endpoint successfully reaches the project's Auth service (HTTP 200). The application HTML returns HTTP 200 with the security headers still present.
+- The public app renders its sign-in form after upgrade. These checks do not represent an authenticated customer transaction or a complete integration test.
+
+Exact metadata, timestamps, privilege results and HTTP checks are recorded in `DATABASE_UPGRADE_VERIFICATION_2026-10-07.json`.
 
 Readiness checks:
 
@@ -30,7 +41,7 @@ Readiness checks:
 | Database logical size | Approximately 40.8 MiB; this is not a downtime guarantee |
 | Release-specific compatibility | Earlier preflight found no affected ltree, float GiST, custom-operator or legacy pgcrypto uses |
 
-The backup check verifies an available provider backup, not an independent restore drill or a zero-loss recovery point. Supabase's dashboard explicitly warns that database backups exclude Storage object bytes. Recheck backup freshness and health at the chosen maintenance time, review the upgrade dialog, then verify version, Auth, database access, RLS and application connectivity after upgrade.
+The backup check verifies an available provider backup, not an independent restore drill or a zero-loss recovery point. Supabase's dashboard explicitly warns that database backups exclude Storage object bytes. Independent restore and receipt recovery drills remain separate release work.
 
 ## Screenshot evidence
 
@@ -40,7 +51,11 @@ Saved settings:
 
 ![Render header rules saved](evidence/render-response-headers-2026-10-07.jpg)
 
-Upgrade hold requiring an outage window:
+Completed upgrade:
+
+![Provider confirms upgrade completion](evidence/supabase-upgrade-completed-2026-10-07.jpg)
+
+Historical warning reviewed before the user approved the outage:
 
 ![Stable upgrade target and provider downtime warning](evidence/supabase-upgrade-warning-2026-10-07.jpg)
 
