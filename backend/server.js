@@ -1,3 +1,5 @@
+import {createReportSubmissionGuard} from './security/report_submission.mjs';
+import {createVideoAccess} from './security/video_access.mjs';
 import riciVoice from './voice/rici_pronunciation.cjs';
 const {riciRealtimeInstructions} = riciVoice;
 import {registerWelcomeAudio} from './welcome/audio.mjs';
@@ -71,6 +73,7 @@ const { registerK135zZoomRoutes, createK135zServerRuntime } = k135zGate5Routes;
 // K135Z_GATE5_ESM_IMPORTS_END
 
 import express from "express";
+import {assertAppleAccountBinding, refreshSignedAppleTransaction} from './web_billing/apple_security.mjs';
 import {createKorlixSignupHandler, KORLIX_MINIMUM_AGE, KORLIX_SIGNUP_POLICY_VERSION} from "./korlix_signup_eligibility.mjs";
 import crypto from "crypto";
 import cors from "cors";
@@ -123,6 +126,13 @@ import { createKorlixVapiNovaRuntime } from "./korlix_vapi_nova_responder.mjs"; 
 dotenv.config();
 
 const app = express();
+app.disable("x-powered-by");
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Strict-Transport-Security", "max-age=31536000");
+  next();
+});
 
 const KORLIX_SUPPORT_REPORT_EMAIL =
   process.env.KORLIX_SUPPORT_REPORT_EMAIL ||
@@ -273,6 +283,8 @@ const supabaseAdmin =
         },
       })
     : null;
+
+const videoAccess = createVideoAccess({database:supabaseAdmin});
 
 const supabaseAuth =
   supabaseUrl && supabaseAnonKey
@@ -850,11 +862,18 @@ function makeHttpError(message, statusCode = 400) {
   return error;
 }
 
+function assertAccountEnabled(profile) {
+  if (profile?.is_disabled === true) {
+    throw makeHttpError("This account is disabled. Contact support.", 403);
+  }
+}
+
 async function registerDeviceSession({
   userId,
   profile,
   deviceInfo,
 }) {
+  assertAccountEnabled(profile);
   if (!supabaseAdmin) {
     return null;
   }
@@ -948,6 +967,7 @@ async function touchActiveDeviceSession({
   deviceInfo,
   allowRegister = false,
 }) {
+  assertAccountEnabled(profile);
   if (!supabaseAdmin || !deviceInfo.deviceId) {
     return null;
   }
@@ -972,17 +992,23 @@ async function touchActiveDeviceSession({
         last_seen_at: new Date().toISOString(),
       })
       .eq("id", existing.id)
+      .eq("status", "active")
       .select("*")
-      .single();
+      .maybeSingle();
 
     if (error) {
       throw error;
     }
 
+    if (!data) {
+      throw makeHttpError("This device is no longer authorized. Please sign in again.", 403);
+    }
     return data;
   }
 
-  if (allowRegister) {
+  // Only a fresh password sign-in may reactivate a revoked device. A refresh
+  // token may register an older client's missing row, but not undo revocation.
+  if (allowRegister && !existing) {
     return registerDeviceSession({
       userId,
       profile,
@@ -1094,26 +1120,27 @@ async function getAuthenticatedUser(req) {
     throw createInvalidSessionError();
   }
 
+  // Disabled accounts must be denied even when a legacy client has no device
+  // header. Only server-owned profile state is an authorization source.
+  const { data: account, error: accountError } = await supabaseAdmin
+    .from("user_profiles")
+    .select("is_disabled")
+    .eq("id", data.user.id)
+    .maybeSingle();
+  if (accountError) throw makeHttpError("Account access could not be verified. Please retry.", 503);
+  assertAccountEnabled(account);
+
   const deviceInfo = getRequestDeviceInfo(req);
 
-  // Device limits are enforced at sign-in.
-  // Protected requests should not fail if an older APK did not send device headers.
+  // Keep older clients without device headers compatible, but do not suppress
+  // a revocation or a failed access check for an explicitly supplied device.
   if (deviceInfo.explicitDeviceId) {
-    try {
-      const profile = await getOrCreateProfile(data.user);
-
-      await touchActiveDeviceSession({
-        userId: data.user.id,
-        profile,
-        deviceInfo,
-        allowRegister: false,
-      });
-    } catch (deviceError) {
-      console.warn(
-        "Device session touch skipped:",
-        sanitize(deviceError?.message)
-      );
-    }
+    await touchActiveDeviceSession({
+      userId: data.user.id,
+      profile: account,
+      deviceInfo,
+      allowRegister: false,
+    });
   }
 
   return data.user;
@@ -1909,22 +1936,10 @@ async function findKorlixProfileForCreditGrant({ userId, email }) {
   return data;
 }
 
-async function getVideoCreditSummaryForUser({ userId, profile }) {
-  const monthlyLimit = getVideoTierLimit(profile);
-  const usedThisMonth = await countUserVideoGenerationsThisMonth(userId);
-  const purchasedVideoCredits = await getPurchasedVideoCreditBalance(userId);
-  const includedRemaining = Math.max(monthlyLimit - usedThisMonth, 0);
-
-  return {
-    tier: String(profile?.tier || "basic").toLowerCase(),
-    monthlyLimit,
-    usedThisMonth,
-    includedRemaining,
-    purchasedVideoCredits,
-    canGenerateVideo: includedRemaining > 0 || purchasedVideoCredits > 0,
-    packs: KORLIX_VIDEO_CREDIT_PACKS,
-  };
+async function getVideoCreditSummaryForUser({ userId }) {
+  return videoAccess.summary({user:{id:userId}});
 }
+
 
 async function spendPurchasedVideoCredit({ userId, videoId, prompt }) {
   const balance = await getPurchasedVideoCreditBalance(userId);
@@ -2323,12 +2338,25 @@ app.post("/api/auth/refresh", async (req, res) => {
 
     const profile = await getOrCreateProfile(data.user);
 
-    const deviceSession = await touchActiveDeviceSession({
-      userId: data.user.id,
-      profile,
-      deviceInfo,
-      allowRegister: true,
-    });
+    let deviceSession;
+    try {
+      deviceSession = await touchActiveDeviceSession({
+        userId: data.user.id,
+        profile,
+        deviceInfo,
+        allowRegister: true,
+      });
+    } catch (accessError) {
+      // Rotation already happened. Do not leave a freshly rotated session
+      // usable when the account or the device was explicitly denied.
+      if (accessError?.statusCode === 403 && data.session?.access_token) {
+        const { error: revokeError } = await supabaseAdmin.auth.admin.signOut(
+          data.session.access_token, "local",
+        );
+        if (revokeError) throw makeHttpError("Session revocation could not be confirmed. Please retry.", 503);
+      }
+      throw accessError;
+    }
 
     res.json({
       success: true,
@@ -3175,6 +3203,13 @@ app.post("/api/auth/signout", async (req, res) => {
     const user = await requireUser(req);
     const deviceInfo = getRequestDeviceInfo(req);
 
+    // Invalidate this session's refresh tokens at Supabase as well as the local
+    // device record. Other signed-in devices retain their own sessions.
+    const { error: signOutError } = await supabaseAdmin.auth.admin.signOut(
+      getBearerToken(req), "local",
+    );
+    if (signOutError) throw makeHttpError("Sign-out could not be confirmed. Please retry.", 503);
+
     if (deviceInfo.deviceId) {
       await revokeDeviceSession({
         userId: user.id,
@@ -3301,28 +3336,8 @@ app.post("/api/video/generate", async (req, res) => {
       });
     }
 
-    const shouldSpendPurchasedCredit =
-      creditSummaryBefore.includedRemaining <= 0 &&
-      creditSummaryBefore.purchasedVideoCredits > 0;
-
-    if (
-      creditSummaryBefore.includedRemaining <= 0 &&
-      creditSummaryBefore.purchasedVideoCredits <= 0
-    ) {
-      return res.status(402).json({
-        error:
-          tier === "basic"
-            ? "Basic does not include monthly video generations. Buy video credits to generate videos."
-            : "No video generations remaining. Buy video credits to continue.",
-        buyCreditsRequired: true,
-        tier,
-        monthlyLimit: creditSummaryBefore.monthlyLimit,
-        usedThisMonth: creditSummaryBefore.usedThisMonth,
-        includedRemaining: creditSummaryBefore.includedRemaining,
-        purchasedVideoCredits: creditSummaryBefore.purchasedVideoCredits,
-        packs: creditSummaryBefore.packs,
-      });
-    }
+    const reservation = await videoAccess.reserve({user, kind:'text_to_video', provider:'openai'});
+    const shouldSpendPurchasedCredit = reservation.spentPurchasedCredit;
 
     const videoJob = await createOpenAIVideoJob({
       prompt,
@@ -3330,13 +3345,7 @@ app.post("/api/video/generate", async (req, res) => {
       seconds,
     });
 
-    if (shouldSpendPurchasedCredit) {
-      await spendPurchasedVideoCredit({
-        userId: user.id,
-        videoId: videoJob.id,
-        prompt,
-      });
-    }
+    await videoAccess.attach({user,reservation,jobId:videoJob.id});
 
     const creditsUsed = 25;
 
@@ -3399,7 +3408,7 @@ app.post("/api/video/generate", async (req, res) => {
 
 app.get("/api/video/status/:videoId", async (req, res) => {
   try {
-    await requireUser(req);
+    const user = await requireUser(req);
 
     const videoId = String(req.params.videoId || "").trim();
 
@@ -3409,6 +3418,7 @@ app.get("/api/video/status/:videoId", async (req, res) => {
       });
     }
 
+    await videoAccess.requireOwnedJob({user,jobId:videoId,provider:'openai'});
     const video = await retrieveOpenAIVideo(videoId);
 
     res.json({
@@ -3429,7 +3439,7 @@ app.get("/api/video/status/:videoId", async (req, res) => {
 
 app.get("/api/video/content/:videoId", async (req, res) => {
   try {
-    await requireUser(req);
+    const user = await requireUser(req);
 
     const videoId = String(req.params.videoId || "").trim();
 
@@ -3439,6 +3449,7 @@ app.get("/api/video/content/:videoId", async (req, res) => {
       });
     }
 
+    await videoAccess.requireOwnedJob({user,jobId:videoId,provider:'openai'});
     const content = await fetchOpenAIVideoContent(videoId);
 
     res.setHeader("Content-Type", content.contentType);
@@ -10152,46 +10163,8 @@ async function korlixI2vResolveUserV1(req) {
 }
 
 async function korlixI2vResolveTierV1(user) {
-  const client = korlixI2vSupabaseClientV1();
-
-  const metadataTier =
-    korlixI2vTierFromObjectV1(user?.app_metadata) ||
-    korlixI2vTierFromObjectV1(user?.user_metadata);
-
-  if (metadataTier) return korlixI2vNormalizeTierV1(metadataTier);
-
-  if (!client || !user?.id || typeof client.from !== "function") {
-    return "basic";
-  }
-
-  const tableChecks = [
-    ["profiles", "id"],
-    ["profiles", "user_id"],
-    ["user_profiles", "id"],
-    ["user_profiles", "user_id"],
-    ["crm_profiles", "id"],
-    ["crm_profiles", "user_id"],
-    ["subscriptions", "user_id"],
-  ];
-
-  for (const [tableName, columnName] of tableChecks) {
-    try {
-      const response = await client
-        .from(tableName)
-        .select("*")
-        .eq(columnName, user.id)
-        .maybeSingle();
-
-      const data = response?.data;
-      const tier = korlixI2vTierFromObjectV1(data);
-
-      if (tier) return korlixI2vNormalizeTierV1(tier);
-    } catch (_) {
-      // Ignore missing tables/columns and keep trying known profile locations.
-    }
-  }
-
-  return "basic";
+  const profile = await getOrCreateProfile(user);
+  return korlixI2vNormalizeTierV1(profile?.tier || 'basic');
 }
 
 async function korlixI2vClaimMonthlyVideoAccessV1(req) {
@@ -10266,11 +10239,23 @@ async function korlixI2vClaimMonthlyVideoAccessV1(req) {
 }
 // KORLIX_MONTHLY_VIDEO_LIMITS_V1_END
 
+async function requireVideoUploadUser(req, res, next) {
+  try {
+    req.korlixVideoUser = await requireUser(req);
+    next();
+  } catch (error) {
+    res.status(error.statusCode || 401).json({ok:false,error:getKorlixUserFacingError(error)});
+  }
+}
+
 app.post(
   "/api/video/image-to-video",
+  requireVideoUploadUser,
   documentUpload.single("image"),
   async (req, res) => {
     try {
+      const user = req.korlixVideoUser;
+      await getOrCreateProfile(user);
       const providerUrl = korlixI2vProviderUrlV2();
       const apiKey = korlixI2vApiKeyV2();
 
@@ -10343,6 +10328,7 @@ app.post(
           },
         };
 
+        const reservation = await videoAccess.reserve({user,kind:'image_to_video',provider:korlixI2vIsOpenAiUrlV2(providerUrl)?'openai':'kling'});
         const providerResponse = await fetch(providerUrl, {
           method: "POST",
           headers: {
@@ -10364,6 +10350,7 @@ app.post(
         }
 
         const jobId = korlixI2vExtractJobIdV2(providerBody);
+        await videoAccess.attach({user,reservation,jobId});
         const contentUrl =
           jobId && korlixI2vIsOpenAiUrlV2(providerUrl)
             ? `${korlixI2vPublicBaseV2(req)}/api/video/image-to-video/content/${encodeURIComponent(jobId)}`
@@ -10426,6 +10413,7 @@ const klingImageBase64 = await korlixI2vKlingImageBase64V2(fileBuffer);
           klingRequestBody.external_task_id = externalTaskId;
         }
 
+        const reservation = await videoAccess.reserve({user,kind:'image_to_video',provider:korlixI2vIsOpenAiUrlV2(providerUrl)?'openai':'kling'});
         const providerResponse = await fetch(providerUrl, {
           method: "POST",
           headers: {
@@ -10447,6 +10435,7 @@ const klingImageBase64 = await korlixI2vKlingImageBase64V2(fileBuffer);
         }
 
         const jobId = korlixI2vKlingJobIdV2(providerBody);
+        await videoAccess.attach({user,reservation,jobId});
         const status = korlixI2vKlingStatusV2(providerBody) || "queued";
 
         return res.json({
@@ -10472,6 +10461,7 @@ const klingImageBase64 = await korlixI2vKlingImageBase64V2(fileBuffer);
         form.append("source", "korlix_image_to_video_v1");
       }
 
+      const reservation = await videoAccess.reserve({user,kind:'image_to_video',provider:'generic'});
       const providerResponse = await fetch(providerUrl, {
         method: "POST",
         headers: korlixI2vAuthHeadersV2(),
@@ -10490,6 +10480,7 @@ const klingImageBase64 = await korlixI2vKlingImageBase64V2(fileBuffer);
       }
 
       const jobId = korlixI2vExtractJobIdV2(providerBody);
+        await videoAccess.attach({user,reservation,jobId});
       const contentUrl =
         jobId && korlixI2vIsOpenAiUrlV2(providerUrl)
           ? `${korlixI2vPublicBaseV2(req)}/api/video/image-to-video/content/${encodeURIComponent(jobId)}`
@@ -10506,7 +10497,7 @@ const klingImageBase64 = await korlixI2vKlingImageBase64V2(fileBuffer);
       });
     } catch (error) {
       console.error("KORLIX_IMAGE_TO_VIDEO_ERROR", error);
-      return res.status(500).json({
+      return res.status(error.statusCode || 500).json({
         ok: false,
         error: "Image to Video provider request failed.",
         details: error?.message || String(error),
@@ -10517,6 +10508,7 @@ const klingImageBase64 = await korlixI2vKlingImageBase64V2(fileBuffer);
 
 app.get("/api/video/image-to-video/status/:jobId", async (req, res) => {
   try {
+    const user = await requireUser(req);
     const providerUrl = korlixI2vProviderUrlV2();
     const statusBase =
       korlixI2vEnvStringV2("KORLIX_IMAGE_TO_VIDEO_STATUS_URL") ||
@@ -10539,6 +10531,7 @@ app.get("/api/video/image-to-video/status/:jobId", async (req, res) => {
       });
     }
 
+    await videoAccess.requireOwnedJob({user,jobId,provider:korlixI2vIsOpenAiUrlV2(statusBase)?'openai':korlixI2vIsKlingUrlV2(statusBase)?'kling':'generic'});
     const statusUrl = `${statusBase.replace(/\/+$/, "")}/${encodeURIComponent(jobId)}`;
     const providerResponse = await fetch(statusUrl, {
       method: "GET",
@@ -10573,7 +10566,7 @@ app.get("/api/video/image-to-video/status/:jobId", async (req, res) => {
     });
   } catch (error) {
     console.error("KORLIX_IMAGE_TO_VIDEO_STATUS_ERROR", error);
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       ok: false,
       error: "Image to Video status request failed.",
       details: error?.message || String(error),
@@ -10583,6 +10576,7 @@ app.get("/api/video/image-to-video/status/:jobId", async (req, res) => {
 
 app.get("/api/video/image-to-video/content/:jobId", async (req, res) => {
   try {
+    const user = await requireUser(req);
     const providerUrl = korlixI2vProviderUrlV2();
 
     if (!providerUrl || !korlixI2vIsOpenAiUrlV2(providerUrl)) {
@@ -10602,6 +10596,7 @@ app.get("/api/video/image-to-video/content/:jobId", async (req, res) => {
       });
     }
 
+    await videoAccess.requireOwnedJob({user,jobId,provider:'openai'});
     const contentUrl = `${providerUrl.replace(/\/+$/, "")}/${encodeURIComponent(jobId)}/content`;
     const providerResponse = await fetch(contentUrl, {
       method: "GET",
@@ -10625,7 +10620,7 @@ app.get("/api/video/image-to-video/content/:jobId", async (req, res) => {
     return res.send(Buffer.from(arrayBuffer));
   } catch (error) {
     console.error("KORLIX_IMAGE_TO_VIDEO_CONTENT_ERROR", error);
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       ok: false,
       error: "Image to Video content request failed.",
       details: error?.message || String(error),
@@ -10635,12 +10630,13 @@ app.get("/api/video/image-to-video/content/:jobId", async (req, res) => {
 // KORLIX_IMAGE_TO_VIDEO_ROUTE_END
 
 // KORLIX_REPORT_DELIVERY_V2_BEGIN
+const prepareSupportReport = createReportSubmissionGuard();
 const korlixReportDeliveryV2Reports =
   global.__korlixReportDeliveryV2Reports || [];
 global.__korlixReportDeliveryV2Reports = korlixReportDeliveryV2Reports;
 
 const KORLIX_REPORT_DELIVERY_V2_MAX_MEMORY =
-  Number(process.env.KORLIX_REPORT_MAX_MEMORY || 1000) || 1000;
+  Math.max(1, Math.min(1000, Number(process.env.KORLIX_REPORT_MAX_MEMORY || 1000) || 1000));
 
 const KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL =
   process.env.KORLIX_SUPPORT_REPORT_EMAIL ||
@@ -10671,68 +10667,6 @@ function korlixReportDeliveryV2String(value, fallback = "") {
   } catch (_) {
     return String(value);
   }
-}
-
-function korlixReportDeliveryV2ClientIp(req) {
-  const forwarded = req.headers && req.headers["x-forwarded-for"];
-
-  if (Array.isArray(forwarded) && forwarded.length > 0) {
-    return String(forwarded[0]).split(",")[0].trim();
-  }
-
-  if (typeof forwarded === "string" && forwarded.trim()) {
-    return forwarded.split(",")[0].trim();
-  }
-
-  return req.socket && req.socket.remoteAddress ? String(req.socket.remoteAddress) : "";
-}
-
-function korlixReportDeliveryV2Normalize(req) {
-  const body = req.body || {};
-  const reportId =
-    korlixReportDeliveryV2String(body.id).trim() ||
-    `korlix_report_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-
-  return {
-    id: reportId,
-    reportId,
-    contentType: korlixReportDeliveryV2String(body.contentType || body.type, "ai_output"),
-    reason: korlixReportDeliveryV2String(body.reason, "Other"),
-    details: korlixReportDeliveryV2String(body.details || body.message || body.notes, ""),
-    prompt: korlixReportDeliveryV2String(body.prompt, ""),
-    outputSummary: korlixReportDeliveryV2String(
-      body.outputSummary || body.output || body.summary,
-      "",
-    ),
-    contentId: korlixReportDeliveryV2String(body.contentId || body.generationId, ""),
-    imageUrl: korlixReportDeliveryV2String(body.imageUrl || body.image_url, ""),
-    videoId: korlixReportDeliveryV2String(body.videoId || body.video_id, ""),
-    videoUrl: korlixReportDeliveryV2String(body.videoUrl || body.video_url, ""),
-    language: korlixReportDeliveryV2String(body.language, ""),
-    appVersion: korlixReportDeliveryV2String(body.appVersion || body.version, ""),
-    platform: korlixReportDeliveryV2String(
-      body.platform || req.headers["x-korlix-platform"],
-      "",
-    ),
-    appArea: korlixReportDeliveryV2String(body.appArea, "ai_generated_content_report"),
-    userEmail: korlixReportDeliveryV2String(
-      body.userEmail || body.email || req.headers["x-korlix-user-email"],
-      "",
-    ),
-    userId: korlixReportDeliveryV2String(body.userId || body.user_id, ""),
-    deviceId: korlixReportDeliveryV2String(
-      body.deviceId || body.device_id || req.headers["x-korlix-device-id"],
-      "",
-    ),
-    deviceLabel: korlixReportDeliveryV2String(
-      body.deviceLabel || body.device_label || req.headers["x-korlix-device-label"],
-      "",
-    ),
-    createdAt: new Date().toISOString(),
-    ip: korlixReportDeliveryV2ClientIp(req),
-    userAgent: korlixReportDeliveryV2String(req.headers["user-agent"], ""),
-    raw: body,
-  };
 }
 
 function korlixReportDeliveryV2Text(report) {
@@ -10769,9 +10703,6 @@ function korlixReportDeliveryV2Text(report) {
     `Image URL: ${report.imageUrl}`,
     `Video ID: ${report.videoId}`,
     `Video URL: ${report.videoUrl}`,
-    "",
-    "RAW PAYLOAD:",
-    JSON.stringify(report.raw || {}, null, 2),
   ];
 
   return lines.join("\n");
@@ -10810,8 +10741,6 @@ function korlixReportDeliveryV2Html(report) {
         `Video URL: ${report.videoUrl}`,
       ].join("\n"),
     )}</pre>
-    <h3>Raw Payload</h3>
-    <pre>${escape(JSON.stringify(report.raw || {}, null, 2))}</pre>
   `;
 }
 
@@ -10929,75 +10858,59 @@ function korlixReportDeliveryV2AdminAuthorized(req) {
     "",
   );
 
-  const queryToken = korlixReportDeliveryV2String(
-    req.query && req.query.token,
-    "",
-  );
-
-  return [bearer, headerToken, queryToken].includes(
-    KORLIX_REPORT_DELIVERY_V2_ADMIN_TOKEN,
-  );
+  // Secrets in query strings leak into URL history and access logs.
+  const expected = crypto.createHash("sha256").update(KORLIX_REPORT_DELIVERY_V2_ADMIN_TOKEN).digest();
+  return [bearer, headerToken].some((token) => token && crypto.timingSafeEqual(
+    crypto.createHash("sha256").update(token).digest(), expected,
+  ));
 }
 
 app.post(
   ["/api/report-output", "/api/reports/content", "/api/report"],
   async (req, res) => {
+    res.set("Cache-Control", "no-store");
     try {
-      const report = korlixReportDeliveryV2Normalize(req);
-
+      const user = await requireUser(req);
+      // Validate size and consume the verified account's allowance before any
+      // persistence, logging, or email. Client identity fields are discarded.
+      const report = prepareSupportReport({req,user});
       korlixReportDeliveryV2Reports.unshift(report);
-
       if (korlixReportDeliveryV2Reports.length > KORLIX_REPORT_DELIVERY_V2_MAX_MEMORY) {
         korlixReportDeliveryV2Reports.splice(KORLIX_REPORT_DELIVERY_V2_MAX_MEMORY);
       }
-
-      const text = korlixReportDeliveryV2Text(report);
-      console.log("[KORLIX_AI_OUTPUT_REPORT]", JSON.stringify(report));
-      console.log("KORLIX_SUPPORT_REPORTED_OUTPUT\n" + text);
-
-      const persistence = await korlixReportDeliveryV2Persist(report);
+      console.log("[KORLIX_AI_OUTPUT_REPORT_RECEIVED]", report.id);
+      await korlixReportDeliveryV2Persist(report);
       const supportNotification = await korlixReportDeliveryV2SendEmail(report);
-
       return res.status(supportNotification.delivered ? 200 : 202).json({
         ok: true,
         reportId: report.id,
-        message: supportNotification.delivered
-          ? "AI output report received and emailed to support."
-          : "AI output report received. Support email not delivered; check backend configuration.",
-        supportEmail: KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL,
-        supportNotification,
-        persistence,
+        message: "Your report has been received for review.",
       });
     } catch (error) {
-      console.error("[KORLIX_AI_OUTPUT_REPORT_ERROR]", error);
-
-      return res.status(500).json({
-        ok: false,
-        error: "Could not submit AI output report.",
-        details: error && error.message ? error.message : String(error),
-      });
+      const status = [400,401,403,413,429,503].includes(error?.statusCode) ? error.statusCode : 500;
+      if (error?.retryAfter) res.set("Retry-After", String(error.retryAfter));
+      if (status === 500) console.error("[KORLIX_AI_OUTPUT_REPORT_ERROR]");
+      const messages = {
+        400: "Invalid report.", 401: "Sign in to submit a report.",
+        403: "Sign in again to submit a report.", 413: "Keep the report under 32 KiB.",
+        429: "Too many reports. Please try again later.",
+        503: "Reports are temporarily unavailable. Please try again later.",
+      };
+      return res.status(status).json({ok:false,error:messages[status] || "Could not submit AI output report."});
     }
   },
 );
 
-app.get("/api/report-output/health", (req, res) => {
-  res.json({
+app.get("/api/report-output/health", (_req, res) => {
+  res.set("Cache-Control", "no-store").json({
     ok: true,
     feature: "ai_output_reporting",
-    reportDeliveryVersion: "v2",
-    reportCount: korlixReportDeliveryV2Reports.length,
-    supportEmail: KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL,
-    supportEmailConfigured: Boolean(KORLIX_REPORT_DELIVERY_V2_SUPPORT_EMAIL),
-    supportFromEmailConfigured: Boolean(KORLIX_REPORT_DELIVERY_V2_FROM_EMAIL),
-    resendConfigured: Boolean(process.env.RESEND_API_KEY || ""),
-    adminTokenConfigured: Boolean(KORLIX_REPORT_DELIVERY_V2_ADMIN_TOKEN),
-    jsonlPath:
-      process.env.KORLIX_REPORTS_JSONL_PATH ||
-      `${process.cwd()}/logs/korlix-ai-output-reports.jsonl`,
+    reportDeliveryVersion: "v3",
   });
 });
 
 app.get("/api/report-output/recent", (req, res) => {
+  res.set("Cache-Control", "no-store");
   if (!korlixReportDeliveryV2AdminAuthorized(req)) {
     return res.status(403).json({
       ok: false,
@@ -11281,7 +11194,6 @@ async function korlixAppleBuild130TransactionFromHistory({
     try {
       const request = {
         sort: config.library.Order.DESCENDING,
-        revoked: false,
         productIds: expectedProductId ? [expectedProductId] : undefined,
         productTypes: [config.library.ProductType.AUTO_RENEWABLE],
       };
@@ -11359,10 +11271,13 @@ async function korlixAppleBuild130ResolveTransaction({
   const data = String(verificationData || "").trim();
 
   if (korlixAppleBuild130IsJws(data)) {
-    return korlixAppleBuild130VerifyTransactionJws(
-      data,
-      preferredEnvironment
-    );
+    return refreshSignedAppleTransaction({
+      signedTransactionInfo: data,
+      preferredEnvironment,
+      expectedProductId,
+      verifyTransaction: korlixAppleBuild130VerifyTransactionJws,
+      fetchHistory: korlixAppleBuild130TransactionFromHistory,
+    });
   }
 
   const config = await korlixAppleBuild130Config();
@@ -11447,6 +11362,8 @@ async function korlixAppleBuild130ApplyEntitlement({
   if (!supabaseAdmin) {
     throw makeHttpError("Supabase is not configured on the backend.", 503);
   }
+
+  await assertAppleAccountBinding({userId, transaction, database: supabaseAdmin});
 
   const autoRenewStatus =
     renewalInfo?.autoRenewStatus === undefined ||
@@ -11682,13 +11599,13 @@ app.post("/api/billing/apple/verify", async (req, res) => {
     return res.json({
       ok: true,
       verified: true,
-      active: transaction.active,
+      active: applied?.active ?? transaction.active,
       tier: applied?.tier || transaction.tier,
-      productId: transaction.productId,
-      status: transaction.status,
-      expiresAt: transaction.expiresAt,
-      transactionId: transaction.transactionId,
-      originalTransactionId: transaction.originalTransactionId,
+      productId: applied?.productId || transaction.productId,
+      status: applied?.status || transaction.status,
+      expiresAt: applied?.expiresAt ?? transaction.expiresAt,
+      transactionId: applied?.transactionId || transaction.transactionId,
+      originalTransactionId: applied?.originalTransactionId || transaction.originalTransactionId,
       environment: transaction.environment,
     });
   } catch (error) {

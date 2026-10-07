@@ -1,0 +1,128 @@
+{
+  "checked_at_utc": "2026-10-07",
+  "scope": "Backend production npm dependency lock and observed public response headers; no production exploit traffic",
+  "baseline_counts": {
+    "info": 0,
+    "low": 1,
+    "moderate": 6,
+    "high": 5,
+    "critical": 1,
+    "total": 13
+  },
+  "after_counts": {
+    "info": 0,
+    "low": 0,
+    "moderate": 5,
+    "high": 0,
+    "critical": 0,
+    "total": 5
+  },
+  "direct_exact_pins": {
+    "multer": "2.4.0",
+    "sharp": "0.35.5"
+  },
+  "transitive_patches": {
+    "@xmldom/xmldom": "0.8.15",
+    "body-parser": "2.3.0",
+    "brace-expansion": [
+      "1.1.21",
+      "2.1.7"
+    ],
+    "nanoid": "5.1.16",
+    "proxy-addr": "2.0.8",
+    "qs": "6.16.0"
+  },
+  "reachability": [
+    {
+      "package": "multer",
+      "advisories": [
+        "GHSA-72gw-mp4g-v24j",
+        "GHSA-3p4h-7m6x-2hcm",
+        "GHSA-wc9g-mqfw-jrwm",
+        "GHSA-qvfw-j98x-7q72",
+        "GHSA-535w-7cp7-47q4"
+      ],
+      "status": "patched",
+      "evidence": "Parses user multipart uploads across Receipt Wiz, Bookkeeping, Inventory, Closet and general documents."
+    },
+    {
+      "package": "sharp",
+      "advisories": [
+        "GHSA-rgj7-g3m4-5g8c",
+        "GHSA-wq5f-xc86-pv6w"
+      ],
+      "status": "patched",
+      "evidence": "Processes user images; native decoder advisories are relevant even when image dimensions are bounded."
+    },
+    {
+      "package": "@xmldom/xmldom",
+      "advisories": [
+        "GHSA-8344-3jmq-59r6",
+        "GHSA-x4fp-j954-r2f4",
+        "GHSA-965w-775f-mr7g",
+        "GHSA-93r5-fhx6-vmg9"
+      ],
+      "status": "patched",
+      "evidence": "Mammoth parses untrusted uploaded DOCX XML through xmldom."
+    },
+    {
+      "package": "proxy-addr",
+      "advisories": [
+        "GHSA-jqcg-44mw-7w3h"
+      ],
+      "status": "patched; vulnerable condition not found",
+      "evidence": "Requires particular malformed trust subnet configuration; no trust proxy configuration found in server source."
+    },
+    {
+      "package": "uuid",
+      "advisories": [
+        "GHSA-w5hq-g745-h8pq"
+      ],
+      "status": "residual moderate; vulnerable use not found",
+      "evidence": "ExcelJS 4.4.0 depends on uuid8.3.2 but invokes only v4() without external buffers. Advisory affects v3/v5/v6 external output buffer handling. No forced ExcelJS downgrade or incompatible uuid override applied."
+    },
+    {
+      "package": "sprintf-js",
+      "advisories": [
+        "GHSA-hp3w-g68c-fv3c"
+      ],
+      "status": "residual moderate; no upstream patched release; vulnerable use not found",
+      "evidence": "Present through Mammoth CLI argparse dependency. App calls mammoth.extractRawText API, which does not load argparse or expose attacker format strings. No old Mammoth downgrade applied."
+    },
+    {
+      "package": "docx bundled nanoid",
+      "advisories": [
+        "GHSA-28wg-ghj8-5hjv"
+      ],
+      "status": "bundled implementation remains; vulnerable use not found",
+      "evidence": "docx9.7.1 embeds old non-secure nanoid code, so patching lock dependency does not rewrite embedded bundle. Inspected calls use fixed positive lengths; no attacker-controlled negative size path found."
+    }
+  ],
+  "tests": {
+    "passed": 102,
+    "failed": 0,
+    "files": [
+      "test/picture_studio.test.cjs",
+      "test/virtual_closet.test.mjs",
+      "test/inventory.test.mjs",
+      "test/contacts_crm.test.mjs",
+      "test/bookkeeping_receipts.test.mjs",
+      "test/receipt_wiz.test.mjs"
+    ],
+    "extra": "DOCX generation and Mammoth extractRawText round-trip passed; Sharp0.35.5 loads libvips8.18.7"
+  },
+  "public_headers_before_root_hardening": {
+    "frontend": "GET /app/ 200; nosniff present; no observed CSP/frame protections, HSTS or Referrer-Policy",
+    "backend": "GET /api/health 200; X-Powered-By Express; Access-Control-Allow-Origin *; no observed baseline security headers"
+  },
+  "limitations": [
+    "Package audit advisories are not equivalent to proven reachable exploits.",
+    "No exploitation of production, customer data access, load testing, deployments or secret reads by dependency auditor.",
+    "A clean critical/high audit count does not prove absence of embedded dependency flaws or application vulnerabilities."
+  ],
+  "evidence_files": [
+    "/tmp/korlix-backend-security-npm-audit.json",
+    "/tmp/korlix-backend-security-npm-audit-after.json",
+    "/tmp/korlix-backend-security-dependency-tests.log"
+  ]
+}
