@@ -24,8 +24,7 @@ function fixture(options = {}) {
   const scope = {...quality, ...studio, ...require('../chat_memory/memory.mjs'), ...require('../resume_studio/policy.mjs'), createTextResponse, OpenAI, Buffer, AbortSignal,
     process: {env: {OPENAI_API_KEY:'offline', OPENAI_MODEL:'old-model', OPENAI_SEARCH_MODEL:'old-search'}},
     languageMap: {en:{name:'English',instruction:'Use English.'}},
-    shouldUseLiveSearch: command => command.includes('today'), wantsFile: () => false,
-    calculateCredits: () => 1, getAuthenticatedUser: async () => user,
+    getAuthenticatedUser: async () => user,
     requireUser: async () => {if (!user) throw Object.assign(Error('Sign in'),{statusCode:401});return user;},
     getOrCreateProfile: async () => ({tier:'enterprise',selected_character:'nova'}),
     getOrCreateUsageCounter: async () => ({}),
@@ -46,7 +45,7 @@ function fixture(options = {}) {
     app: {post(path, handler) {scope.routes[path] = handler;}}, routes:{},
   };
   vm.createContext(scope);
-  for (const name of ['createOpenAIResponse','buildKorlixImageCreatePrompt',
+  for (const name of ['shouldUseLiveSearch','wantsFile','calculateCredits','createOpenAIResponse','buildKorlixImageCreatePrompt',
     'createKorlixImaginedImage','createKorlixImprovedImage']) {
     const match = new RegExp('(?:async )?function '+name+'\\b').exec(source);
     vm.runInContext(source.slice(match.index, source.indexOf('\n}\n',match.index)+2),scope);
@@ -77,6 +76,62 @@ test('search and its fallback preserve xhigh and report fallback honestly', asyn
     for(const call of f.calls) assert.equal(call.reasoning.effort,'xhigh');
     if(searchFailure) assert.match(f.calls[1].input,/Live search was attempted but failed/);
   }
+});
+test('real chat routing requires current sources for TWIC and document variants without recency keywords', async () => {
+  for (const command of ['where in Delaware do I apply for my twic card',
+    "Is an enhanced driver's license enough?", 'Which identification documents are accepted?',
+    'How do I apply for a building permit?', 'Qué documentos necesito para mi pasaporte?',
+    'Quels documents apporter pour un passeport ?']) {
+    const f=fixture(),r=await f.run({command});
+    assert.equal(r.statusCode,200,command);assert.equal(f.calls.length,1);
+    assert.equal(f.calls[0].tools[0].type,'web_search');assert.equal(f.calls[0].tool_choice,'required');
+    assert.equal(r.body.searched,true);assert.equal(r.body.fallbackUsed,false);
+    assert.match(f.calls[0].instructions,/issuing agency or its authorized provider/);
+    assert.match(f.calls[0].instructions,/single-document versus multiple-document/);
+    assert.match(f.calls[0].instructions,/Do not append unverified restrictions/);
+  }
+});
+test('document follow-ups use only supplied recent user context and unrelated requests stay ordinary', async () => {
+  const f=fixture();
+  let r=await f.run({command:'What should I bring?',history:[{role:'user',content:'Where do I apply for TWIC?'},{role:'assistant',content:'Use an official enrollment center.'}]});
+  assert.equal(r.body.searched,true);assert.equal(f.calls[0].tool_choice,'required');
+  for (const body of [{command:'What should I bring?'},
+    {command:'What should I bring?',history:[{role:'assistant',content:'Get a TWIC.'}]},
+    {command:'Write a poem about clouds',history:[{role:'user',content:'Where do I apply for TWIC?'}]},
+    {command:'Rewrite this greeting: Hello, friend.'}]) {
+    r=await f.run(body);assert.equal(r.body.searched,false);assert.equal(f.calls.at(-1).tools,undefined);
+  }
+});
+test('search fallback gets explicit requirements uncertainty and preserves existing search accounting', async () => {
+  for (const searchFailure of [false,true]) {
+    const f=fixture({searchFailure}),r=await f.run({command:'Where in Delaware do I apply for my TWIC card?'});
+    assert.equal(r.statusCode,200);assert.equal(r.body.creditsUsed,4);
+    assert.equal(f.usage.length,1);assert.equal(f.saved.length,1);
+    assert.equal(f.usage[0].creditsNeeded,4);assert.equal(f.usage[0].liveSearchUsed,!searchFailure);
+    assert.equal(r.body.searched,!searchFailure);assert.equal(r.body.fallbackUsed,searchFailure);
+    assert.equal(f.calls.length,searchFailure?2:1);
+    if (searchFailure) {
+      assert.equal(f.calls[1].tools,undefined);
+      assert.match(f.calls[1].instructions,/Live search was attempted but failed/);
+      assert.match(f.calls[1].instructions,/Do not assert current eligibility, accepted-document rules/);
+      assert.match(f.calls[1].instructions,/never invent a link or imply a source was checked/i);
+    }
+  }
+});
+test('private Resume Studio text retains its no-search override despite credential keywords', async () => {
+  const f=fixture(),r=await f.run({command:'Rewrite my resume: TWIC holder, current CDL license.',purpose:'resume_studio'});
+  assert.equal(r.statusCode,200);assert.equal(r.body.searched,false);assert.equal(r.body.creditsUsed,1);
+  assert.equal(r.body.fileRequested,false);assert.equal(f.calls[0].tools,undefined);
+});
+test('ordinary credential rewrites and creative text do not add search; explicit verification still does', async () => {
+  for (const command of ['Rewrite my resume: TWIC holder, CDL license.',
+    'Please translate: I have a TWIC card.', 'Write a poem about a passport']) {
+    const f=fixture(),r=await f.run({command});
+    assert.equal(r.statusCode,200);assert.equal(r.body.searched,false);assert.equal(r.body.creditsUsed,1);
+    assert.equal(f.calls[0].tools,undefined);
+  }
+  const f=fixture(),r=await f.run({command:'Rewrite and fact-check this: An enhanced driver’s license is never enough for TWIC.'});
+  assert.equal(r.body.searched,true);assert.equal(f.calls[0].tool_choice,'required');
 });
 test('only supplied selected-topic messages reach chat; new topics have no implicit history', async () => {
   const f=fixture();await f.run({command:'What color?',history:[{role:'user',content:'My label is teal.'}]});

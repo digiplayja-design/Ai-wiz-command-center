@@ -85,7 +85,7 @@ import OpenAI from "openai";
 import korlixAstra from "./korlix_astra.cjs";
 const {createTextResponse} = korlixAstra;
 import chatQuality from "./chat_quality.cjs";
-const {CHAT_MODEL, CHAT_EFFORT, chatHistory, imageSettings, imagePrompt, probeModelAccess} = chatQuality;
+const {CHAT_MODEL, CHAT_EFFORT, chatHistory, needsOfficialSourceSearch, chatAccuracyInstructions, imageSettings, imagePrompt, probeModelAccess} = chatQuality;
 import pictureStudio from "./picture_studio.cjs";
 const {pictureOptions, pictureModelSettings, improvePicture} = pictureStudio;
 let chatModelAccess = {chat: 'checking', images: 'checking'};
@@ -2058,11 +2058,13 @@ async function fetchOpenAIVideoContent(videoId) {
 }
 
 
-async function createOpenAIResponse(client, { model, input, useSearch, reasoningEffort }) {
+async function createOpenAIResponse(client, { model, input, useSearch, reasoningEffort, instructions }) {
   const request = {
     model,
     input,
   };
+
+  if (instructions) request.instructions = instructions;
 
   if (reasoningEffort) {
     request.reasoning = {effort: reasoningEffort};
@@ -4527,7 +4529,8 @@ app.post("/api/generate", async (req, res) => {
     }
 
     const resumePolicy = resumeTextPolicy(req.body);
-    const liveSearchNeeded = resumePolicy?.liveSearchNeeded ?? shouldUseLiveSearch(command);
+    const liveSearchNeeded = resumePolicy?.liveSearchNeeded ??
+      (needsOfficialSourceSearch(command, selectedHistory) || shouldUseLiveSearch(command));
     const fileRequested = resumePolicy?.fileRequested ?? wantsFile(command);
     const creditsNeeded = calculateCredits({
       liveSearchNeeded,
@@ -4585,11 +4588,12 @@ app.post("/api/generate", async (req, res) => {
       ? `
 This question needs current information.
 Use live web search.
+For applications, credentials, eligibility, and document requirements, check the current official agency or authorized provider sources and relevant exceptions before answering.
 Bring up real contenders, recent data, standings, rankings, current performance, or relevant sources when useful.
 For sports questions, do not dodge. Give a best pick or ranked shortlist and explain the evidence.
 `
       : `
-This question does not require live search unless the user explicitly asks for current information.
+Live search is not enabled for this request. Do not imply that current requirements or other changing facts have been verified.
 `;
 
     const selectedCharacterId = profile?.selected_character || "jj";
@@ -4661,6 +4665,7 @@ Return only the finished response.
         response = await createOpenAIResponse(client, {
           model: searchModel,
           input,
+          instructions: chatAccuracyInstructions(),
           useSearch: true,
           reasoningEffort: CHAT_EFFORT,
         });
@@ -4676,7 +4681,8 @@ Return only the finished response.
           model: normalModel,
           input: `${input}
 
-Important: Live search was attempted but failed. Give the most useful answer possible and clearly avoid pretending to know live standings.`,
+Important: Live search was attempted but failed. Clearly say that current information could not be verified and avoid definitive claims about current requirements or other changing facts.`,
+          instructions: chatAccuracyInstructions({searchFailed: true}),
           useSearch: false,
           reasoningEffort: CHAT_EFFORT,
         });
@@ -4687,6 +4693,7 @@ Important: Live search was attempted but failed. Give the most useful answer pos
       response = await createOpenAIResponse(client, {
         model: normalModel,
         input,
+        instructions: chatAccuracyInstructions(),
         useSearch: false,
         reasoningEffort: CHAT_EFFORT,
       });

@@ -40,7 +40,7 @@ before(async () => {
   const generateRoute = source.slice(source.indexOf('app.post("/api/generate",'), source.indexOf('// CREDIT DISPUTE LETTERS'));
   const context = {
     app, process: { env: { OPENAI_API_KEY: 'fixture-key' } }, console: { error() {} },
-    supabaseAdmin: database, prepareChatMemory, resumeTextPolicy, chatHistory: chatQuality.chatHistory,
+    supabaseAdmin: database, prepareChatMemory, resumeTextPolicy, ...chatQuality,
     languageMap: { en: { name: 'English', instruction: 'Use English' } }, shouldUseLiveSearch: () => false, wantsFile: () => false, calculateCredits: () => 1,
     getAuthenticatedUser: requireUser, getOrCreateProfile: async () => ({ tier: 'basic' }), getOrCreateUsageCounter: async () => ({}), checkUsageAllowed: () => ({ allowed: true }),
     sanitize: x => x, getKorlixUserFacingError: e => e.message, OpenAI: class {}, CHAT_MODEL: 'fixture', CHAT_EFFORT: 'fixture',
