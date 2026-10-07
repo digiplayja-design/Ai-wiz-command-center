@@ -1293,150 +1293,155 @@ class _SchedulingScreenState extends State<SchedulingScreen>
           ),
         ],
       ),
-      body: denied
-          ? const Center(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: Text(
-                  'Sign in with an active, verified KORLIX account and reopen KORLIX 2MEETU.',
-                  textAlign: TextAlign.center,
+      body: SafeArea(
+        top: false,
+        child: denied
+            ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Text(
+                    'Sign in with an active, verified KORLIX account and reopen KORLIX 2MEETU.',
+                    textAlign: TextAlign.center,
+                  ),
                 ),
-              ),
-            )
-          : _loading && _data.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1200),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _panel(
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Wrap(
-                              spacing: 10,
-                              runSpacing: 10,
-                              children: const [
-                                Chip(
-                                  avatar: Icon(
-                                    Icons.auto_awesome_outlined,
-                                    size: 16,
-                                  ),
-                                  label: Text('KORLIX 2MEETU'),
-                                ),
-                                Chip(label: Text('ONE-TO-ONE + GROUPS')),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-                            Text(
-                              'Less back-and-forth.\nMore meaningful meetings.',
-                              style: Theme.of(context).textTheme.headlineLarge
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: -.8,
-                                  ),
-                            ),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'Beautiful booking pages. Thoughtful availability. Your next connection, made simple.',
-                            ),
-                            const SizedBox(height: 22),
-                            Wrap(
-                              spacing: 12,
-                              runSpacing: 12,
-                              children: [
-                                FilledButton.icon(
-                                  onPressed: _busy ? null : () => _editEvent(),
-                                  icon: const Icon(Icons.add),
-                                  label: const Text('Create booking page'),
-                                ),
-                                OutlinedButton.icon(
-                                  onPressed: _busy ? null : _editAvailability,
-                                  icon: const Icon(Icons.schedule),
-                                  label: const Text('My availability'),
-                                ),
-                                if (widget.openVoice != null)
-                                  OutlinedButton.icon(
-                                    onPressed: _busy ? null : _openVoice,
-                                    icon: const Icon(Icons.mic_none),
-                                    label: const Text('Talk to Rici'),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            for (final item in [
-                              (0, 'Overview', Icons.space_dashboard_outlined),
-                              (1, 'Event types', Icons.link),
-                              (2, 'Availability', Icons.schedule),
-                              (3, 'Bookings', Icons.event_note),
-                              (4, 'Connections', Icons.link),
-                              (5, 'Teams', Icons.groups_outlined),
-                              (6, 'Assistant', Icons.auto_awesome_outlined),
-                            ])
-                              Padding(
-                                padding: const EdgeInsets.only(right: 10),
-                                child: ChoiceChip(
-                                  selected: _tab == item.$1,
-                                  onSelected: (_) =>
-                                      setState(() => _tab = item.$1),
-                                  avatar: Icon(item.$3, size: 18),
-                                  label: Text(item.$2),
-                                  showCheckmark: false,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-                      if (_busy || _loading) ...[
-                        const LinearProgressIndicator(),
-                        const SizedBox(height: 20),
-                      ],
-                      if (_error != null) ...[
+              )
+            : _loading && _data.isEmpty
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1200),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         _panel(
-                          Text(
-                            _error!,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: const [
+                                  Chip(
+                                    avatar: Icon(
+                                      Icons.auto_awesome_outlined,
+                                      size: 16,
+                                    ),
+                                    label: Text('KORLIX 2MEETU'),
+                                  ),
+                                  Chip(label: Text('ONE-TO-ONE + GROUPS')),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              Text(
+                                'Less back-and-forth.\nMore meaningful meetings.',
+                                style: Theme.of(context).textTheme.headlineLarge
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: -.8,
+                                    ),
+                              ),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'Beautiful booking pages. Thoughtful availability. Your next connection, made simple.',
+                              ),
+                              const SizedBox(height: 22),
+                              Wrap(
+                                spacing: 12,
+                                runSpacing: 12,
+                                children: [
+                                  FilledButton.icon(
+                                    onPressed: _busy
+                                        ? null
+                                        : () => _editEvent(),
+                                    icon: const Icon(Icons.add),
+                                    label: const Text('Create booking page'),
+                                  ),
+                                  OutlinedButton.icon(
+                                    onPressed: _busy ? null : _editAvailability,
+                                    icon: const Icon(Icons.schedule),
+                                    label: const Text('My availability'),
+                                  ),
+                                  if (widget.openVoice != null)
+                                    OutlinedButton.icon(
+                                      onPressed: _busy ? null : _openVoice,
+                                      icon: const Icon(Icons.mic_none),
+                                      label: const Text('Talk to Rici'),
+                                    ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 20),
-                      ],
-                      switch (_tab) {
-                        0 => _overview(),
-                        1 => _eventTypes(),
-                        2 => _availability(),
-                        3 => _bookingList(),
-                        _ => SchedulingConnectedPanel(
-                          key: ValueKey(_tab),
-                          mode: {
-                            4: 'connections',
-                            5: 'teams',
-                            6: 'assistant',
-                          }[_tab]!,
-                          data: _data,
-                          client: widget.client,
-                          refresh: () => _load(quiet: true),
+                        const SizedBox(height: 24),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              for (final item in [
+                                (0, 'Overview', Icons.space_dashboard_outlined),
+                                (1, 'Event types', Icons.link),
+                                (2, 'Availability', Icons.schedule),
+                                (3, 'Bookings', Icons.event_note),
+                                (4, 'Connections', Icons.link),
+                                (5, 'Teams', Icons.groups_outlined),
+                                (6, 'Assistant', Icons.auto_awesome_outlined),
+                              ])
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 10),
+                                  child: ChoiceChip(
+                                    selected: _tab == item.$1,
+                                    onSelected: (_) =>
+                                        setState(() => _tab = item.$1),
+                                    avatar: Icon(item.$3, size: 18),
+                                    label: Text(item.$2),
+                                    showCheckmark: false,
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
-                      },
-                      const SizedBox(height: 28),
-                    ],
+                        const SizedBox(height: 28),
+                        if (_busy || _loading) ...[
+                          const LinearProgressIndicator(),
+                          const SizedBox(height: 20),
+                        ],
+                        if (_error != null) ...[
+                          _panel(
+                            Text(
+                              _error!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                        switch (_tab) {
+                          0 => _overview(),
+                          1 => _eventTypes(),
+                          2 => _availability(),
+                          3 => _bookingList(),
+                          _ => SchedulingConnectedPanel(
+                            key: ValueKey(_tab),
+                            mode: {
+                              4: 'connections',
+                              5: 'teams',
+                              6: 'assistant',
+                            }[_tab]!,
+                            data: _data,
+                            client: widget.client,
+                            refresh: () => _load(quiet: true),
+                          ),
+                        },
+                        const SizedBox(height: 28),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
+      ),
     );
   }
 }

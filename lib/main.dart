@@ -50,6 +50,10 @@ import 'characters/character_video_gestures.dart';
 export 'characters/character_catalog.dart' show normalizeKorlixCharacterId;
 import 'auth/korlix_october_welcome.dart';
 import 'auth/korlix_login_preferences.dart';
+import 'auth/korlix_token_store.dart';
+import 'ads/korlix_ad_consent.dart';
+import 'account/korlix_account_deletion_dialog.dart';
+import 'sharing/korlix_share.dart';
 import 'auth/korlix_portal_launch.dart';
 import 'input_tools/upload_studio.dart';
 import 'input_tools/voice_composer.dart';
@@ -171,7 +175,26 @@ bool _korlixPortalLaunchRequested = false;
 final ValueNotifier<int> kKorlixAuthRevision = ValueNotifier<int>(0);
 final ValueNotifier<int> kKorlixBillingRevision = ValueNotifier<int>(0);
 
+String? korlixConsentAccountScope(KorlixAuthSession? session) {
+  if (session == null) return null;
+  try {
+    final parts = session.accessToken.split('.');
+    if (parts.length != 3) return null;
+    final claims = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))));
+    if (claims is! Map<String, dynamic>) return null;
+    final issuer = claims['iss'];
+    final subject = claims['sub'];
+    if (issuer is! String || issuer.isEmpty || subject is! String || subject.isEmpty) return null;
+    // This is only a local privacy-preference namespace. Authorization still
+    // requires the backend to validate the token and active device session.
+    return jsonEncode([issuer, subject]);
+  } catch (_) {
+    return null;
+  }
+}
+
 void korlixSetInMemorySession(KorlixAuthSession? session) {
+  KorlixThirdPartyAiConsent.setAccountScope(korlixConsentAccountScope(session));
   if (session == null || session.email != kKorlixUserEmail) {
     kKorlixSounds.clearSession();
   }
@@ -182,8 +205,15 @@ void korlixSetInMemorySession(KorlixAuthSession? session) {
 }
 
 Future<void> korlixClearLocalAuthSession() async {
-  await KorlixSessionStore.clear();
+  // Invalidate visible sessions before waiting on a locked device's storage.
   korlixSetInMemorySession(null);
+  try {
+    await KorlixSessionStore.clear().timeout(const Duration(seconds: 5));
+  } catch (_) {
+    kKorlixBootWarnings.add(
+      'Session storage could not be cleared. Unlock your device and try again.',
+    );
+  }
 }
 
 bool korlixIsSessionTimeoutStatus(int statusCode) {
@@ -250,19 +280,6 @@ Future<void> main() async {
             }
           });
 
-          await _korlixRunBootStep('Mobile ads setup', () async {
-            if (!kIsWeb &&
-                (defaultTargetPlatform == TargetPlatform.android ||
-                    defaultTargetPlatform == TargetPlatform.iOS)) {
-              try {
-                await MobileAds.instance.initialize().timeout(
-                  const Duration(seconds: 8),
-                );
-              } catch (e) {
-                debugPrint("AdMob init failed: $e");
-              }
-            }
-          });
         } catch (error, stack) {
           final message = 'Background startup warning: $error';
           kKorlixBootWarnings.add(message);
@@ -530,9 +547,9 @@ class KorlixSessionStore {
 
   static Future<KorlixAuthSession?> load() async {
     final prefs = await SharedPreferences.getInstance();
-
-    final accessToken = prefs.getString(accessTokenKey);
-    final refreshToken = prefs.getString(refreshTokenKey);
+    final tokens = await KorlixTokenStore.instance.read();
+    final accessToken = tokens?.accessToken;
+    final refreshToken = tokens?.refreshToken;
     final email = prefs.getString(emailKey);
 
     if (accessToken == null || accessToken.isEmpty) {
@@ -549,11 +566,10 @@ class KorlixSessionStore {
   static Future<void> save(KorlixAuthSession session) async {
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setString(accessTokenKey, session.accessToken);
-
-    if (session.refreshToken != null && session.refreshToken!.isNotEmpty) {
-      await prefs.setString(refreshTokenKey, session.refreshToken!);
-    }
+    await KorlixTokenStore.instance.write(
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+    );
 
     if (session.email != null && session.email!.isNotEmpty) {
       await prefs.setString(emailKey, session.email!);
@@ -563,8 +579,7 @@ class KorlixSessionStore {
   static Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.remove(accessTokenKey);
-    await prefs.remove(refreshTokenKey);
+    await KorlixTokenStore.instance.clear();
     await prefs.remove(emailKey);
   }
 
@@ -612,8 +627,8 @@ class KorlixSessionStore {
         email: data['user']?['email']?.toString() ?? session.email,
       );
 
-      await save(newSession);
-
+      // The caller must verify the originating session is still current
+      // before persisting a response that arrived after an account switch.
       return newSession;
     } catch (_) {
       return session;
@@ -633,58 +648,56 @@ class KorlixAuthSession {
   });
 }
 
-Future<Map<String, String>> korlixAuthenticatedBackendHeaders() async {
+Future<Map<String, String>> korlixAuthenticatedBackendHeaders({http.Client? client}) async {
+  final revision = kKorlixAuthRevision.value;
   KorlixAuthSession? session;
-
   final inMemoryAccessToken = kKorlixAccessToken?.trim();
-
   if (inMemoryAccessToken != null && inMemoryAccessToken.isNotEmpty) {
     session = KorlixAuthSession(
       accessToken: inMemoryAccessToken,
       refreshToken: kKorlixRefreshToken,
       email: kKorlixUserEmail,
     );
-  }
-
-  if (session == null) {
+  } else {
     try {
-      session = await KorlixSessionStore.load().timeout(
-        const Duration(seconds: 3),
-      );
+      session = await KorlixSessionStore.load().timeout(const Duration(seconds: 3));
     } catch (_) {
       session = null;
     }
   }
-
-  if (session != null) {
+  if (session != null && revision == kKorlixAuthRevision.value) {
+    KorlixAuthSession? refreshed;
     try {
-      final refreshed = await KorlixSessionStore.refresh(
-        session,
-      ).timeout(const Duration(seconds: 8));
-
-      if (refreshed != null) {
-        await KorlixSessionStore.save(refreshed);
-        korlixSetInMemorySession(refreshed);
-      } else {
-        korlixSetInMemorySession(session);
-      }
+      refreshed = await KorlixSessionStore.refresh(session, client: client)
+          .timeout(const Duration(seconds: 8));
     } catch (_) {
-      korlixSetInMemorySession(session);
+      refreshed = session;
     }
+    if (revision != kKorlixAuthRevision.value) {
+      throw StateError('Your account changed. Please try again.');
+    }
+    if (refreshed == null) {
+      await korlixClearLocalAuthSession();
+      return KorlixDeviceStore.headers();
+    }
+    await KorlixSessionStore.save(refreshed);
+    if (revision != kKorlixAuthRevision.value) {
+      throw StateError('Your account changed. Please try again.');
+    }
+    korlixSetInMemorySession(refreshed);
+  } else if (revision != kKorlixAuthRevision.value) {
+    throw StateError('Your account changed. Please try again.');
   }
 
   final headers = KorlixDeviceStore.headers();
   final accessToken = kKorlixAccessToken?.trim();
   final email = kKorlixUserEmail?.trim();
-
   if (accessToken != null && accessToken.isNotEmpty) {
     headers['Authorization'] = 'Bearer $accessToken';
   }
-
   if (email != null && email.isNotEmpty) {
     headers['X-Korlix-User-Email'] = email;
   }
-
   return headers;
 }
 
@@ -715,6 +728,7 @@ Uri _assertValidKorlixBackendUri(String rawUri) {
 
 class _AuthGateState extends State<AuthGate> {
   bool _booting = true;
+  String? _restoreNotice;
   late final KnovaWelcomeController _welcome;
   bool _portalLaunchScheduled = false;
 
@@ -774,6 +788,7 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _restoreSession() async {
+    final revision = kKorlixAuthRevision.value;
     try {
       await KorlixDeviceStore.ensureLoaded().timeout(
         const Duration(seconds: 5),
@@ -783,6 +798,7 @@ class _AuthGateState extends State<AuthGate> {
         const Duration(seconds: 5),
       );
 
+      if (!mounted || revision != kKorlixAuthRevision.value) return;
       if (saved == null) {
         await korlixClearLocalAuthSession();
       } else {
@@ -790,8 +806,10 @@ class _AuthGateState extends State<AuthGate> {
           saved,
         ).timeout(const Duration(seconds: 8));
 
+        if (!mounted || revision != kKorlixAuthRevision.value) return;
         if (refreshed != null) {
-          await KorlixSessionStore.save(refreshed);
+          await KorlixSessionStore.save(refreshed).timeout(const Duration(seconds: 5));
+          if (!mounted || revision != kKorlixAuthRevision.value) return;
           korlixSetInMemorySession(refreshed);
         } else {
           await korlixClearLocalAuthSession();
@@ -803,15 +821,15 @@ class _AuthGateState extends State<AuthGate> {
       debugPrint('Korlix startup warning: $warning');
       debugPrintStack(stackTrace: stack);
 
-      // If restore/refresh fails, do not leave a stale token making the user
-      // appear signed in. Force a complete local signout.
-      await korlixClearLocalAuthSession();
-    }
-
-    if (mounted) {
-      setState(() {
-        _booting = false;
-      });
+      // A locked keychain or interrupted migration must not erase the only
+      // recoverable credentials. Start signed out and allow a later retry.
+      if (revision == kKorlixAuthRevision.value) korlixSetInMemorySession(null);
+      _restoreNotice =
+          'We could not restore your session. Unlock your device and sign in again.';
+    } finally {
+      if (mounted) {
+        setState(() => _booting = false);
+      }
     }
   }
 
@@ -842,7 +860,7 @@ class _AuthGateState extends State<AuthGate> {
           ...KorlixDeviceStore.headers(),
         },
         body: jsonEncode(KorlixDeviceStore.bodyFields()),
-      );
+      ).timeout(const Duration(seconds: 8));
     } catch (_) {
       // Local sign-out should still happen even if the server cleanup fails.
     }
@@ -896,7 +914,11 @@ class _AuthGateState extends State<AuthGate> {
     }
 
     if (!_signedIn) {
-      return AuthScreen(onSignedIn: _handleSignedIn, onSignInGesture: _welcome.prepareGesture);
+      return AuthScreen(
+        onSignedIn: _handleSignedIn,
+        onSignInGesture: _welcome.prepareGesture,
+        initialNotice: _restoreNotice,
+      );
     }
 
     _schedulePortalLaunch();
@@ -960,8 +982,9 @@ class AuthScreen extends StatefulWidget {
   final http.Client? client;
   final DateTime? seasonalDate;
   final VoidCallback? onSignInGesture;
+  final String? initialNotice;
 
-  const AuthScreen({super.key, required this.onSignedIn, this.client, this.seasonalDate, this.onSignInGesture});
+  const AuthScreen({super.key, required this.onSignedIn, this.client, this.seasonalDate, this.onSignInGesture, this.initialNotice});
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -993,6 +1016,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   void initState() {
     super.initState();
+    _message = widget.initialNotice;
     _preferencesLoaded = _restoreLoginPreferences();
   }
 
@@ -2098,9 +2122,14 @@ class KorlixBasicAdBanner extends StatefulWidget {
 }
 
 class _KorlixBasicAdBannerState extends State<KorlixBasicAdBanner> {
+  final KorlixAdConsent _consent = KorlixAdConsent.instance;
   BannerAd? _bannerAd;
+  BannerAd? _pendingAd;
   bool _loaded = false;
-  bool _shouldShow = false;
+  bool _preparing = false;
+  bool _prepareAgain = false;
+  bool _lastConsentReady = false;
+  int _generation = 0;
 
   static const String _androidTestBannerAdUnit =
       'ca-app-pub-3940256099942544/6300978111';
@@ -2108,121 +2137,203 @@ class _KorlixBasicAdBannerState extends State<KorlixBasicAdBanner> {
   static const String _androidProductionBannerAdUnit =
       'ca-app-pub-1549134869666707/4852386901';
 
-  bool get _mobileAdsSupported {
-    return !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
-  }
+  bool get _mobileAdsSupported =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
-  String get _adUnitId {
-    return kReleaseMode
-        ? _androidProductionBannerAdUnit
-        : _androidTestBannerAdUnit;
-  }
+  String get _adUnitId =>
+      kReleaseMode ? _androidProductionBannerAdUnit : _androidTestBannerAdUnit;
 
   @override
   void initState() {
     super.initState();
-    _prepareAd();
+    _lastConsentReady = _consent.adsReady;
+    _consent.addListener(_handleConsentChanged);
+    kKorlixAuthRevision.addListener(_handleAccountChanged);
+    kKorlixBillingRevision.addListener(_handleAccountChanged);
+    unawaited(_prepareAd());
+  }
+
+  void _disposeAd(Ad ad) {
+    unawaited(ad.dispose().catchError((Object _) {}));
+  }
+
+  void _invalidateAd() {
+    _generation++;
+    final pending = _pendingAd;
+    final current = _bannerAd;
+    _pendingAd = null;
+    _bannerAd = null;
+    _loaded = false;
+    if (pending != null) _disposeAd(pending);
+    if (current != null && !identical(current, pending)) _disposeAd(current);
+    if (mounted) setState(() {});
+  }
+
+  void _handleAccountChanged() {
+    _invalidateAd();
+    _queuePreparation();
+  }
+
+  void _handleConsentChanged() {
+    final ready = _consent.adsReady;
+    if (ready == _lastConsentReady) return;
+    _lastConsentReady = ready;
+    if (!ready) {
+      _invalidateAd();
+    } else {
+      _queuePreparation();
+    }
+  }
+
+  void _queuePreparation() {
+    if (!mounted) return;
+    if (_preparing) {
+      _prepareAgain = true;
+    } else {
+      unawaited(_prepareAd());
+    }
   }
 
   Future<void> _prepareAd() async {
-    if (!_mobileAdsSupported) {
+    if (!_mobileAdsSupported ||
+        !mounted ||
+        _preparing ||
+        _pendingAd != null ||
+        _bannerAd != null) {
       return;
     }
+    final token = kKorlixAccessToken;
+    if (token == null || token.isEmpty) return;
+    final generation = _generation;
+    final authRevision = kKorlixAuthRevision.value;
+    final billingRevision = kKorlixBillingRevision.value;
+    bool current() =>
+        mounted &&
+        generation == _generation &&
+        authRevision == kKorlixAuthRevision.value &&
+        billingRevision == kKorlixBillingRevision.value &&
+        token == kKorlixAccessToken;
 
-    if (kKorlixAccessToken == null || kKorlixAccessToken!.isEmpty) {
-      return;
-    }
-
+    _preparing = true;
     try {
-      final response = await http.get(
-        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/me'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $kKorlixAccessToken',
-        },
-      );
-
-      if (response.statusCode >= 400) {
+      if (kKorlixDeviceId == null) {
+        await KorlixDeviceStore.ensureLoaded().timeout(
+          const Duration(seconds: 5),
+        );
+      }
+      if (!current()) return;
+      final response = await http
+          .get(
+            _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/me'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+              ...KorlixDeviceStore.headers(),
+            },
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!current() || response.statusCode < 200 || response.statusCode >= 300) {
         return;
       }
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final profile =
-          (data['profile'] as Map?)?.cast<String, dynamic>() ??
-          <String, dynamic>{};
-      final tier = (profile['tier'] ?? 'basic').toString();
-      final preferredTheme = (profile['preferred_theme'] ?? 'korlix_blue')
-          .toString();
-
-      if (tier != 'basic') {
+      final profile = (data['profile'] as Map?)?.cast<String, dynamic>();
+      // Missing account data must never be interpreted as eligibility for ads.
+      if (profile?['tier'] != 'basic') return;
+      if (!await _consent.prepareAds() || !current() || !_consent.adsReady) {
         return;
       }
-
-      _shouldShow = true;
 
       final ad = BannerAd(
         size: AdSize.banner,
         adUnitId: _adUnitId,
         listener: BannerAdListener(
           onAdLoaded: (ad) {
-            if (!mounted) {
+            if (!current() ||
+                !_consent.adsReady ||
+                !identical(_pendingAd, ad)) {
+              _disposeAd(ad);
               return;
             }
-
             setState(() {
+              _pendingAd = null;
               _bannerAd = ad as BannerAd;
               _loaded = true;
             });
           },
           onAdFailedToLoad: (ad, error) {
-            ad.dispose();
-
-            if (!mounted) {
+            _disposeAd(ad);
+            if (!mounted ||
+                (!identical(_pendingAd, ad) && !identical(_bannerAd, ad))) {
               return;
             }
-
             setState(() {
+              if (identical(_pendingAd, ad)) _pendingAd = null;
+              if (identical(_bannerAd, ad)) _bannerAd = null;
               _loaded = false;
-              _bannerAd = null;
             });
           },
         ),
         request: const AdRequest(),
       );
-
+      _pendingAd = ad;
       await ad.load();
     } catch (_) {
-      // Ads should never block app usage.
+      // Ads should never block app usage or reveal SDK/network error details.
+      if (current()) {
+        final pending = _pendingAd;
+        _pendingAd = null;
+        if (pending != null) _disposeAd(pending);
+      }
+    } finally {
+      _preparing = false;
+      if (_prepareAgain && mounted) {
+        _prepareAgain = false;
+        unawaited(_prepareAd());
+      }
     }
   }
 
   @override
   void dispose() {
-    _bannerAd?.dispose();
+    _consent.removeListener(_handleConsentChanged);
+    kKorlixAuthRevision.removeListener(_handleAccountChanged);
+    kKorlixBillingRevision.removeListener(_handleAccountChanged);
+    _generation++;
+    final pending = _pendingAd;
+    final current = _bannerAd;
+    if (pending != null) _disposeAd(pending);
+    if (current != null && !identical(current, pending)) _disposeAd(current);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_mobileAdsSupported || !_shouldShow || !_loaded || _bannerAd == null) {
+    if (!_mobileAdsSupported ||
+        !_consent.adsReady ||
+        !_loaded ||
+        _bannerAd == null) {
       return const SizedBox.shrink();
     }
 
-    return Container(
-      width: double.infinity,
-      height: _bannerAd!.size.height.toDouble() + 12,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.72),
-        border: Border(
-          top: BorderSide(color: const Color(0xFF2EC7DF).withOpacity(0.25)),
+    return Semantics(
+      label: 'Advertisement',
+      child: Container(
+        width: double.infinity,
+        height: _bannerAd!.size.height.toDouble() + 12,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.72),
+          border: Border(
+            top: BorderSide(color: const Color(0xFF2EC7DF).withValues(alpha: 0.25)),
+          ),
         ),
-      ),
-      child: SizedBox(
-        width: _bannerAd!.size.width.toDouble(),
-        height: _bannerAd!.size.height.toDouble(),
-        child: AdWidget(ad: _bannerAd!),
+        child: SizedBox(
+          width: _bannerAd!.size.width.toDouble(),
+          height: _bannerAd!.size.height.toDouble(),
+          child: AdWidget(ad: _bannerAd!),
+        ),
       ),
     );
   }
@@ -2438,6 +2549,7 @@ class KorlixAccountButton extends StatefulWidget {
 
 class _KorlixAccountButtonState extends State<KorlixAccountButton> {
   bool _loading = false;
+  bool _deletionRequestBusy = false;
 
   Map<String, String> _headers() {
     final headers = <String, String>{'Content-Type': 'application/json'};
@@ -3559,70 +3671,58 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
   // KORLIX_BRAIN_VAULT_SECURITY_SETTINGS_UI_BUILD131_V1_END
 
   Future<void> _requestAccountDeletion() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF071B27),
-          title: const Text(
-            'Request account deletion?',
-            style: TextStyle(color: Color(0xFFE4EBEE)),
-          ),
-          content: const Text(
-            'This will submit a request to delete your Korlix AI account and related data. You may be contacted by support if more information is needed.',
-            style: TextStyle(color: Color(0xFFA9C6CF)),
-          ),
-          actions: [
-            TextButton(style: korlixSoundButtonStyle(null),
-              onPressed: korlixSoundAction(() => Navigator.of(context).pop(false)),
-              child: const Text('Cancel'),
-            ),
-            TextButton(style: korlixSoundButtonStyle(null),
-              onPressed: korlixSoundAction(() => Navigator.of(context).pop(true)),
-              child: const Text(
-                'Request deletion',
-                style: TextStyle(color: Colors.redAccent),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true) {
+    if (!mounted || _deletionRequestBusy) return;
+    final revision = kKorlixAuthRevision.value;
+    final token = kKorlixAccessToken;
+    if (token == null || token.isEmpty) {
+      await _showKorlixNotice(
+        title: 'Sign in required',
+        message: 'Sign in to the account you want to request deletion for.',
+      );
       return;
     }
-
+    final headers = Map<String, String>.from(_headers());
+    bool current() => mounted && revision == kKorlixAuthRevision.value &&
+        token == kKorlixAccessToken;
+    _deletionRequestBusy = true;
     try {
-      final response = await http.post(
-        _assertValidKorlixBackendUri(
-          '$kKorlixBackendBaseUrl/api/account/delete-request',
+      final recorded = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => KorlixAccountDeletionDialog(
+          sessionChanges: kKorlixAuthRevision,
+          isSessionCurrent: current,
+          showAppleSubscriptions: !kIsWeb &&
+              defaultTargetPlatform == TargetPlatform.iOS,
+          submitRequest: () async {
+            if (!current()) return;
+            final response = await http.post(
+              _assertValidKorlixBackendUri(
+                '$kKorlixBackendBaseUrl/api/account/delete-request',
+              ),
+              headers: headers,
+              body: jsonEncode({
+                'reason': 'User requested account deletion from Korlix Account panel.',
+              }),
+            ).timeout(const Duration(seconds: 15));
+            if (!current()) return;
+            final data = jsonDecode(response.body);
+            if (response.statusCode < 200 || response.statusCode >= 300 ||
+                data is! Map || data['success'] != true) {
+              throw StateError('Deletion request was not confirmed.');
+            }
+          },
         ),
-        headers: _headers(),
-        body: jsonEncode({
-          'email': kKorlixUserEmail,
-          'reason':
-              'User requested account deletion from Korlix Account panel.',
-        }),
       );
-
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-
-      if (response.statusCode >= 400) {
-        throw Exception(data['error'] ?? 'Could not submit deletion request.');
-      }
-
+      if (recorded != true || !current()) return;
       await _showKorlixNotice(
-        title: 'Deletion request submitted',
-        message: 'Your account deletion request has been recorded.',
-        danger: true,
+        title: 'Deletion request recorded',
+        message: 'Your request has been recorded for review. Your account has '
+            'not been deleted yet. Account deletion does not automatically '
+            'cancel recurring subscriptions.',
       );
-    } catch (error) {
-      await _showKorlixNotice(
-        title: 'Deletion request failed',
-        message: _cleanError(error),
-        danger: true,
-      );
+    } finally {
+      _deletionRequestBusy = false;
     }
   }
 
@@ -3754,6 +3854,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
       context: context,
       backendBaseUrl: kKorlixBackendBaseUrl,
       headersBuilder: _headers,
+      sessionChanges: kKorlixAuthRevision,
       currentTier: currentTier,
       onTierChanged: _handleAppleSubscriptionTierChanged,
     );
@@ -4120,6 +4221,17 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     if (selected != null && mounted) await _setTheme(theme: selected.themeId, screenSkin: selected.skinId);
   }
 
+  Future<void> _openAdPrivacyOptions() async {
+    final revision = kKorlixAuthRevision.value;
+    final shown = await KorlixAdConsent.instance.showPrivacyOptions();
+    if (!shown && mounted && revision == kKorlixAuthRevision.value) {
+      await _showKorlixNotice(
+        title: 'Ad privacy options unavailable',
+        message: 'Your ad privacy options could not open. Please try again.',
+      );
+    }
+  }
+
   Future<void> _openPanel() async {
     if (_loading) {
       return;
@@ -4350,6 +4462,27 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       )),
                     ),
                     const SizedBox(height: 10),
+                    ListenableBuilder(
+                      listenable: KorlixAdConsent.instance,
+                      builder: (context, _) {
+                        final consent = KorlixAdConsent.instance;
+                        if (!consent.privacyOptionsRequired) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: OutlinedButton.icon(
+                            key: const Key('korlix-ad-privacy-options'),
+                            onPressed: korlixSoundAction(consent.privacyOptionsShowing
+                                ? null : _openAdPrivacyOptions),
+                            icon: const Icon(Icons.privacy_tip_outlined),
+                            label: const Text('Ad privacy options'),
+                            style: korlixSoundButtonStyle(OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF69D9E8),
+                              side: const BorderSide(color: Color(0xFF69D9E8)),
+                            )),
+                          ),
+                        );
+                      },
+                    ),
                     // KORLIX_BRAIN_VAULT_ACCOUNT_MANAGER_SETTINGS_BUILD131_V1_BEGIN
                     OutlinedButton.icon(
                       onPressed: korlixSoundAction(_openBrainVaultSecuritySettings),
@@ -5521,6 +5654,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       KorlixAppleBillingService.instance.configure(
         backendBaseUrl: kKorlixBackendBaseUrl,
         headersBuilder: _authHeaders,
+        sessionChanges: kKorlixAuthRevision,
         currentTier: _currentTier,
         onTierChanged: _handleAppleSubscriptionTierChanged,
       ),
@@ -8252,6 +8386,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   Future<void> _shareGeneratedImage(GeneratedItem item) async {
     try {
       final bytes = await _generatedImageBytes(item);
+      if (!mounted) return;
 
       await Share.shareXFiles(
         [
@@ -8263,6 +8398,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         ],
         text: 'Korlix AI improved image',
         subject: 'Korlix AI improved image',
+        fileNameOverrides: [_generatedImageFilename(item)],
+        sharePositionOrigin: korlixShareOrigin(context),
       );
     } catch (error) {
       if (!mounted) {
@@ -11652,16 +11789,12 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   Future<void> _shareFeaturedResult(GeneratedItem item) async {
-    final box = context.findRenderObject() as RenderBox?;
-
     await Share.share(
       _featuredResultShareText(item),
       subject: item.title.trim().isNotEmpty
           ? item.title.trim()
           : 'Korlix AI result',
-      sharePositionOrigin: box == null
-          ? null
-          : box.localToGlobal(Offset.zero) & box.size,
+      sharePositionOrigin: korlixShareOrigin(context),
     );
   }
 
@@ -12202,6 +12335,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                                 Share.share(
                                   'I created a video with Korlix AI. Video ID: $videoId',
                                   subject: 'Korlix AI video',
+                                  sharePositionOrigin: korlixShareOrigin(context),
                                 );
                               }),
                               icon: const Icon(Icons.share_rounded),
@@ -12349,7 +12483,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
               ? 'application/pdf'
               : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         ),
-      ], text: 'Credit Dispute Letter');
+      ], text: 'Credit Dispute Letter', fileNameOverrides: [fileName],
+        sharePositionOrigin: korlixShareOrigin(context));
     } catch (e) {
       debugPrint('[CreditDocs] Save error: ' + e.toString());
     }
@@ -14329,11 +14464,14 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         [XFile.fromData(bytes, name: filename, mimeType: 'text/plain')],
         text: 'Korlix AI chat export: ${topic.title}',
         subject: 'Korlix AI chat export',
+        fileNameOverrides: [filename],
+        sharePositionOrigin: korlixShareOrigin(context),
       );
     } catch (_) {
       await Share.share(
         exportText,
         subject: 'Korlix AI chat export: ${topic.title}',
+        sharePositionOrigin: korlixShareOrigin(context),
       );
     }
   }
@@ -15683,7 +15821,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                       _chatActionButton(
                         icon: Icons.share_rounded,
                         label: 'Share',
-                        onTap: () => Share.share(msg.aiText),
+                        onTap: () => Share.share(msg.aiText,
+                          sharePositionOrigin: korlixShareOrigin(context)),
                       ),
                       // Open full
                       _chatActionButton(

@@ -53,6 +53,7 @@ class _PortraitStudioHomeState extends State<PortraitStudioHome> {
       if (image == null) return;
 
       final bytes = await image.readAsBytes();
+      if (!mounted) return;
       final fallbackName =
           'korlix_portrait_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final imageName = image.name.trim().isEmpty ? fallbackName : image.name;
@@ -72,6 +73,7 @@ class _PortraitStudioHomeState extends State<PortraitStudioHome> {
         context,
       ).showSnackBar(SnackBar(content: Text('Selected $imageName')));
     } catch (error) {
+      if (!mounted) return;
       setState(() {
         _error =
             'Could not open your photos. Check iOS Photos permission, then try again.';

@@ -47,6 +47,49 @@ Future<void> area(WidgetTester tester, String value) async {
 }
 
 void main() {
+  testWidgets('landscape controls stay inside cutouts and the home indicator', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(844, 390);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    var locationRequests = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: korlixBuildTheme('korlix_blue'),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(padding: const EdgeInsets.fromLTRB(44, 0, 44, 34)),
+          child: child!,
+        ),
+        home: KorlixLocatorScreen(
+          locate: () async {
+            locationRequests++;
+            return const LocatorPosition(40, -74);
+          },
+          openMap: (_) async => true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final scroll = find.byType(SingleChildScrollView);
+    final viewport = tester.getRect(scroll);
+    expect(viewport.left, greaterThanOrEqualTo(44));
+    expect(viewport.right, lessThanOrEqualTo(800));
+    expect(viewport.bottom, lessThanOrEqualTo(356));
+    await tester.scrollUntilVisible(
+      find.text('Bars'),
+      300,
+      scrollable: find
+          .descendant(of: scroll, matching: find.byType(Scrollable))
+          .first,
+    );
+    expect(find.text('Bars').hitTestable(), findsOneWidget);
+    expect(locationRequests, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   test(
     'Google search includes acquired coordinates; manual area overrides them',
     () {

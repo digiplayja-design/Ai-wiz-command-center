@@ -11,6 +11,7 @@ import 'package:video_player/video_player.dart';
 import '../korlix_video_downloader.dart';
 import '../korlix_video_preview_source.dart';
 import '../privacy/korlix_third_party_ai_consent.dart';
+import '../sharing/korlix_share.dart';
 import 'image_to_video_media.dart';
 
 typedef KorlixImageToVideoHeadersBuilder =
@@ -576,7 +577,10 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
         await _openVideoUrl();
       } else {
         await SharePlus.instance.share(
-          ShareParams(text: 'KORLIX AI Image to Video result:\n${media.uri}'),
+          ShareParams(
+            text: 'KORLIX AI Image to Video result:\n${media.uri}',
+            sharePositionOrigin: korlixShareOrigin(context),
+          ),
         );
       }
     } catch (error) {

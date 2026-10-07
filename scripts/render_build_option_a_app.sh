@@ -2,6 +2,7 @@
 set -euo pipefail
 
 # Keep build diagnostics local; deployment does not need analytics reporting.
+export DASH__SUPPRESS_ANALYTICS=true
 export FLUTTER_SUPPRESS_ANALYTICS=true
 export DART_SUPPRESS_ANALYTICS=true
 
@@ -22,7 +23,11 @@ if ! command -v flutter >/dev/null 2>&1; then
   echo "Flutter not found. Installing Flutter SDK into $FLUTTER_DIR..."
 
   if [ ! -d "$FLUTTER_DIR/.git" ]; then
-    rm -rf "$FLUTTER_DIR"
+    if [ -e "$FLUTTER_DIR" ]; then
+      echo "Flutter SDK path already exists and is not a Git checkout: $FLUTTER_DIR" >&2
+      echo "Choose an unused KORLIX_FLUTTER_DIR or provide Flutter on PATH." >&2
+      exit 1
+    fi
     git clone --depth 1 --branch "$FLUTTER_CHANNEL" https://github.com/flutter/flutter.git "$FLUTTER_DIR"
   fi
 
@@ -31,18 +36,33 @@ else
   echo "Flutter already available."
 fi
 
-flutter --version
-flutter config --enable-web
+flutter --suppress-analytics --no-version-check --version
+flutter --suppress-analytics --no-version-check config --enable-web
 
 echo ""
 echo "Getting dependencies..."
-flutter pub get
+flutter --suppress-analytics --no-version-check pub get
 
-echo "Checking sign-in and refresh device compatibility..."
-flutter test --no-pub test/auth_device_session_test.dart test/signup_eligibility_test.dart
+echo "Checking account security, billing, privacy, sharing and location flows..."
+RELEASE_TESTS=(
+  test/auth_device_session_test.dart
+  test/signup_eligibility_test.dart
+  test/auth/korlix_token_store_test.dart
+  test/apple_billing_test.dart
+  test/korlix_ad_consent_test.dart
+  test/korlix_share_test.dart
+  test/account_deletion_dialog_test.dart
+  test/video_download_test.dart
+  test/locator_test.dart
+  test/privacy/korlix_third_party_ai_consent_test.dart
+  test/privacy/korlix_third_party_ai_privacy_statement_test.dart
+  test/workforce/workforce_location_test.dart
+  test/workforce/workforce_test.dart
+)
 
-echo "Checking Workforce location capture and attendance flows..."
-flutter test --no-pub test/workforce/workforce_location_test.dart test/workforce/workforce_test.dart
+# This is a repeatable source-test gate. A passing web build does not replace
+# the signed iPhone/iPad archive and device checks required before submission.
+flutter --suppress-analytics --no-version-check test --no-pub "${RELEASE_TESTS[@]}"
 
 echo ""
 echo "Building Flutter web release for $APP_BASE_HREF..."
@@ -70,11 +90,11 @@ if [ -n "${KORLIX_OPENAI_IMAGE_MODEL:-}" ]; then
 fi
 
 PWA_ARGS=()
-if flutter build web --help 2>/dev/null | grep -q -- "--pwa-strategy"; then
+if flutter --suppress-analytics --no-version-check build web --help 2>/dev/null | grep -q -- "--pwa-strategy"; then
   PWA_ARGS+=(--pwa-strategy=none)
 fi
 
-flutter build web \
+flutter --suppress-analytics --no-version-check build web \
   --release \
   --base-href "$APP_BASE_HREF" \
   "${PWA_ARGS[@]}" \

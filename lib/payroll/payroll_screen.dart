@@ -746,511 +746,517 @@ class _PayrollScreenState extends State<PayrollScreen>
           const SizedBox(width: 8),
         ],
       ),
-      body: denied
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.lock_outline, size: 48),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Enterprise business access required',
-                      style: theme.textTheme.headlineSmall,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Sign in with a verified, active Enterprise business account to manage payroll.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+      body: SafeArea(
+        top: false,
+        child: denied
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.lock_outline, size: 48),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Enterprise business access required',
+                        style: theme.textTheme.headlineSmall,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Sign in with a verified, active Enterprise business account to manage payroll.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            )
-          : _loading && _accounts.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : SelectionArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1180),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            const Chip(
-                              avatar: Icon(
-                                Icons.verified_user_outlined,
-                                size: 16,
-                              ),
-                              label: Text('ENTERPRISE'),
-                            ),
-                            const Chip(label: Text('UNITED STATES · USD')),
-                            const Chip(label: Text('PAID ADD-ON')),
-                            if (_provider['environment'] == 'demo')
+              )
+            : _loading && _accounts.isEmpty
+            ? const Center(child: CircularProgressIndicator())
+            : SelectionArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1180),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
                               const Chip(
-                                label: Text('DEMO · NO REAL PAYMENTS'),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'Your people. Paid with confidence.',
-                          style: theme.textTheme.headlineLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Manage US payroll, employee onboarding, direct deposit, and payroll tax workflows from one business workspace.',
-                        ),
-                        const SizedBox(height: 28),
-                        if (_error != null) ...[
-                          _panel(
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(
-                                  Icons.info_outline,
-                                  color: theme.colorScheme.error,
+                                avatar: Icon(
+                                  Icons.verified_user_outlined,
+                                  size: 16,
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(child: Text(_error!)),
-                              ],
+                                label: Text('ENTERPRISE'),
+                              ),
+                              const Chip(label: Text('UNITED STATES · USD')),
+                              const Chip(label: Text('PAID ADD-ON')),
+                              if (_provider['environment'] == 'demo')
+                                const Chip(
+                                  label: Text('DEMO · NO REAL PAYMENTS'),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            'Your people. Paid with confidence.',
+                            style: theme.textTheme.headlineLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                          const SizedBox(height: 18),
-                        ],
-                        if (_provider['ready'] != true ||
-                            _provider['environment'] == 'demo') ...[
-                          _panel(
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _provider['environment'] == 'demo' &&
-                                          _provider['ready'] == true
-                                      ? 'Demo payroll environment'
-                                      : 'Prepare now. Activate payroll next.',
-                                  style: theme.textTheme.titleMedium,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  '${_provider['message'] ?? 'Provider status is unavailable. Refresh to try again.'}',
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                        ],
-                        Wrap(
-                          spacing: 16,
-                          runSpacing: 16,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            if (_accounts.isNotEmpty)
-                              SizedBox(
-                                width: 350,
-                                child: DropdownButtonFormField<String>(
-                                  key: ValueKey(_selected),
-                                  initialValue: _selected,
-                                  isExpanded: true,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Payroll business',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  items: _accounts
-                                      .map(
-                                        (a) => DropdownMenuItem(
-                                          value: '${a['id']}',
-                                          child: Text(
-                                            '${a['legal_name']}',
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      )
-                                      .toList(),
-                                  onChanged: _busy
-                                      ? null
-                                      : (v) {
-                                          setState(() {
-                                            _selected = v;
-                                            _onboarding = {};
-                                          });
-                                          unawaited(_load(select: v));
-                                        },
-                                ),
-                              ),
-                            FilledButton.icon(
-                              onPressed: _busy || _loading ? null : _create,
-                              icon: const Icon(Icons.add),
-                              label: Text(
-                                _businesses.isEmpty
-                                    ? 'Add a business'
-                                    : 'New payroll workspace',
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        if (_busy || _loading) ...[
-                          const LinearProgressIndicator(),
-                          const SizedBox(height: 16),
-                        ],
-                        if (_accounts.isEmpty)
-                          _panel(
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Icon(
-                                  Icons.account_balance_outlined,
-                                  size: 42,
-                                ),
-                                const SizedBox(height: 20),
-                                Text(
-                                  'Start with your US business',
-                                  style: theme.textTheme.headlineSmall,
-                                ),
-                                const SizedBox(height: 10),
-                                const Text(
-                                  'Add your business in Bookkeeping, then prepare its payroll workspace. Payroll is a separate paid add-on for each Enterprise business. You will review pricing before subscribing.',
-                                ),
-                                const SizedBox(height: 24),
-                                const Text(
-                                  '1. Prepare your workspace     2. Activate your paid add-on     3. Set up and run payroll',
-                                ),
-                              ],
-                            ),
-                          )
-                        else ...[
-                          _addonPanel(),
-                          const SizedBox(height: 24),
-                          _panel(
-                            Wrap(
-                              spacing: 35,
-                              runSpacing: 24,
-                              children: [
-                                _label(
-                                  'Provider connection',
-                                  status,
-                                  Icons.link,
-                                ),
-                                _label(
-                                  'Company onboarding',
-                                  _onboarding['onboarding_completed'] == true
-                                      ? 'Complete'
-                                      : 'Review setup',
-                                  Icons.fact_check_outlined,
-                                ),
-                                _label(
-                                  'Access',
-                                  _paid
-                                      ? 'Enterprise + Payroll'
-                                      : 'Add-on required',
-                                  Icons.shield_outlined,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          if (_account['needs_attention'] == true) ...[
-                            _panel(
-                              const Text(
-                                'This connection needs payroll support review. To prevent duplicate companies or repeated credential changes, creating another connection is paused.',
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                          ],
-                          if (_connected &&
-                              _account['environment'] !=
-                                  _provider['environment']) ...[
-                            _panel(
-                              const Text(
-                                'This workspace belongs to a different payroll environment. Contact payroll support before continuing.',
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                          ],
-                          if (!_connected && _account['status'] == 'draft') ...[
-                            _panel(
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Connect your payroll company',
-                                    style: theme.textTheme.titleLarge,
-                                  ),
-                                  const SizedBox(height: 10),
-                                  const Text(
-                                    'Gusto handles secure employee and bank details, payroll calculations, payments, and tax workflows. No payroll is submitted by connecting.',
-                                  ),
-                                  const SizedBox(height: 20),
-                                  FilledButton.icon(
-                                    onPressed:
-                                        !_busy &&
-                                            _paid &&
-                                            _provider['ready'] == true
-                                        ? _connect
-                                        : null,
-                                    icon: const Icon(Icons.link),
-                                    label: const Text(
-                                      'Connect payroll provider',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                          ],
-                          if (_connected &&
-                              _account['terms_accepted'] != true) ...[
-                            _panel(
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Review your provider agreement',
-                                    style: theme.textTheme.titleLarge,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  FilledButton(
-                                    onPressed:
-                                        _busy ||
-                                            !_paid ||
-                                            _provider['ready'] != true
-                                        ? null
-                                        : _terms,
-                                    child: const Text(
-                                      'Review and accept terms',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                          ],
-                          _panel(
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Company setup',
-                                  style: theme.textTheme.titleLarge,
-                                ),
-                                const SizedBox(height: 10),
-                                const Text(
-                                  'Complete business addresses, federal and state tax details, funding, employee onboarding, pay schedules, and signed documents.',
-                                ),
-                                const SizedBox(height: 18),
-                                Wrap(
-                                  spacing: 12,
-                                  runSpacing: 12,
-                                  children: [
-                                    FilledButton.icon(
-                                      onPressed: !_busy && _usable
-                                          ? () => _flow('company_onboarding')
-                                          : null,
-                                      icon: const Icon(Icons.arrow_forward),
-                                      label: const Text('Continue setup'),
-                                    ),
-                                    OutlinedButton.icon(
-                                      onPressed: !_busy && _usable
-                                          ? _refreshProvider
-                                          : null,
-                                      icon: const Icon(Icons.sync),
-                                      label: const Text('Refresh setup status'),
-                                    ),
-                                  ],
-                                ),
-                                for (final step in payrollItems(
-                                  _onboarding['steps'],
-                                ))
-                                  ListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    leading: Icon(
-                                      step['completed'] == true
-                                          ? Icons.check_circle
-                                          : Icons.radio_button_unchecked,
-                                    ),
-                                    title: Text('${step['title']}'),
-                                    trailing: Text(
-                                      step['completed'] == true
-                                          ? 'Complete'
-                                          : step['required'] == true
-                                          ? 'Required'
-                                          : 'Optional',
-                                    ),
-                                  ),
-                              ],
-                            ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Manage US payroll, employee onboarding, direct deposit, and payroll tax workflows from one business workspace.',
                           ),
                           const SizedBox(height: 28),
-                          Text(
-                            'Payroll operations',
-                            style: theme.textTheme.headlineSmall,
-                          ),
-                          const SizedBox(height: 16),
+                          if (_error != null) ...[
+                            _panel(
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    color: theme.colorScheme.error,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: Text(_error!)),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                          ],
+                          if (_provider['ready'] != true ||
+                              _provider['environment'] == 'demo') ...[
+                            _panel(
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _provider['environment'] == 'demo' &&
+                                            _provider['ready'] == true
+                                        ? 'Demo payroll environment'
+                                        : 'Prepare now. Activate payroll next.',
+                                    style: theme.textTheme.titleMedium,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    '${_provider['message'] ?? 'Provider status is unavailable. Refresh to try again.'}',
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                          ],
                           Wrap(
                             spacing: 16,
                             runSpacing: 16,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              _action(
-                                'Run payroll',
-                                'Review hours, earnings, deductions, taxes, and payment dates before submitting.',
-                                Icons.payments_outlined,
-                                'run_payroll',
-                                payroll: true,
-                              ),
-                              _action(
-                                'Employees',
-                                'Manage employee onboarding, compensation, and employment changes.',
-                                Icons.badge_outlined,
-                                'employee_management',
-                              ),
-                              _action(
-                                'Contractors',
-                                'Manage contractor records and payment setup.',
-                                Icons.work_outline,
-                                'contractor_management',
-                              ),
-                              _action(
-                                'Contractor payments',
-                                'Review contractor payments and their funding details.',
-                                Icons.receipt_long_outlined,
-                                'contractor_payments',
-                                payroll: true,
-                              ),
-                              _action(
-                                'Off-cycle payroll',
-                                'Prepare additional payroll outside the regular schedule.',
-                                Icons.event_repeat,
-                                'run_off_cycle_payroll',
-                                payroll: true,
-                              ),
-                              _action(
-                                'Pay schedules',
-                                'Manage pay frequency, pay periods, and check dates.',
-                                Icons.calendar_month_outlined,
-                                'manage_payroll_schedule',
-                              ),
-                              _action(
-                                'Payroll history',
-                                'Review historical payrolls and completed run details.',
-                                Icons.history,
-                                'payroll_history',
-                              ),
-                              _action(
-                                'Tax documents',
-                                'Review company details and year-end tax documents.',
-                                Icons.description_outlined,
-                                'eoy_company_review',
-                              ),
-                              _action(
-                                'Payroll reports',
-                                'Create payroll reports without sensitive identity fields.',
-                                Icons.bar_chart,
-                                'reports_no_pii',
-                              ),
-                              _action(
-                                'Benefits',
-                                'Manage company benefits and employee benefit deductions.',
-                                Icons.health_and_safety_outlined,
-                                'benefits',
+                              if (_accounts.isNotEmpty)
+                                SizedBox(
+                                  width: 350,
+                                  child: DropdownButtonFormField<String>(
+                                    key: ValueKey(_selected),
+                                    initialValue: _selected,
+                                    isExpanded: true,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Payroll business',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    items: _accounts
+                                        .map(
+                                          (a) => DropdownMenuItem(
+                                            value: '${a['id']}',
+                                            child: Text(
+                                              '${a['legal_name']}',
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: _busy
+                                        ? null
+                                        : (v) {
+                                            setState(() {
+                                              _selected = v;
+                                              _onboarding = {};
+                                            });
+                                            unawaited(_load(select: v));
+                                          },
+                                  ),
+                                ),
+                              FilledButton.icon(
+                                onPressed: _busy || _loading ? null : _create,
+                                icon: const Icon(Icons.add),
+                                label: Text(
+                                  _businesses.isEmpty
+                                      ? 'Add a business'
+                                      : 'New payroll workspace',
+                                ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 28),
-                          _panel(
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Connected business tools',
-                                  style: theme.textTheme.titleLarge,
-                                ),
-                                const SizedBox(height: 8),
+                          const SizedBox(height: 24),
+                          if (_busy || _loading) ...[
+                            const LinearProgressIndicator(),
+                            const SizedBox(height: 16),
+                          ],
+                          if (_accounts.isEmpty)
+                            _panel(
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.account_balance_outlined,
+                                    size: 42,
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Text(
+                                    'Start with your US business',
+                                    style: theme.textTheme.headlineSmall,
+                                  ),
+                                  const SizedBox(height: 10),
+                                  const Text(
+                                    'Add your business in Bookkeeping, then prepare its payroll workspace. Payroll is a separate paid add-on for each Enterprise business. You will review pricing before subscribing.',
+                                  ),
+                                  const SizedBox(height: 24),
+                                  const Text(
+                                    '1. Prepare your workspace     2. Activate your paid add-on     3. Set up and run payroll',
+                                  ),
+                                ],
+                              ),
+                            )
+                          else ...[
+                            _addonPanel(),
+                            const SizedBox(height: 24),
+                            _panel(
+                              Wrap(
+                                spacing: 35,
+                                runSpacing: 24,
+                                children: [
+                                  _label(
+                                    'Provider connection',
+                                    status,
+                                    Icons.link,
+                                  ),
+                                  _label(
+                                    'Company onboarding',
+                                    _onboarding['onboarding_completed'] == true
+                                        ? 'Complete'
+                                        : 'Review setup',
+                                    Icons.fact_check_outlined,
+                                  ),
+                                  _label(
+                                    'Access',
+                                    _paid
+                                        ? 'Enterprise + Payroll'
+                                        : 'Add-on required',
+                                    Icons.shield_outlined,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            if (_account['needs_attention'] == true) ...[
+                              _panel(
                                 const Text(
-                                  'Review approved time in Workforce and record payroll expenses in Bookkeeping. Hours and ledger entries are not automatically transferred.',
+                                  'This connection needs payroll support review. To prevent duplicate companies or repeated credential changes, creating another connection is paused.',
                                 ),
-                                const SizedBox(height: 16),
-                                Wrap(
-                                  spacing: 12,
-                                  runSpacing: 12,
+                              ),
+                              const SizedBox(height: 24),
+                            ],
+                            if (_connected &&
+                                _account['environment'] !=
+                                    _provider['environment']) ...[
+                              _panel(
+                                const Text(
+                                  'This workspace belongs to a different payroll environment. Contact payroll support before continuing.',
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                            ],
+                            if (!_connected &&
+                                _account['status'] == 'draft') ...[
+                              _panel(
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    OutlinedButton.icon(
-                                      onPressed: _busy
-                                          ? null
-                                          : widget.openWorkforce,
-                                      icon: const Icon(Icons.groups_outlined),
-                                      label: const Text('Open Workforce'),
+                                    Text(
+                                      'Connect your payroll company',
+                                      style: theme.textTheme.titleLarge,
                                     ),
-                                    OutlinedButton.icon(
-                                      onPressed: _busy
-                                          ? null
-                                          : widget.openBookkeeping,
-                                      icon: const Icon(
-                                        Icons.account_balance_wallet_outlined,
+                                    const SizedBox(height: 10),
+                                    const Text(
+                                      'Gusto handles secure employee and bank details, payroll calculations, payments, and tax workflows. No payroll is submitted by connecting.',
+                                    ),
+                                    const SizedBox(height: 20),
+                                    FilledButton.icon(
+                                      onPressed:
+                                          !_busy &&
+                                              _paid &&
+                                              _provider['ready'] == true
+                                          ? _connect
+                                          : null,
+                                      icon: const Icon(Icons.link),
+                                      label: const Text(
+                                        'Connect payroll provider',
                                       ),
-                                      label: const Text('Open Bookkeeping'),
                                     ),
                                   ],
                                 ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          if (_audit.isNotEmpty)
+                              ),
+                              const SizedBox(height: 24),
+                            ],
+                            if (_connected &&
+                                _account['terms_accepted'] != true) ...[
+                              _panel(
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Review your provider agreement',
+                                      style: theme.textTheme.titleLarge,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    FilledButton(
+                                      onPressed:
+                                          _busy ||
+                                              !_paid ||
+                                              _provider['ready'] != true
+                                          ? null
+                                          : _terms,
+                                      child: const Text(
+                                        'Review and accept terms',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                            ],
                             _panel(
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Workspace activity',
+                                    'Company setup',
                                     style: theme.textTheme.titleLarge,
                                   ),
                                   const SizedBox(height: 10),
-                                  for (final event in _audit.take(8))
+                                  const Text(
+                                    'Complete business addresses, federal and state tax details, funding, employee onboarding, pay schedules, and signed documents.',
+                                  ),
+                                  const SizedBox(height: 18),
+                                  Wrap(
+                                    spacing: 12,
+                                    runSpacing: 12,
+                                    children: [
+                                      FilledButton.icon(
+                                        onPressed: !_busy && _usable
+                                            ? () => _flow('company_onboarding')
+                                            : null,
+                                        icon: const Icon(Icons.arrow_forward),
+                                        label: const Text('Continue setup'),
+                                      ),
+                                      OutlinedButton.icon(
+                                        onPressed: !_busy && _usable
+                                            ? _refreshProvider
+                                            : null,
+                                        icon: const Icon(Icons.sync),
+                                        label: const Text(
+                                          'Refresh setup status',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  for (final step in payrollItems(
+                                    _onboarding['steps'],
+                                  ))
                                     ListTile(
                                       contentPadding: EdgeInsets.zero,
-                                      leading: const Icon(
-                                        Icons.check_circle_outline,
-                                        size: 18,
+                                      leading: Icon(
+                                        step['completed'] == true
+                                            ? Icons.check_circle
+                                            : Icons.radio_button_unchecked,
                                       ),
-                                      title: Text(
-                                        _eventLabel('${event['action']}'),
-                                      ),
-                                      subtitle: Text(
-                                        '${event['created_at']}'
-                                            .replaceFirst('T', ' ')
-                                            .split('.')
-                                            .first,
+                                      title: Text('${step['title']}'),
+                                      trailing: Text(
+                                        step['completed'] == true
+                                            ? 'Complete'
+                                            : step['required'] == true
+                                            ? 'Required'
+                                            : 'Optional',
                                       ),
                                     ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 28),
+                            Text(
+                              'Payroll operations',
+                              style: theme.textTheme.headlineSmall,
+                            ),
+                            const SizedBox(height: 16),
+                            Wrap(
+                              spacing: 16,
+                              runSpacing: 16,
+                              children: [
+                                _action(
+                                  'Run payroll',
+                                  'Review hours, earnings, deductions, taxes, and payment dates before submitting.',
+                                  Icons.payments_outlined,
+                                  'run_payroll',
+                                  payroll: true,
+                                ),
+                                _action(
+                                  'Employees',
+                                  'Manage employee onboarding, compensation, and employment changes.',
+                                  Icons.badge_outlined,
+                                  'employee_management',
+                                ),
+                                _action(
+                                  'Contractors',
+                                  'Manage contractor records and payment setup.',
+                                  Icons.work_outline,
+                                  'contractor_management',
+                                ),
+                                _action(
+                                  'Contractor payments',
+                                  'Review contractor payments and their funding details.',
+                                  Icons.receipt_long_outlined,
+                                  'contractor_payments',
+                                  payroll: true,
+                                ),
+                                _action(
+                                  'Off-cycle payroll',
+                                  'Prepare additional payroll outside the regular schedule.',
+                                  Icons.event_repeat,
+                                  'run_off_cycle_payroll',
+                                  payroll: true,
+                                ),
+                                _action(
+                                  'Pay schedules',
+                                  'Manage pay frequency, pay periods, and check dates.',
+                                  Icons.calendar_month_outlined,
+                                  'manage_payroll_schedule',
+                                ),
+                                _action(
+                                  'Payroll history',
+                                  'Review historical payrolls and completed run details.',
+                                  Icons.history,
+                                  'payroll_history',
+                                ),
+                                _action(
+                                  'Tax documents',
+                                  'Review company details and year-end tax documents.',
+                                  Icons.description_outlined,
+                                  'eoy_company_review',
+                                ),
+                                _action(
+                                  'Payroll reports',
+                                  'Create payroll reports without sensitive identity fields.',
+                                  Icons.bar_chart,
+                                  'reports_no_pii',
+                                ),
+                                _action(
+                                  'Benefits',
+                                  'Manage company benefits and employee benefit deductions.',
+                                  Icons.health_and_safety_outlined,
+                                  'benefits',
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 28),
+                            _panel(
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Connected business tools',
+                                    style: theme.textTheme.titleLarge,
+                                  ),
+                                  const SizedBox(height: 8),
                                   const Text(
-                                    'Payment and filing status is available in the secure provider workspace.',
+                                    'Review approved time in Workforce and record payroll expenses in Bookkeeping. Hours and ledger entries are not automatically transferred.',
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Wrap(
+                                    spacing: 12,
+                                    runSpacing: 12,
+                                    children: [
+                                      OutlinedButton.icon(
+                                        onPressed: _busy
+                                            ? null
+                                            : widget.openWorkforce,
+                                        icon: const Icon(Icons.groups_outlined),
+                                        label: const Text('Open Workforce'),
+                                      ),
+                                      OutlinedButton.icon(
+                                        onPressed: _busy
+                                            ? null
+                                            : widget.openBookkeeping,
+                                        icon: const Icon(
+                                          Icons.account_balance_wallet_outlined,
+                                        ),
+                                        label: const Text('Open Bookkeeping'),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
                             ),
+                            const SizedBox(height: 24),
+                            if (_audit.isNotEmpty)
+                              _panel(
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Workspace activity',
+                                      style: theme.textTheme.titleLarge,
+                                    ),
+                                    const SizedBox(height: 10),
+                                    for (final event in _audit.take(8))
+                                      ListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        leading: const Icon(
+                                          Icons.check_circle_outline,
+                                          size: 18,
+                                        ),
+                                        title: Text(
+                                          _eventLabel('${event['action']}'),
+                                        ),
+                                        subtitle: Text(
+                                          '${event['created_at']}'
+                                              .replaceFirst('T', ' ')
+                                              .split('.')
+                                              .first,
+                                        ),
+                                      ),
+                                    const Text(
+                                      'Payment and filing status is available in the secure provider workspace.',
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                          const SizedBox(height: 28),
+                          Text(
+                            'Payroll services provided through Gusto Embedded Payroll. US businesses only. Availability depends on provider approval and completed onboarding.',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 24),
                         ],
-                        const SizedBox(height: 28),
-                        Text(
-                          'Payroll services provided through Gusto Embedded Payroll. US businesses only. Availability depends on provider approval and completed onboarding.',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 24),
-                      ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
+      ),
     );
   }
 }

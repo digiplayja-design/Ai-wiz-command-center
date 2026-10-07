@@ -628,50 +628,53 @@ class _FunnelScreenState extends State<FunnelScreen> {
               ),
           ],
         ),
-        body: Column(
-          children: [
-            if (_busy) const LinearProgressIndicator(minHeight: 2),
-            if (_error != null)
-              Container(
-                width: double.infinity,
-                color: WfStyle.danger.withValues(alpha: .12),
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _error!,
-                        style: const TextStyle(color: WfStyle.danger),
+        body: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              if (_busy) const LinearProgressIndicator(minHeight: 2),
+              if (_error != null)
+                Container(
+                  width: double.infinity,
+                  color: WfStyle.danger.withValues(alpha: .12),
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(color: WfStyle.danger),
+                        ),
                       ),
-                    ),
-                    IconButton(
-                      tooltip: 'Dismiss',
-                      onPressed: () => setState(() => _error = null),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
+                      IconButton(
+                        tooltip: 'Dismiss',
+                        onPressed: () => setState(() => _error = null),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                ),
+              Expanded(
+                child: AbsorbPointer(
+                  absorbing: _busy,
+                  child: _denied
+                      ? Center(
+                          child: _title(
+                            widget.client.sessionChanged
+                                ? 'Session changed'
+                                : 'Enterprise access required',
+                            widget.client.sessionChanged
+                                ? 'Sign in again and reopen Funnel Studio to continue.'
+                                : 'Sign in with an active Enterprise account to open Funnel Studio.',
+                          ),
+                        )
+                      : _selected == null
+                      ? _dashboard()
+                      : _editor(),
                 ),
               ),
-            Expanded(
-              child: AbsorbPointer(
-                absorbing: _busy,
-                child: _denied
-                    ? Center(
-                        child: _title(
-                          widget.client.sessionChanged
-                              ? 'Session changed'
-                              : 'Enterprise access required',
-                          widget.client.sessionChanged
-                              ? 'Sign in again and reopen Funnel Studio to continue.'
-                              : 'Sign in with an active Enterprise account to open Funnel Studio.',
-                        ),
-                      )
-                    : _selected == null
-                    ? _dashboard()
-                    : _editor(),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     ),

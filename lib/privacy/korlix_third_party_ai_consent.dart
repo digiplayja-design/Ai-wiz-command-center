@@ -1,5 +1,7 @@
 // KORLIX_THIRD_PARTY_AI_CONSENT_BUILD131_V1_BEGIN
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -64,7 +66,7 @@ class KorlixThirdPartyAiConsent {
   const KorlixThirdPartyAiConsent._();
 
   static const String consentNoticeVersion =
-      'build131.apple-third-party-ai-consent.v1';
+      'build131.apple-third-party-ai-consent.v2';
 
   static const String consentVersionKey =
       'korlix.third_party_ai_consent.version';
@@ -81,106 +83,161 @@ class KorlixThirdPartyAiConsent {
     'https://www.korlixdeveloper.com/privacy-policy.html',
   );
 
+  static String? _accountScope;
+  static int _sessionRevision = 0;
+  static Future<void>? _pending;
+  static VoidCallback? _dismissActiveDialog;
+  static final Set<String> _untrustedRecords = {};
+
+  /// Call whenever the authenticated session is replaced or cleared. The scope
+  /// must identify an account (for example issuer + subject), never a bearer
+  /// token. A missing identity permits one-request consent only, without reuse.
+  static void setAccountScope(String? scope) {
+    _accountScope = scope == null || scope.trim().isEmpty ? null : scope.trim();
+    _sessionRevision++;
+    _dismissActiveDialog?.call();
+  }
+
+  static String accountStorageKey(String scope) =>
+      'korlix.third_party_ai_consent.v2.account.${Uri.encodeComponent(scope)}';
+
+  static Future<T> _serial<T>(Future<T> Function() operation) {
+    final previous = _pending;
+    final result = previous == null
+        ? Future<T>.sync(operation)
+        : previous.then((_) => operation());
+    final waiting = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    _pending = waiting;
+    waiting.then((_) {
+      if (identical(_pending, waiting)) _pending = null;
+    });
+    return result;
+  }
+
+  static Set<String> _requestedGrants(
+    Set<KorlixThirdPartyAiProvider> providers,
+    Set<KorlixThirdPartyAiDataCategory> categories,
+  ) => {
+    for (final provider in providers)
+      for (final category in categories) '${provider.name}:${category.name}',
+  };
+
+  static Set<String> _readGrants(SharedPreferences preferences, String key) {
+    if (_untrustedRecords.contains(key)) return {};
+    try {
+      final stored = preferences.getString(key);
+      if (stored == null) return {};
+      final record = jsonDecode(stored);
+      if (record is! Map || record['version'] != consentNoticeVersion) {
+        return {};
+      }
+      final grants = record['grants'];
+      if (grants is! List || grants.any((grant) => grant is! String)) return {};
+      final known = _requestedGrants(
+        KorlixThirdPartyAiProvider.values.toSet(),
+        KorlixThirdPartyAiDataCategory.values.toSet(),
+      );
+      return grants.whereType<String>().where(known.contains).toSet();
+    } catch (_) {
+      return {};
+    }
+  }
+
   static Future<bool> ensure({
     required BuildContext context,
     required String featureName,
     required Set<KorlixThirdPartyAiProvider> providers,
     required Set<KorlixThirdPartyAiDataCategory> dataCategories,
-  }) async {
-    if (providers.isEmpty || dataCategories.isEmpty) {
-      return false;
-    }
-
-    final preferences = await SharedPreferences.getInstance();
-    final versionMatches =
-        preferences.getString(consentVersionKey) == consentNoticeVersion;
-
-    final acceptedProviders = versionMatches
-        ? _readProviders(preferences)
-        : <KorlixThirdPartyAiProvider>{};
-
-    final acceptedCategories = versionMatches
-        ? _readDataCategories(preferences)
-        : <KorlixThirdPartyAiDataCategory>{};
-
-    if (acceptedProviders.containsAll(providers) &&
-        acceptedCategories.containsAll(dataCategories)) {
-      return true;
-    }
-
-    if (!context.mounted) {
-      return false;
-    }
-
-    final combinedProviders = <KorlixThirdPartyAiProvider>{
-      ...acceptedProviders,
-      ...providers,
-    };
-
-    final combinedCategories = <KorlixThirdPartyAiDataCategory>{
-      ...acceptedCategories,
-      ...dataCategories,
-    };
-
-    final accepted = await _showConsentDialog(
-      context: context,
-      featureName: featureName,
-      providers: combinedProviders,
-      dataCategories: combinedCategories,
+  }) {
+    final scope = _accountScope;
+    final revision = _sessionRevision;
+    final requestedProviders = Set<KorlixThirdPartyAiProvider>.of(providers);
+    final requestedCategories = Set<KorlixThirdPartyAiDataCategory>.of(
+      dataCategories,
     );
-
-    if (accepted != true) {
-      return false;
+    bool current() =>
+        context.mounted &&
+        revision == _sessionRevision &&
+        scope == _accountScope;
+    if (providers.isEmpty || dataCategories.isEmpty || !current()) {
+      return Future.value(false);
     }
 
-    final providerNames =
-        combinedProviders.map((provider) => provider.name).toList()..sort();
+    return _serial(() async {
+      if (!current()) return false;
+      try {
+        final preferences = await SharedPreferences.getInstance();
+        if (!context.mounted || !current()) return false;
+        final key = scope == null ? null : accountStorageKey(scope);
+        final grants = key == null ? <String>{} : _readGrants(preferences, key);
+        final requested = _requestedGrants(
+          requestedProviders,
+          requestedCategories,
+        );
+        if (key != null && grants.containsAll(requested)) return true;
 
-    final categoryNames =
-        combinedCategories.map((category) => category.name).toList()..sort();
+        // Legacy device-global lists have no trustworthy account or pairing
+        // provenance, so they are never migrated into these scoped grants.
+        final accepted = await _showConsentDialog(
+          context: context,
+          featureName: featureName,
+          providers: requestedProviders,
+          dataCategories: requestedCategories,
+          rememberForAccount: scope != null,
+        );
+        if (accepted != true || !current()) return false;
+        if (key == null) return true;
 
-    await preferences.setString(consentVersionKey, consentNoticeVersion);
-
-    await preferences.setStringList(providersKey, providerNames);
-
-    await preferences.setStringList(dataCategoriesKey, categoryNames);
-
-    await preferences.setString(
-      acceptedAtKey,
-      DateTime.now().toUtc().toIso8601String(),
-    );
-
-    return true;
+        final combined = {...grants, ...requested}.toList()..sort();
+        // A single record prevents a partially saved version/provider/category
+        // update from constructing a broader permission than the one accepted.
+        _untrustedRecords.add(key);
+        final saved = await preferences.setString(
+          key,
+          jsonEncode({
+            'version': consentNoticeVersion,
+            'grants': combined,
+            'acceptedAt': DateTime.now().toUtc().toIso8601String(),
+          }),
+        );
+        if (!saved) return false;
+        _untrustedRecords.remove(key);
+        return current();
+      } catch (_) {
+        // A preference failure must not reuse a partially updated memory cache
+        // or unexpectedly continue an AI request after its consent gate fails.
+        return false;
+      }
+    });
   }
 
-  static Future<void> revoke() async {
-    final preferences = await SharedPreferences.getInstance();
-
-    await preferences.remove(consentVersionKey);
-    await preferences.remove(providersKey);
-    await preferences.remove(dataCategoriesKey);
-    await preferences.remove(acceptedAtKey);
-  }
-
-  static Set<KorlixThirdPartyAiProvider> _readProviders(
-    SharedPreferences preferences,
-  ) {
-    final stored = preferences.getStringList(providersKey) ?? const <String>[];
-
-    return KorlixThirdPartyAiProvider.values
-        .where((provider) => stored.contains(provider.name))
-        .toSet();
-  }
-
-  static Set<KorlixThirdPartyAiDataCategory> _readDataCategories(
-    SharedPreferences preferences,
-  ) {
-    final stored =
-        preferences.getStringList(dataCategoriesKey) ?? const <String>[];
-
-    return KorlixThirdPartyAiDataCategory.values
-        .where((category) => stored.contains(category.name))
-        .toSet();
+  /// Revokes this account's choices and invalidates pending consent immediately.
+  /// Other accounts on the same device keep their separate choices.
+  static Future<void> revoke() {
+    final scope = _accountScope;
+    final key = scope == null ? null : accountStorageKey(scope);
+    _sessionRevision++;
+    if (key != null) _untrustedRecords.add(key);
+    _dismissActiveDialog?.call();
+    return _serial(() async {
+      final preferences = await SharedPreferences.getInstance();
+      if (key != null && !await preferences.remove(key)) {
+        throw StateError(
+          'Your AI privacy choice could not be saved. Try again.',
+        );
+      }
+      for (final legacyKey in [
+        consentVersionKey,
+        providersKey,
+        dataCategoriesKey,
+        acceptedAtKey,
+      ]) {
+        await preferences.remove(legacyKey);
+      }
+    });
   }
 
   static Future<bool?> _showConsentDialog({
@@ -188,17 +245,19 @@ class KorlixThirdPartyAiConsent {
     required String featureName,
     required Set<KorlixThirdPartyAiProvider> providers,
     required Set<KorlixThirdPartyAiDataCategory> dataCategories,
-  }) {
+    required bool rememberForAccount,
+  }) async {
     final providerLabels = providers.map((provider) => provider.label).toList()
       ..sort();
 
     final categoryLabels =
         dataCategories.map((category) => category.label).toList()..sort();
 
-    return showDialog<bool>(
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final route = DialogRoute<bool>(
       context: context,
+      themes: InheritedTheme.capture(from: context, to: navigator.context),
       barrierDismissible: false,
-      useRootNavigator: true,
       builder: (dialogContext) {
         return AlertDialog(
           key: const ValueKey<String>('korlix-third-party-ai-consent-dialog'),
@@ -237,10 +296,14 @@ class KorlixThirdPartyAiConsent {
                     'AI request and leaves non-AI parts of Korlix available.',
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    'Your choice is stored on this device. Korlix asks '
-                    'again when this notice changes or when a new provider '
-                    'or data category is needed.',
+                  Text(
+                    rememberForAccount
+                        ? 'Your choice is stored for this account on this device. '
+                              'Korlix asks again when this notice changes or when a '
+                              'provider needs a content category you have not approved '
+                              'for that provider.'
+                        : 'This choice applies to this request only. Sign in to '
+                              'remember choices for your account on this device.',
                   ),
                 ],
               ),
@@ -277,6 +340,16 @@ class KorlixThirdPartyAiConsent {
         );
       },
     );
+    void dismiss() {
+      if (route.isActive) navigator.removeRoute(route, false);
+    }
+
+    _dismissActiveDialog = dismiss;
+    try {
+      return await navigator.push<bool>(route);
+    } finally {
+      if (identical(_dismissActiveDialog, dismiss)) _dismissActiveDialog = null;
+    }
   }
 
   static Widget _bullet(String value) {

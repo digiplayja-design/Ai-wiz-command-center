@@ -8,21 +8,6 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-val keystorePropertiesFile = rootProject.file("key.properties")
-val keystoreProperties = Properties()
-if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
-}
-
-fun korlixSigningFileOrNull(value: Any?): java.io.File? {
-    val path = value?.toString()?.trim().orEmpty()
-    if (path.isEmpty()) {
-        return null
-    }
-
-    return rootProject.file(path)
-}
-
 // KORLIX_ANDROID_RELEASE_SIGNING_REPAIR_BEGIN
 val korlixAndroidKeyProperties = Properties()
 val korlixAndroidKeyPropertiesFile = rootProject.file("key.properties")
@@ -96,15 +81,10 @@ val korlixAndroidHasReleaseSigning =
         korlixAndroidReleaseKeyAlias.isNotBlank() &&
         korlixAndroidReleaseKeyPassword.isNotBlank()
 
-println("Korlix Android release signing complete: $korlixAndroidHasReleaseSigning")
 // KORLIX_ANDROID_RELEASE_SIGNING_REPAIR_END
 
 android {
-    
-    
-    compileSdk = 36
-compileSdk = 36
-namespace = "com.korlixdeveloper.korlixai"
+    namespace = "com.korlixdeveloper.korlixai"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -123,43 +103,38 @@ namespace = "com.korlixdeveloper.korlixai"
 
     signingConfigs {
         create("release") {
-            keyAlias = keystoreProperties.getProperty("keyAlias")
-            keyPassword = keystoreProperties.getProperty("keyPassword")
-            storeFile = korlixSigningFileOrNull(keystoreProperties.getProperty("storeFile") ?: "")
-            storePassword = keystoreProperties.getProperty("storePassword")
+            storeFile = korlixAndroidReleaseStoreFile
+            storePassword = korlixAndroidReleaseStorePassword
+            keyAlias = korlixAndroidReleaseKeyAlias
+            keyPassword = korlixAndroidReleaseKeyPassword
         }
     }
 
     buildTypes {
         getByName("release") {
+            // Never produce a release artifact signed with the public debug key.
             signingConfig = signingConfigs.getByName("release")
         }
     }
-
-
-    // KORLIX_ANDROID_RELEASE_SIGNING_OVERRIDE_BEGIN
-    signingConfigs {
-        val releaseSigning = findByName("release") ?: create("release")
-        releaseSigning.storeFile = korlixAndroidReleaseStoreFile
-        releaseSigning.storePassword = korlixAndroidReleaseStorePassword
-        releaseSigning.keyAlias = korlixAndroidReleaseKeyAlias
-        releaseSigning.keyPassword = korlixAndroidReleaseKeyPassword
-    }
-
-    buildTypes {
-        getByName("release") {
-            signingConfig = if (korlixAndroidHasReleaseSigning) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
-        }
-    }
-    // KORLIX_ANDROID_RELEASE_SIGNING_OVERRIDE_END
 }
 
 kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
+// Fail at the release task boundary, without blocking debug builds or analysis.
+gradle.taskGraph.whenReady {
+    val buildsReleaseArtifact = allTasks.any {
+        it.project == project && it.name in setOf(
+            "assembleRelease", "bundleRelease", "packageRelease"
+        )
+    }
+    if (buildsReleaseArtifact && !korlixAndroidHasReleaseSigning) {
+        throw GradleException(
+            "Release signing is required. Configure key.properties or the " +
+                "KORLIX_ANDROID_STORE_FILE/STORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD environment variables."
+        )
     }
 }

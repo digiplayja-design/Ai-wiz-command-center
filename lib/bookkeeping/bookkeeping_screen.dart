@@ -453,81 +453,87 @@ class _BookkeepingScreenState extends State<BookkeepingScreen> {
               ),
           ],
         ),
-        body: _denied
-            ? const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Text(
-                    'Your session changed. Sign in again and reopen Bookkeeping.',
-                    textAlign: TextAlign.center,
+        body: SafeArea(
+          top: false,
+          child: _denied
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text(
+                      'Your session changed. Sign in again and reopen Bookkeeping.',
+                      textAlign: TextAlign.center,
+                    ),
                   ),
-                ),
-              )
-            : LayoutBuilder(
-                builder: (context, box) => Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (box.maxWidth >= 1100) _sidebar(),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: EdgeInsets.all(box.maxWidth < 600 ? 16 : 30),
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 1180),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                ReceiptWizEntry(client:widget.client,businessId:_business?['id'] as String?),
-                                if (_busy)
-                                  const LinearProgressIndicator(minHeight: 3),
-                                if (_error != null)
-                                  _panel(
-                                    Padding(
-                                      padding: const EdgeInsets.all(16),
-                                      child: Text(
-                                        _error!,
-                                        style: const TextStyle(
-                                          color: Color(0xff9c2525),
+                )
+              : LayoutBuilder(
+                  builder: (context, box) => Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (box.maxWidth >= 1100) _sidebar(),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: EdgeInsets.all(box.maxWidth < 600 ? 16 : 30),
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 1180),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  ReceiptWizEntry(
+                                    client: widget.client,
+                                    businessId: _business?['id'] as String?,
+                                  ),
+                                  if (_busy)
+                                    const LinearProgressIndicator(minHeight: 3),
+                                  if (_error != null)
+                                    _panel(
+                                      Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Text(
+                                          _error!,
+                                          style: const TextStyle(
+                                            color: Color(0xff9c2525),
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                if (_businesses.isEmpty &&
-                                    !_busy &&
-                                    _error == null)
-                                  _welcome()
-                                else ...[
-                                  _header(),
-                                  const SizedBox(height: 22),
-                                  _toolbar(),
-                                  if (widget.openVoice != null &&
-                                      _business != null) ...[
-                                    const SizedBox(height: 18),
-                                    _voiceCard(),
-                                  ],
-                                  if (_overview != null) ...[
-                                    const SizedBox(height: 14),
-                                    _statementGuide(),
-                                  ],
-                                  const SizedBox(height: 20),
-                                  if (_overview != null) ...[
-                                    _totals(),
+                                  if (_businesses.isEmpty &&
+                                      !_busy &&
+                                      _error == null)
+                                    _welcome()
+                                  else ...[
+                                    _header(),
                                     const SizedBox(height: 22),
-                                    _activity(),
+                                    _toolbar(),
+                                    if (widget.openVoice != null &&
+                                        _business != null) ...[
+                                      const SizedBox(height: 18),
+                                      _voiceCard(),
+                                    ],
+                                    if (_overview != null) ...[
+                                      const SizedBox(height: 14),
+                                      _statementGuide(),
+                                    ],
+                                    const SizedBox(height: 20),
+                                    if (_overview != null) ...[
+                                      _totals(),
+                                      const SizedBox(height: 22),
+                                      _activity(),
+                                    ],
+                                    const SizedBox(height: 24),
+                                    _scope(),
                                   ],
-                                  const SizedBox(height: 24),
-                                  _scope(),
                                 ],
-                              ],
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+        ),
       ),
     ),
   );

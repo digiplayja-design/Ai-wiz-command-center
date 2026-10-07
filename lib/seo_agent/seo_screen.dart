@@ -1380,82 +1380,89 @@ class _SeoAgentScreenState extends State<SeoAgentScreen> {
             ),
           ],
         ),
-        body: _locked
-            ? const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Text(
-                    'Your sign-in changed. Reopen SEO Agent to continue.',
+        body: SafeArea(
+          top: false,
+          child: _locked
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text(
+                      'Your sign-in changed. Reopen SEO Agent to continue.',
+                    ),
                   ),
-                ),
-              )
-            : _loading
-            ? const Center(child: CircularProgressIndicator())
-            : SelectionArea(
-                child: SingleChildScrollView(
-                  controller: _scroll,
-                  padding: const EdgeInsets.all(18),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1120),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _hero(),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: [
-                              for (final (index, label, icon) in [
-                                (0, 'Overview', Icons.dashboard_outlined),
-                                (1, 'Reports', Icons.analytics_outlined),
-                                (2, 'Business setup', Icons.business_outlined),
-                              ])
-                                ChoiceChip(
-                                  key: Key('seo-tab-$index'),
-                                  selected: _tab == index,
-                                  onSelected: (_) => _go(index),
-                                  avatar: Icon(icon, size: 18),
-                                  label: Text(label),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          if (_busy || _refreshing)
-                            const Padding(
-                              padding: EdgeInsets.only(bottom: 16),
-                              child: LinearProgressIndicator(),
+                )
+              : _loading
+              ? const Center(child: CircularProgressIndicator())
+              : SelectionArea(
+                  child: SingleChildScrollView(
+                    controller: _scroll,
+                    padding: const EdgeInsets.all(18),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1120),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _hero(),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: [
+                                for (final (index, label, icon) in [
+                                  (0, 'Overview', Icons.dashboard_outlined),
+                                  (1, 'Reports', Icons.analytics_outlined),
+                                  (
+                                    2,
+                                    'Business setup',
+                                    Icons.business_outlined,
+                                  ),
+                                ])
+                                  ChoiceChip(
+                                    key: Key('seo-tab-$index'),
+                                    selected: _tab == index,
+                                    onSelected: (_) => _go(index),
+                                    avatar: Icon(icon, size: 18),
+                                    label: Text(label),
+                                  ),
+                              ],
                             ),
-                          if (_error != null)
-                            _panel(
-                              Text(
-                                _error!,
-                                style: const TextStyle(
-                                  color: Color(0xFF9E2222),
-                                ),
+                            const SizedBox(height: 20),
+                            if (_busy || _refreshing)
+                              const Padding(
+                                padding: EdgeInsets.only(bottom: 16),
+                                child: LinearProgressIndicator(),
                               ),
-                              color: const Color(0xFFFFF3F1),
-                            ),
-                          if (_notice != null && _notice!.isNotEmpty)
-                            _panel(
-                              Text(
-                                _notice!,
-                                style: const TextStyle(color: _navy),
+                            if (_error != null)
+                              _panel(
+                                Text(
+                                  _error!,
+                                  style: const TextStyle(
+                                    color: Color(0xFF9E2222),
+                                  ),
+                                ),
+                                color: const Color(0xFFFFF3F1),
                               ),
-                              color: const Color(0xFFE9F6F8),
-                            ),
-                          if (_active != null) _activity(),
-                          if (_tab == 0) _overview(),
-                          if (_tab == 1)
-                            _selected == null ? _history() : _report(),
-                          if (_tab == 2) _setup(),
-                          const SizedBox(height: 20),
-                        ],
+                            if (_notice != null && _notice!.isNotEmpty)
+                              _panel(
+                                Text(
+                                  _notice!,
+                                  style: const TextStyle(color: _navy),
+                                ),
+                                color: const Color(0xFFE9F6F8),
+                              ),
+                            if (_active != null) _activity(),
+                            if (_tab == 0) _overview(),
+                            if (_tab == 1)
+                              _selected == null ? _history() : _report(),
+                            if (_tab == 2) _setup(),
+                            const SizedBox(height: 20),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
+        ),
       ),
     );
   }

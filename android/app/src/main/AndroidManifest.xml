@@ -14,7 +14,6 @@
         <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
-<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
     <!-- KORLIX_ANDROID_IOS_PARITY_PERMISSIONS_BEGIN -->
     <!-- Shared iOS/Android feature parity:
@@ -36,6 +35,7 @@
          Do not request broad photo/video library permissions unless Google Play
          policy declarations are intentionally updated. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" tools:node="remove" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" tools:node="remove" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
@@ -69,6 +69,10 @@
 <application
         android:label="Korlix AI"
         android:name="${applicationName}"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:usesCleartextTraffic="false"
         android:icon="@mipmap/ic_launcher">
 
         <!-- Explicit, active Social calls only. Never restarted after termination. -->

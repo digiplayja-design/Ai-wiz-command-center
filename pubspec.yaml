@@ -43,6 +43,8 @@ dependencies:
   audioplayers: ^6.7.0
   supabase_flutter: ^2.12.4
   shared_preferences: ^2.5.5
+  # Last compatible major for Android API 23 / compile SDK 36.
+  flutter_secure_storage: 10.3.4
   google_mobile_ads: ^8.0.0
   speech_to_text: ^7.4.0
   file_picker: 10.3.8

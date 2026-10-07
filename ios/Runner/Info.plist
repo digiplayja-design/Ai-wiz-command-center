@@ -69,15 +69,15 @@
 	<key>UIBackgroundModes</key>
 	<array><string>audio</string></array>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Korlix AI needs microphone access for voice input.</string>
+	<string>Use your microphone for voice input, recordings you start, and Social audio or video calls you join.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Korlix AI uses speech recognition to convert your voice to text.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Korlix AI uses your location only when you choose location-based tools.</string>
+	<string>Find nearby places or attach your current location to a Workforce check-in when you choose to use these tools.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Korlix AI needs camera access so you can capture images for Improve My Picture.</string>
+	<string>Take photos for creative tools, job records and attendance, or share video during Social calls you join.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Korlix AI needs photo library access so you can choose images for Improve My Picture and other creative tools.</string>
+	<string>Choose photos and videos for creative tools, Social posts and attachments.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Korlix AI needs permission to save generated images to your photo library.</string>
 	<key>GADApplicationIdentifier</key>
