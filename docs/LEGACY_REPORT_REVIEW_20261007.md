@@ -25,10 +25,18 @@ The migration itself does not classify or update existing reports. Applying it, 
 
 Run `node --test backend/test/legacy_report_review.test.mjs`. Tests use synthetic data and real PGlite SQL: restrictive grants/RLS even with permissive default grants, rejection of malformed fields and invalid links, deletion cascade/SET NULL behavior, exact duplicate comparisons, atomic review/status changes, preserved original content, six remaining open synthetic follow-ups, and transaction rollback on invalid review data. They do not establish real mailbox coverage, report resolution quality or production execution.
 
-## Production review completed October 7, 2026
+## Historical initial production review — October 7, 2026
 
-The owner requested this review. At 22:48 UTC, a guarded transaction recorded all 39 original reports: 32 exact duplicates linked to their primary reports, one reviewed appropriate safety refusal requiring no action, and six cases requiring follow-up. The duplicate and no-action entries moved to `resolved`; the six primary follow-ups remain `new`. All 39 original records remain. Exact duplicate equality includes reporter, generation, reason and details. A subsequent read verified all 32 links. No customer communication, content removal, suspension or account deletion occurred.
+The owner requested this review. At 22:48 UTC, a guarded transaction recorded all 39 original reports: 32 exact duplicates linked to their primary reports, one reviewed appropriate safety refusal requiring no action, and six cases requiring follow-up. The duplicate and no-action entries moved to `resolved`; the six primary follow-ups remained `new` at that checkpoint. All 39 original records remained. Exact duplicate equality includes reporter, generation, reason and details. A subsequent read verified all 32 links. No customer communication, content removal, suspension or account deletion occurred.
 
-The six remaining cases concern three date-sensitive factual outputs, one location/source follow-up, one missing original image artifact, and one budget arithmetic/sourcing review. They are not marked fixed. Private per-case notes remain in the restricted ledger; customer identifiers and report text are intentionally absent from this document.
+The six cases at that checkpoint concerned three date-sensitive factual outputs, one location/source follow-up, one missing original image artifact, and one budget arithmetic/sourcing review. They were not marked fixed. Private per-case notes remain in the restricted ledger; customer identifiers and report text are intentionally absent from this document.
 
 Migration `20261007224627_legacy_report_review_ledger` is applied. Live metadata confirms RLS and no privileges for `anon` or `authenticated`. Security advisors returned no WARNING or ERROR findings (one INFO). This establishes the narrow ledger access check, not comprehensive security certification.
+
+## Current checkpoint after a scoped retest — October 7, 2026
+
+One date-sensitive sports case is closed with no further action after a live October 7 retest supplied by the user. Its core factual claims were checked against NBA, The Ringer, AP and Sports Illustrated reporting. The retest dated its preseason opinion and distinguished earlier-season statistics. The original freshness/framing failure was not reproduced in this one sample. This is a scoped case resolution, not proof that all answers or other cases are fixed.
+
+Current totals are **34 legacy rows resolved**: 32 duplicates, one appropriate safety refusal and one no-further-action closure after retest. **Five primary follow-ups remain `new`**: two date-sensitive factual outputs, one location/source follow-up, one missing original image artifact and one budget arithmetic/sourcing review. All original report records and duplicate links are preserved.
+
+This was a user-provided retest with source verification, not a model-operated signed-in production test. The answer appeared twice in pasted material, but that repetition's origin is not established and is not classified as app duplication. No private report IDs, raw prompts or responses are reproduced here. No runtime change or deployment was made for this scoped closure.
