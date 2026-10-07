@@ -3,9 +3,7 @@
 const K133_NOVA_EMAIL_SETTINGS_ENABLE_FIX_V4_FRESH = true;
 
 const APP = {
-  apiBase:
-    localStorage.getItem("korlixNovaEmailApiBase") ||
-    "https://chee-chai-chee-backend.onrender.com",
+  apiBase: KorlixEmailRequestPolicy.apiOrigin,
 
   token: null,
 
@@ -722,7 +720,7 @@ async function requestJson(
     ? path
     : `${APP.apiBase}${path}`;
 
-  const response = await fetch(
+  const response = await KorlixEmailRequestPolicy.request(
     url,
     {
       ...options,
@@ -1856,7 +1854,7 @@ function renderDashboard() {
 
 async function loadHealth() {
   try {
-    const response = await fetch(
+    const response = await KorlixEmailRequestPolicy.request(
       `${APP.apiBase}/api/health`,
       {
         headers: {
@@ -2892,11 +2890,8 @@ async function connectSession() {
     "Looking for the active KORLIX session…",
   );
 
-  APP.apiBase =
-    els.apiBaseInput.value
-      .trim()
-      .replace(/\/+$/, "") ||
-    APP.apiBase;
+  APP.apiBase = KorlixEmailRequestPolicy.apiOrigin;
+  els.apiBaseInput.value = APP.apiBase;
 
   APP.token =
     findSessionToken();
@@ -3513,98 +3508,52 @@ function korlixClearPrivateRefreshTokenV3() {
   APP.refreshToken = null;
 }
 
-function korlixMainStoredStringV3(
-  names,
-) {
-  const requested =
-    new Set(
-      names.map(
-        (name) =>
-          String(name)
-            .toLowerCase(),
-      ),
-    );
-
-  for (
-    const item
-    of korlixStorageEntriesV2()
-  ) {
-    const lowerKey =
-      String(item.key)
-        .toLowerCase();
-
-    if (
-      lowerKey.includes(
-        "korlixnovaemail",
-      )
-    ) {
-      continue;
-    }
-
-    const matches =
-      [...requested].some(
-        (name) =>
-          lowerKey === name ||
-          lowerKey ===
-            `flutter.${name}` ||
-          lowerKey.endsWith(
-            `.${name}`,
-          ) ||
-          lowerKey.endsWith(
-            `:${name}`,
-          ),
-      );
-
-    if (!matches) {
-      continue;
-    }
-
-    const parsed =
-      korlixParseStoredValueV2(
-        item.value,
-      );
-
-    if (
-      typeof parsed ===
-        "string" &&
-      parsed.trim()
-    ) {
-      return parsed.trim();
-    }
+function korlixMainStoredStringV3(names) {
+  // KorlixSessionStore uses Flutter SharedPreferences' default localStorage
+  // prefix. Never discover a login by scanning unrelated/private token keys.
+  for (const name of names) {
+    if (!String(name).startsWith('korlix_')) continue;
+    try {
+      const value = korlixParseStoredValueV2(localStorage.getItem(`flutter.${name}`));
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    } catch (_) { /* Fail closed when the main login cannot be read. */ }
   }
-
-  return "";
+  return '';
 }
 
 function korlixChooseAccessTokenV3(
   ...tokens
 ) {
-  const usable =
-    tokens
-      .map(
-        (token) =>
-          String(token || "")
-            .trim(),
-      )
-      .filter(
-        (token) =>
-          tokenUsable(token),
-      );
-
-  usable.sort(
-    (
-      left,
-      right,
-    ) =>
-      korlixJwtSecondsRemainingV2(
-        right,
-      ) -
-      korlixJwtSecondsRemainingV2(
-        left,
-      ),
+  return KorlixEmailRequestPolicy.chooseSessionToken(
+    korlixMainStoredStringV3(['korlix_access_token', 'access_token', 'accessToken']),
+    tokens,
   );
+}
 
-  return usable[0] || "";
+function korlixMainSessionScopeV5() {
+  return KorlixEmailRequestPolicy.sessionScope(korlixMainStoredStringV3(
+    ['korlix_access_token', 'access_token', 'accessToken'],
+  ));
+}
+
+function korlixInvalidateChangedSessionV5() {
+  if (!APP.token || KorlixEmailRequestPolicy.sessionScope(APP.token) === korlixMainSessionScopeV5()) return;
+  korlixResetEmailSessionV3();
+  document.querySelectorAll('.modal-backdrop').forEach(modal => {
+    if (modal.id !== 'connectionModal') modal.classList.add('hidden');
+  });
+  document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
+  renderDashboard();
+  setMessage(els.connectionMessage, 'Your KORLIX login changed. Sign in and reconnect Email Center.', 'error');
+}
+
+function korlixAssertEmailSessionV5(token = APP.token) {
+  const scope = korlixMainSessionScopeV5();
+  if (!scope || (token && KorlixEmailRequestPolicy.sessionScope(token) !== scope)) {
+    korlixInvalidateChangedSessionV5();
+    throw new Error('Your KORLIX login changed. Sign in and reconnect Email Center.');
+  }
+  return scope;
 }
 
 function korlixStaleRefreshErrorV3(
@@ -3877,11 +3826,11 @@ function korlixReadSessionBundleV2() {
     );
 
   const refreshToken =
-    korlixMainStoredStringV3([
+    korlixMainSessionScopeV5() ? korlixMainStoredStringV3([
       "korlix_refresh_token",
       "refresh_token",
       "refreshToken",
-    ]);
+    ]) : '';
 
   const email =
     firstDefined(
@@ -4005,6 +3954,7 @@ async function korlixFetchWithTimeoutV2(
   options = {},
   timeoutMilliseconds = 25000,
 ) {
+  const sessionScope = korlixAssertEmailSessionV5();
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),
@@ -4012,10 +3962,14 @@ async function korlixFetchWithTimeoutV2(
   );
 
   try {
-    return await fetch(url, {
+    const response = await KorlixEmailRequestPolicy.request(url, {
       ...options,
       signal: controller.signal,
     });
+    if (sessionScope !== korlixAssertEmailSessionV5()) {
+      throw new Error('Your KORLIX login changed. Reconnect Email Center.');
+    }
+    return response;
   } catch (error) {
     if (error?.name === "AbortError") {
       throw new Error(
@@ -4264,6 +4218,7 @@ async function korlixRefreshSessionUnlockedV3(
     );
   }
 
+  korlixAssertEmailSessionV5(session.accessToken);
   APP.token =
     session.accessToken;
 
@@ -4313,6 +4268,7 @@ async function korlixRefreshSessionV2(
       requested.accessToken,
     ) >= 600
   ) {
+    korlixAssertEmailSessionV5(requested.accessToken);
     APP.token =
       requested.accessToken;
 
@@ -4369,33 +4325,9 @@ async function korlixRefreshSessionV2(
 }
 
 findSessionToken = function findSessionTokenV2() {
-  const own = korlixOwnSessionValueV2(
-    "korlixNovaEmailAccessTokenV2",
-  );
-
-  if (tokenUsable(own)) {
-    return own;
-  }
-
-  const explicit = korlixStoredStringV2([
-    "korlix_access_token",
-    "access_token",
-    "accessToken",
-  ]);
-
-  if (tokenUsable(explicit)) {
-    return explicit;
-  }
-
-  for (const item of korlixStorageEntriesV2()) {
-    const token = searchObjectForToken(item.value);
-
-    if (tokenUsable(token)) {
-      return token;
-    }
-  }
-
-  return null;
+  return korlixChooseAccessTokenV3(korlixOwnSessionValueV2(
+    'korlixNovaEmailAccessTokenV2',
+  )) || null;
 };
 
 function korlixEmailScopeV4() {
@@ -4430,6 +4362,7 @@ requestJson = async function requestJsonV2(path, options = {}) {
   );
 
   const payload = await korlixReadJsonResponseV2(response);
+  korlixAssertEmailSessionV5();
   if (requestScope !== korlixEmailScopeV4()) {
     throw new Error('Your account or agent changed. Reconnect Email Center.');
   }
@@ -4768,9 +4701,8 @@ connectSession = async function connectSessionV2() {
 
   els.connectSessionButton.disabled = true;
 
-  APP.apiBase =
-    els.apiBaseInput.value.trim().replace(/\/+$/, "") ||
-    APP.apiBase;
+  APP.apiBase = KorlixEmailRequestPolicy.apiOrigin;
+  els.apiBaseInput.value = APP.apiBase;
 
   localStorage.setItem(
     "korlixNovaEmailApiBase",
@@ -4889,12 +4821,13 @@ connectSession = async function connectSessionV2() {
 boot = async function bootV2() {
   bindEvents();
   korlixInstallResetEmailSessionButtonV3();
+  window.addEventListener('storage', korlixInvalidateChangedSessionV5);
+  window.addEventListener('focus', korlixInvalidateChangedSessionV5);
+  document.addEventListener('visibilitychange', korlixInvalidateChangedSessionV5);
   updateClock();
   setInterval(updateClock, 1000);
 
-  APP.apiBase =
-    localStorage.getItem("korlixNovaEmailApiBase") ||
-    APP.apiBase;
+  APP.apiBase = KorlixEmailRequestPolicy.apiOrigin;
 
   APP.agentId =
     new URLSearchParams(location.search).get("agentId") ||

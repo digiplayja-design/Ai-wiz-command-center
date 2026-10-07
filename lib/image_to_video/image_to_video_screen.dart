@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
@@ -9,7 +8,10 @@ import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
+import '../korlix_video_downloader.dart';
+import '../korlix_video_preview_source.dart';
 import '../privacy/korlix_third_party_ai_consent.dart';
+import 'image_to_video_media.dart';
 
 typedef KorlixImageToVideoHeadersBuilder =
     Future<Map<String, String>> Function();
@@ -54,6 +56,8 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
   String _quality = 'high';
 
   VideoPlayerController? _videoController;
+  KorlixVideoPreviewSource? _videoSource;
+  int _videoRevision = 0;
   Future<void>? _videoInitFuture;
 
   Uint8List? get _imageBytes => _imageFile?.bytes;
@@ -68,9 +72,11 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
 
   @override
   void dispose() {
+    _videoRevision++;
     _promptController.dispose();
     _negativePromptController.dispose();
     _videoController?.dispose();
+    unawaited(releaseKorlixVideoPreviewSource(_videoSource));
     super.dispose();
   }
 
@@ -118,14 +124,19 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
     await _resetVideoController();
   }
 
-  Future<void> _resetVideoController() async {
+  Future<int> _resetVideoController() async {
+    final revision = ++_videoRevision;
     final controller = _videoController;
+    final source = _videoSource;
     _videoController = null;
+    _videoSource = null;
     _videoInitFuture = null;
 
     if (controller != null) {
       await controller.dispose();
     }
+    await releaseKorlixVideoPreviewSource(source);
+    return revision;
   }
 
   String? _stringAt(Map<String, dynamic> data, List<String> keys) {
@@ -165,13 +176,9 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
     return null;
   }
 
-  bool _isPlayableVideoUrl(String value) {
-    final uri = Uri.tryParse(value);
-    return uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
-  }
-
   Future<void> _setVideoUrl(String? url) async {
-    await _resetVideoController();
+    final revision = await _resetVideoController();
+    if (!mounted || revision != _videoRevision) return;
 
     if (url == null || url.trim().isEmpty) {
       return;
@@ -180,13 +187,24 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
     final cleaned = url.trim();
     _resultVideoUrl = cleaned;
 
-    if (!_isPlayableVideoUrl(cleaned)) {
+    final media = ImageToVideoMedia(
+      url: cleaned,
+      backendBaseUrl: _endpointBase,
+    );
+    final source = await media.preparePreview(_headers);
+    if (!mounted || revision != _videoRevision) {
+      await releaseKorlixVideoPreviewSource(source);
       return;
     }
 
-    final controller = VideoPlayerController.networkUrl(Uri.parse(cleaned));
+    _videoSource = source;
+    final controller = VideoPlayerController.networkUrl(
+      Uri.parse(source.url),
+      httpHeaders: source.headers,
+    );
     _videoController = controller;
     _videoInitFuture = controller.initialize().then((_) {
+      if (!mounted || revision != _videoRevision) return;
       controller.setLooping(true);
       controller.play();
 
@@ -386,6 +404,19 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
           Uri.parse('$_endpointBase/api/video/image-to-video/status/$jobId'),
           headers: await _headers(),
         );
+        if (response.statusCode == 401 ||
+            response.statusCode == 403 ||
+            response.statusCode == 404) {
+          if (mounted) {
+            setState(() {
+              _loading = false;
+              _errorText =
+                  'This video is not available to your current account. Sign in again and retry.';
+              _statusText = 'Video unavailable.';
+            });
+          }
+          return;
+        }
 
         Map<String, dynamic> data = const <String, dynamic>{};
         try {
@@ -517,12 +548,20 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
       return;
     }
 
-    final uri = Uri.tryParse(url);
-    if (uri == null) {
-      return;
+    try {
+      final media = ImageToVideoMedia(url: url, backendBaseUrl: _endpointBase);
+      if (media.protected) {
+        await downloadKorlixVideo(
+          url: media.uri.toString(),
+          headers: await media.headers(_headers),
+          filename: 'korlix-image-to-video.mp4',
+        );
+      } else {
+        await launchUrl(media.uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (error) {
+      if (mounted) setState(() => _errorText = 'Could not open video: $error');
     }
-
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   Future<void> _shareVideoUrl() async {
@@ -531,7 +570,18 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
       return;
     }
 
-    await Share.share('KORLIX AI Image to Video result:\n$url');
+    try {
+      final media = ImageToVideoMedia(url: url, backendBaseUrl: _endpointBase);
+      if (media.protected) {
+        await _openVideoUrl();
+      } else {
+        await SharePlus.instance.share(
+          ShareParams(text: 'KORLIX AI Image to Video result:\n${media.uri}'),
+        );
+      }
+    } catch (error) {
+      if (mounted) setState(() => _errorText = 'Could not share video: $error');
+    }
   }
 
   Widget _chip({
