@@ -1,0 +1,237 @@
+{
+  "verifiedAt": "2026-10-07T21:56:20.799108+00:00",
+  "pages": [
+    {
+      "page": "index.html",
+      "url": "https://www.korlixdeveloper.com/",
+      "http": 200,
+      "matchesRelease": true,
+      "sha256": "85a9bb7ec2813ccd5355accf0fd63925ad2fc4dad9f3f09b9194925e52234963"
+    },
+    {
+      "page": "launch.css",
+      "url": "https://www.korlixdeveloper.com/launch.css",
+      "http": 200,
+      "matchesRelease": true,
+      "sha256": "adbcb5ddffb20af0871d02c42d69e8dbcc04a3e3b8c195fba55ccb277d3e72a7"
+    },
+    {
+      "page": "launch.js",
+      "url": "https://www.korlixdeveloper.com/launch.js",
+      "http": 200,
+      "matchesRelease": true,
+      "sha256": "70a7266d16c1ccd5e82f2957313219a61de2324b2d591d8186d2d984c976aad8"
+    },
+    {
+      "page": "pricing.html",
+      "url": "https://www.korlixdeveloper.com/pricing.html",
+      "http": 200,
+      "matchesRelease": true,
+      "sha256": "005ccbece3b7bc7a736ebc54044f5554e8e247ba337e2e6d4ebeb98763c3f03d"
+    },
+    {
+      "page": "legal.html",
+      "url": "https://www.korlixdeveloper.com/legal.html",
+      "http": 200,
+      "matchesRelease": true,
+      "sha256": "23b6275f206327b4f749871d3ae87134faa29f5d6c1ef9d2d89d6cc060550bc8"
+    },
+    {
+      "page": "privacy-policy.html",
+      "url": "https://www.korlixdeveloper.com/privacy-policy.html",
+      "http": 200,
+      "matchesRelease": true,
+      "sha256": "e63f8534aadc9f88c9e7ca2ce24a4bafb2147e4101774cd3826657d52d1ca0e8"
+    },
+    {
+      "page": "terms.html",
+      "url": "https://www.korlixdeveloper.com/terms.html",
+      "http": 200,
+      "matchesRelease": true,
+      "sha256": "bc458239aad75209f5be025efbb0cac2086ef06c50a465b59bd631a342828b42"
+    },
+    {
+      "page": "subscription-terms.html",
+      "url": "https://www.korlixdeveloper.com/subscription-terms.html",
+      "http": 200,
+      "matchesRelease": true,
+      "sha256": "36e498ec993f1082df2f43e46085df6b1da71a4fc075e1d86c90b8c3900be9be"
+    },
+    {
+      "page": "support.html",
+      "url": "https://www.korlixdeveloper.com/support.html",
+      "http": 200,
+      "matchesRelease": true,
+      "sha256": "a0d5407ffde3f90269ab5895ef3ebc325380509c39bc3df63b982acc82da7540"
+    },
+    {
+      "page": "delete-account.html",
+      "url": "https://www.korlixdeveloper.com/delete-account.html",
+      "http": 200,
+      "matchesRelease": true,
+      "sha256": "9dc323f412bc1f110bec7617b00010e4c884527afc37bca392d94f598e67e48f"
+    },
+    {
+      "page": "ai-safety.html",
+      "url": "https://www.korlixdeveloper.com/ai-safety.html",
+      "http": 200,
+      "matchesRelease": true,
+      "sha256": "9ae829debf49612de5c624cd8989370d6cc589399aea54d71934f783d078cfa3"
+    },
+    {
+      "page": "community-guidelines.html",
+      "url": "https://www.korlixdeveloper.com/community-guidelines.html",
+      "http": 200,
+      "matchesRelease": true,
+      "sha256": "2d40a378d1cf513ffb5bed5e4da932c3325f139b9b149a0a9f865348de026352"
+    },
+    {
+      "page": "child-safety.html",
+      "url": "https://www.korlixdeveloper.com/child-safety.html",
+      "http": 200,
+      "matchesRelease": true,
+      "sha256": "446119c2b52440816abd133313fa216a2992ecfe0281dcc90719646d0f01614e"
+    },
+    {
+      "page": "music-production.html",
+      "url": "https://www.korlixdeveloper.com/music-production.html",
+      "http": 200,
+      "matchesRelease": true,
+      "sha256": "60759ec5ca75e5175908c059d55632a38eb4ffeb1b3f03f90763e8eb0f1f36fd"
+    }
+  ],
+  "api": [
+    {
+      "path": "/api/health",
+      "http": 200,
+      "data": {
+        "status": "Korlix AI backend is healthy",
+        "supabaseConfigured": true,
+        "supabaseAuthConfigured": true
+      }
+    },
+    {
+      "path": "/api/report-output/health",
+      "http": 200,
+      "data": {
+        "ok": true,
+        "feature": "ai_output_reporting",
+        "reportDeliveryVersion": "v4"
+      }
+    },
+    {
+      "path": "/api/report-output/recent",
+      "http": 403,
+      "data": {
+        "ok": false,
+        "error": "Report admin access is not configured or token is invalid. Set KORLIX_REPORT_ADMIN_TOKEN and pass it as a Bearer token."
+      }
+    },
+    {
+      "path": "/api/billing/web/health",
+      "http": 200,
+      "data": {
+        "version": "web_monthly_20261004",
+        "configured": true,
+        "checkoutEnabled": false,
+        "livePayments": true,
+        "apiVersion": "2026-09-30.endive",
+        "connection": "verified",
+        "prices": [
+          {
+            "tier": "pro",
+            "amount": 3499,
+            "currency": "usd",
+            "interval": "month"
+          },
+          {
+            "tier": "ultra",
+            "amount": 12499,
+            "currency": "usd",
+            "interval": "month"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/api/directory/health",
+      "http": 200,
+      "data": {
+        "version": 1,
+        "freeListings": true,
+        "publicBrowsing": true,
+        "paymentsReady": false,
+        "paymentCredentialsConfigured": true,
+        "checkoutEnabled": false,
+        "paymentConnection": "verified",
+        "paymentApiVersion": "2026-09-30.endive",
+        "livePayments": true,
+        "adminConfigured": true,
+        "prices": {
+          "currency": "USD",
+          "monthlyCents": 499,
+          "yearlyCents": 4900
+        },
+        "sandboxWebhookProbe": {
+          "enabled": false,
+          "verified": false
+        }
+      }
+    },
+    {
+      "path": "/api/scheduling/payments/health",
+      "http": 200,
+      "data": {
+        "version": "connect_no_transaction_fee_20261005",
+        "configured": true,
+        "checkoutEnabled": false,
+        "merchantSetupEnabled": true,
+        "livePayments": false,
+        "platformFeePercent": 0,
+        "chargePattern": "direct",
+        "accountReadiness": "accounts_v2",
+        "apiVersion": "2026-09-30.endive"
+      }
+    }
+  ],
+  "appEntry": {
+    "http": 200,
+    "url": "https://www.korlixdeveloper.com/app/",
+    "hasFlutterBootstrap": true
+  },
+  "frontend": {
+    "commit": "b61e7664334e0b7800e1a66009b17ccf0a5036c5",
+    "deploy": "dep-db3bu560tbcc73d432r0",
+    "liveAt": "2026-10-07T21:55:08.500459Z"
+  },
+  "backend": {
+    "commit": "28f7ec37262ff985b9bf0addb834b3d537846a6e",
+    "deploy": "dep-db3bundg1s2s739qgcig",
+    "liveAt": "2026-10-07T21:54:07.531531Z",
+    "healthCheckPath": "/api/health"
+  },
+  "migration": {
+    "version": "20261007214516",
+    "name": "durable_ai_report_queue",
+    "rlsEnabled": true,
+    "anonPrivileges": false,
+    "authenticatedPrivileges": false,
+    "serviceCrud": true
+  },
+  "browser": {
+    "homepageUrl": "https://www.korlixdeveloper.com/",
+    "countdownTicking": true,
+    "date": "2026-10-15T13:00:00Z",
+    "viewportWidth": 1363,
+    "documentWidth": 1348,
+    "appStartup": "sign-in interface reached; no account submitted",
+    "signedInHome": "source/widget tests; no authenticated live session in this verification"
+  },
+  "tests": {
+    "flutterReleaseGate": 154,
+    "publicCountdown": 7,
+    "focusedBackend": 30,
+    "receiptRecoveryIncludedInFocusedBackend": 12,
+    "nativePostgresGate": "unverified; restricted executor cannot start required non-root native process"
+  }
+}
