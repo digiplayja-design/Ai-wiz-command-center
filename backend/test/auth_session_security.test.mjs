@@ -68,6 +68,13 @@ test('an explicitly revoked device is rejected instead of swallowed', async () =
   assert.equal(f.calls.some(c => c[1] === 'upsert'), false);
 });
 
+test('a verified legacy session with an unregistered stable device remains usable without creating a new device', async () => {
+  const f = fixture({ status: null });
+  assert.equal((await f.context.getAuthenticatedUser(f.req)).id, 'alice');
+  assert.equal(f.calls.some(c => c[1] === 'upsert'), false);
+  assert.equal(f.device(), null);
+});
+
 test('legacy clients without device headers remain compatible when account is enabled', async () => {
   const f = fixture({ status: 'revoked', explicit: false });
   assert.equal((await f.context.getAuthenticatedUser(f.req)).id, 'alice');
@@ -121,6 +128,28 @@ test('rejected refresh revokes the newly rotated provider session and never retu
     assert.equal(res.body.session, undefined);
     assert.deepEqual(f.calls.filter(c => c[0] === 'signOut'), [['signOut', 'rotated-token', 'local']]);
   }
+});
+
+test('refresh tolerates a missing historical device row without consuming a device slot or revoking the provider session', async () => {
+  for (const explicit of [true, false]) {
+    const f = fixture({ status: null, explicit }), res = f.response();
+    await f.handlers.get('/api/auth/refresh')(f.req, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.session.access_token, 'rotated-token');
+    assert.equal(res.body.deviceSession, null);
+    assert.equal(f.calls.some(c => c[1] === 'upsert'), false);
+    assert.equal(f.calls.some(c => c[0] === 'signOut'), false);
+    assert.equal(f.device(), null);
+  }
+});
+
+test('missing device compatibility never bypasses disabled accounts', async () => {
+  const f = fixture({ status: null, disabled: true });
+  await assert.rejects(f.context.getAuthenticatedUser(f.req), error => error.statusCode === 403);
+  const res = f.response();
+  await f.handlers.get('/api/auth/refresh')(f.req, res);
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body.session, undefined);
 });
 
 test('successful refresh retains the active session', async () => {

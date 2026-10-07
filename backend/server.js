@@ -966,6 +966,7 @@ async function touchActiveDeviceSession({
   profile,
   deviceInfo,
   allowRegister = false,
+  allowMissing = false,
 }) {
   assertAccountEnabled(profile);
   if (!supabaseAdmin || !deviceInfo.deviceId) {
@@ -1006,8 +1007,15 @@ async function touchActiveDeviceSession({
     return data;
   }
 
-  // Only a fresh password sign-in may reactivate a revoked device. A refresh
-  // token may register an older client's missing row, but not undo revocation.
+  // Some released clients signed in without a device ID, then sent a stable
+  // ID on protected requests. A verified provider session remains usable when
+  // that historical device row is missing. Never treat a known revoked row as
+  // missing, and never create a new device merely by refreshing a session.
+  if (allowMissing && !existing) {
+    return null;
+  }
+
+  // Only a fresh password sign-in may reactivate a revoked device.
   if (allowRegister && !existing) {
     return registerDeviceSession({
       userId,
@@ -1139,7 +1147,7 @@ async function getAuthenticatedUser(req) {
       userId: data.user.id,
       profile: account,
       deviceInfo,
-      allowRegister: false,
+      allowMissing: true,
     });
   }
 
@@ -2344,7 +2352,7 @@ app.post("/api/auth/refresh", async (req, res) => {
         userId: data.user.id,
         profile,
         deviceInfo,
-        allowRegister: true,
+        allowMissing: true,
       });
     } catch (accessError) {
       // Rotation already happened. Do not leave a freshly rotated session
