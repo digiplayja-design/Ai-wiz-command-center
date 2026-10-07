@@ -1,0 +1,80 @@
+{
+  "checked_at": "2026-10-07T13:17:15.657891+00:00",
+  "checks": [
+    {
+      "url": "https://www.korlixdeveloper.com/app/",
+      "status": 200,
+      "headers": {
+        "Content-Security-Policy": "frame-ancestors 'self'",
+        "X-Frame-Options": "SAMEORIGIN",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Strict-Transport-Security": "max-age=86400"
+      },
+      "pass": true
+    },
+    {
+      "url": "https://www.korlixdeveloper.com/app/main.dart.js",
+      "status": 200,
+      "headers": {
+        "Content-Security-Policy": "frame-ancestors 'self'",
+        "X-Frame-Options": "SAMEORIGIN",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Strict-Transport-Security": "max-age=86400"
+      },
+      "pass": true
+    },
+    {
+      "url": "https://www.korlixdeveloper.com/nova-email/",
+      "status": 200,
+      "headers": {
+        "Content-Security-Policy": "frame-ancestors 'self'",
+        "X-Frame-Options": "SAMEORIGIN",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Strict-Transport-Security": "max-age=86400"
+      },
+      "pass": true
+    },
+    {
+      "url": "https://korlixdeveloper-website.onrender.com/app/",
+      "status": 200,
+      "headers": {
+        "Content-Security-Policy": "frame-ancestors 'self'",
+        "X-Frame-Options": "SAMEORIGIN",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Strict-Transport-Security": "max-age=315360000; includeSubdomains; preload"
+      },
+      "pass": true,
+      "note": "Render keeps its stronger platform HSTS header on onrender.com; the configured one-day rule is delivered on the custom domain."
+    },
+    {
+      "url": "https://korlixdeveloper-website.onrender.com/app/main.dart.js",
+      "status": 200,
+      "headers": {
+        "Content-Security-Policy": "frame-ancestors 'self'",
+        "X-Frame-Options": "SAMEORIGIN",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Strict-Transport-Security": "max-age=315360000; includeSubdomains; preload"
+      },
+      "pass": true,
+      "note": "Render keeps its stronger platform HSTS header on onrender.com; the configured one-day rule is delivered on the custom domain."
+    },
+    {
+      "url": "https://korlixdeveloper-website.onrender.com/nova-email/",
+      "status": 200,
+      "headers": {
+        "Content-Security-Policy": "frame-ancestors 'self'",
+        "X-Frame-Options": "SAMEORIGIN",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Strict-Transport-Security": "max-age=315360000; includeSubdomains; preload"
+      },
+      "pass": true,
+      "note": "Render keeps its stronger platform HSTS header on onrender.com; the configured one-day rule is delivered on the custom domain."
+    }
+  ]
+}
