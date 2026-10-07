@@ -74,7 +74,8 @@ void main() {
     final f = CaptureFixture(); addTearDown(f.c.dispose);
     final b = K135zZoomRuntimeBinding(launch:K135zZoomLaunch(agentId:'agent',
       backendBaseUri:Uri.parse('https://api.example.test'),
-      headersBuilder:() => {'authorization':'Bearer offline'}, isCurrent:() => true), transport:f.c.transport);
+      headersBuilder:() => {'authorization':'Bearer offline'}, isCurrent:() => true),
+      transport:f.c.transport, requestAiConsent:() async => true);
     addTearDown(b.dispose);
     await b.initialize(); expect(f.calls, isEmpty);
     expect(b.listeningMeeting?.uuid, 'meeting'); expect(b.canStartListening, isTrue);

@@ -134,6 +134,33 @@ void main() {
   });
 
   testWidgets(
+    'existing text and image permission cannot authorize inventory records',
+    (tester) async {
+      final context = await mount(tester);
+      await grant(tester, context, categories: {textData, imageData});
+      const inventory = KorlixThirdPartyAiDataCategory.inventoryRecords;
+      final pending = request(
+        context,
+        categories: {textData, imageData, inventory},
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Selected inventory records and search results'),
+        findsOneWidget,
+      );
+      await choose(tester, false);
+      expect(await pending, isFalse);
+      expect(await request(context, categories: {textData, imageData}), isTrue);
+      final accepted = request(context, categories: {inventory});
+      await choose(tester, true);
+      expect(await accepted, isTrue);
+      expect(await request(context, categories: {inventory}), isTrue);
+      await tester.pumpAndSettle();
+      expect(dialog, findsNothing);
+    },
+  );
+
+  testWidgets(
     'new requests disclose their own scope without widening old grants',
     (tester) async {
       final context = await mount(tester);

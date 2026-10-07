@@ -36,7 +36,7 @@ class PriorityPlayer extends SpokenPlayer {
 K135zZoomRuntimeBinding binding(CaptureFixture f, SpokenPlayer player) => K135zZoomRuntimeBinding(
   launch:K135zZoomLaunch(agentId:'agent',backendBaseUri:Uri.parse('https://api.example.test'),
     headersBuilder:() => {'authorization':'Bearer offline'},isCurrent:() => f.current),
-  transport:f.c.transport, spokenPlayer:player);
+  transport:f.c.transport, spokenPlayer:player, requestAiConsent:() async => true);
 
 void main() {
   test('one live hosted meeting is selected ahead of other calendar meetings', () async {

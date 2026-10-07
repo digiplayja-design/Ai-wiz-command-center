@@ -32,6 +32,7 @@ enum KorlixThirdPartyAiDataCategory {
   fieldProofRecords,
   workforceRecords,
   crmRecords,
+  inventoryRecords,
 }
 
 extension KorlixThirdPartyAiDataCategoryLabel
@@ -52,6 +53,8 @@ extension KorlixThirdPartyAiDataCategoryLabel
         return 'Selected business bookkeeping records';
       case KorlixThirdPartyAiDataCategory.crmRecords:
         return 'Your CRM contact details, notes and follow-up records';
+      case KorlixThirdPartyAiDataCategory.inventoryRecords:
+        return 'Selected inventory records and search results';
       case KorlixThirdPartyAiDataCategory.workforceRecords:
         return 'Authorized company, team, assignment, schedule and work-update records';
       case KorlixThirdPartyAiDataCategory.fieldProofRecords:

@@ -84,6 +84,14 @@ class K135zStartupPanel extends StatelessWidget {
                 icon: const Icon(Icons.volume_off_outlined),
                 child: Text(voice?.userPaused == true ? 'Nova paused' : 'Silence Nova')),
           ]),
+          const SizedBox(height: 8),
+          const Text(
+            'OpenAI processes meeting captions/transcripts and the selected agent’s '
+            'training and approved memory to generate Nova’s replies and voice. '
+            'You must have the host’s permission and inform participants before starting. '
+            'Saving a recording requires separate recording consent.',
+            key: Key('meeting-ai-sharing-notice'),
+            style: TextStyle(color: muted, fontSize: 13)),
           const SizedBox(height: 10),
           Semantics(liveRegion: true, child: Text(
             voice?.starting == true || voice?.enabled == true ? voice!.message

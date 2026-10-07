@@ -62,6 +62,7 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
     KorlixZoomJsonTransport? transport,
     K135zSpokenPlayer? spokenPlayer,
     Future<bool> Function(Uri)? openUrl,
+    Future<bool> Function()? requestAiConsent,
     DateTime Function()? now,
     this.timeout = const Duration(seconds: 15),
   }) : _openUrl = openUrl ?? _openExternal, _now = now ?? DateTime.now {
@@ -77,7 +78,8 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
     );
     capture = K135zCaptureController(agentId:launch.agentId, baseUri:launch.backendBaseUri,
       headers:launch.headersBuilder, isCurrent:() => usable,
-      transport:transport ?? _send, cancelRequests:_cancelCaptureRequests);
+      transport:transport ?? _send, cancelRequests:_cancelCaptureRequests,
+      requestAiConsent:requestAiConsent);
     recordings = K135zRecordingsController(capture:capture);
     response = K135zMeetingResponse(capture:capture, cancelRequest:_cancelResponseRequests,
       spokenPlayer:spokenPlayer, recordingSink:recordings.beginPlayback);

@@ -5,8 +5,10 @@ import '../../lib/meeting_copilot/korlix_meeting_copilot.dart';
 import '../../lib/meeting_copilot/korlix_meeting_copilot_access.dart';
 import '../../lib/meeting_copilot/korlix_meeting_copilot_route.dart';
 import 'k135z_capture_controller_test.dart' show CaptureFixture;
+import 'helpers/k135z_ai_consent_fakes.dart';
 
 void main() {
+  setUp(seedMeetingAiConsent);
   for (final width in [390.0, 1024.0]) {
     testWidgets('one tap starts the sole meeting and Stop stays visible at width $width', (tester) async {
       tester.view.physicalSize = Size(width, 900); tester.view.devicePixelRatio = 1;

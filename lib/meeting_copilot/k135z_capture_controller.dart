@@ -8,7 +8,8 @@ import 'korlix_zoom_connection_client.dart';
 class K135zCaptureController extends ChangeNotifier {
   K135zCaptureController({required this.agentId, required this.baseUri,
     required this.headers, required this.isCurrent, required this.transport,
-    required this.cancelRequests, int Function()? milliseconds, bool watch = true}) {
+    required this.cancelRequests, this.requestAiConsent,
+    int Function()? milliseconds, bool watch = true}) {
     _clock = milliseconds ?? (() => _stopwatch.elapsedMilliseconds);
     if (watch) _timer = Timer.periodic(const Duration(milliseconds: 250), (timer) {
       if (fastTranscript || timer.tick % 4 == 0) unawaited(tick());
@@ -20,6 +21,9 @@ class K135zCaptureController extends ChangeNotifier {
   final bool Function() isCurrent;
   final KorlixZoomJsonTransport transport;
   final VoidCallback cancelRequests;
+  // Supplied by the authenticated route. No callback means no AI capture.
+  // This is separate from the meeting's host/listening/recording permissions.
+  final Future<bool> Function()? requestAiConsent;
   final Stopwatch _stopwatch = Stopwatch()..start();
   late final int Function() _clock;
   final String _id = List.generate(16, (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0')).join();
@@ -328,6 +332,7 @@ class K135zCaptureController extends ChangeNotifier {
   // Called only by the disclosed Start listening tap for this exact meeting.
   Future<void> listenTo(String uuid) => _run((e) async {
     _actionError = null;
+    await _ensureAiConsent(e);
     await _selectMeeting(uuid, e, replacePrevious:true);
     _current(e); _need(meetingUuid == uuid); _requireSettled();
     _consent = true;
@@ -366,6 +371,7 @@ class K135zCaptureController extends ChangeNotifier {
     if (!canStart) return;
     await _run((e) async {
       _actionError = null;
+      await _ensureAiConsent(e);
       if (!_confirmed || _state == 'listening') {
         final began = _clock();
         _accept(_workspace((await _post('status', {}, e))['workspace']), began);
@@ -376,6 +382,15 @@ class K135zCaptureController extends ChangeNotifier {
       _need(_consent && ['ready', 'paused'].contains(_state));
       await _sendCommand('start', e);
     });
+  }
+  Future<void> _ensureAiConsent(int epoch) async {
+    _current(epoch);
+    final approved = await (requestAiConsent?.call() ?? Future<bool>.value(false));
+    _current(epoch);
+    if (!approved) {
+      throw const _CaptureFeedback(
+        'Listening was not started. Allow sharing meeting transcripts and approved agent context with OpenAI to use Nova.');
+    }
   }
   Future<void> pause() async { _returnBinding = null; if (canPause) await _command('pause'); }
   Future<void> stop() async {

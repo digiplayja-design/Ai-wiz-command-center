@@ -11,6 +11,7 @@ import '../../lib/meeting_copilot/korlix_meeting_copilot.dart';
 import '../../lib/meeting_copilot/korlix_meeting_copilot_access.dart';
 import '../../lib/meeting_copilot/korlix_meeting_copilot_route.dart';
 import 'k135z_capture_controller_test.dart' show CaptureFixture;
+import 'helpers/k135z_ai_consent_fakes.dart';
 
 const pref = 'k135z.copilot.agent.v1.api.example.test.user';
 class EntryFixture {
@@ -48,7 +49,7 @@ class EntryFixture {
 }
 
 void main() {
-  setUp(() { SharedPreferences.setMockInitialValues({}); setKorlixMeetingCopilotEnterpriseAccess(false); });
+  setUp(() { seedMeetingAiConsent(); setKorlixMeetingCopilotEnterpriseAccess(false); });
   tearDown(() => setKorlixMeetingCopilotEnterpriseAccess(false));
   testWidgets('reload with no route argument restores the chosen agent; Start remains explicit', (tester) async {
     final f = EntryFixture(); addTearDown(f.dispose);

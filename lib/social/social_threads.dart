@@ -1017,8 +1017,8 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       context,
       'Remove this message?',
       widget.groupChat
-          ? 'This message and its attachment will be removed for everyone in the group.'
-          : 'This message and its attachment will be removed for both members.',
+          ? 'This message and its attachment will be removed from the KORLIX conversation for everyone in the group. Screenshots and downloaded copies are not recalled.'
+          : 'This message and its attachment will be removed from the KORLIX conversation for both members. Screenshots and downloaded copies are not recalled.',
       action: 'Remove',
     )) {
       return;

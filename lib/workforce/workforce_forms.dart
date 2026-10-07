@@ -566,7 +566,7 @@ class _WorkforcePunchDialogState extends State<WorkforcePunchDialog> {
                 ),
               ],
               const Text(
-                'Photo evidence for your workspace. No facial identification or matching.',
+                'Photo evidence visible to you and authorized workspace managers. No facial identification or matching.',
                 style: TextStyle(color: WfStyle.muted, fontSize: 12),
               ),
               const SizedBox(height: 16),
@@ -622,7 +622,7 @@ class _WorkforcePunchDialogState extends State<WorkforcePunchDialog> {
                   ),
                 ),
               const Text(
-                'A location stamp for this attendance event. No background tracking.',
+                'A location stamp shared with authorized workspace managers for this attendance event. No background tracking.',
                 style: TextStyle(color: WfStyle.muted, fontSize: 12),
               ),
               const SizedBox(height: 16),
@@ -638,7 +638,7 @@ class _WorkforcePunchDialogState extends State<WorkforcePunchDialog> {
               ),
             ),
             Text(
-              'Evidence expires after ${widget.policy['retention_days'] ?? 30} days. ${widget.clockOut ? 'Missing evidence flags this shift for review; it does not prevent clock-out.' : 'Exceptions go to your manager for review.'}',
+              'Photo and location evidence expires after ${widget.policy['retention_days'] ?? 30} days and is queued for removal. Attendance and work-update records remain. ${widget.clockOut ? 'Missing evidence flags this shift for review; it does not prevent clock-out.' : 'Exceptions go to your manager for review.'}',
               style: const TextStyle(
                 color: WfStyle.muted,
                 fontSize: 12,

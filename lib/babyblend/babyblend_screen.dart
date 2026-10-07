@@ -873,7 +873,7 @@ class _BabyBlendScreenState extends State<BabyBlendScreen> {
       ),
       const SizedBox(height: 24),
       const Text(
-        'Photos stay private in your account until you remove them. When you create a portrait, both references are sent to OpenAI with your permission. Only downloaded copies leave your gallery through your own actions.',
+        'Photos are stored in your account gallery. When you create a portrait, both references are sent to OpenAI with your permission. Downloaded or shared copies are separate; removing a gallery item does not recall those copies or earlier provider processing.',
         style: TextStyle(color: _muted, fontSize: 12, height: 1.6),
       ),
     ],

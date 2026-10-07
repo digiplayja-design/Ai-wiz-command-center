@@ -149,6 +149,7 @@ import 'live_convo/korlix_live_convo_test_screen.dart';
 import 'billing/korlix_apple_billing.dart';
 import 'billing/web_billing_screen.dart';
 import 'privacy/korlix_third_party_ai_consent.dart';
+import 'privacy/korlix_privacy_settings.dart';
 
 import 'meeting_copilot/korlix_meeting_copilot_route.dart';
 import 'meeting_copilot/k135z_copilot_entry.dart';
@@ -3670,6 +3671,21 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
 
   // KORLIX_BRAIN_VAULT_SECURITY_SETTINGS_UI_BUILD131_V1_END
 
+  Future<void> _openLegalPrivacy() async {
+    if (!mounted) return;
+    final revision = kKorlixAuthRevision.value;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => KorlixPrivacySettings(
+          sessionChanges: kKorlixAuthRevision,
+          isSessionCurrent: () => mounted &&
+              revision == kKorlixAuthRevision.value &&
+              (kKorlixAccessToken?.isNotEmpty ?? false),
+        ),
+      ),
+    );
+  }
+
   Future<void> _requestAccountDeletion() async {
     if (!mounted || _deletionRequestBusy) return;
     final revision = kKorlixAuthRevision.value;
@@ -4499,6 +4515,17 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       )),
                     ),
                     // KORLIX_BRAIN_VAULT_ACCOUNT_MANAGER_SETTINGS_BUILD131_V1_END
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      key: const Key('account-legal-privacy'),
+                      onPressed: korlixSoundAction(_openLegalPrivacy),
+                      icon: const Icon(Icons.privacy_tip_outlined),
+                      label: const Text('Legal & Privacy'),
+                      style: korlixSoundButtonStyle(OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF69D9E8),
+                        side: const BorderSide(color: Color(0xFF69D9E8)),
+                      )),
+                    ),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
                       onPressed: korlixSoundAction(_requestAccountDeletion),
@@ -9374,7 +9401,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
 
   Future<void> _openInventoryStudio() async {
     final client=InventoryClient(backendBaseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
-    Future<bool> consent(BuildContext context)=>KorlixThirdPartyAiConsent.ensure(context:context,featureName:'Inventory Studio and Rici',providers:{KorlixThirdPartyAiProvider.openAi},dataCategories:{KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.imagesAndPhotos,KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts});
+    Future<bool> consent(BuildContext context)=>KorlixThirdPartyAiConsent.ensure(context:context,featureName:'Inventory Studio and Rici',providers:{KorlixThirdPartyAiProvider.openAi},dataCategories:{KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.imagesAndPhotos,KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,KorlixThirdPartyAiDataCategory.inventoryRecords});
     await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>InventoryScreen(client:client,ensureConsent:consent,openVoice:(search,results)async{
       await Navigator.of(context).push<void>(MaterialPageRoute<void>(builder:(_)=>KorlixLiveConvoTestScreen(
         sessionChanges:kKorlixAuthRevision,backendBaseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,

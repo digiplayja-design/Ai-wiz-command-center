@@ -30,11 +30,12 @@ class CaptureFixture {
     'bindingRevision':1,'authorityRevision':0,'validForMs':0,'pending':false,'uncertain':false,'captureActive':false,
   };
   late final K135zCaptureController c;
-  CaptureFixture() {
+  CaptureFixture({Future<bool> Function()? requestAiConsent}) {
     row['authority']['context'] = row['snapshot']['context'];
     c = K135zCaptureController(agentId:'agent',baseUri:Uri.parse('https://api.example.test'),
       headers:() => {'authorization':'Bearer offline'},isCurrent:() => current,
       cancelRequests:() {cancels++;},milliseconds:() => now,watch:false,
+      requestAiConsent:requestAiConsent ?? () async => true,
       transport:({required String method, required Uri uri, required Map<String,String> headers, Object? body}) async {
         if (method == 'GET') {
           return KorlixZoomTransportResponse(statusCode:200, body:jsonEncode(

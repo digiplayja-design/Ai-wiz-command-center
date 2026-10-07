@@ -12,8 +12,10 @@ import '../../lib/meeting_copilot/k135z_workspace_controller.dart';
 import '../../lib/meeting_copilot/korlix_meeting_copilot_access.dart';
 import '../../lib/meeting_copilot/korlix_meeting_copilot_route.dart';
 import 'helpers/k135z_korlixai_fakes.dart';
+import 'helpers/k135z_ai_consent_fakes.dart';
 
 void main() {
+  setUp(seedMeetingAiConsent);
   gate6cRouteTests();
   gate6pWidgetTests();
   testWidgets('Gate6N route buttons dispatch authenticated capture controls', (tester) async {

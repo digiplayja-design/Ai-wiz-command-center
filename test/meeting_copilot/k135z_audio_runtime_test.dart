@@ -12,7 +12,8 @@ void main() {
     await http.runWithClient(() async {
       final binding = K135zZoomRuntimeBinding(launch: K135zZoomLaunch(
         agentId: 'agent', backendBaseUri: Uri.parse('https://api.example.test'),
-        headersBuilder: () => {'authorization': 'Bearer offline'}, isCurrent: () => true));
+        headersBuilder: () => {'authorization': 'Bearer offline'}, isCurrent: () => true),
+        requestAiConsent: () async => true);
       try {
         await binding.capture.refreshAudio();
         expect(requests, isEmpty);

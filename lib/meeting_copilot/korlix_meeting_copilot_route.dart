@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../privacy/korlix_third_party_ai_consent.dart';
 
 import 'k135z_workspace_controller.dart';
 import 'k135z_zoom_runtime_binding.dart';
@@ -61,7 +62,22 @@ class _KorlixMeetingCopilotRouteState extends State<KorlixMeetingCopilotRoute> w
     _controller.setConnection(connected: false);
     if (launch != null && kKorlixMeetingCopilotEnterpriseAccess.value && launch.current) {
       _binding = K135zZoomRuntimeBinding(launch: launch,
-          transport: widget.zoomTransport, openUrl: widget.zoomOpenUrl);
+          transport: widget.zoomTransport, openUrl: widget.zoomOpenUrl,
+          requestAiConsent: () async {
+            if (!mounted || !launch.current ||
+                !kKorlixMeetingCopilotEnterpriseAccess.value) return false;
+            final approved = await KorlixThirdPartyAiConsent.ensure(
+              context: context,
+              featureName: 'Nova Meeting Copilot',
+              providers: {KorlixThirdPartyAiProvider.openAi},
+              dataCategories: {
+                KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,
+                KorlixThirdPartyAiDataCategory.agentTrainingAndMemory,
+              },
+            );
+            return approved && mounted && launch.current &&
+                kKorlixMeetingCopilotEnterpriseAccess.value;
+          });
       _binding!.addListener(_changed);
       final binding = _binding!;
       WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -18,10 +18,13 @@ void main() {
     expect(screen.meetingCopilotEnterpriseEnabled, isTrue);
     final source = _read('lib/live_convo/korlix_live_convo_test_screen.dart');
     for (final retained in <String>['meetingCopilotEnterpriseEnabled: widget.meetingCopilotEnterpriseEnabled',
-      'K136sLearningOverlay', '_k136sCurrentAttempt', '_k136sRouteTranscript', '_k136sControlsLocked',
-      'captureForLiveDocs: !handledAsVoiceApproval && !handledAsLearning']) {
+      'K136sLearningOverlay', '_k136sCurrentAttempt', '_k136sRouteTranscript', '_k136sControlsLocked']) {
       expect(source, contains(retained), reason: retained);
     }
+    // Live Docs now also excludes isolated and scheduling voice sessions.
+    // Retain the learning/approval guard without depending on its old prefix.
+    expect(source, matches(RegExp(
+      r'captureForLiveDocs:\s*!_isolatedVoiceMode\s*&&\s*!widget.schedulingMode\s*&&\s*!handledAsVoiceApproval\s*&&\s*!handledAsLearning')));
   });
   test('Gate5 main has one protected route and synchronizes access', () {
     final source = _read('lib/main.dart');
