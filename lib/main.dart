@@ -54,6 +54,8 @@ import 'auth/korlix_login_preferences.dart';
 import 'auth/korlix_token_store.dart';
 import 'ads/korlix_ad_consent.dart';
 import 'account/korlix_account_deletion_dialog.dart';
+import 'support/korlix_ai_report_client.dart';
+import 'support/korlix_saved_output_report_dialog.dart';
 import 'sharing/korlix_share.dart';
 import 'auth/korlix_portal_launch.dart';
 import 'input_tools/upload_studio.dart';
@@ -2552,6 +2554,7 @@ class KorlixAccountButton extends StatefulWidget {
 class _KorlixAccountButtonState extends State<KorlixAccountButton> {
   bool _loading = false;
   bool _deletionRequestBusy = false;
+  bool _historyReportBusy = false;
 
   Map<String, String> _headers() {
     final headers = <String, String>{'Content-Type': 'application/json'};
@@ -2679,34 +2682,52 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
   Future<void> _reportHistoryItem({
     required String? generationId,
     required String prompt,
+    required String outputSummary,
   }) async {
+    if (!mounted || _historyReportBusy) return;
+    final revision = kKorlixAuthRevision.value;
+    final token = kKorlixAccessToken;
+    if (token == null || token.isEmpty) {
+      await _showKorlixNotice(
+        title: 'Sign in required',
+        message: 'Sign in to report this saved output.',
+      );
+      return;
+    }
+    final headers = Map<String, String>.from(_headers());
+    bool current() => mounted && revision == kKorlixAuthRevision.value &&
+        token == kKorlixAccessToken;
+    _historyReportBusy = true;
     try {
-      final response = await http.post(
-        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/reports'),
-        headers: _headers(),
-        body: jsonEncode({
-          'generation_id': generationId,
-          'reason': 'User reported AI output',
-          'details': 'Reported from saved settings. Prompt: $prompt',
-        }),
+      final reportId = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => KorlixSavedOutputReportDialog(
+          sessionChanges: kKorlixAuthRevision,
+          isSessionCurrent: current,
+          submitReport: (reason, details) {
+            if (!current()) throw StateError('Sign-in changed.');
+            return submitKorlixAiReport(
+              endpoint: _assertValidKorlixBackendUri(
+                '$kKorlixBackendBaseUrl/api/report-output',
+              ),
+              headers: headers,
+              contentId: generationId,
+              prompt: prompt,
+              outputSummary: outputSummary,
+              reason: reason,
+              details: details,
+            );
+          },
+        ),
       );
-
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-
-      if (response.statusCode >= 400) {
-        throw Exception(data['error'] ?? 'Report failed.');
-      }
-
+      if (reportId == null || !current()) return;
       await _showKorlixNotice(
-        title: 'Report submitted',
-        message: 'Thank you. The Korlix team will review this output.',
+        title: 'Report received',
+        message: 'Your report was saved for review. Reference: $reportId',
       );
-    } catch (error) {
-      await _showKorlixNotice(
-        title: 'Report failed',
-        message: _cleanError(error),
-        danger: true,
-      );
+    } finally {
+      _historyReportBusy = false;
     }
   }
 
@@ -4691,6 +4712,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                                     onPressed: korlixSoundAction(() => _reportHistoryItem(
                                       generationId: historyId,
                                       prompt: prompt,
+                                      outputSummary: response,
                                     )),
                                     icon: const Icon(
                                       Icons.flag_outlined,
@@ -5394,6 +5416,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   bool _socialOpening = false;
   bool _contactsOpening = false;
   bool _toolFinderOpening = false;
+  bool _aiOutputReportBusy = false;
   final _commandPanelKey = GlobalKey();
   bool _showSavedTopicsPanel = false;
   final ScrollController _savedTopicsScrollController = ScrollController();
@@ -7796,162 +7819,37 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     ];
   }
 
-  String _generatedContentReportSummary({
-    required String contentType,
-    required String prompt,
-    required String outputSummary,
-    String? contentId,
-    String? imageUrl,
-    String? videoId,
-  }) {
-    final buffer = StringBuffer()
-      ..writeln('Korlix AI Reported Output')
-      ..writeln('Type: $contentType')
-      ..writeln('Time: ${DateTime.now().toIso8601String()}');
-
-    if ((contentId ?? '').trim().isNotEmpty) {
-      buffer.writeln('Content ID: ${contentId!.trim()}');
-    }
-
-    if ((videoId ?? '').trim().isNotEmpty) {
-      buffer.writeln('Video ID: ${videoId!.trim()}');
-    }
-
-    if ((imageUrl ?? '').trim().isNotEmpty) {
-      buffer.writeln('Image URL: ${imageUrl!.trim()}');
-    }
-
-    if (prompt.trim().isNotEmpty) {
-      buffer
-        ..writeln()
-        ..writeln('Prompt:')
-        ..writeln(prompt.trim());
-    }
-
-    if (outputSummary.trim().isNotEmpty) {
-      buffer
-        ..writeln()
-        ..writeln('Generated output summary:')
-        ..writeln(outputSummary.trim());
-    }
-
-    return buffer.toString();
-  }
-
   Future<bool> _submitGeneratedContentReport({
     required String contentType,
     required String prompt,
     required String outputSummary,
     required String reason,
     required String details,
+    required Map<String, String> headers,
     String? contentId,
     String? imageUrl,
     String? videoId,
   }) async {
-    final payload = <String, dynamic>{
-      'contentType': contentType,
-      'reason': reason,
-      'details': details,
-      'prompt': prompt,
-      'outputSummary': outputSummary,
-      'contentId': contentId,
-      'imageUrl': imageUrl,
-      'videoId': videoId,
-      'language': _selectedLanguage,
-      'appVersion': 'Korlix AI',
-      'createdAt': DateTime.now().toIso8601String(),
-    };
-
-    final endpoints = <String>[
-      '$kKorlixBackendBaseUrl/api/reports/content',
-      '$kKorlixBackendBaseUrl/api/report-output',
-      '$kKorlixBackendBaseUrl/api/report',
-    ];
-
-    for (final endpoint in endpoints) {
-      try {
-        final response = await http
-            .post(
-              Uri.parse(endpoint),
-              headers: _authHeaders(),
-              body: jsonEncode(payload),
-            )
-            .timeout(const Duration(seconds: 18));
-
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          return true;
-        }
-      } catch (_) {
-        // Try the next endpoint/fallback.
-      }
-    }
-
-    return false;
-  }
-
-  Future<void> _openGeneratedContentReportEmailFallback({
-    required String contentType,
-    required String prompt,
-    required String outputSummary,
-    required String reason,
-    required String details,
-    String? contentId,
-    String? imageUrl,
-    String? videoId,
-  }) async {
-    final body = StringBuffer()
-      ..writeln(
-        _generatedContentReportSummary(
-          contentType: contentType,
-          prompt: prompt,
-          outputSummary: outputSummary,
-          contentId: contentId,
-          imageUrl: imageUrl,
-          videoId: videoId,
-        ),
-      )
-      ..writeln()
-      ..writeln('Reason:')
-      ..writeln(reason)
-      ..writeln()
-      ..writeln('Additional details:')
-      ..writeln(
-        details.trim().isEmpty ? '[No extra details provided]' : details.trim(),
-      );
-
-    final uri = Uri(
-      scheme: 'mailto',
-      path: 'support@korlixdeveloper.com',
-      queryParameters: <String, String>{
-        'subject': 'Report AI Output - Korlix AI',
-        'body': body.toString(),
-      },
-    );
-
     try {
-      final launched = await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
+      await submitKorlixAiReport(
+        endpoint: _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/report-output'),
+        headers: headers,
+        contentType: contentType,
+        appArea: 'generated_content_report',
+        prompt: prompt,
+        outputSummary: outputSummary,
+        reason: reason,
+        details: details,
+        contentId: contentId,
+        imageUrl: imageUrl,
+        videoId: videoId,
+        language: _selectedLanguage,
+        platform: kIsWeb ? 'web' : defaultTargetPlatform.name,
       );
-
-      if (launched) {
-        return;
-      }
-    } catch (_) {}
-
-    await Clipboard.setData(ClipboardData(text: body.toString()));
-
-    if (!mounted) {
-      return;
+      return true;
+    } catch (_) {
+      return false;
     }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Report details copied. Email support@korlixdeveloper.com if the email app did not open.',
-        ),
-      ),
-    );
   }
 
   Future<void> _showReportGeneratedContentSheet({
@@ -7962,6 +7860,20 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     String? imageUrl,
     String? videoId,
   }) async {
+    if (!mounted || _aiOutputReportBusy) return;
+    final revision = kKorlixAuthRevision.value;
+    final token = kKorlixAccessToken;
+    if (token == null || token.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in to submit a report.')),
+      );
+      return;
+    }
+    final headers = Map<String, String>.from(_authHeaders());
+    bool current() => mounted && revision == kKorlixAuthRevision.value &&
+        token == kKorlixAccessToken;
+    _aiOutputReportBusy = true;
+    var sheetSubmitted = false;
     final detailsController = TextEditingController();
     var selectedReason = _generatedContentReportCategories().first;
 
@@ -8069,6 +7981,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
                           controller: detailsController,
                           minLines: 3,
                           maxLines: 5,
+                          maxLength: 1000,
                           style: const TextStyle(color: Color(0xFFE4EBEE)),
                           cursorColor: const Color(0xFF69D9E8),
                           decoration: InputDecoration(
@@ -8127,6 +8040,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
                             Expanded(
                               child: FilledButton.icon(
                                 onPressed: korlixSoundAction(() {
+                                  if (sheetSubmitted) return;
+                                  sheetSubmitted = true;
                                   Navigator.of(
                                     sheetContext,
                                   ).pop(<String, String>{
@@ -8160,7 +8075,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         },
       );
 
-      if (result == null || !mounted) {
+      if (result == null || !current()) {
         return;
       }
 
@@ -8168,6 +8083,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       final details = result['details'] ?? '';
 
       final sent = await _submitGeneratedContentReport(
+        headers: headers,
         contentType: contentType,
         prompt: prompt,
         outputSummary: outputSummary,
@@ -8178,7 +8094,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         videoId: videoId,
       );
 
-      if (!mounted) {
+      if (!current()) {
         return;
       }
 
@@ -8192,23 +8108,13 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Could not submit automatically. Opening support email fallback.',
+            'We could not confirm whether your report was received. It may already be saved. Contact support@korlixdeveloper.com before submitting it again.',
           ),
         ),
       );
-
-      await _openGeneratedContentReportEmailFallback(
-        contentType: contentType,
-        prompt: prompt,
-        outputSummary: outputSummary,
-        reason: reason,
-        details: details,
-        contentId: contentId,
-        imageUrl: imageUrl,
-        videoId: videoId,
-      );
     } finally {
       detailsController.dispose();
+      _aiOutputReportBusy = false;
     }
   }
 
@@ -15047,56 +14953,27 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     required String outputSummary,
     required String reason,
     required String details,
+    required Map<String, String> headers,
     String? contentId,
   }) async {
-    final payload = <String, dynamic>{
-      'contentType': contentType,
-      'reason': reason,
-      'details': details,
-      'prompt': prompt,
-      'outputSummary': outputSummary,
-      'contentId': contentId,
-      'language': _selectedLanguage,
-      'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
-      'appArea': 'google_play_ai_generated_content_report',
-      'createdAt': DateTime.now().toIso8601String(),
-    };
-
-    final endpoints = <String>[
-      '$kKorlixBackendBaseUrl/api/report-output',
-      '$kKorlixBackendBaseUrl/api/reports/content',
-      '$kKorlixBackendBaseUrl/api/report',
-    ];
-
-    for (final endpoint in endpoints) {
-      try {
-        final response = await http
-            .post(
-              Uri.parse(endpoint),
-              headers: _authHeaders(),
-              body: jsonEncode(payload),
-            )
-            .timeout(const Duration(seconds: 18));
-
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          return true;
-        }
-      } catch (_) {
-        // Try next endpoint.
-      }
-    }
-
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final pending =
-          prefs.getStringList('korlix_pending_ai_output_reports') ?? <String>[];
-      pending.add(jsonEncode(payload));
-      await prefs.setStringList('korlix_pending_ai_output_reports', pending);
+      await submitKorlixAiReport(
+        endpoint: _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/report-output'),
+        headers: headers,
+        contentType: contentType,
+        appArea: 'google_play_ai_generated_content_report',
+        prompt: prompt,
+        outputSummary: outputSummary,
+        reason: reason,
+        details: details,
+        contentId: contentId,
+        language: _selectedLanguage,
+        platform: kIsWeb ? 'web' : defaultTargetPlatform.name,
+      );
+      return true;
     } catch (_) {
-      // Local fallback should never crash the app.
+      return false;
     }
-
-    return false;
   }
 
   Future<void> _showGooglePlayAiReportSheet({
@@ -15105,6 +14982,20 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     required String outputSummary,
     String? contentId,
   }) async {
+    if (!mounted || _aiOutputReportBusy) return;
+    final revision = kKorlixAuthRevision.value;
+    final token = kKorlixAccessToken;
+    if (token == null || token.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in to submit a report.')),
+      );
+      return;
+    }
+    final headers = Map<String, String>.from(_authHeaders());
+    bool current() => mounted && revision == kKorlixAuthRevision.value &&
+        token == kKorlixAccessToken;
+    _aiOutputReportBusy = true;
+    var sheetSubmitted = false;
     final detailsController = TextEditingController();
     var selectedReason = _googlePlayAiReportReasons().first;
 
@@ -15210,6 +15101,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                           controller: detailsController,
                           minLines: 3,
                           maxLines: 5,
+                          maxLength: 1000,
                           style: const TextStyle(color: Color(0xFFE4EBEE)),
                           cursorColor: const Color(0xFF69D9E8),
                           decoration: InputDecoration(
@@ -15294,6 +15186,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                             Expanded(
                               child: FilledButton.icon(
                                 onPressed: korlixSoundAction(() {
+                                  if (sheetSubmitted) return;
+                                  sheetSubmitted = true;
                                   Navigator.of(
                                     sheetContext,
                                   ).pop(<String, String>{
@@ -15327,11 +15221,12 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         },
       );
 
-      if (result == null || !mounted) {
+      if (result == null || !current()) {
         return;
       }
 
       final sent = await _submitGooglePlayAiReport(
+        headers: headers,
         contentType: contentType,
         prompt: prompt,
         outputSummary: outputSummary,
@@ -15340,7 +15235,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         contentId: contentId,
       );
 
-      if (!mounted) {
+      if (!current()) {
         return;
       }
 
@@ -15349,12 +15244,13 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
           content: Text(
             sent
                 ? 'Report submitted. Thank you for helping improve Korlix AI safety.'
-                : 'Report saved in the app. It will be available for Korlix AI review.',
+                : 'We could not confirm whether your report was received. It may already be saved. Contact support@korlixdeveloper.com before submitting it again.',
           ),
         ),
       );
     } finally {
       detailsController.dispose();
+      _aiOutputReportBusy = false;
     }
   }
 

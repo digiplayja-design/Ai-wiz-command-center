@@ -61,6 +61,7 @@ RELEASE_TESTS=(
   test/privacy/korlix_third_party_ai_privacy_statement_test.dart
   test/privacy/korlix_privacy_settings_test.dart
   test/launch/korlix_launch_countdown_test.dart
+  test/support/ai_output_report_test.dart
   test/meeting_copilot/k135z_ai_sharing_consent_test.dart
   test/workforce/workforce_location_test.dart
   test/workforce/workforce_test.dart
