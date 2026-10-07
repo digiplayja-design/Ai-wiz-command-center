@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:ai_wiz_command_center/workforce/workforce_forms.dart';
 import 'package:ai_wiz_command_center/workforce/workforce_location.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
@@ -273,27 +274,48 @@ void main() {
     );
   }
 
-  testWidgets(
-    'A silent browser watch times out and is cancelled before retry',
-    (tester) async {
+  test('A silent browser watch times out and is cancelled before retry', () {
+    fakeAsync((async) {
       final silent = Completer<Position>();
       final gateway = FakeLocationGateway()
         ..positions.addAll([silent.future, fix()]);
-      final result = WorkforceLocationService(
+      Map<String, dynamic>? result;
+      Object? failure;
+      WorkforceLocationService(
         gateway: gateway,
         isWeb: true,
-      ).capture();
-      await tester.pump();
+      ).capture().then<void>(
+        (value) {
+          result = value;
+        },
+        onError: (Object error) {
+          failure = error;
+        },
+      );
+      async.flushMicrotasks();
       expect(gateway.settings.length, 1);
-      await tester.pump(const Duration(seconds: 20));
-      expect((await result)['latitude'], 40.7);
+      expect(result, isNull);
+      async.elapse(const Duration(seconds: 19));
+      expect(gateway.cancellations, 0);
+      expect(gateway.settings.length, 1);
+      async.elapse(const Duration(seconds: 1));
+      async.flushMicrotasks();
+      expect(failure, isNull);
+      expect(
+        result,
+        isNotNull,
+        reason: 'Capture must complete after its bounded retry',
+      );
+      expect(result!['latitude'], 40.7);
       expect(gateway.settings.length, 2);
       expect(gateway.cancellations, 2);
+      expect(async.pendingTimers, isEmpty);
       silent.complete(fix(latitude: 42));
-      await tester.pump();
+      async.flushMicrotasks();
+      expect(result!['latitude'], 40.7);
       expect(gateway.settings.length, 2);
-    },
-  );
+    });
+  });
 
   testWidgets(
     'Closing the attendance dialog cancels capture with no later retry',
