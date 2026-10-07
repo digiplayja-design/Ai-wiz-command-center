@@ -1,9 +1,10 @@
 # Support-readiness follow-up — October 7, 2026
 
-**Overall checklist item: partially complete.** The owner confirmed they will handle support and identified Titan as the mailbox provider. Backlog review is complete. Mailbox access, backup/cadence, six remaining cases and full account-deletion fulfillment still need evidence.
+**Overall checklist item: partially complete. Support coverage and backlog review are complete.** On October 7, 2026, the owner clarified that a team handles the Titan support inbox and that email reaches several team members’ phones. This owner confirmation establishes the support arrangement; it supersedes the earlier assumption of single-person coverage. Six remaining cases and full account-deletion fulfillment still need resolution.
 
 ## Completed
 
+- Recorded owner-confirmed team support coverage: the support inbox is handled by a team, with email reaching several team members’ phones. No particular response schedule or 24/7 service promise has been specified.
 - Reviewed all 39 legacy reports and their seven distinct saved outputs through private access. Linked 32 exact duplicate submissions, closed one appropriate safety refusal without further action, and retained six uncertain cases as open. All original records remain; a private, service-only review ledger records the outcome and reasoning.
 - Applied the review ledger migration with RLS and no browser privileges. Verified 39 review records, all original 39 report records, 32 exact duplicate links and six remaining open primary cases.
 - Fixed the saved-history report action, which referenced an obsolete endpoint. It now uses the durable reporting route and asks for a reason/details while including the saved response context.
@@ -11,12 +12,14 @@
 - Passed 12 focused client/dialog tests and the full selected 166-test Flutter release gate. New support code/tests analyze cleanly and main.dart has no analysis errors.
 - Completed a local synthetic deletion rehearsal: 66 checks across request intake, selected storage cleanup, cross-user isolation, provider disconnection and the deletion dialog. Eight additional focused new SQL/rehearsal tests passed together. These counts overlap; they are not a cumulative distinct total.
 
+## Verification note
+
+The owner confirmed operational inbox handling and distribution to multiple team phones. An earlier independent login attempt was blocked by GoDaddy’s unusual-browser check. That remains a limitation of this session’s verification, not an unresolved support-coverage requirement. This session did not read the inbox or send a test email.
+
 ## Remaining evidence
 
 | Item | Current result | Needed to close |
 | --- | --- | --- |
-| Primary support contact | Owner confirmed “I will.” | Record practical review cadence and absence coverage. No ongoing automated monitoring or 24/7 staffing is implied. |
-| Support mailbox | Titan routed the secure login through GoDaddy. GoDaddy displayed an unusual-browser block. | Verify actual inbox access and receipt handling through an approved supported path. This session did not read the mailbox or send a test email. The block is specific to this cloud browser; it is not proof the mailbox is unavailable. |
 | Legacy follow-ups | Six cases remain open. Source research is complete for three sports responses and one enrollment-locator response; correction follow-up remains. One original-image evidence gap and one budget arithmetic/sourcing issue also remain. | Per-case evidence and resolution. Reviewing and deduplicating are not equivalent to fixing the original output. Private details remain in the ledger. |
 | Complete account deletion | Intake and selected components are tested. Auth-only deletion leaves independent receipt bytes; immutable bookkeeping dependencies block a generic purge. | A controlled real-stack test account, complete per-account manifest, approved finance/shared-record retention decisions, feature/provider cleanup, and final verification. No production customer deletion was attempted. |
 
@@ -34,4 +37,4 @@ No customer message, account deletion, privilege expansion, paid purchase or pro
 - Backend evidence commit: `61efefee0de33dae9f1c0cde5d505a0401fc6174`. It changes migration, tests and documentation only; the existing backend runtime was not redeployed.
 - Source research for four remaining cases was added to the private review ledger. The cited regular-season records were verified; the sports issue concerns missing or stale playoff context. The location response needs an actionable official locator. All six cases remain open until resolution is recorded.
 
-The backlog **review** and primary-support assignment can be marked complete. The combined support/deletion readiness item remains open for the evidence in the table above.
+The backlog **review** and **team support coverage** are marked complete based on the recorded review and owner confirmation. The combined support/deletion readiness item remains open for the evidence in the table above.
