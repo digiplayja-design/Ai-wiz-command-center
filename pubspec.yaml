@@ -82,6 +82,7 @@ flutter:
 
   assets:
     - assets/fieldproof/
+    - assets/characters/button_climbers/realistic-people-v2.png
 
     - assets/meeting_copilot/korlix_logo.jpeg
 

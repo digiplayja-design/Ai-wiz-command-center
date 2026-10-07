@@ -92,20 +92,31 @@ analysis reported no issues for the changed code.
 
 ### Home button climbers
 
-`KorlixButtonClimbers` adds two silent, articulated vector characters to the home
+`KorlixButtonClimbers` adds two silent, articulated human figures to the home
 viewport. Registered `KorlixActionButton` render boxes provide actual button
 edges after layout, scroll, and resize. The man and woman climb up and down,
-stand on the top edge, wave, and reach their palms toward the glass on separate
-27-second cycles. Only the transparent illustration layer repaints, capped at
+pull up at the top edge, wave, and reach toward the glass on staggered
+24.8-second cycles. Only the transparent illustration layer repaints, capped at
 30fps; button hit testing and accessibility remain with the original controls.
 
 The **Button climbers** switch in Skins & Templates saves a device preference.
 Reduced motion and accessible navigation hide the figures. Navigation, inactive
 app lifecycle, disabled tickers, and text editing suspend the animation without
 advancing its clock. Animation generates no input events and does not reset the
-smoke screensaver's idle timer. There are no media assets, requests, or AI calls.
+smoke screensaver's idle timer. One bundled 1.6 MiB alpha atlas is decoded once;
+there are no video players, remote media providers, or runtime AI calls. The
+artwork and original generation prompt are in `assets/characters/button_climbers/`.
 
-`test/button_climbers_test.dart` covers choreography, saved settings, scrolling,
+The realism revision replaces the original cartoon painter and sinusoidal limb
+movement. Every stroke shifts weight, reaches, plants a foot, pulls up on fixed
+contacts, then brings the trailing limbs along. At least three contacts remain
+planted, and contact positions follow the rounded button edge. Adaptive step
+length avoids exaggerated reaches on tall controls. Only full tool controls
+with enough room are used; small language/theme chips are excluded. The top
+Find a tool control has side clearance and enough height for a climbing route.
+
+`test/button_climbers_test.dart` covers planted grips while the body moves,
+rounded-edge contact and three-point support throughout each cycle, choreography, saved settings, scrolling,
 resizing, tap-through, route/lifecycle/editing pauses, accessibility, and smoke
 wake behavior. Set `KORLIX_CLIMBERS_REVIEW` and `KORLIX_FLUTTER_ROOT` to export
 phone/tablet review frames in dark and light themes.

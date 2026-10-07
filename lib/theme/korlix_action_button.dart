@@ -424,9 +424,8 @@ class KorlixActionButton extends StatelessWidget {
         ),
       ),
     );
-    return KorlixClimberAnchor(
-      child: iconOnly ? Tooltip(message: label, child: button) : button,
-    );
+    final result = iconOnly ? Tooltip(message: label, child: button) : button;
+    return tile || expand || hero ? KorlixClimberAnchor(child: result) : result;
   }
 }
 

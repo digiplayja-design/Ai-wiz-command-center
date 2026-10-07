@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ai_wiz_command_center/characters/button_climbers.dart';
 import 'package:ai_wiz_command_center/characters/button_climber_painter.dart';
+import 'package:ai_wiz_command_center/characters/button_climber_artwork.dart';
 import 'package:ai_wiz_command_center/characters/button_climbers_settings.dart';
 import 'package:ai_wiz_command_center/theme/korlix_action_button.dart';
 import 'package:ai_wiz_command_center/theme/korlix_action_grid.dart';
@@ -33,6 +34,10 @@ KorlixButtonClimbersPainter painter(WidgetTester tester) =>
         as KorlixButtonClimbersPainter;
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    await KorlixClimberArtwork.load();
+  });
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   test(
@@ -43,26 +48,81 @@ void main() {
         const Size(390, 844),
         const Size(1024, 900),
       ]) {
-        final button = Rect.fromLTWH(12, 140, size.width - 24, 136);
+        final button = Rect.fromLTWH(40, 140, size.width - 80, 136);
         for (final woman in [false, true]) {
           KorlixClimberPose pose(double seconds) => KorlixClimberPose.at(
-            seconds - (woman ? 9.5 : 0),
+            seconds - (woman ? KorlixClimberPose.womanDelay : 0),
             button,
             size,
             woman: woman,
           );
           expect(pose(6).position.dy, lessThan(pose(1).position.dy));
           expect(pose(11).wave, 1);
-          expect(pose(15).reach, 1);
-          expect(pose(25).position.dy, greaterThan(pose(20).position.dy));
+          expect(pose(13).reach, 1);
+          expect(pose(22).position.dy, greaterThan(pose(18).position.dy));
           expect(
-            (pose(27).position - pose(27.0001).position).distance,
+            (pose(24.7999).position - pose(24.8001).position).distance,
             lessThan(.01),
           );
           for (var frame = 0; frame <= 270; frame++) {
             final point = pose(frame / 10).position;
-            expect(point.dx, inInclusiveRange(24, size.width - 24));
+            expect(point.dx, inInclusiveRange(0, size.width));
             expect(point.dy, inInclusiveRange(48, size.height - 30));
+          }
+        }
+      }
+    },
+  );
+
+  test(
+    'planted hands and toes stay on the rounded edge while the body pulls up',
+    () {
+      const button = Rect.fromLTWH(40, 140, 310, 136);
+      const size = Size(390, 844);
+      for (final woman in [false, true]) {
+        KorlixClimberPose pose(double seconds) => KorlixClimberPose.at(
+          seconds - (woman ? KorlixClimberPose.womanDelay : 0),
+          button,
+          size,
+          woman: woman,
+        );
+        final first = pose(.76), pulled = pose(1.08);
+        expect(pulled.position.dy, lessThan(first.position.dy - 1));
+        for (final points in [
+          (first.handA, pulled.handA),
+          (first.handB, pulled.handB),
+          (first.footA, pulled.footA),
+          (first.footB, pulled.footB),
+        ]) {
+          expect(
+            (first.toViewport(points.$1) - pulled.toViewport(points.$2))
+                .distance,
+            lessThan(.001),
+          );
+        }
+        for (final h in [96.0, 112.0, 136.0, 300.0]) {
+          final ledge = Rect.fromLTWH(40, 140, 310, h);
+          for (var frame = 0; frame < 496; frame++) {
+            final p = KorlixClimberPose.at(
+              frame * .05,
+              ledge,
+              size,
+              woman: woman,
+            );
+            final contacts = [
+              (p.handA, p.handAPlanted),
+              (p.handB, p.handBPlanted),
+              (p.footA, p.footAPlanted),
+              (p.footB, p.footBPlanted),
+            ];
+            expect(contacts.where((c) => c.$2).length, greaterThanOrEqualTo(3));
+            for (final c in contacts.where((c) => c.$2)) {
+              expect(c.$1.dy, inInclusiveRange(0, h));
+              expect(
+                c.$1.dx,
+                closeTo(KorlixClimberPose.edgeInset(c.$1.dy, h) + .5, .001),
+              );
+            }
           }
         }
       }
@@ -117,11 +177,12 @@ void main() {
               controller: controller,
               child: SingleChildScrollView(
                 controller: scroll,
-                padding: const EdgeInsets.fromLTRB(12, 140, 12, 80),
+                padding: const EdgeInsets.fromLTRB(32, 140, 32, 80),
                 child: Column(
                   children: [
                     KorlixActionButton(
                       key: const Key('real-button'),
+                      size: KorlixButtonSize.hero,
                       label: 'Find a tool',
                       expand: true,
                       onPressed: () => taps++,
@@ -164,8 +225,8 @@ void main() {
         const Size(390, 844),
         woman: false,
       );
-      // Tap through the man's painted torso, directly on the underlying button.
-      await tester.tapAt(Offset(pose.position.dx + 2, first.center.dy));
+      // Tap through the planted fingers on the button's real edge.
+      await tester.tapAt(pose.toViewport(pose.handA) + const Offset(4, 0));
       await frames(tester);
       expect(taps, 1);
       scroll.jumpTo(40);
@@ -221,6 +282,8 @@ void main() {
                         children: [
                           KorlixActionButton(
                             label: 'Visible control',
+                            size: KorlixButtonSize.hero,
+                            expand: true,
                             onPressed: () {},
                           ),
                           const SizedBox(height: 80),
@@ -312,6 +375,8 @@ void main() {
                 children: [
                   KorlixActionButton(
                     key: const Key('smoke-underlying-button'),
+                    size: KorlixButtonSize.hero,
+                    expand: true,
                     label: 'Find a tool',
                     onPressed: () => taps++,
                   ),
@@ -420,9 +485,9 @@ void main() {
                   controller: controller,
                   child: SingleChildScrollView(
                     padding: EdgeInsets.fromLTRB(
-                      size.width < 430 ? 12 : 48,
+                      size.width < 430 ? 32 : 48,
                       100,
-                      size.width < 430 ? 12 : 48,
+                      size.width < 430 ? 32 : 48,
                       40,
                     ),
                     child: Column(
@@ -439,6 +504,7 @@ void main() {
                         const SizedBox(height: 60),
                         KorlixActionButton(
                           label: 'Find a tool',
+                          size: KorlixButtonSize.hero,
                           subtitle: 'Search KORLIX by name or task',
                           icon: Icons.search_rounded,
                           expand: true,
@@ -473,7 +539,7 @@ void main() {
           ),
         );
         await frames(tester);
-        for (final phase in [1, 11, 15, 23]) {
+        for (final phase in [1, 6, 10, 13, 19, 23]) {
           final art = painter(tester);
           await tester.pump(
             Duration(

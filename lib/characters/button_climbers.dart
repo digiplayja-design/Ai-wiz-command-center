@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'button_climber_painter.dart';
+import 'button_climber_artwork.dart';
 import 'button_climbers_settings.dart';
 
 /// One transparent, noninteractive animation layer for the home viewport.
@@ -22,6 +24,7 @@ class _KorlixButtonClimbersState extends State<KorlixButtonClimbers>
   final _seconds = ValueNotifier<double>(0);
   final _buttons = ValueNotifier<List<Rect>>(const []);
   final _visible = ValueNotifier<bool>(false);
+  final _artwork = ValueNotifier<ui.Image?>(null);
   late final _ClimberAnchors _anchors;
   late final Ticker _ticker;
   Duration _lastPaint = Duration.zero;
@@ -48,6 +51,19 @@ class _KorlixButtonClimbersState extends State<KorlixButtonClimbers>
     FocusManager.instance.addListener(_focusChanged);
     _controller.addListener(_syncPlayback);
     unawaited(_controller.restore());
+    _artwork.value = KorlixClimberArtwork.ready;
+    if (_artwork.value == null) unawaited(_loadArtwork());
+  }
+
+  Future<void> _loadArtwork() async {
+    try {
+      final image = await KorlixClimberArtwork.load();
+      if (!mounted) return;
+      _artwork.value = image;
+      _syncPlayback();
+    } catch (_) {
+      // Decoration can be absent offline; controls remain fully usable.
+    }
   }
 
   @override
@@ -93,6 +109,7 @@ class _KorlixButtonClimbersState extends State<KorlixButtonClimbers>
         _tickers &&
         !_keyboard &&
         !_editing &&
+        _artwork.value != null &&
         _buttons.value.isNotEmpty;
     _visible.value = show;
     if (show && !_ticker.isActive) {
@@ -124,7 +141,10 @@ class _KorlixButtonClimbersState extends State<KorlixButtonClimbers>
         final visible = rect.intersect(bounds);
         if (rect.width >= 90 &&
             visible.width >= 80 &&
-            visible.height >= 36 &&
+            visible.height >= 80 &&
+            rect.height >= 96 &&
+            rect.width >= 120 &&
+            (rect.left >= 28 || rect.right <= bounds.width - 28) &&
             rect.top >= 76 &&
             rect.top < bounds.height - 72) {
           buttons.add(rect);
@@ -159,6 +179,7 @@ class _KorlixButtonClimbersState extends State<KorlixButtonClimbers>
     _seconds.dispose();
     _buttons.dispose();
     _visible.dispose();
+    _artwork.dispose();
     super.dispose();
   }
 
@@ -190,6 +211,7 @@ class _KorlixButtonClimbersState extends State<KorlixButtonClimbers>
                         seconds: _seconds,
                         buttons: _buttons,
                         visible: _visible,
+                        artwork: _artwork,
                       ),
                     ),
                   ),

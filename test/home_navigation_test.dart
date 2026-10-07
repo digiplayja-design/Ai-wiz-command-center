@@ -22,6 +22,7 @@ import 'package:ai_wiz_command_center/contacts_crm/contacts_screen.dart';
 import 'package:ai_wiz_command_center/navigation/home_tool_finder.dart';
 import 'package:ai_wiz_command_center/theme/korlix_action_grid.dart';
 import 'package:ai_wiz_command_center/characters/button_climber_painter.dart';
+import 'package:ai_wiz_command_center/characters/button_climber_artwork.dart';
 import 'package:ai_wiz_command_center/navigation/home_tool_catalog.dart';
 import 'package:ai_wiz_command_center/social/social_alert_scope.dart';
 import 'package:ai_wiz_command_center/social/social_notifications.dart';
@@ -65,6 +66,7 @@ void main() {
   final audio = AudioplayersPlatformInterface.instance;
   final globalAudio = GlobalAudioplayersPlatformInterface.instance;
   setUpAll(() async {
+    await KorlixClimberArtwork.load();
     final sdk =
         Platform.environment['KORLIX_FLUTTER_ROOT'] ??
         Platform.resolvedExecutable.split('/bin/cache/').first;
