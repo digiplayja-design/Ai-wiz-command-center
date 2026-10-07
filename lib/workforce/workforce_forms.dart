@@ -2,11 +2,11 @@ import 'dart:convert';
 import '../sounds/korlix_sound_service.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'workforce_client.dart';
 import 'workforce_style.dart';
+import 'workforce_location.dart';
 
 class WfField {
   const WfField(
@@ -355,7 +355,9 @@ class WorkforcePunchDialog extends StatefulWidget {
     required this.clockOut,
     required this.policy,
     required this.submit,
+    this.locationService = const WorkforceLocationService(),
   });
+  final WorkforceLocationService locationService;
   final bool clockOut;
   final WfJson policy;
   final Future<void> Function(WfJson) submit;
@@ -366,11 +368,15 @@ class WorkforcePunchDialog extends StatefulWidget {
 class _WorkforcePunchDialogState extends State<WorkforcePunchDialog> {
   Uint8List? _photo;
   WfJson? _location;
+  WorkforceLocationCancellation? _locationCancellation;
+  bool _locating = false;
+  String? _locationError, _locationProgress;
   bool _busy = false, _saving = false, _confirmed = false;
   String? _error;
   final _reason = TextEditingController();
   @override
   void dispose() {
+    _locationCancellation?.cancel();
     _reason.dispose();
     super.dispose();
   }
@@ -408,59 +414,66 @@ class _WorkforcePunchDialogState extends State<WorkforcePunchDialog> {
   }
 
   Future<void> _locate() async {
+    final cancellation = WorkforceLocationCancellation();
+    _locationCancellation = cancellation;
     setState(() {
       _busy = true;
+      _locating = true;
+      _location = null;
       _error = null;
+      _locationError = null;
+      _locationProgress =
+          'Allow location access if asked. Finding your location…';
     });
     try {
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        throw Exception();
-      }
-      final p = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 20),
-        ),
+      final location = await widget.locationService.capture(
+        cancellation: cancellation,
+        onProgress: (message) {
+          if (mounted) setState(() => _locationProgress = message);
+        },
       );
-      if (mounted) {
-        setState(
-          () => _location = {
-            'latitude': p.latitude,
-            'longitude': p.longitude,
-            'accuracy': p.accuracy,
-            'captured_at': DateTime.now().toUtc().toIso8601String(),
-          },
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(
-          () => _error =
-              'Location is unavailable. Enable location access or record an exception.',
-        );
-      }
+      if (mounted) setState(() => _location = location);
+    } on WorkforceLocationCancelled {
+      // Closing the dialog stops capture; it is not a location error.
+    } on WorkforceLocationException catch (error) {
+      if (mounted) setState(() => _locationError = error.message);
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _locating = false;
+          _locationProgress = null;
+        });
+      }
     }
   }
 
   Future<void> _save() async {
+    final capturedAt = DateTime.tryParse('${_location?['captured_at'] ?? ''}');
+    if (_location != null &&
+        (capturedAt == null ||
+            DateTime.now().toUtc().difference(capturedAt.toUtc()).abs() >
+                const Duration(minutes: 3))) {
+      setState(() {
+        _location = null;
+        _locationError =
+            'This location has expired. Capture your current '
+            'location again, or explain the exception below.';
+      });
+    }
     final missing =
         (widget.policy['require_selfie'] == true && _photo == null) ||
-        (widget.policy['require_location'] == true && _location == null);
+        (widget.policy['require_location'] == true &&
+            (_location == null || (_location!['accuracy'] as num) > 100));
     if (_photo != null && !_confirmed) {
       setState(() => _error = 'Please confirm the photo is ready to submit.');
       return;
     }
     if (!widget.clockOut && missing && _reason.text.trim().length < 5) {
       setState(
-        () => _error =
-            'Capture the required evidence or explain why it is unavailable.',
+        () => _error = widget.policy['require_location'] == true
+            ? 'Capture the required evidence with location accuracy within 100 m, or explain why it is unavailable.'
+            : 'Capture the required evidence or explain why it is unavailable.',
       );
       return;
     }
@@ -563,17 +576,49 @@ class _WorkforcePunchDialogState extends State<WorkforcePunchDialog> {
                 onPressed: _busy || _saving ? null : _locate,
                 icon: const Icon(Icons.my_location),
                 label: Text(
-                  _location == null
+                  _locating
+                      ? 'Finding location…'
+                      : _location == null
                       ? 'Capture current location'
                       : 'Refresh location',
                 ),
               ),
+              if (_locating) ...[
+                const SizedBox(height: 8),
+                const LinearProgressIndicator(),
+                const SizedBox(height: 8),
+                Semantics(
+                  liveRegion: true,
+                  child: Text(_locationProgress ?? 'Finding your location…'),
+                ),
+              ],
+              if (_locationError != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      _locationError!,
+                      style: const TextStyle(color: WfStyle.danger),
+                    ),
+                  ),
+                ),
               if (_location != null)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text(
                     '${(_location!['latitude'] as num).toStringAsFixed(5)}, ${(_location!['longitude'] as num).toStringAsFixed(5)} · accuracy ±${(_location!['accuracy'] as num).round()} m',
                     style: const TextStyle(color: WfStyle.cyan),
+                  ),
+                ),
+              if (_location != null && (_location!['accuracy'] as num) > 100)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'This location is approximate (over 100 m). Refresh near a '
+                    'window or outdoors for a more accurate fix, or explain '
+                    'the exception below for your manager to review.',
+                    style: TextStyle(color: WfStyle.danger),
                   ),
                 ),
               const Text(
