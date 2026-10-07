@@ -47,7 +47,8 @@ const quiet = { log() {}, warn() {} };
 
 test('identityFromUser: account-owner rule and tolerant shapes', () => {
   assert.deepEqual(identityFromUser({ id: 'u', app_metadata: { account_id: 'a' } }), { userId: 'u', accountId: 'a' });
-  assert.deepEqual(identityFromUser({ id: 'u', user_metadata: { account_id: 'b' } }), { userId: 'u', accountId: 'b' });
+  assert.deepEqual(identityFromUser({ id: 'u', user_metadata: { account_id: 'b' } }), { userId: 'u', accountId: 'u' });
+  assert.deepEqual(identityFromUser({ id: 'u', app_metadata: { account_id: 'a' }, user_metadata: { account_id: 'b' } }), { userId: 'u', accountId: 'a' });
   assert.deepEqual(identityFromUser({ id: 'u' }), { userId: 'u', accountId: 'u' });
   assert.deepEqual(identityFromUser({ user: { id: 'u' } }), { userId: 'u', accountId: 'u' });
   assert.equal(identityFromUser(null), null); assert.equal(identityFromUser({}), null);
@@ -57,6 +58,23 @@ test('augmentSaveBody: adds label/expiresAt/memoryKey and a memory mirror; keeps
   const b = augmentSaveBody({ memory_key: 'k', summary: 'S', expires_at: '2026-10-01T00:00:00Z', content: 'C', kind: 'fact', confirmed: true });
   assert.equal(b.label, 'S'); assert.equal(b.expiresAt, '2026-10-01T00:00:00Z'); assert.equal(b.memoryKey, 'k'); assert.equal(b.confirmed, true);
   assert.equal(b.memory.content, 'C'); assert.equal(b.memory.label, 'S'); assert.equal('memory' in b.memory, false);
+});
+
+test('mounted approval ignores a forged account in user-editable metadata', async () => {
+  const { app, call } = stubApp(); const f = fakes();
+  f.requireUser = async () => ({ id: 'user-2', user_metadata: { account_id: 'acct-9' } });
+  const mounted = mountK136S(app, { ...f, env: env(), log: quiet, vaultVerifier: OK_VAULT });
+  const headers = { authorization: 'Bearer user-2' };
+  const grant = await call('POST', '/k136s/grant', { headers, body: { agentId: 'agent-x', vaultPassword: 'fixture-only' } });
+  assert.equal(grant.status, 200);
+  headers['x-k136s-grant'] = grant.json.grant;
+  const preview = await call('POST', '/k136s/preview', { headers, body: { agentId: 'agent-x', proposedText: 'Acme prefers morning calls.' } });
+  assert.equal(preview.status, 200);
+  const issued = await call('POST', '/k136s/approve/request', { headers, body: { sessionId: 'metadata-test', agentId: 'agent-x', contentHash: preview.json.contentHash } });
+  assert.equal(issued.status, 200);
+  const audit = mounted._internals.store.audit.list().find(event => event.eventType === 'APPROVAL_ISSUED');
+  assert.equal(audit.userId, 'user-2');
+  assert.equal(audit.accountId, 'user-2');
 });
 
 test('mount: registers the five routes and reports mounted + memory store; dev endpoints are hard-off', async () => {

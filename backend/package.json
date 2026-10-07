@@ -16,7 +16,8 @@
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
     "sharp": "0.35.5",
-    "web-push": "3.6.7"
+    "web-push": "3.6.7",
+    "yauzl": "3.4.0"
   },
   "engines": {
     "node": ">=22.0.0"
@@ -34,5 +35,13 @@
   "version": "1.0.0",
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "11.1.1"
+    },
+    "mammoth": {
+      "argparse": "2.0.1"
+    }
   }
 }

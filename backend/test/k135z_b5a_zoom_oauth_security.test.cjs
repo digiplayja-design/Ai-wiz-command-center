@@ -1137,7 +1137,7 @@ test(
 );
 
 test(
-  "route registrar exposes all seven B5A routes",
+  "route registrar exposes seven B5A API routes and the bounded public audio diagnostics",
   () => {
     const calls = [];
 
@@ -1193,26 +1193,29 @@ test(
       },
     );
 
-    assert.equal(
-      calls.length,
-      7,
-    );
-
-    assert.deepEqual(
-      calls.map(
-        ([method, path]) =>
-          `${method} ${path}`,
-      ),
-      [
-        "GET /api/k135z/zoom/oauth/start",
-        "GET /api/k135z/zoom/oauth/callback",
-        "GET /api/k135z/zoom/status",
-        "DELETE /api/k135z/zoom/connection",
-        "GET /api/k135z/zoom/meetings/upcoming",
-        "POST /api/k135z/zoom/webhook",
-        "POST /api/k135z/zoom/deauthorization",
-      ],
-    );
+    const registered = calls.map(([method, path]) => `${method} ${path}`);
+    assert.equal(new Set(registered).size, registered.length, "no duplicate route registrations");
+    assert.deepEqual(registered, [
+      "GET /k135z/audio-output-test/",
+      "GET /k135z/audio-output-test/probe.mjs",
+      "GET /k135z/audio-output-test/page.mjs",
+      "GET /k135z/audio-output-test/style.css",
+      "GET /k135z/audio-output-test/media_player.mjs",
+      "GET /k135z/audio-output-test/native/",
+      "GET /k135z/audio-output-test/native.mjs",
+      "GET /k135z/audio-output-test/native_session.mjs",
+      "GET /k135z/audio-output-test/voice/",
+      "GET /k135z/audio-output-test/voice.mjs",
+      "GET /k135z/audio-output-test/voice_session.mjs",
+      "POST /k135z/audio-output-test/voice/prepare",
+      "GET /api/k135z/zoom/oauth/start",
+      "GET /api/k135z/zoom/oauth/callback",
+      "GET /api/k135z/zoom/status",
+      "DELETE /api/k135z/zoom/connection",
+      "GET /api/k135z/zoom/meetings/upcoming",
+      "POST /api/k135z/zoom/webhook",
+      "POST /api/k135z/zoom/deauthorization",
+    ]);
   },
 );
 

@@ -8,7 +8,7 @@ import {registerDirectory} from '../directory/routes.mjs';
 const business='11111111-1111-4111-8111-111111111111';
 const generation='22222222-2222-4222-8222-222222222222';
 const credentials={KORLIX_DIRECTORY_STRIPE_SECRET_KEY:'rk_test_fixture',KORLIX_DIRECTORY_STRIPE_WEBHOOK_SECRET:'whsec_fixture'};
-const subscription=()=>({id:'sub_fixture',customer:'cus_fixture',livemode:false,status:'active',metadata:{korlix_directory:business,generation},items:{data:[{quantity:1,current_period_end:2000000000,price:{currency:'usd',unit_amount:499,recurring:{interval:'month',interval_count:1}}}]},latest_invoice:{id:'in_fixture',status:'paid',amount_paid:499}});
+const subscription=()=>({id:'sub_fixture',customer:'cus_fixture',livemode:false,status:'active',metadata:{korlix_directory:business,generation},items:{data:[{quantity:1,current_period_end:2000000000,price:{currency:'usd',unit_amount:499,recurring:{interval:'month',interval_count:1}}}]},latest_invoice:{id:'in_fixture',customer:'cus_fixture',livemode:false,currency:'usd',subscription:'sub_fixture',status:'paid',amount_paid:499,amount_due:499,amount_remaining:0}});
 
 test('portal cancellation dates stop renewal without removing the paid membership period',()=>{
  const billing=directoryBilling(credentials);
@@ -21,6 +21,23 @@ test('portal cancellation dates stop renewal without removing the paid membershi
   assert.equal(billing.validSubscription({...paid,cancel_at_period_end:false,cancel_at}).cancel_at_period_end,false);
  }
  assert.equal(billing.validSubscription({...paid,cancel_at_period_end:true}).cancel_at_period_end,true);
+});
+
+test('paused collection and invoices for a different account, subscription or mode never grant membership',()=>{
+ const billing=directoryBilling(credentials);
+ for(const change of [s=>s.pause_collection={behavior:'void'},s=>s.latest_invoice.customer='cus_other',
+  s=>s.latest_invoice.subscription='sub_other',s=>s.latest_invoice.livemode=true,
+  s=>s.latest_invoice.currency='eur',s=>s.latest_invoice.amount_remaining=1,
+  s=>s.latest_invoice.amount_due=500,s=>s.latest_invoice.amount_paid='499']){
+  const s=subscription();change(s);
+  const result=billing.validSubscription(s);
+  assert.equal(result.state,'unpaid');assert.equal(result.paid_until,null);
+ }
+ const modern=subscription();delete modern.latest_invoice.subscription;
+ modern.latest_invoice.parent={subscription_details:{subscription:'sub_fixture'}};
+ assert.equal(billing.validSubscription(modern).state,'active');
+ const paginated=subscription();paginated.items.has_more=true;
+ assert.throws(()=>billing.validSubscription(paginated),/did not match/);
 });
 
 test('credential check verifies the expected account portal without creating payments',async()=>{

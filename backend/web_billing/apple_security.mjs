@@ -6,6 +6,16 @@ function reject(message, statusCode) {
   throw error;
 }
 
+// An upgrade replaces the original subscription immediately. Its previously
+// scheduled expiration can still be in the future; it is no longer a grant.
+export function appleTransactionAccess(decoded, now = Date.now) {
+  const expires = Number(decoded?.expiresDate || 0);
+  const revoked = Number(decoded?.revocationDate || 0);
+  const active = decoded?.isUpgraded !== true && Number.isFinite(revoked) && revoked <= 0 &&
+    Number.isFinite(expires) && expires > now();
+  return {active, status: revoked > 0 ? 'revoked' : active ? 'active' : 'expired'};
+}
+
 // TestFlight and sandbox receipts are genuine Apple signatures, but are not
 // paid production purchases. Test access is a server-controlled account grant.
 // Expired/revoked observations must still pass so they can remove old access.

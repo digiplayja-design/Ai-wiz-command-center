@@ -1,4 +1,5 @@
 import { inflateRawSync } from "node:zlib";
+import { zipDirectory } from "../archive_security.mjs";
 import { ContactError, fail, normalizeContact, SOURCES } from "./core.mjs";
 const MAX_ROWS = 1000,
   MAX_BYTES = 2 * 1024 * 1024;
@@ -150,16 +151,11 @@ function jsonRecords(data, source) {
 }
 // Inspect ZIP central-directory sizes before ExcelJS decompresses a workbook.
 function checkXlsxZip(b) {
-  let end = -1;
-  for (let i = b.length - 22; i >= Math.max(0, b.length - 65557); i--) {
-    if (b.readUInt32LE(i) === 0x06054b50) {
-      end = i;
-      break;
-    }
-  }
-  if (end < 0) fail("This is not a valid Excel workbook.");
-  const count = b.readUInt16LE(end + 10);
-  let pos = b.readUInt32LE(end + 16),
+  let directory;
+  try { directory = zipDirectory(b); }
+  catch { fail("This is not a valid Excel workbook. Export contacts as CSV."); }
+  const count = directory.count;
+  let pos = directory.start,
     total = 0;
   if (count > 300 || count === 0xffff)
     fail("This workbook is too complex. Export it as CSV.");

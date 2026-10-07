@@ -26,9 +26,10 @@ async function fixture(flags={}) {
   const run=(options={})=>studio.improvePicture({client,toFile,file,options:studio.pictureOptions(options)});
   const source=fs.readFileSync(require.resolve('../server.js'),'utf8');
   const start=source.indexOf('app.post("/api/image/improve"');
-  let handler;
+  let middleware, uploadParses=0;
   const context={...studio,process:{env:{OPENAI_API_KEY:'offline'}},
-    app:{post(_path,...handlers){handler=handlers.at(-1);}},documentUpload:{single:()=>()=>{}},
+    app:{post(_path,...handlers){middleware=handlers;}},
+    documentUpload:{single:()=> (req,_res,next)=>{uploadParses++;req.file=req.uploadFixture;return next();}},
     isImageUpload:()=>true,requireUser:async()=>{if(flags.anonymous)throw Object.assign(Error('Sign in'),{statusCode:401});return {id:'user'};},
     getOrCreateProfile:async()=>({tier:flags.basic?'basic':'enterprise'}),getOrCreateUsageCounter:async()=>({}),
     hasAdvancedUploadAccess:tier=>tier==='enterprise',checkUsageAllowed:()=>({allowed:!flags.exhausted,reason:'No credits'}),
@@ -36,13 +37,18 @@ async function fixture(flags={}) {
     saveGenerationHistory:async data=>{history.push(data);return {id:'saved'};},
     incrementUsage:async data=>{usage.push(data);return {};},sanitize:x=>String(x),getKorlixUserFacingError:e=>e.message,console:{error(){}},
   };
-  vm.runInNewContext(source.slice(start,source.indexOf('\n});',start)+4),context);
+  const guardStart=source.indexOf('async function requireDocumentUploadUser(');
+  assert(guardStart>=0,'document upload authentication middleware must be present');
+  vm.runInNewContext(source.slice(guardStart,source.indexOf('\n}',guardStart)+2)+'\n'+source.slice(start,source.indexOf('\n});',start)+4),context);
   const route=async(body={},uploaded=file)=>{
     const result={status:200};
-    await handler({body,file:uploaded},{status(value){result.status=value;return this;},json(value){result.body=value;return this;}});
+    const req={body,uploadFixture:uploaded};
+    const res={status(value){result.status=value;return this;},json(value){result.body=value;return this;}};
+    const dispatch=index=>middleware[index]?.(req,res,()=>dispatch(index+1));
+    await dispatch(0);
     return result;
   };
-  return {file,calls,usage,history,run,route};
+  return {file,calls,usage,history,run,route,get uploadParses(){return uploadParses;}};
 }
 
 test('Astra sees the actual image at original detail and xhigh before a max-quality edit',async()=>{
@@ -124,6 +130,7 @@ test('non-object option payloads are rejected with a helpful validation error',(
 test('signed-out, lower-tier and exhausted accounts cannot request analysis or editing',async()=>{
   for(const flags of [{anonymous:true},{basic:true},{exhausted:true}]) {
     const f=await fixture(flags);const r=await f.route();assert(r.status>=400);assert.equal(f.calls.length,0);assert.equal(f.usage.length,0);
+    assert.equal(f.uploadParses,flags.anonymous?0:1,'signed-out requests must fail before parsing the upload');
   }
 });
 

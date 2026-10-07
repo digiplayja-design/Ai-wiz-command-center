@@ -37,8 +37,9 @@ function identityFromUser(user) {
   const u = user && user.user && !user.id ? user.user : user;
   if (!u || typeof u.id !== 'string' || !u.id) return null;
   const am = (u.app_metadata && typeof u.app_metadata === 'object') ? u.app_metadata : {};
-  const um = (u.user_metadata && typeof u.user_metadata === 'object') ? u.user_metadata : {};
-  const accountId = (typeof am.account_id === 'string' && am.account_id) || (typeof um.account_id === 'string' && um.account_id) || u.id;
+  // Supabase user_metadata is editable by the user. Only server-managed
+  // app_metadata may choose an account for approval and audit bindings.
+  const accountId = (typeof am.account_id === 'string' && am.account_id) || u.id;
   return { userId: u.id, accountId };
 }
 

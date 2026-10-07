@@ -10,7 +10,7 @@ export function directoryBilling(env,{fetcher=fetch,now=Date.now}={}){
  let connectionCheck=null,connectionStatus='unchecked',connectionCheckedAt=0;
  async function api(path,{method='GET',body,idem}={}){
   if(!configured)fail('Verified membership payments are not yet available. Your free listing and application remain available.',503);
-  let response;try{response=await fetcher('https://api.stripe.com/v1'+path,{method,headers:{Authorization:'Bearer '+key,'Stripe-Version':DIRECTORY_STRIPE_API_VERSION,...(body?{'Content-Type':'application/x-www-form-urlencoded'}:{}),...(idem?{'Idempotency-Key':idem}:{})},...(body?{body:new URLSearchParams(body).toString()}:{}),signal:AbortSignal.timeout(25000)});}catch{fail('Payment provider temporarily unavailable. Retry without starting a second purchase.',503);}
+  let response;try{response=await fetcher('https://api.stripe.com/v1'+path,{method,redirect:'error',headers:{Authorization:'Bearer '+key,'Stripe-Version':DIRECTORY_STRIPE_API_VERSION,...(body?{'Content-Type':'application/x-www-form-urlencoded'}:{}),...(idem?{'Idempotency-Key':idem}:{})},...(body?{body:new URLSearchParams(body).toString()}:{}),signal:AbortSignal.timeout(25000)});}catch{fail('Payment provider temporarily unavailable. Retry without starting a second purchase.',503);}
   const data=await response.json();if(!response.ok)fail('Payment provider could not complete this request. Please retry or contact support.',502);return data;
  }
  async function checkConnection(){
@@ -28,10 +28,17 @@ export function directoryBilling(env,{fetcher=fetch,now=Date.now}={}){
  function validSubscription(s){
   id(s.metadata?.korlix_directory);id(s.metadata?.generation);
   const lines=s.items?.data||[],price=lines[0]?.price,period=price?.recurring?.interval;
-  if(s.livemode!==live||lines.length!==1||lines[0]?.quantity!==1||price?.currency!=='usd'||!Object.hasOwn(PRICES,period)||price?.unit_amount!==PRICES[period]||price?.recurring?.interval_count!==1)fail('Membership price or payment mode did not match.',409);
-  const invoice=s.latest_invoice,paid=s.status==='active'&&invoice?.status==='paid'&&invoice?.amount_paid>=PRICES[period];
+  if(s.livemode!==live||lines.length!==1||s.items?.has_more||lines[0]?.quantity!==1||price?.currency!=='usd'||!Object.hasOwn(PRICES,period)||price?.unit_amount!==PRICES[period]||price?.recurring?.interval_count!==1)fail('Membership price or payment mode did not match.',409);
+  const invoice=s.latest_invoice,customer=typeof s.customer==='string'?s.customer:s.customer?.id;
+  const invoiceCustomer=typeof invoice?.customer==='string'?invoice.customer:invoice?.customer?.id;
+  const invoiceSub=invoice?.parent?.subscription_details?.subscription||invoice?.subscription;
+  const invoiceSubscription=typeof invoiceSub==='string'?invoiceSub:invoiceSub?.id;
+  const paid=s.status==='active'&&!s.pause_collection&&invoice?.status==='paid'
+   &&invoice.livemode===live&&invoice.currency==='usd'&&invoiceCustomer===customer&&invoiceSubscription===s.id
+   &&invoice.amount_remaining===0&&Number.isSafeInteger(invoice.amount_due)&&invoice.amount_due>=0
+   &&Number.isSafeInteger(invoice.amount_paid)&&invoice.amount_paid>=Math.max(invoice.amount_due,PRICES[period]);
   const end=lines[0]?.current_period_end??s.current_period_end;
-  if(paid&&!Number.isFinite(end))fail('Membership renewal date could not be verified.',409);
+  if(paid&&(!Number.isSafeInteger(end)||end<=0))fail('Membership renewal date could not be verified.',409);
   // The customer portal can schedule flexible subscriptions with cancel_at
   // while leaving cancel_at_period_end false. Preserve paid access and report
   // renewal as canceled when that date is the end of this paid period.

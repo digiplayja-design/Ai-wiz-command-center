@@ -1,10 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {assertAppleAccountBinding, assertAppleSandboxAccess, refreshSignedAppleTransaction} from '../web_billing/apple_security.mjs';
+import {appleTransactionAccess, assertAppleAccountBinding, assertAppleSandboxAccess, refreshSignedAppleTransaction} from '../web_billing/apple_security.mjs';
 
 const alice = '9fa257ac-9a3a-4f75-ae90-e058081a0390';
 const bob = 'a3f1b7f4-2b2e-4e18-a981-2cd50b560270';
 const transaction = {originalTransactionId: '100000000000001'};
+test('upgraded Apple transactions never grant their replaced plan even before its old expiry', () => {
+  const decoded = {expiresDate: 2000};
+  assert.deepEqual(appleTransactionAccess(decoded, () => 1000), {active: true, status: 'active'});
+  assert.deepEqual(appleTransactionAccess({...decoded, isUpgraded: true}, () => 1000), {active: false, status: 'expired'});
+  assert.deepEqual(appleTransactionAccess({...decoded, revocationDate: 900}, () => 1000), {active: false, status: 'revoked'});
+  assert.deepEqual(appleTransactionAccess(decoded, () => 2000), {active: false, status: 'expired'});
+  assert.equal(appleTransactionAccess({...decoded, revocationDate: 'invalid'}, () => 1000).active, false);
+});
 function db(result) {
   return {from(table) {
     assert.equal(table, 'korlix_apple_transaction_bindings');

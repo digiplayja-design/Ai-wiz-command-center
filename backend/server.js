@@ -1,3 +1,5 @@
+import {createAccountRequestLimiter} from './security/account_request_limiter.mjs';
+import {publicApiErrorHandler} from './security/http_errors.mjs';
 import {createReportSubmissionGuard} from './security/report_submission.mjs';
 import {createVideoAccess} from './security/video_access.mjs';
 import riciVoice from './voice/rici_pronunciation.cjs';
@@ -73,7 +75,7 @@ const { registerK135zZoomRoutes, createK135zServerRuntime } = k135zGate5Routes;
 // K135Z_GATE5_ESM_IMPORTS_END
 
 import express from "express";
-import {assertAppleAccountBinding, refreshSignedAppleTransaction} from './web_billing/apple_security.mjs';
+import {assertAppleAccountBinding, refreshSignedAppleTransaction, appleTransactionAccess} from './web_billing/apple_security.mjs';
 import {createKorlixSignupHandler, KORLIX_MINIMUM_AGE, KORLIX_SIGNUP_POLICY_VERSION} from "./korlix_signup_eligibility.mjs";
 import crypto from "crypto";
 import cors from "cors";
@@ -116,7 +118,8 @@ import {
 } from "./korlix_agent_email_delivery.mjs"; // KORLIX_AGENT_EMAIL_DELIVERY_BUILD133_IMPORT
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, Table, TableRow, TableCell, WidthType, ShadingType } from "docx";
 
-import multer from "multer";
+import {createDocumentUpload} from './document_upload.mjs';
+import {extractUploadedDocumentText} from './document_text.mjs';
 import { installKorlixVapiNovaRoutes } from "./korlix_vapi_nova.mjs";
 
 import {
@@ -127,7 +130,8 @@ dotenv.config();
 
 const app = express();
 app.disable("x-powered-by");
-app.use((_req, res, next) => {
+app.use((req, res, next) => {
+  if (/^\/api(?:\/|$)/.test(req.path)) res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "no-referrer");
   res.setHeader("Strict-Transport-Security", "max-age=31536000");
@@ -170,7 +174,7 @@ async function korlixSendSupportReport(payload) {
   const text = korlixSupportReportText(payload);
   const subject = "Korlix AI reported output";
 
-  console.log("KORLIX_SUPPORT_REPORTED_OUTPUT\n" + text);
+  console.log("KORLIX_SUPPORT_REPORTED_OUTPUT_RECEIVED");
 
   const resendKey = process.env.RESEND_API_KEY || "";
   const fromEmail =
@@ -251,12 +255,21 @@ app.use(express.json({
   },
 })); // KORLIX_AGENT_EMAIL_RESEND_RAW_BODY_BUILD133
 
-const documentUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 15 * 1024 * 1024,
-  },
-});
+async function requireDocumentUploadUser(req, res, next) {
+  try {
+    req.korlixDocumentUploadUser = await requireUser(req);
+    return next();
+  } catch (error) {
+    return res.status(error.statusCode || 503).json({
+      ok: false,
+      error: error.statusCode === 401 || error.statusCode === 403
+        ? getKorlixUserFacingError(error)
+        : "Account access could not be verified. Please retry.",
+    });
+  }
+}
+
+const documentUpload = createDocumentUpload();
 
 
 const passwordResetAttempts = new Map();
@@ -371,16 +384,8 @@ function getPasswordResetRedirectUrl(req) {
     return configured;
   }
 
-  const forwardedProto = String(req.get("x-forwarded-proto") || "")
-    .split(",")[0]
-    .trim();
-  const protocol = forwardedProto || req.protocol || "https";
-  const host = req.get("host");
-
-  if (host) {
-    return `${protocol}://${host}/reset-password`;
-  }
-
+  // The recovery destination is security-sensitive: Host and forwarded headers
+  // are client-controlled on some ingress paths. Never derive reset links from them.
   return "https://chee-chai-chee-backend.onrender.com/reset-password";
 }
 
@@ -388,20 +393,22 @@ function checkPasswordResetRateLimit(req, email) {
   const now = Date.now();
   const windowMs = 15 * 60 * 1000;
   const maxAttempts = 5;
-  const ip = String(req.ip || req.get("x-forwarded-for") || "unknown")
-    .split(",")[0]
-    .trim();
-  const key = `${ip}:${String(email || "").toLowerCase()}`;
-  const existing = passwordResetAttempts.get(key) || [];
-  const recent = existing.filter((timestamp) => now - timestamp < windowMs);
-
-  if (recent.length >= maxAttempts) {
-    passwordResetAttempts.set(key, recent);
-    return false;
+  // Limit the target mailbox across callers. Rotating IPs must not reset its budget.
+  // Hash addresses and bound storage so anonymous requests cannot retain PII or
+  // grow this process indefinitely by submitting unique email addresses.
+  const key = crypto.createHash("sha256")
+    .update(String(email || "").trim().toLowerCase()).digest("hex");
+  for (const [entryKey, entry] of passwordResetAttempts) {
+    if (entry.expiresAt <= now) passwordResetAttempts.delete(entryKey);
   }
-
-  recent.push(now);
-  passwordResetAttempts.set(key, recent);
+  const existing = passwordResetAttempts.get(key);
+  if (existing) {
+    if (existing.count >= maxAttempts) return false;
+    existing.count += 1;
+    return true;
+  }
+  if (passwordResetAttempts.size >= 5000) return false;
+  passwordResetAttempts.set(key, {count: 1, expiresAt: now + windowMs});
   return true;
 }
 
@@ -1471,61 +1478,6 @@ function getUploadMimeType(file) {
   return "application/octet-stream";
 }
 
-
-async function loadPdfParse() {
-  try {
-    const mod = await import("pdf-parse/lib/pdf-parse.js");
-    return mod.default || mod;
-  } catch (_) {
-    const mod = await import("pdf-parse");
-    return mod.default || mod;
-  }
-}
-
-async function loadMammoth() {
-  const mod = await import("mammoth");
-  return mod.default || mod;
-}
-
-async function extractUploadedDocumentText(file) {
-  const fileName = String(file.originalname || "").toLowerCase();
-  const mimeType = String(file.mimetype || "").toLowerCase();
-  const buffer = file.buffer;
-
-  if (!buffer || buffer.length === 0) {
-    throw new Error("Uploaded file is empty.");
-  }
-
-  if (fileName.endsWith(".pdf") || mimeType.includes("pdf")) {
-    const pdfParse = await loadPdfParse();
-    const parsed = await pdfParse(buffer);
-    return parsed.text || "";
-  }
-
-  if (
-    fileName.endsWith(".docx") ||
-    mimeType.includes("wordprocessingml.document")
-  ) {
-    const mammoth = await loadMammoth();
-    const parsed = await mammoth.extractRawText({
-      buffer,
-    });
-
-    return parsed.value || "";
-  }
-
-  if (
-    fileName.endsWith(".txt") ||
-    fileName.endsWith(".md") ||
-    fileName.endsWith(".csv") ||
-    mimeType.includes("text/") ||
-    mimeType.includes("csv")
-  ) {
-    return buffer.toString("utf8");
-  }
-
-  return "";
-}
 
 function normalizeDocumentText(value) {
   return String(value || "")
@@ -3804,31 +3756,26 @@ app.delete("/api/history/:id", async (req, res) => {
 app.post("/api/account/delete-request", async (req, res) => {
   try {
     if (!supabaseAdmin) {
-      return res.status(500).json({
+      return res.status(503).json({
         error: "Supabase is not configured on the backend.",
       });
     }
 
-    const user = await getAuthenticatedUser(req).catch(() => null);
-    const email = String(req.body.email || user?.email || "").trim();
-    const reason = String(req.body.reason || "").trim();
+    const user = await requireUser(req);
+    const email = String(user.email || "").trim();
+    const reason = String(req.body?.reason || "").trim();
 
-    if (!user && !email) {
+    if (reason.length > 2000) {
       return res.status(400).json({
-        error: "Email is required for account deletion requests.",
+        error: "Keep your deletion request reason under 2,000 characters.",
       });
     }
 
-    const { data, error } = await supabaseAdmin
-      .from("account_deletion_requests")
-      .insert({
-        user_id: user?.id || null,
-        email,
-        reason,
-        status: "requested",
-      })
-      .select("*")
-      .single();
+    const { data, error } = await supabaseAdmin.rpc("korlix_request_account_deletion", {
+      p_user_id: user.id,
+      p_email: email,
+      p_reason: reason,
+    });
 
     if (error) {
       throw error;
@@ -3839,7 +3786,7 @@ app.post("/api/account/delete-request", async (req, res) => {
       request: data,
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       error: getKorlixUserFacingError(error),
     });
   }
@@ -4007,7 +3954,7 @@ app.post("/api/image/create", async (req, res) => {
 });
 
 
-app.post("/api/image/improve", documentUpload.single("image"), async (req, res) => {
+app.post("/api/image/improve", requireDocumentUploadUser, documentUpload.single("image"), async (req, res) => {
   try {
     if (!process.env.OPENAI_API_KEY) {
       return res.status(400).json({
@@ -4182,7 +4129,7 @@ function assertKorlixSupportedUpload(file) {
   }
 }
 
-app.post("/api/analyze-documents", documentUpload.array("files", 8), async (req, res) => {
+app.post("/api/analyze-documents", requireDocumentUploadUser, documentUpload.array("files", 8), async (req, res) => {
   try {
     if (!process.env.OPENAI_API_KEY) {
       return res.status(400).json({
@@ -4347,7 +4294,7 @@ Instructions:
 });
 
 
-app.post("/api/analyze-document", documentUpload.single("file"), async (req, res) => {
+app.post("/api/analyze-document", requireDocumentUploadUser, documentUpload.single("file"), async (req, res) => {
   try {
     if (!process.env.OPENAI_API_KEY) {
       return res.status(400).json({
@@ -4802,7 +4749,7 @@ Important: Live search was attempted but failed. Give the most useful answer pos
 // ============================================================
 // CREDIT DISPUTE LETTERS — generate 3 DOCX letters (Equifax, Experian, TransUnion)
 // ============================================================
-app.post("/api/credit-dispute-letters", documentUpload.array("files", 8), async (req, res) => {
+app.post("/api/credit-dispute-letters", requireDocumentUploadUser, documentUpload.array("files", 8), async (req, res) => {
   try {
     if (!process.env.OPENAI_API_KEY) {
       return res.status(400).json({ error: "Missing OPENAI_API_KEY on backend." });
@@ -5334,6 +5281,8 @@ registerStudyStudio(app,{database:supabaseAdmin,requireUser,
 
 
 // KORLIX_CUSTOM_ACCESS_ROUTES_V1_BEGIN
+const consumeCustomAccessRequest = createAccountRequestLimiter({windowMs: 60 * 60 * 1000, maxAttempts: 3});
+const consumeCustomAccessRedemption = createAccountRequestLimiter({windowMs: 15 * 60 * 1000, maxAttempts: 10});
 function korlixCustomAccessStringV1(value, fallback = "") {
   const text = String(value ?? "").trim();
   return text || fallback;
@@ -5356,20 +5305,8 @@ function korlixCustomAccessBearerTokenV1(req) {
 }
 
 async function korlixCustomAccessResolveUserV1(req) {
-  const client = korlixCustomAccessSupabaseClientV1();
-  const token = korlixCustomAccessBearerTokenV1(req);
-
-  if (!client || !token || !client.auth || typeof client.auth.getUser !== "function") {
-    return null;
-  }
-
-  try {
-    const result = await client.auth.getUser(token);
-    return result?.data?.user || null;
-  } catch (error) {
-    console.warn("KORLIX_CUSTOM_ACCESS_AUTH_LOOKUP_FAILED", error?.message || String(error));
-    return null;
-  }
+  // All feature paths share verified account and device-session access checks.
+  return getAuthenticatedUser(req);
 }
 
 function korlixCustomAccessSupportEmailV1() {
@@ -5465,18 +5402,20 @@ async function korlixCustomAccessSendSupportEmailV1({ user, requestId, email }) 
 }
 
 async function korlixCustomAccessRequireUserV1(req, res) {
-  const user = await korlixCustomAccessResolveUserV1(req);
-
-  if (!user?.id) {
-    res.status(401).json({
+  try {
+    const user = await korlixCustomAccessResolveUserV1(req);
+    if (user?.id) return user;
+    throw makeHttpError("Please sign in to use Custom Access.", 401);
+  } catch (error) {
+    res.status(error.statusCode || 503).json({
       ok: false,
-      error: "Please sign in to use Custom Access.",
-      code: "sign_in_required_for_custom_access",
+      error: error.statusCode === 401 || error.statusCode === 403
+        ? getKorlixUserFacingError(error)
+        : "Account access could not be verified. Please retry.",
+      code: error.statusCode === 403 ? "custom_access_forbidden" : "sign_in_required_for_custom_access",
     });
     return null;
   }
-
-  return user;
 }
 
 app.get("/api/custom-access/me", async (req, res) => {
@@ -5521,6 +5460,7 @@ app.post("/api/custom-access/request-code", async (req, res) => {
   try {
     const user = await korlixCustomAccessRequireUserV1(req, res);
     if (!user) return;
+    consumeCustomAccessRequest(user.id);
 
     const client = korlixCustomAccessSupabaseClientV1();
     if (!client || typeof client.from !== "function") {
@@ -5531,7 +5471,7 @@ app.post("/api/custom-access/request-code", async (req, res) => {
       });
     }
 
-    const email = korlixCustomAccessEmailNormV1(user.email || req.body?.email);
+    const email = korlixCustomAccessEmailNormV1(user.email);
     if (!email) {
       return res.status(400).json({
         ok: false,
@@ -5547,7 +5487,7 @@ app.post("/api/custom-access/request-code", async (req, res) => {
       request_type: "basic_7_day",
       requested_features: ["copybox", "voice_scribe"],
       status: "requested",
-      notes: korlixCustomAccessStringV1(req.body?.notes),
+      notes: korlixCustomAccessStringV1(req.body?.notes).slice(0, 2000),
     };
 
     const inserted = await client
@@ -5587,10 +5527,11 @@ app.post("/api/custom-access/request-code", async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({
+    if (error?.retryAfter) res.set("Retry-After", String(error.retryAfter));
+    return res.status(error.statusCode || 500).json({
       ok: false,
       error: "Custom Access request failed.",
-      details: error?.message || String(error),
+      details: error.statusCode === 429 ? error.message : undefined,
     });
   }
 });
@@ -5599,6 +5540,7 @@ app.post("/api/custom-access/redeem-code", async (req, res) => {
   try {
     const user = await korlixCustomAccessRequireUserV1(req, res);
     if (!user) return;
+    consumeCustomAccessRedemption(user.id);
 
     const client = korlixCustomAccessSupabaseClientV1();
     if (!client || typeof client.rpc !== "function") {
@@ -5641,10 +5583,11 @@ app.post("/api/custom-access/redeem-code", async (req, res) => {
 
     return res.json(data);
   } catch (error) {
-    return res.status(500).json({
+    if (error?.retryAfter) res.set("Retry-After", String(error.retryAfter));
+    return res.status(error.statusCode || 500).json({
       ok: false,
       error: "Custom Access code redemption failed.",
-      details: error?.message || String(error),
+      details: error.statusCode === 429 ? error.message : undefined,
     });
   }
 });
@@ -5656,7 +5599,7 @@ app.post("/api/custom-access/admin/create-code", async (req, res) => {
       korlixCustomAccessStringV1(req.headers["x-korlix-admin-token"]) ||
       korlixCustomAccessStringV1(req.headers["x-admin-token"]);
 
-    if (!expected || supplied !== expected) {
+    if (!expected || !secretMatches(supplied, expected)) {
       return res.status(403).json({
         ok: false,
         error: "Admin token is required.",
@@ -7306,6 +7249,7 @@ function korlixAgentFileTrainingDraftV1(parsed) {
 app.post(
   "/api/live-convo/agents/:agentId/training-files/analyze",
 
+  requireDocumentUploadUser,
   documentUpload.array(
     "files",
     KORLIX_AGENT_FILE_MEMORY_MAX_FILES_V1,
@@ -7621,6 +7565,7 @@ app.post(
 app.post(
   "/api/live-convo/agents/:agentId/memory-files/analyze",
 
+  requireDocumentUploadUser,
   documentUpload.array(
     "files",
     KORLIX_AGENT_FILE_MEMORY_MAX_FILES_V1,
@@ -8343,28 +8288,8 @@ function korlixLiveConvoBearerTokenV1(req) {
 }
 
 async function korlixLiveConvoResolveUserV1(req) {
-  const client = korlixLiveConvoSupabaseClientV1();
-  const token = korlixLiveConvoBearerTokenV1(req);
-
-  if (
-    !client ||
-    !token ||
-    !client.auth ||
-    typeof client.auth.getUser !== "function"
-  ) {
-    return null;
-  }
-
-  try {
-    const result = await client.auth.getUser(token);
-    return result?.data?.user || null;
-  } catch (error) {
-    console.warn(
-      "KORLIX_LIVE_CONVO_AUTH_FAILED",
-      error?.message || String(error)
-    );
-    return null;
-  }
+  // All feature paths share verified account and device-session access checks.
+  return getAuthenticatedUser(req);
 }
 
 async function korlixLiveConvoSafetyIdentifierV1(userId) {
@@ -10154,20 +10079,8 @@ function korlixI2vTierFromObjectV1(value) {
 }
 
 async function korlixI2vResolveUserV1(req) {
-  const client = korlixI2vSupabaseClientV1();
-  const token = korlixI2vBearerTokenV1(req);
-
-  if (!client || !token || !client.auth || typeof client.auth.getUser !== "function") {
-    return null;
-  }
-
-  try {
-    const result = await client.auth.getUser(token);
-    return result?.data?.user || null;
-  } catch (error) {
-    console.warn("KORLIX_I2V_AUTH_LOOKUP_FAILED", error?.message || String(error));
-    return null;
-  }
+  // All feature paths share verified account and device-session access checks.
+  return getAuthenticatedUser(req);
 }
 
 async function korlixI2vResolveTierV1(user) {
@@ -11181,6 +11094,8 @@ async function korlixAppleBuild130VerifyNotification(signedPayload) {
   throw lastError || new Error("Apple notification verification failed.");
 }
 
+const consumeAppleVerification = createAccountRequestLimiter({windowMs: 10 * 60 * 1000, maxAttempts: 20});
+
 async function korlixAppleBuild130TransactionFromHistory({
   transactionId,
   expectedProductId,
@@ -11209,8 +11124,11 @@ async function korlixAppleBuild130TransactionFromHistory({
       let response = null;
       let revision = null;
       const signedTransactions = [];
+      const seenRevisions = new Set();
+      let pageCount = 0;
 
       do {
+        if (++pageCount > 20) throw makeHttpError("Apple transaction history is too large to verify. Please contact support.", 503);
         response = await attempt.client.getTransactionHistory(
           transactionId,
           revision,
@@ -11223,6 +11141,11 @@ async function korlixAppleBuild130TransactionFromHistory({
         }
 
         revision = response?.revision || null;
+        if (signedTransactions.length > 400 || (response?.hasMore === true &&
+            (!revision || seenRevisions.has(revision)))) {
+          throw makeHttpError("Apple transaction history could not be verified. Please retry later.", 503);
+        }
+        if (revision) seenRevisions.add(revision);
       } while (response?.hasMore === true);
 
       const verified = [];
@@ -11327,17 +11250,12 @@ function korlixAppleBuild130NormalizeTransaction(result) {
     throw makeHttpError("Apple transaction bundle ID mismatch.", 400);
   }
 
-  const expiresMs = Number(decoded.expiresDate || 0);
-  const revokedMs = Number(decoded.revocationDate || 0);
-  const active =
-    (!Number.isFinite(revokedMs) || revokedMs <= 0) &&
-    Number.isFinite(expiresMs) &&
-    expiresMs > Date.now();
+  const {active, status} = appleTransactionAccess(decoded);
 
   return {
     productId,
     tier,
-    status: active ? "active" : revokedMs > 0 ? "revoked" : "expired",
+    status,
     active,
     environment:
       String(decoded.environment || result?.environment || "").trim() ||
@@ -11495,6 +11413,7 @@ app.get("/api/billing/apple/health", async (req, res) => {
 app.get("/api/billing/apple/status", async (req, res) => {
   try {
     const user = await requireUser(req);
+    if (String(req.query?.refresh || "") === "1") consumeAppleVerification(user.id);
     let { profile, entitlement } =
       await korlixAppleBuild130StatusForUser(user);
     let refreshWarning = null;
@@ -11542,6 +11461,7 @@ app.get("/api/billing/apple/status", async (req, res) => {
       })(),
     });
   } catch (error) {
+    if (error?.retryAfter) res.set("Retry-After", String(error.retryAfter));
     return res.status(error?.statusCode || 500).json({
       ok: false,
       error: getKorlixUserFacingError(error),
@@ -11552,6 +11472,7 @@ app.get("/api/billing/apple/status", async (req, res) => {
 app.post("/api/billing/apple/verify", async (req, res) => {
   try {
     const user = await requireUser(req);
+    consumeAppleVerification(user.id);
     await getOrCreateProfile(user);
     const body = req.body && typeof req.body === "object" ? req.body : {};
     const expectedProductId = String(body.productId || "").trim();
@@ -11622,6 +11543,7 @@ app.post("/api/billing/apple/verify", async (req, res) => {
       sanitize(error?.message)
     );
 
+    if (error?.retryAfter) res.set("Retry-After", String(error.retryAfter));
     return res.status(error?.statusCode || 500).json({
       ok: false,
       verified: false,
@@ -11691,6 +11613,7 @@ app.post("/api/billing/apple/notifications", async (req, res) => {
 
     if (
       transaction.status === "expired" &&
+      transaction.decoded.isUpgraded !== true &&
       Number.isFinite(gracePeriodExpiresMs) &&
       gracePeriodExpiresMs > Date.now()
     ) {
@@ -12064,6 +11987,7 @@ app.get("/api/live-docs/health", async (_req, res) => {
 
 app.post(
   "/api/live-docs/jobs",
+  requireDocumentUploadUser,
   documentUpload.array("files", 8),
   async (req, res) => {
     try {
@@ -12951,6 +12875,8 @@ app.use("/api", (req, res) => {
 });
 // KORLIX_API_NOT_FOUND_FALLBACK_FINAL_END
 
+
+app.use(publicApiErrorHandler);
 
 const k135zHttpServer = app.listen(port, () => {
   console.log(`Korlix AI backend running on port ${port}`);

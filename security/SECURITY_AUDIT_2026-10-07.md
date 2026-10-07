@@ -1,5 +1,7 @@
 # KORLIX security audit — 7 October 2026
 
+This is the earlier security pass. See [the final pre-submission audit](PRE_APP_STORE_AUDIT_2026-10-07.md) for subsequent fixes, current dependency results and remaining release gates.
+
 This audit found and corrected exploitable access-control and abuse weaknesses. It is a source, configuration and targeted regression review, not a guarantee that the application has no vulnerabilities.
 
 ## Scope and method

@@ -41,7 +41,7 @@ test('delivery check defaults off, rejects shared secrets and expires within two
 test('sandbox HTTP delivery never reads the provider or writes memberships; live reconciliation still works',async()=>{
  let time=Date.now(),providerReads=0;const writes=[];
  const business='11111111-1111-4111-8111-111111111111';
- const billing=directoryBilling(liveCredentials,{fetcher:async()=>{providerReads++;return {ok:true,json:async()=>({id:'sub_livefixture',customer:'cus_livefixture',livemode:true,status:'active',metadata:{korlix_directory:business,generation:'22222222-2222-4222-8222-222222222222'},items:{data:[{quantity:1,current_period_end:2000000000,price:{currency:'usd',unit_amount:499,recurring:{interval:'month',interval_count:1}}}]},latest_invoice:{id:'in_livefixture',status:'paid',amount_paid:499}})};}});
+ const billing=directoryBilling(liveCredentials,{fetcher:async()=>{providerReads++;return {ok:true,json:async()=>({id:'sub_livefixture',customer:'cus_livefixture',livemode:true,status:'active',metadata:{korlix_directory:business,generation:'22222222-2222-4222-8222-222222222222'},items:{data:[{quantity:1,current_period_end:2000000000,price:{currency:'usd',unit_amount:499,recurring:{interval:'month',interval_count:1}}}]},latest_invoice:{id:'in_livefixture',customer:'cus_livefixture',livemode:true,currency:'usd',subscription:'sub_livefixture',status:'paid',amount_paid:499,amount_due:499,amount_remaining:0}})};}});
  const app=express();app.use(express.json({verify:(q,r,b)=>q.korlixDirectoryRawBody=Buffer.from(b)}));
  registerDirectory(app,{environment:environment(time),now:()=>time,billing,store:{command:async(...args)=>{writes.push(args);return {ok:true};}}});
  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
