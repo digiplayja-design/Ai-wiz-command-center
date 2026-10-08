@@ -129,3 +129,26 @@ repeat prompts, not a strict cross-tab or cross-device frequency guarantee.
 Android/iOS native compilation and actual store dialog presentation are not
 verified by these Flutter tests. Signed native builds and store/device tests
 remain necessary. Public web deployment evidence is recorded after release.
+
+### Published web release
+
+Frontend commit `7b48b6d9b52bac534b2be8d6296b0b7553d2c7d7` was deployed by
+Render release `dep-db417449v7es738nmd00`, which reached `live` at
+2026-10-08 22:08:14 UTC (6:08:14 PM Eastern). The release gate passed 288 tests,
+with the existing opt-in screenshot-render test skipped. The final invitation
+suite also independently passed all 11 tests after the account-race fix.
+
+The canonical `/app/` and compiled `/app/main.dart.js` returned HTTP 200; the
+live bundle contains the invitation, Google Play action, Settings feedback
+entry and local-counter namespace. Both updated policy pages returned 200
+with their new disclosures from the Render hostname. The canonical terms
+page also contained the new section. The canonical privacy URL initially
+returned a previous CDN copy (the observed shared-cache lifetime is 300
+seconds); a fresh release-query URL and the Render hostname returned the
+updated policy. No additional deployment is needed for cache expiration.
+
+No backend deployment or database migration was required. Real feedback was
+not submitted and a store review was not posted during verification. The
+native integrations are committed source only: Android/iOS compilation,
+signed distribution and actual store-controlled review presentation remain
+unverified and must accompany the next native release.
