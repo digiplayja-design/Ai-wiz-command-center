@@ -151,7 +151,7 @@ Browser background notifications require browser/OS permission and support. iPho
 
 ## Last login and Auto Dump audience
 
-Apply `20261008202609_korlix_social_last_login_dump_scope.sql` before deploying the matching frontend. The API routes already forward these validated RPC inputs; no backend runtime patch is required.
+Apply `20261008204002_korlix_social_last_login_dump_scope.sql` before deploying the matching frontend. The API routes already forward these validated RPC inputs; no backend runtime patch is required.
 
 Viewer-aware member, profile, direct-chat and group cards add `last_login_at`, the authenticated account's real `auth.users.last_sign_in_at` timestamp. A Social heartbeat does not change it. The existing `show_online` setting controls disclosure of both online status and last login; null means hidden or unavailable, not a made-up recent login. Existing discoverability, connection, block and suspension checks still apply. The migration grants only `SELECT(last_sign_in_at)` to the server's service role, retains browser-denied auth access and uses security-invoker functions. It adds no auth trigger or client-supplied login timestamp.
 
