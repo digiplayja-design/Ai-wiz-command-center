@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
+
 import 'social_media_widgets.dart';
 import 'social_voice_note.dart';
+
 import 'package:flutter/material.dart';
+
 import '../theme/korlix_theme.dart';
 import '../theme/korlix_action_button.dart';
 import 'social_client.dart';
@@ -386,6 +390,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       if (mounted && g == _generation) {
         setState(() {
           _error = '$e';
+          _peer = {..._peer, 'online': null, 'last_login_at': null};
           if (e is SocialException && [401, 403, 404].contains(e.status)) {
             _messages = [];
             _attachment = null;
@@ -559,7 +564,8 @@ class _SocialChatScreenState extends State<SocialChatScreen>
         client: widget.client,
         dumps: _dumps,
         message: message,
-        onSave: (seconds, requestId) async {
+        canDumpEveryone: message['sender'] == widget.me['id'],
+        onSave: (seconds, scope, requestId) async {
           if (_unavailable || !widget.client.available) {
             throw const SocialException('This conversation is unavailable.');
           }
@@ -569,13 +575,16 @@ class _SocialChatScreenState extends State<SocialChatScreen>
             _loading = false;
           });
           try {
-            final result = await widget.client
-                .post(seconds == null ? 'dump_cancel' : 'dump_schedule', {
-                  'id': id,
-                  ..._destination,
-                  'seconds': ?seconds,
-                  'request_id': requestId,
-                });
+            final result = await widget.client.post(
+              seconds == null ? 'dump_cancel' : 'dump_schedule',
+              {
+                'id': id,
+                ..._destination,
+                'seconds': ?seconds,
+                'request_id': requestId,
+                'dump_scope': scope,
+              },
+            );
             if (!mounted || !widget.client.available || _unavailable) {
               throw const SocialException(
                 'Your session changed. Reopen Social.',
@@ -583,6 +592,9 @@ class _SocialChatScreenState extends State<SocialChatScreen>
             }
             if (result['id'] != id ||
                 !result.containsKey('dump_at') ||
+                (scope == 'everyone' &&
+                    (!result.containsKey('everyone_dump_at') ||
+                        !result.containsKey('self_dump_at'))) ||
                 DateTime.tryParse('${result['server_time']}') == null ||
                 (result['dump_at'] != null &&
                     DateTime.tryParse('${result['dump_at']}') == null)) {
@@ -596,9 +608,13 @@ class _SocialChatScreenState extends State<SocialChatScreen>
               context,
               result['dumped'] == true
                   ? 'This message has already been dumped from your history.'
-                  : result['dump_at'] == null
-                  ? 'Auto Dump is off. The message stays in your history.'
-                  : 'Auto Dump timer confirmed.',
+                  : seconds == null
+                  ? (result['dump_at'] == null
+                        ? 'Timer cancelled. The message stays in your history.'
+                        : 'Timer cancelled. The other Auto Dump timer remains active.')
+                  : (scope == 'everyone'
+                        ? 'Auto Dump timer confirmed for everyone.'
+                        : 'Auto Dump timer confirmed for you only.'),
             );
           } finally {
             if (mounted) setState(() => _dumpSaving = false);
@@ -1391,9 +1407,9 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                               child: Text(
                                 _error!,
                                 style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onErrorContainer,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onErrorContainer,
                                 ),
                               ),
                             ),
@@ -1579,9 +1595,8 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                             onPressed: _sending ? null : _send,
                             style: IconButton.styleFrom(
                               minimumSize: const Size(52, 52),
-                              foregroundColor: korlixSkinOf(
-                                context,
-                              ).textOnAccent,
+                              foregroundColor: korlixSkinOf(context)
+                                  .textOnAccent,
                             ),
                             icon: _sending
                                 ? const SizedBox(
@@ -1764,14 +1779,22 @@ class _SocialTopicScreenState extends State<SocialTopicScreen>
             if (_topic != null) {
               _topic = {
                 ..._topic!,
-                'author': {...socialMap(_topic!['author']), 'online': null},
+                'author': {
+                  ...socialMap(_topic!['author']),
+                  'online': null,
+                  'last_login_at': null,
+                },
               };
             }
             _replies = [
               for (final reply in _replies)
                 {
                   ...reply,
-                  'author': {...socialMap(reply['author']), 'online': null},
+                  'author': {
+                    ...socialMap(reply['author']),
+                    'online': null,
+                    'last_login_at': null,
+                  },
                 },
             ];
           }
@@ -2288,8 +2311,7 @@ class _SocialTopicScreenState extends State<SocialTopicScreen>
                   const SocialEmpty(
                     icon: Icons.lock_outline,
                     title: 'This discussion is locked.',
-                    body:
-                        'Existing posts can still be read. New replies are closed.',
+                    body: 'Existing posts can still be read. New replies are closed.',
                   )
                 else
                   _composer(),
@@ -2484,9 +2506,7 @@ class _SocialManagementScreenState extends State<SocialManagementScreen> {
     if (!await socialConfirm(
       context,
       _reports ? 'Confirm moderation action?' : 'Unblock this member?',
-      _reports
-          ? 'Apply “$decision” and resolve this report?'
-          : 'Unblocking does not restore your connection. A new follow request must be accepted.',
+      _reports ? 'Apply “$decision” and resolve this report?' : 'Unblocking does not restore your connection. A new follow request must be accepted.',
       action: _reports ? 'Apply' : 'Unblock',
     )) {
       return;

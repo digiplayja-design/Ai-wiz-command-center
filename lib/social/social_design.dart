@@ -1,5 +1,7 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+
 import '../theme/korlix_theme.dart';
 import 'social_client.dart';
 
@@ -89,6 +91,43 @@ String? socialPresenceLabel(SocialMap member) {
   return member['online'] == true ? 'Online' : 'Offline';
 }
 
+/// Auth sign-in only: never substitute heartbeat/message activity. Missing or
+/// unverified timestamps are omitted, including on privacy/access invalidation.
+DateTime? socialLastLogin(SocialMap member) {
+  if (socialPresenceLabel(member) == null ||
+      member['show_online'] == false ||
+      member['online'] is! bool) {
+    return null;
+  }
+  final value = member['last_login_at'];
+  if (value is! String ||
+      !RegExp(
+        r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$',
+      ).hasMatch(value)) {
+    return null;
+  }
+  final date = DateTime.tryParse(value);
+  if (date == null) return null;
+  // DateTime.tryParse normalizes invalid calendar dates; do not display them.
+  final civil = DateTime.tryParse(value.substring(0, 19));
+  if (civil == null ||
+      civil.toIso8601String().substring(0, 19) != value.substring(0, 19)) {
+    return null;
+  }
+  return date.toLocal();
+}
+
+String socialLastLoginLabel(BuildContext context, DateTime date) {
+  final local = date.toLocal();
+  String pad(int value) => value.toString().padLeft(2, '0');
+  final offset = local.timeZoneOffset;
+  final minutes = offset.inMinutes.abs();
+  final zone =
+      'UTC${offset.isNegative ? '−' : '+'}${pad(minutes ~/ 60)}:${pad(minutes % 60)}';
+  final time = '${pad(local.hour)}:${pad(local.minute)}:${pad(local.second)}';
+  return 'Last login: ${MaterialLocalizations.of(context).formatFullDate(local)} · $time $zone';
+}
+
 /// Keeps the status beside a name when space permits, and wraps it at large
 /// text sizes instead of squeezing or truncating the status into a color dot.
 class SocialMemberName extends StatelessWidget {
@@ -98,6 +137,7 @@ class SocialMemberName extends StatelessWidget {
     this.style,
     this.name,
     this.showStatus = true,
+    this.showLastLogin = false,
     this.maxLines = 2,
     this.alignment = WrapAlignment.start,
   });
@@ -105,6 +145,7 @@ class SocialMemberName extends StatelessWidget {
   final TextStyle? style;
   final String? name;
   final bool showStatus;
+  final bool showLastLogin;
   final int maxLines;
   final WrapAlignment alignment;
 
@@ -112,6 +153,7 @@ class SocialMemberName extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = showStatus ? socialPresenceLabel(member) : null;
     final online = label == 'Online';
+    final login = showStatus && showLastLogin ? socialLastLogin(member) : null;
     final skin = korlixSkinOf(context);
     final color = online
         ? (skin.isLight ? const Color(0xFF137145) : const Color(0xFF75E8B8))
@@ -161,6 +203,21 @@ class SocialMemberName extends StatelessWidget {
                       ),
                     ),
                   ),
+                ),
+              ),
+            ),
+          if (login != null)
+            SizedBox(
+              width: constraints.maxWidth.isFinite
+                  ? constraints.maxWidth
+                  : null,
+              child: Tooltip(
+                message:
+                    'Last successful sign-in, shown in your local time zone',
+                child: Text(
+                  socialLastLoginLabel(context, login),
+                  key: ValueKey('last-login-${member['id']}'),
+                  style: TextStyle(color: skin.mutedText, fontSize: 11),
                 ),
               ),
             ),
@@ -395,7 +452,6 @@ Future<bool> socialConfirm(
     false;
 
 void socialNotice(BuildContext context, Object message) {
-  ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text('$message')));
+  ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text('$message')));
 }

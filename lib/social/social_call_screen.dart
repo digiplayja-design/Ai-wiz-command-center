@@ -1,7 +1,9 @@
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
+
 import '../sounds/korlix_sound_service.dart';
 import '../theme/korlix_theme.dart';
 import '../theme/korlix_action_button.dart';
@@ -81,7 +83,13 @@ class _SocialCallScreenState extends State<SocialCallScreen>
       if (profile['id'] == widget.peer['id']) {
         setState(() => _displayPeer = profile);
       } else {
-        setState(() => _displayPeer = {..._displayPeer, 'online': null});
+        setState(
+          () => _displayPeer = {
+            ..._displayPeer,
+            'online': null,
+            'last_login_at': null,
+          },
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -89,7 +97,7 @@ class _SocialCallScreenState extends State<SocialCallScreen>
           () => _displayPeer =
               e is SocialException && [401, 403, 404].contains(e.status)
               ? {'name': 'Unavailable member', 'color': 'cyan'}
-              : {..._displayPeer, 'online': null},
+              : {..._displayPeer, 'online': null, 'last_login_at': null},
         );
       }
     } finally {
@@ -236,9 +244,7 @@ class _SocialCallScreenState extends State<SocialCallScreen>
             ),
             const SizedBox(height: 8),
             Text(
-              m.microphoneIssue.isNotEmpty
-                  ? m.microphoneIssue
-                  : 'Reopens the microphone without ending this call. If you muted it, tap Unmute to speak.',
+              m.microphoneIssue.isNotEmpty ? m.microphoneIssue : 'Reopens the microphone without ending this call. If you muted it, tap Unmute to speak.',
               style: TextStyle(
                 color: m.microphoneIssue.isNotEmpty ? s.danger : s.mutedText,
                 fontSize: 12,

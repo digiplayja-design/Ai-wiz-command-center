@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../theme/korlix_theme.dart';
 import '../theme/korlix_action_button.dart';
 import 'social_client.dart';
@@ -239,12 +241,14 @@ class _SocialGroupInviteState extends State<SocialGroupInvite> {
       _error = null;
     });
     try {
-      final result = await widget.client
-          .post(widget.group == null ? 'group_create' : 'group_invite', {
-            'group': widget.group?['id'] ?? _requestId,
-            'members': ids,
-            if (widget.group == null) 'name': _name.text.trim(),
-          });
+      final result = await widget.client.post(
+        widget.group == null ? 'group_create' : 'group_invite',
+        {
+          'group': widget.group?['id'] ?? _requestId,
+          'members': ids,
+          if (widget.group == null) 'name': _name.text.trim(),
+        },
+      );
       if (mounted && _available) {
         Navigator.pop(context, widget.group ?? socialMap(result['group']));
       }
@@ -364,8 +368,7 @@ class _SocialGroupInviteState extends State<SocialGroupInvite> {
                   const SocialEmpty(
                     icon: Icons.person_add_alt_1_outlined,
                     title: 'No connections found.',
-                    body:
-                        'Connect with people in Social first. Once a follow request is accepted, you can invite them here.',
+                    body: 'Connect with people in Social first. Once a follow request is accepted, you can invite them here.',
                   ),
                 for (final p in _connections)
                   CheckboxListTile(
@@ -388,7 +391,7 @@ class _SocialGroupInviteState extends State<SocialGroupInvite> {
                             );
                           },
                     secondary: SocialAvatar(member: p, size: 38),
-                    title: SocialMemberName(member: p),
+                    title: SocialMemberName(member: p, showLastLogin: true),
                     subtitle: Text(
                       widget.excluded.contains(p['id'])
                           ? 'Already joined or invited'
@@ -640,7 +643,10 @@ class _SocialGroupDetailsState extends State<SocialGroupDetails> {
                       member: socialMap(m['profile']),
                       size: 42,
                     ),
-                    title: SocialMemberName(member: socialMap(m['profile'])),
+                    title: SocialMemberName(
+                      member: socialMap(m['profile']),
+                      showLastLogin: true,
+                    ),
                     subtitle: Text(
                       m['is_owner'] == true
                           ? 'Group owner'

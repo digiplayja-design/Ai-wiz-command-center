@@ -20,6 +20,14 @@ class DumpStore {
   String token = 'Bearer dump-account';
   final calls = <SocialMap>[];
   final due = <String, DateTime>{};
+  final everyoneDue = <String, DateTime>{};
+  DateTime? effectiveDue(String id) {
+    final self = due[id], everyone = everyoneDue[id];
+    if (self == null) return everyone;
+    if (everyone == null) return self;
+    return self.isBefore(everyone) ? self : everyone;
+  }
+
   final rows = <SocialMap>[
     replies.message('first', 1, 'Private meeting address'),
     {
@@ -32,8 +40,8 @@ class DumpStore {
   Completer<void>? saveGate;
   DateTime get serverNow => now().add(const Duration(days: 8));
   List<String> get hidden => [
-    for (final item in due.entries)
-      if (!item.value.isAfter(serverNow)) item.key,
+    for (final id in {...due.keys, ...everyoneDue.keys})
+      if (!effectiveDue(id)!.isAfter(serverNow)) id,
   ];
   SocialMap card(SocialMap row) {
     final parent = row['reply_to'] == null
@@ -41,16 +49,27 @@ class DumpStore {
         : rows.firstWhere((item) => item['id'] == row['reply_to']);
     return {
       ...row,
-      'dump_at': due[row['id']]?.toIso8601String(),
+      'dump_at': effectiveDue('${row['id']}')?.toIso8601String(),
+      'self_dump_at': due[row['id']]?.toIso8601String(),
+      'everyone_dump_at': everyoneDue[row['id']]?.toIso8601String(),
       if (parent != null)
         'reply': hidden.contains(parent['id'])
             ? {
                 ...parent,
                 'body': '',
                 'deleted': true,
-                'dump_at': due[parent['id']]?.toIso8601String(),
+                'dump_at': effectiveDue('${parent['id']}')?.toIso8601String(),
+                'self_dump_at': due[parent['id']]?.toIso8601String(),
+                'everyone_dump_at': everyoneDue[parent['id']]
+                    ?.toIso8601String(),
               }
-            : {...parent, 'dump_at': due[parent['id']]?.toIso8601String()},
+            : {
+                ...parent,
+                'dump_at': effectiveDue('${parent['id']}')?.toIso8601String(),
+                'self_dump_at': due[parent['id']]?.toIso8601String(),
+                'everyone_dump_at': everyoneDue[parent['id']]
+                    ?.toIso8601String(),
+              },
     };
   }
 
@@ -78,7 +97,16 @@ class DumpStore {
           'peer': fixtures.peer,
           'dumped_ids': hidden,
           'dump_schedules': {
+            for (final id in {...due.keys, ...everyoneDue.keys})
+              if (!hidden.contains(id)) id: effectiveDue(id)!.toIso8601String(),
+          },
+          'dump_self_schedules': {
             for (final entry in due.entries)
+              if (!hidden.contains(entry.key))
+                entry.key: entry.value.toIso8601String(),
+          },
+          'dump_everyone_schedules': {
+            for (final entry in everyoneDue.entries)
               if (!hidden.contains(entry.key))
                 entry.key: entry.value.toIso8601String(),
           },
@@ -100,18 +128,23 @@ class DumpStore {
           result = {'error': 'Timer connection interrupted. Please retry.'};
         } else {
           final id = '${data['id']}';
+          final schedules = data['dump_scope'] == 'everyone'
+              ? everyoneDue
+              : due;
           if (!hidden.contains(id)) {
             if (action == 'dump_schedule') {
-              due[id] = serverNow.add(
+              schedules[id] = serverNow.add(
                 Duration(seconds: data['seconds'] as int),
               );
             } else {
-              due.remove(id);
+              schedules.remove(id);
             }
           }
           result = {
             'id': id,
-            'dump_at': due[id]?.toIso8601String(),
+            'dump_at': effectiveDue(id)?.toIso8601String(),
+            'self_dump_at': due[id]?.toIso8601String(),
+            'everyone_dump_at': everyoneDue[id]?.toIso8601String(),
             'server_time': serverNow.toIso8601String(),
             'dumped': hidden.contains(id),
           };
@@ -199,40 +232,37 @@ void main() {
     model.dispose();
   });
 
-  test(
-    'new authoritative snapshot restores local expiry after another device cancels',
-    () {
-      var local = DateTime.utc(2026, 10, 3, 18);
-      final model = SocialAutoDump(now: () => local);
-      model.confirm('old', {
-        'dump_at': local.add(const Duration(seconds: 15)).toIso8601String(),
-        'server_time': local.toIso8601String(),
-        'dumped': false,
-      });
-      local = local.add(const Duration(seconds: 16));
-      model.observe({}, []);
-      expect(model.hidden('old'), true);
-      model.observe({
-        'server_time': local.toIso8601String(),
-        'dump_schedules': <String, String>{},
-        'dumped_ids': <String>[],
-      }, []);
-      expect(model.hidden('old'), false);
-      // A delayed pre-cancellation original-message response is ignored.
-      model.observe(
-        {
-          'server_time': local
-              .subtract(const Duration(seconds: 10))
-              .toIso8601String(),
-        },
-        [
-          {'id': 'old', 'dump_at': local.toIso8601String()},
-        ],
-      );
-      expect(model.deadlines.containsKey('old'), false);
-      model.dispose();
-    },
-  );
+  test('new authoritative snapshot restores local expiry after another device cancels', () {
+    var local = DateTime.utc(2026, 10, 3, 18);
+    final model = SocialAutoDump(now: () => local);
+    model.confirm('old', {
+      'dump_at': local.add(const Duration(seconds: 15)).toIso8601String(),
+      'server_time': local.toIso8601String(),
+      'dumped': false,
+    });
+    local = local.add(const Duration(seconds: 16));
+    model.observe({}, []);
+    expect(model.hidden('old'), true);
+    model.observe({
+      'server_time': local.toIso8601String(),
+      'dump_schedules': <String, String>{},
+      'dumped_ids': <String>[],
+    }, []);
+    expect(model.hidden('old'), false);
+    // A delayed pre-cancellation original-message response is ignored.
+    model.observe(
+      {
+        'server_time': local
+            .subtract(const Duration(seconds: 10))
+            .toIso8601String(),
+      },
+      [
+        {'id': 'old', 'dump_at': local.toIso8601String()},
+      ],
+    );
+    expect(model.deadlines.containsKey('old'), false);
+    model.dispose();
+  });
 
   test('late confirmed cancellation clears local expiry immediately', () {
     var local = DateTime.utc(2026, 10, 3, 18);
@@ -276,6 +306,8 @@ void main() {
         (call) => call['action'] == 'dump_schedule',
       );
       expect(request['id'], 'first');
+      expect(request['dump_scope'], 'self');
+      expect(find.byKey(const ValueKey('dump-scope-everyone')), findsNothing);
       expect(request['peer'], fixtures.peer['id']);
       expect(request['seconds'], 15);
       expect(find.textContaining('Auto Dump in'), findsOneWidget);
@@ -290,6 +322,109 @@ void main() {
       expect(t.takeException(), isNull);
     },
   );
+
+  testWidgets('sender can choose everyone for a group message', (t) async {
+    final store = DumpStore(t.binding.clock.now);
+    await mount(t, store, group: true);
+    await choose(t, 'second');
+    expect(find.text('For everyone'), findsOneWidget);
+    await replies.tap(t, find.byKey(const ValueKey('dump-scope-everyone')));
+    expect(find.textContaining('Screenshots, downloads'), findsOneWidget);
+    await replies.tap(t, find.byKey(const ValueKey('dump-confirm')));
+    final request = store.calls.lastWhere(
+      (call) => call['action'] == 'dump_schedule',
+    );
+    expect(request['dump_scope'], 'everyone');
+    expect(request['group'], fixtures.peer['id']);
+    expect(store.due, isEmpty);
+    expect(store.everyoneDue.keys, ['second']);
+  });
+
+  testWidgets(
+    'recipient cannot cancel an everyone timer and can set personal timer',
+    (t) async {
+      final store = DumpStore(t.binding.clock.now);
+      store.everyoneDue['first'] = store.serverNow.add(
+        const Duration(hours: 1),
+      );
+      await mount(t, store);
+      await choose(t, 'first');
+      expect(find.byKey(const ValueKey('dump-scope-everyone')), findsNothing);
+      expect(find.byKey(const ValueKey('dump-cancel')), findsNothing);
+      expect(find.textContaining('Sender timer for everyone:'), findsOneWidget);
+      await replies.tap(t, find.byKey(const ValueKey('dump-confirm')));
+      expect(store.due.containsKey('first'), true);
+      expect(store.everyoneDue.containsKey('first'), true);
+    },
+  );
+
+  testWidgets('cancelling personal timer leaves sender everyone timer active', (
+    t,
+  ) async {
+    final store = DumpStore(t.binding.clock.now);
+    store.due['second'] = store.serverNow.add(const Duration(minutes: 1));
+    store.everyoneDue['second'] = store.serverNow.add(const Duration(hours: 1));
+    await mount(t, store);
+    await choose(t, 'second');
+    expect(
+      find.textContaining('A personal timer and an everyone timer'),
+      findsOneWidget,
+    );
+    await replies.tap(t, find.byKey(const ValueKey('dump-cancel')));
+    expect(store.due, isEmpty);
+    expect(store.everyoneDue.containsKey('second'), true);
+    final request = store.calls.lastWhere(
+      (call) => call['action'] == 'dump_cancel',
+    );
+    expect(request['dump_scope'], 'self');
+    expect(
+      find.textContaining('The other Auto Dump timer remains active'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'everyone expiry scrubs loaded original, reply and composer draft',
+    (t) async {
+      final store = DumpStore(t.binding.clock.now);
+      store.everyoneDue['first'] = store.serverNow.add(
+        const Duration(seconds: 15),
+      );
+      await mount(t, store);
+      await replies.tap(t, find.byKey(const ValueKey('reply-first')));
+      await t.enterText(find.byType(TextField), 'Keep my response');
+      await replies.tap(t, find.byKey(const ValueKey('quote-second')));
+      await t.pump(const Duration(seconds: 16));
+      await t.pumpAndSettle();
+      expect(find.text('Private meeting address'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('reply-composer-preview')),
+        findsNothing,
+      );
+      await replies.tap(t, find.byTooltip('Close original message'));
+      expect(find.text('Keep my response'), findsOneWidget);
+    },
+  );
+
+  testWidgets('scope change after failed save uses a fresh request id', (
+    t,
+  ) async {
+    final store = DumpStore(t.binding.clock.now)..fail = true;
+    await mount(t, store);
+    await choose(t, 'second');
+    await replies.tap(t, find.byKey(const ValueKey('dump-confirm')));
+    final first = store.calls.lastWhere(
+      (call) => call['action'] == 'dump_schedule',
+    );
+    await replies.tap(t, find.byKey(const ValueKey('dump-scope-everyone')));
+    store.fail = false;
+    await replies.tap(t, find.byKey(const ValueKey('dump-confirm')));
+    final second = store.calls.lastWhere(
+      (call) => call['action'] == 'dump_schedule',
+    );
+    expect(second['request_id'], isNot(first['request_id']));
+    expect(second['dump_scope'], 'everyone');
+  });
 
   testWidgets(
     'failed save preserves selected message and retries same request id',

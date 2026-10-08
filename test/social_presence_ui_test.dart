@@ -20,7 +20,11 @@ class PresenceStore {
   bool online = true, blocked = false, fail = false;
   int replyCount = 1;
   Completer<void>? gate;
-  SocialMap get member => {...fixtures.peer, 'online': online};
+  SocialMap get member => {
+    ...fixtures.peer,
+    'online': online,
+    'last_login_at': '2026-10-03T16:00:42Z',
+  };
   SocialMap get topic => {
     ...fixtures.topic,
     'surface': 'wall',
@@ -108,6 +112,86 @@ void main() {
     }
   });
 
+  test('last login accepts explicit zone and never substitutes last seen', () {
+    final member = {
+      ...fixtures.peer,
+      'last_login_at': '2026-10-08T16:19:42-04:00',
+    };
+    expect(
+      socialLastLogin(member)?.toUtc(),
+      DateTime.utc(2026, 10, 8, 20, 19, 42),
+    );
+    for (final value in [
+      null,
+      '',
+      'invalid',
+      '2026-10-08T20:19:42',
+      '2026-02-31T20:19:42Z',
+    ]) {
+      expect(
+        socialLastLogin({
+          ...member,
+          'last_login_at': value,
+          'last_seen_at': '2026-10-08T20:00:00Z',
+        }),
+        isNull,
+      );
+    }
+    for (final flags in [
+      {'show_online': false},
+      {'online': null},
+      {'blocked': true},
+      {'suspended': true},
+      {'unavailable': true},
+      {'deleted': true},
+      {'name': 'Unavailable member'},
+    ]) {
+      expect(socialLastLogin({...member, ...flags}), isNull);
+    }
+  });
+
+  testWidgets(
+    'last login shows exact local time and zone, then obeys hide setting',
+    (t) async {
+      final member = ValueNotifier<SocialMap>({
+        ...fixtures.peer,
+        'last_login_at': '2026-10-08T20:19:42Z',
+      });
+      await fixtures.mount(
+        t,
+        Scaffold(
+          body: ValueListenableBuilder<SocialMap>(
+            valueListenable: member,
+            builder: (_, value, _) =>
+                SocialMemberName(member: value, showLastLogin: true),
+          ),
+        ),
+      );
+      final label = t
+          .widget<Text>(
+            find.byKey(ValueKey('last-login-${fixtures.peer['id']}')),
+          )
+          .data!;
+      final local = DateTime.utc(2026, 10, 8, 20, 19, 42).toLocal();
+      expect(
+        label,
+        contains('${local.hour.toString().padLeft(2, '0')}:19:42 UTC'),
+      );
+      expect(label, contains('2026'));
+      expect(
+        find.byTooltip(
+          'Last successful sign-in, shown in your local time zone',
+        ),
+        findsOneWidget,
+      );
+      member.value = {...member.value, 'show_online': false};
+      await t.pump();
+      expect(find.textContaining('Last login:'), findsNothing);
+      await t.pumpWidget(const SizedBox());
+      member.dispose();
+    },
+  );
+
   for (final theme in ['pure_black', 'pure_white']) {
     testWidgets(
       'name and readable badge wrap at 320px and double text in $theme',
@@ -118,9 +202,11 @@ void main() {
             body: Padding(
               padding: const EdgeInsets.all(20),
               child: SocialMemberName(
+                showLastLogin: true,
                 member: {
                   ...fixtures.peer,
                   'name': 'A very long member name that should wrap safely',
+                  'last_login_at': '2026-10-08T20:19:42Z',
                 },
                 style: const TextStyle(fontSize: 26),
               ),
@@ -146,7 +232,8 @@ void main() {
       Scaffold(
         body: ValueListenableBuilder<SocialMap>(
           valueListenable: member,
-          builder: (_, value, _) => SocialMemberName(member: value),
+          builder: (_, value, _) =>
+              SocialMemberName(member: value, showLastLogin: true),
         ),
       ),
     );
@@ -231,6 +318,7 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('● Online'), findsNothing);
     expect(find.text('● Status unavailable'), findsWidgets);
+    expect(find.textContaining('Last login:'), findsNothing);
     await t.pumpWidget(const SizedBox());
     s.close();
   });

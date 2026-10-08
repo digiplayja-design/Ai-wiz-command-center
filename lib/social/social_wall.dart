@@ -403,12 +403,18 @@ class _SocialProfileWallScreenState extends State<SocialProfileWallScreen>
           _more = false;
           _error = '$e';
         } else {
-          if (_profile != null) _profile = {..._profile!, 'online': null};
+          if (_profile != null) {
+            _profile = {..._profile!, 'online': null, 'last_login_at': null};
+          }
           _posts = [
             for (final post in _posts)
               {
                 ...post,
-                'author': {...socialMap(post['author']), 'online': null},
+                'author': {
+                  ...socialMap(post['author']),
+                  'online': null,
+                  'last_login_at': null,
+                },
               },
           ];
         }
@@ -536,6 +542,7 @@ class _SocialProfileWallScreenState extends State<SocialProfileWallScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SocialMemberName(
+                    showLastLogin: true,
                     member: p,
                     style: const TextStyle(
                       fontSize: 26,

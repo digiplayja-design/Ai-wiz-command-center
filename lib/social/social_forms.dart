@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
@@ -308,9 +309,8 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
                     helperText: '3–24 letters, numbers or underscores',
                   ),
                   validator: (v) =>
-                      RegExp(
-                        r'^[a-z0-9_]{3,24}$',
-                      ).hasMatch((v ?? '').trim().toLowerCase())
+                      RegExp(r'^[a-z0-9_]{3,24}$')
+                          .hasMatch((v ?? '').trim().toLowerCase())
                       ? null
                       : 'Use 3–24 letters, numbers or underscores',
                 ),
@@ -407,9 +407,9 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
                             : (v) => setState(() => _discoverable = v),
                       ),
                       SwitchListTile.adaptive(
-                        title: const Text('Show when I am online'),
+                        title: const Text('Show online status and last login'),
                         subtitle: const Text(
-                          'Visible while you use KORLIX. It expires shortly after you leave.',
+                          'Let Social members see your online status and the date and time of your last sign-in. Turn off to hide both.',
                         ),
                         value: _online,
                         onChanged: _saving
@@ -626,13 +626,15 @@ class _SocialComposeTopicState extends State<SocialComposeTopic> {
       _error = null;
     });
     try {
-      await widget.client
-          .post(widget.topic == null ? 'create_topic' : 'edit_topic', {
-            'id': _id,
-            if (_wall) 'surface': 'wall' else 'category': _category,
-            'title': _title.text.trim(),
-            'body': _body.text.trim(),
-          });
+      await widget.client.post(
+        widget.topic == null ? 'create_topic' : 'edit_topic',
+        {
+          'id': _id,
+          if (_wall) 'surface': 'wall' else 'category': _category,
+          'title': _title.text.trim(),
+          'body': _body.text.trim(),
+        },
+      );
       if (mounted) Navigator.pop(context, _id);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');

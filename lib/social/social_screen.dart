@@ -327,6 +327,29 @@ class _SocialScreenState extends State<SocialScreen>
           if (e is SocialException && [401, 403, 404].contains(e.status)) {
             _items = [];
             _more = false;
+          } else {
+            // Do not keep sharing activity after a refresh cannot confirm
+            // current visibility settings.
+            _items = [
+              for (final item in _items)
+                {
+                  ...item,
+                  'online': null,
+                  'last_login_at': null,
+                  if (item['profile'] is Map)
+                    'profile': {
+                      ...socialMap(item['profile']),
+                      'online': null,
+                      'last_login_at': null,
+                    },
+                  if (item['author'] is Map)
+                    'author': {
+                      ...socialMap(item['author']),
+                      'online': null,
+                      'last_login_at': null,
+                    },
+                },
+            ];
           }
         });
       }
@@ -764,6 +787,7 @@ class _SocialScreenState extends State<SocialScreen>
           ),
           const SizedBox(height: 14),
           SocialMemberName(
+            showLastLogin: true,
             member: p,
             style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 19),
           ),
@@ -974,18 +998,15 @@ class _SocialScreenState extends State<SocialScreen>
                                   borderRadius: BorderRadius.circular(14),
                                   gradient: LinearGradient(
                                     colors: [
-                                      socialColor(
-                                        category['color'],
-                                      ).withValues(alpha: .3),
-                                      socialColor(
-                                        category['color'],
-                                      ).withValues(alpha: .07),
+                                      socialColor(category['color'])
+                                          .withValues(alpha: .3),
+                                      socialColor(category['color'])
+                                          .withValues(alpha: .07),
                                     ],
                                   ),
                                   border: Border.all(
-                                    color: socialColor(
-                                      category['color'],
-                                    ).withValues(alpha: .4),
+                                    color: socialColor(category['color'])
+                                        .withValues(alpha: .4),
                                   ),
                                 ),
                                 child: Icon(
@@ -1061,6 +1082,7 @@ class _SocialScreenState extends State<SocialScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               SocialMemberName(
+                                showLastLogin: true,
                                 member: socialMap(t['author']),
                                 style: const TextStyle(
                                   fontSize: 12,
@@ -1263,8 +1285,7 @@ class _SocialScreenState extends State<SocialScreen>
                   const SocialEmpty(
                     icon: Icons.lock_outline_rounded,
                     title: 'Sign in to join the conversation.',
-                    body:
-                        'Sign in to your KORLIX account, then reopen Social. Your previous account’s content has been cleared.',
+                    body: 'Sign in to your KORLIX account, then reopen Social. Your previous account’s content has been cleared.',
                   )
                 else if (_profile == null) ...[
                   const Center(child: SocialOrbit(size: 210)),
@@ -1364,6 +1385,7 @@ class _SocialScreenState extends State<SocialScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 SocialMemberName(
+                                  showLastLogin: true,
                                   member: _profile!,
                                   style: const TextStyle(
                                     fontSize: 17,
@@ -1579,8 +1601,7 @@ class _SocialScreenState extends State<SocialScreen>
                       const SocialEmpty(
                         icon: Icons.groups_outlined,
                         title: 'Make space for your circle.',
-                        body:
-                            'Create a group or accept an invitation here to start chatting together.',
+                        body: 'Create a group or accept an invitation here to start chatting together.',
                       ),
                     _grid([
                       for (final g in _items)

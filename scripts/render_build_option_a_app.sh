@@ -62,6 +62,11 @@ RELEASE_TESTS=(
   test/privacy/korlix_privacy_settings_test.dart
   test/launch/korlix_launch_countdown_test.dart
   test/support/ai_output_report_test.dart
+  test/social_auto_dump_test.dart
+  test/social_dump_truck_test.dart
+  test/social_presence_model_test.dart
+  test/social_presence_ui_test.dart
+  test/social_attachment_lifetime_test.dart
   test/meeting_copilot/k135z_ai_sharing_consent_test.dart
   test/workforce/workforce_location_test.dart
   test/workforce/workforce_test.dart
