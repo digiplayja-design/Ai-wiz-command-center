@@ -79,3 +79,23 @@ assertions verified service-role execution, timestamp/preference matching,
 new metadata, RLS and browser-role denial. The security advisor returned no
 WARNING or ERROR findings; the service-only table has the expected INFO notice
 for RLS with no browser policies.
+
+## Production publication — October 8, 2026
+
+Frontend feature commit `db66bacd0cc26c10271a20ac3f5d5ce59fbc12fc` was published
+by Render deployment `dep-db400qeb7d7c739rjsk0`, which reached `live` at
+2026-10-08 20:46:25 UTC (4:46:25 PM Eastern). The release gate passed all
+220 Flutter tests. The backend branch is at
+`97267ccd3469773c05129d3ee4dbf53a80950a83`, including the migration-history
+filename alignment; no backend runtime deployment was needed.
+
+Public HTTP checks after publication returned 200 for the canonical `/app/`,
+its Flutter bootstrap and `main.dart.js`, and all five policy pages. The live
+compiled app contains the new last-login label, both dump audience options,
+and shared-schedule handling. Each live policy page contains the October 8
+update, last-login disclosure and both audience labels. The backend health
+endpoint returned 200 and reported healthy.
+
+The production migration and public release are verified. A signed-in,
+two-member production device test has not been performed. Native app builds
+and app-store privacy submissions were not part of this web release.
