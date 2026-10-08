@@ -23,8 +23,8 @@ const connect=async()=>{await call(users[0],'request',{peer:b.id});await call(us
 const send=async(actor=users[0],peer=b.id,body='Hello',id=randomUUID())=>call(actor,'send',{peer,body,id});
 const topic=async(actor=users[0])=>call(actor,'create_topic',{id:randomUUID(),category:'sports',title:'Match day',body:'Who are you supporting?'});
 before(async()=>{
- db=new PGlite();await db.exec('create schema auth; create role anon; create role authenticated; create role service_role bypassrls; create table auth.users(id uuid primary key);');
- for(const u of users)await db.query('insert into auth.users values($1)',[u]);
+ db=new PGlite();await db.exec('create schema auth; create role anon; create role authenticated; create role service_role bypassrls; create table auth.users(id uuid primary key,last_sign_in_at timestamptz);grant usage on schema auth to service_role;grant select(id) on auth.users to service_role;');
+ for(const u of users)await db.query('insert into auth.users(id) values($1)',[u]);
  const folder=new URL('../../supabase/migrations/',import.meta.url),file=(await readdir(folder)).find(f=>f.endsWith('_korlix_social.sql'));
  await db.exec(await readFile(new URL(file,folder),'utf8'));
  await db.exec("create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id uuid primary key,bucket_id text,name text);alter table storage.objects enable row level security;grant usage on schema storage to anon,authenticated;grant all on storage.objects to anon,authenticated;create policy fixture_existing_allow on storage.objects to anon,authenticated using(true) with check(true);");
@@ -48,6 +48,8 @@ before(async()=>{
  await db.exec(await readFile(new URL(communication,folder),'utf8'));
  const discover=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_discover.sql'));
  await db.exec(await readFile(new URL(discover,folder),'utf8'));
+ const dumpScope=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_last_login_dump_scope.sql'));
+ await db.exec(await readFile(new URL(dumpScope,folder),'utf8'));
  const app=express();app.use(express.json({limit:'250kb'}));registerSocial(app,{database:rpc,requireUser:async q=>{if(!users.includes(q.headers.authorization))throw Error();return {id:q.headers.authorization,email_confirmed_at:'2026-01-01'};},logger:{warn(){}}});
  server=app.listen(0);await new Promise(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}/api/social/`;
 });
@@ -177,7 +179,7 @@ test('specific message replies preserve Unicode, survive paging, and support ide
  await api('send',payload);await api('send',payload);
  const messages=(await api('messages',{peer:a.id},users[1],'GET')).items;
  assert.equal(messages.length,2);assert.equal(messages[1].reply_to,original.id);
- assert.deepEqual(messages[1].reply,{id:original.id,seq:messages[0].seq,sender:b.id,deleted:false,body:'Meeting at 3? 👋🏽',dump_at:null});
+ assert.deepEqual(messages[1].reply,{id:original.id,seq:messages[0].seq,sender:b.id,deleted:false,body:'Meeting at 3? 👋🏽',dump_at:null,self_dump_at:null,everyone_dump_at:null,dump_scope:null});
  for(let i=0;i<52;i++)await send();
  const viewed=await api('message',{peer:b.id,id:original.id},users[0],'GET');assert.equal(viewed.message.body,'Meeting at 3? 👋🏽');
  await api('send',{...payload,reply_to:null},users[0],'POST',409);
@@ -334,7 +336,7 @@ test('group tables and RPCs stay service-only with RLS, bounded batches and auth
 test('group capacity includes pending invitations and cannot be exceeded by later batches',async()=>{
  await connectAll();const targets=[b.id,c.id];
  for(let i=0;i<48;i++){
-  const user=randomUUID();await db.query('insert into auth.users values($1)',[user]);
+  const user=randomUUID();await db.query('insert into auth.users(id) values($1)',[user]);
   const member=(await call(user,'save_profile',profile(`capacity_${i}`))).profile;
   await db.query("insert into korlix_social_connections(requester,recipient,state)values($1,$2,'accepted')",[a.id,member.id]);targets.push(member.id);
  }

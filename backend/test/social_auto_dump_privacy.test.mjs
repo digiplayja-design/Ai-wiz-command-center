@@ -25,8 +25,8 @@ const noText = (result, text) => assert.equal(JSON.stringify(result).includes(te
 
 before(async () => {
   db = new PGlite();
-  await db.exec('create schema auth; create role anon; create role authenticated; create role service_role bypassrls; create table auth.users(id uuid primary key); create schema storage; create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]); create table storage.objects(id uuid primary key,bucket_id text,name text); alter table storage.objects enable row level security;');
-  for (const user of users) await db.query('insert into auth.users values($1)', [user]);
+  await db.exec('create schema auth; create role anon; create role authenticated; create role service_role bypassrls; create table auth.users(id uuid primary key,last_sign_in_at timestamptz);grant usage on schema auth to service_role;grant select(id) on auth.users to service_role; create schema storage; create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]); create table storage.objects(id uuid primary key,bucket_id text,name text); alter table storage.objects enable row level security;');
+  for (const user of users) await db.query('insert into auth.users(id) values($1)', [user]);
   const folder = new URL('../../supabase/migrations/', import.meta.url);
   for (const file of (await readdir(folder)).filter(f => /_korlix_social(?:_|\.)/.test(f)).sort()) {
     const sql = await readFile(new URL(file, folder), 'utf8');
