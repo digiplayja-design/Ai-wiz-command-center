@@ -62,6 +62,27 @@ Future<void> unmount(WidgetTester tester) async {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  testWidgets('visibility informs active-time tracking and resets on wake', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = KorlixScreensaverController();
+    await mount(tester, controller);
+    expect(controller.visibility.value, isFalse);
+    controller.preview();
+    await tester.pump();
+    expect(controller.visibility.value, isTrue);
+    controller.activity();
+    await tester.pump();
+    expect(controller.visibility.value, isFalse);
+    controller.preview();
+    await tester.pump();
+    await unmount(tester);
+    expect(controller.visibility.value, isFalse);
+    controller.dispose();
+  });
+
   testWidgets(
     'mouse motion resets idle and a wake scroll cannot scroll the hidden page',
     (tester) async {

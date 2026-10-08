@@ -56,6 +56,10 @@ import 'ads/korlix_ad_consent.dart';
 import 'account/korlix_account_deletion_dialog.dart';
 import 'support/korlix_ai_report_client.dart';
 import 'support/korlix_saved_output_report_dialog.dart';
+import 'reviews/korlix_app_feedback_dialog.dart';
+import 'reviews/korlix_review_host.dart';
+import 'reviews/korlix_review_invitation.dart';
+import 'reviews/korlix_store_review.dart';
 import 'sharing/korlix_share.dart';
 import 'auth/korlix_portal_launch.dart';
 import 'input_tools/upload_studio.dart';
@@ -173,6 +177,7 @@ bool kSupabaseReady = false;
 String? kKorlixAccessToken;
 String? kKorlixRefreshToken;
 String? kKorlixUserEmail;
+String? _korlixReviewAccountScope;
 KorlixPortalLaunch? _korlixInitialPortalLaunch;
 bool _korlixPortalLaunchRequested = false;
 
@@ -199,6 +204,7 @@ String? korlixConsentAccountScope(KorlixAuthSession? session) {
 
 void korlixSetInMemorySession(KorlixAuthSession? session) {
   KorlixThirdPartyAiConsent.setAccountScope(korlixConsentAccountScope(session));
+  _korlixReviewAccountScope = korlixConsentAccountScope(session);
   if (session == null || session.email != kKorlixUserEmail) {
     kKorlixSounds.clearSession();
   }
@@ -415,6 +421,13 @@ String korlixFriendlyErrorMessage(Object error) {
 }
 
 final _korlixNavigatorKey = GlobalKey<NavigatorState>();
+final _korlixReviewHomeKey = GlobalKey<_CommandCenterScreenState>();
+final _korlixReviewRouteObserver = KorlixReviewRouteObserver();
+final _korlixReviewChanges = Listenable.merge([
+  kKorlixAuthRevision,
+  kKorlixScreensaver.visibility,
+  _korlixReviewRouteObserver,
+]);
 final _korlixSocialRouteObserver = RouteObserver<ModalRoute<dynamic>>();
 final _korlixScreensaverObserver = KorlixScreensaverObserver(kKorlixScreensaver);
 
@@ -432,8 +445,32 @@ class CheeChaiCheeApp extends StatelessWidget {
         kKorlixMeetingCopilotAuthObserver,
         _korlixSocialRouteObserver,
         _korlixScreensaverObserver,
+        _korlixReviewRouteObserver,
       ],
-      builder: (context, child) => KorlixSoundHost(child: SocialAppAlerts(
+      builder: (context, child) => KorlixReviewHost(
+        sessionChanges: _korlixReviewChanges,
+        accountScope: () => _korlixReviewAccountScope,
+        isAvailable: () => !kKorlixScreensaver.visibility.value,
+        canPrompt: () => _korlixReviewRouteObserver.atHome &&
+            (_korlixReviewHomeKey.currentState?._canShowReviewPrompt ?? false),
+        navigatorKey: _korlixNavigatorKey,
+        onPromptCancelled: cancelKorlixStoreReviewRequest,
+        onPrompt: (context) async {
+          if (kIsWeb) {
+            await showKorlixReviewInvitation(context,
+              baseUrl: kKorlixBackendBaseUrl,
+              headersBuilder: () => {
+                ...KorlixDeviceStore.headers(),
+                if (kKorlixAccessToken?.isNotEmpty == true)
+                  'Authorization': 'Bearer $kKorlixAccessToken',
+              },
+              sessionChanges: kKorlixAuthRevision,
+            );
+          } else {
+            await requestKorlixStoreReview();
+          }
+        },
+        child: KorlixSoundHost(child: SocialAppAlerts(
         baseUrl: kKorlixBackendBaseUrl,
         headersBuilder: () => {
           ...KorlixDeviceStore.headers(),
@@ -446,7 +483,7 @@ class CheeChaiCheeApp extends StatelessWidget {
         beforeOpenCall: stopKorlixCharacterSpeechGlobally,
         child: KorlixSmokeScreensaver(sessionChanges: kKorlixAuthRevision,
           child: child ?? const SizedBox.shrink()),
-      )),
+      ))),
 
       routes: <String, WidgetBuilder>{
         KorlixMeetingCopilotRoute.routeName: (_) =>
@@ -929,7 +966,7 @@ class _AuthGateState extends State<AuthGate> {
 
     return Stack(
       children: [
-        const CommandCenterScreen(),
+        CommandCenterScreen(key: _korlixReviewHomeKey),
         Positioned(
           top: 8,
           left: 8,
@@ -4500,6 +4537,18 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       )),
                     ),
                     const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      key: const Key('korlix-send-app-feedback'),
+                      onPressed: korlixSoundAction(() => showKorlixAppFeedbackDialog(
+                        context,
+                        baseUrl: kKorlixBackendBaseUrl,
+                        headersBuilder: _headers,
+                        sessionChanges: kKorlixAuthRevision,
+                      )),
+                      icon: const Icon(Icons.feedback_outlined),
+                      label: const Text('Send app feedback'),
+                    ),
+                    const SizedBox(height: 10),
                     ListenableBuilder(
                       listenable: KorlixAdConsent.instance,
                       builder: (context, _) {
@@ -5410,6 +5459,18 @@ class CommandCenterScreen extends StatefulWidget {
 
 class _CommandCenterScreenState extends State<CommandCenterScreen>
     with WidgetsBindingObserver {
+  bool get _canShowReviewPrompt {
+    final alerts = SocialAlertScope.maybeOf(context);
+    return mounted && ModalRoute.of(context)?.isCurrent == true &&
+        !_loading && !_voiceListening && !_uploadOpening &&
+        !_voiceComposerOpening && !_resumePendingGenerationJobsRunning &&
+        !_aiOutputReportBusy && !_socialOpening && !_contactsOpening &&
+        !_toolFinderOpening && !_loadingTier &&
+        _controller.text.trim().isEmpty && _savedTopicsOverlayEntry == null &&
+        _wizardCuePlayer.state != PlayerState.playing &&
+        alerts?.calls?.current == null &&
+        alerts?.notifications.incomingCall == null;
+  }
   late final ChatMemoryClient _chatMemory;
   SocialNotifications get _socialNotifications =>
       SocialAlertScope.maybeOf(context)!.notifications;

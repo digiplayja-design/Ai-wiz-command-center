@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,6 +17,10 @@ class KorlixScreensaverController extends ChangeNotifier {
   Future<void>? _restoring;
   Future<void> _writes = Future.value();
   bool get enabled => _enabled;
+
+  /// Activity accounting must pause while the visual screensaver is covering
+  /// the app, even though media and the navigator remain mounted.
+  final ValueNotifier<bool> visibility = ValueNotifier<bool>(false);
 
   Future<void> restore() => _restoring ??= _restore();
   Future<void> _restore() async {
@@ -63,6 +68,7 @@ class KorlixScreensaverController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    visibility.dispose();
     super.dispose();
   }
 }

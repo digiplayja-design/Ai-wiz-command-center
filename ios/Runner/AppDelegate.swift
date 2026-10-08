@@ -1,5 +1,6 @@
 import AVFoundation
 import Flutter
+import StoreKit
 import UIKit
 
 @main
@@ -7,6 +8,7 @@ import UIKit
   private var soundEffects: KorlixSoundEffects?
   private var socialCalls: FlutterMethodChannel?
   private var socialCallId: String?
+  private var storeReviews: FlutterMethodChannel?
 
   override func application(
     _ application: UIApplication,
@@ -17,6 +19,30 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "KorlixStoreReview") {
+      storeReviews = FlutterMethodChannel(name: "korlix/store_review", binaryMessenger: registrar.messenger())
+      storeReviews?.setMethodCallHandler { call, result in
+        guard call.method == "requestReview" else { result(FlutterMethodNotImplemented); return }
+        guard UIApplication.shared.applicationState == .active,
+              let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive &&
+                  $0.windows.contains(where: { $0.isKeyWindow && !$0.isHidden }) }) else {
+          result(false)
+          return
+        }
+        if #available(iOS 16.0, *) {
+          AppStore.requestReview(in: scene)
+        } else if #available(iOS 14.0, *) {
+          SKStoreReviewController.requestReview(in: scene)
+        } else {
+          SKStoreReviewController.requestReview()
+        }
+        // StoreKit deliberately provides no shown/submitted result. TestFlight
+        // and store quotas can suppress this request without indicating it.
+        result(true)
+      }
+    }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "KorlixSoundEffects") {
       soundEffects = KorlixSoundEffects(messenger: registrar.messenger())
       socialCalls = FlutterMethodChannel(name: "korlix/social_call_background", binaryMessenger: registrar.messenger())

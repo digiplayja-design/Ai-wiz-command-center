@@ -124,6 +124,10 @@ kotlin {
     }
 }
 
+dependencies {
+    implementation("com.google.android.play:review:2.0.2")
+}
+
 // Fail at the release task boundary, without blocking debug builds or analysis.
 gradle.taskGraph.whenReady {
     val buildsReleaseArtifact = allTasks.any {

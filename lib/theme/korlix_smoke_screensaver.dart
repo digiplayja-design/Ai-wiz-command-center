@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'korlix_screensaver_controller.dart';
 import 'korlix_smoke_veil.dart';
 
@@ -69,6 +71,7 @@ class _KorlixSmokeScreensaverState extends State<KorlixSmokeScreensaver>
   void didUpdateWidget(covariant KorlixSmokeScreensaver oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
+      (oldWidget.controller ?? kKorlixScreensaver).visibility.value = false;
       (oldWidget.controller ?? kKorlixScreensaver).removeListener(
         _settingsChanged,
       );
@@ -127,6 +130,7 @@ class _KorlixSmokeScreensaverState extends State<KorlixSmokeScreensaver>
     }
     _previousFocus = FocusManager.instance.primaryFocus;
     setState(() => _visible = true);
+    _controller.visibility.value = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _visible) _wakeFocus.requestFocus();
     });
@@ -138,6 +142,7 @@ class _KorlixSmokeScreensaverState extends State<KorlixSmokeScreensaver>
       final previous = _previousFocus;
       _previousFocus = null;
       setState(() => _visible = false);
+      _controller.visibility.value = false;
       if (restoreFocus) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted &&
@@ -210,6 +215,7 @@ class _KorlixSmokeScreensaverState extends State<KorlixSmokeScreensaver>
   @override
   void dispose() {
     _timer?.cancel();
+    _controller.visibility.value = false;
     _controller.removeListener(_settingsChanged);
     widget.sessionChanges?.removeListener(_sessionChanged);
     WidgetsBinding.instance.removeObserver(this);

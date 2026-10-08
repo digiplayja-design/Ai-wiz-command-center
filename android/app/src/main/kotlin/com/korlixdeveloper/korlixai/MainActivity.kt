@@ -9,6 +9,7 @@ import android.media.SoundPool
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import com.google.android.play.core.review.ReviewManagerFactory
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -22,6 +23,58 @@ class MainActivity: FlutterActivity() {
     private val pendingCalls = mutableMapOf<String, MethodChannel.Result>()
     private var notificationPermissionCall: String? = null
     private var approvedCall: String? = null
+    private var storeReviews: MethodChannel? = null
+    private var pendingStoreReview: MethodChannel.Result? = null
+    private var storeReviewLaunched = false
+    private val storeReviewHandler = Handler(Looper.getMainLooper())
+    private var storeReviewDeadline: Runnable? = null
+
+    private fun finishStoreReview(result: MethodChannel.Result, accepted: Boolean) {
+        if (pendingStoreReview !== result) return
+        storeReviewDeadline?.let(storeReviewHandler::removeCallbacks)
+        storeReviewDeadline = null
+        pendingStoreReview = null
+        storeReviewLaunched = false
+        result.success(accepted)
+    }
+
+    private fun requestStoreReview(result: MethodChannel.Result) {
+        if (!foreground || isFinishing || isDestroyed || pendingStoreReview != null) {
+            result.success(false)
+            return
+        }
+        pendingStoreReview = result
+        storeReviewLaunched = false
+        // A late preparation response must not surface on an unrelated screen
+        // after the neutral pause that initiated the request has passed.
+        storeReviewDeadline = Runnable { finishStoreReview(result, false) }
+            .also { storeReviewHandler.postDelayed(it, 15000) }
+        try {
+            val manager = ReviewManagerFactory.create(this)
+            manager.requestReviewFlow().addOnCompleteListener { preparation ->
+                if (pendingStoreReview !== result) return@addOnCompleteListener
+                if (!preparation.isSuccessful || !foreground || isFinishing || isDestroyed) {
+                    finishStoreReview(result, false)
+                    return@addOnCompleteListener
+                }
+                try {
+                    storeReviewLaunched = true
+                    storeReviewDeadline?.let(storeReviewHandler::removeCallbacks)
+                    storeReviewDeadline = null
+                    manager.launchReviewFlow(this, preparation.result)
+                        .addOnCompleteListener { flow ->
+                            // Successful completion does not reveal whether
+                            // Play displayed its UI or collected any review.
+                            finishStoreReview(result, flow.isSuccessful)
+                        }
+                } catch (_: Exception) {
+                    finishStoreReview(result, false)
+                }
+            }
+        } catch (_: Exception) {
+            finishStoreReview(result, false)
+        }
+    }
 
     private fun launchSocialCall(id: String) {
         if (!pendingCalls.containsKey(id) || !KorlixSocialCallService.authorized.contains(id)) return
@@ -38,6 +91,15 @@ class MainActivity: FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        storeReviews = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "korlix/store_review")
+        storeReviews?.setMethodCallHandler { call, result ->
+            if (call.method == "requestReview") requestStoreReview(result)
+            else if (call.method == "cancelPendingReview") {
+                if (!storeReviewLaunched) pendingStoreReview?.let { finishStoreReview(it, false) }
+                result.success(null)
+            }
+            else result.notImplemented()
+        }
         soundEffects = KorlixSoundEffects(
             MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "korlix/sound_effects"),
             cacheDir
@@ -83,6 +145,8 @@ class MainActivity: FlutterActivity() {
 
     override fun onPause() {
         foreground = false
+        // The Play UI itself can pause us. Only cancel before it is launched.
+        if (!storeReviewLaunched) pendingStoreReview?.let { finishStoreReview(it, false) }
         soundEffects?.pause()
         super.onPause()
     }
@@ -101,6 +165,9 @@ class MainActivity: FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        pendingStoreReview?.let { finishStoreReview(it, false) }
+        storeReviews?.setMethodCallHandler(null)
+        storeReviews = null
         pendingCalls.values.forEach { it.success(false) }
         pendingCalls.clear()
         approvedCall = null
