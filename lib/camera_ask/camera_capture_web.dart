@@ -95,10 +95,8 @@ class _CameraCaptureState extends State<_CameraCapture> {
       final tracks = stream.getVideoTracks();
       if (tracks.isNotEmpty) {
         final track = tracks.first;
-        Map cameraConstraints = {};
         Object? capability;
         try {
-          cameraConstraints = track.getConstraints();
           capability = track.getCapabilities()['torch'];
         } catch (_) {
           // Older browsers can capture photos without exposing capabilities.
@@ -107,7 +105,8 @@ class _CameraCaptureState extends State<_CameraCapture> {
           capability: capability,
           apply: (enabled) async {
             await track.applyConstraints({
-              ...cameraConstraints,
+              // Change only the light. Reapplying camera selection/resolution
+              // can unnecessarily reconfigure a mobile camera's live preview.
               'torch': enabled,
               'advanced': [
                 {'torch': enabled},
@@ -147,19 +146,33 @@ class _CameraCaptureState extends State<_CameraCapture> {
     }
     final change = flashlight.toggle();
     setState(() {});
+    var failed = false;
     try {
       await change;
-      if (!mounted || !identical(_flashlight, flashlight)) return;
-      setState(() {});
     } catch (_) {
-      if (!mounted || !identical(_flashlight, flashlight)) return;
-      // The light's state is uncertain after an error. Release the source
-      // rather than leave a possibly illuminated camera running.
-      _stop();
-      setState(() {
-        _error =
-            'The flashlight could not be changed. Reopen the camera to continue, or take a photo with your phone’s camera and choose it from your photos.';
-      });
+      failed = true;
+    }
+    if (!mounted || !identical(_flashlight, flashlight)) return;
+    // A light change can briefly pause the video on a mobile camera. Keep the
+    // same element and stream, and resume playback instead of closing capture.
+    final video = _video;
+    if (video != null && video.paused && _stream != null) {
+      try {
+        await video.play();
+      } catch (_) {
+        // A torch/playback warning must not release a still usable camera.
+      }
+    }
+    if (!mounted || !identical(_flashlight, flashlight)) return;
+    setState(() {});
+    if (failed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'The light could not be changed. You can still take a photo or try the light again.',
+          ),
+        ),
+      );
     }
   }
 
@@ -344,8 +357,8 @@ class _CameraCaptureState extends State<_CameraCapture> {
                       _flashlight!.changing
                           ? 'Changing light…'
                           : _flashlight!.enabled
-                          ? 'Flashlight on'
-                          : 'Flashlight off',
+                          ? 'Turn light off'
+                          : 'Turn light on',
                     ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _flashlight!.enabled

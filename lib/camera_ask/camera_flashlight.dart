@@ -14,7 +14,10 @@ class CameraFlashlight {
   final bool supported;
   final Future<void> Function(bool) apply;
   final bool? Function() readEnabled;
+  // The last accepted command determines the next on/off action. A browser's
+  // reported setting may lag behind the physical light or be unavailable.
   bool enabled = false;
+  bool? reportedEnabled;
   bool changing = false;
   bool _closed = false;
 
@@ -25,12 +28,12 @@ class CameraFlashlight {
     try {
       await apply(next);
       if (_closed) return;
-      // Browsers may silently ignore optional constraints. Read the actual
-      // setting before claiming that the light was switched on or off.
-      if (readEnabled() != next) {
-        throw StateError('The camera did not confirm the flashlight setting.');
-      }
       enabled = next;
+      try {
+        reportedEnabled = readEnabled();
+      } catch (_) {
+        reportedEnabled = null;
+      }
     } finally {
       changing = false;
     }
@@ -39,6 +42,7 @@ class CameraFlashlight {
   void close() {
     _closed = true;
     enabled = false;
+    reportedEnabled = null;
     changing = false;
   }
 }

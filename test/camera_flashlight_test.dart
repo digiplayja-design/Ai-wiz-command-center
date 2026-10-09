@@ -87,7 +87,7 @@ void main() {
   });
 
   test(
-    'An ignored or unreported constraint never reports the light on',
+    'Stale or missing settings do not fail a successful light change',
     () async {
       for (final actual in <bool?>[false, null]) {
         final flashlight = CameraFlashlight(
@@ -95,29 +95,33 @@ void main() {
           apply: (_) async {},
           readEnabled: () => actual,
         );
-        await expectLater(flashlight.toggle(), throwsStateError);
-        expect(flashlight.enabled, isFalse);
+        await flashlight.toggle();
+        expect(flashlight.enabled, isTrue);
+        expect(flashlight.reportedEnabled, actual);
         expect(flashlight.changing, isFalse);
       }
     },
   );
 
-  test('A failed off command does not falsely report the light off', () async {
+  test('Stale settings do not prevent the next explicit off command', () async {
+    final changes = <bool>[];
     final flashlight = CameraFlashlight(
       capability: true,
-      apply: (_) async {},
+      apply: (enabled) async => changes.add(enabled),
       readEnabled: () => true,
     );
     await flashlight.toggle();
-    await expectLater(flashlight.toggle(), throwsStateError);
-    expect(flashlight.enabled, isTrue);
+    await flashlight.toggle();
+    expect(flashlight.enabled, isFalse);
+    expect(flashlight.reportedEnabled, isTrue);
+    expect(changes, [true, false]);
     expect(flashlight.changing, isFalse);
     flashlight.close();
     expect(flashlight.enabled, isFalse);
   });
 
   test(
-    'Rejected commands propagate so the owner can release the camera',
+    'Rejected commands propagate without changing the last accepted command',
     () async {
       final flashlight = CameraFlashlight(
         capability: true,
@@ -127,6 +131,40 @@ void main() {
       await expectLater(flashlight.toggle(), throwsStateError);
       expect(flashlight.enabled, isFalse);
       expect(flashlight.changing, isFalse);
+    },
+  );
+
+  test('Unreadable settings do not fail a successful command', () async {
+    final flashlight = CameraFlashlight(
+      capability: true,
+      apply: (_) async {},
+      readEnabled: () => throw StateError('Not supported'),
+    );
+    await flashlight.toggle();
+    expect(flashlight.enabled, isTrue);
+    expect(flashlight.reportedEnabled, isNull);
+    expect(flashlight.changing, isFalse);
+  });
+
+  test(
+    'A rejected off command leaves the off action available for retry',
+    () async {
+      var reject = false;
+      final flashlight = CameraFlashlight(
+        capability: true,
+        apply: (_) async {
+          if (reject) throw StateError('Device busy');
+        },
+        readEnabled: () => true,
+      );
+      await flashlight.toggle();
+      reject = true;
+      await expectLater(flashlight.toggle(), throwsStateError);
+      expect(flashlight.enabled, isTrue);
+      expect(flashlight.changing, isFalse);
+      reject = false;
+      await flashlight.toggle();
+      expect(flashlight.enabled, isFalse);
     },
   );
 
