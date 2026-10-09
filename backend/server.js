@@ -21,6 +21,7 @@ import { socialRelayReadiness } from './social/calls.mjs';
 import { registerAgentStudio } from './agent_studio/routes.mjs';
 import { generateStep, WorkflowError } from './agent_studio/model.mjs';
 import { registerInventory } from './inventory/routes.mjs';
+import { registerEnterpriseBusinessAccess } from './enterprise_business_access.mjs';
 import { recognize as recognizeInventory } from './inventory/model.mjs';
 import { registerCyberDefender } from './cyber_defender/routes.mjs';
 import { generateReview } from './cyber_defender/model.mjs';
@@ -12471,6 +12472,7 @@ registerAgentStudio(app, {database:supabaseAdmin,requireUser,
   return {...checkUsageAllowed({profile,usageCounter,creditsNeeded:1}),status:429,usageId:usageCounter.id,creditLimit:limits.dailyCreditLimit,requestLimit:limits.dailyRequestLimit};
  },generate:data=>generateStep({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})})
 });
+registerEnterpriseBusinessAccess(app, { database: supabaseAdmin, requireUser });
 registerInventory(app,{database:supabaseAdmin,storageDatabase:bookkeepingStorage,requireUser,
  aiAccess:async user=>{
   if(!process.env.OPENAI_API_KEY)return {allowed:false,status:503,reason:'KORLIX picture recognition is temporarily unavailable.'};
