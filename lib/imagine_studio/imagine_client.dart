@@ -15,6 +15,39 @@ class ImagineException implements Exception {
   String toString() => message;
 }
 
+class LogoCreativeDirection {
+  const LogoCreativeDirection({
+    required this.conceptName,
+    required this.summary,
+    required this.planningModel,
+    required this.reasoningEffort,
+  });
+  final String conceptName, summary, planningModel, reasoningEffort;
+
+  static LogoCreativeDirection? read(dynamic value) {
+    if (value is! Map) return null;
+    for (final entry in const {
+      'conceptName': 100,
+      'summary': 800,
+      'planningModel': 100,
+      'reasoningEffort': 20,
+    }.entries) {
+      final field = value[entry.key];
+      if (field is! String ||
+          field.trim().isEmpty ||
+          field.length > entry.value) {
+        return null;
+      }
+    }
+    return LogoCreativeDirection(
+      conceptName: value['conceptName'],
+      summary: value['summary'],
+      planningModel: value['planningModel'],
+      reasoningEffort: value['reasoningEffort'],
+    );
+  }
+}
+
 class ImagineResult {
   ImagineResult({
     required this.bytes,
@@ -23,12 +56,14 @@ class ImagineResult {
     DateTime? createdAt,
     required this.width,
     required this.height,
+    this.logoDirection,
   }) : createdAt = createdAt ?? DateTime.now();
   final Uint8List bytes;
   final ImagineBrief brief;
   final String id;
   final DateTime createdAt;
   final int width, height;
+  final LogoCreativeDirection? logoDirection;
 }
 
 abstract class ImagineRecipeStore {
@@ -222,6 +257,7 @@ class ImagineClient extends ChangeNotifier {
   Future<ImagineResult?> create(
     ImagineBrief brief, {
     String language = 'en',
+    Map<String, dynamic>? logoBrief,
   }) async {
     _guard();
     if (busy) return null;
@@ -249,9 +285,10 @@ class ImagineClient extends ChangeNotifier {
               'language': language,
               'imageSize': brief.size,
               'imageStyle': brief.style,
+              'logoBrief': ?logoBrief,
             }),
           )
-          .timeout(const Duration(seconds: 265));
+          .timeout(Duration(seconds: logoBrief == null ? 265 : 445));
       _guard();
       Map<String, dynamic> data;
       try {
@@ -305,6 +342,7 @@ class ImagineClient extends ChangeNotifier {
         id: '${data['generationId'] ?? agentStudioKey()}',
         width: width,
         height: height,
+        logoDirection: LogoCreativeDirection.read(data['logoDirection']),
       );
       results.insert(0, result);
       while (results.length > 6 ||

@@ -307,7 +307,11 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
     });
     try {
       if (!await widget.ensureConsent() || !mounted || !c.available) return;
-      await c.images.create(c.design.aiBrief, language: widget.language);
+      await c.images.create(
+        c.design.aiBrief,
+        language: widget.language,
+        logoBrief: c.design.json,
+      );
       if (mounted && c.available && c.images.results.isNotEmpty) {
         setState(() => _selectedAiId = c.images.results.first.id);
       }
@@ -1531,8 +1535,8 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _heading(
-            'Take a creative detour.',
-            'Ask AI for a custom visual concept using your brand brief. AI artwork downloads as PNG; the editable logos and SVG kit remain separate.',
+            'Your AI creative director.',
+            'Astra at max reasoning plans your symbol, typography and composition, then the image artist renders your logo. Download the AI artwork as PNG.',
           ),
           Text(
             '1 generation credit per completed AI concept. Review lettering before using it.',
@@ -1541,17 +1545,26 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
           const SizedBox(height: 16),
           KorlixActionButton(
             label: c.images.busy
-                ? 'Creating · ${c.images.elapsed}s'
+                ? 'Designing & rendering · ${c.images.elapsed}s'
                 : 'Explore with AI',
             icon: Icons.auto_awesome_rounded,
             expand: true,
             onPressed: busy ? null : _ai,
           ),
-          if (c.images.busy)
+          if (c.images.busy) ...[
             const Padding(
-              padding: EdgeInsets.only(top: 16),
+              padding: EdgeInsets.only(top: 16, bottom: 10),
               child: LinearProgressIndicator(),
             ),
+            Text(
+              'Developing the creative direction and rendering your concept. This can take several minutes.',
+              style: TextStyle(
+                color: skin.mutedText,
+                fontSize: 12,
+                height: 1.5,
+              ),
+            ),
+          ],
           if (selected != null) ...[
             const SizedBox(height: 22),
             Text(
@@ -1642,6 +1655,18 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
               'AI concept: ${selected.brief.lettering.split('\n').first}',
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
+            if (selected.logoDirection case final direction?) ...[
+              const SizedBox(height: 12),
+              Text(
+                direction.conceptName,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                direction.summary,
+                style: TextStyle(color: skin.mutedText, height: 1.5),
+              ),
+            ],
             const SizedBox(height: 12),
             ClipRRect(
               borderRadius: BorderRadius.circular(18),

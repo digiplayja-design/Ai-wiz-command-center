@@ -307,6 +307,15 @@ void main() {
     'AI concepts need explicit consent and reuse authenticated credit-controlled generation',
     (t) async {
       final f = LogoFixture()..consent = false;
+      f.studio.invalidBody = jsonEncode({
+        ...jsonDecode((await f.studio.response()).body) as Map<String, dynamic>,
+        'logoDirection': {
+          'conceptName': 'A welcoming table',
+          'summary': 'A warm organic mark with readable lettering.',
+          'planningModel': 'gpt-6-astra',
+          'reasoningEffort': 'max',
+        },
+      });
       await social.mount(t, f.screen());
       await begin(t, f);
       await actions.tap(t, find.text('Explore with AI'));
@@ -317,7 +326,21 @@ void main() {
       expect(f.studio.requests.length, 1);
       expect(f.studio.requests.single['prompt'], contains('DA FINAL STOP'));
       expect(f.studio.requests.single['imageStyle'], 'design');
+      expect(f.studio.requests.single['logoBrief']['name'], 'DA FINAL STOP');
+      expect(
+        f.studio.requests.single['logoBrief']['typeface'],
+        f.c.design.typeface,
+      );
+      expect(
+        f.studio.requests.single['logoBrief']['primary'],
+        f.c.design.primary,
+      );
       expect(f.c.images.results.length, 1);
+      expect(find.text('A welcoming table'), findsOneWidget);
+      expect(
+        find.text('A warm organic mark with readable lettering.'),
+        findsOneWidget,
+      );
       expect(t.takeException(), isNull);
     },
   );

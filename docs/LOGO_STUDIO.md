@@ -54,6 +54,25 @@ environment (baseline `fd9338a`). This measures repeated rendering, not AI
 service latency, browser frame rate, or Samsung hardware performance. Timings
 are diagnostic and are not used as CI pass/fail thresholds.
 
+## Astra creative direction
+
+Explore with AI submits the selected structured brand brief to `/api/image/create`.
+When `logoBrief` is present, the backend first uses `gpt-6-astra` with
+`reasoning.effort: max`, a strict JSON output schema, and `store: false`.
+The plan covers the symbol, typography, layout, and color placement. Its image
+instructions are rendered by the existing GPT Image service; the exact name,
+tagline, and chosen colors are reapplied after planning. A short concept title
+and design summary accompany the returned PNG in the Ideas screen.
+
+The planning model and effort are server-owned. Planning gets 180 seconds and
+image rendering 240 seconds; the logo client waits up to 445 seconds. The UI
+reports the combined operation without inventing timed stage transitions.
+There are no automatic provider retries or silent image-only fallbacks.
+Authentication and the existing credit gate run before planning; history and
+the one-generation-credit charge run only after a valid PNG is returned.
+Ordinary Imagine requests omit `logoBrief` and keep their existing behavior.
+Editable examples continue to be produced locally without an AI credit.
+
 ## Verification
 
 The five Logo Studio test suites are included in the Render release gate.
