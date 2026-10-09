@@ -83,16 +83,25 @@ for (const setup of [
     const page = await browser.newPage({viewport: {width: setup.width, height: setup.height}, acceptDownloads: true});
     page.setDefaultTimeout(10000);
     const errors = [];
+    const fontsRequested = new Set();
+    page.on('request', request => {
+      if (request.url().includes('/assets/logo_fonts/') && request.url().endsWith('.ttf')) fontsRequested.add(request.url());
+    });
     page.on('pageerror', error => errors.push(error.message));
     try {
       await page.goto(base + '/?theme=' + setup.theme);
       await page.getByRole('heading', {name: 'Logo Studio'}).waitFor();
       await page.screenshot({path: path.join(artifacts, setup.id + '-start.png')});
+      assert.ok(fontsRequested.size <= 2, 'Opening the studio must not download the full font catalog');
       const name = await reveal(page, page.getByRole('textbox', {name: 'Business or brand name', exact: true}));
       await enterText(page, name, 'Poppy & Pine');
       await click(page, 'Café & food');
       await click(page, /Create my logos/, {exact: false});
       await page.getByRole('button', {name: 'Customize', exact: true}).first().waitFor();
+      await click(page, 'Next 12 ideas');
+      assert.match(await page.locator('body').ariaSnapshot(), /Page 2/);
+      await click(page, 'Previous ideas');
+      assert.match(await page.locator('body').ariaSnapshot(), /Page 1/);
       await page.screenshot({path: path.join(artifacts, setup.id + '-ideas.png')});
       await page.getByRole('button', {name: 'Customize', exact: true}).first().press('Enter');
       await click(page, 'Edit logo shape Shape');
@@ -101,7 +110,9 @@ for (const setup of [
       await symbol.press('Enter');
       await page.screenshot({path: path.join(artifacts, setup.id + '-shape.png')});
       await click(page, 'Edit typography Type');
-      await click(page, 'Wide');
+      await enterText(page, await reveal(page, page.getByRole('textbox', {name: 'Search fonts', exact: true})), 'Pacifico');
+      await click(page, /^Pacifico/, {exact: false});
+      await page.screenshot({path: path.join(artifacts, setup.id + '-fonts.png')});
       await click(page, 'Edit colors Color');
       await click(page, 'Ocean & pearl');
       await page.screenshot({path: path.join(artifacts, setup.id + '-color.png')});
@@ -128,18 +139,22 @@ for (const setup of [
       const project = JSON.parse((await download(page, 'Project backup', '.korlix-logo.json')).toString());
       assert.equal(project.name, 'Poppy & Pine Studio');
       assert.equal(project.mark, 'Petal');
-      assert.equal(project.typeface, 'Wide');
+      assert.equal(project.typeface, 'Pacifico');
       assert.equal(project.primary, '135C73');
       const svg = (await download(page, 'Download SVG', '.svg')).toString();
       assert.ok(svg.includes('Poppy &amp; Pine Studio'));
       assert.ok(svg.includes('#135C73'));
       assert.ok(svg.includes('<path'));
+      assert.ok(svg.includes('font-family="Korlix_pacifico'));
+      assert.ok(svg.includes('data:font/ttf;base64,'));
       const png = await download(page, 'Download PNG', '.png');
       assert.equal(png.readUInt32BE(16), 2400);
       assert.equal(png.readUInt32BE(20), 1600);
       const kit = await download(page, 'Download brand kit', '.zip');
       assert.equal(kit.subarray(0, 2).toString(), 'PK');
       assert.ok(kit.length > 10000);
+      assert.ok(kit.includes(Buffer.from('fonts/Pacifico.ttf')));
+      assert.ok(kit.includes(Buffer.from('fonts/pacifico-OFL.txt')));
       assert.deepEqual(errors, []);
     } catch (error) {
       await page.screenshot({path: path.join(artifacts, setup.id + '-failure.png')});

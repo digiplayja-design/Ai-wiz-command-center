@@ -22,6 +22,11 @@ class LogoClient extends ChangeNotifier {
   final String _key, _scope;
   bool _closed = false, _denied = false, loaded = false, saving = false;
   int round = 0, _documentEpoch = 0;
+  LogoDesign? _ideasBrief;
+  bool keepIdeaColors = true;
+  String ideaLayout = 'Any layout';
+  int get ideaPage => round > 0 ? round - 1 : 0;
+  bool get hasPreviousIdeas => round > 1;
   String? _currentProjectId;
   LogoDesign? _savedDesign, _gestureStart;
   bool _gestureRecorded = false;
@@ -64,6 +69,10 @@ class LogoClient extends ChangeNotifier {
     _denied = true;
     design = const LogoDesign();
     concepts.clear();
+    _ideasBrief = null;
+    round = 0;
+    keepIdeaColors = true;
+    ideaLayout = 'Any layout';
     shortlist.clear();
     projects.clear();
     _undo.clear();
@@ -77,12 +86,41 @@ class LogoClient extends ChangeNotifier {
   void generate(LogoDesign brief, {bool preserveSelection = false}) {
     _guard();
     if (brief.error != null) throw ImagineException(brief.error!);
-    concepts = logoDirections(brief, round: round++);
+    if (!preserveSelection || _ideasBrief == null) {
+      _ideasBrief = brief;
+      round = 0;
+    }
+    concepts = logoDirections(
+      _ideasBrief!,
+      round: round++,
+      keepColors: keepIdeaColors,
+      layout: ideaLayout,
+    );
     if (!preserveSelection) {
       choose(concepts.first);
     } else {
       _notify();
     }
+  }
+
+  void nextIdeas() => generate(_ideasBrief ?? design, preserveSelection: true);
+
+  void previousIdeas() {
+    _guard();
+    if (!hasPreviousIdeas) return;
+    round -= 2;
+    nextIdeas();
+  }
+
+  void configureIdeas({bool? keepColors, String? layout}) {
+    _guard();
+    if (layout != null && !logoIdeaLayouts.contains(layout)) {
+      throw ArgumentError.value(layout, 'layout');
+    }
+    if (keepColors != null) keepIdeaColors = keepColors;
+    if (layout != null) ideaLayout = layout;
+    round = 0;
+    nextIdeas();
   }
 
   void choose(LogoDesign value) {
@@ -122,6 +160,10 @@ class LogoClient extends ChangeNotifier {
       );
     }
     concepts.clear();
+    _ideasBrief = null;
+    round = 0;
+    keepIdeaColors = true;
+    ideaLayout = 'Any layout';
     shortlist.clear();
     round = 0;
     choose(const LogoDesign());
@@ -324,6 +366,10 @@ class LogoClient extends ChangeNotifier {
     images.dispose();
     projects.clear();
     concepts.clear();
+    _ideasBrief = null;
+    round = 0;
+    keepIdeaColors = true;
+    ideaLayout = 'Any layout';
     shortlist.clear();
     _undo.clear();
     _redo.clear();

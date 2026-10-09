@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'logo_font_catalog.dart';
+export 'logo_font_catalog.dart';
 import 'package:flutter/material.dart';
 import '../imagine_studio/imagine_catalog.dart';
 
@@ -22,7 +24,6 @@ const logoStyles = [
   'Playful',
   'Minimal',
 ];
-const logoTypefaces = ['Clean', 'Strong', 'Wide', 'Slanted'];
 const logoLayouts = ['Horizontal', 'Stacked', 'Wordmark', 'Monogram'];
 const logoMarks = [
   'Orbit',
@@ -41,6 +42,38 @@ const logoMarks = [
   'Prism',
   'Link',
   'Compass',
+  'Sunrise',
+  'Wings',
+  'Hexagon',
+  'Crown',
+  'Bolt',
+  'Wave',
+  'Flame',
+  'Drop',
+  'Lotus',
+  'Mountain',
+  'Pulse',
+  'Infinity',
+  'Diamond',
+  'Triangle',
+  'Cube',
+  'Steps',
+  'Arrow',
+  'Bloom',
+  'Feather',
+  'Sprout',
+  'Heart',
+  'Butterfly',
+  'Anchor',
+  'Bridge',
+  'Gateway',
+  'Orbitals',
+  'Nexus',
+  'Weave',
+  'Target',
+  'Star',
+  'Helix',
+  'Crescent',
 ];
 
 class LogoPalette {
@@ -59,6 +92,20 @@ const logoPalettes = [
   LogoPalette('Plum & rose', '572B48', 'C7788D', 'FBF3F1'),
   LogoPalette('Olive & oat', '555D3B', 'BFA46B', 'F7F4EB'),
   LogoPalette('Slate & lime', '2F4053', '8CAB47', 'F2F5EF'),
+  LogoPalette('Cherry & cream', '9E2540', 'D89276', 'FFF7EF'),
+  LogoPalette('Cobalt & sand', '224DB2', 'D7AD70', 'FBF6ED'),
+  LogoPalette('Teal & tangerine', '096F72', 'E88845', 'F1FAF6'),
+  LogoPalette('Espresso', '53392D', 'B58F6C', 'FAF3E8'),
+  LogoPalette('Lavender dusk', '67517A', 'AB94BF', 'FAF5FF'),
+  LogoPalette('Rosewood', '7B3445', 'BA8478', 'FAF1EF'),
+  LogoPalette('Jade & gold', '24684F', 'C3A347', 'F5F8EA'),
+  LogoPalette('Electric punch', '542DA8', 'E4547E', 'F8F4FF'),
+  LogoPalette('Burnt sienna', 'A6472B', 'CBAD70', 'FFF4E8'),
+  LogoPalette('Arctic blue', '235B85', '71B3CE', 'F1F8FD'),
+  LogoPalette('Terracotta sky', 'A75441', '668F9D', 'FAF5EF'),
+  LogoPalette('Mustard ink', '26323C', 'C7A03B', 'FCF8E9'),
+  LogoPalette('Emerald night', '176655', '7CB39A', 'EFF8F3'),
+  LogoPalette('Berry sorbet', '88367A', 'D883B0', 'FFF3FA'),
 ];
 Color logoColor(String hex) => Color(int.parse('FF$hex', radix: 16));
 String cleanLogoText(String s, int max) {
@@ -249,106 +296,138 @@ class LogoDesign {
   );
 }
 
-List<LogoDesign> logoDirections(LogoDesign brief, {int round = 0}) {
-  final marks = switch (brief.industry) {
-    'Food & drink' => [
-      'Leaf',
-      'Arch',
-      'Spark',
-      'Flow',
-      'Beacon',
-      'Initials',
-      'Petal',
-      'Horizon',
-    ],
-    'Beauty & wellness' => [
-      'Leaf',
-      'Orbit',
-      'Flow',
-      'Arch',
-      'Spark',
-      'Initials',
-      'Petal',
-      'Ribbon',
-    ],
-    'Property & construction' => [
-      'Arch',
-      'Peak',
-      'Mosaic',
-      'Shield',
-      'Beacon',
-      'Initials',
-      'Prism',
-      'Horizon',
-    ],
-    'Fitness & outdoors' => [
-      'Peak',
-      'Flow',
-      'Shield',
-      'Spark',
-      'Leaf',
-      'Initials',
-      'Compass',
-      'Horizon',
-    ],
-    'Professional services' => [
-      'Shield',
-      'Arch',
-      'Mosaic',
-      'Beacon',
-      'Orbit',
-      'Initials',
-      'Link',
-      'Prism',
-    ],
-    _ => [
-      'Orbit',
-      'Spark',
-      'Mosaic',
-      'Flow',
-      'Peak',
-      'Initials',
-      'Prism',
-      'Link',
-      'Ribbon',
-      'Compass',
-    ],
-  };
-  final font = switch (brief.style) {
-    'Elegant' => 'Wide',
-    'Minimal' || 'Organic' => 'Clean',
-    'Playful' => 'Slanted',
-    _ => 'Strong',
-  };
-  return List.generate(
-    6,
-    (i) => brief.copy(
-      mark: marks[(i + round) % marks.length],
-      layout: [
-        'Horizontal',
-        'Stacked',
-        'Horizontal',
-        'Stacked',
-        'Wordmark',
-        'Monogram',
-      ][i],
-      typeface: i == 2 ? 'Wide' : font,
-      tracking: brief.style == 'Elegant'
-          ? 4
-          : i == 4
-          ? 3
-          : 1,
-      primary: i == 3 ? brief.secondary : brief.primary,
-      secondary: i == 3 ? brief.primary : brief.secondary,
-    ),
-  );
-}
+// A fixed-size page can be regenerated from its index. Browsing never retains
+// an ever-growing list of canvases or loses earlier pages. This is a permutation
+// of a large, finite design space, not a claim of infinite unique identities.
+const logoIdeasPerPage = 12;
+const logoIdeaLayouts = ['Any layout', ...logoLayouts];
 
-const logoDirectionNames = [
-  'Signature',
-  'Emblem',
-  'Architect',
-  'Expressive',
-  'Wordmark',
-  'Monogram',
-];
+List<LogoDesign> logoDirections(
+  LogoDesign brief, {
+  int round = 0,
+  bool keepColors = true,
+  String layout = 'Any layout',
+}) {
+  final preferredMarks = switch (brief.industry) {
+    'Food & drink' => ['Leaf', 'Sunrise', 'Sprout', 'Arch', 'Flame'],
+    'Beauty & wellness' => ['Petal', 'Lotus', 'Drop', 'Butterfly', 'Bloom'],
+    'Property & construction' => ['Arch', 'Bridge', 'Cube', 'Gateway', 'Peak'],
+    'Fitness & outdoors' => ['Mountain', 'Bolt', 'Wings', 'Pulse', 'Compass'],
+    'Professional services' => ['Shield', 'Nexus', 'Link', 'Crown', 'Hexagon'],
+    'Arts & entertainment' => ['Spark', 'Star', 'Ribbon', 'Wave', 'Mosaic'],
+    'Community' => ['Heart', 'Link', 'Sprout', 'Bloom', 'Sunrise'],
+    _ => ['Orbit', 'Prism', 'Nexus', 'Arrow', 'Helix'],
+  };
+  final marks = {...preferredMarks, ...logoMarks}.toList();
+  final preferredFonts = switch (brief.style) {
+    'Elegant' => [
+      'Playfair Display',
+      'Bodoni Moda',
+      'Cormorant Garamond',
+      'Cinzel',
+    ],
+    'Organic' => ['Manrope', 'Lora', 'Quicksand', 'Fraunces'],
+    'Playful' => ['Fredoka', 'Righteous', 'Pacifico', 'Bungee'],
+    'Bold' => ['Anton', 'Bebas Neue', 'Alfa Slab One', 'Montserrat'],
+    'Minimal' => ['Outfit', 'Josefin Sans', 'Raleway', 'Space Grotesk'],
+    _ => ['Space Grotesk', 'Poppins', 'Montserrat', 'Manrope'],
+  };
+  final fonts = {
+    ...preferredFonts,
+    ...logoFontCatalog.map((f) => f.name),
+  }.toList();
+  final lockups = <(String, String)>[
+    for (final candidate in ['Horizontal', 'Stacked'])
+      if (layout == 'Any layout' || layout == candidate)
+        for (final mark in marks) (candidate, mark),
+    if (layout == 'Any layout' || layout == 'Wordmark')
+      ('Wordmark', 'Initials'),
+    if (layout == 'Any layout' || layout == 'Monogram')
+      ('Monogram', 'Initials'),
+  ];
+  if (lockups.isEmpty) throw ArgumentError.value(layout, 'layout');
+  final palettes = <LogoPalette>[
+    LogoPalette('Your colors', brief.primary, brief.secondary, brief.paper),
+    if (!keepColors)
+      ...logoPalettes.where(
+        (p) =>
+            p.primary != brief.primary ||
+            p.secondary != brief.secondary ||
+            p.paper != brief.paper,
+      ),
+  ];
+  // Omit invisible dimensions: wordmarks have no symbol size, and connected
+  // script lettering/monograms have no tracking. This avoids cosmetic duplicates.
+  final ranges =
+      <
+        ({
+          int start,
+          int end,
+          String layout,
+          String mark,
+          String font,
+          int trackingCount,
+          int scaleCount,
+        })
+      >[];
+  var total = 0;
+  for (final lockup in lockups) {
+    for (final font in fonts) {
+      final trackingCount =
+          lockup.$1 == 'Monogram' || logoFontFor(font).category == 'Script'
+          ? 1
+          : 17;
+      final scaleCount = lockup.$1 == 'Wordmark' || lockup.$1 == 'Monogram'
+          ? 1
+          : 13;
+      final count = palettes.length * trackingCount * scaleCount;
+      ranges.add((
+        start: total,
+        end: total + count,
+        layout: lockup.$1,
+        mark: lockup.$2,
+        font: font,
+        trackingCount: trackingCount,
+        scaleCount: scaleCount,
+      ));
+      total += count;
+    }
+  }
+  var step = 104729;
+  while (step.gcd(total) != 1) {
+    step += 2;
+  }
+  return List.generate(logoIdeasPerPage, (i) {
+    final index =
+        (((round < 0 ? 0 : round) * logoIdeasPerPage + i) % total * step) %
+        total;
+    var low = 0, high = ranges.length - 1;
+    while (low < high) {
+      final middle = (low + high) ~/ 2;
+      if (ranges[middle].end <= index) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    final range = ranges[low];
+    var value = index - range.start;
+    final palette = palettes[value % palettes.length];
+    value ~/= palettes.length;
+    final tracking = (value % range.trackingCount) / 2;
+    value ~/= range.trackingCount;
+    final scale = range.layout == 'Wordmark'
+        ? 1.0
+        : .65 + (value % range.scaleCount) * .05;
+    return brief.copy(
+      mark: range.mark,
+      layout: range.layout,
+      typeface: range.font,
+      primary: palette.primary,
+      secondary: palette.secondary,
+      paper: palette.paper,
+      tracking: tracking,
+      symbolScale: scale,
+    );
+  });
+}

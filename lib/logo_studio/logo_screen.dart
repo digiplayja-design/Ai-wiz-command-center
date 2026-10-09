@@ -41,7 +41,11 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
   late final io = widget.io ?? LogoIo();
   final scroll = ScrollController();
   int tab = 0, palette = 0, editorTab = 0;
-  bool previewInUse = false;
+  bool previewInUse = false, _allPalettes = false;
+  final _fontSearch = TextEditingController();
+  String _fontCategory = 'All fonts';
+  int _fontPage = 0;
+  static const _fontsPerPage = 8;
   double? exportProgress;
   String exportStage = 'Preparing your files…';
   String industry = 'Technology', style = 'Modern';
@@ -132,7 +136,14 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
   void dispose() {
     c.removeListener(_session);
     scroll.dispose();
-    for (final controller in [_name, _tagline, _idea, _hex, _accent]) {
+    for (final controller in [
+      _name,
+      _tagline,
+      _idea,
+      _hex,
+      _accent,
+      _fontSearch,
+    ]) {
       controller.dispose();
     }
     super.dispose();
@@ -541,7 +552,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
       spacing: 8,
       runSpacing: 8,
       children: [
-        for (var i = 0; i < logoPalettes.length; i++)
+        for (var i = 0; i < (_allPalettes ? logoPalettes.length : 10); i++)
           SizedBox(
             width: (constraints.maxWidth - 8) / 2,
             child: Builder(
@@ -624,6 +635,20 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
               },
             ),
           ),
+        SizedBox(
+          width: constraints.maxWidth,
+          child: TextButton.icon(
+            onPressed: () => setState(() => _allPalettes = !_allPalettes),
+            icon: Icon(
+              _allPalettes
+                  ? Icons.expand_less_rounded
+                  : Icons.expand_more_rounded,
+            ),
+            label: Text(
+              _allPalettes ? 'Show fewer palettes' : 'See all 24 palettes',
+            ),
+          ),
+        ),
       ],
     ),
   );
@@ -886,7 +911,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
         ),
         const SizedBox(height: 16),
         Text(
-          'From a first idea to a complete identity. Explore six directions, make one your own, and take it everywhere.',
+          'Find a direction you love. Explore 48 symbols, 32 font families, and fresh combinations every time you turn the page.',
           style: TextStyle(color: skin.mutedText, height: 1.6),
         ),
         const SizedBox(height: 26),
@@ -1071,7 +1096,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
           key: const Key('logo-generate'),
           label: 'Create my logos',
           icon: Icons.auto_awesome_rounded,
-          subtitle: 'Six editable directions · no AI credit used',
+          subtitle: '12 ideas per page · keep exploring for free',
           expand: true,
           onPressed: ready && !busy ? _generate : null,
         ),
@@ -1100,8 +1125,9 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
   List<Widget> _ideas() => [
     _heading(
       'Meet your possibilities.',
-      'Choose a direction. Every symbol, color, and line of text can be changed.',
+      'Keep exploring, then make a favorite your own. Editable examples use no AI credits.',
     ),
+    if (c.concepts.isNotEmpty) _ideaBrowser(),
     if (c.shortlist.isNotEmpty) _shortlistPanel(),
     if (c.concepts.isNotEmpty)
       LayoutBuilder(
@@ -1136,7 +1162,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      '${(i + 1).toString().padLeft(2, '0')} / ${logoDirectionNames[i]}',
+                                      '${c.ideaPage * logoIdeasPerPage + i + 1} / ${c.concepts[i].layout == 'Wordmark' || c.concepts[i].layout == 'Monogram' ? c.concepts[i].layout : c.concepts[i].mark}',
                                       style: const TextStyle(
                                         fontWeight: FontWeight.w800,
                                         fontSize: 16,
@@ -1215,13 +1241,288 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
       _action(
         'More directions',
         Icons.refresh_rounded,
-        busy ? null : () => c.generate(c.design, preserveSelection: true),
+        busy ? null : () => _browseIdeas(c.nextIdeas),
       ),
       _action('Edit selected', Icons.tune_rounded, busy ? null : () => _go(2)),
     ),
     const SizedBox(height: 24),
     _aiPanel(),
   ];
+
+  void _browseIdeas(VoidCallback action) {
+    try {
+      action();
+      if (scroll.hasClients) scroll.jumpTo(0);
+    } catch (e) {
+      _error(e);
+    }
+  }
+
+  Widget _ideaBrowser() => _panel(
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                'Page ${c.ideaPage + 1} · ${c.ideaPage * logoIdeasPerPage + 1}–${(c.ideaPage + 1) * logoIdeasPerPage}',
+                key: const Key('logo-ideas-page'),
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  key: const Key('logo-ideas-previous'),
+                  tooltip: 'Previous ideas',
+                  onPressed: !busy && c.hasPreviousIdeas
+                      ? () => _browseIdeas(c.previousIdeas)
+                      : null,
+                  icon: const Icon(Icons.arrow_back_rounded),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  key: const Key('logo-ideas-next'),
+                  onPressed: busy ? null : () => _browseIdeas(c.nextIdeas),
+                  icon: const Icon(Icons.arrow_forward_rounded),
+                  label: const Text('Next 12 ideas'),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          key: ValueKey('logo-ideas-layout-${c.ideaLayout}'),
+          initialValue: c.ideaLayout,
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Explore a composition'),
+          items: [
+            for (final layout in logoIdeaLayouts)
+              DropdownMenuItem(value: layout, child: Text(layout)),
+          ],
+          onChanged: busy
+              ? null
+              : (value) {
+                  if (value != null) {
+                    _browseIdeas(() => c.configureIdeas(layout: value));
+                  }
+                },
+        ),
+        Material(
+          type: MaterialType.transparency,
+          child: SwitchListTile.adaptive(
+            key: const Key('logo-ideas-colors'),
+            contentPadding: EdgeInsets.zero,
+            value: c.keepIdeaColors,
+            title: const Text('Keep my colors'),
+            subtitle: Text(
+              c.keepIdeaColors
+                  ? 'Your palette, fresh shapes and type.'
+                  : 'Explore all 24 palettes with your brand colors.',
+            ),
+            onChanged: busy
+                ? null
+                : (value) =>
+                      _browseIdeas(() => c.configureIdeas(keepColors: value)),
+          ),
+        ),
+        Text(
+          'Go back to any earlier page. Your selected logo and shortlist stay with you.',
+          style: TextStyle(color: skin.mutedText, fontSize: 12, height: 1.5),
+        ),
+      ],
+    ),
+  );
+
+  List<Widget> _fontPicker() {
+    final query = _fontSearch.text.trim().toLowerCase();
+    final matches = logoTypefaces
+        .where(
+          (face) =>
+              (_fontCategory == 'All fonts' ||
+                  logoFontFor(face).category == _fontCategory) &&
+              face.toLowerCase().contains(query),
+        )
+        .toList();
+    final pages = (matches.length / _fontsPerPage).ceil();
+    final page = _fontPage.clamp(0, pages > 0 ? pages - 1 : 0);
+    final visible = matches.skip(page * _fontsPerPage).take(_fontsPerPage);
+    return [
+      _label('Find your type'),
+      Text(
+        '32 font families + 4 classic styles. Preview them with your own brand name.',
+        style: TextStyle(color: skin.mutedText, height: 1.5, fontSize: 12),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        key: const Key('logo-font-search'),
+        controller: _fontSearch,
+        decoration: InputDecoration(
+          labelText: 'Search fonts',
+          prefixIcon: const Icon(Icons.search_rounded),
+          suffixIcon: query.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Clear font search',
+                  onPressed: () => setState(() {
+                    _fontSearch.clear();
+                    _fontPage = 0;
+                  }),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+        ),
+        onChanged: (_) => setState(() => _fontPage = 0),
+      ),
+      const SizedBox(height: 12),
+      DropdownButtonFormField<String>(
+        initialValue: _fontCategory,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Font style'),
+        items: [
+          for (final category in logoFontCategories)
+            DropdownMenuItem(value: category, child: Text(category)),
+        ],
+        onChanged: (value) => setState(() {
+          _fontCategory = value!;
+          _fontPage = 0;
+        }),
+      ),
+      const SizedBox(height: 12),
+      Text(
+        'Selected: ${c.design.typeface}',
+        style: TextStyle(color: skin.mutedText, fontSize: 12),
+      ),
+      const SizedBox(height: 10),
+      if (matches.isEmpty)
+        const Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('No fonts match. Try another name or style.'),
+        ),
+      for (final face in visible)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Semantics(
+            button: true,
+            selected: c.design.typeface == face,
+            child: Material(
+              color: c.design.typeface == face
+                  ? skin.panelSoft
+                  : skin.panelDeep,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: c.design.typeface == face ? skin.primary : skin.border,
+                ),
+              ),
+              child: InkWell(
+                key: ValueKey('logo-font-$face'),
+                onTap: busy
+                    ? null
+                    : () {
+                        FocusManager.instance.primaryFocus?.unfocus();
+                        c.update(c.design.copy(typeface: face));
+                      },
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              face,
+                              style: TextStyle(
+                                color: skin.text,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          if (c.design.typeface == face)
+                            Icon(
+                              Icons.check_circle_rounded,
+                              color: skin.primary,
+                              size: 18,
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 36,
+                        child: LogoFontReady(
+                          face: face,
+                          builder: (_) => Text(
+                            c.design.name.isEmpty
+                                ? 'Your brand'
+                                : c.design.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 24,
+                              color: skin.text,
+                              fontFamily: logoFontFamily(face),
+                              fontWeight:
+                                  FontWeight.values[(logoFontWeight(face) ~/
+                                              100 -
+                                          1)
+                                      .clamp(0, 8)],
+                              fontStyle: face == 'Slanted'
+                                  ? FontStyle.italic
+                                  : FontStyle.normal,
+                              letterSpacing: face == 'Wide' ? 3 : 0,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      if (pages > 1)
+        Row(
+          children: [
+            IconButton(
+              tooltip: 'Previous fonts',
+              onPressed: page > 0
+                  ? () => setState(() => _fontPage = page - 1)
+                  : null,
+              icon: const Icon(Icons.chevron_left_rounded),
+            ),
+            Expanded(
+              child: Text(
+                '${page * _fontsPerPage + 1}–${(page * _fontsPerPage + _fontsPerPage).clamp(0, matches.length)} of ${matches.length}',
+                textAlign: TextAlign.center,
+              ),
+            ),
+            IconButton(
+              tooltip: 'More fonts',
+              onPressed: page + 1 < pages
+                  ? () => setState(() => _fontPage = page + 1)
+                  : null,
+              icon: const Icon(Icons.chevron_right_rounded),
+            ),
+          ],
+        )
+      else if (matches.isNotEmpty)
+        Text(
+          '${matches.length} matching fonts',
+          style: TextStyle(color: skin.mutedText, fontSize: 12),
+        ),
+    ];
+  }
 
   Widget _aiPanel() {
     final selected = _selectedAi;
@@ -1708,56 +2009,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
       ),
     ],
     2 => [
-      _label('Typography'),
-      for (final face in logoTypefaces)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Material(
-            color: c.design.typeface == face ? skin.panelSoft : skin.panelDeep,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(
-                color: c.design.typeface == face ? skin.primary : skin.border,
-              ),
-            ),
-            child: InkWell(
-              onTap: busy
-                  ? null
-                  : () => c.update(c.design.copy(typeface: face)),
-              borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        face,
-                        style: TextStyle(
-                          fontSize: 22,
-                          color: skin.text,
-                          fontFamily: 'KorlixLogo',
-                          fontWeight: face == 'Strong'
-                              ? FontWeight.w700
-                              : FontWeight.w400,
-                          fontStyle: face == 'Slanted'
-                              ? FontStyle.italic
-                              : FontStyle.normal,
-                          letterSpacing: face == 'Wide' ? 3 : 0,
-                        ),
-                      ),
-                    ),
-                    if (c.design.typeface == face)
-                      Icon(
-                        Icons.check_circle_rounded,
-                        color: skin.primary,
-                        size: 18,
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
+      ..._fontPicker(),
       _label('Letter spacing · ${c.design.tracking.toStringAsFixed(1)}'),
       Slider(
         key: const Key('logo-letter-spacing'),
@@ -1994,7 +2246,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
             ),
             const SizedBox(height: 20),
             Text(
-              'PNG and SVG use your export settings above. Transparent previews show a checkerboard; the downloaded file has no checkerboard. The complete ZIP includes all standard variants. SVG retains editable text; some editors may need the bundled Roboto fonts. AI artwork downloads separately from Ideas.',
+              'PNG and SVG use your export settings above. Transparent previews show a checkerboard; the downloaded file has no checkerboard. The complete ZIP includes all standard variants. SVG retains editable text; some editors may need the bundled fonts. AI artwork downloads separately from Ideas.',
               style: TextStyle(
                 color: skin.mutedText,
                 height: 1.5,

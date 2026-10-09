@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ai_wiz_command_center/imagine_studio/imagine_client.dart';
 import 'package:ai_wiz_command_center/logo_studio/logo_render.dart';
+import 'package:ai_wiz_command_center/logo_studio/logo_model.dart';
 
 import 'agent_studio_test.dart' as fixtures;
 import 'logo_studio_test.dart' as logos;
@@ -42,7 +43,7 @@ Future<void> download(WidgetTester t, logos.LogoFixture f, String label) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
-    await ensureLogoFonts();
+    await Future.wait(logoTypefaces.map(ensureLogoFonts));
     await (FontLoader(
       'Roboto',
     )..addFont(rootBundle.load('assets/fieldproof/Roboto-Regular.ttf'))).load();

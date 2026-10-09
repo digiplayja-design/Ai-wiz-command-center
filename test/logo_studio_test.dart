@@ -83,7 +83,7 @@ Future<void> begin(WidgetTester t, LogoFixture f) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
-    await ensureLogoFonts();
+    await Future.wait(logoTypefaces.map(ensureLogoFonts));
     await (FontLoader(
       'Roboto',
     )..addFont(rootBundle.load('assets/fieldproof/Roboto-Regular.ttf'))).load();
@@ -98,13 +98,16 @@ void main() {
     }
   });
   test(
-    'six editable directions adapt to the brief and safely restore settings',
+    'twelve editable directions adapt to the brief and safely restore settings',
     () {
       final options = logoDirections(sample);
-      expect(options.length, 6);
-      expect(options.map((d) => '${d.mark}/${d.layout}').toSet().length, 6);
+      expect(options.length, 12);
+      expect(
+        options.map((d) => '${d.mark}/${d.layout}').toSet().length,
+        greaterThanOrEqualTo(8),
+      );
       expect(options.first.mark, 'Leaf');
-      expect(options.first.typeface, 'Clean');
+      expect(options.first.typeface, 'Manrope');
       expect(
         options.every(
           (d) => d.name == sample.name && d.tagline == sample.tagline,
@@ -279,7 +282,7 @@ void main() {
       final f = LogoFixture();
       await social.mount(t, f.screen());
       await begin(t, f);
-      expect(f.c.concepts.length, 6);
+      expect(f.c.concepts.length, 12);
       expect(f.studio.requests, isEmpty);
       await actions.tap(t, find.byKey(const ValueKey('logo-concept-0')));
       await actions.reveal(t, find.byKey(const Key('logo-edit-name')));

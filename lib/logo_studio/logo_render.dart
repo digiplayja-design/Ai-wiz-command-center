@@ -4,6 +4,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'logo_model.dart';
+import 'logo_fonts.dart';
+export 'logo_fonts.dart';
 
 enum LogoSurface { light, dark, transparent }
 
@@ -43,6 +45,241 @@ class LogoShape {
 }
 
 List<LogoShape> logoShapes(String name) => switch (name) {
+  'Sunrise' => const [
+    LogoShape(
+      'M 18 60 C 18 15 82 15 82 60 L 67 60 C 67 35 33 35 33 60 Z M 4 70 L 96 70 L 96 80 L 4 80 Z',
+    ),
+    LogoShape(
+      'M 45 3 L 55 3 L 55 17 L 45 17 Z M 9 22 L 16 15 L 27 26 L 20 33 Z M 73 26 L 84 15 L 91 22 L 80 33 Z M 22 89 L 78 89 L 78 96 L 22 96 Z',
+      true,
+    ),
+  ],
+  'Wings' => const [
+    LogoShape(
+      'M 4 16 L 46 41 L 46 85 L 25 67 L 25 49 L 14 43 L 14 30 L 4 26 Z',
+    ),
+    LogoShape(
+      'M 96 16 L 54 41 L 54 85 L 75 67 L 75 49 L 86 43 L 86 30 L 96 26 Z',
+      true,
+    ),
+  ],
+  'Hexagon' => const [
+    LogoShape(
+      'M 50 3 L 93 27 L 93 73 L 50 97 L 7 73 L 7 27 Z M 22 36 L 22 64 L 50 80 L 78 64 L 78 36 L 50 20 Z',
+    ),
+    LogoShape('M 50 30 L 68 40 L 68 60 L 50 70 L 32 60 L 32 40 Z', true),
+  ],
+  'Crown' => const [
+    LogoShape('M 6 24 L 29 44 L 50 10 L 71 44 L 94 24 L 82 75 L 18 75 Z'),
+    LogoShape('M 20 83 L 80 83 L 80 94 L 20 94 Z', true),
+  ],
+  'Bolt' => const [
+    LogoShape('M 54 3 L 17 57 L 46 57 L 34 97 L 85 37 L 55 37 L 73 3 Z'),
+    LogoShape('M 55 48 L 36 82 L 64 48 Z', true),
+  ],
+  'Wave' => const [
+    LogoShape(
+      'M 4 64 C 23 66 23 9 63 14 C 79 15 91 25 96 38 C 78 26 64 31 63 44 C 56 33 44 41 42 56 C 37 80 18 88 4 82 Z',
+    ),
+    LogoShape(
+      'M 47 75 C 69 75 79 58 96 60 L 96 77 C 78 76 71 94 47 93 Z',
+      true,
+    ),
+  ],
+  'Flame' => const [
+    LogoShape(
+      'M 53 3 C 61 34 91 44 87 66 C 84 108 10 107 12 65 C 13 44 34 34 37 18 C 39 34 37 43 32 50 C 51 48 53 23 53 3 Z',
+    ),
+    LogoShape(
+      'M 48 50 C 50 68 70 67 68 82 C 67 99 36 99 33 82 C 29 71 42 66 48 50 Z',
+      true,
+    ),
+  ],
+  'Drop' => const [
+    LogoShape(
+      'M 50 3 C 38 26 14 44 14 63 C 14 109 86 109 86 63 C 86 44 62 26 50 3 Z',
+    ),
+    LogoShape(
+      'M 61 39 C 63 54 76 57 72 72 C 69 83 60 88 50 87 C 68 75 65 60 61 39 Z',
+      true,
+    ),
+  ],
+  'Lotus' => const [
+    LogoShape('M 50 8 C 24 34 26 62 50 85 C 74 62 76 34 50 8 Z'),
+    LogoShape(
+      'M 8 35 C 32 34 40 51 44 87 C 21 83 8 66 8 35 Z M 92 35 C 68 34 60 51 56 87 C 79 83 92 66 92 35 Z',
+      true,
+    ),
+  ],
+  'Mountain' => const [
+    LogoShape('M 2 86 L 36 17 L 70 86 L 52 86 L 36 51 L 20 86 Z'),
+    LogoShape('M 50 45 L 65 16 L 98 86 L 79 86 L 65 51 L 59 63 Z', true),
+  ],
+  'Pulse' => const [
+    LogoShape(
+      'M 3 47 L 24 47 L 37 14 L 55 70 L 67 38 L 77 47 L 97 47 L 97 59 L 72 59 L 64 80 L 52 94 L 36 45 L 32 59 L 3 59 Z',
+    ),
+    LogoShape('M 76 15 L 92 15 L 92 31 L 76 31 Z', true),
+  ],
+  'Infinity' => const [
+    LogoShape(
+      'M 50 40 C 27 5 2 26 3 50 C 3 78 31 93 50 63 L 43 51 C 30 74 17 69 17 50 C 17 30 31 31 43 50 Z',
+    ),
+    LogoShape(
+      'M 50 60 C 73 95 98 74 97 50 C 97 22 69 7 50 37 L 57 49 C 70 26 83 31 83 50 C 83 70 69 69 57 50 Z',
+      true,
+    ),
+  ],
+  'Diamond' => const [
+    LogoShape(
+      'M 50 2 L 98 50 L 50 98 L 2 50 Z M 22 50 L 50 78 L 78 50 L 50 22 Z',
+    ),
+    LogoShape('M 50 31 L 69 50 L 50 69 L 31 50 Z', true),
+  ],
+  'Triangle' => const [
+    LogoShape(
+      'M 50 3 L 98 90 L 80 90 L 50 36 L 30 73 L 60 73 L 70 90 L 2 90 Z',
+    ),
+    LogoShape('M 50 52 L 62 73 L 38 73 Z', true),
+  ],
+  'Cube' => const [
+    LogoShape(
+      'M 50 4 L 93 27 L 50 51 L 7 27 Z M 7 37 L 44 58 L 44 96 L 7 74 Z',
+    ),
+    LogoShape('M 56 58 L 93 37 L 93 74 L 56 96 Z', true),
+  ],
+  'Steps' => const [
+    LogoShape(
+      'M 5 68 L 28 68 L 28 92 L 5 92 Z M 38 39 L 61 39 L 61 92 L 38 92 Z',
+    ),
+    LogoShape('M 71 8 L 94 8 L 94 92 L 71 92 Z', true),
+  ],
+  'Arrow' => const [
+    LogoShape('M 6 39 L 57 39 L 57 13 L 96 50 L 57 87 L 57 61 L 6 61 Z'),
+    LogoShape(
+      'M 6 12 L 27 12 L 27 28 L 6 28 Z M 6 72 L 27 72 L 27 88 L 6 88 Z',
+      true,
+    ),
+  ],
+  'Bloom' => const [
+    LogoShape(
+      'M 50 50 C 9 21 33 0 50 10 C 67 0 91 21 50 50 Z M 50 50 C 91 79 67 100 50 90 C 33 100 9 79 50 50 Z',
+    ),
+    LogoShape(
+      'M 50 50 C 79 9 100 33 90 50 C 100 67 79 91 50 50 Z M 50 50 C 21 91 0 67 10 50 C 0 33 21 9 50 50 Z',
+      true,
+    ),
+  ],
+  'Feather' => const [
+    LogoShape(
+      'M 14 88 C 9 16 57 0 92 9 C 89 52 61 84 27 83 L 16 98 L 7 93 L 68 28 L 19 70 Z',
+    ),
+    LogoShape('M 33 66 L 72 24 L 56 60 Z', true),
+  ],
+  'Sprout' => const [
+    LogoShape(
+      'M 44 94 L 44 61 C 12 66 2 39 8 18 C 39 16 49 38 50 48 C 53 23 70 11 94 13 C 99 42 79 62 56 58 L 56 94 Z',
+    ),
+    LogoShape(
+      'M 13 94 L 13 84 L 36 84 L 36 94 Z M 64 84 L 87 84 L 87 94 L 64 94 Z',
+      true,
+    ),
+  ],
+  'Heart' => const [
+    LogoShape(
+      'M 50 90 C 38 79 4 57 5 32 C 6 4 39 3 50 25 C 61 3 94 4 95 32 C 96 57 62 79 50 90 Z',
+    ),
+    LogoShape(
+      'M 58 36 C 64 18 81 19 82 32 C 83 45 64 63 55 69 C 67 52 70 44 58 36 Z',
+      true,
+    ),
+  ],
+  'Butterfly' => const [
+    LogoShape(
+      'M 45 48 C 6 1 0 7 7 43 C 9 57 27 62 45 48 Z M 44 58 C 8 61 6 91 22 94 C 36 98 48 78 44 58 Z',
+    ),
+    LogoShape(
+      'M 55 48 C 94 1 100 7 93 43 C 91 57 73 62 55 48 Z M 56 58 C 92 61 94 91 78 94 C 64 98 52 78 56 58 Z',
+      true,
+    ),
+  ],
+  'Anchor' => const [
+    LogoShape(
+      'M 44 32 L 56 32 L 56 73 C 76 71 85 62 86 49 L 98 49 C 98 80 72 94 50 98 C 28 94 2 80 2 49 L 14 49 C 15 62 24 71 44 73 Z M 22 35 L 78 35 L 78 47 L 22 47 Z',
+    ),
+    LogoShape(
+      'M 50 2 C 29 2 29 30 50 30 C 71 30 71 2 50 2 Z M 50 10 C 60 10 60 22 50 22 C 40 22 40 10 50 10 Z',
+      true,
+    ),
+  ],
+  'Bridge' => const [
+    LogoShape(
+      'M 4 87 L 4 31 L 17 31 L 17 43 C 34 57 66 57 83 43 L 83 31 L 96 31 L 96 87 L 83 87 L 83 59 C 63 70 37 70 17 59 L 17 87 Z',
+    ),
+    LogoShape(
+      'M 3 18 L 19 18 L 19 27 L 3 27 Z M 81 18 L 97 18 L 97 27 L 81 27 Z M 28 75 L 72 75 L 72 86 L 28 86 Z',
+      true,
+    ),
+  ],
+  'Gateway' => const [
+    LogoShape('M 6 7 L 94 7 L 94 92 L 78 92 L 78 23 L 22 23 L 22 92 L 6 92 Z'),
+    LogoShape('M 36 39 L 64 39 L 64 92 L 36 92 Z', true),
+  ],
+  'Orbitals' => const [
+    LogoShape(
+      'M 50 3 C 8 3 8 97 50 97 C 92 97 92 3 50 3 Z M 50 17 C 73 17 73 83 50 83 C 27 83 27 17 50 17 Z',
+    ),
+    LogoShape(
+      'M 3 50 C 3 8 97 8 97 50 C 97 92 3 92 3 50 Z M 17 50 C 17 73 83 73 83 50 C 83 27 17 27 17 50 Z',
+      true,
+    ),
+  ],
+  'Nexus' => const [
+    LogoShape(
+      'M 8 8 L 32 8 L 32 32 L 8 32 Z M 68 68 L 92 68 L 92 92 L 68 92 Z M 26 36 L 36 26 L 74 64 L 64 74 Z',
+    ),
+    LogoShape(
+      'M 68 8 L 92 8 L 92 32 L 68 32 Z M 8 68 L 32 68 L 32 92 L 8 92 Z M 64 26 L 74 36 L 36 74 L 26 64 Z',
+      true,
+    ),
+  ],
+  'Weave' => const [
+    LogoShape(
+      'M 6 23 L 23 6 L 94 77 L 77 94 Z M 6 57 L 23 40 L 60 77 L 43 94 Z',
+    ),
+    LogoShape(
+      'M 40 23 L 57 6 L 94 43 L 77 60 Z M 6 77 L 24 59 L 41 76 L 23 94 Z',
+      true,
+    ),
+  ],
+  'Target' => const [
+    LogoShape(
+      'M 50 4 C 111 4 111 96 50 96 C -11 96 -11 4 50 4 Z M 50 19 C 9 19 9 81 50 81 C 91 81 91 19 50 19 Z',
+    ),
+    LogoShape('M 50 31 C 75 31 75 69 50 69 C 25 69 25 31 50 31 Z', true),
+  ],
+  'Star' => const [
+    LogoShape(
+      'M 50 3 L 64 34 L 98 38 L 73 61 L 79 96 L 50 79 L 21 96 L 27 61 L 2 38 L 36 34 Z',
+    ),
+    LogoShape('M 50 26 L 57 43 L 76 46 L 62 58 L 65 76 L 50 67 Z', true),
+  ],
+  'Helix' => const [
+    LogoShape('M 15 4 L 35 4 C 35 42 85 57 85 96 L 65 96 C 65 59 15 44 15 4 Z'),
+    LogoShape(
+      'M 65 4 L 85 4 C 85 29 65 46 50 59 L 35 44 C 49 32 65 18 65 4 Z M 35 62 L 50 76 C 40 84 35 89 35 96 L 15 96 C 15 82 24 71 35 62 Z',
+      true,
+    ),
+  ],
+  'Crescent' => const [
+    LogoShape(
+      'M 71 7 C 26 -3 3 25 5 51 C 7 87 41 108 75 88 C 24 98 9 21 71 7 Z',
+    ),
+    LogoShape(
+      'M 76 24 L 82 39 L 98 43 L 84 53 L 84 70 L 71 59 L 55 64 L 62 48 L 52 35 L 69 36 Z',
+      true,
+    ),
+  ],
   'Petal' => const [
     LogoShape(
       'M 50 48 C 14 50 7 14 13 9 C 42 4 55 21 50 48 Z M 50 52 C 86 50 93 86 87 91 C 58 96 45 79 50 52 Z',
@@ -154,26 +391,6 @@ List<LogoShape> logoShapes(String name) => switch (name) {
   ],
 };
 
-Future<void>? _fontLoading;
-bool _fontsReady = false;
-Future<void> ensureLogoFonts() {
-  if (_fontsReady) return Future.value();
-  return _fontLoading ??=
-      (FontLoader('KorlixLogo')
-            ..addFont(rootBundle.load('assets/fieldproof/Roboto-Regular.ttf'))
-            ..addFont(rootBundle.load('assets/fieldproof/Roboto-Bold.ttf')))
-          .load()
-          .then(
-            (_) {
-              _fontsReady = true;
-            },
-            onError: (Object e, StackTrace s) {
-              _fontLoading = null;
-              Error.throwWithStackTrace(e, s);
-            },
-          );
-}
-
 class LogoLettering {
   LogoLettering(
     this.value,
@@ -191,14 +408,15 @@ class LogoLettering {
   double? _fittedFontSize;
   TextPainter get painter => _painter(false);
   TextPainter _painter(bool erase) {
-    final bold = !tagline && design.typeface == 'Strong';
+    final face = tagline ? 'Clean' : design.typeface;
     TextPainter make(double fontSize) => TextPainter(
       text: TextSpan(
         text: value,
         style: TextStyle(
-          fontFamily: 'KorlixLogo',
+          fontFamily: logoFontFamily(face),
           fontSize: fontSize,
-          fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
+          fontWeight:
+              FontWeight.values[(logoFontWeight(face) ~/ 100 - 1).clamp(0, 8)],
           fontStyle: design.typeface == 'Slanted' && !tagline
               ? FontStyle.italic
               : FontStyle.normal,
@@ -252,13 +470,14 @@ class LogoLettering {
   }
 
   String svg() {
-    final p = painter, bold = !tagline && design.typeface == 'Strong';
+    final p = painter;
+    final face = tagline ? 'Clean' : design.typeface;
     final y =
         position(p).dy +
         p.computeDistanceToActualBaseline(TextBaseline.alphabetic);
     final fontSize = p.text!.style!.fontSize!;
     p.dispose();
-    return '<text x="${rect.center.dx}" y="$y" text-anchor="middle" font-family="KorlixLogo,Arial,sans-serif" font-size="$fontSize" font-weight="${bold ? 700 : 400}" font-style="${design.typeface == 'Slanted' && !tagline ? 'italic' : 'normal'}" letter-spacing="${tagline ? 2 : design.tracking + (design.typeface == 'Wide' ? 3 : 0)}" fill="#$color">${const HtmlEscape().convert(value)}</text>';
+    return '<text x="${rect.center.dx}" y="$y" text-anchor="middle" font-family="${logoFontFamily(face)},Arial,sans-serif" font-size="$fontSize" font-weight="${logoFontWeight(face)}" font-style="${design.typeface == 'Slanted' && !tagline ? 'italic' : 'normal'}" letter-spacing="${tagline ? 2 : design.tracking + (design.typeface == 'Wide' ? 3 : 0)}" fill="#$color">${const HtmlEscape().convert(value)}</text>';
   }
 }
 
@@ -402,7 +621,12 @@ class LogoComposition {
           rect.deflate(rect.width * .13),
           rect.width * .53,
           ink == LogoInk.white ? '111927' : _onColor(primary),
-          design.copy(typeface: 'Strong', tracking: 0),
+          design.copy(
+            typeface: isClassicLogoFont(design.typeface)
+                ? 'Strong'
+                : design.typeface,
+            tracking: 0,
+          ),
         ).paint(canvas, erase: ink != LogoInk.color);
         if (ink != LogoInk.color) canvas.restore();
       } else {
@@ -449,7 +673,12 @@ class LogoComposition {
           rect.deflate(rect.width * .13),
           rect.width * .53,
           ink != LogoInk.color ? '000000' : _onColor(primary),
-          design.copy(typeface: 'Strong', tracking: 0),
+          design.copy(
+            typeface: isClassicLogoFont(design.typeface)
+                ? 'Strong'
+                : design.typeface,
+            tracking: 0,
+          ),
         ).svg();
         if (ink != LogoInk.color) {
           out.write(
@@ -562,7 +791,10 @@ class _LogoCanvasState extends State<LogoCanvas> {
     child: AspectRatio(
       aspectRatio: widget.aspectRatio ?? (widget.iconOnly ? 1 : 1.5),
       child: RepaintBoundary(
-        child: CustomPaint(painter: _painter, isComplex: true),
+        child: LogoFontReady(
+          face: widget.design.typeface,
+          builder: (_) => CustomPaint(painter: _painter, isComplex: true),
+        ),
       ),
     ),
   );
@@ -616,7 +848,7 @@ Future<Uint8List> logoPng(
   final outputWidth = width ?? (iconOnly ? 1024 : 2400);
   final outputHeight = height ?? (iconOnly ? 1024 : 1600);
   _checkLogoDimensions(outputWidth, outputHeight);
-  await ensureLogoFonts();
+  await ensureLogoFonts(design.typeface);
   final recorder = ui.PictureRecorder();
   // Each export owns and releases its recording and image.
   final c = Canvas(recorder);

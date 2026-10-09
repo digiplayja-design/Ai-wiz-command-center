@@ -43,22 +43,36 @@ Future<void> validateLogoArtwork(Uint8List bytes) async {
   }
 }
 
-Future<String>? _svgFontStyle;
-Future<String> _logoSvgFonts() =>
-    _svgFontStyle ??= _loadSvgFonts().catchError((Object error) {
-      _svgFontStyle = null;
-      throw error;
-    });
-Future<String> _loadSvgFonts() async {
-  final regular = (await rootBundle.load(
-    'assets/fieldproof/Roboto-Regular.ttf',
-  )).buffer.asUint8List();
-  final bold = (await rootBundle.load(
-    'assets/fieldproof/Roboto-Bold.ttf',
-  )).buffer.asUint8List();
-  final fonts =
-      '<defs><style>@font-face{font-family:KorlixLogo;src:url(data:font/ttf;base64,${base64Encode(regular)}) format("truetype");font-weight:400;}@font-face{font-family:KorlixLogo;src:url(data:font/ttf;base64,${base64Encode(bold)}) format("truetype");font-weight:700;}</style></defs>';
-  return fonts;
+final _svgFontStyles = <String, Future<String>>{};
+Future<String> _logoSvgFonts(String face) => _svgFontStyles.putIfAbsent(
+  face,
+  () => _loadSvgFonts(face).catchError((Object error) {
+    _svgFontStyles.remove(face);
+    throw error;
+  }),
+);
+Future<String> _loadSvgFonts(String face) async {
+  final buffer = StringBuffer('<defs><style>');
+  Future<void> font(String asset, String family, String weight) async {
+    final data = await rootBundle.load(asset);
+    buffer.write(
+      '@font-face{font-family:$family;src:url(data:font/ttf;base64,${base64Encode(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes))}) format("truetype");font-weight:$weight;}',
+    );
+  }
+
+  await font('assets/fieldproof/Roboto-Regular.ttf', 'KorlixLogo', '400');
+  if (isClassicLogoFont(face)) {
+    await font('assets/fieldproof/Roboto-Bold.ttf', 'KorlixLogo', '700');
+  } else {
+    final selected = logoFontFor(face);
+    await font(
+      selected.asset,
+      selected.family,
+      selected.variable ? '100 900' : '${selected.weight}',
+    );
+  }
+  buffer.write('</style></defs>');
+  return buffer.toString();
 }
 
 Future<String> logoSvg(
@@ -69,8 +83,8 @@ Future<String> logoSvg(
   int? width,
   int? height,
 }) async {
-  await ensureLogoFonts();
-  final fonts = await _logoSvgFonts();
+  await ensureLogoFonts(design.typeface);
+  final fonts = await _logoSvgFonts(design.typeface);
   return LogoComposition(
     design,
     surface: surface,
@@ -168,7 +182,7 @@ Future<Uint8List> logoBrandGuide(
           ),
           pw.SizedBox(height: 8),
           pw.Text(
-            'Roboto / ${design.typeface}\n${design.layout} composition / ${design.mark} symbol\nLetter spacing: ${design.tracking.toStringAsFixed(1)}',
+            '${logoFontFor(design.typeface).name} / ${design.typeface}\n${design.layout} composition / ${design.mark} symbol\nLetter spacing: ${design.tracking.toStringAsFixed(1)}',
             style: const pw.TextStyle(fontSize: 11, lineSpacing: 4),
           ),
           pw.SizedBox(height: 24),
@@ -183,7 +197,7 @@ Future<Uint8List> logoBrandGuide(
           ),
           pw.Spacer(),
           pw.Text(
-            'SVG contains vector shapes and editable text. The matching Roboto fonts are included in the kit. PNG exports are raster images. Keep your project JSON to edit again in KORLIX.',
+            'SVG contains vector shapes and editable text. The matching fonts and licenses are included in the kit. PNG exports are raster images. Keep your project JSON to edit again in KORLIX.',
             style: const pw.TextStyle(
               fontSize: 9,
               color: PdfColors.grey600,
@@ -205,7 +219,7 @@ Future<Uint8List> logoBrandKit(
   checkCurrent?.call();
   final output = OutputMemoryStream();
   final encoder = ZipEncoder()..startEncode(output);
-  const total = 26;
+  final total = isClassicLogoFont(design.typeface) ? 26 : 28;
   var completed = 0;
   Future<void> add(String name, List<int> bytes) async {
     checkCurrent?.call();
@@ -294,9 +308,20 @@ Future<Uint8List> logoBrandKit(
     'fonts/LICENSE.txt',
     await rootBundle.loadString('assets/fieldproof/Roboto_LICENSE.txt'),
   );
+  if (!isClassicLogoFont(design.typeface)) {
+    final selected = logoFontFor(design.typeface);
+    await add(
+      'fonts/${selected.name.replaceAll(' ', '-')}.ttf',
+      (await rootBundle.load(selected.asset)).buffer.asUint8List(),
+    );
+    await text(
+      'fonts/${selected.slug}-OFL.txt',
+      await rootBundle.loadString(selected.license),
+    );
+  }
   await text(
     'READ-ME.txt',
-    '${design.name} / KORLIX Logo Studio\n\nYour editable logo collection and brand guide.\n\nPalette: #${design.primary}, #${design.secondary}, #${design.paper}\nTypography: Roboto ${design.typeface}. Some SVG editors may require installing the bundled fonts to preserve lettering.\n\nSVG logos contain real vector shapes and editable text; PNG files are raster images. The primary PNG is 2400 x 1600 pixels. Transparent black and white PNGs are included for single-color use. The layouts folder includes horizontal, stacked, wordmark and monogram SVG/PNG versions of your identity.\n\nAvatar and icon SVG are square, with proportional safe space. Avatar is 1024 x 1024; cover is 1500 x 500. Social sizes are general-purpose canvases; check each platform before publishing. White transparent logos need a dark background to be visible.\n\nTo edit again, open Logo Studio > Saved > Import project and choose project.korlix-logo.json. Saved projects in the app stay in this browser/device and account. Keep this backup.\n\nOptional AI artwork is exported separately as a PNG; it is not vectorized by this kit.\n\nRoboto font licensing: https://www.apache.org/licenses/LICENSE-2.0\n',
+    '${design.name} / KORLIX Logo Studio\n\nYour editable logo collection and brand guide.\n\nPalette: #${design.primary}, #${design.secondary}, #${design.paper}\nTypography: ${logoFontFor(design.typeface).name} / ${design.typeface}. Some SVG editors may require installing the bundled fonts to preserve lettering.\n\nSVG logos contain real vector shapes and editable text; PNG files are raster images. The primary PNG is 2400 x 1600 pixels. Transparent black and white PNGs are included for single-color use. The layouts folder includes horizontal, stacked, wordmark and monogram SVG/PNG versions of your identity.\n\nAvatar and icon SVG are square, with proportional safe space. Avatar is 1024 x 1024; cover is 1500 x 500. Social sizes are general-purpose canvases; check each platform before publishing. White transparent logos need a dark background to be visible.\n\nTo edit again, open Logo Studio > Saved > Import project and choose project.korlix-logo.json. Saved projects in the app stay in this browser/device and account. Keep this backup.\n\nOptional AI artwork is exported separately as a PNG; it is not vectorized by this kit.\n\nFont licenses are included in the fonts folder. Install the selected family to edit the lettering in design software. Roboto is used for the supporting text.\n',
   );
   checkCurrent?.call();
   encoder.endEncode();
