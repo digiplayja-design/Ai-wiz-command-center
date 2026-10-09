@@ -6,6 +6,10 @@ Ricardo created the private `korlix-backups` Backblaze B2 bucket in `us-east-005
 
 This release supplies the provider adapter, automated receipt job, encrypted catalog, controlled recovery command, and synthetic connection probe. **Roll out in `probe` mode first. A successful synthetic probe is not a completed production receipt backup or a full application disaster-recovery drill.**
 
+Verified live on 9 October 2026 at 05:34:54 UTC: backend commit `068b7139739049abb9e26d15b222e0ff683d106a`, Render deploy `dep-db47pe60tbcc73dena80`, passed the synthetic Backblaze probe. Upload, download, decryption, wrong-owner rejection, corruption rejection, anonymous access denial and removal of the exact test-object version all passed. The backend health endpoint remained healthy. The focused local suite passed 61 tests.
+
+**Production backups remain paused.** Only nonsecret destination settings and `RECEIPT_BACKUP_MODE=probe` were applied. No production recovery key has been provisioned. Independent key custody and the actual lifecycle rule still need to be completed before activation. The public disclosure update is in frontend commit `16b0ca8d50e67c80c04ffc26b6ccaa46ac6420b5`; verify its deployment before setting the disclosure-readiness flag. A test object is not a customer backup, and successful cleanup means the bucket can still appear empty.
+
 No new Render service or paid plan is provisioned. Runtime scheduling uses the existing backend: first run 15 seconds after startup, then 60 minutes after each successful run; failures retry after 15 minutes. A restarted service catches up by enumerating the current ready receipts again. Downtime/delay increases the recovery-point interval. Logs report counts and timestamps; no automatic email/SMS alert recipient is configured.
 
 ## Private environment configuration
