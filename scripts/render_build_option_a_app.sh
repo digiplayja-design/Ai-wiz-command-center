@@ -48,6 +48,8 @@ node --test test/web_launch_countdown_test.cjs
 
 echo "Checking account security, billing, privacy, sharing and location flows..."
 RELEASE_TESTS=(
+  test/home_tool_catalog_test.dart
+  test/bookkeeping_plan_access_test.dart
   test/auth_device_session_test.dart
   test/signup_eligibility_test.dart
   test/auth/korlix_token_store_test.dart

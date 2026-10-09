@@ -3,8 +3,6 @@ const homeBusinessTools = <String>[
   // Keep CRM first and visible independently of the home tier request.
   'Contacts CRM',
   'Logo Studio',
-  'Inventory Studio',
-  'Bookkeeping 2027',
   'KORLIX 2MEETU',
   'FieldProof',
   'SEO Agent',
@@ -13,7 +11,12 @@ const homeBusinessTools = <String>[
   'Workforce',
   'Business Directory',
 ];
-const homeEnterpriseTools = <String>['Funnel Studio', 'Payroll'];
+const homeEnterpriseTools = <String>[
+  'Inventory Studio',
+  'Bookkeeping 2027',
+  'Funnel Studio',
+  'Payroll',
+];
 const homePersonalTools = <String>[
   'THE RECEIPT WIZ',
   'Live Studio',
@@ -92,9 +95,9 @@ const _toolDetails = <String, String>{
   'Camera Ask': 'Take a photo and ask about what you see',
   'Locator': 'Find places nearby',
   'Logo Studio': 'Design a logo for your brand',
-  'Inventory Studio': 'Track stock, products and inventory',
-  'Bookkeeping 2027': 'Organize your business finances',
-  'KORLIX 2MEETU': 'Schedule meetings and appointments',
+  'Inventory Studio': 'Track stock, products and inventory · Enterprise',
+  'Bookkeeping 2027': 'Organize your business finances · Enterprise',
+  'KORLIX 2MEETU': 'Free scheduling for meetings and appointments',
   'FieldProof': 'Document jobs and field work',
   'SEO Agent': 'Improve how your website is found',
   'AI Visibility': 'Check your presence in AI answers',
@@ -104,8 +107,7 @@ const _toolDetails = <String, String>{
   'Live Studio': 'Create a live session',
   'The Pod and You': 'Create a podcast with AI',
   'Tax Prep': 'Organize tax preparation',
-  'THE RECEIPT WIZ':
-      'Free receipt scanner, automatic categories and connected finance inboxes',
+  'THE RECEIPT WIZ': 'Free receipt scanner, automatic categories and connected finance inboxes',
   'BabyBlend': 'Explore family photo blends',
   'Virtual Closet': 'Organize outfits and style ideas',
   'Cybersecurity Defender': 'Review digital security',
@@ -128,6 +130,10 @@ List<HomeToolEntry> searchableHomeTools({
   final entries = <String, HomeToolEntry>{};
   void add(String label, String group) {
     final identity = homeToolIdentity(label);
+    if (!enterprise &&
+        homeEnterpriseTools.any((tool) => homeToolIdentity(tool) == identity)) {
+      return;
+    }
     entries.putIfAbsent(
       identity,
       () => HomeToolEntry(

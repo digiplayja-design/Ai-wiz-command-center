@@ -9368,6 +9368,14 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   Future<void> _openInventoryStudio() async {
+    if (_currentTier.trim().toLowerCase() != 'enterprise') {
+      await _showPremiumFeaturePrompt(
+        title: 'Inventory Studio requires Enterprise',
+        availability: 'Enterprise',
+        description: 'Manage stock, products and business locations with Enterprise. Your saved records are retained.',
+      );
+      return;
+    }
     final client=InventoryClient(backendBaseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
     Future<bool> consent(BuildContext context)=>KorlixThirdPartyAiConsent.ensure(context:context,featureName:'Inventory Studio and Rici',providers:{KorlixThirdPartyAiProvider.openAi},dataCategories:{KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.imagesAndPhotos,KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,KorlixThirdPartyAiDataCategory.inventoryRecords});
     await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>InventoryScreen(client:client,ensureConsent:consent,openVoice:(search,results)async{
@@ -9820,6 +9828,14 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   Future<void> _openReceiptWiz() => openReceiptWiz(context, backendBaseUrl:kKorlixBackendBaseUrl, headersBuilder:_authHeaders, sessionChanges:kKorlixAuthRevision);
 
   Future<void> _openBookkeeping() async {
+    if (_currentTier.trim().toLowerCase() != 'enterprise') {
+      await _showPremiumFeaturePrompt(
+        title: 'Bookkeeping requires Enterprise',
+        availability: 'Enterprise',
+        description: 'Manage business records, income, expenses and reports with Enterprise. Your saved records are retained.',
+      );
+      return;
+    }
     final client = BookkeepingClient(backendBaseUrl: kKorlixBackendBaseUrl,
       headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision);
     await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
@@ -11245,7 +11261,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     };
 
     String statusFor(String tool) {
-      if (tool == 'Inventory Studio') return 'Find, scan and manage stock across every location with Rici';
+      if (tool == 'Inventory Studio') return 'Enterprise: find, scan and manage stock across every location with Rici';
       if (tool == 'Logo Studio') return 'Create editable logos, explore AI concepts, and download your brand kit';
       if (tool == 'Cybersecurity Defender') return 'Check suspicious messages, strengthen habits and get incident help';
       if (tool == 'Study Studio') return 'Learn with lessons, flashcards and practice quizzes';
@@ -11261,10 +11277,10 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       if (tool == 'SEO Agent') return 'Audit your website, prepare SEO drafts and monitor improvements weekly';
       if (tool == 'Virtual Closet') return 'Your private wardrobe, AI try-on, saved looks and KORLIX styling';
       if (tool == 'Contract Radar') return 'Find source-linked contracts, save opportunities and prepare bids with KORLIX';
-      if (tool == 'Bookkeeping 2027') return 'Early access: business records, income, expenses and CSV export';
+      if (tool == 'Bookkeeping 2027') return 'Enterprise: business records, income, expenses and CSV export';
       if (tool == 'Funnel Studio') return 'Enterprise pages, lead capture and campaign links';
       if (tool == 'Payroll') return 'Enterprise US payroll, employee onboarding and payroll tax workflows';
-      if (tool == 'KORLIX 2MEETU' || tool == 'Scheduling') return 'AI scheduling, booking pages, group sessions and appointments';
+      if (tool == 'KORLIX 2MEETU' || tool == 'Scheduling') return 'Free scheduling, booking pages, group sessions and appointments';
       if (tool == 'Business Directory') return 'Free business listings, public discovery and optional verification';
       if (tool == 'Workforce') return 'Your business, team tasks, shifts and Rici voice assistance';
       if (tool == 'Contacts CRM') return 'Enterprise contacts, imports and KORLIX connections';
