@@ -13,6 +13,7 @@ import 'logo_export.dart';
 import 'logo_io.dart';
 import 'logo_export_options.dart';
 import 'logo_preview_board.dart';
+import 'logo_processing_panel.dart';
 
 class LogoStudioScreen extends StatefulWidget {
   const LogoStudioScreen({
@@ -40,6 +41,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
       _accent = TextEditingController();
   late final io = widget.io ?? LogoIo();
   final scroll = ScrollController();
+  final _processingKey = GlobalKey();
   int tab = 0, palette = 0, editorTab = 0;
   bool previewInUse = false, _allPalettes = false;
   final _fontSearch = TextEditingController();
@@ -297,7 +299,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
 
   Future<void> _ai() async {
     if (busy || !c.available) return;
-    if (c.design.error != null) {
+    if (!c.images.hasPendingLogo && c.design.error != null) {
       _error(ImagineException(c.design.error!));
       return;
     }
@@ -307,11 +309,26 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
     });
     try {
       if (!await widget.ensureConsent() || !mounted || !c.available) return;
-      await c.images.create(
+      final generation = c.images.create(
         c.design.aiBrief,
         language: widget.language,
         logoBrief: c.design.json,
       );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final target = _processingKey.currentContext;
+        if (mounted && target != null) {
+          unawaited(
+            Scrollable.ensureVisible(
+              target,
+              duration: MediaQuery.of(context).disableAnimations
+                  ? Duration.zero
+                  : const Duration(milliseconds: 300),
+              alignment: .5,
+            ),
+          );
+        }
+      });
+      await generation;
       if (mounted && c.available && c.images.results.isNotEmpty) {
         setState(() => _selectedAiId = c.images.results.first.id);
       }
@@ -1545,24 +1562,21 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
           const SizedBox(height: 16),
           KorlixActionButton(
             label: c.images.busy
-                ? 'Designing & rendering · ${c.images.elapsed}s'
+                ? 'Creating your logo…'
+                : c.images.hasPendingLogo
+                ? 'Check pending logo'
                 : 'Explore with AI',
             icon: Icons.auto_awesome_rounded,
             expand: true,
             onPressed: busy ? null : _ai,
           ),
           if (c.images.busy) ...[
-            const Padding(
-              padding: EdgeInsets.only(top: 16, bottom: 10),
-              child: LinearProgressIndicator(),
-            ),
-            Text(
-              'Developing the creative direction and rendering your concept. This can take several minutes.',
-              style: TextStyle(
-                color: skin.mutedText,
-                fontSize: 12,
-                height: 1.5,
-              ),
+            const SizedBox(height: 16),
+            LogoProcessingPanel(
+              key: _processingKey,
+              elapsed: c.images.elapsed,
+              stage: c.images.logoStage,
+              reconnecting: c.images.logoReconnecting,
             ),
           ],
           if (selected != null) ...[

@@ -24,7 +24,17 @@ void main() {
       headersBuilder: () => {'Authorization': 'logo-browser-fixture'},
       store: store,
       client: MockClient((request) async {
-        if (request.url.path != '/api/image/create') {
+        if (request.url.path == '/api/logo/jobs') {
+          return http.Response(
+            jsonEncode({
+              'jobId': 'logo_fixture',
+              'status': 'processing',
+              'stage': 'planning',
+            }),
+            202,
+          );
+        }
+        if (request.url.path != '/api/logo/jobs/logo_fixture') {
           throw StateError('Unexpected request');
         }
         final png = await logoPng(
@@ -34,8 +44,13 @@ void main() {
         );
         return http.Response(
           jsonEncode({
-            'imageDataUrl': 'data:image/png;base64,${base64Encode(png)}',
-            'generationId': 'fixture-concept',
+            'jobId': 'logo_fixture',
+            'status': 'completed',
+            'stage': 'completed',
+            'result': {
+              'imageDataUrl': 'data:image/png;base64,${base64Encode(png)}',
+              'generationId': 'fixture-concept',
+            },
           }),
           200,
         );

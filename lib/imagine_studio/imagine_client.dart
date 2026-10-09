@@ -66,6 +66,14 @@ class ImagineResult {
   final LogoCreativeDirection? logoDirection;
 }
 
+class _PendingLogo {
+  _PendingLogo(this.brief, this.payload) : requestId = agentStudioKey();
+  final ImagineBrief brief;
+  final Map<String, dynamic> payload;
+  final String requestId;
+  String? jobId;
+}
+
 abstract class ImagineRecipeStore {
   Future<List<String>> read(String key);
   Future<void> write(String key, List<String> value);
@@ -95,6 +103,7 @@ class ImagineClient extends ChangeNotifier {
     this.sessionChanges,
     http.Client? client,
     ImagineRecipeStore? store,
+    this.logoPollInterval = const Duration(seconds: 4),
   }) : _http = client ?? http.Client(),
        _store = store ?? ImaginePreferences() {
     _scope = agentAccountScope(headersBuilder());
@@ -107,6 +116,11 @@ class ImagineClient extends ChangeNotifier {
   final Listenable? sessionChanges;
   final http.Client _http;
   final ImagineRecipeStore _store;
+  final Duration logoPollInterval;
+  _PendingLogo? _pendingLogo;
+  String logoStage = 'queued';
+  bool logoReconnecting = false;
+  bool get hasPendingLogo => _pendingLogo != null;
   late final String _scope, _key;
   bool _closed = false,
       _denied = false,
@@ -132,6 +146,7 @@ class ImagineClient extends ChangeNotifier {
       results.clear();
       recipes = [];
       draft = const ImagineBrief();
+      _pendingLogo = null;
       busy = false;
       error = 'Your session changed. Close this studio and sign in again.';
       _notify();
@@ -261,11 +276,23 @@ class ImagineClient extends ChangeNotifier {
   }) async {
     _guard();
     if (busy) return null;
+    if (logoBrief != null && _pendingLogo != null) brief = _pendingLogo!.brief;
     if (brief.error != null) throw ImagineException(brief.error!);
     busy = true;
     error = null;
     elapsed = 0;
     draft = brief;
+    logoReconnecting = false;
+    if (logoBrief != null) {
+      if (_pendingLogo == null) logoStage = 'queued';
+      _pendingLogo ??= _PendingLogo(brief, {
+        'prompt': brief.compiledPrompt,
+        'language': language,
+        'imageSize': brief.size,
+        'imageStyle': brief.style,
+        'logoBrief': Map<String, dynamic>.from(logoBrief),
+      });
+    }
     _clock = Timer.periodic(const Duration(seconds: 1), (_) {
       elapsed++;
       _notify();
@@ -274,21 +301,22 @@ class ImagineClient extends ChangeNotifier {
     try {
       final headers = Map<String, String>.from(headersBuilder())
         ..['Content-Type'] = 'application/json';
-      final response = await _http
-          .post(
-            Uri.parse(
-              '${baseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/image/create',
-            ),
-            headers: headers,
-            body: jsonEncode({
-              'prompt': brief.compiledPrompt,
-              'language': language,
-              'imageSize': brief.size,
-              'imageStyle': brief.style,
-              'logoBrief': ?logoBrief,
-            }),
-          )
-          .timeout(Duration(seconds: logoBrief == null ? 265 : 445));
+      final response = logoBrief != null
+          ? await _waitForLogo(_pendingLogo!)
+          : await _http
+                .post(
+                  Uri.parse(
+                    '${baseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/image/create',
+                  ),
+                  headers: headers,
+                  body: jsonEncode({
+                    'prompt': brief.compiledPrompt,
+                    'language': language,
+                    'imageSize': brief.size,
+                    'imageStyle': brief.style,
+                  }),
+                )
+                .timeout(const Duration(seconds: 265));
       _guard();
       Map<String, dynamic> data;
       try {
@@ -344,6 +372,7 @@ class ImagineClient extends ChangeNotifier {
         height: height,
         logoDirection: LogoCreativeDirection.read(data['logoDirection']),
       );
+      if (logoBrief != null) _pendingLogo = null;
       results.insert(0, result);
       while (results.length > 6 ||
           (results.length > 1 &&
@@ -366,6 +395,124 @@ class ImagineClient extends ChangeNotifier {
     }
   }
 
+  Map<String, String> _logoHeaders() =>
+      Map<String, String>.from(headersBuilder())
+        ..['Content-Type'] = 'application/json';
+
+  Map<String, dynamic> _logoJobData(http.Response response) {
+    _guard();
+    if (response.statusCode == 401) {
+      _denied = true;
+      _pendingLogo = null;
+      results.clear();
+      recipes = [];
+      draft = const ImagineBrief();
+      throw const ImagineException('Sign in again to check your logo.');
+    }
+    final dynamic data;
+    try {
+      data = jsonDecode(response.body);
+    } catch (_) {
+      throw const FormatException('The logo status could not be read.');
+    }
+    if (response.statusCode >= 400 && response.statusCode < 500) {
+      _pendingLogo = null;
+      throw ImagineException(
+        data is Map && data['error'] is String
+            ? data['error'] as String
+            : 'The logo job is unavailable.',
+      );
+    }
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300 ||
+        data is! Map<String, dynamic>) {
+      throw const FormatException(
+        'The logo service is temporarily unavailable.',
+      );
+    }
+    return data;
+  }
+
+  Future<http.Response> _waitForLogo(_PendingLogo pending) async {
+    final base = baseUrl.replaceFirst(RegExp(r'/+$'), '');
+    final deadline = DateTime.now().add(const Duration(minutes: 20));
+    var connectionFailures = 0;
+    while (DateTime.now().isBefore(deadline)) {
+      _guard();
+      Map<String, dynamic> job;
+      try {
+        final response = pending.jobId == null
+            ? await _http
+                  .post(
+                    Uri.parse('$base/api/logo/jobs'),
+                    headers: _logoHeaders(),
+                    body: jsonEncode({
+                      ...pending.payload,
+                      'clientRequestId': pending.requestId,
+                    }),
+                  )
+                  .timeout(const Duration(seconds: 25))
+            : await _http
+                  .get(
+                    Uri.parse(
+                      '$base/api/logo/jobs/${Uri.encodeComponent(pending.jobId!)}',
+                    ),
+                    headers: _logoHeaders(),
+                  )
+                  .timeout(const Duration(seconds: 25));
+        job = _logoJobData(response);
+        final id = job['jobId'];
+        if (id is! String ||
+            !RegExp(r'^logo_[a-zA-Z0-9_-]{1,100}$').hasMatch(id)) {
+          throw const FormatException('The logo job could not be identified.');
+        }
+        pending.jobId = id;
+        connectionFailures = 0;
+        logoReconnecting = false;
+      } on ImagineException {
+        rethrow;
+      } catch (_) {
+        _guard();
+        logoReconnecting = true;
+        _notify();
+        if (++connectionFailures >= 5) {
+          throw const ImagineException(
+            'The connection was interrupted. Your logo may still be processing. Tap Check pending logo to reconnect to the same job.',
+          );
+        }
+        await Future<void>.delayed(logoPollInterval);
+        continue;
+      }
+      final status = job['status'];
+      if (status == 'completed' && job['result'] is Map) {
+        logoStage = 'completed';
+        return http.Response(jsonEncode(job['result']), 200);
+      }
+      if (status == 'failed') {
+        _pendingLogo = null;
+        throw ImagineException(
+          job['error'] is String
+              ? job['error'] as String
+              : 'This logo could not be completed.',
+        );
+      }
+      if (!['queued', 'processing'].contains(status)) {
+        throw const ImagineException(
+          'The logo status could not be confirmed. Tap Check pending logo to check again.',
+        );
+      }
+      final stage = job['stage'];
+      if (['queued', 'planning', 'rendering', 'finishing'].contains(stage)) {
+        logoStage = stage as String;
+      }
+      _notify();
+      await Future<void>.delayed(logoPollInterval);
+    }
+    throw const ImagineException(
+      'Your logo is taking longer than expected. Tap Check pending logo to check the same job again.',
+    );
+  }
+
   void removeResult(String id) {
     _guard();
     results.removeWhere((r) => r.id == id);
@@ -378,6 +525,7 @@ class ImagineClient extends ChangeNotifier {
     _clock?.cancel();
     sessionChanges?.removeListener(_check);
     _http.close();
+    _pendingLogo = null;
     results.clear();
     recipes = [];
     super.dispose();

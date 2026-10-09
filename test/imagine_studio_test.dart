@@ -46,9 +46,41 @@ class Studio {
     headersBuilder: () => {'Authorization': token},
     sessionChanges: revision,
     store: storage,
+    logoPollInterval: Duration.zero,
     client: MockClient((r) async {
-      expect(r.url.path, '/api/image/create');
       expect(r.headers['Authorization'], token);
+      if (r.url.path == '/api/logo/jobs') {
+        expect(r.method, 'POST');
+        requests.add(jsonDecode(r.body) as Map<String, dynamic>);
+        return http.Response(
+          jsonEncode({
+            'jobId': 'logo_fixture',
+            'status': 'queued',
+            'stage': 'planning',
+          }),
+          202,
+        );
+      }
+      if (r.url.path == '/api/logo/jobs/logo_fixture') {
+        expect(r.method, 'GET');
+        final result = pending != null
+            ? await pending!.future
+            : await response();
+        if (result.statusCode == 401) return result;
+        final data = jsonDecode(result.body) as Map<String, dynamic>;
+        return http.Response(
+          jsonEncode({
+            'jobId': 'logo_fixture',
+            'status': result.statusCode == 200 ? 'completed' : 'failed',
+            'stage': result.statusCode == 200 ? 'completed' : 'failed',
+            if (result.statusCode == 200) 'result': data,
+            if (result.statusCode != 200)
+              'error': data['details'] ?? data['error'],
+          }),
+          200,
+        );
+      }
+      expect(r.url.path, '/api/image/create');
       requests.add(jsonDecode(r.body) as Map<String, dynamic>);
       if (pending != null) return pending!.future;
       return response();

@@ -57,6 +57,7 @@ RELEASE_TESTS=(
   test/logo_export_upgrade_test.dart
   test/logo_catalog_expansion_test.dart
   test/logo_astra_test.dart
+  test/logo_processing_test.dart
   test/bookkeeping_plan_access_test.dart
   test/auth_device_session_test.dart
   test/signup_eligibility_test.dart

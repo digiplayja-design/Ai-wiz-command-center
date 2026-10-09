@@ -154,9 +154,9 @@ class LogoClient extends ChangeNotifier {
 
   void newBrand() {
     _guard();
-    if (images.busy) {
+    if (images.busy || images.hasPendingLogo) {
       throw const ImagineException(
-        'Wait for your AI concept to finish before starting a new brand.',
+        'Check your pending AI concept before starting a new brand.',
       );
     }
     concepts.clear();
