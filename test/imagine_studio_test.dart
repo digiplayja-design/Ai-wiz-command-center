@@ -59,6 +59,7 @@ class Studio {
             'stage': 'planning',
           }),
           202,
+          headers: const {'content-type': 'application/json; charset=utf-8'},
         );
       }
       if (r.url.path == '/api/logo/jobs/logo_fixture') {
@@ -78,6 +79,7 @@ class Studio {
               'error': data['details'] ?? data['error'],
           }),
           200,
+          headers: const {'content-type': 'application/json; charset=utf-8'},
         );
       }
       expect(r.url.path, '/api/image/create');
@@ -98,6 +100,7 @@ class Studio {
               : {'error': 'Daily credit limit reached'},
         ),
     status,
+    headers: const {'content-type': 'application/json; charset=utf-8'},
   );
   void change() {
     token = auth('bob');

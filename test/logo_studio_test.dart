@@ -311,7 +311,8 @@ void main() {
         ...jsonDecode((await f.studio.response()).body) as Map<String, dynamic>,
         'logoDirection': {
           'conceptName': 'A welcoming table',
-          'summary': 'A warm organic mark with readable lettering.',
+          'summary':
+              'A warm organic mark—“Café” lettering, balanced and clear.',
           'planningModel': 'gpt-6-astra',
           'reasoningEffort': 'max',
         },
@@ -338,9 +339,23 @@ void main() {
       expect(f.c.images.results.length, 1);
       expect(find.text('A welcoming table'), findsOneWidget);
       expect(
-        find.text('A warm organic mark with readable lettering.'),
+        find.text('A warm organic mark—“Café” lettering, balanced and clear.'),
         findsOneWidget,
       );
+      await actions.reveal(t, find.text('Download AI concept'));
+      await t.tap(find.text('Download AI concept'));
+      await t.runAsync(() async {
+        // PNG decoding uses the native event loop outside the widget-test clock.
+        for (var i = 0; i < 250 && f.io.files.isEmpty; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        }
+      });
+      await t.pumpAndSettle();
+      expect(f.io.files.single.$2, 'image/png');
+      expect(f.io.files.single.$3, f.c.images.results.single.bytes);
+      expect(f.studio.requests.length, 1);
+      expect(find.textContaining('Invalid argument'), findsNothing);
+      expect(find.textContaining('data:image/png;base64,'), findsNothing);
       expect(t.takeException(), isNull);
     },
   );

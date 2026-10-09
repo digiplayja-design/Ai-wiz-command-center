@@ -299,45 +299,51 @@ class ImagineClient extends ChangeNotifier {
     });
     _notify();
     try {
-      final headers = Map<String, String>.from(headersBuilder())
-        ..['Content-Type'] = 'application/json';
-      final response = logoBrief != null
-          ? await _waitForLogo(_pendingLogo!)
-          : await _http
-                .post(
-                  Uri.parse(
-                    '${baseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/image/create',
-                  ),
-                  headers: headers,
-                  body: jsonEncode({
-                    'prompt': brief.compiledPrompt,
-                    'language': language,
-                    'imageSize': brief.size,
-                    'imageStyle': brief.style,
-                  }),
-                )
-                .timeout(const Duration(seconds: 265));
+      final Map<String, dynamic> data;
+      if (logoBrief != null) {
+        data = await _waitForLogo(_pendingLogo!);
+      } else {
+        final headers = Map<String, String>.from(headersBuilder())
+          ..['Content-Type'] = 'application/json';
+        final response = await _http
+            .post(
+              Uri.parse(
+                '${baseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/image/create',
+              ),
+              headers: headers,
+              body: jsonEncode({
+                'prompt': brief.compiledPrompt,
+                'language': language,
+                'imageSize': brief.size,
+                'imageStyle': brief.style,
+              }),
+            )
+            .timeout(const Duration(seconds: 265));
+        _guard();
+        try {
+          data = jsonDecode(response.body) as Map<String, dynamic>;
+        } catch (_) {
+          throw const ImagineException(
+            'The picture service could not confirm a result. Please try again shortly.',
+          );
+        }
+        if (response.statusCode == 401) {
+          _denied = true;
+          results.clear();
+          recipes = [];
+          draft = const ImagineBrief();
+          throw const ImagineException('Sign in again to create pictures.');
+        }
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw ImagineException(
+            _serviceError(
+              data['details'] ?? data['error'],
+              'This picture could not be created.',
+            ),
+          );
+        }
+      }
       _guard();
-      Map<String, dynamic> data;
-      try {
-        data = jsonDecode(response.body) as Map<String, dynamic>;
-      } catch (_) {
-        throw const ImagineException(
-          'The picture service could not confirm a result. Please try again shortly.',
-        );
-      }
-      if (response.statusCode == 401) {
-        _denied = true;
-        results.clear();
-        recipes = [];
-        draft = const ImagineBrief();
-        throw const ImagineException('Sign in again to create pictures.');
-      }
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw ImagineException(
-          '${data['details'] ?? data['error'] ?? 'This picture could not be created.'}',
-        );
-      }
       final source = data['imageDataUrl'];
       if (source is! String ||
           !source.startsWith('data:image/png;base64,') ||
@@ -385,9 +391,15 @@ class ImagineClient extends ChangeNotifier {
       error =
           'The connection timed out before a picture was returned. A new attempt may use another credit.';
       rethrow;
-    } catch (e) {
-      if (available || _denied) error = '$e';
+    } on ImagineException catch (e) {
+      if (available || _denied) error = e.message;
       rethrow;
+    } catch (_) {
+      final message = logoBrief != null && hasPendingLogo
+          ? 'Your logo result could not be displayed. Tap Check pending logo to retrieve the same result.'
+          : 'The picture result could not be displayed. Please check your results before starting another picture.';
+      if (available || _denied) error = message;
+      throw ImagineException(message);
     } finally {
       _clock?.cancel();
       busy = false;
@@ -398,6 +410,19 @@ class ImagineClient extends ChangeNotifier {
   Map<String, String> _logoHeaders() =>
       Map<String, String>.from(headersBuilder())
         ..['Content-Type'] = 'application/json';
+
+  String _serviceError(dynamic value, String fallback) {
+    // Error text must stay readable and must never become a raw response dump.
+    if (value is! String ||
+        value.trim().isEmpty ||
+        value.length > 1000 ||
+        value.contains('data:image/') ||
+        value.trimLeft().startsWith('{') ||
+        value.contains('imageDataUrl')) {
+      return fallback;
+    }
+    return value.trim();
+  }
 
   Map<String, dynamic> _logoJobData(http.Response response) {
     _guard();
@@ -418,9 +443,10 @@ class ImagineClient extends ChangeNotifier {
     if (response.statusCode >= 400 && response.statusCode < 500) {
       _pendingLogo = null;
       throw ImagineException(
-        data is Map && data['error'] is String
-            ? data['error'] as String
-            : 'The logo job is unavailable.',
+        _serviceError(
+          data is Map ? data['error'] : null,
+          'The logo job is unavailable.',
+        ),
       );
     }
     if (response.statusCode < 200 ||
@@ -433,7 +459,7 @@ class ImagineClient extends ChangeNotifier {
     return data;
   }
 
-  Future<http.Response> _waitForLogo(_PendingLogo pending) async {
+  Future<Map<String, dynamic>> _waitForLogo(_PendingLogo pending) async {
     final base = baseUrl.replaceFirst(RegExp(r'/+$'), '');
     final deadline = DateTime.now().add(const Duration(minutes: 20));
     var connectionFailures = 0;
@@ -484,16 +510,16 @@ class ImagineClient extends ChangeNotifier {
         continue;
       }
       final status = job['status'];
-      if (status == 'completed' && job['result'] is Map) {
+      if (status == 'completed' && job['result'] is Map<String, dynamic>) {
         logoStage = 'completed';
-        return http.Response(jsonEncode(job['result']), 200);
+        // Keep the decoded JSON: recreating an HTTP response defaults to Latin-1,
+        // which rejects punctuation/non-Latin text and copies the entire PNG.
+        return job['result'] as Map<String, dynamic>;
       }
       if (status == 'failed') {
         _pendingLogo = null;
         throw ImagineException(
-          job['error'] is String
-              ? job['error'] as String
-              : 'This logo could not be completed.',
+          _serviceError(job['error'], 'This logo could not be completed.'),
         );
       }
       if (!['queued', 'processing'].contains(status)) {

@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:ai_wiz_command_center/imagine_studio/imagine_client.dart';
+import 'package:ai_wiz_command_center/imagine_studio/imagine_catalog.dart';
 import 'package:ai_wiz_command_center/logo_studio/logo_processing_panel.dart';
 import 'imagine_studio_test.dart' as imagine;
 import 'logo_studio_test.dart' as logo;
@@ -25,6 +26,7 @@ http.Response job(String status, {String stage = 'planning', dynamic result}) =>
         'result': ?result,
       }),
       200,
+      headers: const {'content-type': 'application/json; charset=utf-8'},
     );
 
 ImagineClient client(Future<http.Response> Function(http.Request) handler) =>
@@ -55,6 +57,90 @@ void main() {
           .load();
     }
   });
+
+  test(
+    'completed logo with an em dash, smart quotes and multilingual text keeps its PNG and direction',
+    () async {
+      final fixture = imagine.Studio();
+      final result =
+          jsonDecode((await fixture.response()).body) as Map<String, dynamic>;
+      const summary =
+          'One destination for connected tools—not another standalone app. “KORLIX AI” • Café • 東京 ✨';
+      result.addAll({
+        'success': true,
+        'title': 'Logo Studio concept',
+        'content': 'Logo concept: Orbit Dock. $summary',
+        'logoDirection': {
+          'conceptName': 'Orbit Dock',
+          'summary': summary,
+          'planningModel': 'gpt-6-astra',
+          'reasoningEffort': 'max',
+        },
+      });
+      var posts = 0;
+      final c = client((request) async {
+        if (request.method == 'POST') {
+          posts++;
+          return job('queued');
+        }
+        return job('completed', result: result);
+      });
+      addTearDown(c.dispose);
+      final image = await c.create(
+        logo.sample.aiBrief,
+        logoBrief: logo.sample.json,
+      );
+      expect(image!.logoDirection!.summary, summary);
+      expect(image.logoDirection!.conceptName, 'Orbit Dock');
+      expect(
+        image.bytes,
+        base64Decode((result['imageDataUrl'] as String).substring(22)),
+      );
+      expect(c.error, isNull);
+      expect(c.hasPendingLogo, false);
+      expect(posts, 1);
+    },
+  );
+
+  test(
+    'raw service payloads and unexpected exceptions never become display errors',
+    () async {
+      const raw = '{"imageDataUrl":"data:image/png;base64,PRIVATE_PIXELS"}';
+      for (final value in [
+        raw,
+        'x' * 2000,
+        {'imageDataUrl': raw},
+      ]) {
+        final c = client(
+          (request) async => http.Response(
+            jsonEncode({
+              'jobId': 'logo_existing',
+              'status': 'failed',
+              'error': value,
+            }),
+            200,
+            headers: const {'content-type': 'application/json; charset=utf-8'},
+          ),
+        );
+        await expectLater(
+          c.create(logo.sample.aiBrief, logoBrief: logo.sample.json),
+          throwsA(isA<ImagineException>()),
+        );
+        expect(c.error, 'This logo could not be completed.');
+        expect(c.busy, false);
+        c.dispose();
+      }
+      final c = client((_) async => throw ArgumentError.value(raw, 'string'));
+      await expectLater(
+        c.create(const ImagineBrief(prompt: 'A picture')),
+        throwsA(isA<ImagineException>()),
+      );
+      expect(c.error, isNot(contains('PRIVATE_PIXELS')));
+      expect(c.error, isNot(contains('Invalid argument')));
+      expect(c.error!.length, lessThan(200));
+      c.dispose();
+    },
+  );
 
   test(
     'lost start reply uses the same request ID; poll failures keep one job and report actual stages',
