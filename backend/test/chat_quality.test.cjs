@@ -46,7 +46,7 @@ function fixture(options = {}) {
   };
   vm.createContext(scope);
   for (const name of ['shouldUseLiveSearch','wantsFile','calculateCredits','createOpenAIResponse','buildKorlixImageCreatePrompt',
-    'createKorlixImaginedImage','createKorlixImprovedImage']) {
+    'createKorlixImaginedImage','createKorlixImageForUser','createKorlixImprovedImage']) {
     const match = new RegExp('(?:async )?function '+name+'\\b').exec(source);
     vm.runInContext(source.slice(match.index, source.indexOf('\n}\n',match.index)+2),scope);
   }

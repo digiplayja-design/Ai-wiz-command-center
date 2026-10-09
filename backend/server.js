@@ -92,6 +92,7 @@ const {CHAT_MODEL, CHAT_EFFORT, chatHistory, needsOfficialSourceSearch, chatAccu
 import pictureStudio from "./picture_studio.cjs";
 const {pictureOptions, pictureModelSettings, improvePicture} = pictureStudio;
 import logoStudio from "./logo_studio.cjs";
+import {registerLogoJobs} from "./logo_jobs.mjs";
 const {logoStudioSettings, logoBriefOptions, createDirectedLogo} = logoStudio;
 let chatModelAccess = {chat: 'checking', images: 'checking'};
 import { toFile } from "openai/uploads";
@@ -3874,29 +3875,21 @@ async function createKorlixImaginedImage({ prompt, imageSize, imageStyle }) {
   };
 }
 
-app.post("/api/image/create", async (req, res) => {
-  try {
+async function createKorlixImageForUser({user, body = {}, onStage = () => {}}) {
     if (!process.env.OPENAI_API_KEY) {
-      return res.status(400).json({
-        error: "Missing OPENAI_API_KEY on backend.",
-      });
+      throw Object.assign(new Error("Picture generation is not configured."), {statusCode: 503});
     }
-
-    const user = await requireUser(req);
     const profile = await getOrCreateProfile(user);
     const usageCounter = await getOrCreateUsageCounter(user.id);
 
-    const body = req.body || {};
     const prompt = String(body.prompt || "").trim();
     const languageCode = body.language || "en";
 
     if (!prompt) {
-      return res.status(400).json({
-        error: "Describe the picture you want Korlix AI to create.",
-      });
+      throw Object.assign(new Error("Describe the picture you want Korlix AI to create."), {statusCode: 400});
     }
 
-    if (prompt.length > 12000) return res.status(400).json({error: "Keep the image description under 12,000 characters."});
+    if (prompt.length > 12000) throw Object.assign(new Error("Keep the image description under 12,000 characters."), {statusCode: 400});
     imageSettings(body);
     const logoBrief = logoBriefOptions(body);
 
@@ -3909,17 +3902,14 @@ app.post("/api/image/create", async (req, res) => {
     });
 
     if (!usageCheck.allowed) {
-      return res.status(429).json({
-        error: usageCheck.reason,
-        tier: profile?.tier || "basic",
-      });
+      throw Object.assign(new Error(usageCheck.reason), {statusCode: 429});
     }
 
     const imageResult = logoBrief
       ? await createDirectedLogo({
           client: new OpenAI({apiKey: process.env.OPENAI_API_KEY, maxRetries: 0}),
           brief: logoBrief, render: createKorlixImaginedImage,
-          imageSize: body.imageSize, language: languageCode,
+          imageSize: body.imageSize, language: languageCode, onStage,
         })
       : await createKorlixImaginedImage({prompt, imageSize: body.imageSize, imageStyle: body.imageStyle});
 
@@ -3945,7 +3935,7 @@ app.post("/api/image/create", async (req, res) => {
       creditsNeeded,
     });
 
-    return res.json({
+    return {
       success: true,
       title: logoBrief ? "Logo Studio concept" : "Imagined picture",
       language: languageCode,
@@ -3961,16 +3951,24 @@ app.post("/api/image/create", async (req, res) => {
       creditsUsed: creditsNeeded,
       usage: updatedUsage,
       generationId: historyItem?.id || null,
-    });
-  } catch (error) {
-    console.error("Image create error:", sanitize(error?.message || error));
+    };
+}
 
+app.post("/api/image/create", async (req, res) => {
+  try {
+    const user = await requireUser(req);
+    return res.json(await createKorlixImageForUser({user, body: req.body || {}}));
+  } catch (error) {
+    console.error("Image create error:", sanitize(error?.message || error), error.logoDiagnostic || {});
     return res.status(error.statusCode || 500).json({
       error: "Image generation failed",
       details: getKorlixUserFacingError(error),
     });
   }
 });
+
+registerLogoJobs(app, {requireUser, execute: createKorlixImageForUser,
+  log: data => console.error("Logo job diagnostic:", JSON.stringify(data))});
 
 
 app.post("/api/image/improve", requireDocumentUploadUser, documentUpload.single("image"), async (req, res) => {

@@ -48,7 +48,7 @@ async function fixture(flags = {}) {
     console: {error() {}}, app: {post(_path, handler) {context.route = handler;}},
   };
   vm.createContext(context);
-  for (const name of ['buildKorlixImageCreatePrompt', 'createKorlixImaginedImage']) {
+  for (const name of ['buildKorlixImageCreatePrompt', 'createKorlixImaginedImage', 'createKorlixImageForUser']) {
     const match = new RegExp('(?:async )?function ' + name + '\\b').exec(source);
     assert(match);
     vm.runInContext(source.slice(match.index, source.indexOf('\n}\n', match.index) + 2), context);
@@ -78,7 +78,8 @@ test('the actual logo route plans with Astra max before rendering, then charges 
   assert.equal(p.body.store, false);
   assert.equal(p.body.max_output_tokens, 32768);
   assert.equal(p.body.text.format.strict, true);
-  assert.equal(p.options.timeout, 180000);
+  assert.equal(p.body.background, true);
+  assert.equal(p.options.timeout, 30000);
   assert.equal(p.options.maxRetries, 0);
   assert.equal(p.body.temperature, undefined);
   assert.deepEqual(JSON.parse(p.body.input[0].content).brief, brief);
@@ -178,5 +179,64 @@ test('failed or damaged image output is rejected before history and charging', a
 test('live health settings describe the dedicated logo planning configuration', () => {
   assert.equal(logo.logoStudioSettings().planningModel, 'gpt-6-astra');
   assert.equal(logo.logoStudioSettings().reasoningEffort, 'max');
+  assert.equal(logo.logoStudioSettings().backgroundJobs, true);
+  assert.equal(logo.logoStudioSettings().planningTimeoutSeconds, 600);
   assert.match(source, /logoStudio: logoStudioSettings\(\)/);
+});
+
+test('Astra max continues beyond the old three-minute cutoff by polling one background response', async () => {
+  const f = await fixture(), calls = [], stages = [];
+  let clock = 0, reads = 0;
+  const result = await logo.createDirectedLogo({brief, imageSize: '1024x1024',
+    now: () => clock, sleep: async () => {clock += 200000;}, onStage: stage => stages.push(stage),
+    client: {responses: {
+      create: async body => {calls.push(body); return {id: 'resp_existing', status: 'queued'};},
+      retrieve: async (id, query, options) => {
+        assert.equal(id, 'resp_existing');
+        assert.deepEqual(query, {});
+        assert.deepEqual(options, {timeout: 30000, maxRetries: 0});
+        return ++reads < 2 ? {id, status: 'in_progress'} : {id, status: 'completed', output_text: JSON.stringify(plan)};
+      },
+    }}, render: async () => ({imageDataUrl: 'data:image/png;base64,' + f.png.toString('base64')}),
+  });
+  assert.equal(clock, 400000);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].reasoning.effort, 'max');
+  assert.deepEqual(stages.slice(-2), ['rendering', 'finishing']);
+  assert.equal(result.logoDirection.conceptName, plan.conceptName);
+});
+
+test('temporary status read failures retry the response lookup, never the generation', async () => {
+  const f = await fixture();
+  let creates = 0, reads = 0;
+  await logo.createDirectedLogo({brief, sleep: async () => {},
+    client: {responses: {
+      create: async () => {creates++; return {id: 'resp_existing', status: 'queued'};},
+      retrieve: async () => {
+        if (++reads < 3) throw Object.assign(Error('Network interruption'), {status: 503});
+        return {status: 'completed', output_text: JSON.stringify(plan)};
+      },
+    }}, render: async () => ({imageDataUrl: 'data:image/png;base64,' + f.png.toString('base64')}),
+  });
+  assert.equal(creates, 1);
+  assert.equal(reads, 3);
+});
+
+test('planning has a bounded deadline, cancels abandoned work and never renders after timeout', async () => {
+  let clock = 0, cancellations = 0, renders = 0;
+  await assert.rejects(logo.createDirectedLogo({brief, now: () => clock,
+    sleep: async () => {clock += 200001;},
+    client: {responses: {
+      create: async () => ({id: 'resp_existing', status: 'queued'}),
+      retrieve: async () => ({id: 'resp_existing', status: 'in_progress'}),
+      cancel: async id => {assert.equal(id, 'resp_existing'); cancellations++;},
+    }}, render: async () => {renders++;},
+  }), error => {
+    assert.equal(error.statusCode, 504);
+    assert.equal(error.logoDiagnostic.reason, 'planning_deadline');
+    assert.match(error.message, /No generation credit/);
+    return true;
+  });
+  assert.equal(cancellations, 1);
+  assert.equal(renders, 0);
 });

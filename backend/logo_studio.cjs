@@ -1,18 +1,19 @@
 'use strict';
 
 const sharp = require('sharp');
-const {createTextResponse} = require('./korlix_astra.cjs');
+const {astraRequest} = require('./korlix_astra.cjs');
 const {imageSettings} = require('./chat_quality.cjs');
 
 const LOGO_MODEL = 'gpt-6-astra';
 const LOGO_EFFORT = 'max';
-const PLAN_TIMEOUT_MS = 180000;
+const PLAN_TIMEOUT_MS = 600000;
 const PLAN_LIMITS = Object.freeze({conceptName: 100, summary: 800, renderPrompt: 6000});
 const fail = (message, statusCode = 502) => Object.assign(new Error(message), {statusCode});
 
 function logoStudioSettings() {
   const {model, quality} = imageSettings();
-  return {planningModel: LOGO_MODEL, reasoningEffort: LOGO_EFFORT, imageModel: model, imageQuality: quality};
+  return {planningModel: LOGO_MODEL, reasoningEffort: LOGO_EFFORT, imageModel: model, imageQuality: quality,
+    backgroundJobs: true, planningTimeoutSeconds: PLAN_TIMEOUT_MS / 1000};
 }
 
 function logoBriefOptions(body = {}) {
@@ -53,7 +54,14 @@ function logoRenderPrompt(brief, plan) {
 }
 
 function readLogoPlan(response) {
-  if (response?.status !== 'completed') throw fail('The logo design plan did not finish. Please try again.');
+  if (response?.status !== 'completed') {
+    const error = fail(response?.incomplete_details?.reason === 'max_output_tokens'
+      ? 'Astra reached the design budget before finishing. No generation credit was used. Please simplify the brief and try again.'
+      : 'The logo design plan did not finish. No generation credit was used. Please try again.');
+    error.logoDiagnostic = {stage: 'planning', status: safeCode(response?.status),
+      reason: safeCode(response?.incomplete_details?.reason), code: safeCode(response?.error?.code)};
+    throw error;
+  }
   const content = (Array.isArray(response.output) ? response.output : [])
     .flatMap(item => Array.isArray(item?.content) ? item.content : []).filter(Boolean);
   if (content.some(item => item.type === 'refusal')) {
@@ -94,14 +102,51 @@ async function validateLogoImage(image) {
   }
 }
 
-async function createDirectedLogo({client, brief, render, imageSize, language = 'en'}) {
+function safeCode(value) {
+  return typeof value === 'string' && /^[a-zA-Z0-9_.:-]{1,120}$/.test(value) ? value : undefined;
+}
+
+async function waitForLogoPlan(client, initial, {sleep, now, onStage}) {
+  let response = initial;
+  const deadline = now() + PLAN_TIMEOUT_MS;
+  let failures = 0;
+  while (['queued', 'in_progress'].includes(response?.status)) {
+    if (typeof response.id !== 'string' || !/^resp_[a-zA-Z0-9_-]+$/.test(response.id)) {
+      throw fail('Astra did not return a usable design job. No generation credit was used.');
+    }
+    onStage('planning');
+    if (now() >= deadline) {
+      try { await client.responses.cancel(response.id, {timeout: 15000, maxRetries: 0}); } catch (_) {}
+      throw Object.assign(fail('Astra is taking too long to finish this design. No generation credit was used. Please try again.', 504),
+        {logoDiagnostic: {stage: 'planning', reason: 'planning_deadline'}});
+    }
+    await sleep(2500);
+    try {
+      response = await client.responses.retrieve(response.id, {}, {timeout: 30000, maxRetries: 0});
+      failures = 0;
+    } catch (error) {
+      // Retry only reading the existing response. Never create another generation.
+      if (++failures >= 5 || [400, 401, 403, 404].includes(error?.status)) {
+        try { await client.responses.cancel(response.id, {timeout: 15000, maxRetries: 0}); } catch (_) {}
+        throw error;
+      }
+    }
+  }
+  return response;
+}
+
+async function createDirectedLogo({client, brief, render, imageSize, language = 'en',
+  onStage = () => {}, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), now = Date.now}) {
   if (typeof language !== 'string' || language.length > 32) throw fail('Choose a supported language.', 400);
   let response;
+  const startedAt = now();
+  onStage('planning');
   try {
-    response = await createTextResponse(client, {
+    response = await client.responses.create(astraRequest({
       model: LOGO_MODEL,
       reasoning: {effort: LOGO_EFFORT},
       store: false,
+      background: true,
       max_output_tokens: 32768,
       instructions: [
         'You are the creative director for KORLIX Logo Studio. Develop one distinctive, production-minded logo concept from the supplied brand brief.',
@@ -116,14 +161,36 @@ async function createDirectedLogo({client, brief, render, imageSize, language = 
         schema: {type: 'object', additionalProperties: false,
           properties: Object.fromEntries(Object.keys(PLAN_LIMITS).map(key => [key, {type: 'string'}])),
           required: Object.keys(PLAN_LIMITS)}}},
-    }, {timeout: PLAN_TIMEOUT_MS, maxRetries: 0});
-  } catch (_) {
+    }), {timeout: 30000, maxRetries: 0});
+    response = await waitForLogoPlan(client, response, {sleep, now, onStage});
+  } catch (cause) {
     // A failed planning step must never silently become an unplanned image or a retry.
-    throw fail('Astra could not complete the logo design plan. No generation credit was used. Please try again.', 503);
+    if (cause?.logoDiagnostic) throw cause;
+    const error = fail('Astra could not complete the logo design plan. No generation credit was used. Please try again.', 503);
+    error.logoDiagnostic = {stage: 'planning', elapsedMs: now() - startedAt,
+      httpStatus: Number.isInteger(cause?.status) ? cause.status : undefined,
+      code: safeCode(cause?.code), parameter: safeCode(cause?.param),
+      type: safeCode(cause?.name), requestId: safeCode(cause?.request_id)};
+    throw error;
   }
-  const plan = readLogoPlan(response);
-  const image = await render({prompt: logoRenderPrompt(brief, plan), imageSize, imageStyle: 'design'});
-  await validateLogoImage(image);
+  let plan;
+  try { plan = readLogoPlan(response); }
+  catch (error) {
+    error.logoDiagnostic ||= {stage: 'planning', reason: 'invalid_plan'};
+    throw error;
+  }
+  onStage('rendering');
+  let image;
+  try {
+    image = await render({prompt: logoRenderPrompt(brief, plan), imageSize, imageStyle: 'design'});
+    onStage('finishing');
+    await validateLogoImage(image);
+  } catch (cause) {
+    const error = fail('The logo artwork could not be completed. No generation credit was used. Please try again.');
+    error.logoDiagnostic = {stage: 'rendering', code: safeCode(cause?.code),
+      type: safeCode(cause?.name), httpStatus: Number.isInteger(cause?.status) ? cause.status : undefined};
+    throw error;
+  }
   return {...image, logoDirection: {conceptName: plan.conceptName, summary: plan.summary,
     planningModel: LOGO_MODEL, reasoningEffort: LOGO_EFFORT}};
 }

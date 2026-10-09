@@ -10,6 +10,7 @@ logs
 **/*.log
 test/*
 !test/logo_studio.test.cjs
+!test/logo_jobs.test.mjs
 test_*.mjs
 coverage
 .DS_Store

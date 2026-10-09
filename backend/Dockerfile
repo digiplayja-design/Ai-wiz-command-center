@@ -15,7 +15,7 @@ COPY --chown=node:node . .
 RUN mkdir -p /app/logs && chown node:node /app /app/logs
 USER node
 RUN npm run k135z:verify-sdk && node --check server.js \
-    && node --test test/logo_studio.test.cjs \
+    && node --test test/logo_studio.test.cjs test/logo_jobs.test.mjs \
     && ffmpeg -hide_banner -loglevel error -nostdin -y -f lavfi \
        -i anullsrc=r=16000:cl=mono -t 0.1 -c:a libmp3lame -b:a 64k -f mp3 /dev/null
 CMD ["sh", "-c", "npm run k135z:verify-sdk && exec node server.js"]
