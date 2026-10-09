@@ -2,13 +2,16 @@ import {backupConfig, safeBackupCode, check} from './config.mjs';
 import {createBackblazeStore} from './backblaze.mjs';
 import {createReceiptBackupSource} from './source.mjs';
 import {runBackblazeProbe, runReceiptBackup} from './runner.mjs';
+import {createReceiptBackupAlerts} from './alerts.mjs';
 
 // Runs inside the existing paid backend. A restart performs catch-up after 15s.
 // No customer API route, incoming trigger, or production deletion capability is exposed.
 export function startReceiptBackupRuntime({database, env = process.env, logger = console,
-  timers = {setTimeout, clearTimeout}, storeFactory = createBackblazeStore, sourceFactory = createReceiptBackupSource}) {
+  timers = {setTimeout, clearTimeout}, storeFactory = createBackblazeStore, sourceFactory = createReceiptBackupSource,
+  alertsFactory = createReceiptBackupAlerts}) {
   const controller = new AbortController();
   let timer, store, config, running = false, validated = false;
+  const alerts = alertsFactory({env, logger, signal: controller.signal});
   const status = {mode: 'off', lastSuccessAt: null, lastFailureAt: null, lastError: null};
   const log = (event, fields, failed = false) => logger[failed ? 'error' : 'info'](JSON.stringify({event, ...fields}));
   try {
@@ -21,7 +24,10 @@ export function startReceiptBackupRuntime({database, env = process.env, logger =
   } catch (error) {
     status.lastError = safeBackupCode(error);
     log('receipt_backup_configuration', {status: 'blocked', code: status.lastError}, true);
-    return {stop() {}, getStatus: () => ({...status})};
+    if (env.RECEIPT_BACKUP_MODE === 'enabled') {
+      void alerts.failure(error).catch(() => log('receipt_backup_alert', {status: 'failed', code: 'BACKUP_ALERT_REQUEST_FAILED'}, true));
+    }
+    return {stop() { controller.abort(); }, getStatus: () => ({...status})};
   }
   async function tick() {
     if (running || controller.signal.aborted) return;
@@ -37,11 +43,17 @@ export function startReceiptBackupRuntime({database, env = process.env, logger =
         const result = await runReceiptBackup({store, source: sourceFactory(database, {project: config.project}), config, signal});
         status.lastSuccessAt = result.completedAt; status.lastError = null;
         log('receipt_backup_run', result);
+        try { await alerts.test(); }
+        catch { log('receipt_backup_alert', {kind: 'test', status: 'failed', code: 'BACKUP_ALERT_REQUEST_FAILED'}, true); }
       }
     } catch (error) {
       failed = true; status.lastFailureAt = new Date().toISOString(); status.lastError = safeBackupCode(error);
       log('receipt_backup_failure', {mode: config.mode, code: status.lastError,
         lastSuccessAt: status.lastSuccessAt, retryMinutes: config.mode === 'enabled' ? 15 : null}, true);
+      if (config.mode === 'enabled' && !controller.signal.aborted) {
+        try { await alerts.failure(error); }
+        catch { log('receipt_backup_alert', {status: 'failed', code: 'BACKUP_ALERT_REQUEST_FAILED'}, true); }
+      }
     } finally {
       running = false;
       if (config.mode === 'enabled' && !controller.signal.aborted) {
