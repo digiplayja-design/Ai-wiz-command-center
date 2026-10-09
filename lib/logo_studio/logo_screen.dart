@@ -40,7 +40,10 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
       _accent = TextEditingController();
   late final io = widget.io ?? LogoIo();
   final scroll = ScrollController();
-  int tab = 0, palette = 0;
+  int tab = 0, palette = 0, editorTab = 0;
+  bool previewInUse = false;
+  double? exportProgress;
+  String exportStage = 'Preparing your files…';
   String industry = 'Technology', style = 'Modern';
   LogoDesign _briefBase = const LogoDesign();
   String? _selectedAiId;
@@ -56,13 +59,11 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
   void initState() {
     super.initState();
     c.addListener(_session);
-    for (final controller in [_name, _tagline, _idea]) {
-      controller.addListener(_refreshBrief);
-    }
     unawaited(_initialize());
   }
 
   Future<void> _initialize() async {
+    unawaited(_loadProjects());
     try {
       await ensureLogoFonts();
     } catch (_) {
@@ -75,8 +76,11 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
       }
       return;
     }
+    if (mounted) setState(() => ready = true);
+  }
+
+  Future<void> _loadProjects() async {
     try {
-      if (mounted) setState(() => ready = true);
       await c.load();
     } catch (_) {
       if (mounted && c.available) {
@@ -86,10 +90,6 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
         );
       }
     }
-  }
-
-  void _refreshBrief() {
-    if (mounted && tab == 0) setState(() {});
   }
 
   void _session() {
@@ -169,7 +169,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
       _say('Add your brand name, then choose Create my logos.');
       return;
     }
-    if (next == 0 || next == 2) _sync(c.design);
+    if ((next == 0 && c.design.error == null) || next == 2) _sync(c.design);
     setState(() {
       tab = next;
       error = notice = null;
@@ -261,6 +261,8 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
   void _choose(LogoDesign d) {
     c.choose(d);
     _sync(d);
+    editorTab = 0;
+    previewInUse = false;
     _go(2);
   }
 
@@ -347,6 +349,8 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
     var filename = d.filename;
     setState(() {
       exporting = true;
+      exportProgress = null;
+      exportStage = 'Preparing your files…';
       error = notice = null;
     });
     void guard() {
@@ -360,7 +364,17 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
       late String extension, mime;
       switch (kind) {
         case 'kit':
-          bytes = await logoBrandKit(d, checkCurrent: guard);
+          bytes = await logoBrandKit(
+            d,
+            checkCurrent: guard,
+            onProgress: (done, total, stage) {
+              guard();
+              setState(() {
+                exportProgress = done / total;
+                exportStage = stage;
+              });
+            },
+          );
           extension = 'brand-kit.zip';
           mime = 'application/zip';
         case 'svg':
@@ -454,37 +468,28 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
       subtitle: subtitle,
     ),
   );
-  Widget _pair(Widget first, Widget second) => IntrinsicHeight(
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(child: first),
-        const SizedBox(width: 12),
-        Expanded(child: second),
-      ],
-    ),
+  Widget _pair(Widget first, Widget second) => LayoutBuilder(
+    builder: (context, constraints) => constraints.maxWidth < 340
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [first, const SizedBox(height: 10), second],
+          )
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: first),
+              const SizedBox(width: 12),
+              Expanded(child: second),
+            ],
+          ),
   );
   Widget _panel(Widget child) => Container(
     margin: const EdgeInsets.only(bottom: 18),
     padding: const EdgeInsets.all(20),
     decoration: BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Color.lerp(skin.panel, skin.primary, skin.isLight ? .03 : .07)!,
-          skin.panelDeep,
-        ],
-      ),
-      borderRadius: BorderRadius.circular(25),
+      color: skin.panel,
+      borderRadius: BorderRadius.circular(22),
       border: Border.all(color: skin.border),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: skin.isLight ? .05 : .2),
-          blurRadius: 16,
-          offset: const Offset(0, 8),
-        ),
-      ],
     ),
     child: child,
   );
@@ -531,40 +536,96 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
         ),
     ],
   );
-  Widget _paletteChoices({bool editing = false}) => Wrap(
-    spacing: 8,
-    runSpacing: 8,
-    children: [
-      for (var i = 0; i < logoPalettes.length; i++)
-        ChoiceChip(
-          avatar: CircleAvatar(
-            backgroundColor: logoColor(logoPalettes[i].primary),
-            child: const SizedBox(),
-          ),
-          label: Text(logoPalettes[i].name),
-          selected: editing
-              ? c.design.primary == logoPalettes[i].primary &&
-                    c.design.secondary == logoPalettes[i].secondary &&
-                    c.design.paper == logoPalettes[i].paper
-              : palette == i,
-          onSelected: busy
-              ? null
-              : (_) {
-                  if (editing) {
-                    final p = logoPalettes[i];
-                    c.update(
-                      c.design.copy(
-                        primary: p.primary,
-                        secondary: p.secondary,
-                        paper: p.paper,
+  Widget _paletteChoices({bool editing = false}) => LayoutBuilder(
+    builder: (context, constraints) => Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (var i = 0; i < logoPalettes.length; i++)
+          SizedBox(
+            width: (constraints.maxWidth - 8) / 2,
+            child: Builder(
+              builder: (context) {
+                final p = logoPalettes[i];
+                final selected = editing
+                    ? c.design.primary == p.primary &&
+                          c.design.secondary == p.secondary &&
+                          c.design.paper == p.paper
+                    : palette == i;
+                return Semantics(
+                  selected: selected,
+                  button: true,
+                  child: Material(
+                    color: skin.panelDeep,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: selected ? skin.primary : skin.border,
+                        width: selected ? 2 : 1,
                       ),
-                    );
-                  } else {
-                    setState(() => _applyPalette(i));
-                  }
-                },
-        ),
-    ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: busy
+                          ? null
+                          : () {
+                              if (editing) {
+                                c.update(
+                                  c.design.copy(
+                                    primary: p.primary,
+                                    secondary: p.secondary,
+                                    paper: p.paper,
+                                  ),
+                                );
+                              } else {
+                                setState(() => _applyPalette(i));
+                              }
+                            },
+                      child: Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: Row(
+                                children: [
+                                  for (final hex in [
+                                    p.primary,
+                                    p.secondary,
+                                    p.paper,
+                                  ])
+                                    Expanded(
+                                      child: Container(
+                                        height: 24,
+                                        color: logoColor(hex),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              p.name,
+                              style: TextStyle(
+                                color: skin.text,
+                                fontSize: 11,
+                                fontWeight: selected
+                                    ? FontWeight.w800
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
+    ),
   );
   Widget _canvas(
     LogoDesign d, {
@@ -797,154 +858,242 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
     );
   }
 
-  List<Widget> _start() => [
-    _panel(
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Image.asset(
-                'assets/branding/korlix_mini_mark.png',
-                width: 30,
-                height: 30,
+  Widget _eyebrow(String text) => Text(
+    text,
+    style: TextStyle(
+      color: skin.primary,
+      fontSize: 11,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 1.8,
+    ),
+  );
+
+  Widget _brandHero() => _panel(
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _eyebrow('A SMALL MARK. A BIG BEGINNING.'),
+        const SizedBox(height: 18),
+        Text(
+          'Build a brand\nthat feels like you.',
+          style: TextStyle(
+            color: skin.text,
+            fontSize: 38,
+            height: 1.05,
+            letterSpacing: -1.6,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'From a first idea to a complete identity. Explore six directions, make one your own, and take it everywhere.',
+          style: TextStyle(color: skin.mutedText, height: 1.6),
+        ),
+        const SizedBox(height: 26),
+        AnimatedBuilder(
+          animation: Listenable.merge([_name, _tagline]),
+          builder: (context, _) {
+            final design = logoDirections(
+              brief.copy(
+                name: _name.text.trim().isEmpty
+                    ? 'Your brand'
+                    : _name.text.trim(),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'KORLIX / LOGO STUDIO',
-                  style: TextStyle(
-                    color: skin.primary,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.6,
-                    fontSize: 11,
-                  ),
+            ).first;
+            return Column(
+              children: [
+                _canvas(
+                  design,
+                  key: const Key('logo-live-preview'),
+                  backdrop: LogoSurface.light,
+                  aspectRatio: 1.65,
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 22),
-          _heading(
-            'Big ideas.\nA signature to match.',
-            'Tell us about your brand. We’ll build six editable directions, ready for your finishing touch.',
-          ),
-          Transform.rotate(
-            angle: -.018,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                    color: skin.primary.withValues(alpha: .12),
-                    blurRadius: 24,
-                    offset: const Offset(0, 12),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _canvas(
+                        design.copy(layout: 'Monogram'),
+                        backdrop: LogoSurface.dark,
+                        aspectRatio: 2.2,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: logoColor(design.paper),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'YOUR PALETTE',
+                              style: TextStyle(
+                                color: Color(0xFF526073),
+                                fontSize: 9,
+                                letterSpacing: 1.2,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                for (final hex in [
+                                  design.primary,
+                                  design.secondary,
+                                  'FFFFFF',
+                                ])
+                                  Expanded(
+                                    child: Container(
+                                      height: 24,
+                                      margin: const EdgeInsets.only(right: 4),
+                                      decoration: BoxDecoration(
+                                        color: logoColor(hex),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 22),
+        Wrap(
+          spacing: 16,
+          runSpacing: 10,
+          children: [
+            for (final item in const [
+              'Editable vectors',
+              'Instant previews',
+              'Ready-to-use kit',
+            ])
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.check_circle_outline_rounded,
+                    color: skin.primary,
+                    size: 15,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    item,
+                    style: TextStyle(color: skin.mutedText, fontSize: 12),
                   ),
                 ],
               ),
-              child: _canvas(
-                logoDirections(
-                  brief.copy(
-                    name: _name.text.trim().isEmpty
-                        ? 'YOUR BRAND'
-                        : _name.text.trim(),
-                  ),
-                ).first,
-                key: const Key('logo-live-preview'),
-                backdrop: LogoSurface.light,
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'LIVE PREVIEW  ·  EDITABLE SVG  ·  TRANSPARENT PNG',
-            style: TextStyle(
-              color: skin.mutedText,
-              fontSize: 10,
-              letterSpacing: .6,
-            ),
-          ),
-        ],
-      ),
+          ],
+        ),
+      ],
     ),
-    _panel(
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _label('A little inspiration'),
-          _presetCards(),
-          const SizedBox(height: 24),
-          _heading(
-            'First, your brand.',
-            'A name and a little direction are all you need.',
+  );
+
+  Widget _briefForm() => _panel(
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _heading(
+          'Let’s meet your brand.',
+          'A name and a little direction are all you need.',
+        ),
+        TextField(
+          key: const Key('logo-brand-name'),
+          controller: _name,
+          maxLength: 50,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            labelText: 'Business or brand name',
+            hintText: 'e.g. Da Final Stop',
           ),
-          TextField(
-            key: const Key('logo-brand-name'),
-            controller: _name,
-            maxLength: 50,
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(
-              labelText: 'Business or brand name',
-              hintText: 'e.g. Da Final Stop',
-            ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          key: const Key('logo-tagline'),
+          controller: _tagline,
+          maxLength: 80,
+          decoration: const InputDecoration(
+            labelText: 'Tagline (optional)',
+            hintText: 'A few words that make you memorable',
           ),
-          const SizedBox(height: 10),
-          TextField(
-            key: const Key('logo-tagline'),
-            controller: _tagline,
-            maxLength: 80,
-            decoration: const InputDecoration(
-              labelText: 'Tagline (optional)',
-              hintText: 'A few words that make you memorable',
-            ),
+        ),
+        _label('Quick start'),
+        _presetCards(),
+        _label('What do you do?'),
+        DropdownButtonFormField<String>(
+          key: ValueKey('logo-industry-$industry'),
+          initialValue: industry,
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Industry'),
+          items: [
+            for (final v in logoIndustries)
+              DropdownMenuItem(value: v, child: Text(v)),
+          ],
+          onChanged: (v) {
+            if (v != null) setState(() => industry = v);
+          },
+        ),
+        _label('Your personality'),
+        _choices(logoStyles, style, (v) => setState(() => style = v)),
+        _label('A color direction'),
+        _paletteChoices(),
+        const SizedBox(height: 20),
+        TextField(
+          key: const Key('logo-idea'),
+          controller: _idea,
+          maxLength: 700,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Ideas for AI exploration (optional)',
+            hintText: 'A rising sun, warm hospitality, a neighborhood café…',
+            alignLabelWithHint: true,
           ),
-          _label('What do you do?'),
-          DropdownButtonFormField<String>(
-            key: ValueKey('logo-industry-$industry'),
-            initialValue: industry,
-            isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Industry'),
-            items: [
-              for (final v in logoIndustries)
-                DropdownMenuItem(value: v, child: Text(v)),
-            ],
-            onChanged: (v) {
-              if (v != null) setState(() => industry = v);
-            },
+        ),
+        if (widget.allowVoice)
+          TextButton.icon(
+            onPressed: busy ? null : _voice,
+            icon: const Icon(Icons.mic_none_rounded),
+            label: const Text('Tell Rici your idea'),
           ),
-          _label('Your personality'),
-          _choices(logoStyles, style, (v) => setState(() => style = v)),
-          _label('A color direction'),
-          _paletteChoices(),
-          const SizedBox(height: 20),
-          TextField(
-            key: const Key('logo-idea'),
-            controller: _idea,
-            maxLength: 700,
-            minLines: 2,
-            maxLines: 4,
-            decoration: const InputDecoration(
-              labelText: 'Ideas for AI exploration (optional)',
-              hintText: 'A rising sun, warm hospitality, a neighborhood café…',
-              alignLabelWithHint: true,
-            ),
-          ),
-          if (widget.allowVoice)
-            TextButton.icon(
-              onPressed: busy ? null : _voice,
-              icon: const Icon(Icons.mic_none_rounded),
-              label: const Text('Tell Rici your idea'),
-            ),
-          const SizedBox(height: 16),
-          KorlixActionButton(
-            key: const Key('logo-generate'),
-            label: 'Create my logos',
-            icon: Icons.auto_awesome_rounded,
-            subtitle: 'Six editable directions · no AI credit used',
-            expand: true,
-            onPressed: ready && !busy ? _generate : null,
-          ),
-        ],
-      ),
+        const SizedBox(height: 16),
+        KorlixActionButton(
+          key: const Key('logo-generate'),
+          label: 'Create my logos',
+          icon: Icons.auto_awesome_rounded,
+          subtitle: 'Six editable directions · no AI credit used',
+          expand: true,
+          onPressed: ready && !busy ? _generate : null,
+        ),
+      ],
+    ),
+  );
+
+  List<Widget> _start() => [
+    LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 850) {
+          return Column(children: [_brandHero(), _briefForm()]);
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 5, child: _brandHero()),
+            const SizedBox(width: 24),
+            Expanded(flex: 6, child: _briefForm()),
+          ],
+        );
+      },
     ),
   ];
 
@@ -962,7 +1111,11 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
           children: [
             for (var i = 0; i < c.concepts.length; i++)
               SizedBox(
-                width: (constraints.maxWidth - 12) / 2,
+                width: constraints.maxWidth < 450
+                    ? constraints.maxWidth
+                    : constraints.maxWidth >= 1050
+                    ? (constraints.maxWidth - 24) / 3
+                    : (constraints.maxWidth - 12) / 2,
                 child: Material(
                   color: skin.panel,
                   borderRadius: BorderRadius.circular(18),
@@ -976,9 +1129,44 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
                         _canvas(c.concepts[i], backdrop: LogoSurface.light),
                         Padding(
                           padding: const EdgeInsets.all(12),
-                          child: Text(
-                            logoDirectionNames[i],
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${(i + 1).toString().padLeft(2, '0')} / ${logoDirectionNames[i]}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Text(
+                                      '${c.concepts[i].layout} · ${c.concepts[i].typeface}',
+                                      style: TextStyle(
+                                        color: skin.mutedText,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              for (final hex in [
+                                c.concepts[i].primary,
+                                c.concepts[i].secondary,
+                              ])
+                                Container(
+                                  width: 12,
+                                  height: 12,
+                                  margin: const EdgeInsets.only(left: 4),
+                                  decoration: BoxDecoration(
+                                    color: logoColor(hex),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                         Padding(
@@ -988,12 +1176,11 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
                             crossAxisAlignment: WrapCrossAlignment.center,
                             spacing: 4,
                             children: [
-                              Text(
-                                'Customize',
-                                style: TextStyle(
-                                  color: skin.primary,
-                                  fontSize: 12,
-                                ),
+                              TextButton(
+                                onPressed: busy
+                                    ? null
+                                    : () => _choose(c.concepts[i]),
+                                child: const Text('Customize'),
                               ),
                               IconButton(
                                 key: ValueKey('logo-shortlist-$i'),
@@ -1122,6 +1309,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
                                   aspectRatio: 1,
                                   child: Image.memory(
                                     c.images.results[i].bytes,
+                                    cacheWidth: 240,
                                     fit: BoxFit.contain,
                                     errorBuilder: (_, _, _) =>
                                         const Icon(Icons.broken_image_outlined),
@@ -1194,239 +1382,639 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
     );
   }
 
-  List<Widget> _editor() => [
-    _heading(
-      'Make it unmistakably yours.',
-      'Fine-tune your chosen direction. Your preview updates instantly.',
+  String get _saveStatus => c.currentProjectId == null
+      ? 'Not saved yet'
+      : c.hasUnsavedChanges
+      ? 'Unsaved changes'
+      : 'Saved on this device';
+
+  void _showBrandPreviews() {
+    if (MediaQuery.sizeOf(context).width >= 1000) {
+      setState(() => previewInUse = !previewInUse);
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => FractionallySizedBox(
+        heightFactor: .9,
+        child: Column(
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: IconButton(
+                tooltip: 'Close brand previews',
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                child: AnimatedBuilder(
+                  animation: c,
+                  builder: (context, _) => c.available
+                      ? LogoPreviewBoard(design: c.design)
+                      : const Text('Your session changed.'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _editorToolbar() => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                c.design.name.isEmpty ? 'Your design' : c.design.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 18,
+                  color: skin.text,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                _saveStatus,
+                style: TextStyle(fontSize: 11, color: skin.mutedText),
+              ),
+            ],
+          ),
+        ),
+        TextButton(
+          onPressed: busy || !c.canUndo ? null : c.undo,
+          child: const Text('Undo'),
+        ),
+        TextButton(
+          onPressed: busy || !c.canRedo ? null : c.redo,
+          child: const Text('Redo'),
+        ),
+      ],
     ),
-    _panel(
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _canvas(c.design),
-          const SizedBox(height: 16),
-          _choices(
-            ['Light', 'Dark', 'Transparent'],
-            ['Light', 'Dark', 'Transparent'][surface.index],
-            (v) => setState(
-              () => surface = LogoSurface
-                  .values[['Light', 'Dark', 'Transparent'].indexOf(v)],
+  );
+
+  Widget _previewStage({
+    required bool compact,
+    required double height,
+  }) => Container(
+    key: const Key('logo-editor-stage'),
+    padding: EdgeInsets.all(compact ? 12 : 24),
+    decoration: BoxDecoration(
+      color: Color.lerp(skin.panelDeep, skin.primary, .035),
+      border: Border.all(color: skin.border),
+      borderRadius: BorderRadius.circular(22),
+    ),
+    child: Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _eyebrow(
+                previewInUse ? 'YOUR BRAND, IN CONTEXT' : 'LIVE CANVAS',
+              ),
+            ),
+            TextButton.icon(
+              key: const Key('logo-preview-mode'),
+              onPressed: _showBrandPreviews,
+              icon: Icon(
+                previewInUse ? Icons.gesture_rounded : Icons.grid_view_rounded,
+                size: 16,
+              ),
+              label: Text(previewInUse ? 'Canvas' : 'In use'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (previewInUse)
+          SizedBox(
+            height: height,
+            child: SingleChildScrollView(
+              child: LogoPreviewBoard(design: c.design),
+            ),
+          )
+        else
+          SizedBox(
+            height: height,
+            width: double.infinity,
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: compact ? 2.1 : 1.5,
+                child: _canvas(
+                  c.design,
+                  key: const Key('logo-editor-preview'),
+                  aspectRatio: compact ? 2.1 : 1.5,
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 12,
-            children: [
-              TextButton.icon(
-                onPressed: busy || !c.canUndo ? null : c.undo,
-                icon: const Icon(Icons.undo_rounded),
-                label: const Text('Undo'),
-              ),
-              TextButton.icon(
-                onPressed: busy || !c.canRedo ? null : c.redo,
-                icon: const Icon(Icons.redo_rounded),
-                label: const Text('Redo'),
-              ),
-            ],
+        const SizedBox(height: 12),
+        _choices(
+          ['Light', 'Dark', 'Transparent'],
+          ['Light', 'Dark', 'Transparent'][surface.index],
+          (v) => setState(
+            () => surface =
+                LogoSurface.values[['Light', 'Dark', 'Transparent'].indexOf(v)],
           ),
-        ],
-      ),
-    ),
-    _panel(LogoPreviewBoard(design: c.design)),
-    _panel(
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            key: const Key('logo-edit-name'),
-            controller: _name,
-            maxLength: 50,
-            onChanged: (v) => c.update(c.design.copy(name: v)),
-            decoration: const InputDecoration(labelText: 'Brand name'),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _tagline,
-            maxLength: 80,
-            onChanged: (v) => c.update(c.design.copy(tagline: v)),
-            decoration: const InputDecoration(labelText: 'Tagline'),
-          ),
-          _label('Composition'),
-          _choices(
-            logoLayouts,
-            c.design.layout,
-            (v) => c.update(c.design.copy(layout: v)),
-          ),
-          _label('Symbol'),
-          _choices(
-            logoMarks,
-            c.design.mark,
-            (v) => c.update(c.design.copy(mark: v)),
-          ),
-          _label('Typography'),
-          _choices(
-            logoTypefaces,
-            c.design.typeface,
-            (v) => c.update(c.design.copy(typeface: v)),
-          ),
-          _label('Letter spacing'),
-          Slider(
-            value: c.design.tracking,
-            min: 0,
-            max: 8,
-            divisions: 16,
-            label: c.design.tracking.toStringAsFixed(1),
-            onChanged: busy
-                ? null
-                : (v) => c.update(c.design.copy(tracking: v)),
-          ),
-          _label('Symbol size'),
-          Slider(
-            value: c.design.symbolScale,
-            min: .65,
-            max: 1.25,
-            divisions: 12,
-            label: '${(c.design.symbolScale * 100).round()}%',
-            onChanged: busy
-                ? null
-                : (v) => c.update(c.design.copy(symbolScale: v)),
-          ),
-          _label('Color palette'),
-          _paletteChoices(editing: true),
+        ),
+        if (!compact) ...[
           const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  key: const Key('logo-primary-hex'),
-                  controller: _hex,
-                  maxLength: 6,
-                  decoration: const InputDecoration(
-                    labelText: 'Primary hex',
-                    prefixText: '#',
-                  ),
-                  onChanged: (v) {
-                    if (RegExp(r'^[0-9a-fA-F]{6}$').hasMatch(v)) {
-                      c.update(c.design.copy(primary: v.toUpperCase()));
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  key: const Key('logo-accent-hex'),
-                  controller: _accent,
-                  maxLength: 6,
-                  decoration: const InputDecoration(
-                    labelText: 'Accent hex',
-                    prefixText: '#',
-                  ),
-                  onChanged: (v) {
-                    if (RegExp(r'^[0-9a-fA-F]{6}$').hasMatch(v)) {
-                      c.update(c.design.copy(secondary: v.toUpperCase()));
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
           Text(
-            c.currentProjectId == null
-                ? 'New project · not saved yet'
-                : c.hasUnsavedChanges
-                ? 'Unsaved changes'
-                : 'Saved on this device',
+            '${c.design.layout} / ${c.design.mark} / ${c.design.typeface}',
             style: TextStyle(color: skin.mutedText, fontSize: 12),
           ),
-          const SizedBox(height: 12),
-          _pair(
-            _action(
-              c.saving
-                  ? 'Saving…'
-                  : c.currentProjectId == null
-                  ? 'Save project'
-                  : 'Save changes',
-              Icons.bookmark_add_outlined,
-              busy || c.saving ? null : _save,
-            ),
-            _action(
-              'Get my brand kit',
-              Icons.inventory_2_outlined,
-              busy ? null : () => _go(3),
+        ],
+      ],
+    ),
+  );
+
+  Widget _inspectorTabs() => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 10),
+    child: Row(
+      children: [
+        for (var i = 0; i < 4; i++)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: Semantics(
+                label: const [
+                  'Edit brand text',
+                  'Edit logo shape',
+                  'Edit typography',
+                  'Edit colors',
+                ][i],
+                child: Material(
+                  color: editorTab == i ? skin.primary : skin.panelSoft,
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    key: ValueKey('logo-inspector-$i'),
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => setState(() => editorTab = i),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Column(
+                        children: [
+                          Icon(
+                            const [
+                              Icons.text_fields_rounded,
+                              Icons.category_outlined,
+                              Icons.text_format_rounded,
+                              Icons.palette_outlined,
+                            ][i],
+                            size: 20,
+                            color: editorTab == i
+                                ? skin.textOnAccent
+                                : skin.mutedText,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            const ['Brand', 'Shape', 'Type', 'Color'][i],
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: editorTab == i
+                                  ? skin.textOnAccent
+                                  : skin.text,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
-          if (c.currentProjectId != null)
-            TextButton.icon(
-              key: const Key('logo-save-copy'),
-              onPressed: busy || c.saving ? null : () => _save(asCopy: true),
-              icon: const Icon(Icons.copy_all_rounded),
-              label: const Text('Save a copy'),
+      ],
+    ),
+  );
+
+  List<Widget> _inspectorControls() => switch (editorTab) {
+    0 => [
+      _label('The words that define you'),
+      TextField(
+        key: const Key('logo-edit-name'),
+        controller: _name,
+        maxLength: 50,
+        enabled: !busy,
+        onChanged: (v) => c.update(c.design.copy(name: v)),
+        decoration: const InputDecoration(labelText: 'Brand name'),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: _tagline,
+        maxLength: 80,
+        enabled: !busy,
+        onChanged: (v) => c.update(c.design.copy(tagline: v)),
+        decoration: const InputDecoration(labelText: 'Tagline'),
+      ),
+      Text(
+        'Keep it clear, memorable, and easy to read at a small size.',
+        style: TextStyle(color: skin.mutedText, height: 1.5, fontSize: 12),
+      ),
+    ],
+    1 => [
+      _label('Composition'),
+      _choices(
+        logoLayouts,
+        c.design.layout,
+        (v) => c.update(c.design.copy(layout: v)),
+      ),
+      _label('Choose your symbol'),
+      LayoutBuilder(
+        builder: (context, constraints) => Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final mark in logoMarks)
+              SizedBox(
+                width: (constraints.maxWidth - 16) / 3,
+                child: Semantics(
+                  selected: c.design.mark == mark,
+                  button: true,
+                  child: Material(
+                    color: c.design.mark == mark
+                        ? skin.panelSoft
+                        : skin.panelDeep,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: c.design.mark == mark
+                            ? skin.primary
+                            : skin.border,
+                        width: c.design.mark == mark ? 2 : 1,
+                      ),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: busy
+                          ? null
+                          : () => c.update(c.design.copy(mark: mark)),
+                      child: Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: SizedBox(
+                              height: 40,
+                              child: LogoCanvas(
+                                design: c.design.copy(
+                                  mark: mark,
+                                  layout: 'Horizontal',
+                                ),
+                                iconOnly: true,
+                                surface: skin.isLight
+                                    ? LogoSurface.light
+                                    : LogoSurface.dark,
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Text(
+                              mark,
+                              style: TextStyle(fontSize: 11, color: skin.text),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+      _label('Symbol size · ${(c.design.symbolScale * 100).round()}%'),
+      Slider(
+        key: const Key('logo-symbol-size'),
+        value: c.design.symbolScale,
+        min: .65,
+        max: 1.25,
+        divisions: 12,
+        label: '${(c.design.symbolScale * 100).round()}%',
+        onChangeStart: busy ? null : (_) => c.beginEdit(),
+        onChangeEnd: busy ? null : (_) => c.endEdit(),
+        onChanged: busy ? null : (v) => c.update(c.design.copy(symbolScale: v)),
+      ),
+    ],
+    2 => [
+      _label('Typography'),
+      for (final face in logoTypefaces)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Material(
+            color: c.design.typeface == face ? skin.panelSoft : skin.panelDeep,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(
+                color: c.design.typeface == face ? skin.primary : skin.border,
+              ),
             ),
+            child: InkWell(
+              onTap: busy
+                  ? null
+                  : () => c.update(c.design.copy(typeface: face)),
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        face,
+                        style: TextStyle(
+                          fontSize: 22,
+                          color: skin.text,
+                          fontFamily: 'KorlixLogo',
+                          fontWeight: face == 'Strong'
+                              ? FontWeight.w700
+                              : FontWeight.w400,
+                          fontStyle: face == 'Slanted'
+                              ? FontStyle.italic
+                              : FontStyle.normal,
+                          letterSpacing: face == 'Wide' ? 3 : 0,
+                        ),
+                      ),
+                    ),
+                    if (c.design.typeface == face)
+                      Icon(
+                        Icons.check_circle_rounded,
+                        color: skin.primary,
+                        size: 18,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      _label('Letter spacing · ${c.design.tracking.toStringAsFixed(1)}'),
+      Slider(
+        key: const Key('logo-letter-spacing'),
+        value: c.design.tracking,
+        min: 0,
+        max: 8,
+        divisions: 16,
+        label: c.design.tracking.toStringAsFixed(1),
+        onChangeStart: busy ? null : (_) => c.beginEdit(),
+        onChangeEnd: busy ? null : (_) => c.endEdit(),
+        onChanged: busy ? null : (v) => c.update(c.design.copy(tracking: v)),
+      ),
+    ],
+    _ => [
+      _label('Curated palettes'),
+      _paletteChoices(editing: true),
+      _label('Make your own'),
+      Row(
+        children: [
+          Expanded(
+            child: TextField(
+              key: const Key('logo-primary-hex'),
+              controller: _hex,
+              maxLength: 6,
+              enabled: !busy,
+              decoration: const InputDecoration(
+                labelText: 'Primary hex',
+                prefixText: '#',
+              ),
+              onChanged: (v) {
+                if (RegExp(r'^[0-9a-fA-F]{6}$').hasMatch(v)) {
+                  c.update(c.design.copy(primary: v.toUpperCase()));
+                }
+              },
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              key: const Key('logo-accent-hex'),
+              controller: _accent,
+              maxLength: 6,
+              enabled: !busy,
+              decoration: const InputDecoration(
+                labelText: 'Accent hex',
+                prefixText: '#',
+              ),
+              onChanged: (v) {
+                if (RegExp(r'^[0-9a-fA-F]{6}$').hasMatch(v)) {
+                  c.update(c.design.copy(secondary: v.toUpperCase()));
+                }
+              },
+            ),
+          ),
         ],
       ),
+    ],
+  };
+
+  Widget _editorActions() => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 14),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FilledButton.icon(
+          onPressed: busy ? null : () => _go(3),
+          icon: const Icon(Icons.download_rounded, size: 18),
+          label: const Text('Get my brand kit'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: busy || c.saving ? null : _save,
+          icon: const Icon(Icons.bookmark_add_outlined, size: 18),
+          label: Text(
+            c.saving
+                ? 'Saving…'
+                : c.currentProjectId == null
+                ? 'Save project'
+                : 'Save changes',
+          ),
+        ),
+        if (c.currentProjectId != null)
+          TextButton.icon(
+            key: const Key('logo-save-copy'),
+            onPressed: busy || c.saving ? null : () => _save(asCopy: true),
+            icon: const Icon(Icons.copy_all_rounded, size: 16),
+            label: const Text('Save a copy'),
+          ),
+      ],
     ),
-  ];
+  );
+
+  Widget _editorWorkspace() => LayoutBuilder(
+    builder: (context, constraints) {
+      final wide = constraints.maxWidth >= 850;
+      final compactHeight = (constraints.maxHeight * .24).clamp(95.0, 185.0);
+      final stage = _previewStage(
+        compact: !wide,
+        height: wide
+            ? (constraints.maxHeight - 235).clamp(180.0, 520.0)
+            : compactHeight,
+      );
+      final controls = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [..._inspectorControls(), _editorActions()],
+      );
+      if (wide) {
+        return Column(
+          children: [
+            _editorToolbar(),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: SingleChildScrollView(child: stage)),
+                    const SizedBox(width: 20),
+                    SizedBox(
+                      width: 350,
+                      child: Column(
+                        children: [
+                          _inspectorTabs(),
+                          Expanded(
+                            child: ListView(
+                              controller: scroll,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              children: [controls],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      }
+      // When the keyboard or large text needs room, all content remains scrollable.
+      final constrained =
+          constraints.maxHeight < 500 ||
+          MediaQuery.textScalerOf(context).scale(1) > 1.25;
+      if (constrained) {
+        return ListView(
+          controller: scroll,
+          padding: const EdgeInsets.all(12),
+          children: [_editorToolbar(), stage, _inspectorTabs(), controls],
+        );
+      }
+      return Column(
+        children: [
+          _editorToolbar(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: stage,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: _inspectorTabs(),
+          ),
+          Expanded(
+            child: ListView(
+              controller: scroll,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              children: [controls],
+            ),
+          ),
+        ],
+      );
+    },
+  );
 
   List<Widget> _kit() => [
     _heading(
       'Your brand, ready to go.',
-      'A coordinated collection for your website, profiles, presentations, and next big idea.',
+      'Choose a finish, download one file, or take your complete identity with you.',
     ),
-    _exportConfigurator(),
-    _panel(
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'THE COMPLETE BRAND KIT',
-            style: TextStyle(
-              color: skin.primary,
-              letterSpacing: 1.5,
-              fontWeight: FontWeight.w800,
-              fontSize: 11,
+    LayoutBuilder(
+      builder: (context, constraints) {
+        final downloads = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _panel(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'THE COMPLETE BRAND KIT',
+                    style: TextStyle(
+                      color: skin.primary,
+                      letterSpacing: 1.5,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    '• Editable SVG in color, black, and white\n• 2400 px PNGs: transparent, light, and dark\n• Profile icon, avatar, and social cover\n• PDF brand guide with colors and typography\n• Editable project backup and matching fonts',
+                    style: TextStyle(height: 1.8),
+                  ),
+                  const SizedBox(height: 20),
+                  _download(
+                    'Download brand kit',
+                    Icons.folder_zip_outlined,
+                    'kit',
+                    subtitle: 'Everything in one ZIP',
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            '• Editable SVG in color, black, and white\n• 2400 px PNGs: transparent, light, and dark\n• Profile icon, avatar, and social cover\n• PDF brand guide with colors and typography\n• Editable project backup and matching fonts',
-            style: TextStyle(height: 1.8),
-          ),
-          const SizedBox(height: 20),
-          _download(
-            'Download brand kit',
-            Icons.folder_zip_outlined,
-            'kit',
-            subtitle: 'Everything in one ZIP',
-          ),
-        ],
-      ),
-    ),
-    _pair(
-      _download(
-        'Download PNG',
-        Icons.image_outlined,
-        'png',
-        subtitle:
-            '${logoExportPresets[exportPreset].width} × ${logoExportPresets[exportPreset].height} · ${surface.name}',
-      ),
-      _download(
-        'Download SVG',
-        Icons.polyline_outlined,
-        'svg',
-        subtitle: '${ink.name} vector · ${surface.name}',
-      ),
-    ),
-    const SizedBox(height: 14),
-    _pair(
-      _download('Brand guide', Icons.picture_as_pdf_outlined, 'pdf'),
-      _download('Project backup', Icons.save_outlined, 'project'),
-    ),
-    const SizedBox(height: 20),
-    Text(
-      'PNG and SVG use your export settings above. Transparent previews show a checkerboard; the downloaded file has no checkerboard. The complete ZIP includes all standard variants. SVG retains editable text; some editors may need the bundled Roboto fonts. AI artwork downloads separately from Ideas.',
-      style: TextStyle(color: skin.mutedText, height: 1.5, fontSize: 12),
+            _pair(
+              _download(
+                'Download PNG',
+                Icons.image_outlined,
+                'png',
+                subtitle:
+                    '${logoExportPresets[exportPreset].width} × ${logoExportPresets[exportPreset].height} · ${surface.name}',
+              ),
+              _download(
+                'Download SVG',
+                Icons.polyline_outlined,
+                'svg',
+                subtitle: '${ink.name} vector · ${surface.name}',
+              ),
+            ),
+            const SizedBox(height: 14),
+            _pair(
+              _download('Brand guide', Icons.picture_as_pdf_outlined, 'pdf'),
+              _download('Project backup', Icons.save_outlined, 'project'),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'PNG and SVG use your export settings above. Transparent previews show a checkerboard; the downloaded file has no checkerboard. The complete ZIP includes all standard variants. SVG retains editable text; some editors may need the bundled Roboto fonts. AI artwork downloads separately from Ideas.',
+              style: TextStyle(
+                color: skin.mutedText,
+                height: 1.5,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        );
+        if (constraints.maxWidth < 850) {
+          return Column(children: [_exportConfigurator(), downloads]);
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 6, child: _exportConfigurator()),
+            const SizedBox(width: 24),
+            Expanded(flex: 5, child: downloads),
+          ],
+        );
+      },
     ),
   ];
 
@@ -1473,177 +2061,255 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
           'Your saved logos will live here. Open a design and choose Save project.',
         ),
       ),
-    for (final project in c.projects)
-      _panel(
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 1000
+            ? 3
+            : constraints.maxWidth >= 650
+            ? 2
+            : 1;
+        return Wrap(
+          spacing: 16,
+          runSpacing: 0,
           children: [
-            _canvas(
-              LogoDesign.fromJson(Map<String, dynamic>.from(project['design'])),
-              backdrop: LogoSurface.light,
+            for (final project in c.projects)
+              SizedBox(
+                width: (constraints.maxWidth - (columns - 1) * 16) / columns,
+                child: _projectCard(project),
+              ),
+          ],
+        );
+      },
+    ),
+  ];
+
+  Widget _projectCard(Map<String, dynamic> project) => _panel(
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _canvas(
+          LogoDesign.fromJson(Map<String, dynamic>.from(project['design'])),
+          backdrop: LogoSurface.light,
+        ),
+        const SizedBox(height: 12),
+        Text(
+          '${project['design']['name']}',
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+        ),
+        Wrap(
+          spacing: 12,
+          children: [
+            TextButton.icon(
+              onPressed: busy
+                  ? null
+                  : () {
+                      try {
+                        c.openProject('${project['id']}');
+                        _sync(c.design);
+                        _go(2);
+                      } catch (e) {
+                        _error(e);
+                      }
+                    },
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text('Open project'),
             ),
-            const SizedBox(height: 12),
-            Text(
-              '${project['design']['name']}',
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-            ),
-            Wrap(
-              spacing: 12,
-              children: [
-                TextButton.icon(
-                  onPressed: busy
-                      ? null
-                      : () {
-                          try {
-                            c.openProject('${project['id']}');
-                            _sync(c.design);
-                            _go(2);
-                          } catch (e) {
-                            _error(e);
-                          }
-                        },
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Open project'),
-                ),
-                TextButton.icon(
-                  onPressed: busy || c.saving
-                      ? null
-                      : () async {
-                          try {
-                            await c.delete('${project['id']}');
-                            _say('Saved project removed from this device.');
-                          } catch (e) {
-                            _error(e);
-                          }
-                        },
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  label: const Text('Delete saved copy'),
-                ),
-              ],
+            TextButton.icon(
+              onPressed: busy || c.saving
+                  ? null
+                  : () async {
+                      try {
+                        await c.delete('${project['id']}');
+                        _say('Saved project removed from this device.');
+                      } catch (e) {
+                        _error(e);
+                      }
+                    },
+              icon: const Icon(Icons.delete_outline_rounded),
+              label: const Text('Delete saved copy'),
             ),
           ],
         ),
-      ),
+      ],
+    ),
+  );
+
+  static const _destinations = [
+    ('Start', 'Brand brief', Icons.edit_note_rounded),
+    ('Ideas', 'Logo directions', Icons.auto_awesome_mosaic_outlined),
+    ('Edit', 'Edit logo', Icons.tune_rounded),
+    ('Kit', 'Brand kit', Icons.inventory_2_outlined),
+    ('Saved', 'Saved projects', Icons.bookmarks_outlined),
   ];
+
+  Widget _feedback() => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (error != null || notice != null)
+        Container(
+          margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          padding: const EdgeInsets.fromLTRB(14, 6, 4, 6),
+          decoration: BoxDecoration(
+            color: skin.panelSoft,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                error != null
+                    ? Icons.info_outline_rounded
+                    : Icons.check_circle_outline_rounded,
+                color: error != null ? skin.danger : skin.primary,
+                size: 18,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    error ?? notice!,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: skin.text, fontSize: 12),
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Dismiss message',
+                onPressed: () => setState(() => error = notice = null),
+                icon: const Icon(Icons.close_rounded, size: 18),
+              ),
+            ],
+          ),
+        ),
+      if (exporting)
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Semantics(
+            liveRegion: true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  exportStage,
+                  style: TextStyle(color: skin.text, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                LinearProgressIndicator(value: exportProgress),
+              ],
+            ),
+          ),
+        ),
+    ],
+  );
+
+  Widget _workspace() => Column(
+    children: [
+      _feedback(),
+      Expanded(
+        child: !ready
+            ? const Center(child: CircularProgressIndicator())
+            : tab == 2
+            ? _editorWorkspace()
+            : ListView(
+                key: ValueKey('logo-tab-$tab'),
+                controller: scroll,
+                padding: EdgeInsets.all(
+                  MediaQuery.sizeOf(context).width < 500 ? 16 : 28,
+                ),
+                children: [
+                  ...switch (tab) {
+                    0 => _start(),
+                    1 => _ideas(),
+                    3 => _kit(),
+                    _ => _saved(),
+                  },
+                  const SizedBox(height: 28),
+                ],
+              ),
+      ),
+    ],
+  );
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: c,
-    builder: (context, _) => Scaffold(
-      appBar: AppBar(
-        title: const Text('Logo Studio'),
-        actions: [
-          if (c.available && c.design.error == null)
-            IconButton(
-              tooltip: 'Save logo project',
-              onPressed: busy || c.saving ? null : _save,
-              icon: const Icon(Icons.bookmark_add_outlined),
-            ),
-        ],
-      ),
-      body: SafeArea(
-        child: !c.available
-            ? const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Text(
-                    'Your session changed. Reopen Logo Studio after signing in.',
-                  ),
+    builder: (context, _) => LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 1000;
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Logo Studio'),
+            actions: [
+              if (wide)
+                Padding(
+                  padding: const EdgeInsets.only(right: 24),
+                  child: Center(child: _eyebrow('KORLIX / BRAND DESIGN')),
                 ),
-              )
-            : Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 940),
-                  child: ListView(
-                    key: ValueKey('logo-tab-$tab'),
-                    controller: scroll,
-                    padding: const EdgeInsets.all(20),
+              if (c.available && c.design.error == null)
+                IconButton(
+                  tooltip: 'Save logo project',
+                  onPressed: busy || c.saving ? null : _save,
+                  icon: const Icon(Icons.bookmark_add_outlined),
+                ),
+            ],
+          ),
+          body: SafeArea(
+            child: !c.available
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text(
+                        'Your session changed. Reopen Logo Studio after signing in.',
+                      ),
+                    ),
+                  )
+                : Row(
                     children: [
-                      if (error != null)
-                        _panel(
-                          Semantics(
-                            liveRegion: true,
-                            child: Text(
-                              error!,
-                              style: TextStyle(color: skin.danger),
-                            ),
+                      if (wide)
+                        NavigationRail(
+                          selectedIndex: tab,
+                          onDestinationSelected: busy ? null : _go,
+                          backgroundColor: skin.panelDeep,
+                          labelType: NavigationRailLabelType.all,
+                          groupAlignment: -.85,
+                          destinations: [
+                            for (final d in _destinations)
+                              NavigationRailDestination(
+                                icon: Tooltip(message: d.$2, child: Icon(d.$3)),
+                                label: Text(d.$1),
+                              ),
+                          ],
+                        ),
+                      Expanded(
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 1320),
+                            child: _workspace(),
                           ),
                         ),
-                      if (notice != null)
-                        _panel(
-                          Semantics(
-                            liveRegion: true,
-                            child: Text(
-                              notice!,
-                              style: TextStyle(color: skin.primary),
-                            ),
-                          ),
-                        ),
-                      if (exporting)
-                        _panel(
-                          const Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Preparing your files…'),
-                              SizedBox(height: 12),
-                              LinearProgressIndicator(),
-                            ],
-                          ),
-                        ),
-                      if (ready)
-                        ...switch (tab) {
-                          0 => _start(),
-                          1 => _ideas(),
-                          2 => _editor(),
-                          3 => _kit(),
-                          _ => _saved(),
-                        }
-                      else
-                        const Padding(
-                          padding: EdgeInsets.all(40),
-                          child: Center(child: CircularProgressIndicator()),
-                        ),
-                      const SizedBox(height: 28),
+                      ),
                     ],
                   ),
+          ),
+          bottomNavigationBar: !c.available || wide
+              ? null
+              : NavigationBar(
+                  height: 72,
+                  selectedIndex: tab,
+                  onDestinationSelected: busy ? null : _go,
+                  labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                  destinations: [
+                    for (final d in _destinations)
+                      NavigationDestination(
+                        icon: Icon(d.$3),
+                        label: d.$1,
+                        tooltip: d.$2,
+                      ),
+                  ],
                 ),
-              ),
-      ),
-      bottomNavigationBar: !c.available
-          ? null
-          : NavigationBar(
-              selectedIndex: tab,
-              onDestinationSelected: busy ? null : _go,
-              labelBehavior:
-                  NavigationDestinationLabelBehavior.onlyShowSelected,
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.edit_note_rounded),
-                  label: 'Start',
-                  tooltip: 'Brand brief',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.auto_awesome_mosaic_outlined),
-                  label: 'Ideas',
-                  tooltip: 'Logo directions',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.tune_rounded),
-                  label: 'Edit',
-                  tooltip: 'Edit logo',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.inventory_2_outlined),
-                  label: 'Kit',
-                  tooltip: 'Brand kit',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.bookmarks_outlined),
-                  label: 'Saved',
-                  tooltip: 'Saved projects',
-                ),
-              ],
-            ),
+        );
+      },
     ),
   );
 }

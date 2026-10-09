@@ -229,7 +229,18 @@ void main() {
     (t) async {
       await t.runAsync(() async {
         final before = jsonEncode(brand.json);
-        final archive = ZipDecoder().decodeBytes(await logoBrandKit(brand));
+        final progress = <int>[];
+        final archive = ZipDecoder().decodeBytes(
+          await logoBrandKit(
+            brand,
+            onProgress: (done, total, stage) {
+              expect(total, 26);
+              expect(stage, isNotEmpty);
+              progress.add(done);
+            },
+          ),
+        );
+        expect(progress, List.generate(27, (index) => index));
         final names = archive.files.map((f) => f.name);
         expect(
           names,

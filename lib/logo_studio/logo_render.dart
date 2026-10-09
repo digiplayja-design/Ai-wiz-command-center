@@ -15,7 +15,9 @@ class LogoShape {
   const LogoShape(this.d, [this.secondary = false]);
   final String d;
   final bool secondary;
-  Path get path {
+  static final _paths = Expando<Path>('logo paths');
+  Path get path => Path.from(_paths[this] ??= _parsePath());
+  Path _parsePath() {
     final tokens = RegExp(
       r'[MLCQZ]|-?\d+(?:\.\d+)?',
     ).allMatches(d).map((m) => m.group(0)!).toList();
@@ -41,6 +43,53 @@ class LogoShape {
 }
 
 List<LogoShape> logoShapes(String name) => switch (name) {
+  'Petal' => const [
+    LogoShape(
+      'M 50 48 C 14 50 7 14 13 9 C 42 4 55 21 50 48 Z M 50 52 C 86 50 93 86 87 91 C 58 96 45 79 50 52 Z',
+    ),
+    LogoShape(
+      'M 52 50 C 50 14 86 7 91 13 C 96 42 79 55 52 50 Z M 48 50 C 50 86 14 93 9 87 C 4 58 21 45 48 50 Z',
+      true,
+    ),
+  ],
+  'Ribbon' => const [
+    LogoShape('M 8 12 L 37 12 L 77 88 L 48 88 Z'),
+    LogoShape(
+      'M 63 12 L 92 12 L 63 63 L 49 37 Z M 8 88 L 30 48 L 44 74 L 37 88 Z',
+      true,
+    ),
+  ],
+  'Horizon' => const [
+    LogoShape(
+      'M 18 48 C 18 6 82 6 82 48 L 65 48 C 65 27 35 27 35 48 Z M 8 57 L 92 57 L 92 68 L 8 68 Z',
+    ),
+    LogoShape('M 21 77 L 79 77 L 79 87 L 21 87 Z', true),
+  ],
+  'Prism' => const [
+    LogoShape('M 50 4 L 96 81 L 4 81 Z M 50 30 L 27 68 L 73 68 Z'),
+    LogoShape(
+      'M 50 30 L 73 68 L 50 57 Z M 4 89 L 96 89 L 96 96 L 4 96 Z',
+      true,
+    ),
+  ],
+  'Link' => const [
+    LogoShape(
+      'M 45 23 C 26 4 1 21 8 43 L 29 67 L 43 53 L 25 34 C 22 27 29 23 34 28 L 52 46 L 66 32 Z',
+    ),
+    LogoShape(
+      'M 55 77 C 74 96 99 79 92 57 L 71 33 L 57 47 L 75 66 C 78 73 71 77 66 72 L 48 54 L 34 68 Z',
+      true,
+    ),
+  ],
+  'Compass' => const [
+    LogoShape(
+      'M 50 3 L 65 36 L 97 50 L 65 64 L 50 97 L 36 64 L 3 50 L 36 36 Z',
+    ),
+    LogoShape(
+      'M 50 23 L 59 43 L 78 50 L 50 50 Z M 50 50 L 50 77 L 41 57 L 22 50 Z',
+      true,
+    ),
+  ],
   'Peak' => const [
     LogoShape('M 8 84 L 48 12 L 69 49 L 55 49 L 48 37 L 22 84 Z'),
     LogoShape('M 41 84 L 69 35 L 96 84 L 80 84 L 69 64 L 58 84 Z', true),
@@ -139,6 +188,7 @@ class LogoLettering {
   final double size;
   final LogoDesign design;
   final bool tagline;
+  double? _fittedFontSize;
   TextPainter get painter => _painter(false);
   TextPainter _painter(bool erase) {
     final bold = !tagline && design.typeface == 'Strong';
@@ -167,8 +217,10 @@ class LogoLettering {
       textDirection: TextDirection.ltr,
       maxLines: 1,
     )..layout();
+    if (_fittedFontSize != null) return make(_fittedFontSize!);
     final original = make(size);
     if (original.width <= rect.width && original.height <= rect.height) {
+      _fittedFontSize = size;
       return original;
     }
     original.dispose();
@@ -187,6 +239,7 @@ class LogoLettering {
         high = middle;
       }
     }
+    _fittedFontSize = low;
     return make(low);
   }
 
@@ -265,7 +318,8 @@ class LogoComposition {
     );
   }
 
-  List<LogoLettering> get lettering {
+  late final List<LogoLettering> lettering = _lettering();
+  List<LogoLettering> _lettering() {
     if (iconOnly || design.layout == 'Monogram') return [];
     final horizontal = design.layout == 'Horizontal';
     final rect = horizontal
@@ -295,7 +349,8 @@ class LogoComposition {
 
   /// Bounds of the mark and measured lettering, without the old artboard's
   /// empty margins. All previews and exports use these same fitted bounds.
-  Rect get contentBounds {
+  late final Rect contentBounds = _contentBounds();
+  Rect _contentBounds() {
     Rect? bounds;
     if (design.layout != 'Wordmark' || iconOnly) bounds = markRect;
     for (final text in lettering) {
@@ -454,7 +509,7 @@ String _onColor(String hex) {
   return darkContrast >= whiteContrast ? '111927' : 'FFFFFF';
 }
 
-class LogoCanvas extends StatelessWidget {
+class LogoCanvas extends StatefulWidget {
   const LogoCanvas({
     super.key,
     required this.design,
@@ -469,20 +524,45 @@ class LogoCanvas extends StatelessWidget {
   final bool iconOnly;
   final double? aspectRatio;
   @override
+  State<LogoCanvas> createState() => _LogoCanvasState();
+}
+
+class _LogoCanvasState extends State<LogoCanvas> {
+  late _LogoPainter _painter;
+  void _compose() => _painter = _LogoPainter(
+    LogoComposition(
+      widget.design,
+      surface: widget.surface,
+      ink: widget.ink,
+      iconOnly: widget.iconOnly,
+    ),
+  );
+  @override
+  void initState() {
+    super.initState();
+    _compose();
+  }
+
+  @override
+  void didUpdateWidget(LogoCanvas oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.design != widget.design ||
+        oldWidget.surface != widget.surface ||
+        oldWidget.ink != widget.ink ||
+        oldWidget.iconOnly != widget.iconOnly) {
+      _compose();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) => Semantics(
-    label: '${design.name}, ${design.layout} logo, ${design.mark} symbol',
+    label:
+        '${widget.design.name}, ${widget.design.layout} logo, ${widget.design.mark} symbol',
     image: true,
     child: AspectRatio(
-      aspectRatio: aspectRatio ?? (iconOnly ? 1 : 1.5),
-      child: CustomPaint(
-        painter: _LogoPainter(
-          LogoComposition(
-            design,
-            surface: surface,
-            ink: ink,
-            iconOnly: iconOnly,
-          ),
-        ),
+      aspectRatio: widget.aspectRatio ?? (widget.iconOnly ? 1 : 1.5),
+      child: RepaintBoundary(
+        child: CustomPaint(painter: _painter, isComplex: true),
       ),
     ),
   );

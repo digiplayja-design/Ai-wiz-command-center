@@ -35,6 +35,12 @@ const logoMarks = [
   'Mosaic',
   'Beacon',
   'Initials',
+  'Petal',
+  'Ribbon',
+  'Horizon',
+  'Prism',
+  'Link',
+  'Compass',
 ];
 
 class LogoPalette {
@@ -49,6 +55,10 @@ const logoPalettes = [
   LogoPalette('Violet bloom', '7038B0', 'D65780', 'FBF5FD'),
   LogoPalette('Coral energy', 'CC462C', 'E69B32', 'FFF6ED'),
   LogoPalette('Pure contrast', '161B23', '66717F', 'F4F5F6'),
+  LogoPalette('Ocean & pearl', '135C73', '68BDB0', 'F2F8F5'),
+  LogoPalette('Plum & rose', '572B48', 'C7788D', 'FBF3F1'),
+  LogoPalette('Olive & oat', '555D3B', 'BFA46B', 'F7F4EB'),
+  LogoPalette('Slate & lime', '2F4053', '8CAB47', 'F2F5EF'),
 ];
 Color logoColor(String hex) => Color(int.parse('FF$hex', radix: 16));
 String cleanLogoText(String s, int max) {
@@ -84,6 +94,42 @@ class LogoDesign {
       secondary,
       paper;
   final double tracking, symbolScale;
+  // Value equality keeps identical previews from repainting and avoids JSON
+  // serialization on every edit, undo, and shortlist lookup.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LogoDesign &&
+          name == other.name &&
+          tagline == other.tagline &&
+          industry == other.industry &&
+          style == other.style &&
+          idea == other.idea &&
+          mark == other.mark &&
+          layout == other.layout &&
+          typeface == other.typeface &&
+          primary == other.primary &&
+          secondary == other.secondary &&
+          paper == other.paper &&
+          tracking == other.tracking &&
+          symbolScale == other.symbolScale;
+
+  @override
+  int get hashCode => Object.hash(
+    name,
+    tagline,
+    industry,
+    style,
+    idea,
+    mark,
+    layout,
+    typeface,
+    primary,
+    secondary,
+    paper,
+    tracking,
+    symbolScale,
+  );
   String? get error => name.trim().isEmpty
       ? 'Add your business or brand name first.'
       : name.runes.length > 50
@@ -205,7 +251,16 @@ class LogoDesign {
 
 List<LogoDesign> logoDirections(LogoDesign brief, {int round = 0}) {
   final marks = switch (brief.industry) {
-    'Food & drink' => ['Leaf', 'Arch', 'Spark', 'Flow', 'Beacon', 'Initials'],
+    'Food & drink' => [
+      'Leaf',
+      'Arch',
+      'Spark',
+      'Flow',
+      'Beacon',
+      'Initials',
+      'Petal',
+      'Horizon',
+    ],
     'Beauty & wellness' => [
       'Leaf',
       'Orbit',
@@ -213,6 +268,8 @@ List<LogoDesign> logoDirections(LogoDesign brief, {int round = 0}) {
       'Arch',
       'Spark',
       'Initials',
+      'Petal',
+      'Ribbon',
     ],
     'Property & construction' => [
       'Arch',
@@ -221,6 +278,8 @@ List<LogoDesign> logoDirections(LogoDesign brief, {int round = 0}) {
       'Shield',
       'Beacon',
       'Initials',
+      'Prism',
+      'Horizon',
     ],
     'Fitness & outdoors' => [
       'Peak',
@@ -229,6 +288,8 @@ List<LogoDesign> logoDirections(LogoDesign brief, {int round = 0}) {
       'Spark',
       'Leaf',
       'Initials',
+      'Compass',
+      'Horizon',
     ],
     'Professional services' => [
       'Shield',
@@ -237,8 +298,21 @@ List<LogoDesign> logoDirections(LogoDesign brief, {int round = 0}) {
       'Beacon',
       'Orbit',
       'Initials',
+      'Link',
+      'Prism',
     ],
-    _ => ['Orbit', 'Spark', 'Mosaic', 'Flow', 'Peak', 'Initials'],
+    _ => [
+      'Orbit',
+      'Spark',
+      'Mosaic',
+      'Flow',
+      'Peak',
+      'Initials',
+      'Prism',
+      'Link',
+      'Ribbon',
+      'Compass',
+    ],
   };
   final font = switch (brief.style) {
     'Elegant' => 'Wide',

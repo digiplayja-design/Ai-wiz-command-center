@@ -78,6 +78,29 @@ void main() {
   });
 
   testWidgets(
+    'mobile inspector edits the identity while keeping the canvas visible',
+    (t) async {
+      final f = logos.LogoFixture();
+      await social.mount(t, f.screen());
+      await logos.begin(t, f);
+      await actions.tap(t, find.byKey(const Key('logo-concept-0')));
+      final before = t.getRect(find.byKey(const Key('logo-editor-stage')));
+      await actions.tap(t, find.byKey(const Key('logo-inspector-3')));
+      await enter(t, field('Accent hex'), 'E38D5A');
+      expect(f.c.design.secondary, 'E38D5A');
+      expect(t.getRect(find.byKey(const Key('logo-editor-stage'))), before);
+      await actions.tap(t, find.byKey(const Key('logo-inspector-1')));
+      await actions.tap(t, find.text('Petal'));
+      expect(f.c.design.mark, 'Petal');
+      await actions.tap(t, find.byKey(const Key('logo-inspector-2')));
+      await actions.tap(t, find.text('Wide'));
+      expect(f.c.design.typeface, 'Wide');
+      expect(t.takeException(), isNull);
+      expect(f.studio.requests, isEmpty);
+    },
+  );
+
+  testWidgets(
     'shortlisted directions survive exploring without replacing edits',
     (t) async {
       final f = logos.LogoFixture();
@@ -112,6 +135,7 @@ void main() {
     await social.mount(t, f.screen());
     await logos.begin(t, f);
     await actions.tap(t, find.byKey(const Key('logo-concept-0')));
+    await actions.tap(t, find.byKey(const Key('logo-inspector-3')));
     await enter(t, field('Primary hex'), '654321');
     await enter(t, field('Accent hex'), 'A1B2C3');
     final paper = f.c.design.paper;
@@ -322,9 +346,13 @@ void main() {
       }
       await fixtures.capture(t, 'logo-upgrade-edit-${size.$1}-${size.$3}');
       expect(t.takeException(), isNull);
+      await actions.tap(t, find.byKey(const Key('logo-preview-mode')));
       await actions.reveal(t, find.byKey(const Key('logo-in-use')));
       await fixtures.capture(t, 'logo-upgrade-in-use-${size.$1}-${size.$3}');
       expect(t.takeException(), isNull);
+      if (size.$1 < 1000) {
+        await actions.tap(t, find.byTooltip('Close brand previews'));
+      }
       await actions.tap(t, find.byTooltip('Brand kit'));
       await actions.reveal(t, find.byKey(const Key('logo-export-preview')));
       await fixtures.capture(t, 'logo-upgrade-kit-${size.$1}-${size.$3}');

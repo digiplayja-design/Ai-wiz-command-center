@@ -43,6 +43,24 @@ Future<void> validateLogoArtwork(Uint8List bytes) async {
   }
 }
 
+Future<String>? _svgFontStyle;
+Future<String> _logoSvgFonts() =>
+    _svgFontStyle ??= _loadSvgFonts().catchError((Object error) {
+      _svgFontStyle = null;
+      throw error;
+    });
+Future<String> _loadSvgFonts() async {
+  final regular = (await rootBundle.load(
+    'assets/fieldproof/Roboto-Regular.ttf',
+  )).buffer.asUint8List();
+  final bold = (await rootBundle.load(
+    'assets/fieldproof/Roboto-Bold.ttf',
+  )).buffer.asUint8List();
+  final fonts =
+      '<defs><style>@font-face{font-family:KorlixLogo;src:url(data:font/ttf;base64,${base64Encode(regular)}) format("truetype");font-weight:400;}@font-face{font-family:KorlixLogo;src:url(data:font/ttf;base64,${base64Encode(bold)}) format("truetype");font-weight:700;}</style></defs>';
+  return fonts;
+}
+
 Future<String> logoSvg(
   LogoDesign design, {
   LogoSurface surface = LogoSurface.transparent,
@@ -52,14 +70,7 @@ Future<String> logoSvg(
   int? height,
 }) async {
   await ensureLogoFonts();
-  final regular = (await rootBundle.load(
-    'assets/fieldproof/Roboto-Regular.ttf',
-  )).buffer.asUint8List();
-  final bold = (await rootBundle.load(
-    'assets/fieldproof/Roboto-Bold.ttf',
-  )).buffer.asUint8List();
-  final fonts =
-      '<defs><style>@font-face{font-family:KorlixLogo;src:url(data:font/ttf;base64,${base64Encode(regular)}) format("truetype");font-weight:400;}@font-face{font-family:KorlixLogo;src:url(data:font/ttf;base64,${base64Encode(bold)}) format("truetype");font-weight:700;}</style></defs>';
+  final fonts = await _logoSvgFonts();
   return LogoComposition(
     design,
     surface: surface,
@@ -189,37 +200,61 @@ Future<Uint8List> logoBrandGuide(
 Future<Uint8List> logoBrandKit(
   LogoDesign design, {
   void Function()? checkCurrent,
+  void Function(int completed, int total, String stage)? onProgress,
 }) async {
   checkCurrent?.call();
-  final archive = Archive();
-  void add(String name, List<int> bytes) {
+  final output = OutputMemoryStream();
+  final encoder = ZipEncoder()..startEncode(output);
+  const total = 26;
+  var completed = 0;
+  Future<void> add(String name, List<int> bytes) async {
     checkCurrent?.call();
-    archive.addFile(ArchiveFile(name, bytes.length, bytes));
+    encoder.add(ArchiveFile(name, bytes.length, bytes));
+    completed++;
+    final stage = name.startsWith('social/')
+        ? 'Preparing social assets'
+        : name.startsWith('layouts/')
+        ? 'Building logo layouts'
+        : name.startsWith('fonts/') || name == 'READ-ME.txt'
+        ? 'Finishing your kit'
+        : name == 'brand-guide.pdf'
+        ? 'Creating your brand guide'
+        : 'Building your logo files';
+    onProgress?.call(completed, total, '$stage · $completed of $total');
+    // Yield between files so the browser can paint progress and respond to
+    // navigation/session changes. Do not retain every uncompressed kit asset.
+    await Future<void>.delayed(Duration.zero);
+    checkCurrent?.call();
   }
 
-  void text(String name, String value) => add(name, utf8.encode(value));
+  Future<void> text(String name, String value) => add(name, utf8.encode(value));
+  onProgress?.call(0, total, 'Building your logo files');
+  await Future<void>.delayed(Duration.zero);
   for (final entry in [
     ('primary', LogoInk.color),
     ('black', LogoInk.black),
     ('white', LogoInk.white),
   ]) {
-    text('logos/${entry.$1}.svg', await logoSvg(design, ink: entry.$2));
+    await text('logos/${entry.$1}.svg', await logoSvg(design, ink: entry.$2));
   }
-  add('logos/transparent-2400.png', await logoPng(design));
-  add('logos/black-2400.png', await logoPng(design, ink: LogoInk.black));
-  add('logos/white-2400.png', await logoPng(design, ink: LogoInk.white));
+  await add('logos/transparent-2400.png', await logoPng(design));
+  await add('logos/black-2400.png', await logoPng(design, ink: LogoInk.black));
+  await add('logos/white-2400.png', await logoPng(design, ink: LogoInk.white));
   final light = await logoPng(design, surface: LogoSurface.light);
-  add('logos/light-2400.png', light);
-  add('logos/dark-2400.png', await logoPng(design, surface: LogoSurface.dark));
+  await add('logos/light-2400.png', light);
+  await add(
+    'logos/dark-2400.png',
+    await logoPng(design, surface: LogoSurface.dark),
+  );
   // Export the same identity in useful lockups, without changing the project.
   for (final layout in ['Horizontal', 'Stacked', 'Wordmark', 'Monogram']) {
     final variant = design.copy(layout: layout);
     final name = layout.toLowerCase();
-    text('layouts/$name.svg', await logoSvg(variant));
-    add('layouts/$name-2400.png', await logoPng(variant));
+    await text('layouts/$name.svg', await logoSvg(variant));
+    await add('layouts/$name-2400.png', await logoPng(variant));
   }
-  text('social/icon.svg', await logoSvg(design, iconOnly: true));
-  add(
+  await text('social/icon.svg', await logoSvg(design, iconOnly: true));
+  await add(
     'social/avatar-1024.png',
     await logoPng(
       design,
@@ -229,11 +264,11 @@ Future<Uint8List> logoBrandKit(
       iconOnly: true,
     ),
   );
-  add(
+  await add(
     'social/icon-transparent-512.png',
     await logoPng(design, width: 512, height: 512, iconOnly: true),
   );
-  add(
+  await add(
     'social/cover-1500x500.png',
     await logoPng(
       design.copy(layout: 'Horizontal'),
@@ -242,27 +277,28 @@ Future<Uint8List> logoBrandKit(
       height: 500,
     ),
   );
-  add('brand-guide.pdf', await logoBrandGuide(design, preview: light));
-  text(
+  await add('brand-guide.pdf', await logoBrandGuide(design, preview: light));
+  await text(
     'project.korlix-logo.json',
     const JsonEncoder.withIndent('  ').convert(design.json),
   );
   for (final style in ['Regular', 'Bold']) {
-    add(
+    await add(
       'fonts/Roboto-$style.ttf',
       (await rootBundle.load(
         'assets/fieldproof/Roboto-$style.ttf',
       )).buffer.asUint8List(),
     );
   }
-  text(
+  await text(
     'fonts/LICENSE.txt',
     await rootBundle.loadString('assets/fieldproof/Roboto_LICENSE.txt'),
   );
-  text(
+  await text(
     'READ-ME.txt',
     '${design.name} / KORLIX Logo Studio\n\nYour editable logo collection and brand guide.\n\nPalette: #${design.primary}, #${design.secondary}, #${design.paper}\nTypography: Roboto ${design.typeface}. Some SVG editors may require installing the bundled fonts to preserve lettering.\n\nSVG logos contain real vector shapes and editable text; PNG files are raster images. The primary PNG is 2400 x 1600 pixels. Transparent black and white PNGs are included for single-color use. The layouts folder includes horizontal, stacked, wordmark and monogram SVG/PNG versions of your identity.\n\nAvatar and icon SVG are square, with proportional safe space. Avatar is 1024 x 1024; cover is 1500 x 500. Social sizes are general-purpose canvases; check each platform before publishing. White transparent logos need a dark background to be visible.\n\nTo edit again, open Logo Studio > Saved > Import project and choose project.korlix-logo.json. Saved projects in the app stay in this browser/device and account. Keep this backup.\n\nOptional AI artwork is exported separately as a PNG; it is not vectorized by this kit.\n\nRoboto font licensing: https://www.apache.org/licenses/LICENSE-2.0\n',
   );
   checkCurrent?.call();
-  return Uint8List.fromList(ZipEncoder().encode(archive));
+  encoder.endEncode();
+  return output.getBytes();
 }

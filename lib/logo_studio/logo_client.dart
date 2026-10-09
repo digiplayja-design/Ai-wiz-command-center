@@ -22,7 +22,9 @@ class LogoClient extends ChangeNotifier {
   final String _key, _scope;
   bool _closed = false, _denied = false, loaded = false, saving = false;
   int round = 0, _documentEpoch = 0;
-  String? _currentProjectId, _savedDesign;
+  String? _currentProjectId;
+  LogoDesign? _savedDesign, _gestureStart;
+  bool _gestureRecorded = false;
   LogoDesign design = const LogoDesign();
   List<LogoDesign> concepts = [];
   List<Map<String, dynamic>> projects = [];
@@ -35,9 +37,8 @@ class LogoClient extends ChangeNotifier {
       _scope.isNotEmpty &&
       _scope == agentAccountScope(images.headersBuilder());
   String? get currentProjectId => _currentProjectId;
-  bool get hasUnsavedChanges => _savedDesign == null
-      ? design.error == null
-      : _savedDesign != jsonEncode(design.json);
+  bool get hasUnsavedChanges =>
+      _savedDesign == null ? design.error == null : _savedDesign != design;
   bool get canUndo => _undo.isNotEmpty;
   bool get canRedo => _redo.isNotEmpty;
   void _guard() {
@@ -67,7 +68,8 @@ class LogoClient extends ChangeNotifier {
     projects.clear();
     _undo.clear();
     _redo.clear();
-    _currentProjectId = _savedDesign = null;
+    _currentProjectId = null;
+    _savedDesign = _gestureStart = null;
     _documentEpoch++;
     loaded = false;
   }
@@ -86,7 +88,8 @@ class LogoClient extends ChangeNotifier {
   void choose(LogoDesign value) {
     _guard();
     design = value;
-    _currentProjectId = _savedDesign = null;
+    _currentProjectId = null;
+    _savedDesign = _gestureStart = null;
     _documentEpoch++;
     _undo.clear();
     _redo.clear();
@@ -103,7 +106,8 @@ class LogoClient extends ChangeNotifier {
     }
     design = LogoDesign.fromJson(Map<String, dynamic>.from(project['design']));
     _currentProjectId = id;
-    _savedDesign = jsonEncode(design.json);
+    _savedDesign = design;
+    _gestureStart = null;
     _documentEpoch++;
     _undo.clear();
     _redo.clear();
@@ -130,14 +134,12 @@ class LogoClient extends ChangeNotifier {
     _notify();
   }
 
-  bool isShortlisted(LogoDesign value) =>
-      shortlist.any((d) => jsonEncode(d.json) == jsonEncode(value.json));
+  bool isShortlisted(LogoDesign value) => shortlist.contains(value);
 
   void toggleShortlist(LogoDesign value) {
     _guard();
     if (value.error != null) throw ImagineException(value.error!);
-    final key = jsonEncode(value.json);
-    final index = shortlist.indexWhere((d) => jsonEncode(d.json) == key);
+    final index = shortlist.indexOf(value);
     if (index >= 0) {
       shortlist.removeAt(index);
     } else {
@@ -153,16 +155,36 @@ class LogoClient extends ChangeNotifier {
 
   void update(LogoDesign value) {
     _guard();
-    if (jsonEncode(value.json) == jsonEncode(design.json)) return;
-    _undo.add(design);
-    if (_undo.length > 40) _undo.removeAt(0);
+    if (value == design) return;
+    if (_gestureStart == null || !_gestureRecorded) {
+      _undo.add(design);
+      if (_gestureStart == null && _undo.length > 40) _undo.removeAt(0);
+      _gestureRecorded = _gestureStart != null;
+    }
     _redo.clear();
     design = value;
     _notify();
   }
 
+  /// A continuous slider gesture is one undoable edit, with live previews.
+  void beginEdit() {
+    _guard();
+    _gestureStart = design;
+    _gestureRecorded = false;
+  }
+
+  void endEdit() {
+    _guard();
+    if (_gestureRecorded && design == _gestureStart) _undo.removeLast();
+    if (_undo.length > 40) _undo.removeAt(0);
+    _gestureStart = null;
+    _gestureRecorded = false;
+    _notify();
+  }
+
   void undo() {
     _guard();
+    _gestureStart = null;
     if (!canUndo) return;
     _redo.add(design);
     design = _undo.removeLast();
@@ -171,6 +193,7 @@ class LogoClient extends ChangeNotifier {
 
   void redo() {
     _guard();
+    _gestureStart = null;
     if (!canRedo) return;
     _undo.add(design);
     design = _redo.removeLast();
@@ -252,7 +275,7 @@ class LogoClient extends ChangeNotifier {
       projects = next;
       if (_documentEpoch == epoch) {
         _currentProjectId = id;
-        _savedDesign = jsonEncode(snapshot.json);
+        _savedDesign = snapshot;
       }
     } finally {
       saving = false;
@@ -273,7 +296,8 @@ class LogoClient extends ChangeNotifier {
       _guard();
       projects = next;
       if (_currentProjectId == id) {
-        _currentProjectId = _savedDesign = null;
+        _currentProjectId = null;
+        _savedDesign = null;
       }
     } finally {
       saving = false;

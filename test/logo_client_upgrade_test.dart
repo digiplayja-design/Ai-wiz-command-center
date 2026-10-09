@@ -56,6 +56,29 @@ String sessionToken({String session = 'session-alice', int expires = 1}) =>
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('one slider drag is one undo step, including a return to its start', () {
+    final f = LogoFixture();
+    addTearDown(f.c.dispose);
+    f.c.choose(sample);
+    f.c.beginEdit();
+    for (final value in [2.0, 3.0, 1.0, 4.0, 5.0]) {
+      f.c.update(f.c.design.copy(tracking: value));
+    }
+    f.c.endEdit();
+    expect(f.c.design.tracking, 5);
+    f.c.undo();
+    expect(f.c.design, sample);
+    expect(f.c.canUndo, isFalse);
+    f.c.redo();
+    expect(f.c.design.tracking, 5);
+    f.c.beginEdit();
+    f.c.update(f.c.design.copy(tracking: 6));
+    f.c.update(f.c.design.copy(tracking: 5));
+    f.c.endEdit();
+    f.c.undo();
+    expect(f.c.design, sample);
+  });
+
   test(
     'saving updates the current project and save copy gets a new identity',
     () async {
