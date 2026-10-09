@@ -42,6 +42,7 @@ import {createCrmEmails,registerCrmEmailPublicRoutes} from './contacts_crm/email
 import { registerContactsCrm } from './contacts_crm/routes.mjs'; // K137_ENTERPRISE_CONTACTS
 import { registerBookkeeping } from './bookkeeping/routes.mjs';
 import { registerReceiptWiz } from './receipt_wiz/routes.mjs';
+import {startReceiptBackupRuntime} from './receipt_backup/runtime.mjs';
 import { scanReceiptWiz } from './receipt_wiz/core.mjs';
 import { bookkeepingVoiceInstructions, bookkeepingVoiceSessionGuard } from './bookkeeping/voice.mjs';
 import { registerBabyBlend } from './babyblend/routes.mjs';
@@ -12861,6 +12862,10 @@ app.use(publicApiErrorHandler);
 
 const k135zHttpServer = app.listen(port, () => {
   console.log(`Korlix AI backend running on port ${port}`);
+  const receiptBackupRuntime = startReceiptBackupRuntime({database: upgradedFeatureDatabase});
+  k135zHttpServer.once('close', () => receiptBackupRuntime.stop());
+  process.once('SIGTERM', () => receiptBackupRuntime.stop());
+  process.once('SIGINT', () => receiptBackupRuntime.stop());
   probeModelAccess({apiKey: process.env.OPENAI_API_KEY, imageModel: imageSettings().model})
     .then(result => {chatModelAccess = result;})
     .catch(() => {chatModelAccess = {chat: 'unknown', images: 'unknown'};});
