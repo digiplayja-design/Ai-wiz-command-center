@@ -43,6 +43,7 @@ import { registerContactsCrm } from './contacts_crm/routes.mjs'; // K137_ENTERPR
 import { registerBookkeeping } from './bookkeeping/routes.mjs';
 import { registerReceiptWiz } from './receipt_wiz/routes.mjs';
 import {startReceiptBackupRuntime} from './receipt_backup/runtime.mjs';
+import {startApplicationBackupRuntime} from './application_backup/runtime.mjs';
 import { scanReceiptWiz } from './receipt_wiz/core.mjs';
 import { bookkeepingVoiceInstructions, bookkeepingVoiceSessionGuard } from './bookkeeping/voice.mjs';
 import { registerBabyBlend } from './babyblend/routes.mjs';
@@ -12863,6 +12864,10 @@ app.use(publicApiErrorHandler);
 const k135zHttpServer = app.listen(port, () => {
   console.log(`Korlix AI backend running on port ${port}`);
   const receiptBackupRuntime = startReceiptBackupRuntime({database: upgradedFeatureDatabase});
+  const applicationBackupRuntime = startApplicationBackupRuntime();
+  k135zHttpServer.once('close', () => applicationBackupRuntime.stop());
+  process.once('SIGTERM', () => applicationBackupRuntime.stop());
+  process.once('SIGINT', () => applicationBackupRuntime.stop());
   k135zHttpServer.once('close', () => receiptBackupRuntime.stop());
   process.once('SIGTERM', () => receiptBackupRuntime.stop());
   process.once('SIGINT', () => receiptBackupRuntime.stop());

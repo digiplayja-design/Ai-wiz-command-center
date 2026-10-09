@@ -16,13 +16,16 @@ function senderAddress(value) {
 // These alerts are sent only to the address Ricardo explicitly approved.
 // Never include receipt data, user identifiers, provider error messages or credentials.
 export function createReceiptBackupAlerts({env = process.env, logger = console, fetchImpl = fetch,
-  now = () => new Date(), signal, sleep = (ms, abortSignal) => new Promise((resolve, reject) => {
+  now = () => new Date(), signal, scope = 'receipt', sleep = (ms, abortSignal) => new Promise((resolve, reject) => {
     if (abortSignal?.aborted) return reject(new Error('aborted'));
     const timer = setTimeout(() => { abortSignal?.removeEventListener('abort', abort); resolve(); }, ms);
     function abort() { clearTimeout(timer); reject(new Error('aborted')); }
     abortSignal?.addEventListener('abort', abort, {once: true});
   })} = {}) {
   const disabled = {failure: async () => ({accepted: false, disabled: true}), test: async () => ({accepted: false, disabled: true})};
+  if (!['receipt', 'application'].includes(scope)) return disabled;
+  const eventPrefix = scope === 'application' ? 'application_backup' : 'receipt_backup';
+  const label = scope === 'application' ? 'Application' : 'Receipt';
   const recipient = (env.RECEIPT_BACKUP_ALERT_EMAIL || '').trim().toLowerCase();
   if (!recipient) return disabled;
   const log = (event, fields, failed = false) => logger[failed ? 'error' : 'info'](JSON.stringify({event, ...fields}));
@@ -33,10 +36,10 @@ export function createReceiptBackupAlerts({env = process.env, logger = console, 
   const configurationCode = recipient !== BACKUP_ALERT_RECIPIENT ? 'BACKUP_ALERT_RECIPIENT_INVALID'
     : !from ? 'BACKUP_ALERT_SENDER_NOT_CONFIGURED' : !keyConfigured ? 'BACKUP_ALERT_PROVIDER_NOT_CONFIGURED' : null;
   if (configurationCode) {
-    log('receipt_backup_alert_configuration', {status: 'blocked', code: configurationCode}, true);
+    log(eventPrefix + '_alert_configuration', {status: 'blocked', code: configurationCode}, true);
     return disabled;
   }
-  log('receipt_backup_alert_configuration', {status: 'ready', recipient, provider: 'resend',
+  log(eventPrefix + '_alert_configuration', {status: 'ready', recipient, provider: 'resend',
     repeatWindowHours: 6, externalOutageMonitoring: false});
   const accepted = new Map(), inFlight = new Map();
 
@@ -67,7 +70,7 @@ export function createReceiptBackupAlerts({env = process.env, logger = console, 
     if (accepted.has(idempotencyKey)) return {accepted: true, suppressed: true};
     if (inFlight.has(idempotencyKey)) return inFlight.get(idempotencyKey);
     const payload = {from, to: [recipient], subject, text: lines.join('\n'),
-      tags: [{name: 'category', value: 'receipt_backup'}, {name: 'kind', value: kind}]};
+      tags: [{name: 'category', value: eventPrefix}, {name: 'kind', value: kind}]};
     const pending = (async () => {
       let result;
       for (let index = 0; index < 3; index++) {
@@ -78,10 +81,10 @@ export function createReceiptBackupAlerts({env = process.env, logger = console, 
       if (result.accepted) {
         accepted.set(idempotencyKey, now().getTime() + DAY_MS);
         while (accepted.size > 32) accepted.delete(accepted.keys().next().value);
-        log('receipt_backup_alert', {kind, status: 'accepted', recipient, provider: 'resend', emailId: result.emailId,
+        log(eventPrefix + '_alert', {kind, status: 'accepted', recipient, provider: 'resend', emailId: result.emailId,
           inboxDeliveryVerified: false});
       } else if (!signal?.aborted) {
-        log('receipt_backup_alert', {kind, status: 'failed', code: result.code || 'BACKUP_ALERT_REQUEST_FAILED',
+        log(eventPrefix + '_alert', {kind, status: 'failed', code: result.code || 'BACKUP_ALERT_REQUEST_FAILED',
           ...(result.httpStatus ? {httpStatus: result.httpStatus} : {})}, true);
       }
       return result;
@@ -95,12 +98,12 @@ export function createReceiptBackupAlerts({env = process.env, logger = console, 
       const code = safeBackupCode(error), window = Math.floor(now().getTime() / WINDOW_MS);
       const windowStart = new Date(window * WINDOW_MS).toISOString();
       // Stable payloads also deduplicate retries and overlapping instances at Resend.
-      return send('failure', `korlix-receipt-backup/${SOURCE_PROJECT}/failure/${code}/${window}`,
-        '[KORLIX] Receipt backup needs attention', [
-          'At least one KORLIX receipt backup attempt failed during this monitoring window.',
+      return send('failure', `korlix-${scope}-backup/${SOURCE_PROJECT}/failure/${code}/${window}`,
+        `[KORLIX] ${label} backup needs attention`, [
+          `At least one KORLIX ${scope} backup attempt failed during this monitoring window.`,
           '', `Monitoring window starts (UTC): ${windowStart}`, `Failure code: ${code}`,
           'A complete, verified backup was not confirmed for the affected attempt.',
-          'Earlier successful backups remain the last recovery point; review the latest receipt_backup_run log.',
+          `Earlier successful backups remain the last recovery point; review the latest ${eventPrefix}_run log.`,
           'Run failures normally retry after 15 minutes. Configuration errors require correction and a restart.',
           '', `Open the backend logs: ${DASHBOARD}`,
           'Repeated occurrences of this error are grouped into six-hour UTC windows.',
@@ -108,6 +111,7 @@ export function createReceiptBackupAlerts({env = process.env, logger = console, 
         ]);
     },
     async test() {
+      if (scope !== 'receipt') return {accepted: false, skipped: true};
       const id = env.RECEIPT_BACKUP_ALERT_TEST_ID || '';
       if (!id) return {accepted: false, skipped: true};
       const expiry = Date.parse(env.RECEIPT_BACKUP_ALERT_TEST_EXPIRES_AT || '');
