@@ -8,7 +8,8 @@ node_modules
 **/.env.*
 logs
 **/*.log
-test
+test/*
+!test/logo_studio.test.cjs
 test_*.mjs
 coverage
 .DS_Store
