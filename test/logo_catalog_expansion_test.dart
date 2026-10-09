@@ -129,7 +129,7 @@ void main() {
           final svg = await logoSvg(design);
           expect(
             svg,
-            contains('font-family="${font.family},Arial,sans-serif"'),
+            contains('font-family="${font.family},${font.name},Arial,sans-serif"'),
           );
           final embedded = RegExp(
             r'data:font/ttf;base64,([A-Za-z0-9+/=]+)',

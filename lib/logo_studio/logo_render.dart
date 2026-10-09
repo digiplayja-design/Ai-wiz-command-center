@@ -477,7 +477,7 @@ class LogoLettering {
         p.computeDistanceToActualBaseline(TextBaseline.alphabetic);
     final fontSize = p.text!.style!.fontSize!;
     p.dispose();
-    return '<text x="${rect.center.dx}" y="$y" text-anchor="middle" font-family="${logoFontFamily(face)},Arial,sans-serif" font-size="$fontSize" font-weight="${logoFontWeight(face)}" font-style="${design.typeface == 'Slanted' && !tagline ? 'italic' : 'normal'}" letter-spacing="${tagline ? 2 : design.tracking + (design.typeface == 'Wide' ? 3 : 0)}" fill="#$color">${const HtmlEscape().convert(value)}</text>';
+    return '<text x="${rect.center.dx}" y="$y" text-anchor="middle" font-family="${logoFontFamily(face)},${logoFontFor(face).name},Arial,sans-serif" font-size="$fontSize" font-weight="${logoFontWeight(face)}" font-style="${design.typeface == 'Slanted' && !tagline ? 'italic' : 'normal'}" letter-spacing="${tagline ? 2 : design.tracking + (design.typeface == 'Wide' ? 3 : 0)}" fill="#$color">${const HtmlEscape().convert(value)}</text>';
   }
 }
 
