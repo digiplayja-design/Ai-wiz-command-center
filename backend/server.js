@@ -91,6 +91,8 @@ import chatQuality from "./chat_quality.cjs";
 const {CHAT_MODEL, CHAT_EFFORT, chatHistory, needsOfficialSourceSearch, chatAccuracyInstructions, imageSettings, imagePrompt, probeModelAccess} = chatQuality;
 import pictureStudio from "./picture_studio.cjs";
 const {pictureOptions, pictureModelSettings, improvePicture} = pictureStudio;
+import logoStudio from "./logo_studio.cjs";
+const {logoStudioSettings, logoBriefOptions, createDirectedLogo} = logoStudio;
 let chatModelAccess = {chat: 'checking', images: 'checking'};
 import { toFile } from "openai/uploads";
 import { createClient } from "@supabase/supabase-js";
@@ -3618,6 +3620,7 @@ app.get("/api/health", (req, res) => {
     chatImageQuality: imageSettings().quality,
     chatModelAccess,
     pictureStudio: {analysisModel: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, ...pictureModelSettings()},
+    logoStudio: logoStudioSettings(),
     inventory: {version:1,search:true,stockLedger:true,serialTracking:true,orders:true,pictureRecognition:true},
     cyberDefender: {version:1,quickChecks:true,privateReports:true,safetyChecklist:true,incidentGuides:true},
     studyStudio: {version:1,savedProgress:true,flashcards:true,practiceQuiz:true},
@@ -3895,6 +3898,7 @@ app.post("/api/image/create", async (req, res) => {
 
     if (prompt.length > 12000) return res.status(400).json({error: "Keep the image description under 12,000 characters."});
     imageSettings(body);
+    const logoBrief = logoBriefOptions(body);
 
     const creditsNeeded = 1;
 
@@ -3911,9 +3915,17 @@ app.post("/api/image/create", async (req, res) => {
       });
     }
 
-    const imageResult = await createKorlixImaginedImage({ prompt, imageSize: body.imageSize, imageStyle: body.imageStyle });
+    const imageResult = logoBrief
+      ? await createDirectedLogo({
+          client: new OpenAI({apiKey: process.env.OPENAI_API_KEY, maxRetries: 0}),
+          brief: logoBrief, render: createKorlixImaginedImage,
+          imageSize: body.imageSize, language: languageCode,
+        })
+      : await createKorlixImaginedImage({prompt, imageSize: body.imageSize, imageStyle: body.imageStyle});
 
-    const content = "Image generated.";
+    const content = imageResult.logoDirection
+      ? `Logo concept: ${imageResult.logoDirection.conceptName}. ${imageResult.logoDirection.summary}`
+      : "Image generated.";
 
     const historyItem = await saveGenerationHistory({
       user,
@@ -3935,7 +3947,7 @@ app.post("/api/image/create", async (req, res) => {
 
     return res.json({
       success: true,
-      title: "Imagined picture",
+      title: logoBrief ? "Logo Studio concept" : "Imagined picture",
       language: languageCode,
       content,
       imageDataUrl: imageResult.imageDataUrl,
@@ -3943,6 +3955,7 @@ app.post("/api/image/create", async (req, res) => {
       model: imageResult.model,
       imageQuality: imageResult.quality,
       imageSize: imageResult.size,
+      ...(imageResult.logoDirection ? {logoDirection: imageResult.logoDirection} : {}),
       authenticated: true,
       tier: profile?.tier || "basic",
       creditsUsed: creditsNeeded,

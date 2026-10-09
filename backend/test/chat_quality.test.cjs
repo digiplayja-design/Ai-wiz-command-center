@@ -21,7 +21,7 @@ function fixture(options = {}) {
     }
   }
   const user = options.anonymous ? null : {id:'signed-in-user'};
-  const scope = {...quality, ...studio, ...require('../chat_memory/memory.mjs'), ...require('../resume_studio/policy.mjs'), createTextResponse, OpenAI, Buffer, AbortSignal,
+  const scope = {...quality, ...studio, ...require('../logo_studio.cjs'), ...require('../chat_memory/memory.mjs'), ...require('../resume_studio/policy.mjs'), createTextResponse, OpenAI, Buffer, AbortSignal,
     process: {env: {OPENAI_API_KEY:'offline', OPENAI_MODEL:'old-model', OPENAI_SEARCH_MODEL:'old-search'}},
     languageMap: {en:{name:'English',instruction:'Use English.'}},
     getAuthenticatedUser: async () => user,
