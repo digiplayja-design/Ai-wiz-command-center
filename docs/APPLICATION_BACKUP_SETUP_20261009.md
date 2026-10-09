@@ -4,6 +4,10 @@
 
 Ricardo authorized extending the receipt backups to the other important KORLIX data. The implementation and offline synthetic recovery checks are prepared. **Wider production backups are not active until the new scoped Backblaze credential, database connection and retention/disclosure checks are configured.** Existing receipt backups remain separate and enabled.
 
+Prepared code is deployed: backend commit `09dd79fdea79812f000e29f99cd71907fa18f3b3`, deploy `dep-db4dbi3tqb8s73etefr0`, became live at 11:55:17 UTC. The backend health endpoint returned HTTP 200. The live application-backup runtime explicitly reports `mode=off`, `productionBackupsActive=false`, `state=awaiting-configuration`. A receipt run completed at 11:55:29 UTC with both receipts and its catalog verified. Earlier scheduled receipt runs at 10:16:51 and 11:16:52 UTC also completed successfully, confirming the hourly timer beyond startup.
+
+The expanded conditional privacy disclosure is deployed in frontend commit `bf947a705b6d86251aa45d0d1f10778d1ef78c02`, deploy `dep-db4dbjflot8c738kmsng`, live at 11:57:08 UTC. No new paid service, database schema change, production restore or broader customer-data export was performed.
+
 Read-only inventory on 9 October: PostgreSQL 17.11, approximately 45.5 MB database, 256 public tables plus Auth and private application schemas, 16 private Storage buckets and 97 current objects (93 outside the receipt buckets). `vault.secrets` is empty. No production data or credentials were exported into chat or the development workspace. The most recent provider-backup observation in the existing runbook is 7 October, not a new confirmation of today's Supabase backup.
 
 The Supabase connector provides queries but not a PostgreSQL connection credential. The Render connector can merge environment variables but cannot retrieve or generate the missing database password. The existing B2 application key is deliberately restricted to `receipts/`. It cannot be used for `application/`, and this implementation does not put unrelated application data under `receipts/` to bypass that boundary.
