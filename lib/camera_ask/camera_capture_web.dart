@@ -3,8 +3,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:html' as html;
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+
 import 'camera_ask_client.dart';
+import 'camera_flashlight.dart';
 
 Future<CameraPhoto?> captureCameraAskPhoto(BuildContext context) =>
     Navigator.of(context).push<CameraPhoto>(
@@ -20,6 +23,7 @@ class _CameraCapture extends StatefulWidget {
 class _CameraCaptureState extends State<_CameraCapture> {
   html.VideoElement? _video;
   html.MediaStream? _stream;
+  CameraFlashlight? _flashlight;
   StreamSubscription<html.Event>? _visibility, _ready;
   bool _front = false, _opening = false, _capturing = false, _hasFrame = false;
   String? _error;
@@ -42,6 +46,10 @@ class _CameraCaptureState extends State<_CameraCapture> {
 
   void _stop() {
     _generation++;
+    _flashlight?.close();
+    _flashlight = null;
+    // Stopping the source releases its camera and torch, including when a
+    // flashlight command is still pending. Never wait to release the camera.
     _stream?.getTracks().forEach((track) => track.stop());
     _stream = null;
     _video?.pause();
@@ -69,6 +77,7 @@ class _CameraCaptureState extends State<_CameraCapture> {
         'audio': false,
         'video': {
           'facingMode': _front ? 'user' : 'environment',
+          'torch': false,
           'width': {'ideal': 1920},
           'height': {'ideal': 1080},
         },
@@ -83,6 +92,34 @@ class _CameraCaptureState extends State<_CameraCapture> {
       _video!.srcObject = stream;
       await _video!.play();
       if (!mounted || generation != _generation) return;
+      final tracks = stream.getVideoTracks();
+      if (tracks.isNotEmpty) {
+        final track = tracks.first;
+        Map cameraConstraints = {};
+        Object? capability;
+        try {
+          cameraConstraints = track.getConstraints();
+          capability = track.getCapabilities()['torch'];
+        } catch (_) {
+          // Older browsers can capture photos without exposing capabilities.
+        }
+        _flashlight = CameraFlashlight(
+          capability: capability,
+          apply: (enabled) async {
+            await track.applyConstraints({
+              ...cameraConstraints,
+              'torch': enabled,
+              'advanced': [
+                {'torch': enabled},
+              ],
+            });
+          },
+          readEnabled: () {
+            final setting = track.getSettings()['torch'];
+            return setting is bool ? setting : null;
+          },
+        );
+      }
       setState(() {
         _opening = false;
         _hasFrame = _video!.videoWidth > 0;
@@ -98,9 +135,41 @@ class _CameraCaptureState extends State<_CameraCapture> {
     }
   }
 
+  Future<void> _toggleFlashlight() async {
+    final flashlight = _flashlight;
+    if (!_hasFrame ||
+        _opening ||
+        _capturing ||
+        flashlight == null ||
+        !flashlight.supported ||
+        flashlight.changing) {
+      return;
+    }
+    final change = flashlight.toggle();
+    setState(() {});
+    try {
+      await change;
+      if (!mounted || !identical(_flashlight, flashlight)) return;
+      setState(() {});
+    } catch (_) {
+      if (!mounted || !identical(_flashlight, flashlight)) return;
+      // The light's state is uncertain after an error. Release the source
+      // rather than leave a possibly illuminated camera running.
+      _stop();
+      setState(() {
+        _error =
+            'The flashlight could not be changed. Reopen the camera to continue, or take a photo with your phone’s camera and choose it from your photos.';
+      });
+    }
+  }
+
   void _capture() {
     final video = _video;
-    if (!_hasFrame || video == null || video.videoWidth == 0 || _capturing) {
+    if (!_hasFrame ||
+        video == null ||
+        video.videoWidth == 0 ||
+        _capturing ||
+        (_flashlight?.changing ?? false)) {
       return;
     }
     setState(() => _capturing = true);
@@ -244,7 +313,8 @@ class _CameraCaptureState extends State<_CameraCapture> {
               runSpacing: 10,
               children: [
                 OutlinedButton.icon(
-                  onPressed: _opening || _capturing
+                  onPressed:
+                      _opening || _capturing || (_flashlight?.changing ?? false)
                       ? null
                       : () {
                           _front = !_front;
@@ -256,8 +326,44 @@ class _CameraCaptureState extends State<_CameraCapture> {
                     foregroundColor: Colors.white,
                   ),
                 ),
+                if (_flashlight?.supported ?? false)
+                  OutlinedButton.icon(
+                    onPressed:
+                        _hasFrame &&
+                            !_opening &&
+                            !_capturing &&
+                            !_flashlight!.changing
+                        ? () => unawaited(_toggleFlashlight())
+                        : null,
+                    icon: Icon(
+                      _flashlight!.enabled
+                          ? Icons.flashlight_on
+                          : Icons.flashlight_off,
+                    ),
+                    label: Text(
+                      _flashlight!.changing
+                          ? 'Changing light…'
+                          : _flashlight!.enabled
+                          ? 'Flashlight on'
+                          : 'Flashlight off',
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _flashlight!.enabled
+                          ? const Color(0xFF8EE9DB)
+                          : Colors.white,
+                      backgroundColor: _flashlight!.enabled
+                          ? const Color(0xFF123D37)
+                          : null,
+                    ),
+                  ),
                 FilledButton.icon(
-                  onPressed: _hasFrame && !_capturing ? _capture : null,
+                  onPressed:
+                      _hasFrame &&
+                          !_opening &&
+                          !_capturing &&
+                          !(_flashlight?.changing ?? false)
+                      ? _capture
+                      : null,
                   icon: const Icon(Icons.camera_alt_outlined),
                   label: const Text('Capture photo'),
                   style: FilledButton.styleFrom(
@@ -268,6 +374,15 @@ class _CameraCaptureState extends State<_CameraCapture> {
               ],
             ),
           ),
+          if (_hasFrame && !_opening && !(_flashlight?.supported ?? false))
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12, left: 20, right: 20),
+              child: Text(
+                'Flashlight is unavailable for this camera or browser. You can also take a photo using your phone’s flash, then choose it from your photos.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFFB9CCD9), fontSize: 12),
+              ),
+            ),
           const Padding(
             padding: EdgeInsets.only(bottom: 16, left: 20, right: 20),
             child: Text(
