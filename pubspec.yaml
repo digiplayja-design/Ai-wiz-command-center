@@ -83,6 +83,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/social_reactions/
     - assets/fieldproof/
     - assets/logo_fonts/
     - assets/characters/button_climbers/realistic-people-v2.png

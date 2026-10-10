@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'social_media_widgets.dart';
+import 'social_reaction_picker.dart';
 import 'social_voice_note.dart';
 
 import 'package:flutter/material.dart';
@@ -637,6 +638,18 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       SocialAttachmentDraft? picked;
       if (widget.attachmentPicker != null) {
         picked = await widget.attachmentPicker!(kind);
+      } else if (kind == 'gif' || kind == 'sticker') {
+        _composeFocus.unfocus();
+        picked = await showModalBottomSheet<SocialAttachmentDraft>(
+          context: context,
+          isScrollControlled: true,
+          showDragHandle: true,
+          useSafeArea: true,
+          builder: (_) => FractionallySizedBox(
+            heightFactor: .9,
+            child: SocialReactionSheet(client: widget.client, initialKind: kind),
+          ),
+        );
       } else if (kind == 'voice') {
         final bytes = await showModalBottomSheet<Uint8List>(
           context: context,
@@ -808,14 +821,16 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                     )
                   : Row(
                       children: [
-                        if (draft.kind == 'image')
+                        if (['image', 'gif', 'sticker'].contains(draft.kind))
                           ClipRRect(
                             borderRadius: BorderRadius.circular(10),
-                            child: Image.memory(
+                            child: draft.kind == 'gif'
+                                ? SizedBox(width: 52, height: 52, child: SocialReactionImage(provider: MemoryImage(draft.bytes), animated: false, label: 'GIF preview'))
+                                : Image.memory(
                               draft.bytes,
                               width: 52,
                               height: 52,
-                              fit: BoxFit.cover,
+                              fit: BoxFit.contain,
                               errorBuilder: (_, _, _) =>
                                   const Icon(Icons.image_outlined),
                             ),
@@ -828,7 +843,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                draft.filename,
+                                draft.kind == 'gif' ? 'GIF · ${draft.filename}' : draft.kind == 'sticker' ? 'Sticker · ${draft.filename}' : draft.filename,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1541,6 +1556,8 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                         alignment: WrapAlignment.center,
                         children: [
                           for (final item in [
+                            ('gif', 'GIF', Icons.gif_box_outlined),
+                            ('sticker', 'Stickers', Icons.auto_awesome_outlined),
                             ('image', 'Photo', Icons.photo_outlined),
                             ('file', 'File', Icons.attach_file_rounded),
                             ('voice', 'Voice note', Icons.mic_none_rounded),

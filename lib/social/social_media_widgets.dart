@@ -28,6 +28,182 @@ String socialFileSize(num bytes) => bytes >= 1048576
 String _time(Duration d) =>
     '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
 
+String socialImageLabel(SocialMap attachment) =>
+    attachment['content_type'] == 'image/gif' ||
+        '${attachment['filename']}'.toLowerCase().endsWith('.gif')
+    ? 'GIF'
+    : '${attachment['filename']}'.startsWith('Sticker - ')
+    ? 'Sticker'
+    : 'Photo';
+
+/// One decoded frame when paused; animation only listens while playing.
+class SocialReactionImage extends StatefulWidget {
+  const SocialReactionImage({
+    super.key,
+    required this.provider,
+    required this.animated,
+    required this.label,
+    this.onError,
+  });
+  final ImageProvider provider;
+  final bool animated;
+  final String label;
+  final Widget Function()? onError;
+  @override
+  State<SocialReactionImage> createState() => _SocialReactionImageState();
+}
+
+class _SocialReactionImageState extends State<SocialReactionImage>
+    with WidgetsBindingObserver {
+  ImageStream? _stream;
+  ImageInfo? _frame;
+  late final _listener = ImageStreamListener(_image, onError: _failed);
+  bool _listening = false, _playing = true, _error = false, _foreground = true;
+  bool? _reduced;
+  bool get _animate =>
+      widget.animated &&
+      _playing &&
+      _foreground &&
+      TickerMode.valuesOf(context).enabled;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduced = MediaQuery.disableAnimationsOf(context);
+    if (_reduced != reduced) {
+      _reduced = reduced;
+      _playing = !reduced;
+    }
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(covariant SocialReactionImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.provider != widget.provider) {
+      _stop();
+      _stream = null;
+      _frame?.dispose();
+      _frame = null;
+      _error = false;
+    }
+    _resolve();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    if (_foreground) {
+      _resolve();
+    } else {
+      _stop();
+    }
+  }
+
+  void _resolve() {
+    final stream = ResizeImage.resizeIfNeeded(
+      640,
+      null,
+      widget.provider,
+    ).resolve(createLocalImageConfiguration(context));
+    if (_stream?.key != stream.key) {
+      _stop();
+      _stream = stream;
+    }
+    if (_foreground && (_frame == null || _animate)) {
+      _listen();
+    } else {
+      _stop();
+    }
+  }
+
+  void _listen() {
+    if (_listening || _stream == null) return;
+    _listening = true;
+    _stream!.addListener(_listener);
+  }
+
+  void _stop() {
+    if (_listening) _stream?.removeListener(_listener);
+    _listening = false;
+  }
+
+  void _image(ImageInfo image, bool synchronous) {
+    if (!mounted) {
+      image.dispose();
+      return;
+    }
+    final previous = _frame;
+    setState(() {
+      _frame = image;
+      _error = false;
+    });
+    previous?.dispose();
+    if (!_animate) _stop();
+  }
+
+  void _failed(Object error, StackTrace? stack) {
+    _stop();
+    if (mounted) setState(() => _error = true);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _stop();
+    _frame?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    image: true,
+    label: widget.label,
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        if (_error)
+          widget.onError?.call() ??
+              const Center(
+                child: Text('Image unavailable. Choose another file.'),
+              )
+        else if (_frame != null)
+          RawImage(
+            image: _frame!.image,
+            scale: _frame!.scale,
+            fit: BoxFit.contain,
+          )
+        else
+          const Center(child: CircularProgressIndicator()),
+        if (widget.animated && !_error)
+          Positioned(
+            right: 4,
+            bottom: 4,
+            child: IconButton.filledTonal(
+              tooltip: _playing ? 'Pause GIF' : 'Play GIF',
+              onPressed: () {
+                setState(() => _playing = !_playing);
+                if (_animate || _frame == null) {
+                  _listen();
+                } else {
+                  _stop();
+                }
+              },
+              icon: Icon(
+                _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
 class SocialVoicePlayer extends StatefulWidget {
   const SocialVoicePlayer({
     super.key,
@@ -409,7 +585,7 @@ class _SocialAttachmentViewState extends State<SocialAttachmentView> {
           builder: (context, _) => Dialog.fullscreen(
             child: Scaffold(
               appBar: AppBar(
-                title: const Text('Photo'),
+                title: Text(socialImageLabel(widget.attachment)),
                 leading: IconButton(
                   tooltip: 'Close photo',
                   icon: const Icon(Icons.close),
@@ -421,13 +597,23 @@ class _SocialAttachmentViewState extends State<SocialAttachmentView> {
                       minScale: .5,
                       maxScale: 5,
                       child: Center(
-                        child: Image.network(
-                          url,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, _, _) => const Text(
-                            'Photo unavailable. Close and reopen it.',
-                          ),
-                        ),
+                        child: socialImageLabel(widget.attachment) != 'Photo'
+                            ? SizedBox.expand(
+                                child: SocialReactionImage(
+                                  provider: NetworkImage(url),
+                                  animated:
+                                      socialImageLabel(widget.attachment) ==
+                                      'GIF',
+                                  label: '${widget.attachment['filename']}',
+                                ),
+                              )
+                            : Image.network(
+                                url,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, _, _) => const Text(
+                                  'Photo unavailable. Close and reopen it.',
+                                ),
+                              ),
                       ),
                     )
                   : const Center(child: Text('Your session changed.')),
@@ -452,6 +638,7 @@ class _SocialAttachmentViewState extends State<SocialAttachmentView> {
   @override
   Widget build(BuildContext context) {
     final a = widget.attachment, s = korlixSkinOf(context);
+    final imageLabel = socialImageLabel(a);
     if (a['kind'] == 'voice') {
       return SocialVoicePlayer(
         key: ValueKey(a['id']),
@@ -470,35 +657,60 @@ class _SocialAttachmentViewState extends State<SocialAttachmentView> {
             borderRadius: BorderRadius.circular(16),
             child: GestureDetector(
               onTap: _opening ? null : _preview,
-              child: Image.network(
-                _imageUrl ?? '${a['url'] ?? ''}',
-                height: 190,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                loadingBuilder: (_, child, progress) => progress == null
-                    ? child
-                    : const SizedBox(
-                        height: 190,
-                        child: Center(child: CircularProgressIndicator()),
+              child: imageLabel != 'Photo'
+                  ? SizedBox(
+                      height: 210,
+                      child: SocialReactionImage(
+                        provider: NetworkImage(
+                          _imageUrl ?? '${a['url'] ?? ''}',
+                        ),
+                        animated: imageLabel == 'GIF',
+                        label: '${a['filename']}',
+                        onError: () => Center(
+                          child: TextButton.icon(
+                            onPressed: () async {
+                              try {
+                                final url = await _link();
+                                if (mounted) setState(() => _imageUrl = url);
+                              } catch (e) {
+                                if (context.mounted) socialNotice(context, e);
+                              }
+                            },
+                            icon: const Icon(Icons.refresh),
+                            label: Text('Reload $imageLabel'),
+                          ),
+                        ),
                       ),
-                errorBuilder: (_, _, _) => SizedBox(
-                  height: 110,
-                  child: Center(
-                    child: TextButton.icon(
-                      onPressed: () async {
-                        try {
-                          final url = await _link();
-                          if (mounted) setState(() => _imageUrl = url);
-                        } catch (e) {
-                          if (context.mounted) socialNotice(context, e);
-                        }
-                      },
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Reload photo'),
+                    )
+                  : Image.network(
+                      _imageUrl ?? '${a['url'] ?? ''}',
+                      height: 190,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (_, child, progress) => progress == null
+                          ? child
+                          : const SizedBox(
+                              height: 190,
+                              child: Center(child: CircularProgressIndicator()),
+                            ),
+                      errorBuilder: (_, _, _) => SizedBox(
+                        height: 110,
+                        child: Center(
+                          child: TextButton.icon(
+                            onPressed: () async {
+                              try {
+                                final url = await _link();
+                                if (mounted) setState(() => _imageUrl = url);
+                              } catch (e) {
+                                if (context.mounted) socialNotice(context, e);
+                              }
+                            },
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Reload photo'),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -514,7 +726,12 @@ class _SocialAttachmentViewState extends State<SocialAttachmentView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${a['filename']}',
+                    imageLabel == 'Photo' || a['kind'] != 'image'
+                        ? '${a['filename']}'
+                        : '$imageLabel · ${a['filename']}'.replaceFirst(
+                            'Sticker - ',
+                            '',
+                          ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(

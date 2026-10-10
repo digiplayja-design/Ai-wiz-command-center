@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/korlix_theme.dart';
 import 'social_client.dart';
+import 'social_media_widgets.dart' show socialImageLabel;
 
 class SocialMessageQuote extends StatelessWidget {
   const SocialMessageQuote({
@@ -18,6 +19,15 @@ class SocialMessageQuote extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = korlixSkinOf(context), deleted = message['deleted'] == true;
+    final body = '${message['body'] ?? ''}';
+    final attachment = socialMap(message['attachment']);
+    final fallback = attachment['kind'] == 'image'
+        ? socialImageLabel(attachment)
+        : attachment['kind'] == 'voice'
+        ? 'Voice note'
+        : attachment.isNotEmpty
+        ? 'Attachment'
+        : '';
     final content = Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
       decoration: BoxDecoration(
@@ -46,7 +56,11 @@ class SocialMessageQuote extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  deleted ? 'Message removed' : '${message['body'] ?? ''}',
+                  deleted
+                      ? 'Message removed'
+                      : body.isNotEmpty
+                      ? body
+                      : fallback,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

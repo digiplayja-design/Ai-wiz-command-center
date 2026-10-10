@@ -85,6 +85,8 @@ RELEASE_TESTS=(
   test/korlix_smoke_screensaver_test.dart
   test/social_auto_dump_test.dart
   test/social_replies_test.dart
+  test/social_reactions_test.dart
+  test/social_media_test.dart
   test/social_dump_truck_test.dart
   test/social_presence_model_test.dart
   test/social_presence_ui_test.dart

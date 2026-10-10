@@ -1,0 +1,146 @@
+[
+  {
+    "id": "hey",
+    "label": "Hey!",
+    "category": "Greetings",
+    "keywords": "wave hello hi welcome"
+  },
+  {
+    "id": "big-up",
+    "label": "Big up!",
+    "category": "Celebrate",
+    "keywords": "respect jamaica proud awesome"
+  },
+  {
+    "id": "lol",
+    "label": "LOL",
+    "category": "Reactions",
+    "keywords": "laugh funny haha hilarious"
+  },
+  {
+    "id": "love-this",
+    "label": "Love this",
+    "category": "Love",
+    "keywords": "heart love adore favourite"
+  },
+  {
+    "id": "thank-you",
+    "label": "Thank you",
+    "category": "Everyday",
+    "keywords": "thanks grateful appreciation"
+  },
+  {
+    "id": "respect",
+    "label": "Respect",
+    "category": "Reactions",
+    "keywords": "salute big up agreed"
+  },
+  {
+    "id": "you-got-this",
+    "label": "You got this",
+    "category": "Everyday",
+    "keywords": "encourage support strong"
+  },
+  {
+    "id": "congrats",
+    "label": "Congrats!",
+    "category": "Celebrate",
+    "keywords": "congratulations win proud clap"
+  },
+  {
+    "id": "lets-go",
+    "label": "Let’s go!",
+    "category": "Celebrate",
+    "keywords": "excited ready fire hype"
+  },
+  {
+    "id": "on-my-way",
+    "label": "On my way",
+    "category": "Everyday",
+    "keywords": "coming omw travel"
+  },
+  {
+    "id": "well-done",
+    "label": "Well done",
+    "category": "Celebrate",
+    "keywords": "great job applause clap"
+  },
+  {
+    "id": "good-morning",
+    "label": "Good morning",
+    "category": "Greetings",
+    "keywords": "sun hello morning"
+  },
+  {
+    "id": "good-night",
+    "label": "Good night",
+    "category": "Greetings",
+    "keywords": "sleep tired night bye"
+  },
+  {
+    "id": "thinking",
+    "label": "Thinking…",
+    "category": "Reactions",
+    "keywords": "hmm think wait question"
+  },
+  {
+    "id": "seriously",
+    "label": "Seriously?",
+    "category": "Reactions",
+    "keywords": "really wow shocked surprise"
+  },
+  {
+    "id": "oops",
+    "label": "Oops!",
+    "category": "Reactions",
+    "keywords": "mistake awkward surprised"
+  },
+  {
+    "id": "sorry",
+    "label": "Sorry",
+    "category": "Everyday",
+    "keywords": "apology apologies sad"
+  },
+  {
+    "id": "hugs",
+    "label": "Sending hugs",
+    "category": "Love",
+    "keywords": "hug care support comfort"
+  },
+  {
+    "id": "no-worries",
+    "label": "No worries",
+    "category": "Everyday",
+    "keywords": "okay alright relax fine"
+  },
+  {
+    "id": "birthday",
+    "label": "Happy birthday",
+    "category": "Celebrate",
+    "keywords": "party birthday cake happy"
+  },
+  {
+    "id": "yes",
+    "label": "Yes!",
+    "category": "Reactions",
+    "keywords": "yes agree thumbs up approved"
+  },
+  {
+    "id": "nope",
+    "label": "Nope",
+    "category": "Reactions",
+    "keywords": "no disagree stop thumbs down"
+  },
+  {
+    "id": "deal",
+    "label": "Deal!",
+    "category": "Everyday",
+    "keywords": "handshake agreed business done"
+  },
+  {
+    "id": "coffee",
+    "label": "Coffee time",
+    "category": "Everyday",
+    "keywords": "coffee break tired work"
+  }
+]
