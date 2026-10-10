@@ -51,3 +51,18 @@ test('notification clicks from a previous account cannot open the current accoun
   await w.fire('notificationclick',{notification:{data:{binding:'previous'},close(){}}});
   assert.equal(w.focused.length,0); assert.equal(w.opened.length,0);
 });
+
+test('online alerts are generic, honor silent preference, and silence duplicate foreground sound',async()=>{
+ const w=worker(); await w.bind();
+ await w.fire('push',{data:{json:()=>payload({kind:'online',silent:true,body:'Private name is online'})}});
+ assert.equal(w.shown.length,1);assert.equal(w.shown[0].silent,true);
+ assert.match(w.shown[0].body,/selected connection is online/);
+ assert.ok(!JSON.stringify(w.shown).includes('Private name'));
+ assert.equal(w.shown[0].requireInteraction,false);
+ w.self.clients.matchAll=async()=>[{url:'https://korlix.test/app/',visibilityState:'visible'}];
+ await w.fire('push',{data:{json:()=>payload({kind:'online'})}});
+ assert.equal(w.shown.length,2);assert.equal(w.shown[1].silent,true);
+ w.self.clients.matchAll=async()=>[{url:'https://korlix.test/app/',visibilityState:'hidden'}];
+ await w.fire('push',{data:{json:()=>payload({kind:'online'})}});
+ assert.equal(w.shown.length,3);assert.equal(w.shown[2].silent,false);
+});

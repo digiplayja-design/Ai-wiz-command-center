@@ -57,6 +57,7 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
   String? _lastCall;
   late final KorlixSoundService _sounds;
   late int _messageRevision;
+  late int _onlineRevision;
   DateTime? _ringExpiresAt;
   final Set<String> _silencedCalls = {};
 
@@ -72,6 +73,7 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
           shouldPoll: () => mounted,
           enableCalls: true,
           enablePresence: true,
+          enableOnlineAlerts: true,
           clientBuilder: widget.clientBuilder,
         );
     _lastClient = _notifications.client;
@@ -88,6 +90,7 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
     unawaited(_syncPush());
     // A restored unread count or a pre-existing popup is not a new message.
     _messageRevision = _notifications.messageRevision;
+    _onlineRevision = _notifications.onlineRevision;
     _notifications.addListener(_changed);
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -181,6 +184,22 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
         ),
       );
     }
+    final online = _notifications.onlineAlert;
+    if (!replaced &&
+        online != null &&
+        online.sound != 'silent' &&
+        _onlineRevision != _notifications.onlineRevision &&
+        _notifications.available &&
+        !_notifications.callOpen &&
+        id == null) {
+      unawaited(
+        _sounds.play(
+          online.sound == 'ring' ? KorlixSound.ringtone : KorlixSound.bell,
+          eventId: 'social-online:${identityHashCode(client)}:${online.id}',
+        ),
+      );
+    }
+    _onlineRevision = _notifications.onlineRevision;
     _messageRevision = _notifications.messageRevision;
     if (id != null && (replaced || id != _lastCall)) {
       _ringExpiresAt = DateTime.now().add(const Duration(seconds: 45));
@@ -248,6 +267,31 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
     if (mounted && identical(owner, _notifications.client)) {
       unawaited(_notifications.refresh());
     }
+  }
+
+  Future<void> _openOnline(SocialOnlineAlert alert) async {
+    final navigator = widget.navigatorKey.currentState;
+    if (navigator == null ||
+        !_notifications.available ||
+        _notifications.callOpen ||
+        alert.id != _notifications.onlineAlert?.id) {
+      return;
+    }
+    final client =
+        widget.clientBuilder?.call() ??
+        SocialClient(
+          baseUrl: widget.baseUrl,
+          headersBuilder: widget.headersBuilder,
+          sessionChanges: widget.sessionChanges,
+        );
+    _notifications.dismissOnline();
+    await navigator.push<void>(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/social/online-alert'),
+        builder: (_) =>
+            SocialScreen(client: client, initialConversation: alert.peer),
+      ),
+    );
   }
 
   Future<void> _openCall(SocialMap incoming) async {
@@ -334,6 +378,7 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
     child: SocialAlertOverlay(
       notifications: _notifications,
       onOpenMessage: _openMessage,
+      onOpenOnline: _openOnline,
       onOpenCall: _openCall,
       onDeclineCall: _declineCall,
       callActionBusy: _declining,

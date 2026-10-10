@@ -34,15 +34,25 @@ self.addEventListener('push', event => {
   event.waitUntil((async () => {
     let data;
     try { data = event.data?.json(); } catch (_) { return; }
-    if (!data || !['call', 'message', 'group_message'].includes(data.kind)) return;
+    if (!data || !['call', 'message', 'group_message', 'online'].includes(data.kind)) return;
     if (!data.binding || data.binding !== await binding()) return;
     const expires = Date.parse(data.expiresAt);
     if (!Number.isFinite(expires) || expires <= Date.now()) return;
+    // Always display a received push. The foreground app supplies the custom
+    // sound, so silence the duplicate system sound while it is visible.
+    let onlineForeground = false;
+    if (data.kind === 'online') {
+      const windows = await self.clients.matchAll({type: 'window', includeUncontrolled: true});
+      onlineForeground = windows.some(client => client.visibilityState === 'visible' &&
+          new URL(client.url).origin === self.location.origin &&
+          new URL(client.url).pathname.startsWith(new URL('../', self.registration.scope).pathname));
+    }
     await self.registration.showNotification('KORLIX Social', {
-      body: data.kind === 'call' ? 'You have an incoming call. Open KORLIX to view it.' : 'You have a new message. Open KORLIX to read it.',
+      body: data.kind === 'online' ? 'A selected connection is online. Open KORLIX to see who.' : data.kind === 'call' ? 'You have an incoming call. Open KORLIX to view it.' : 'You have a new message. Open KORLIX to read it.',
       icon: '../icons/Icon-192.png',
       tag: `korlix-social-${data.kind}-${String(data.eventId || '').slice(0, 80)}`,
       data: {binding: data.binding, expiresAt: data.expiresAt},
+      silent: data.kind === 'online' && (data.silent === true || onlineForeground),
       requireInteraction: data.kind === 'call',
     });
   })());

@@ -17,6 +17,7 @@ import 'social_call_controller.dart';
 import 'social_groups.dart';
 import 'social_invite_screen.dart';
 import 'social_notification_settings.dart';
+import 'social_online_settings.dart';
 import 'social_call_history.dart';
 import 'social_discover.dart';
 import 'domino/domino_screen.dart';
@@ -454,6 +455,22 @@ class _SocialScreenState extends State<SocialScreen>
   }
 
   Future<void> _memberAction(String action, SocialMap p) async {
+    if (action == 'online_alert') {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => SocialOnlineSettings(client: client, peer: p),
+        ),
+      );
+      return;
+    }
+    if (action == 'notifications') {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => SocialNotificationSettings(client: client),
+        ),
+      );
+      return;
+    }
     if (action == 'report') {
       final sent = await socialReport(context, client, 'member', p['id']);
       if (mounted && sent) {
@@ -758,6 +775,11 @@ class _SocialScreenState extends State<SocialScreen>
                 tooltip: 'Member options',
                 onSelected: (a) => _memberAction(a, p),
                 itemBuilder: (_) => [
+                  if (accepted)
+                    const PopupMenuItem(
+                      value: 'online_alert',
+                      child: Text('Notify when online'),
+                    ),
                   const PopupMenuItem(
                     value: 'calls',
                     child: Text('Call history'),
@@ -998,15 +1020,18 @@ class _SocialScreenState extends State<SocialScreen>
                                   borderRadius: BorderRadius.circular(14),
                                   gradient: LinearGradient(
                                     colors: [
-                                      socialColor(category['color'])
-                                          .withValues(alpha: .3),
-                                      socialColor(category['color'])
-                                          .withValues(alpha: .07),
+                                      socialColor(
+                                        category['color'],
+                                      ).withValues(alpha: .3),
+                                      socialColor(
+                                        category['color'],
+                                      ).withValues(alpha: .07),
                                     ],
                                   ),
                                   border: Border.all(
-                                    color: socialColor(category['color'])
-                                        .withValues(alpha: .4),
+                                    color: socialColor(
+                                      category['color'],
+                                    ).withValues(alpha: .4),
                                   ),
                                 ),
                                 child: Icon(
@@ -1285,7 +1310,8 @@ class _SocialScreenState extends State<SocialScreen>
                   const SocialEmpty(
                     icon: Icons.lock_outline_rounded,
                     title: 'Sign in to join the conversation.',
-                    body: 'Sign in to your KORLIX account, then reopen Social. Your previous account’s content has been cleared.',
+                    body:
+                        'Sign in to your KORLIX account, then reopen Social. Your previous account’s content has been cleared.',
                   )
                 else if (_profile == null) ...[
                   const Center(child: SocialOrbit(size: 210)),
@@ -1601,7 +1627,8 @@ class _SocialScreenState extends State<SocialScreen>
                       const SocialEmpty(
                         icon: Icons.groups_outlined,
                         title: 'Make space for your circle.',
-                        body: 'Create a group or accept an invitation here to start chatting together.',
+                        body:
+                            'Create a group or accept an invitation here to start chatting together.',
                       ),
                     _grid([
                       for (final g in _items)

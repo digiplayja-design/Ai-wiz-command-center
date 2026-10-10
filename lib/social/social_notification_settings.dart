@@ -4,6 +4,7 @@ import '../theme/korlix_theme.dart';
 import '../theme/korlix_action_button.dart';
 import 'social_client.dart';
 import 'social_design.dart';
+import 'social_online_settings.dart';
 import 'social_push_platform.dart';
 import 'social_push_native.dart'
     if (dart.library.js_interop) 'social_push_web.dart';
@@ -27,7 +28,11 @@ class _SocialNotificationSettingsState
   late final owner = socialPushOwner(widget.client.headersBuilder());
   SocialMap? _local;
   SocialMap _config = {};
-  bool _loading = true, _saving = false, _messages = true, _calls = true;
+  bool _loading = true,
+      _saving = false,
+      _messages = true,
+      _calls = true,
+      _online = false;
   String? _error;
   @override
   void initState() {
@@ -50,6 +55,7 @@ class _SocialNotificationSettingsState
         _local = saved == null ? null : local;
         _messages = saved?['messages'] != false;
         _calls = saved?['calls'] != false;
+        _online = saved?['online'] == true;
         _loading = false;
       });
     } catch (e) {
@@ -83,6 +89,7 @@ class _SocialNotificationSettingsState
         'subscription': local['subscription'],
         'messages': _messages,
         'calls': _calls,
+        'online': _online,
       });
       if (!mounted || !widget.client.available) {
         await platform.unsubscribe(owner);
@@ -170,6 +177,21 @@ class _SocialNotificationSettingsState
                   ),
                 ),
                 const SizedBox(height: 16),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.notifications_active_outlined),
+                  title: const Text('Online alerts'),
+                  subtitle: const Text(
+                    'Choose people and a bell, short ring or silent alert',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          SocialOnlineSettings(client: widget.client),
+                    ),
+                  ),
+                ),
                 if (_loading) const LinearProgressIndicator(),
                 if (!_loading && !capable)
                   SocialPanel(
@@ -206,6 +228,17 @@ class _SocialNotificationSettingsState
                       ? null
                       : (v) => setState(() => _messages = v),
                 ),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Selected connections online'),
+                  subtitle: const Text(
+                    'Background alerts for people chosen in Online alerts; names stay hidden on the lock screen',
+                  ),
+                  value: _online,
+                  onChanged: _saving
+                      ? null
+                      : (v) => setState(() => _online = v),
+                ),
                 const SizedBox(height: 12),
                 KorlixActionButton(
                   label: _local == null
@@ -216,7 +249,10 @@ class _SocialNotificationSettingsState
                   expand: true,
                   tile: MediaQuery.textScalerOf(context).scale(1) > 1.3,
                   onPressed:
-                      _loading || _saving || !capable || (!_calls && !_messages)
+                      _loading ||
+                          _saving ||
+                          !capable ||
+                          (!_calls && !_messages && !_online)
                       ? null
                       : _save,
                 ),

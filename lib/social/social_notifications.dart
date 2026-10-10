@@ -18,6 +18,17 @@ class SocialUnreadConversation {
   String get name => '${card['name'] ?? (group ? 'Group chat' : 'Message')}';
 }
 
+class SocialOnlineAlert {
+  const SocialOnlineAlert({
+    required this.id,
+    required this.peer,
+    required this.sound,
+  });
+  final String id, sound;
+  final SocialMap peer;
+  String get name => '${peer['name'] ?? 'Your connection'}';
+}
+
 /// Reads the existing server counts. Opening this inbox never marks chat read.
 /// All state is in memory and is discarded on sign-out or session replacement.
 class SocialNotifications extends ChangeNotifier {
@@ -29,11 +40,15 @@ class SocialNotifications extends ChangeNotifier {
     this.clientBuilder,
     this.enableCalls = false,
     this.enablePresence = false,
+    this.enableOnlineAlerts = false,
     Duration interval = const Duration(seconds: 5),
   }) {
     sessionChanges.addListener(_sessionChanged);
     _syncAccount();
-    _timer = Timer.periodic(interval, (_) => unawaited(refresh()));
+    _timer = Timer.periodic(interval, (_) {
+      unawaited(refresh());
+      unawaited(refreshOnline());
+    });
     if (enableCalls) {
       _callTimer = Timer.periodic(
         const Duration(seconds: 3),
@@ -55,6 +70,14 @@ class SocialNotifications extends ChangeNotifier {
   final SocialClient Function()? clientBuilder;
   final bool enableCalls;
   final bool enablePresence;
+  final bool enableOnlineAlerts;
+  Future<void>? _pendingOnline;
+  int _onlineGeneration = 0, _onlineRevision = 0;
+  final Set<String> _seenOnline = {};
+  final List<SocialOnlineAlert> _onlineQueue = [];
+  SocialOnlineAlert? _onlineAlert;
+  SocialOnlineAlert? get onlineAlert => _onlineAlert;
+  int get onlineRevision => _onlineRevision;
   SocialClient? _client;
   SocialClient? get client => available ? _client : null;
   Timer? _timer, _callTimer, _callExpiry, _presenceTimer;
@@ -91,6 +114,7 @@ class SocialNotifications extends ChangeNotifier {
     unawaited(refresh());
     unawaited(refreshCalls());
     unawaited(refreshPresence());
+    unawaited(refreshOnline());
   }
 
   void _syncAccount({bool replaceDenied = false}) {
@@ -129,6 +153,9 @@ class SocialNotifications extends ChangeNotifier {
 
   void _clear() {
     _conversations = const [];
+    _onlineQueue.clear();
+    _seenOnline.clear();
+    _onlineAlert = null;
     _partial = false;
     _hasMessageBaseline = false;
     _messageAlert = null;
@@ -142,6 +169,8 @@ class SocialNotifications extends ChangeNotifier {
   }
 
   void _invalidateLoads() {
+    _onlineGeneration++;
+    _pendingOnline = null;
     _generation++;
     _callGeneration++;
     _pending = null;
@@ -150,7 +179,10 @@ class SocialNotifications extends ChangeNotifier {
 
   void _hideAlerts() {
     _invalidateLoads();
-    final changed = _messageAlert != null || _incomingCall != null;
+    final changed =
+        _messageAlert != null || _incomingCall != null || _onlineAlert != null;
+    _onlineQueue.clear();
+    _onlineAlert = null;
     _messageAlert = null;
     _incomingCall = null;
     _callExpiry?.cancel();
@@ -205,6 +237,7 @@ class SocialNotifications extends ChangeNotifier {
       unawaited(refresh());
       unawaited(refreshCalls());
       unawaited(refreshPresence());
+      unawaited(refreshOnline());
     }
   }
 
@@ -320,6 +353,83 @@ class SocialNotifications extends ChangeNotifier {
       // A notification outage must not interrupt the main KORLIX screen.
     } finally {
       if (!_closed && generation == _generation) _pending = null;
+    }
+  }
+
+  void dismissOnline() {
+    if (_closed || _onlineAlert == null) return;
+    _onlineQueue.removeWhere((e) => e.id == _onlineAlert!.id);
+    _advanceOnline();
+    notifyListeners();
+  }
+
+  void _advanceOnline() {
+    final next = _onlineQueue.isEmpty ? null : _onlineQueue.first;
+    if (next?.id != _onlineAlert?.id && next != null) _onlineRevision++;
+    _onlineAlert = next;
+  }
+
+  Future<void> refreshOnline() {
+    if (_closed || !enableOnlineAlerts) return Future.value();
+    _syncAccount();
+    if (!_foreground || !shouldPoll() || !available) return Future.value();
+    return _pendingOnline ??= _loadOnline(
+      _client!,
+      _generation,
+      _onlineGeneration,
+    );
+  }
+
+  Future<void> _loadOnline(
+    SocialClient client,
+    int generation,
+    int onlineGeneration,
+  ) async {
+    bool current() =>
+        _current(client, generation) && onlineGeneration == _onlineGeneration;
+    try {
+      final response = await client.get('online_events');
+      if (!current()) return;
+      final rows = socialItems(response['items']);
+      final valid = rows
+          .where(
+            (row) =>
+                row['id'] is String &&
+                socialMap(row['peer'])['id'] != null &&
+                socialMap(row['peer'])['online'] == true &&
+                ['bell', 'ring', 'silent'].contains(row['sound']),
+          )
+          .toList();
+      final ids = valid.map((row) => row['id']).toSet();
+      _onlineQueue.removeWhere((event) => !ids.contains(event.id));
+      for (final row in valid) {
+        final id = row['id'] as String;
+        if (_seenOnline.add(id)) {
+          _onlineQueue.add(
+            SocialOnlineAlert(
+              id: id,
+              peer: Map.unmodifiable(socialMap(row['peer'])),
+              sound: row['sound'] as String,
+            ),
+          );
+        }
+      }
+      while (_seenOnline.length > 256) {
+        _seenOnline.remove(_seenOnline.first);
+      }
+      _advanceOnline();
+      notifyListeners();
+    } catch (_) {
+      // Never leave a stale online claim visible while its access check fails.
+      if (current()) {
+        _onlineQueue.clear();
+        _onlineAlert = null;
+        notifyListeners();
+      }
+    } finally {
+      if (!_closed && onlineGeneration == _onlineGeneration) {
+        _pendingOnline = null;
+      }
     }
   }
 

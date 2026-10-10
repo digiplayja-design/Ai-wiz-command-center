@@ -16,6 +16,7 @@ class SocialAlertOverlay extends StatefulWidget {
     required this.onOpenMessage,
     required this.onOpenCall,
     required this.onDeclineCall,
+    this.onOpenOnline,
     this.callActionBusy = false,
     this.callError,
   });
@@ -25,6 +26,7 @@ class SocialAlertOverlay extends StatefulWidget {
   final Future<void> Function(SocialUnreadConversation) onOpenMessage;
   final Future<void> Function(SocialMap) onOpenCall;
   final Future<void> Function(SocialMap) onDeclineCall;
+  final Future<void> Function(SocialOnlineAlert)? onOpenOnline;
   final bool callActionBusy;
   final String? callError;
 
@@ -87,10 +89,13 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
     final notifications = widget.notifications;
     final call = notifications.callOpen ? null : notifications.incomingCall;
     final message = notifications.callOpen ? null : notifications.messageAlert;
+    final online = notifications.callOpen ? null : notifications.onlineAlert;
     final identity = call != null
         ? 'call:${notifications.callRevision}:${call['id']}'
         : message != null
         ? 'message:${notifications.messageRevision}:${message.key}'
+        : online != null
+        ? 'online:${online.id}'
         : null;
     if (_visibleIdentity != identity) {
       _visibleIdentity = identity;
@@ -107,8 +112,9 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
         _shakenCallRevision = notifications.callRevision;
         _startShake();
       }
-    } else if (message != null) {
-      if (_shakenMessageRevision != notifications.messageRevision) {
+    } else if (message != null || online != null) {
+      if (message != null &&
+          _shakenMessageRevision != notifications.messageRevision) {
         _shakenMessageRevision = notifications.messageRevision;
         _startShake();
       }
@@ -122,7 +128,11 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
         _messageTimer = Timer(const Duration(seconds: 10), () {
           _messageTimer = null;
           if (mounted && generation == _alertGeneration) {
-            notifications.dismissMessage();
+            if (message != null) {
+              notifications.dismissMessage();
+            } else {
+              notifications.dismissOnline();
+            }
           }
         });
       }
@@ -182,6 +192,7 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
     final notifications = widget.notifications;
     final call = notifications.callOpen ? null : notifications.incomingCall;
     final message = notifications.callOpen ? null : notifications.messageAlert;
+    final online = notifications.callOpen ? null : notifications.onlineAlert;
     final media = MediaQuery.of(context);
     return LayoutBuilder(
       builder: (context, constraints) => Stack(
@@ -202,7 +213,7 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
               );
             },
           ),
-          if (call != null || message != null)
+          if (call != null || message != null || online != null)
             Positioned(
               left: 0,
               right: 0,
@@ -225,7 +236,7 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
                             24,
                       ),
                     ),
-                    child: _alertCard(call, message),
+                    child: _alertCard(call, message, online),
                   ),
                 ),
               ),
@@ -235,16 +246,25 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
     );
   }
 
-  Widget _alertCard(SocialMap? call, SocialUnreadConversation? message) {
+  Widget _alertCard(
+    SocialMap? call,
+    SocialUnreadConversation? message,
+    SocialOnlineAlert? online,
+  ) {
+    final isOnline = call == null && message == null && online != null;
     final isCall = call != null;
     final video = call?['mode'] == 'video';
     final title = isCall
         ? video
               ? 'Incoming video call'
               : 'Incoming phone call'
+        : isOnline
+        ? 'Connection online'
         : 'Incoming message';
     final name = isCall
         ? '${socialMap(call['peer'])['name'] ?? 'KORLIX Social member'}'
+        : isOnline
+        ? online.name
         : message!.name;
     final busy = _localBusy || isCall && widget.callActionBusy;
     final error = _localError ?? (isCall ? widget.callError : null);
@@ -290,6 +310,8 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
                             ? video
                                   ? Icons.videocam_rounded
                                   : Icons.phone_in_talk_rounded
+                            : isOnline
+                            ? Icons.person_rounded
                             : Icons.mark_chat_unread_rounded,
                         color: accent,
                         size: 28,
@@ -331,6 +353,8 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
                   Text(
                     isCall
                         ? 'View the call to answer.'
+                        : isOnline
+                        ? 'Is online now. Say hello when you’re ready.'
                         : message!.group
                         ? 'New message in your group.'
                         : 'You have a new private message.',
@@ -349,7 +373,11 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
                     runSpacing: 10,
                     children: [
                       _button(
-                        label: isCall ? 'View call' : 'Open message',
+                        label: isCall
+                            ? 'View call'
+                            : isOnline
+                            ? 'Open chat'
+                            : 'Open message',
                         icon: isCall ? Icons.call_rounded : Icons.chat_rounded,
                         color: isCall
                             ? const Color(0xFF087565)
@@ -361,6 +389,9 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
                                 _run(
                                   () => isCall
                                       ? widget.onOpenCall(call)
+                                      : isOnline
+                                      ? (widget.onOpenOnline?.call(online) ??
+                                            Future<void>.value())
                                       : widget.onOpenMessage(message!),
                                   call: isCall,
                                 ),
@@ -381,6 +412,8 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
                                   call: true,
                                 ),
                               )
+                            : isOnline
+                            ? widget.notifications.dismissOnline
                             : widget.notifications.dismissMessage,
                       ),
                     ],
