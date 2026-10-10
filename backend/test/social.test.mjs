@@ -352,6 +352,26 @@ const uploadAttachment=async({actor=users[0],destination={peer:b.id},kind='file'
  const result=await response.json();assert.equal(response.status,status,JSON.stringify(result));assert.equal(response.headers.get('cache-control'),'no-store');return result;
 };
 const mediaRpc=async(actor,action,data)=>(await db.query('select korlix_social_attachment_v1($1,$2,$3::jsonb) result',[actor,action,JSON.stringify(data)])).rows[0].result;
+test('GIF and sticker uploads retain formats through direct and group sends with private access', async()=>{
+ await connectAll(); const {group}=await createGroup(); await api('group_accept',{group:group.id},users[1]);
+ const png=await sharp({create:{width:12,height:12,channels:4,background:{r:40,g:200,b:170,alpha:.5}}}).png().toBuffer();
+ const gif=await sharp(png).gif().toBuffer();
+ for(const groupChat of [false,true]) for(const kind of ['gif','sticker']) {
+  const id=randomUUID(), destination=groupChat?{group:group.id}:{peer:b.id};
+  const request={id,destination,kind,name:kind==='gif'?'Hello.gif':'Hello.png',bytes:kind==='gif'?gif:png};
+  const {attachment}=await uploadAttachment(request); await uploadAttachment(request);
+  assert.equal(attachment.kind,'image'); assert.equal(attachment.content_type,kind==='gif'?'image/gif':'image/png');
+  assert.match(attachment.url,/expires=300/); assert.equal(attachment.object_path,undefined);
+  const messageId=randomUUID();
+  await api(groupChat?'group_send':'send',{id:messageId,...destination,body:'',attachment_id:id});
+  const message=(await api(groupChat?'group_message':'message',{id:messageId,...(groupChat?destination:{peer:a.id})},users[1],'GET')).message;
+  assert.equal(message.attachment.id,id); assert.equal(message.attachment.content_type,attachment.content_type);
+  await api('attachment_link',{id},users[1],'GET');
+  await api('attachment_link',{id},users[2],'GET',groupChat?403:404);
+  await api(groupChat?'group_delete_message':'delete_message',{id:messageId,...destination});
+  await api('attachment_link',{id},users[1],'GET',404);
+ }
+});
 test('attachments require authentication and accepted destinations before upload',async()=>{
  await uploadAttachment({actor:'',status:401});await uploadAttachment({status:403});
  await connectAll();const {group}=await createGroup();await uploadAttachment({actor:users[1],destination:{group:group.id},status:403});

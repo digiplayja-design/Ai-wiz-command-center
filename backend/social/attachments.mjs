@@ -6,11 +6,30 @@ const links = new Map();
 
 export async function validateAttachment(file, kind) {
   if (!file?.buffer?.length || file.buffer.length > attachmentLimit) throw bad('Choose a file smaller than 20 MB.');
-  if (!['image', 'file', 'voice'].includes(kind)) throw bad('Choose a photo, file or voice note.');
+  if (!['image', 'gif', 'sticker', 'file', 'voice'].includes(kind)) throw bad('Choose a photo, GIF, sticker, file or voice note.');
   let bytes = file.buffer;
   let filename = String(file.originalname || 'Attachment').replace(/[\x00-\x1f\x7f/\\<>:"|?*]/g, '_').slice(-140);
   let extension = filename.split('.').at(-1).toLowerCase(), content_type, duration_ms = null;
-  if (kind === 'image') {
+  if (kind === 'gif' || kind === 'sticker') {
+    const gif = kind === 'gif';
+    try {
+      const { default: sharp } = await import('sharp');
+      const image = sharp(bytes, { limitInputPixels: 32000000, animated: gif, failOn: 'warning' });
+      const meta = await image.metadata();
+      const frames = meta.pages || 1;
+      if (gif ? meta.format !== 'gif' || frames > 160 : !['png', 'webp', 'jpeg'].includes(meta.format) || frames > 1) throw Error();
+      if (gif && (meta.width > 2048 || (meta.pageHeight || meta.height) > 2048)) throw Error();
+      const resized = image.resize(gif ? 640 : 512, gif ? 640 : 512, { fit: 'inside', withoutEnlargement: true }).timeout({ seconds: 15 });
+      // Re-encode every frame, strip metadata, and retain sticker alpha. Store
+      // as the existing image kind so older clients and access rules still work.
+      bytes = await (gif ? resized.gif({ effort: 3 }) : resized.png()).toBuffer();
+      if (bytes.length > attachmentLimit) throw Error();
+    } catch { throw bad(gif ? 'Choose a GIF under 20 MB, 2048 pixels and 160 frames. Try a shorter or smaller GIF.' : 'Choose a still PNG, WebP or JPG sticker under 20 MB.'); }
+    extension = gif ? 'gif' : 'png'; content_type = gif ? 'image/gif' : 'image/png';
+    filename = filename.replace(/\.[^.]+$/, '').replace(/^Sticker - /i, '').slice(0, 125);
+    filename = (gif ? '' : 'Sticker - ') + filename + '.' + extension;
+    kind = 'image';
+  } else if (kind === 'image') {
     try {
       const { default: sharp } = await import('sharp');
       const image = sharp(bytes, { limitInputPixels: 32000000, animated: false, failOn: 'error' });
