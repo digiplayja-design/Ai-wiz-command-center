@@ -55,6 +55,8 @@ before(async()=>{
  await db.exec(await readFile(new URL(upgrade,folder),'utf8'));
  const dumpScope=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_last_login_dump_scope.sql'));
  await db.exec(await readFile(new URL(dumpScope,folder),'utf8'));
+ const online=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_online_alerts.sql'));
+ await db.exec(await readFile(new URL(online,folder),'utf8'));
  const app=express();app.use(express.json({limit:'250kb'}));push=registerSocial(app,{database:rpc,env,pushSender:sender,autoStart:false,requireUser:async q=>{if(!users.includes(q.headers.authorization))throw Error();return {id:q.headers.authorization,email_confirmed_at:'2026-01-01'};},logger:{warn(){}}});
  server=app.listen(0);await new Promise(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}/api/social/`;
 });
@@ -202,4 +204,106 @@ test('old endpoint expiration cannot revoke a renewed subscription, even with re
  saved=(await db.query('select revision,subscription from korlix_social_push_subscriptions')).rows;
  assert.equal(saved.length,1);assert.equal(saved[0].revision,3);assert.equal(saved[0].subscription.endpoint,fresh.subscription.endpoint);
  await send();await push.tick();assert.equal(sends.length,1);assert.equal(sends[0][0].endpoint,fresh.subscription.endpoint);
+});
+
+const online = async(actor, action, data={}) => (await db.query('select korlix_social_online_v1($1,$2,$3::jsonb) result',[actor,action,JSON.stringify(data)])).rows[0].result;
+const watch = (peer=b.id, enabled=true, sound='bell', actor=users[0]) => online(actor,'online_watch_set',{peer,enabled,sound});
+const events = actor => online(actor,'online_events');
+const offline = async(peer=b.id) => db.query("update korlix_social_profiles set last_seen=now()-interval '2 minutes' where id=$1",[peer]);
+
+test('online selections require accepted connections and cannot select self or act as another user',async()=>{
+ await assert.rejects(watch(),{code:'42501'});
+ await connect();await watch();
+ assert.equal((await online(users[0],'online_watches')).items.length,1);
+ assert.equal((await online(users[1],'online_watches')).items.length,0);
+ await assert.rejects(watch(a.id));
+ await api('online_watch_set',{peer:c.id,enabled:true,sound:'bell',p_actor:users[1]},users[0],'POST',403);
+ await api('online_watches',{},'invalid','GET',401);
+ await assert.rejects(watch(b.id,true,'alarm'));
+ await assert.rejects(watch(b.id,'true','bell'));
+});
+
+test('online alerts begin at next arrival, deduplicate heartbeats and respect the 15 minute cooldown',async()=>{
+ await connect();await call(users[1],'presence',{active:true});await watch();
+ await call(users[1],'presence',{active:true});assert.equal((await events(users[0])).items.length,0);
+ await offline();await call(users[1],'presence',{active:true});
+ const first=(await events(users[0])).items[0];assert.equal(first.peer.id,b.id);assert.equal(first.peer.online,true);
+ await call(users[1],'presence',{active:true});assert.equal((await events(users[0])).items[0].id,first.id);
+ await offline();await call(users[1],'presence',{active:true});assert.equal((await events(users[0])).items.length,0);
+ await db.exec("update korlix_social_online_watches set last_alert_at=now()-interval '16 minutes'");
+ await offline();await call(users[1],'presence',{active:true});
+ assert.notEqual((await events(users[0])).items[0].id,first.id);
+ assert.equal(await count('korlix_social_online_events'),1);
+});
+
+test('online notification enrollment is separately opt-in and silent mode is delivered without a name',async()=>{
+ await connect();await watch(b.id,true,'silent');
+ const sub=enrollment(0);await pushCall(users[0],'subscribe',sub);
+ await call(users[1],'presence',{active:true});assert.equal(await count('korlix_social_push_outbox'),0);
+ await pushCall(users[0],'subscribe',{...sub,online:true});
+ await db.exec("update korlix_social_online_watches set last_alert_at=now()-interval '16 minutes'");
+ await offline();await call(users[1],'presence',{active:true});await push.tick();
+ assert.equal(sends.length,1);const body=JSON.parse(sends[0][1]);
+ assert.equal(body.kind,'online');assert.equal(body.silent,true);
+ assert.ok(!sends[0][1].includes('bruno'));assert.ok(!sends[0][1].includes(b.id));
+ assert(sends[0][2].TTL<=90);
+});
+
+test('hidden, suspended and offline members cannot produce or retain online alerts',async()=>{
+ await connect();await watch();
+ await db.query('update korlix_social_profiles set show_online=false where id=$1',[b.id]);
+ await call(users[1],'presence',{active:true});assert.equal((await events(users[0])).items.length,0);
+ await db.query('update korlix_social_profiles set show_online=true where id=$1',[b.id]);
+ await call(users[1],'presence',{active:true});assert.equal((await events(users[0])).items.length,1);
+ await db.query('update korlix_social_profiles set suspended=true where id=$1',[b.id]);
+ assert.equal((await events(users[0])).items.length,0);
+});
+
+test('online push rechecks visibility and watch choice after the worker claims it',async()=>{
+ await connect();await watch();await pushCall(users[0],'subscribe',enrollment(0,{online:true}));
+ await call(users[1],'presence',{active:true});const item=(await pushCall(null,'claim')).items[0];
+ await db.query('update korlix_social_profiles set show_online=false where id=$1',[b.id]);
+ assert.equal((await pushCall(null,'authorize',item)).delivery,null);
+ assert.equal(sends.length,0);
+});
+
+test('removal and blocking erase online selections and pending events; reconnecting does not restore them',async()=>{
+ await connect();await watch();await watch(a.id,true,'bell',users[1]);
+ await call(users[1],'presence',{active:true});
+ await call(users[0],'remove',{peer:b.id});
+ assert.equal(await count('korlix_social_online_watches'),0);assert.equal(await count('korlix_social_online_events'),0);
+ await connect();assert.equal((await online(users[0],'online_watches')).items.length,0);
+ await watch();await call(users[1],'block',{peer:a.id});
+ assert.equal(await count('korlix_social_online_watches'),0);
+});
+
+test('disabling a watch revokes events and queued push even with messages and calls enabled',async()=>{
+ await connect();await watch();await pushCall(users[0],'subscribe',enrollment(0,{online:true}));
+ await call(users[1],'presence',{active:true});assert.equal((await events(users[0])).items.length,1);
+ await watch(b.id,false);await push.tick();
+ assert.equal(sends.length,0);assert.equal((await events(users[0])).items.length,0);
+});
+
+test('online events are bounded and expire, and client roles cannot read watches or invoke privileged RPCs',async()=>{
+ await connect();await watch();await call(users[1],'presence',{active:true});
+ await db.exec("update korlix_social_online_events set expires_at=now()-interval '1 second'");
+ assert.equal((await events(users[0])).items.length,0);
+ await pushCall(null,'claim');assert.equal(await count('korlix_social_online_events'),0);
+ for (const role of ['anon','authenticated']) {
+  const permission=(await db.query("select has_table_privilege($1,'korlix_social_online_watches','select') watches,has_table_privilege($1,'korlix_social_online_events','select') events,has_function_privilege($1,'korlix_social_online_v1(uuid,text,jsonb)','execute') rpc",[role])).rows[0];
+  assert.deepEqual(permission,{watches:false,events:false,rpc:false});
+ }
+ const rows=(await db.query("select relrowsecurity from pg_class where oid in ('korlix_social_online_watches'::regclass,'korlix_social_online_events'::regclass)")).rows;
+ assert(rows.every(row=>row.relrowsecurity));
+});
+
+test('online selections are capped at 50 and updating an existing sound remains allowed',async()=>{
+ for(let i=0;i<51;i++) {
+  const user=randomUUID(),id=randomUUID();await db.query('insert into auth.users(id) values($1)',[user]);
+  await db.query("insert into korlix_social_profiles(id,user_id,handle,name) values($1,$2,$3,$3)",[id,user,'online_limit_'+i]);
+  await db.query("insert into korlix_social_connections(requester,recipient,state) values($1,$2,'accepted')",[a.id,id]);
+  if(i<50)await watch(id);else await assert.rejects(watch(id),/up to 50/);
+ }
+ const first=(await online(users[0],'online_watches')).items[0];await watch(first.peer.id,true,'ring');
+ assert.equal((await online(users[0],'online_watches')).items.length,50);
 });

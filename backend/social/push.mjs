@@ -51,8 +51,8 @@ export function createSocialPush({ database, authenticate, env = process.env, lo
           const seconds = Math.floor((Date.parse(delivery.expires_at) - now()) / 1000);
           if (seconds <= 0) { await rpc(null, 'finish', { id: item.id, lease: item.lease, status: 'cancelled' }); return; }
           const payload = JSON.stringify({ kind: delivery.kind, binding: delivery.binding, eventId: delivery.event_id,
-            expiresAt: delivery.expires_at, url: '/app/?social=1', title: 'KORLIX Social',
-            body: delivery.kind === 'call' ? 'You have an incoming call. Open KORLIX Social to answer.' : 'You have a new message. Open KORLIX Social to read it.' });
+            expiresAt: delivery.expires_at, silent: delivery.silent === true, url: '/app/?social=1', title: 'KORLIX Social',
+            body: delivery.kind === 'online' ? 'A selected connection is online. Open KORLIX Social to see who.' : delivery.kind === 'call' ? 'You have an incoming call. Open KORLIX Social to answer.' : 'You have a new message. Open KORLIX Social to read it.' });
           attempted = true;
           await sender(subscription, payload, { TTL: Math.min(seconds, delivery.kind === 'call' ? 45 : 300), urgency: delivery.kind === 'call' ? 'high' : 'normal',
             topic: createHash('sha256').update(`${delivery.kind}:${delivery.event_id}`).digest('base64url').slice(0, 32), timeout: 8000,
@@ -85,10 +85,11 @@ export function createSocialPush({ database, authenticate, env = process.env, lo
         if (!uuid.test(data.device || '')) return res.status(400).json({ error: 'Reopen notification settings on this browser.' });
         if (action === 'push_unsubscribe') return res.json(await rpc(user.id, 'unsubscribe', { device: data.device }));
         if (!socialPushConfig(env).enabled) return res.status(503).json({ error: socialPushConfig(env).reason });
+        if (data.online !== undefined && typeof data.online !== 'boolean') return res.status(400).json({ error: 'Choose your online notification preference.' });
         if (!uuid.test(data.binding || '') || typeof data.messages !== 'boolean' || typeof data.calls !== 'boolean') return res.status(400).json({ error: 'Choose your notification preferences.' });
         let subscription;
         try { subscription = validateSocialPushSubscription(data.subscription); } catch (error) { return res.status(400).json({ error: error.message }); }
-        return res.json(await rpc(user.id, 'subscribe', { device: data.device, binding: data.binding, messages: data.messages, calls: data.calls, subscription }));
+        return res.json(await rpc(user.id, 'subscribe', { device: data.device, binding: data.binding, messages: data.messages, calls: data.calls, ...(data.online === undefined ? {} : {online: data.online}), subscription }));
       } catch (error) {
         const status = { '42501': 403, P0001: 400, '54000': 429, '23505': 409 }[error.code] || 503;
         return res.status(status).json({ error: status === 503 ? 'Notification settings could not be confirmed. Refresh before retrying.' : error.message });

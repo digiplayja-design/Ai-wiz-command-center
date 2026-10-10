@@ -13,10 +13,12 @@ export function registerSocial(app, { database, requireUser, logger = console, e
   const actions = new Set(['bootstrap', 'members', 'member', 'wall', 'connections', 'messages', 'message', 'topics', 'topic', 'blocks', 'reports',
     'save_profile', 'presence', 'request', 'accept', 'decline', 'remove', 'block', 'unblock', 'send', 'read',
     'dump_schedule', 'dump_cancel', 'delete_message', 'create_topic', 'edit_topic', 'delete_topic', 'reply', 'edit_reply', 'delete_reply', 'report', 'moderate']);
+  const onlineActions = new Set(['online_watches', 'online_events', 'online_watch_set']);
+  for (const action of onlineActions) actions.add(action);
   const chatActions = new Set(['messages', 'message', 'send']);
   const groupActions = new Set(['groups','group_create','group_details','group_invite','group_accept','group_decline','group_rename','group_remove','group_leave','group_messages','group_message','group_send','group_read','group_delete_message']);
   for (const action of groupActions) actions.add(action);
-  const reads = new Set(['bootstrap', 'members', 'member', 'wall', 'connections', 'messages', 'message', 'topics', 'topic', 'blocks', 'reports']);
+  const reads = new Set(['online_watches', 'online_events', 'bootstrap', 'members', 'member', 'wall', 'connections', 'messages', 'message', 'topics', 'topic', 'blocks', 'reports']);
   for (const action of ['groups','group_details','group_messages','group_message']) reads.add(action);
   const callActions = new Set(['call_config', 'call_inbox', 'call_history', 'call_restart', 'call_start', 'call_accept', 'call_end', 'call_poll', 'call_signal']);
   for (const action of callActions) actions.add(action);
@@ -55,7 +57,7 @@ export function registerSocial(app, { database, requireUser, logger = console, e
       const groupAction = groupActions.has(action) || groupReport || action === 'moderate';
       const mediaChat = chatActions.has(action) || ['group_messages','group_message','group_send'].includes(action);
       const discoverReport = action === 'report' && ['video','news'].includes(data.kind);
-      const result = await database.rpc(discoverReport || action === 'moderate' ? 'korlix_social_discover_v1' : ['dump_schedule','dump_cancel'].includes(action) ? 'korlix_social_dump_v1' : mediaChat ? 'korlix_social_media_chat_v1' : groupAction ? 'korlix_social_groups_v1' : callActions.has(action) ? 'korlix_social_calls_v1' : 'korlix_social_v1', { p_actor: user.id, p_action: groupReport ? 'group_report' : action, p_data: data });
+      const result = await database.rpc(onlineActions.has(action) ? 'korlix_social_online_v1' : discoverReport || action === 'moderate' ? 'korlix_social_discover_v1' : ['dump_schedule','dump_cancel'].includes(action) ? 'korlix_social_dump_v1' : mediaChat ? 'korlix_social_media_chat_v1' : groupAction ? 'korlix_social_groups_v1' : callActions.has(action) ? 'korlix_social_calls_v1' : 'korlix_social_v1', { p_actor: user.id, p_action: groupReport ? 'group_report' : action, p_data: data });
       if (result.error) {
         const code = result.error.code;
         const status = { P0001: 400, P0002: 404, '42501': 403, '23505': 409, '40001': 409, '23514': 400, '22P02': 400, '22003': 400, '54000': 429 }[code];

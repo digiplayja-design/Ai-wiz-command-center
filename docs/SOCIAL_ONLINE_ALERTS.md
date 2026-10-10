@@ -1,0 +1,13 @@
+# Selected-connection online alerts
+
+Added October 10, 2026. A member can select up to 50 accepted connections and choose a bell, a single two-second ring phrase, or a silent banner. Access is through Social settings → Notification settings → Online alerts, or a connection's member menu → Notify when online.
+
+An alert begins on the selected person's next offline-to-online transition. The existing foreground heartbeat and 90-second online lease are authoritative. Repeated heartbeats do not alert again, and each selection has a 15-minute cooldown. Hidden status, suspended profiles, blocks, removed connections, and disabled selections cannot authorize delivery. Removing or blocking a connection removes both directions' selections; reconnecting does not reenroll them.
+
+The service-only `korlix_social_online_v1` RPC provides `online_watches`, `online_watch_set`, and `online_events`. Authenticated HTTP routes derive the actor from the verified session. New tables use RLS, no client grants, and security-invoker functions. Only the latest event per selection is retained, valid for 90 seconds; the push worker cleans expired events. Watches are account-scoped and cascade on account deletion. Connection mutations and watch updates share the same pair lock.
+
+Browser push requires the separate per-device “Selected connections online” opt-in. Existing subscriptions default to false. The existing bounded outbox, lease and delivery-recheck flow is reused. Push contains no person's name or profile identifier. A silent selection suppresses background sound; the foreground application plays its selected effect once and honors app sound/quiet settings. The service worker still displays foreground pushes but requests silence to avoid a second system sound. Notifications cannot override OS Silent/Focus settings or promise delivery.
+
+Native background push remains unconfigured in the existing runtime. Native builds can use the in-app feature after rebuilding; this change does not configure APNs/FCM. For iPhone/iPad web push, install the website on the Home Screen and enable browser notifications from that app. See https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/.
+
+Validation covers selected-person authorization, malformed settings, cooldown and heartbeat deduplication, separate browser opt-in, silent generic push, privacy changes after queue claim, disabling/removal/blocking, expiry, RLS/grants, the 50-selection cap, account changes and late responses, foreground bell/ring/silent delivery, narrow-screen settings, and service-worker binding/foreground behavior. Phone permission and physical-device delivery remain acceptance checks; local tests use fixture accounts and a fake push sender.
