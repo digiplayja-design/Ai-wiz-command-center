@@ -3,7 +3,7 @@ import 'package:ai_wiz_command_center/navigation/home_tool_catalog.dart';
 
 void main() {
   test(
-    'Inventory and Bookkeeping require Enterprise; scheduling stays free',
+    'FieldProof, Inventory and Bookkeeping require Enterprise; scheduling stays free',
     () {
       for (final enterprise in [false, true]) {
         final home = [
@@ -11,12 +11,20 @@ void main() {
           if (enterprise) ...homeEnterpriseTools,
         ];
         final finder = searchableHomeTools(
-          quickActionLabels: ['Inventory Studio', 'Bookkeeping 2027'],
+          quickActionLabels: [
+            'FieldProof',
+            'Inventory Studio',
+            'Bookkeeping 2027',
+          ],
           enterprise: enterprise,
         ).map((entry) => entry.label).toList();
         for (final tools in [home, finder]) {
           expect(tools, contains('KORLIX 2MEETU'));
-          for (final feature in ['Inventory Studio', 'Bookkeeping 2027']) {
+          for (final feature in [
+            'FieldProof',
+            'Inventory Studio',
+            'Bookkeeping 2027',
+          ]) {
             expect(tools.contains(feature), enterprise);
           }
         }

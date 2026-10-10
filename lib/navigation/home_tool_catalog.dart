@@ -4,7 +4,6 @@ const homeBusinessTools = <String>[
   'Contacts CRM',
   'Logo Studio',
   'KORLIX 2MEETU',
-  'FieldProof',
   'SEO Agent',
   'AI Visibility',
   'Contract Radar',
@@ -12,6 +11,7 @@ const homeBusinessTools = <String>[
   'Business Directory',
 ];
 const homeEnterpriseTools = <String>[
+  'FieldProof',
   'Inventory Studio',
   'Bookkeeping 2027',
   'Funnel Studio',
@@ -98,7 +98,7 @@ const _toolDetails = <String, String>{
   'Inventory Studio': 'Track stock, products and inventory · Enterprise',
   'Bookkeeping 2027': 'Organize your business finances · Enterprise',
   'KORLIX 2MEETU': 'Free scheduling for meetings and appointments',
-  'FieldProof': 'Document jobs and field work',
+  'FieldProof': 'Document jobs and field work · Enterprise',
   'SEO Agent': 'Improve how your website is found',
   'AI Visibility': 'Check your presence in AI answers',
   'Contract Radar': 'Find and track contract opportunities',

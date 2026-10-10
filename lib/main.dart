@@ -9918,6 +9918,14 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   Future<void> _openFieldProof() async {
+    if (_currentTier.trim().toLowerCase() != 'enterprise') {
+      await _showPremiumFeaturePrompt(
+        title: 'FieldProof requires Enterprise',
+        availability: 'Enterprise',
+        description: 'Document jobs, review evidence and prepare customer reports with Enterprise. Your saved records are retained.',
+      );
+      return;
+    }
     final client=FieldProofClient(backendBaseUrl:kKorlixBackendBaseUrl,
       headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
     await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>FieldProofScreen(
@@ -11270,7 +11278,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       if (tool == 'THE RECEIPT WIZ') return 'Free receipt scanner, smart categories and connected finance inboxes';
       if (tool == 'Tax Prep') return 'Personal tax organizer, linked Bookkeeping records and preparer packets';
       if (tool == 'BabyBlend') return 'Imagine a fictional child portrait from two adult photos with KORLIX';
-      if (tool == 'FieldProof') return 'Job photos, evidence checklists and customer handoffs with KORLIX';
+      if (tool == 'FieldProof') return 'Enterprise: job photos, evidence checklists and customer handoffs with KORLIX';
       if (tool == 'AI Visibility') return 'See sampled AI answers, improve your website content and track progress';
       if (tool == 'Live Studio') return 'Create an AI-hosted show with private rehearsals and broadcast controls';
       if (tool == 'The Pod and You') return 'A podcast that listens back. Private AI conversations, up to 15 minutes';
