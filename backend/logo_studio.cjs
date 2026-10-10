@@ -1,11 +1,9 @@
 'use strict';
 
 const sharp = require('sharp');
-const {astraRequest} = require('./korlix_astra.cjs');
+const {astraRequest, TEXT_MODEL: LOGO_MODEL, TEXT_EFFORT: LOGO_EFFORT} = require('./korlix_astra.cjs');
 const {imageSettings} = require('./chat_quality.cjs');
 
-const LOGO_MODEL = 'gpt-6-astra';
-const LOGO_EFFORT = 'max';
 const PLAN_TIMEOUT_MS = 600000;
 const PLAN_LIMITS = Object.freeze({conceptName: 100, summary: 800, renderPrompt: 6000});
 const fail = (message, statusCode = 502) => Object.assign(new Error(message), {statusCode});

@@ -91,7 +91,7 @@ test('RLS, grants and restrictive bucket policy block direct client access',asyn
 test('vision planning and editing use all references, identity rules and maximum quality',async()=>{
  const image=(await normalizeUpload({buffer:bytes})).image;const calls=[];const client={responses:{create:async(body,options)=>{calls.push({body,options});return {status:'completed',output_text:JSON.stringify({editPrompt:'Match the supplied blazer.',summary:'Ivory blazer outfit.'})};}},images:{edit:async(body,options)=>{calls.push({body,options});return {data:[{b64_json:bytes.toString('base64')}]};}}};
  const out=await createTryOn({client,toFile:async(bytes,name)=>({bytes,name}),photo:{bytes:image},garments:[{bytes:image,name:'Blazer',category:'outerwear'}],prompt:'Business lunch'});
- assert.equal(calls[0].body.model,'gpt-6-astra');assert.equal(calls[0].body.reasoning.effort,'xhigh');assert.equal(calls[0].body.store,false);assert.equal(calls[0].body.input[0].content.filter(c=>c.type==='input_image').length,2);
+ assert.equal(calls[0].body.model,'gpt-6-astra');assert.equal(calls[0].body.reasoning.effort,'max');assert.equal(calls[0].body.store,false);assert.equal(calls[0].body.input[0].content.filter(c=>c.type==='input_image').length,2);
  assert.equal(calls[1].body.image.length,2);assert.equal(calls[1].body.quality,'max');assert.match(calls[1].body.prompt,/body shape/);assert.equal(calls[1].body.input_fidelity,undefined);assert.equal(out.mime,'image/png');
  client.images.edit=async()=>({data:[{b64_json:'bad'}]});await assert.rejects(createTryOn({client,toFile:async()=>({}),photo:{bytes:image},garments:[{bytes:image,name:'Blazer',category:'outerwear'}],prompt:''}),/unreadable/);
 });

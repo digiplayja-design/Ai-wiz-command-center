@@ -77,7 +77,7 @@ test(
           false,
 
         modelConfigured:
-          false,
+          true,
 
         publicInstructionsConfigured:
           false,
@@ -129,43 +129,17 @@ test(
   },
 );
 
-test(
-  'missing model name fails closed',
-  async () => {
-    const runtime =
-      createKorlixVapiNovaRuntime({
-        environment: {
-          KORLIX_VAPI_NOVA_OPENAI_API_KEY:
-            'test-key',
-        },
-
-        fetchImpl:
-          async () =>
-            response({
-              output_text:
-                'unused',
-            }),
-      });
-
-    await assert.rejects(
-      runtime.respond({
-        messages: [
-          {
-            role:
-              'user',
-
-            content:
-              'Hello',
-          },
-        ],
-      }),
-
-      (error) =>
-        error.code
-        === 'nova_model_not_configured',
-    );
-  },
-);
+test('phone reasoning uses Astra max without legacy model configuration', async () => {
+  let sent;
+  const runtime=createKorlixVapiNovaRuntime({
+    environment:{KORLIX_VAPI_NOVA_OPENAI_API_KEY:'test-key',OPENAI_MODEL:'old-model'},
+    fetchImpl:async(_url,options)=>{sent=JSON.parse(options.body);return response({output_text:'Hello.'});},
+  });
+  assert.equal((await runtime.respond({messages:[{role:'user',content:'Hello'}]})).text,'Hello.');
+  assert.equal(sent.model,'gpt-6-astra');
+  assert.equal(sent.reasoning.effort,'max');
+  assert.equal(sent.max_output_tokens,32768);
+});
 
 test(
   'external insecure model URL is rejected',

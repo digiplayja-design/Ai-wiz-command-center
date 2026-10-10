@@ -1575,11 +1575,7 @@ async function createAdvancedFileResponse({
   extractedText = "",
   textWasTruncated = false,
 }) {
-  const model =
-    process.env.OPENAI_DOCUMENT_MODEL ||
-    process.env.OPENAI_ULTRA_MODEL ||
-    process.env.OPENAI_MODEL ||
-    "gpt-6-astra";
+  const model = CHAT_MODEL;
 
   const fileName = String(file.originalname || "uploaded-file");
   const mimeType = getUploadMimeType(file);
@@ -1644,34 +1640,8 @@ async function createAdvancedFileResponse({
 }
 
 
-function getOpenAIModelForTier(profile, options = {}) {
-  const tier = String(profile?.tier || "basic").toLowerCase();
-
-  if (tier === "ultra") {
-    return process.env.OPENAI_ULTRA_MODEL || "gpt-6-astra";
-  }
-
-  if (tier === "enterprise") {
-    return (
-      process.env.OPENAI_ENTERPRISE_MODEL ||
-      process.env.OPENAI_ULTRA_MODEL ||
-      "gpt-6-astra"
-    );
-  }
-
-  if (tier === "pro") {
-    return (
-      process.env.OPENAI_PRO_MODEL ||
-      process.env.OPENAI_MODEL ||
-      "gpt-6-astra"
-    );
-  }
-
-  return (
-    process.env.OPENAI_BASIC_MODEL ||
-    process.env.OPENAI_MODEL ||
-    "gpt-6-astra"
-  );
+function getOpenAIModelForTier(_profile, _options = {}) {
+  return CHAT_MODEL;
 }
 
 
@@ -3615,6 +3585,7 @@ app.get("/api/health", (req, res) => {
     signupEligibility: {minimumAge: KORLIX_MINIMUM_AGE, policyVersion: KORLIX_SIGNUP_POLICY_VERSION, method: "self_declaration", parentPermissionUnder18: true},
     supabaseHost,
     openAIConfigured: Boolean(process.env.OPENAI_API_KEY),
+    reasoningPolicy: {model: CHAT_MODEL, effort: CHAT_EFFORT, enforced: true, featureModelOverrides: false, minOutputTokens: 32768},
     chatModel: CHAT_MODEL,
     chatReasoningEffort: CHAT_EFFORT,
     chatImageModel: imageSettings().model,
@@ -4241,11 +4212,7 @@ Instructions:
     }
 
     const response = await createTextResponse(client, {
-      model:
-        process.env.OPENAI_FILE_MODEL ||
-        process.env.OPENAI_MODEL ||
-        process.env.OPENAI_CHAT_MODEL ||
-        "gpt-6-astra",
+      model: CHAT_MODEL,
       input: [
         {
           role: "user",
@@ -4418,11 +4385,7 @@ app.post("/api/analyze-document", requireDocumentUploadUser, documentUpload.sing
 
         textWasTruncated = textResult.truncated;
 
-        const model =
-    process.env.OPENAI_DOCUMENT_MODEL ||
-    process.env.OPENAI_ULTRA_MODEL ||
-    process.env.OPENAI_MODEL ||
-    "gpt-6-astra";
+        const model = CHAT_MODEL;
 
         response = await createOpenAIResponse(client, {
           model,
@@ -4452,11 +4415,7 @@ app.post("/api/analyze-document", requireDocumentUploadUser, documentUpload.sing
 
       textWasTruncated = textResult.truncated;
 
-      const model =
-    process.env.OPENAI_DOCUMENT_MODEL ||
-    process.env.OPENAI_ULTRA_MODEL ||
-    process.env.OPENAI_MODEL ||
-    "gpt-6-astra";
+      const model = CHAT_MODEL;
 
       response = await createOpenAIResponse(client, {
         model,
@@ -4866,7 +4825,7 @@ IMPORTANT RULES:
     }
 
     const response = await createTextResponse(client, {
-      model: process.env.OPENAI_FILE_MODEL || process.env.OPENAI_MODEL || "gpt-6-astra",
+      model: CHAT_MODEL,
       input: [{ role: "user", content }],
     });
 
@@ -5725,11 +5684,7 @@ function korlixLiveConvoAgentModelProofV1() {
       ? korlixLiveDocsDocumentModel()
       : (
           String(
-            process.env.OPENAI_DOCUMENT_MODEL ||
-            process.env.OPENAI_FILE_MODEL ||
-            process.env.OPENAI_MODEL ||
-            process.env.OPENAI_CHAT_MODEL ||
-            "gpt-6-astra",
+            CHAT_MODEL,
           ).trim() || "gpt-6-astra"
         );
 
@@ -5743,7 +5698,7 @@ function korlixLiveConvoAgentModelProofV1() {
 
     liveDocsReasoningEffort:
       /^(gpt-[56]|o[1-9])/i.test(liveDocsDocumentModel)
-        ? "high"
+        ? CHAT_EFFORT
         : "",
 
     deterministicAuditEngine: true,
@@ -7446,14 +7401,7 @@ app.post(
 
       const response =
         await createTextResponse(openai, {
-          model:
-            process.env.OPENAI_AGENT_TRAINING_FILE_MODEL ||
-            process.env.OPENAI_AGENT_MEMORY_FILE_MODEL ||
-            process.env.OPENAI_FILE_MODEL ||
-            process.env.OPENAI_DOCUMENT_MODEL ||
-            process.env.OPENAI_MODEL ||
-            process.env.OPENAI_CHAT_MODEL ||
-            "gpt-6-astra",
+          model: CHAT_MODEL,
 
           input: [
             {
@@ -7765,13 +7713,7 @@ app.post(
 
       const response =
         await createTextResponse(openai, {
-          model:
-            process.env.OPENAI_AGENT_MEMORY_FILE_MODEL ||
-            process.env.OPENAI_FILE_MODEL ||
-            process.env.OPENAI_DOCUMENT_MODEL ||
-            process.env.OPENAI_MODEL ||
-            process.env.OPENAI_CHAT_MODEL ||
-            "gpt-6-astra",
+          model: CHAT_MODEL,
 
           input: [
             {
@@ -11797,20 +11739,7 @@ function korlixLiveDocsValidDocumentModel(value) {
 }
 
 function korlixLiveDocsDocumentModel() {
-  const candidates = [
-    process.env.OPENAI_DOCUMENT_MODEL,
-    process.env.OPENAI_FILE_MODEL,
-    process.env.OPENAI_MODEL,
-    process.env.OPENAI_CHAT_MODEL,
-  ];
-
-  for (const candidate of candidates) {
-    if (korlixLiveDocsValidDocumentModel(candidate)) {
-      return String(candidate).trim();
-    }
-  }
-
-  return "gpt-6-astra";
+  return CHAT_MODEL;
 }
 
 function korlixLiveDocsDocumentModelRequest({ input }) {
@@ -11818,7 +11747,7 @@ function korlixLiveDocsDocumentModelRequest({ input }) {
   const request = {
     model,
     input,
-    max_output_tokens: 12000,
+    max_output_tokens: 32768,
     text: {
       format: {
         type: "json_object",
@@ -11827,7 +11756,7 @@ function korlixLiveDocsDocumentModelRequest({ input }) {
   };
 
   if (/^(gpt-[56]|o[1-9])/i.test(model)) {
-    request.reasoning = { effort: "high" };
+    request.reasoning = { effort: CHAT_EFFORT };
   }
 
   return request;
@@ -11963,6 +11892,8 @@ app.get("/api/live-docs/health", async (_req, res) => {
           "docx",
           "pdf",
         ]),
+      documentModel: korlixLiveDocsDocumentModel(),
+      reasoningEffort: CHAT_EFFORT,
       authenticatedGeneration: true,
       revisions: true,
       deterministicTechnicianAudits: true,
@@ -12648,15 +12579,15 @@ registerScheduling(app, {
   generateAI: process.env.OPENAI_API_KEY
     ? data => generateSchedulingAI({
         ...data,
-        client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY, maxRetries: 0, timeout: 90000 }),
+        client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY, maxRetries: 0, timeout: 180000 }),
       })
     : undefined,
 });
 registerReceiptWiz(app, {database: supabaseAdmin, storageDatabase: bookkeepingStorage, requireUser,
   scanReceipt: process.env.OPENAI_API_KEY ? async ({receipt,bytes}) => scanReceiptWiz({receipt,bytes,
-    client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0,timeout:90000}),
+    client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0,timeout:180000}),
     createResponse:createTextResponse,
-    model:process.env.OPENAI_DOCUMENT_MODEL || process.env.OPENAI_ULTRA_MODEL || process.env.OPENAI_MODEL || 'gpt-6-astra',
+    model:CHAT_MODEL,
   }) : undefined,
 });
 registerBookkeeping(app, { database: supabaseAdmin, requireUser, receiptOptions: {
@@ -12671,9 +12602,9 @@ registerBookkeeping(app, { database: supabaseAdmin, requireUser, receiptOptions:
       reason: check.reason || '', daily_limit: getTierLimits(profile.tier).dailyRequestLimit, credit_cost: 1 };
   },
   scanReceipt: async ({ receipt, bytes }) => extractReceipt({ receipt, bytes,
-    client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY, maxRetries: 0, timeout: 90000 }),
+    client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY, maxRetries: 0, timeout: 180000 }),
     createResponse: createTextResponse,
-    model: process.env.OPENAI_DOCUMENT_MODEL || process.env.OPENAI_ULTRA_MODEL || process.env.OPENAI_MODEL || 'gpt-6-astra',
+    model: CHAT_MODEL,
   }),
   chargeScan: async (user) => {
     const usageCounter = await getOrCreateUsageCounter(user.id);

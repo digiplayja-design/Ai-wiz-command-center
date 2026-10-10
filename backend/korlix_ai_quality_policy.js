@@ -1,22 +1,12 @@
 'use strict';
+const {TEXT_MODEL, TEXT_EFFORT} = require('./korlix_astra.cjs');
 
 const KORLIX_OPENAI_QUALITY = Object.freeze({
-  premiumTextModel:
-    process.env.KORLIX_OPENAI_PREMIUM_MODEL ||
-    process.env.KORLIX_OPENAI_TEXT_MODEL ||
-    process.env.OPENAI_MODEL ||
-    'gpt-6-astra',
+  premiumTextModel: TEXT_MODEL,
 
-  textModel:
-    process.env.KORLIX_OPENAI_TEXT_MODEL ||
-    process.env.KORLIX_OPENAI_PREMIUM_MODEL ||
-    process.env.OPENAI_MODEL ||
-    'gpt-6-astra',
+  textModel: TEXT_MODEL,
 
-  streamingModel:
-    process.env.KORLIX_OPENAI_STREAMING_MODEL ||
-    process.env.KORLIX_OPENAI_TEXT_MODEL ||
-    'gpt-6-astra',
+  streamingModel: TEXT_MODEL,
 
   imageModel:
     process.env.KORLIX_OPENAI_IMAGE_MODEL ||
@@ -38,9 +28,7 @@ const KORLIX_OPENAI_QUALITY = Object.freeze({
     process.env.KORLIX_OPENAI_MODERATION_MODEL ||
     'omni-moderation',
 
-  reasoningEffort:
-    process.env.KORLIX_OPENAI_REASONING_EFFORT ||
-    'xhigh',
+  reasoningEffort: TEXT_EFFORT,
 });
 
 const KORLIX_QUALITY_INSTRUCTION = `
@@ -65,6 +53,7 @@ function korlixResolveOpenAIModel(options = {}) {
 
   if (
     process.env.KORLIX_ALLOW_MODEL_DOWNGRADE === 'true' &&
+    ['image', 'audio', 'speech', 'transcrib', 'whisper', 'embed', 'moderation', 'safety'].some(kind => task.includes(kind)) &&
     typeof requested === 'string' &&
     requested.trim()
   ) {
@@ -125,10 +114,7 @@ function korlixEnhanceOpenAIPayload(payload = {}, options = {}) {
   ) {
     enhanced.reasoning = {
       ...(enhanced.reasoning || {}),
-      effort:
-        enhanced.reasoning?.effort ||
-        process.env.KORLIX_OPENAI_REASONING_EFFORT ||
-        KORLIX_OPENAI_QUALITY.reasoningEffort,
+      effort: TEXT_EFFORT,
     };
   }
 

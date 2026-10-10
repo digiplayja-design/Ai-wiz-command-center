@@ -61,19 +61,19 @@ function fixture(options = {}) {
   }};
 }
 
-test('active chat route uses Astra xhigh even with older global model variables', async () => {
+test('active chat route uses Astra max even with older global model variables', async () => {
   const f=fixture(),r=await f.run({command:'Help plan a launch',model:'fake',reasoningEffort:'low'});
   assert.equal(r.statusCode,200);assert.equal(f.calls[0].model,'gpt-6-astra');
-  assert.equal(f.calls[0].reasoning.effort,'xhigh');assert.equal(f.calls[0].store,false);
-  assert.equal(f.calls[0].max_output_tokens,32768);assert.equal(r.body.reasoningEffort,'xhigh');
+  assert.equal(f.calls[0].reasoning.effort,'max');assert.equal(f.calls[0].store,false);
+  assert.equal(f.calls[0].max_output_tokens,32768);assert.equal(r.body.reasoningEffort,'max');
   assert.equal(f.usage.length,1);assert.equal(f.saved[0].command,'Help plan a launch');
 });
-test('search and its fallback preserve xhigh and report fallback honestly', async () => {
+test('search and its fallback preserve max and report fallback honestly', async () => {
   for (const searchFailure of [false,true]) {
     const f=fixture({searchFailure}),r=await f.run({command:'What is new today?'});
     assert.equal(r.statusCode,200);assert.equal(r.body.fallbackUsed,searchFailure);
     assert.equal(f.calls[0].tools[0].type,'web_search');
-    for(const call of f.calls) assert.equal(call.reasoning.effort,'xhigh');
+    for(const call of f.calls) assert.equal(call.reasoning.effort,'max');
     if(searchFailure) assert.match(f.calls[1].input,/Live search was attempted but failed/);
   }
 });
@@ -184,7 +184,7 @@ test('legacy image helper now runs Astra planning and maximum-quality edits',asy
   // Use a valid provider PNG so output validation is exercised.
   f.scope.OpenAI=class {constructor(){this.responses={create:async body=>{f.calls.push(body);return {status:'completed',output_text:JSON.stringify({editPrompt:'Improve light.',summary:'Polish light.'})};}};this.images={edit:async body=>{f.calls.push(body);return {data:[{b64_json:buffer.toString('base64')}]};}};}};
   await f.scope.createKorlixImprovedImage({file:{buffer,originalname:'photo.png'},prompt:'Improve lighting'});
-  assert.equal(f.calls[0].model,quality.CHAT_MODEL);assert.equal(f.calls[0].reasoning.effort,'xhigh');
+  assert.equal(f.calls[0].model,quality.CHAT_MODEL);assert.equal(f.calls[0].reasoning.effort,'max');
   assert.equal(f.calls[1].model,quality.IMAGE_MODEL);assert.equal(f.calls[1].quality,'max');
   assert.equal(f.calls[1].size,'auto');assert.equal(f.calls[1].output_format,'png');
 });

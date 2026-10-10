@@ -126,7 +126,7 @@ test('HTTP route authenticates and rejects arbitrary text before making provider
 
 test('uses the selected agent runtime with Astra conversational reasoning, without sampling parameters',async()=>{
  const f=fixture(),{reply}=await f.run(),b=f.calls[0].body;
- assert.equal(b.model,'gpt-6-astra');assert.equal(b.reasoning_effort,'low');
+ assert.equal(b.model,'gpt-6-astra');assert.equal(b.reasoning_effort,'max');
  assert(b.max_completion_tokens>=8192);assert(!('temperature' in b));assert(!('top_p' in b));
  assert.deepEqual(f.loaded,[principal]);assert.equal(b.messages[1].content,f.runtime.instructions);
  assert.deepEqual(reply.agent,{id:'nova',name:'NOVA',memoryEnabled:true,memoryCount:1});
@@ -166,7 +166,7 @@ test('forged memory, training and model input is rejected before reading memory'
 
 test('explicit deeper reasoning keeps Astra high with the same fresh agent runtime',async()=>{
  const f=fixture();f.preview.lines[2].text='Think deeply about what we decided.';
- await f.run();assert.equal(f.calls[0].body.reasoning_effort,'high');
+ await f.run();assert.equal(f.calls[0].body.reasoning_effort,'max');
  assert.equal(f.calls[0].body.messages[1].content,f.runtime.instructions);
 });
 test('latency telemetry contains stage timings and no personal context',async()=>{
@@ -174,6 +174,6 @@ test('latency telemetry contains stage timings and no personal context',async()=
  const service=createMeetingResponses({env:{OPENAI_API_KEY:'offline'},fetchImpl:f.fetchImpl,
   now:()=>0,loadAgentRuntime:f.loadAgentRuntime,log:e=>events.push(e)});
  await service.run(f.input);
- assert.deepEqual(events,[{event:'k135z_spoken_latency',outcome:'ok',stage:'permission',effort:'low',
+ assert.deepEqual(events,[{event:'k135z_spoken_latency',outcome:'ok',stage:'permission',effort:'max',
   memoryMs:0,answerMs:0,audioMs:0,totalMs:0}]);
 });

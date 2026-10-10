@@ -54,14 +54,14 @@ async function fixture(flags={}) {
 test('Astra sees the actual image at original detail and xhigh before a max-quality edit',async()=>{
   const f=await fixture();const result=await f.run({prompt:'Keep my hairline. Improve lighting.',imageSize:'1536x2304'});
   assert.equal(f.calls.length,2);const [a,e]=f.calls;
-  assert.equal(a.body.model,'gpt-6-astra');assert.equal(a.body.reasoning.effort,'xhigh');assert.equal(a.body.store,false);
+  assert.equal(a.body.model,'gpt-6-astra');assert.equal(a.body.reasoning.effort,'max');assert.equal(a.body.store,false);
   assert.equal(a.body.max_output_tokens,32768);assert.equal(a.body.input[0].content[1].detail,'original');
   assert.match(a.body.input[0].content[1].image_url,/^data:image\/png;base64,/);
   assert.equal(a.body.text.format.strict,true);assert.equal(a.config.maxRetries,0);
   assert.equal(e.body.model,'gpt-image-2.5-sunburst');assert.equal(e.body.quality,'max');assert.equal(e.body.size,'1536x2304');
   assert.equal(e.body.output_format,'png');assert.equal(e.body.n,1);assert.equal(e.body.input_fidelity,undefined);
   assert.deepEqual(e.body.image.bytes,f.file.buffer);assert.match(e.body.prompt,/Keep my hairline/);assert.match(e.body.prompt,/visible light/);
-  assert.equal(result.analysisModel,'gpt-6-astra');assert.equal(result.reasoningEffort,'xhigh');assert.equal(result.imageQuality,'max');
+  assert.equal(result.analysisModel,'gpt-6-astra');assert.equal(result.reasoningEffort,'max');assert.equal(result.imageQuality,'max');
 });
 
 test('cutout and truly transparent inputs request real transparency; opaque PNGs stay auto',async()=>{
@@ -112,7 +112,7 @@ test('styled cutouts retain true transparency and existing subject details',asyn
 
 test('forged models, quality and reasoning cannot downgrade server-owned settings',async()=>{
   const f=await fixture();await f.run({model:'fake',quality:'low',reasoningEffort:'low'});
-  assert.equal(f.calls[0].body.reasoning.effort,'xhigh');assert.equal(f.calls[1].body.quality,'max');
+  assert.equal(f.calls[0].body.reasoning.effort,'max');assert.equal(f.calls[1].body.quality,'max');
 });
 
 test('invalid options, oversized instructions and unreadable images fail without provider spend',async()=>{
@@ -181,7 +181,7 @@ test('reported dimensions and transparency come from the decoded pixels',async()
 test('the active upload route returns real model settings and charges once only after success',async()=>{
   const f=await fixture();const r=await f.route({preset:'restore',prompt:'Keep it black and white.'});
   assert.equal(r.status,200);assert.equal(r.body.analysisModel,'gpt-6-astra');assert.equal(r.body.imageQuality,'max');
-  assert.equal(r.body.reasoningEffort,'xhigh');assert.equal(r.body.creditsUsed,1);assert.equal(f.usage.length,1);assert.equal(f.history.length,1);
+  assert.equal(r.body.reasoningEffort,'max');assert.equal(r.body.creditsUsed,1);assert.equal(f.usage.length,1);assert.equal(f.history.length,1);
   assert.match(f.history[0].command,/Keep it black and white/);assert.equal(r.body.editSummary,'Natural color and light.');
 });
 

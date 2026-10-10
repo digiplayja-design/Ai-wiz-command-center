@@ -963,7 +963,7 @@ function createK135zZoomHandlers(
         const ended=new Promise((_,reject)=>{fail=reject;});
         req.once?.('aborted',cancel);res.once?.('close',cancel);
         timer=setTimeout(()=>{fail(new K135zZoomError(504,'K135Z_WORKSPACE_TIMEOUT'));abort.abort();},
-          kind==='spoken-reply'?120000:kind==='response'||kind==='response-voice'||kind==='waiting-voice'?30000:kind==='consent'&&body.action==='consent'?25000:10000);
+          kind==='spoken-reply'||kind==='response'?120000:kind==='response-voice'||kind==='waiting-voice'?30000:kind==='consent'&&body.action==='consent'?25000:10000);
         if(req.aborted || res.destroyed)cancel();
         const run=async()=>{
           check();

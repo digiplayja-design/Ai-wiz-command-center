@@ -37,7 +37,7 @@ function mock({response = researchResult(), speechResponse, transcriptionRespons
   return {calls, client, providers: createPodProviders({client, now})};
 }
 
-test('research uses Pod-local low reasoning without changing main chat, bounded search, verified sources and exact usage', async () => {
+test('research uses the shared Astra max policy, bounded search, verified sources and exact usage', async () => {
   const fixture = mock();
   assert.equal(fixture.calls.length, 0);
   const result = await fixture.providers.research(episode);
@@ -54,10 +54,10 @@ test('research uses Pod-local low reasoning without changing main chat, bounded 
   assert.equal(fixture.calls.length, 1);
   const {payload, options} = fixture.calls[0];
   assert.equal(payload.model, 'gpt-6-astra');
-  assert.deepEqual(payload.reasoning, {effort: 'low'});
-  assert.equal(chatQuality.CHAT_EFFORT, 'xhigh', 'global chat and image reasoning stays unchanged');
+  assert.deepEqual(payload.reasoning, {effort: 'max'});
+  assert.equal(chatQuality.CHAT_EFFORT, 'max', 'Pod uses the same reasoning policy as main chat');
   assert.equal(payload.store, false);
-  assert.equal(payload.max_output_tokens, 4096);
+  assert.equal(payload.max_output_tokens, 32768);
   assert.equal(payload.max_tool_calls, 2);
   assert.deepEqual(payload.tools, [{type: 'web_search', search_context_size: 'medium'}]);
   assert.equal(payload.tool_choice, 'required');
@@ -70,7 +70,7 @@ test('research uses Pod-local low reasoning without changing main chat, bounded 
   assert.equal(payload.text.format.schema.properties.opening.properties.text.maxLength, 320);
   assert.match(payload.instructions, /untrusted data/);
   assert.equal(options.maxRetries, 0);
-  assert.equal(options.timeout, 60000);
+  assert.equal(options.timeout, 120000);
   assert(Number.isSafeInteger(result.usage.elapsedMs));
   assert(result.usage.elapsedMs >= 0);
   assert(options.signal instanceof AbortSignal);
@@ -441,13 +441,13 @@ test('turn alternates two or three distinct AI roles and selects host for closin
   assert.equal((await fixture.providers.turn(turnArgs({episode: {...episode, turns: [host]}, remainingSeconds: 40}))).speaker, 'host');
   const {payload, options} = fixture.calls.at(-1);
   assert.equal(payload.model, 'gpt-6-astra');
-  assert.equal(payload.reasoning.effort, 'low');
-  assert.equal(payload.max_output_tokens, 2048);
+  assert.equal(payload.reasoning.effort, 'max');
+  assert.equal(payload.max_output_tokens, 32768);
   assert.equal(payload.text.format.schema.properties.text.maxLength, 400);
   assert.equal(payload.tools, undefined);
   assert.equal(payload.store, false);
   assert.equal(options.maxRetries, 0);
-  assert.equal(options.timeout, 30000);
+  assert.equal(options.timeout, 120000);
   assert.equal(JSON.parse(payload.input).closing, true);
   assert.match(payload.instructions, /no persuasion targeted to the listener/);
   assert.match(payload.instructions, /no voting instructions/);
@@ -686,7 +686,7 @@ test('an eligible comparison uses only its independently verified dated backgrou
   assert.equal(result.usage.totalTokens,139);assert.equal(fixture.calls.length,1);
   const payload=fixture.calls[0].payload;
   assert.equal(JSON.parse(payload.input).allowComparisonBackground,true);
-  assert.equal(payload.max_output_tokens,4096);assert.equal(payload.max_tool_calls,2);
+  assert.equal(payload.max_output_tokens,32768);assert.equal(payload.max_tool_calls,2);
   const schema=payload.text.format.schema.properties.comparisonBackground;
   assert.equal(schema.anyOf[0].additionalProperties,false);
   assert.deepEqual(schema.anyOf[0].required,['text','sources','opening']);

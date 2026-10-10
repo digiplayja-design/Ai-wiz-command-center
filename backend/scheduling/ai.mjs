@@ -111,7 +111,7 @@ export async function generateSchedulingAI({ client, prompt, context }) {
     model: quality.CHAT_MODEL,
     reasoning: { effort: quality.CHAT_EFFORT },
     store: false,
-    max_output_tokens: 9000,
+    max_output_tokens: 32768,
     text: {
       format: {
         type: "json_schema",

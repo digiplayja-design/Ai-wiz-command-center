@@ -1302,7 +1302,7 @@ test("AI generation uses the configured Astra model, strict schema, and no stora
   });
   assert.equal(result.action, "clarify");
   assert.equal(sent.model, "gpt-6-astra");
-  assert.equal(sent.reasoning.effort, "xhigh");
+  assert.equal(sent.reasoning.effort, 'max');
   assert.equal(sent.store, false);
   assert.equal(sent.text.format.strict, true);
 });

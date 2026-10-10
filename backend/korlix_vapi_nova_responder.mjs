@@ -1,5 +1,5 @@
 import korlixAstra from './korlix_astra.cjs';
-const {astraRequest} = korlixAstra;
+const {astraRequest, TEXT_MODEL, TEXT_EFFORT} = korlixAstra;
 
 const DEFAULT_BASE_URL =
   'https://api.openai.com/v1';
@@ -219,23 +219,8 @@ function responsesEndpoint(
   return url.toString();
 }
 
-function modelName(
-  environment,
-) {
-  return (
-    asText(
-      environment
-        ?.KORLIX_VAPI_NOVA_MODEL,
-    )
-    || asText(
-      environment
-        ?.OPENAI_MODEL,
-    )
-    || asText(
-      environment
-        ?.OPENAI_CHAT_MODEL,
-    )
-  );
+function modelName(_environment) {
+  return TEXT_MODEL;
 }
 
 function apiKey(
@@ -604,9 +589,9 @@ export function createKorlixVapiNovaRuntime(
         environment
           ?.KORLIX_VAPI_NOVA_MODEL_TIMEOUT_MS,
 
-        25000,
-        3000,
         60000,
+        3000,
+        120000,
       );
 
     const timeout =
@@ -639,6 +624,7 @@ export function createKorlixVapiNovaRuntime(
             body:
               JSON.stringify(astraRequest({
                 model,
+                reasoning: {effort: TEXT_EFFORT},
 
                 instructions:
                   publicInstructions(

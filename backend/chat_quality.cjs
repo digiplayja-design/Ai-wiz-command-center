@@ -1,9 +1,7 @@
 'use strict';
 
-// Main text chat and picture creation only. Nova's live voice keeps its own
-// latency-sensitive reasoning configuration.
-const CHAT_MODEL = 'gpt-6-astra';
-const CHAT_EFFORT = 'xhigh';
+// Shared text and image-analysis policy. Realtime audio is a separate engine.
+const {TEXT_MODEL: CHAT_MODEL, TEXT_EFFORT: CHAT_EFFORT} = require('./korlix_astra.cjs');
 const IMAGE_MODEL = 'gpt-image-2.5-sunburst';
 const IMAGE_SIZES = new Set(['auto', '1024x1024', '1536x1024', '1024x1536']);
 const IMAGE_STYLES = Object.freeze({
