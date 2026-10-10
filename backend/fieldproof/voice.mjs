@@ -1,4 +1,5 @@
 import {FieldProofError,fail,uuid,version,jobData} from './model.mjs';
+import {requireFieldProofEnterprise,fieldProofAccessDetails} from './access.mjs';
 
 export const VOICE_FIELDS={title:120,customer:160,site:350,workOrder:100,technician:120,performedOn:10,assetId:120,oldAssetId:120,summary:4000,exceptions:2000,materials:2000,billingNotes:2000,hours:20,priority:10,stage:20,dueOn:10};
 const allowed=new Set([...Object.keys(VOICE_FIELDS),'template','checks','requiredTags','requiresApproval','readings','issues']);
@@ -21,7 +22,7 @@ export function registerFieldProofVoice(app,{route,call}){
   r.json({...prepareFieldProofVoiceDraft(body.draft,job),jobId:id,version:job?.version??null});
  }));
 }
-export function fieldProofVoiceSessionGuard({requireUser}){
+export function fieldProofVoiceSessionGuard({requireUser,database}){
  return async(req,res,next)=>{
   const mode=req.query?.fieldproof;
   if(req.method!=='POST'||!(mode==='1'||Array.isArray(mode)&&mode.includes('1')))return next();
@@ -29,8 +30,9 @@ export function fieldProofVoiceSessionGuard({requireUser}){
   try{
    let user;try{user=await requireUser(req);}catch{fail('Sign in to use FieldProof.',401);}if(!user?.id)fail('Sign in to use FieldProof.',401);
    if(mode!=='1'||['workforce','music','bookkeeping','inventory','scheduling','scheduling_tools'].some(k=>req.query?.[k]==='1'||Array.isArray(req.query?.[k])&&req.query[k].includes('1')))fail('Open one voice workspace at a time.');
+   await requireFieldProofEnterprise(database,user.id);
    req.korlixFieldProofVoice=Object.freeze({enabled:true});return next();
-  }catch(e){const known=e instanceof FieldProofError;return res.status(known?e.status:503).json({ok:false,error:known?e.message:'FieldProof voice is temporarily unavailable.',code:known&&e.status===401?'FIELDPROOF_VOICE_AUTH_REQUIRED':'FIELDPROOF_VOICE_UNAVAILABLE'});}
+  }catch(e){const known=e instanceof FieldProofError;return res.status(known?e.status:503).json({ok:false,error:known?e.message:'FieldProof voice is temporarily unavailable.',code:known&&e.status===401?'FIELDPROOF_VOICE_AUTH_REQUIRED':'FIELDPROOF_VOICE_UNAVAILABLE',...fieldProofAccessDetails(e)});}
  };
 }
 export function fieldProofVoiceInstructions({language='English'}={}){

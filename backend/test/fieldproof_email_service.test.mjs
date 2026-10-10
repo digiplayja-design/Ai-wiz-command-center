@@ -10,10 +10,21 @@ function fixture(extra = {}) {
   const owner = randomUUID(), other = randomUUID(), jobId = randomUUID();
   const f = {owner, other, jobId, time: new Date('2026-10-05T22:00:00Z'), settings: {...FIELDPROOF_EMAIL_DEFAULTS, version: 1, customer_mode: 'automatic', ...extra.settings}, deliveries: [], objects: new Map(), sends: [], calls: [], tokenHashes: [], reads: [], providerReady: true, senderFingerprint: hash('KORLIX <mail@example.com>'), finishFailures: 0};
   f.user = {id: owner, email: 'owner@example.com', email_confirmed_at: '2026-01-01T00:00:00Z'};
+  f.profile = {id: owner, tier: 'enterprise', is_disabled: false};
   f.snapshot = {job: {id: jobId, user_id: owner, state: 'completed', version: 3, completion: {completedAt: f.time.toISOString()}, data: {title: 'Meter service', customer: 'Test customer', summary: 'Recorded completed work', checks: [], issues: []}}, evidence: []};
   f.row = changes => ({id: randomUUID(), owner_id: owner, kind: 'customer_report', state: 'pending', delivery_mode: 'automatic', version: 1, job_id: jobId, job_version: 3, recipient: 'customer@example.com', created_at: f.time.toISOString(), scheduled_at: f.time.toISOString(), settings_version: 1, payload: null, ...changes});
   f.add = changes => {const row = f.row(changes); f.deliveries.push(row); return row;};
   f.database = {
+    from(table) {
+      assert.equal(table, 'user_profiles');
+      return {select(columns) {
+        assert.equal(columns, 'id,tier,is_disabled');
+        return {eq(column, id) {
+          assert.equal(column, 'id');
+          return {maybeSingle: async () => ({data: id === owner ? f.profile : {id, tier: 'enterprise', is_disabled: false}, error: f.profileError})};
+        }};
+      }};
+    },
     auth: {admin: {getUserById: async id => { if (f.authHook) await f.authHook(id); return {data: {user: id === owner ? clone(f.user) : {id: other, email: 'other@example.com', email_confirmed_at: '2026-01-01T00:00:00Z'}}}; }}},
     rpc: async (name, p) => {
       f.calls.push({name, ...clone(p)});
@@ -65,6 +76,34 @@ function fixture(extra = {}) {
   return f;
 }
 
+test('downgrading cancels queued reports and prevents new summaries', async () => {
+  const f = fixture({settings: {supervisor_mode: 'automatic', supervisor_emails: ['boss@example.com']}});
+  f.accounts = [{...f.settings, owner_id: f.owner}];
+  const row = f.add(); f.profile.tier = 'ultra';
+  await f.service.tick();
+  assert.equal(row.state, 'cancelled'); assert.equal(row.code, 'fieldproof_enterprise_required');
+  assert.equal(f.sends.length, 0); assert.equal(f.objects.size, 0);
+  assert.equal(f.calls.some(c => c.p_action === 'enqueue_summary'), false);
+});
+test('a prepared report cannot send after a downgrade, even during attachment download', async () => {
+  for (const duringDownload of [false, true]) {
+    const f = fixture({settings: {customer_mode: 'draft'}});
+    const row = f.add({delivery_mode: 'draft'});
+    await f.service.tick(); assert.equal(row.state, 'draft');
+    row.state = 'ready';
+    if (duringDownload) f.downloadHook = async () => {f.profile.tier = 'pro';};
+    else f.profile.tier = 'pro';
+    await f.service.tick();
+    assert.equal(row.state, 'cancelled'); assert.equal(f.sends.length, 0);
+    assert.equal(row.code, 'fieldproof_enterprise_required');
+    assert.equal(f.objects.size, 1, 'The saved report is retained');
+  }
+});
+test('a failed plan lookup cannot authorize email delivery', async () => {
+  const f = fixture(); const row = f.add(); f.profileError = Error('offline');
+  await f.service.tick(); assert.equal(row.state, 'failed');
+  assert.equal(row.code, 'fieldproof_access_unavailable'); assert.equal(f.sends.length, 0);
+});
 test('settings reject spoofed routing, invalid schedules and limits; addresses normalize', () => {
   const defaults = {...FIELDPROOF_EMAIL_DEFAULTS}; delete defaults.version;
   assert.equal(normalizeFieldProofEmailSettings(defaults).customer_mode, 'off');
@@ -166,7 +205,7 @@ test('scheduled summary enqueue is one selected-day event, no historical backlog
   const f = fixture({settings: {supervisor_mode: 'draft', supervisor_emails: ['boss@example.com']}}); f.accounts = [{...f.settings, owner_id: f.owner}]; await f.service.tick(); await f.service.tick(); assert.equal(f.deliveries.length, 1); assert.equal(f.deliveries[0].kind, 'supervisor_summary'); assert.equal(f.deliveries[0].report_date, '2026-10-04'); assert.equal(f.deliveries[0].state, 'draft'); assert.equal(f.sends.length, 0);
 });
 test('unsubscribe GET is confirmation-only; explicit POST stores only SHA256 and reveals no identity', async () => {
-  const f = fixture(); const row = f.add({delivery_mode: 'draft'}); await f.service.tick(); const token = /token=([A-Za-z0-9_-]{43})/.exec(row.payload.text)[1]; assert.equal(f.tokenHashes[0], hash(token)); await f.open();
+  const f = fixture(); const row = f.add({delivery_mode: 'draft'}); await f.service.tick(); const token = /token=([A-Za-z0-9_-]{43})/.exec(row.payload.text)[1]; assert.equal(f.tokenHashes[0], hash(token)); f.profile.tier = 'basic'; await f.open();
   try {const page = await fetch(f.base + '/unsubscribe?token=' + token); const body = await page.text(); assert.equal(f.suppressed, undefined); assert.match(body, /method="post"/); assert.doesNotMatch(body, /customer@example|owner@example/); assert.equal(page.headers.get('referrer-policy'), 'no-referrer');
     const response = await fetch(f.base + '/unsubscribe', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: 'token=' + token}); assert.equal(response.status, 200); assert.equal(f.suppressed, true);
   } finally {await f.close();}

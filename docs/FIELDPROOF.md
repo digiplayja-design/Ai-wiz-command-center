@@ -4,6 +4,8 @@ FieldProof turns technician-supplied job records into a private completion packe
 
 ## User flow
 
+FieldProof requires an active **Enterprise** account. It appears with the Enterprise tools, and the backend checks the current saved account plan before jobs, evidence, reports, AI reviews, voice sessions and email actions. A downgrade blocks subsequent operations without deleting saved job records. The same requirement applies to automated customer reports and supervisor summaries; recipient unsubscribe links stay available.
+
 Open **FieldProof** from the home shortcuts or Tools. Start a job with its title, customer and site. Choose from 14 templates: Utility, Installation, Maintenance, General, HVAC, Plumbing, Electrical, Property inspection, Roofing, Cleaning, Delivery, Equipment service, Construction or Landscaping. Save technician details and the completed work; add photos from a camera or file picker and label their evidence categories. The checklist shows missing records. Add company-specific required photos or checklist items as needed.
 
 Record customer approval when required. This is the technician's declaration, including who recorded it, the reported approver, notes, time and job revision. It is not a customer-authenticated signature. Changes to the job or photos invalidate earlier approval for closeout. Closing a job requires explicit confirmation and current required records; reopening creates a new revision.
@@ -22,7 +24,7 @@ Jobs now include priority, work stage and due date. The dashboard supports atten
 
 ## Optional KORLIX review
 
-Ultra Premium and Enterprise accounts may review job details and photo previews with the application's configured GPT-6 Astra / extra-high reasoning settings. Existing AI-sharing consent is required. A completed review uses **one existing credit**, debited atomically with the saved result. Failed, interrupted or repeated requests do not debit again. Manual records and exports do not require an AI review.
+Enterprise accounts may review job details and photo previews with the application's configured GPT-6 Astra / max reasoning settings. Existing AI-sharing consent is required. A completed review uses **one existing credit**, debited atomically with the saved result. Failed, interrupted or repeated requests do not debit again. Manual records and exports do not require an AI review.
 
 The model flags unclear or missing documentation and prepares customer-report and invoice-handoff drafts. It cannot change checklists, approve a job, authenticate signatures, certify safety or workmanship, identify people, invent readings or treat photo text as instructions. Returned photo references must belong to the supplied evidence. Earlier-revision drafts are retained in history but excluded from the current export.
 

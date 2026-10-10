@@ -4,6 +4,8 @@ FieldProof provides account-private customer job reports, one optional courtesy 
 
 ## Set up
 
+An active Enterprise plan is required. The worker rechecks the current account plan before preparing reports, scheduling summaries and dispatching emails. A downgrade cancels waiting reports when processed and stops new summaries; saved job records remain retained. Emails already submitted to the provider may finish. Recipients can still unsubscribe without signing in or holding an Enterprise plan.
+
 1. Open **FieldProof → Autonomous Email** and confirm the displayed Reply-To email. It comes from the verified signed-in account; recipients reply to that account. Delivery uses Korlix's configured sending service.
 2. Enter a business name and choose **Off**, **Review drafts**, or **Automatic** independently for completed-job reports, the courtesy follow-up, and supervisor summaries. New accounts start with all three off.
 3. For customer emails, open a job's **Email customer** screen, enter the customer email, and enable that job's recipient. Both the global mode and the job recipient must be enabled. Closing a future job queues the configured report/follow-up. A completed job can also prepare an explicit draft for review.

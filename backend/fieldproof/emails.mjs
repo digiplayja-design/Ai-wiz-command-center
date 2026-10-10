@@ -1,6 +1,7 @@
 import {createHash, randomBytes, randomUUID} from 'node:crypto';
 import {urlencoded} from 'express';
 import {BUCKET, FieldProofError, uuid} from './model.mjs';
+import {requireFieldProofEnterprise, fieldProofAccessDetails} from './access.mjs';
 import {createFieldProofEmailProvider} from './email_provider.mjs';
 import {renderFieldProofCustomerEmail} from './email_report.mjs';
 
@@ -160,6 +161,7 @@ export function createFieldProofEmails({database, storageDatabase = database, re
   };
   const jobsCall = (actor, action, id = null) => call(actor, action, id, {}, 'korlix_fieldproof_v1');
   const verifiedIdentity = async owner => {
+    await timeout(requireFieldProofEnterprise(database, owner));
     if (!database?.auth?.admin?.getUserById) fail('The account verification service is unavailable.', 503, 'fieldproof_email_identity_unavailable');
     const result = await timeout(database.auth.admin.getUserById(owner)); const user = result.data?.user;
     if (result.error || !user || user.id !== owner || user.deleted_at || user.is_anonymous || !user.email_confirmed_at || (user.banned_until && Date.parse(user.banned_until) > new Date(now()).getTime())) fail('Verify this account email before enabling FieldProof delivery.', 403, 'fieldproof_email_identity_unverified');
@@ -283,6 +285,9 @@ export function createFieldProofEmails({database, storageDatabase = database, re
     if (!payload || payload.to !== row.recipient || identity.replyTo !== payload.replyTo || (payload.senderFingerprint || null) !== (status.senderFingerprint || null)) fail('The sender identity changed. Prepare a new report after reviewing settings.', 409, 'fieldproof_email_sender_changed');
     if (row.first_attempt_at && new Date(now()).getTime() - Date.parse(row.first_attempt_at) >= RETRY_WINDOW) { await finish(row, lease, {state: 'unknown', code: 'fieldproof_email_retry_window_expired'}); return; }
     const attachments = payload.attachment ? [{filename: payload.attachment.filename, content: (await reportBytes(row)).toString('base64')}] : [];
+    // Recheck the plan after preparing attachments, including queued reports
+    // whose owner has since downgraded. Recipient preference links stay public.
+    await timeout(requireFieldProofEnterprise(database, row.owner_id));
     // This is deliberately the last database operation before the provider:
     // pause, recipient suppression, revisions and quota are rechecked atomically.
     const authorized = await call(row.owner_id, 'authorize', row.id, {lease_token: lease});
@@ -308,7 +313,7 @@ export function createFieldProofEmails({database, storageDatabase = database, re
   const processClaim = async (row, lease) => {
     try { if (row.payload) await dispatch(row, lease); else await prepare(row, lease); }
     catch (error) {
-      const stale = ['fieldproof_email_job_changed', 'fieldproof_email_recipient_suppressed', 'fieldproof_email_sender_changed'].includes(error.code);
+      const stale = ['fieldproof_email_job_changed', 'fieldproof_email_recipient_suppressed', 'fieldproof_email_sender_changed', 'fieldproof_enterprise_required', 'fieldproof_account_required'].includes(error.code);
       try { await finish(row, lease, {state: error.outcome === 'uncertain' || row.first_attempt_at ? 'unknown' : stale ? 'cancelled' : 'failed', code: safeCode(error.code)}); } catch { logger.warn('FieldProof email outcome could not be saved', {code: safeCode(error.code)}); }
     }
   };
@@ -332,7 +337,7 @@ export function createFieldProofEmails({database, storageDatabase = database, re
       const accounts = await call(null, 'due_accounts');
       for (const account of (accounts || []).slice(0, 50)) {
         if (Date.now() >= deadline || stopped) break;
-        try { const window = fieldProofSummaryWindow(account.settings || account, now()); if (window) await call(account.owner_id, 'enqueue_summary', null, window); }
+        try { const window = fieldProofSummaryWindow(account.settings || account, now()); if (window) { await timeout(requireFieldProofEnterprise(database, account.owner_id)); await call(account.owner_id, 'enqueue_summary', null, window); } }
         catch (error) { logger.warn('FieldProof summary schedule deferred', {code: safeCode(error.code)}); }
       }
       for (; claimed < 4 && Date.now() < deadline && !stopped; claimed++) {
@@ -347,8 +352,8 @@ export function createFieldProofEmails({database, storageDatabase = database, re
   };
   const route = fn => async (q, r) => {
     r.set('Cache-Control', 'no-store');
-    try { const user = await requireUser(q); if (!user?.id || !UUID.test(user.id)) fail('Sign in to use FieldProof email.', 401, 'fieldproof_email_sign_in'); await fn(q, r, user.id); }
-    catch (error) { const status = error instanceof FieldProofError ? error.status : error.statusCode === 401 ? 401 : 503; r.status(status).json({error: error instanceof FieldProofError ? error.message : status === 401 ? 'Sign in again to use FieldProof.' : 'FieldProof could not finish this email request. Refresh before retrying.', code: safeCode(error.code)}); }
+    try { const user = await requireUser(q); if (!user?.id || !UUID.test(user.id)) fail('Sign in to use FieldProof email.', 401, 'fieldproof_email_sign_in'); await timeout(requireFieldProofEnterprise(database, user.id)); await fn(q, r, user.id); }
+    catch (error) { const status = error instanceof FieldProofError ? error.status : error.statusCode === 401 ? 401 : 503; r.status(status).json({error: error instanceof FieldProofError ? error.message : status === 401 ? 'Sign in again to use FieldProof.' : 'FieldProof could not finish this email request. Refresh before retrying.', code: safeCode(error.code), ...fieldProofAccessDetails(error)}); }
   };
   const register = app => {
     app.get(BASE, route(async (_q, r, owner) => r.json(await state(owner))));

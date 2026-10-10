@@ -11,7 +11,8 @@ test('new voice drafts can be incomplete but cannot mark checks or approve',()=>
  assert.throws(()=>prepareFieldProofVoiceDraft({...d,checks:d.checks.map(x=>({...x,done:true}))}));assert.throws(()=>prepareFieldProofVoiceDraft({...d,requiresApproval:false}));
 });
 test('voice guards reject anonymous, duplicate and mixed modes before allowance',async()=>{
- let allowance=0;const app=express();app.use('/api/live-convo/session',fieldProofVoiceSessionGuard({requireUser:async q=>q.headers.authorization==='owner'?{id:'owner'}:null}));app.post('/api/live-convo/session',(q,r)=>{allowance++;r.json(q.korlixFieldProofVoice??{});});
+ const database={from:()=>({select:()=>({eq:(_column,id)=>({maybeSingle:async()=>({data:{id,tier:'enterprise',is_disabled:false}})})})})};
+ let allowance=0;const app=express();app.use('/api/live-convo/session',fieldProofVoiceSessionGuard({database,requireUser:async q=>q.headers.authorization==='owner'?{id:'owner'}:null}));app.post('/api/live-convo/session',(q,r)=>{allowance++;r.json(q.korlixFieldProofVoice??{});});
  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const url='http://127.0.0.1:'+server.address().port+'/api/live-convo/session?';
  try{assert.equal((await fetch(url+'fieldproof=1',{method:'POST'})).status,401);
  for(const query of ['fieldproof=1&fieldproof=1',...['music','bookkeeping','inventory','scheduling','scheduling_tools'].flatMap(x=>['fieldproof=1&'+x+'=1','fieldproof=1&'+x+'=1&'+x+'=1'])])assert.equal((await fetch(url+query,{method:'POST',headers:{Authorization:'owner'}})).status,400);

@@ -33,6 +33,7 @@ async function fixture(t) {
   }
   await db.exec('set role service_role');
   const database = {
+    from: () => ({select: () => ({eq: (_column, id) => ({maybeSingle: async () => ({data: users.has(id) ? {id, tier: 'enterprise', is_disabled: false} : null})})})}),
     auth: {admin: {getUserById: async id => ({data: {user: users.get(id)}})}},
     async rpc(name, p) {
       assert.ok(['korlix_fieldproof_v1', 'korlix_fieldproof_email_v1'].includes(name));

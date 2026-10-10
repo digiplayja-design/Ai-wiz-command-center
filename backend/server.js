@@ -3616,7 +3616,7 @@ app.get("/api/health", (req, res) => {
     contactsCrm: {version:3,voice:true,directoryImport:{version:2,source:'korlix_directory',automatic:true,immediateOnEnable:true,intervalMinutes:60,batchLimit:100,enabledByDefault:false,worker:crmDirectorySync.health()},email:{version:1,followUpDates:true,draftReview:true,automaticFollowUps:true,enabledByDefault:false,providerConfigured:createFieldProofEmailProvider({environment:process.env,namespace:'crm'}).status().ready}},
     workforce: {version:3,voice:true,businessProfiles:true,industryTemplates:12,teamTypes:5,taskBoard:true,
       email:{version:1,workspaceRecipients:true,draftReview:true,automaticReminders:true,dailySummaries:true,enabledByDefault:false,providerConfigured:createFieldProofEmailProvider({environment:process.env,namespace:'workforce'}).status().ready}},
-    fieldProof: {version:3,model:CHAT_MODEL,reasoningEffort:CHAT_EFFORT,creditCost:FIELDPROOF_CREDIT_COST,maxPhotos:24,originalEvidence:true,voice:true,industryTemplates:14,readings:true,punchList:true,batchPhotos:true,
+    fieldProof: {version:3,requiredTier:'enterprise',model:CHAT_MODEL,reasoningEffort:CHAT_EFFORT,creditCost:FIELDPROOF_CREDIT_COST,maxPhotos:24,originalEvidence:true,voice:true,industryTemplates:14,readings:true,punchList:true,batchPhotos:true,
       email:{version:1,customerReports:true,followUps:true,supervisorSummaries:true,perAccountSettings:true,enabledByDefault:false,providerConfigured:createFieldProofEmailProvider({environment:process.env}).status().ready}},
     aiVisibility: {version: 1, model: CHAT_MODEL, reasoningEffort: CHAT_EFFORT, method: 'openai_web_samples_v1', sampleCount: 3, creditCost: VISIBILITY_CREDIT_COST},
   });
@@ -9302,7 +9302,7 @@ app.post("/api/live-convo/usage", async (req, res) => {
 
 app.use("/api/live-convo/session", crmVoiceSessionGuard({requireUser,database:supabaseAdmin}));
 app.use("/api/live-convo/session", workforceVoiceSessionGuard({ requireUser, database: supabaseAdmin }));
-app.use("/api/live-convo/session", fieldProofVoiceSessionGuard({ requireUser }));
+app.use("/api/live-convo/session", fieldProofVoiceSessionGuard({ requireUser, database: supabaseAdmin }));
 app.use("/api/live-convo/session", musicVoiceSessionGuard({ requireUser }));
 app.use("/api/live-convo/session", bookkeepingVoiceSessionGuard({ database: supabaseAdmin, requireUser }));
 app.use("/api/live-convo/session", async (req, res, next) => {
@@ -12430,7 +12430,7 @@ registerFieldProof(app, {database: supabaseAdmin, storageDatabase: bookkeepingSt
   aiAccess: async user => {
     if (!process.env.OPENAI_API_KEY) return {allowed:false,status:503,reason:'KORLIX photo review is temporarily unavailable.'};
     const profile = await getOrCreateProfile(user);
-    if (!hasAdvancedUploadAccess(profile?.tier)) return {allowed:false,status:403,reason:'KORLIX photo review requires Ultra Premium or Enterprise.'};
+    if (String(profile?.tier ?? '').trim().toLowerCase() !== 'enterprise') return {allowed:false,status:402,reason:'KORLIX photo review requires Enterprise.'};
     const usageCounter = await getOrCreateUsageCounter(user.id);
     if (!profile || !usageCounter) throw new Error('FieldProof usage unavailable');
     const check = checkUsageAllowed({profile,usageCounter,creditsNeeded:FIELDPROOF_CREDIT_COST});

@@ -2,13 +2,14 @@ import {randomUUID,createHash} from 'node:crypto';
 import multer from 'multer';
 import {BUCKET,CREDIT_COST,MAX_PHOTOS,TEMPLATES,TAGS,FieldProofError,fail,text,uuid,version,jobData,readiness,prepareEvidence,evidenceManifest,reportFingerprint} from './model.mjs';
 import {registerFieldProofVoice} from './voice.mjs';
+import {requireFieldProofEnterprise,fieldProofAccessDetails} from './access.mjs';
 const base='/api/fieldproof';
 export function registerFieldProof(app,{database,storageDatabase=database,requireUser,aiAccess,review,logger=console}={}){
  const active=new Set(),starting=new Set();let uploads=0;
  const call=async(actor,action,id=null,data={})=>{const r=await database.rpc('korlix_fieldproof_v1',{p_actor:actor,p_action:action,p_id:id,p_data:data});
   if(r.error){const status={P0002:404,'40001':409,'54000':429,P0001:400,'42501':403}[r.error.code];if(status)fail(r.error.message,status);logger.warn('FieldProof storage unavailable',{action,code:r.error.code});fail('FieldProof could not save this change. Your entries remain here; refresh before retrying.',503);}return r.data;};
  const objects=()=>storageDatabase.storage.from(BUCKET);
- const route=fn=>async(q,r)=>{r.set('Cache-Control','no-store');try{const u=await requireUser(q);if(!u?.id)fail('Sign in to use FieldProof.',401);if(!database||!storageDatabase)fail('FieldProof is temporarily unavailable.',503);await fn(q,r,u);}catch(e){const status=e instanceof FieldProofError?e.status:e.statusCode===401?401:503;r.status(status).json({error:e instanceof FieldProofError?e.message:status===401?'Sign in again to use FieldProof.':'FieldProof could not finish this request. Refresh before retrying.'});}};
+ const route=fn=>async(q,r)=>{r.set('Cache-Control','no-store');try{const u=await requireUser(q);if(!u?.id)fail('Sign in to use FieldProof.',401);if(!database||!storageDatabase)fail('FieldProof is temporarily unavailable.',503);await requireFieldProofEnterprise(database,u.id);await fn(q,r,u);}catch(e){const status=e instanceof FieldProofError?e.status:e.statusCode===401?401:503;r.status(status).json({error:e instanceof FieldProofError?e.message:status===401?'Sign in again to use FieldProof.':'FieldProof could not finish this request. Refresh before retrying.',...fieldProofAccessDetails(e)});}};
  const publicJob=j=>({id:j.id,data:j.data,version:j.version,state:j.state,approval:j.approval,completion:j.completion,createdAt:j.created_at,updatedAt:j.updated_at,photoCount:j.photo_count,runningReview:j.running_review});
  const publicReview=r=>({id:r.id,jobId:r.job_id,version:r.version,state:r.state,result:r.result,error:r.error,charged:r.charged,createdAt:r.created_at,completedAt:r.completed_at});
  const publicEvidence=async(rows)=>{
@@ -64,7 +65,7 @@ export function registerFieldProof(app,{database,storageDatabase=database,requir
   try{const prior=await call(u.id,'review_get',id);if(prior.job_id!==jobId)fail('Use a new review request for this job.',409);return r.json({review:publicReview(prior)});}catch(e){if(e.status!==404)throw e;}
   if(active.size+starting.size>=2)fail('KORLIX is finishing other reviews. Please retry shortly.',429);
   if(starting.has(id))fail('This review is starting. Refresh the job.',409);
-  starting.add(id);try{const access=await aiAccess(u);if(!access?.allowed)fail(access?.reason||'KORLIX photo review requires Ultra Premium or Enterprise.',access?.status||403);
+  starting.add(id);try{const access=await aiAccess(u);if(!access?.allowed)fail(access?.reason||'KORLIX photo review requires Enterprise.',access?.status||403);
    const job=await call(u.id,'review_begin',id,{job_id:jobId,version:version(q.body?.version),usage_id:access.usageId});r.status(202).json({review:publicReview(job)});if(!job.replayed&&!active.has(job.id))void run(u,job);
   }finally{starting.delete(id);}
  }));

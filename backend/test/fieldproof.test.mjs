@@ -23,7 +23,9 @@ test.before(async()=>{
  const dir=new URL('../../supabase/migrations/',import.meta.url);await db.exec(await readFile(new URL((await readdir(dir)).find(x=>x.endsWith('_fieldproof.sql')),dir),'utf8'));
  await db.exec(await readFile(new URL((await readdir(dir)).find(x=>x.endsWith('_fieldproof_workspace_upgrade.sql')),dir),'utf8'));
  bytes=await sharp({create:{width:60,height:80,channels:3,background:'#abc'}}).png().withMetadata().toBuffer();
- const database={rpc:async(_name,p)=>{try{return {data:await rpc(p.p_action,p.p_id,p.p_data,p.p_actor)};}catch(error){if(process.env.FIELDPROOF_DEBUG)console.error(error.message,error.code,error.where);return {error};}}};
+ const database={
+  from:()=>({select:()=>({eq:(_column,id)=>({maybeSingle:async()=>({data:{id,tier:'enterprise',is_disabled:false}})})})}),
+  rpc:async(_name,p)=>{try{return {data:await rpc(p.p_action,p.p_id,p.p_data,p.p_actor)};}catch(error){if(process.env.FIELDPROOF_DEBUG)console.error(error.message,error.code,error.where);return {error};}}};
  const storage={storage:{from(name){assert.equal(name,'korlix-fieldproof');return {
   upload:async(path,data)=>{if(uploadFail)return {error:Error('offline')};objects.set(path,Buffer.from(data));return {data:{path}};},
   download:async(path)=>{reads++;return objects.has(path)?{data:new Blob([objects.get(path)])}:{error:Error('not found')};},
