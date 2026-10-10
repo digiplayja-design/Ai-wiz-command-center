@@ -50,4 +50,6 @@ Flutter: `flutter test --no-pub test/directory`
 Public browser QA uses only synthetic intercepted fixtures; no demonstration business is published.
 Release checks: migration privileges and security advisors, backend health/public anonymous search/private 401, deployed static pages and web build, exact release commits, error logs.
 
-Not included in this release: customer reviews, booking, sponsored placements, automated identity-vendor checks, QR-code generation, or KORLIX-assisted listing descriptions. These can be added without changing the free-listing model.
+Business Passport extends each free profile with a headline, service list, a selected 2MEETU booking link, QR sharing, print and contact-card saving. Enterprise owners can configure a separate AI receptionist from the same business. See [Business Passport and AI Receptionist](BUSINESS_PASSPORT_RECEPTIONIST.md) for setup, permissions, phone readiness and tests.
+
+Not included: customer reviews, sponsored placements, automated identity-vendor checks or KORLIX-assisted listing descriptions.

@@ -14,6 +14,11 @@ export function details(p={}){
  if(!d.phone&&!d.email)fail('Add a business phone or contact email.');
  if(!d.city&&!d.service_area)fail('Add a city or service area.');
  d.website=url(p.website);d.social=url(p.social);
+ d.tagline=text(p.tagline,160);
+ d.services=text(p.services,2400);
+ if(d.services.split('\n').filter(s=>s.trim()).length>12)fail('List up to 12 services, one per line.');
+ d.booking_slug=text(p.booking_slug,80);
+ if(d.booking_slug&&!/^[a-z0-9][a-z0-9-]{5,79}$/.test(d.booking_slug))fail('Choose a published KORLIX 2MEETU booking page.');
  if(!Array.isArray(p.photos??[])||(p.photos??[]).length>12)fail('Choose up to 12 photos.');d.photos=[...new Set((p.photos??[]).map(id))];
  d.offer=null;if(p.offer?.text){const expires=text(p.offer.expires,10,true);if(!/^\d{4}-\d{2}-\d{2}$/.test(expires)||!Number.isFinite(Date.parse(expires)))fail('Use an offer expiry date in YYYY-MM-DD format.');d.offer={text:text(p.offer.text,400,true),expires};}
  return d;

@@ -9,6 +9,8 @@ import {registerWelcomeAudio} from './welcome/audio.mjs';
 import {createCrmDirectorySync} from './contacts_crm/directory_sync.mjs';
 import {crmVoiceSessionGuard,crmVoiceInstructions} from './contacts_crm/voice.mjs';
 import { registerDirectory } from './directory/routes.mjs';
+import { registerReceptionist } from './receptionist/routes.mjs';
+import { receptionistAI } from './receptionist/ai.mjs';
 import {registerWebBilling} from './web_billing/routes.mjs';
 import {billingStore as createWebBillingStore} from './web_billing/core.mjs';
 import { registerChatMemory, prepareChatMemory } from './chat_memory/memory.mjs';
@@ -12573,7 +12575,7 @@ registerVirtualCloset(app, { database: supabaseAdmin, storageDatabase: bookkeepi
   style: data => suggestOutfit({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
 });
 registerPayroll(app, { database: supabaseAdmin, requireUser });
-registerScheduling(app, {
+const schedulingRegistration = registerScheduling(app, {
   database: supabaseAdmin,
   requireUser,
   generateAI: process.env.OPENAI_API_KEY
@@ -12614,6 +12616,36 @@ registerBookkeeping(app, { database: supabaseAdmin, requireUser, receiptOptions:
 } });
 registerContactsCrm(app, { directorySync:crmDirectorySync, crmEmails, database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1 }); // K137_ENTERPRISE_CONTACTS
 registerDirectory(app, {database: supabaseAdmin, requireUser});
+const receptionistRegistration = registerReceptionist(app, {
+  database:supabaseAdmin,requireUser,scheduling:schedulingRegistration,
+  generate:process.env.OPENAI_API_KEY ? receptionistAI(new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0,timeout:120000})) : undefined,
+  voiceAccess:async user=>{
+    const {data:profile,error}=await supabaseAdmin.from('user_profiles').select('id,tier,is_disabled').eq('id',user.id).maybeSingle();
+    if(error||!profile||profile.is_disabled||String(profile.tier).toLowerCase()!=='enterprise')return {allowed:false};
+    const entitlement=korlixLiveConvoBuild131EntitlementForUser(user);
+    const limits=korlixLiveConvoBuild131LimitsForEntitlement(profile,entitlement);
+    const {data,error:usageError}=await supabaseAdmin.rpc('korlix_live_convo_get_usage',{
+      p_user_id:user.id,p_tier:limits.tier,p_monthly_session_limit:limits.monthlySessions,
+      p_monthly_duration_limit:limits.monthlySeconds,p_monthly_token_limit:limits.monthlyTokens,
+    });
+    if(usageError)throw usageError;
+    const usage=korlixLiveConvoBuild129RpcValue(data);
+    return {allowed:Number(usage?.remainingSeconds)>=60&&Number(usage?.remainingTokens)>0&&Number(usage?.remainingSessions)>0,
+      limits,remainingSeconds:Number(usage?.remainingSeconds)||0};
+  },
+  previewAccess:async user=>{
+    const profile=await getOrCreateProfile(user),usageCounter=await getOrCreateUsageCounter(user.id);
+    if(!profile||!usageCounter)throw new Error('Receptionist AI usage unavailable');
+    return {...checkUsageAllowed({profile,usageCounter,creditsNeeded:1}),status:429};
+  },
+  previewCharge:async user=>{
+    const usageCounter=await getOrCreateUsageCounter(user.id);
+    if(!usageCounter)throw new Error('Receptionist AI usage unavailable');
+    await incrementUsage({usageCounter,liveSearchUsed:false,fileRequested:false,creditsNeeded:1});
+  },
+});
+process.once('SIGTERM',()=>receptionistRegistration.stop());
+process.once('SIGINT',()=>receptionistRegistration.stop());
 registerWebBilling(app, {database: supabaseAdmin, requireUser, loadProfile: getOrCreateProfile});
 registerWorkforce(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1, workspaceEmail: workforceEmails }); // K138_WORKFORCE
 registerFunnels(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1, autoStartScheduler: true }); // K141_FUNNEL_SCHEDULING

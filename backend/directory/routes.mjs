@@ -3,9 +3,11 @@ import sharp from 'sharp';
 import {adminIds,CATEGORIES,PRICES,details,DirectoryError,fail,id,slug,storeFor,text} from './core.mjs';
 import {directoryBilling} from './billing.mjs';
 import {sandboxWebhookProbe} from './webhook_probe.mjs';
+import {directoryPassport} from './passport.mjs';
 export function registerDirectory(app,{database,requireUser,environment=process.env,store,billing,now=Date.now}={}){
  const persistence=store||(database?storeFor(database):null),admins=adminIds(environment),pay=billing||directoryBilling(environment),limits=new Map();
  const root='/api/directory';
+ const passport=directoryPassport(database,environment);
  const deliveryProbe=sandboxWebhookProbe(environment,now);
  function rate(key,max=60,period=60000){const time=now();let v=limits.get(key);if(!v||time-v.at>period)v={at:time,n:0};v.n++;limits.set(key,v);if(limits.size>20000)for(const [k,x]of limits)if(time-x.at>3600000)limits.delete(k);if(v.n>max)fail('Please wait before trying again.',429);}
  const ip=q=>environment.RENDER==='true'?String(q.headers['x-forwarded-for']||q.ip).split(',').at(-1).trim():q.ip;
@@ -14,7 +16,12 @@ export function registerDirectory(app,{database,requireUser,environment=process.
  const wrap=(fn,auth=false)=>async(q,r)=>{r.set('Cache-Control','no-store');try{if(!persistence)fail('Directory storage is not configured.',503);let user=null;if(auth){try{user=await requireUser(q);}catch{fail('Sign in to manage your business.',401);}if(!user?.id||user.is_anonymous)fail('Sign in with a permanent account.',401);rate('owner:'+user.id,80);}else rate('public:'+ip(q),120);await fn(q,r,user);}catch(e){r.status(e instanceof DirectoryError?e.status:503).json({error:e instanceof DirectoryError?e.message:'Directory request could not be completed. Please retry.'});}};
  app.get(root+'/health',async(q,r)=>{r.set('Cache-Control','no-store');const paymentConnection=pay.checkConnection?await pay.checkConnection():'unchecked';r.json({version:1,freeListings:true,publicBrowsing:true,paymentsReady:pay.ready,paymentCredentialsConfigured:pay.configured===true,checkoutEnabled:pay.enabled===true,paymentConnection,paymentApiVersion:pay.apiVersion,livePayments:pay.live,adminConfigured:admins.size>0,prices:{currency:'USD',monthlyCents:499,yearlyCents:4900},sandboxWebhookProbe:deliveryProbe.status()});});
  app.get(root+'/businesses',wrap(async(q,r)=>r.json({...await command(null,'browse',null,{q:text(q.query.q,120),category:text(q.query.category,80),city:text(q.query.city,100),...(q.query.ids?{ids:text(q.query.ids,2000).split(',').slice(0,50).map(id)}:{}),offset:Math.min(10000,Math.max(0,Number(q.query.offset)||0))}),categories:CATEGORIES})));
- app.get(root+'/businesses/:slug',wrap(async(q,r)=>r.json(await command(null,'public',null,{slug:text(q.params.slug,120,true)}))));
+ app.get(root+'/businesses/:slug',wrap(async(q,r)=>r.json(await passport.enrich(await command(null,'public',null,{slug:text(q.params.slug,120,true)})))));
+ app.get(root+'/businesses/:slug/passport-qr',wrap(async(q,r)=>{
+  const card=await command(null,'public',null,{slug:text(q.params.slug,120,true)});
+  r.type('image/png').set('X-Content-Type-Options','nosniff').send(await passport.qr(card));
+ }));
+ app.get(root+'/booking-options',wrap(async(q,r,u)=>r.json({events:await passport.events(u.id)}),true));
  app.post(root+'/businesses/:id/report',wrap(async(q,r)=>{rate('report:'+ip(q),5,3600000);if(q.body?.website)fail('Report could not be submitted.');r.json(await command(null,'report',id(q.params.id),{reason:text(q.body?.reason,1000,true)}));}));
  app.post(root+'/businesses/:id/metrics',wrap(async(q,r)=>{const business=id(q.params.id),kind=q.body?.kind;if(!['view','contact'].includes(kind))fail('Invalid metric.');rate(`metric:${ip(q)}:${business}:${kind}`,1,600000);r.json(await command(null,'metrics',business,{kind}));}));
  app.get(root+'/businesses/:id/photos/:asset',wrap(async(q,r)=>{
@@ -23,14 +30,18 @@ export function registerDirectory(app,{database,requireUser,environment=process.
   const {data,error}=await database.from('korlix_directory_assets').select('path,mime').eq('business_id',business).eq('id',asset).eq('purpose','photo').maybeSingle();if(error||!data)fail('Photo not found.',404);
   const file=await database.storage.from('korlix-directory').download(data.path);if(file.error)fail('Photo not found.',404);r.type('image/jpeg').set('X-Content-Type-Options','nosniff').send(Buffer.from(await file.data.arrayBuffer()));
  }));
- app.get(root+'/me',wrap(async(q,r,u)=>r.json({...await command(u,'mine'),isAdmin:admin(u),categories:CATEGORIES,paymentsReady:pay.ready,livePayments:pay.live,prices:PRICES}),true));
- app.post(root+'/owner',wrap(async(q,r,u)=>{rate('create:'+u.id,10,3600000);const d=details(q.body?.details);r.json(await command(u,'create',null,{details:d,owner_name:text(q.body?.owner_name,100,true),slug:slug(d.name)}));},true));
+ app.get(root+'/me',wrap(async(q,r,u)=>{
+  const [mine,bookingOptions]=await Promise.all([command(u,'mine'),passport.events(u.id).catch(()=>[])]);
+  r.json({...mine,bookingOptions,isAdmin:admin(u),categories:CATEGORIES,paymentsReady:pay.ready,livePayments:pay.live,prices:PRICES});
+ },true));
+ app.post(root+'/owner',wrap(async(q,r,u)=>{rate('create:'+u.id,10,3600000);const d=details(q.body?.details);await passport.validate(u.id,d);r.json(await command(u,'create',null,{details:d,owner_name:text(q.body?.owner_name,100,true),slug:slug(d.name)}));},true));
  app.get(root+'/owner/:id',wrap(async(q,r,u)=>r.json(await command(u,'get',id(q.params.id))),true));
  app.post(root+'/owner/:id/action',wrap(async(q,r,u)=>{
   const action=q.body?.action,p=q.body||{};if(!['save','submit','hide','verification_submit'].includes(action))fail('Unsupported owner action.');
   let payload={};if(action==='save'||action==='submit'){if(!Number.isInteger(p.version)||p.version<1)fail('Refresh this listing before saving.');payload={details:details(p.details),owner_name:text(p.owner_name,100,true),version:p.version,consent:p.consent===true};}
   if(action==='verification_submit')payload={evidence_note:text(p.evidence_note,4000,true)};
   const snapshot=await command(u,'get',id(q.params.id));if(snapshot.business.owner_id!==u.id)fail('Only the business owner can change this listing.',403);
+  if(payload.details)await passport.validate(u.id,payload.details);
   r.json(await command(u,action,id(q.params.id),payload));
  },true));
  app.post(root+'/owner/:id/assets',wrap(async(q,r,u)=>{
