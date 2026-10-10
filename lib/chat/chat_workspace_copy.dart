@@ -70,7 +70,7 @@ class KorlixChatCopy {
     'Qualité d’image très élevée',
   );
   String get chatQuality =>
-      _pick('Astra · Extra high', 'Astra · Extra alta', 'Astra · Très élevée');
+      _pick('Astra · Max', 'Astra · Máximo', 'Astra · Maximum');
   String get shape => _pick('Shape', 'Formato', 'Format');
   String get square => _pick('Square', 'Cuadrado', 'Carré');
   String get portrait => _pick('Portrait', 'Vertical', 'Portrait');

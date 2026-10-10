@@ -1385,7 +1385,7 @@ class KorlixLiveConvoAgentClient {
     late final http.StreamedResponse streamedResponse;
 
     final analysisTimeout = timeout.inMilliseconds < 120000
-        ? const Duration(seconds: 120)
+        ? const Duration(seconds: 630)
         : timeout;
 
     try {
@@ -1508,7 +1508,7 @@ class KorlixLiveConvoAgentClient {
     late final http.StreamedResponse streamedResponse;
 
     final analysisTimeout = timeout.inMilliseconds < 120000
-        ? const Duration(seconds: 120)
+        ? const Duration(seconds: 630)
         : timeout;
 
     try {

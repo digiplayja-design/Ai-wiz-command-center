@@ -1,27 +1,15 @@
-const String kKorlixOpenAIPremiumModel = String.fromEnvironment(
-  'KORLIX_OPENAI_PREMIUM_MODEL',
-  defaultValue: 'gpt-6-astra',
-);
+const String kKorlixOpenAIPremiumModel = 'gpt-6-astra';
 
-const String kKorlixOpenAITextModel = String.fromEnvironment(
-  'KORLIX_OPENAI_TEXT_MODEL',
-  defaultValue: 'gpt-6-astra',
-);
+const String kKorlixOpenAITextModel = 'gpt-6-astra';
 
-const String kKorlixOpenAIStreamingModel = String.fromEnvironment(
-  'KORLIX_OPENAI_STREAMING_MODEL',
-  defaultValue: 'gpt-6-astra',
-);
+const String kKorlixOpenAIStreamingModel = 'gpt-6-astra';
 
 const String kKorlixOpenAIImageModel = String.fromEnvironment(
   'KORLIX_OPENAI_IMAGE_MODEL',
   defaultValue: 'gpt-image-2',
 );
 
-const String kKorlixOpenAIReasoningEffort = String.fromEnvironment(
-  'KORLIX_OPENAI_REASONING_EFFORT',
-  defaultValue: 'xhigh',
-);
+const String kKorlixOpenAIReasoningEffort = 'max';
 
 const String kKorlixProductionQualityDirective = '''
 KORLIX AI PRODUCTION QUALITY POLICY:

@@ -2,10 +2,10 @@ import 'package:ai_wiz_command_center/live_convo/korlix_live_convo_agent.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('Astra document proof requires the server to report Astra and high reasoning', () {
+  test('Astra document proof requires the server to report Astra and max reasoning', () {
     for (final value in <Map<String, dynamic>>[
       <String, dynamic>{},
-      <String, dynamic>{'liveDocsDocumentModel': 'gpt-5.6', 'liveDocsReasoningEffort': 'high'},
+      <String, dynamic>{'liveDocsDocumentModel': 'gpt-5.6', 'liveDocsReasoningEffort': 'max'},
       <String, dynamic>{'liveDocsDocumentModel': 'gpt-6-astra', 'liveDocsReasoningEffort': 'low'},
     ]) {
       expect(KorlixLiveConvoAgentModelProof.fromJson(value).provesAstraDocumentReasoning, isFalse);
@@ -115,7 +115,7 @@ void main() {
           'modelProof': <String, dynamic>{
             'liveConvoModel': 'gpt-realtime-2.1',
             'liveDocsDocumentModel': 'gpt-6-astra',
-            'liveDocsReasoningEffort': 'high',
+            'liveDocsReasoningEffort': 'max',
             'deterministicAuditEngine': true,
           },
           'persistenceConfigured': true,

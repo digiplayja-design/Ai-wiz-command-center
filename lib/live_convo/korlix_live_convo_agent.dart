@@ -567,7 +567,7 @@ class KorlixLiveConvoAgentModelProof {
 
   bool get provesAstraDocumentReasoning {
     return liveDocsDocumentModel == 'gpt-6-astra' &&
-        liveDocsReasoningEffort == 'high';
+        liveDocsReasoningEffort == 'max';
   }
 }
 

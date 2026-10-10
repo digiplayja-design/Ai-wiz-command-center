@@ -108,7 +108,7 @@ class K135zMeetingResponse extends ChangeNotifier {
           headers: headers,
           body: body,
         )
-        .timeout(const Duration(seconds: 35));
+        .timeout(Duration(seconds: path == 'response' ? 125 : 35));
     _need(utf8.encode(r.body).length <= 512 * 1024);
     final decoded = jsonDecode(r.body);
     if (r.statusCode != 200) {

@@ -191,7 +191,7 @@ class EmailEnhancerClient extends ChangeNotifier {
               'requestKey': _requestKey,
             }),
           )
-          .timeout(const Duration(seconds: 115));
+          .timeout(const Duration(seconds: 200));
       guard();
       if (r.statusCode == 401) {
         _denied = true;

@@ -5704,7 +5704,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
             'source': 'enterprise_box_ai_rewrite',
           }),
         )
-        .timeout(const Duration(seconds: 90));
+        .timeout(const Duration(seconds: 360));
 
     final data = _decodeKorlixJsonMap(response);
 

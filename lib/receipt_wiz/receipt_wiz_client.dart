@@ -205,7 +205,7 @@ class ReceiptWizClient {
           throw ReceiptWizException(_changed.message, streamed.statusCode);
         }
         return http.Response.fromStream(streamed);
-      })().timeout(const Duration(seconds: 100));
+      })().timeout(const Duration(seconds: 200));
       _ensureSession();
       if (response.statusCode < 200 || response.statusCode >= 300) {
         String? error;

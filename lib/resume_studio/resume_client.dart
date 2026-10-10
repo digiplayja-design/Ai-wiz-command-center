@@ -160,7 +160,7 @@ class ResumeClient {
       r = await _http
           .send(request)
           .then(http.Response.fromStream)
-          .timeout(const Duration(seconds: 100));
+          .timeout(const Duration(seconds: 630));
     } on TimeoutException {
       guard();
       throw const ResumeException(

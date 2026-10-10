@@ -174,7 +174,7 @@ class KorlixLiveConvoFileSubmissionClient {
     required this.backendBaseUrl,
     required this.headersBuilder,
     http.Client? client,
-    this.timeout = const Duration(seconds: 120),
+    this.timeout = const Duration(seconds: 630),
   }) : _client = client ?? http.Client(),
        _ownsClient = client == null;
 

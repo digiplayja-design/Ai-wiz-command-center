@@ -121,7 +121,7 @@ class PictureStudioClient {
       response = await _client
           .send(request)
           .then(http.Response.fromStream)
-          .timeout(const Duration(seconds: 430));
+          .timeout(const Duration(seconds: 490));
     } on TimeoutException {
       _guard();
       throw Exception(

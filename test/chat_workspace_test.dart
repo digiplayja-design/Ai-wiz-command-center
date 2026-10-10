@@ -319,7 +319,7 @@ void main() {
       await tester.tap(find.text('Discuter'));
       await tester.pumpAndSettle();
       expect(mode, isFalse);
-      expect(find.text('Astra · Très élevée'), findsOneWidget);
+      expect(find.text('Astra · Maximum'), findsOneWidget);
       language.value = 'en';
       await tester.pumpAndSettle();
       await tester.tap(find.text('Create image'));

@@ -159,7 +159,7 @@ class FunnelClient {
       _ensureSession(req.headers);
       final response = await (() async => http.Response.fromStream(
         await _http.send(req),
-      ))().timeout(const Duration(seconds: 100));
+      ))().timeout(const Duration(seconds: 200));
       // A completed request must not return private data to a later session.
       _ensureSession();
       Map<String, dynamic>? result;
