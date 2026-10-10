@@ -11,6 +11,7 @@ const homeBusinessTools = <String>[
   'Business Directory',
 ];
 const homeEnterpriseTools = <String>[
+  'AI Receptionist',
   'FieldProof',
   'Inventory Studio',
   'Bookkeeping 2027',
@@ -99,6 +100,7 @@ const _toolDetails = <String, String>{
   'Bookkeeping 2027': 'Organize your business finances · Enterprise',
   'KORLIX 2MEETU': 'Free scheduling for meetings and appointments',
   'FieldProof': 'Document jobs and field work · Enterprise',
+  'AI Receptionist': 'Answer business calls, capture enquiries and book appointments · Enterprise',
   'SEO Agent': 'Improve how your website is found',
   'AI Visibility': 'Check your presence in AI answers',
   'Contract Radar': 'Find and track contract opportunities',

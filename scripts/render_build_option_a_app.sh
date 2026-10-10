@@ -60,6 +60,9 @@ RELEASE_TESTS=(
   test/logo_processing_test.dart
   test/bookkeeping_plan_access_test.dart
   test/fieldproof_plan_access_test.dart
+  test/directory/directory_test.dart
+  test/directory/directory_submission_test.dart
+  test/directory/receptionist_test.dart
   test/auth_device_session_test.dart
   test/signup_eligibility_test.dart
   test/auth/korlix_token_store_test.dart

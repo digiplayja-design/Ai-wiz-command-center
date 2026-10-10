@@ -112,7 +112,7 @@ class DirectoryHero extends StatelessWidget {
                   const SizedBox(height: 12),
                   if (largeText) ...[actions, const SizedBox(height: 20)],
                   Text(
-                    'Create a free public storefront. Share your services, company photos and contact details. No paid KORLIX plan required.',
+                    'Create your free Business Passport. Share services, photos, contact details and a booking link in one page, with a QR code ready for your customers.',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.6,

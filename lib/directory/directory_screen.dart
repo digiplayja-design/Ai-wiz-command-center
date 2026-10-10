@@ -10,10 +10,18 @@ import '../sounds/korlix_sound_actions.dart';
 import '../sounds/korlix_sound_service.dart';
 import 'directory_client.dart';
 import 'directory_style.dart';
+import 'receptionist_screen.dart';
 
 class DirectoryScreen extends StatefulWidget {
-  const DirectoryScreen({super.key, required this.client});
+  const DirectoryScreen({
+    super.key,
+    required this.client,
+    this.receptionistMode = false,
+    this.openScheduling,
+  });
   final DirectoryClient client;
+  final bool receptionistMode;
+  final Future<void> Function()? openScheduling;
   @override
   State<DirectoryScreen> createState() => _DirectoryScreenState();
 }
@@ -108,7 +116,69 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
         _id = id;
         _data = d;
       });
+      if (widget.receptionistMode) await _openReceptionist();
     }
+  }
+
+  Future<void> _openReceptionist() async {
+    if (_id == null || _locked) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ReceptionistScreen(
+          client: widget.client,
+          businessId: _id!,
+          openScheduling: widget.openScheduling,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _passportQr() async {
+    final slug = Uri.encodeComponent(_business['slug'] ?? '');
+    final bytes = await widget.client.bytes('/businesses/$slug/passport-qr');
+    if (!mounted || _locked) return;
+    await _dialog<void>(
+      (c) => AlertDialog(
+        title: const Text('Your Business Passport'),
+        scrollable: true,
+        content: SizedBox(
+          width: 300,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.memory(bytes, width: 250, height: 250),
+              const SizedBox(height: 12),
+              Text(
+                _business['published']?['name'] ?? 'Your business',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Print this QR on business cards, flyers or your front desk. Customers can open your services and booking page.',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('Close'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              await saveBookkeepingFile(
+                bytes,
+                'business-passport-qr.png',
+                'image/png',
+                const Rect.fromLTWH(20, 80, 250, 250),
+              );
+            },
+            icon: const Icon(Icons.download_outlined),
+            label: const Text('Save QR'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<T?> _dialog<T>(WidgetBuilder builder) async {
@@ -147,7 +217,7 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
   }
 
   String get _publicUrl =>
-      'https://www.korlixdeveloper.com/business-directory/?business=${Uri.encodeComponent(_business['slug'] ?? '')}';
+      'https://www.korlixdeveloper.com/business-directory/passport.html?business=${Uri.encodeComponent(_business['slug'] ?? '')}';
 
   void _acceptBusiness(DirJson business) {
     if (!mounted || _locked) return;
@@ -216,9 +286,12 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
         : create
         ? <String, dynamic>{}
         : dirMap(_business['draft']);
+    final bookingOptions = dirRows(_me['bookingOptions']);
+    String bookingSlug = current['booking_slug']?.toString() ?? '';
     final controls = <String, TextEditingController>{};
     const fields = {
       'name': 'Business name *',
+      'tagline': 'Passport headline (optional)',
       'owner_name': 'Owner / representative name (private) *',
       'public_contact_name': 'Public contact name (optional)',
       'specialties': 'Specialties / nature of business',
@@ -229,6 +302,7 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
       'country': 'Country',
       'service_area': 'Service area / online service',
       'description': 'Short business description *',
+      'services': 'Services — one per line (optional)',
       'hours': 'Opening hours',
       'website': 'Website URL (https://...)',
       'social': 'Social page URL (https://...)',
@@ -267,6 +341,8 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
         return 'Please complete this field.';
       }
       const limits = {
+        'tagline': 160,
+        'services': 2400,
         'specialties': 300,
         'address': 250,
         'service_area': 250,
@@ -363,7 +439,11 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
                           key: ValueKey('directory-field-${e.key}'),
                           controller: controls[e.key],
                           validator: (value) => validate(e.key, value),
-                          maxLength: e.key == 'description'
+                          maxLength: e.key == 'tagline'
+                              ? 160
+                              : e.key == 'services'
+                              ? 2400
+                              : e.key == 'description'
                               ? 2000
                               : e.key == 'hours'
                               ? 500
@@ -383,19 +463,62 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
                               : e.key == 'offer_expires'
                               ? 10
                               : 500,
-                          minLines: e.key == 'description' ? 3 : 1,
-                          maxLines: e.key == 'description' || e.key == 'hours'
+                          minLines:
+                              e.key == 'description' || e.key == 'services'
+                              ? 3
+                              : 1,
+                          maxLines:
+                              e.key == 'description' ||
+                                  e.key == 'hours' ||
+                                  e.key == 'services'
                               ? 5
                               : 1,
                           decoration: InputDecoration(
                             labelText: e.value,
-                            helperText: e.key.startsWith('offer_')
+                            helperText: e.key == 'services'
+                                ? 'Up to 12 services. Optional price: Consultation | From \$50'
+                                : e.key.startsWith('offer_')
                                 ? 'Shown only with an active verified membership'
                                 : null,
                             border: const OutlineInputBorder(),
                           ),
                         ),
                       ),
+                    DropdownButtonFormField<String>(
+                      initialValue: bookingSlug,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Passport booking button',
+                        helperText: 'Choose your published KORLIX 2MEETU page.',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        const DropdownMenuItem(
+                          value: '',
+                          child: Text('No booking button'),
+                        ),
+                        if (bookingSlug.isNotEmpty &&
+                            !bookingOptions.any(
+                              (e) => e['slug'] == bookingSlug,
+                            ))
+                          DropdownMenuItem(
+                            value: bookingSlug,
+                            child: const Text(
+                              'Previous page — select a published page',
+                            ),
+                          ),
+                        for (final event in bookingOptions)
+                          DropdownMenuItem(
+                            value: event['slug'].toString(),
+                            child: Text(
+                              event['title'].toString(),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: (v) => bookingSlug = v ?? '',
+                    ),
+                    const SizedBox(height: 18),
                     if (assets.isNotEmpty) ...[
                       const Text(
                         'Choose company photos (first selected is the cover)',
@@ -497,6 +620,7 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
                         ].contains(k))
                           k: controls[k]!.text.trim(),
                       'category': category,
+                      'booking_slug': bookingSlug,
                       'photos': photos,
                       'offer': controls['offer_text']!.text.trim().isEmpty
                           ? null
@@ -920,7 +1044,11 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
         backgroundColor: DirectoryVisuals.dark(context)
             ? const Color(0xff101a2d)
             : const Color(0xfff8faff),
-        title: const Text('KORLIX Business Directory'),
+        title: Text(
+          widget.receptionistMode
+              ? 'AI Receptionist · Choose a business'
+              : 'KORLIX Business Directory',
+        ),
         actions: [
           IconButton(
             tooltip: 'Refresh',
@@ -1157,6 +1285,52 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
       if (b['review_note']?.toString().isNotEmpty == true)
         Text('Listing review: ${b['review_note']}'),
       const SizedBox(height: 14),
+      if (_mine)
+        Container(
+          padding: const EdgeInsets.all(18),
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: DirectoryVisuals.panel(context, colorful: true),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'YOUR BUSINESS PASSPORT',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.3,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'One page. Every way to connect.',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Your free Passport brings your services, photos, contact details and booking link together. Add an Enterprise AI receptionist to handle incoming enquiries.',
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (b['published'] != null && b['state'] != 'hidden')
+                    _button(
+                      'Passport QR code',
+                      () => _run(_passportQr),
+                      icon: Icons.qr_code_2,
+                    ),
+                  _button(
+                    'AI Receptionist · Enterprise',
+                    () => _run(_openReceptionist),
+                    icon: Icons.support_agent_rounded,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -1202,7 +1376,7 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
           ],
           if (b['published'] != null) ...[
             _button(
-              'View public page',
+              'View Business Passport',
               () => _run(() => _open(_publicUrl)),
               icon: Icons.public,
             ),

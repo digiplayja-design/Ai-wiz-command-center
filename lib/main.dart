@@ -10100,10 +10100,10 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       PayrollScreen(client: client, openBookkeeping: _openBookkeeping, openWorkforce: _openWorkforce)));
   }
 
-  Future<void> _openBusinessDirectory() async {
+  Future<void> _openBusinessDirectory({bool receptionistMode=false}) async {
     final client = DirectoryClient(backendBaseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
     try {
-      final route = MaterialPageRoute<void>(builder: (_) => DirectoryScreen(client:client));
+      final route = MaterialPageRoute<void>(builder: (_) => DirectoryScreen(client:client,receptionistMode:receptionistMode,openScheduling:_openScheduling));
       await Navigator.of(context).push(route);
       await route.completed;
     } finally { client.dispose(); }
@@ -10166,6 +10166,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     if (tool == 'KORLIX 2MEETU' || tool == 'Scheduling') { unawaited(_openScheduling()); return; }
 
     if (tool == 'Business Directory') { unawaited(_openBusinessDirectory()); return; }
+    if (tool == 'AI Receptionist') { unawaited(_openBusinessDirectory(receptionistMode:true)); return; }
     if (tool == 'Workforce') {
       unawaited(_openWorkforce());
       return;
@@ -11289,7 +11290,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       if (tool == 'Funnel Studio') return 'Enterprise pages, lead capture and campaign links';
       if (tool == 'Payroll') return 'Enterprise US payroll, employee onboarding and payroll tax workflows';
       if (tool == 'KORLIX 2MEETU' || tool == 'Scheduling') return 'Free scheduling, booking pages, group sessions and appointments';
-      if (tool == 'Business Directory') return 'Free business listings, public discovery and optional verification';
+      if (tool == 'Business Directory') return 'Free Business Passports, QR sharing, booking links and public discovery';
+      if (tool == 'AI Receptionist') return 'K-Nova answers your business calls and books appointments · Enterprise';
       if (tool == 'Workforce') return 'Your business, team tasks, shifts and Rici voice assistance';
       if (tool == 'Contacts CRM') return 'Enterprise contacts, imports and KORLIX connections';
       if (tool == 'Voice-scribe') {

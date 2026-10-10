@@ -21,6 +21,7 @@ void main() {
         for (final tools in [home, finder]) {
           expect(tools, contains('KORLIX 2MEETU'));
           for (final feature in [
+            'AI Receptionist',
             'FieldProof',
             'Inventory Studio',
             'Bookkeeping 2027',

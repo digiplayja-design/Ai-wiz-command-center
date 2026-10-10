@@ -121,6 +121,7 @@ class DirectoryClient {
     String path, {
     DirJson? body,
     Map<String, String>? query,
+    Duration timeout = const Duration(seconds: 40),
   }) async {
     final uri = Uri.parse(
       '${backendBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/directory$path',
@@ -136,7 +137,7 @@ class DirectoryClient {
       if (body != null) req.body = jsonEncode(body);
       final res = await (() async => http.Response.fromStream(
         await _http.send(req),
-      ))().timeout(const Duration(seconds: 40));
+      ))().timeout(timeout);
       _guard();
       if (res.statusCode < 200 || res.statusCode >= 300) {
         if (res.statusCode == 401) {
@@ -170,8 +171,15 @@ class DirectoryClient {
     String path, {
     DirJson? body,
     Map<String, String>? query,
+    Duration timeout = const Duration(seconds: 40),
   }) async {
-    final res = await _send(method, path, body: body, query: query);
+    final res = await _send(
+      method,
+      path,
+      body: body,
+      query: query,
+      timeout: timeout,
+    );
     try {
       return Map<String, dynamic>.from(jsonDecode(res.body) as Map);
     } catch (_) {
