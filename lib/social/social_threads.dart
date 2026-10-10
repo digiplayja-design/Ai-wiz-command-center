@@ -860,7 +860,8 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       : '${_peer['name']}';
 
   void _chooseReply(SocialMap m) {
-    if (_sending ||
+    if (!mounted ||
+        _sending ||
         _unavailable ||
         !widget.client.available ||
         m['deleted'] == true ||
@@ -868,7 +869,17 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       return;
     }
     setState(() => _replyTo = Map<String, dynamic>.from(m));
-    _composeFocus.requestFocus();
+    // Request the keyboard as part of the tap, including when the field still
+    // has focus after the phone's keyboard was dismissed. The Focus widget is
+    // inside EditableText, so its attached context resolves the public editor
+    // state without accessing TextField's private implementation.
+    final editor = _composeFocus.context
+        ?.findAncestorStateOfType<EditableTextState>();
+    if (editor != null) {
+      editor.requestKeyboard();
+    } else {
+      _composeFocus.requestFocus();
+    }
   }
 
   Future<void> _viewOriginal(String id) async {
@@ -906,7 +917,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
         _scrubDumped();
       });
       _composeFocus.unfocus();
-      final selected = await showModalBottomSheet<SocialMap>(
+      await showModalBottomSheet<void>(
         context: context,
         showDragHandle: true,
         isScrollControlled: true,
@@ -987,7 +998,10 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                         KorlixActionButton(
                           label: 'Reply to this message',
                           icon: Icons.reply_rounded,
-                          onPressed: () => Navigator.pop(sheetContext, message),
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            _chooseReply(message);
+                          },
                         ),
                       ],
                     ],
@@ -998,9 +1012,6 @@ class _SocialChatScreenState extends State<SocialChatScreen>
           },
         ),
       );
-      if (selected != null && mounted && widget.client.available) {
-        _chooseReply(selected);
-      }
     } catch (e) {
       if (mounted && widget.client.available) socialNotice(context, e);
     } finally {
@@ -1179,11 +1190,16 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                   if (!removed)
                     PopupMenuButton<String>(
                       tooltip: 'Message options',
-                      onSelected: (v) => _messageAction(v, m),
+                      onSelected: (v) {
+                        if (v != 'reply') _messageAction(v, m);
+                      },
                       itemBuilder: (_) => [
                         PopupMenuItem(
                           value: 'reply',
                           enabled: !_sending && !_unavailable,
+                          // PopupMenuItem dismisses its route before onTap.
+                          // Keep keyboard activation inside the user's tap.
+                          onTap: () => _chooseReply(m),
                           child: const Text('Reply'),
                         ),
                         PopupMenuItem(
@@ -1554,6 +1570,9 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                     ),
                   if (!_unavailable)
                     Padding(
+                      // Inserting/removing the quote above must not replace
+                      // this editor or detach its text-input connection.
+                      key: const ValueKey('social-message-composer'),
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.end,

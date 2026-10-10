@@ -17,10 +17,12 @@ class DirectoryScreen extends StatefulWidget {
     super.key,
     required this.client,
     this.receptionistMode = false,
+    this.passportMode = false,
     this.openScheduling,
   });
   final DirectoryClient client;
   final bool receptionistMode;
+  final bool passportMode;
   final Future<void> Function()? openScheduling;
   @override
   State<DirectoryScreen> createState() => _DirectoryScreenState();
@@ -34,6 +36,11 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
   String _adminQuery = '';
   bool _busy = false, _locked = false;
   bool get _admin => _me['isAdmin'] == true;
+  String get _title => widget.receptionistMode
+      ? 'AI Receptionist'
+      : widget.passportMode
+      ? 'Business Passport'
+      : 'KORLIX Business Directory';
   DirJson get _business => dirMap(_data['business']);
   DirJson get _membership => dirMap(_data['membership']);
   bool get _paid =>
@@ -96,7 +103,7 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
       _me = me;
       _businesses = dirRows(me['businesses']);
     });
-    if (_admin) {
+    if (_admin && !widget.passportMode && !widget.receptionistMode) {
       final q = await widget.client.request(
         'GET',
         '/admin',
@@ -106,7 +113,11 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
         setState(() => _queue = dirRows(q['businesses']));
       }
     }
-    if (_id != null) await _select(_id!);
+    if (_id != null) {
+      await _select(_id!);
+    } else if (widget.passportMode && _businesses.length == 1) {
+      await _select(_businesses.single['id']);
+    }
   }
 
   Future<void> _select(String id) async {
@@ -402,7 +413,13 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
               vertical: 20,
             ),
             title: Text(
-              create ? 'Add your business — free' : 'Edit business listing',
+              widget.passportMode
+                  ? (create
+                        ? 'Create your Business Passport — free'
+                        : 'Edit Business Passport')
+                  : (create
+                        ? 'Add your business — free'
+                        : 'Edit business listing'),
             ),
             content: SizedBox(
               width: 650,
@@ -1030,7 +1047,7 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
   Widget build(BuildContext context) {
     if (_locked) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Business Directory')),
+        appBar: AppBar(title: Text(_title)),
         body: const Center(
           child: Text('Sign in again to manage your businesses.'),
         ),
@@ -1044,11 +1061,7 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
         backgroundColor: DirectoryVisuals.dark(context)
             ? const Color(0xff101a2d)
             : const Color(0xfff8faff),
-        title: Text(
-          widget.receptionistMode
-              ? 'AI Receptionist · Choose a business'
-              : 'KORLIX Business Directory',
-        ),
+        title: Text(_title),
         actions: [
           IconButton(
             tooltip: 'Refresh',
@@ -1067,6 +1080,21 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   DirectoryHero(
+                    eyebrow: widget.receptionistMode
+                        ? 'ENTERPRISE AI RECEPTIONIST'
+                        : widget.passportMode
+                        ? 'FREE BUSINESS PASSPORT'
+                        : 'YOUR BUSINESS. YOUR NEXT CHAPTER.',
+                    title: widget.receptionistMode
+                        ? 'Give your business a receptionist.'
+                        : widget.passportMode
+                        ? 'Your business. One shareable Passport.'
+                        : 'Your business deserves to be found.',
+                    description: widget.receptionistMode
+                        ? 'Choose the business whose calls K-Nova should answer. Its Passport provides the public business details. Set up answers, appointments and a private call inbox here. A connected phone line is required.'
+                        : widget.passportMode
+                        ? 'Share your services, photos, contact details and booking link with one page and QR code. Your free Passport also appears in the Business Directory. AI Receptionist is a separate Enterprise service you can add.'
+                        : 'Create your free Business Passport. Share services, photos, contact details and a booking link in one page, with a QR code ready for your customers.',
                     actions: Wrap(
                       spacing: 10,
                       runSpacing: 10,
@@ -1085,7 +1113,11 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
                               ? null
                               : () => _run(() => _edit(create: true)),
                           icon: const Icon(Icons.add_business),
-                          label: const Text('Add business — free'),
+                          label: Text(
+                            widget.passportMode
+                                ? 'Create Business Passport — free'
+                                : 'Add business — free',
+                          ),
                         ),
                         _button(
                           'Explore public directory',
@@ -1139,14 +1171,22 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
                     ),
                   const SizedBox(height: 24),
                   Text(
-                    'My Businesses',
+                    widget.receptionistMode
+                        ? 'Choose a business for AI Receptionist'
+                        : widget.passportMode
+                        ? 'My Business Passports'
+                        : 'My Businesses',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   if (_businesses.isEmpty && !_busy)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.symmetric(vertical: 20),
                       child: Text(
-                        'Your first listing starts here. Add your business, upload company photos, then submit it for review.',
+                        widget.passportMode
+                            ? 'Create your free Passport, add your business details and submit it for review. Your approved page will be ready to share.'
+                            : widget.receptionistMode
+                            ? 'Add your business first. Your free Passport and Enterprise receptionist use the same business details.'
+                            : 'Your first listing starts here. Add your business, upload company photos, then submit it for review.',
                       ),
                     ),
                   const SizedBox(height: 14),
@@ -1163,7 +1203,9 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
                       selected: b['id'] == _id,
                       onTap: () => _run(() => _select(b['id'])),
                     ),
-                  if (_admin) ...[
+                  if (_admin &&
+                      !widget.passportMode &&
+                      !widget.receptionistMode) ...[
                     const SizedBox(height: 24),
                     Text(
                       'Directory review desk',

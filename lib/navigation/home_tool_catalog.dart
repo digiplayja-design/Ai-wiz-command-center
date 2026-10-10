@@ -8,6 +8,7 @@ const homeBusinessTools = <String>[
   'AI Visibility',
   'Contract Radar',
   'Workforce',
+  'Business Passport',
   'Business Directory',
 ];
 const homeEnterpriseTools = <String>[
@@ -88,7 +89,9 @@ class HomeToolEntry {
 const _toolDetails = <String, String>{
   'Contacts CRM': 'Contacts, leads, follow-ups and autonomous email',
   'Workforce': 'Team tasks, work updates and email reminders',
-  'Business Directory': 'Find business listings and build connections',
+  'Business Passport':
+      'Your free business profile, services, booking link and QR code',
+  'Business Directory': 'Find businesses and explore their public Passports',
   'KORLIX Social': 'News, user videos, people and messages',
   'Live Convo': 'Talk with Rici in a live conversation',
   'Upload': 'Bring files and photos into your conversation',
@@ -100,7 +103,8 @@ const _toolDetails = <String, String>{
   'Bookkeeping 2027': 'Organize your business finances · Enterprise',
   'KORLIX 2MEETU': 'Free scheduling for meetings and appointments',
   'FieldProof': 'Document jobs and field work · Enterprise',
-  'AI Receptionist': 'Answer business calls, capture enquiries and book appointments · Enterprise',
+  'AI Receptionist':
+      'Answer business calls, capture enquiries and book appointments · Enterprise',
   'SEO Agent': 'Improve how your website is found',
   'AI Visibility': 'Check your presence in AI answers',
   'Contract Radar': 'Find and track contract opportunities',
@@ -109,7 +113,8 @@ const _toolDetails = <String, String>{
   'Live Studio': 'Create a live session',
   'The Pod and You': 'Create a podcast with AI',
   'Tax Prep': 'Organize tax preparation',
-  'THE RECEIPT WIZ': 'Free receipt scanner, automatic categories and connected finance inboxes',
+  'THE RECEIPT WIZ':
+      'Free receipt scanner, automatic categories and connected finance inboxes',
   'BabyBlend': 'Explore family photo blends',
   'Virtual Closet': 'Organize outfits and style ideas',
   'Cybersecurity Defender': 'Review digital security',

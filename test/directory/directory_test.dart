@@ -10,6 +10,98 @@ import 'package:ai_wiz_command_center/directory/directory_screen.dart';
 String token(String user) =>
     'header.${base64Url.encode(utf8.encode(jsonEncode({'iss': 'https://fixture.test', 'sub': user, 'session_id': 'session-$user'}))).replaceAll('=', '')}.signature';
 void main() {
+  testWidgets(
+    'Passport shortcut opens the existing business without creating a duplicate',
+    (tester) async {
+      final calls = <String>[];
+      final business = {
+        'id': 'existing-business',
+        'owner_id': 'owner',
+        'slug': 'existing-business',
+        'draft': {'name': 'Fixture Shop', 'category': 'Other'},
+        'state': 'draft',
+        'verification_state': 'none',
+        'version': 1,
+      };
+      final client = DirectoryClient(
+        backendBaseUrl: 'https://backend.test',
+        headersBuilder: () => {},
+        client: MockClient((r) async {
+          calls.add('${r.method} ${r.url.path}');
+          return http.Response(
+            jsonEncode(
+              r.url.path.endsWith('/me')
+                  ? {
+                      'businesses': [business],
+                      'categories': ['Other'],
+                    }
+                  : {'business': business, 'assets': []},
+            ),
+            200,
+          );
+        }),
+      );
+      await tester.pumpWidget(
+        MaterialApp(home: DirectoryScreen(client: client, passportMode: true)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(AppBar, 'Business Passport'), findsOneWidget);
+      expect(find.text('My Business Passports'), findsOneWidget);
+      expect(find.text('YOUR BUSINESS PASSPORT'), findsOneWidget);
+      expect(calls, [
+        'GET /api/directory/me',
+        'GET /api/directory/owner/existing-business',
+      ]);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      client.dispose();
+    },
+  );
+  testWidgets(
+    'Passport creation and receptionist selection have distinct phone-sized screens',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final client = DirectoryClient(
+        backendBaseUrl: 'https://backend.test',
+        headersBuilder: () => {},
+        client: MockClient(
+          (r) async =>
+              http.Response('{"businesses":[],"categories":["Other"]}', 200),
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(home: DirectoryScreen(client: client, passportMode: true)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('FREE BUSINESS PASSPORT'), findsOneWidget);
+      await tester.tap(find.text('Create Business Passport — free'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Create your Business Passport — free'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DirectoryScreen(client: client, receptionistMode: true),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(AppBar, 'AI Receptionist'), findsOneWidget);
+      expect(find.text('ENTERPRISE AI RECEPTIONIST'), findsOneWidget);
+      expect(
+        find.textContaining('A connected phone line is required.'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      client.dispose();
+    },
+  );
   test('client rejects a response arriving after account switch', () async {
     var user = 'a';
     final revision = ValueNotifier(0), pending = Completer<http.Response>();

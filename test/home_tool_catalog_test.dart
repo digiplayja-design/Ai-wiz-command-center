@@ -2,6 +2,27 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ai_wiz_command_center/navigation/home_tool_catalog.dart';
 
 void main() {
+  test('Business Passport is visible and searchable on every tier', () {
+    expect(homeBusinessTools, contains('Business Passport'));
+    expect(homeEnterpriseTools, isNot(contains('Business Passport')));
+    for (final enterprise in [false, true]) {
+      final tools = searchableHomeTools(
+        quickActionLabels: [],
+        enterprise: enterprise,
+      );
+      final passport = tools.singleWhere(
+        (tool) => tool.label == 'Business Passport',
+      );
+      expect(passport.group, 'Business');
+      expect(passport.matches('passport'), isTrue);
+      expect(passport.matches('qr code'), isTrue);
+      expect(
+        tools.where((tool) => tool.label == 'Business Directory'),
+        hasLength(1),
+      );
+      expect(tools.any((tool) => tool.label == 'AI Receptionist'), enterprise);
+    }
+  });
   test(
     'FieldProof, Inventory and Bookkeeping require Enterprise; scheduling stays free',
     () {

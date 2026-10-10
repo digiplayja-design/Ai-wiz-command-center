@@ -140,6 +140,62 @@ void main() {
     }
   });
   testWidgets(
+    'choosing a reply keeps the composer mounted and opens its keyboard',
+    (t) async {
+      final r = Replies();
+      await mount(t, r);
+      final editor = find.descendant(
+        of: find.byType(TextField),
+        matching: find.byType(EditableText),
+      );
+      final composer = t.state<EditableTextState>(editor);
+      await t.tap(find.byKey(const ValueKey('reply-first')));
+      await t.pumpAndSettle();
+      expect(t.state<EditableTextState>(editor), same(composer));
+      expect(composer.widget.focusNode.hasFocus, isTrue);
+      expect(t.testTextInput.isVisible, isTrue);
+      expect(preview, findsOneWidget);
+    },
+  );
+  testWidgets(
+    'reply reopens a dismissed keyboard without clearing the current draft',
+    (t) async {
+      final r = Replies();
+      await mount(t, r);
+      await t.enterText(find.byType(TextField), 'Keep this draft');
+      t.testTextInput.hide();
+      await t.tap(find.byKey(const ValueKey('reply-first')));
+      await t.pumpAndSettle();
+      expect(t.testTextInput.isVisible, isTrue);
+      expect(find.text('Keep this draft'), findsOneWidget);
+      t.testTextInput.hide();
+      await t.tap(find.byKey(const ValueKey('reply-second')));
+      await t.pumpAndSettle();
+      expect(t.testTextInput.isVisible, isTrue);
+      expect(find.text('Keep this draft'), findsOneWidget);
+    },
+  );
+  testWidgets(
+    'Reply from the message menu opens the keyboard for the chosen message',
+    (t) async {
+      final r = Replies();
+      await mount(t, r);
+      await t.tap(find.byTooltip('Message options').first);
+      await t.pumpAndSettle();
+      await t.tap(find.text('Reply').last);
+      await t.pumpAndSettle();
+      expect(t.testTextInput.isVisible, isTrue);
+      expect(
+        find.descendant(
+          of: preview,
+          matching: find.text('Are we meeting on Friday?'),
+        ),
+        findsOneWidget,
+      );
+      expect(t.takeException(), isNull);
+    },
+  );
+  testWidgets(
     'reply selects the specific message, cancels without losing draft, and sends a linked quote',
     (t) async {
       final r = Replies();
@@ -213,6 +269,11 @@ void main() {
       );
       await tap(t, find.text('Reply to this message'));
       expect(preview, findsOneWidget);
+      expect(t.testTextInput.isVisible, isTrue);
+      expect(
+        t.widget<TextField>(find.byType(TextField)).focusNode!.hasFocus,
+        isTrue,
+      );
       r.original = {...r.original, 'body': '', 'deleted': true};
       await tap(t, find.byTooltip('Cancel reply'));
       await tap(t, find.byKey(const ValueKey('quote-response')));

@@ -68,8 +68,16 @@ class DirectoryVisuals {
 }
 
 class DirectoryHero extends StatelessWidget {
-  const DirectoryHero({super.key, required this.actions});
+  const DirectoryHero({
+    super.key,
+    required this.actions,
+    this.eyebrow = 'YOUR BUSINESS. YOUR NEXT CHAPTER.',
+    this.title = 'Your business deserves to be found.',
+    this.description =
+        'Create your free Business Passport. Share services, photos, contact details and a booking link in one page, with a QR code ready for your customers.',
+  });
   final Widget actions;
+  final String eyebrow, title, description;
   @override
   Widget build(BuildContext context) => Container(
     decoration: DirectoryVisuals.panel(context, colorful: true),
@@ -88,7 +96,7 @@ class DirectoryHero extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'YOUR BUSINESS. YOUR NEXT CHAPTER.',
+                    eyebrow,
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
@@ -100,7 +108,7 @@ class DirectoryHero extends StatelessWidget {
                   ),
                   const SizedBox(height: 13),
                   Text(
-                    'Your business deserves to be found.',
+                    title,
                     style: TextStyle(
                       fontSize: spacious ? 36 : 25,
                       height: 1.15,
@@ -112,7 +120,7 @@ class DirectoryHero extends StatelessWidget {
                   const SizedBox(height: 12),
                   if (largeText) ...[actions, const SizedBox(height: 20)],
                   Text(
-                    'Create your free Business Passport. Share services, photos, contact details and a booking link in one page, with a QR code ready for your customers.',
+                    description,
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.6,
