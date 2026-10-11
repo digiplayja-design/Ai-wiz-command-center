@@ -51,6 +51,10 @@ RELEASE_TESTS=(
   test/home_tool_catalog_test.dart
   test/camera_ask_test.dart
   test/camera_flashlight_test.dart
+  test/picture_templates_test.dart
+  test/picture_studio_test.dart
+  test/picture_studio_client_test.dart
+  test/picture_studio_session_test.dart
   test/logo_studio_test.dart
   test/logo_studio_upgrade_test.dart
   test/logo_client_upgrade_test.dart

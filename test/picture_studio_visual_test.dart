@@ -96,11 +96,12 @@ void main() {
             bytes: bytes,
           );
           await tester.pumpWidget(
-            MaterialApp(
-              theme: korlixBuildTheme(theme),
-              home: RepaintBoundary(
-                key: boundary,
-                child: PictureStudioScreen(
+            RepaintBoundary(
+              key: boundary,
+              child: MaterialApp(
+                debugShowCheckedModeBanner: false,
+                theme: korlixBuildTheme(theme),
+                home: PictureStudioScreen(
                   pickPhoto: () async => file,
                   ensureConsent: () async => true,
                   onOpenTemplates: () {},
@@ -139,6 +140,22 @@ void main() {
           }
 
           await capture('upload');
+          await tester.tap(find.byKey(const Key('picture-browse-templates')));
+          await tester.pumpAndSettle();
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: '$theme $width templates',
+          );
+          await capture('templates');
+          await tester.ensureVisible(
+            find.byKey(const Key('picture-template-clean-headshot')),
+          );
+          await tester.tap(
+            find.byKey(const Key('picture-template-clean-headshot')),
+          );
+          await tester.pumpAndSettle();
+          await capture('template-selected');
           await tester.ensureVisible(find.text('Choose photo'));
           await tester.tap(find.text('Choose photo'));
           await tester.pumpAndSettle();

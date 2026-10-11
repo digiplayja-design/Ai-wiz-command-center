@@ -8,6 +8,8 @@ import 'package:image_picker/image_picker.dart' as ip;
 import '../korlix_image_saver.dart';
 import '../theme/korlix_theme.dart';
 import 'picture_studio_client.dart';
+import 'picture_template_gallery.dart';
+import 'picture_templates.dart';
 
 typedef PictureEditCallback =
     Future<PictureEditResult> Function(PlatformFile, PictureEditOptions);
@@ -73,6 +75,9 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
   };
   late final TextEditingController _prompt;
   final ScrollController _scroll = ScrollController();
+  final _templateAnchor = GlobalKey();
+  PictureTemplate? _template;
+  PictureEditOptions? _beforeTemplate;
   PlatformFile? _original, _source;
   final List<_PictureVersion> _versions = [];
   _PictureVersion? _selectedVersion;
@@ -163,7 +168,9 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
 
   Future<void> _improve() async {
     if (_busy || _source == null) return;
-    if (_preset == 'custom' && _prompt.text.trim().isEmpty) {
+    if (_preset == 'custom' &&
+        _template == null &&
+        _prompt.text.trim().isEmpty) {
       setState(
         () => _error = 'Describe the change you want, or choose a treatment.',
       );
@@ -171,16 +178,19 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
     }
     final source = _source!;
     final sourceLabel = _sourceLabel;
-    final options = PictureEditOptions(
-      preset: _preset,
-      strength: _strength,
-      look: _look,
-      lighting: _lighting,
-      size: _size,
-      preserveIdentity: _preserve,
-      prompt: _prompt.text.trim(),
-      language: widget.language,
-    );
+    final template = _template;
+    final beforeTemplate = _beforeTemplate;
+    final personalInstructions = _prompt.text.trim();
+    final prompt =
+        template?.promptWith(personalInstructions) ?? personalInstructions;
+    if (prompt.length > 12000) {
+      setState(
+        () => _error =
+            'Shorten your instructions to leave room for the template directions.',
+      );
+      return;
+    }
+    final options = _options(prompt: prompt);
     setState(() {
       _busy = true;
       _error = null;
@@ -200,6 +210,9 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
           sourceLabel: sourceLabel,
           result: result,
           options: options,
+          template: template,
+          personalInstructions: personalInstructions,
+          beforeTemplate: beforeTemplate,
         );
         _versions.add(version);
         _trimHistory();
@@ -228,6 +241,73 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
       _timer?.cancel();
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  PictureEditOptions _options({String? prompt}) => PictureEditOptions(
+    preset: _preset,
+    strength: _strength,
+    look: _look,
+    lighting: _lighting,
+    size: _size,
+    preserveIdentity: _preserve,
+    prompt: prompt ?? _prompt.text.trim(),
+    language: widget.language,
+  );
+
+  void _applyControls(PictureEditOptions options) {
+    _preset = options.preset;
+    _strength = options.strength;
+    _look = options.look;
+    _lighting = options.lighting;
+    _size = options.size;
+    _preserve = options.preserveIdentity;
+  }
+
+  void _clearTemplate() {
+    if (_beforeTemplate != null) _applyControls(_beforeTemplate!);
+    _template = null;
+    _beforeTemplate = null;
+  }
+
+  Future<void> _browseTemplates() async {
+    if (_busy) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    final galleryTheme = korlixBuildTheme(_skin.id);
+    final selected = await Navigator.of(context).push<PictureTemplate>(
+      MaterialPageRoute(
+        builder: (_) => Theme(
+          data: galleryTheme,
+          child: PictureTemplateGallery(selectedId: _template?.id),
+        ),
+      ),
+    );
+    if (!mounted || _busy || selected == null) return;
+    setState(() {
+      _beforeTemplate ??= _options();
+      _template = selected;
+      _applyControls(
+        PictureEditOptions(
+          preset: selected.preset,
+          strength: selected.strength,
+          look: selected.look,
+          lighting: selected.lighting,
+          size: selected.size,
+        ),
+      );
+      _error = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = _templateAnchor.currentContext;
+      if (mounted && target != null) {
+        unawaited(
+          Scrollable.ensureVisible(
+            target,
+            duration: const Duration(milliseconds: 250),
+            alignment: .1,
+          ),
+        );
+      }
+    });
   }
 
   Future<void> _save() async {
@@ -291,6 +371,8 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
       _sourceLabel = 'Version ${version.number}';
       _selectedVersion = null;
       _preset = 'custom';
+      _template = null;
+      _beforeTemplate = null;
       _look = _lighting = 'original';
       _prompt.clear();
       _previewMode = 'after';
@@ -304,13 +386,10 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
       _selectedVersion = version;
       _source = version.source;
       _sourceLabel = version.sourceLabel;
-      _preset = version.options.preset;
-      _strength = version.options.strength;
-      _look = version.options.look;
-      _lighting = version.options.lighting;
-      _size = version.options.size;
-      _preserve = version.options.preserveIdentity;
-      _prompt.text = version.options.prompt;
+      _applyControls(version.options);
+      _template = version.template;
+      _beforeTemplate = version.beforeTemplate;
+      _prompt.text = version.personalInstructions;
       _previewMode = 'after';
       _error = null;
     });
@@ -323,6 +402,8 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
       _sourceLabel = 'Original photo';
       _selectedVersion = null;
       _preset = 'enhance';
+      _template = null;
+      _beforeTemplate = null;
       _look = _lighting = 'original';
       _previewMode = 'after';
       _error = null;
@@ -697,7 +778,10 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
                   borderRadius: BorderRadius.circular(16),
                   onTap: _busy
                       ? null
-                      : () => setState(() => _preset = entry.key),
+                      : () => setState(() {
+                          _clearTemplate();
+                          _preset = entry.key;
+                        }),
                   child: Container(
                     constraints: const BoxConstraints(minHeight: 90),
                     padding: const EdgeInsets.all(12),
@@ -808,11 +892,135 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
     ],
   );
 
+  Widget _templatePicker() {
+    final template = _template;
+    return Container(
+      key: _templateAnchor,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _skin.secondary.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _skin.secondary.withValues(alpha: .35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (template != null)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: SizedBox(
+                    width: 64,
+                    height: 72,
+                    child: PictureTemplateArtwork(template: template),
+                  ),
+                )
+              else
+                Icon(
+                  Icons.dashboard_customize_outlined,
+                  color: _skin.secondary,
+                  size: 28,
+                ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      template == null
+                          ? 'Start with a template'
+                          : template.name,
+                      key: const Key('picture-selected-template'),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      template?.description ??
+                          '${pictureTemplates.length} styles for portraits, memories, products and more.',
+                      style: TextStyle(
+                        color: _skin.mutedText,
+                        height: 1.4,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                key: const Key('picture-change-template'),
+                onPressed: _busy ? null : _browseTemplates,
+                icon: const Icon(Icons.collections_outlined, size: 18),
+                label: Text(
+                  template == null ? 'Browse templates' : 'Change template',
+                ),
+              ),
+              if (template != null)
+                TextButton(
+                  key: const Key('picture-clear-template'),
+                  onPressed: _busy ? null : () => setState(_clearTemplate),
+                  child: const Text('Clear template'),
+                ),
+            ],
+          ),
+          if (template != null) ...[
+            Material(
+              color: Colors.transparent,
+              child: ExpansionTile(
+                key: ValueKey('picture-template-directions-${template.id}'),
+                tilePadding: EdgeInsets.zero,
+                title: const Text(
+                  'Template directions',
+                  style: TextStyle(fontSize: 13),
+                ),
+                children: [
+                  Text(
+                    template.instructions,
+                    style: TextStyle(
+                      color: _skin.mutedText,
+                      fontSize: 13,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Add your own instructions below to customize this style.',
+              style: TextStyle(
+                color: _skin.mutedText,
+                fontSize: 12,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _controls() => _card(
     Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _step('2', 'Choose your treatment', _skin.tertiary),
+        _step('2', 'Choose your look', _skin.tertiary),
+        _templatePicker(),
+        const SizedBox(height: 18),
+        _label(
+          _template == null ? 'Or choose a treatment' : 'Change to a treatment',
+        ),
         _presetChoices(),
         const SizedBox(height: 12),
         Text(
@@ -860,7 +1068,7 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
           maxLines: 6,
           maxLength: 12000,
           decoration: InputDecoration(
-            labelText: _preset == 'custom'
+            labelText: _preset == 'custom' && _template == null
                 ? 'Describe your edit'
                 : 'Your instructions (optional)',
             hintText: 'Tell us what should change and what should stay.',
@@ -1037,7 +1245,7 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
         TextButton.icon(
           onPressed: _busy ? null : widget.onOpenTemplates,
           icon: const Icon(Icons.collections_outlined),
-          label: const Text('Explore portrait templates'),
+          label: const Text('More portrait effects'),
         ),
       ],
     ),
@@ -1102,8 +1310,15 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
         ),
         const SizedBox(height: 10),
         Text(
-          'Restore a memory, polish a portrait or make your product shine. Play with color, compare every edit, and keep your favorite.',
+          'Pick a template, restore a memory or make your product shine. Customize the look, compare every edit, and keep your favorite.',
           style: TextStyle(color: _skin.text, height: 1.5),
+        ),
+        const SizedBox(height: 16),
+        FilledButton.tonalIcon(
+          key: const Key('picture-browse-templates'),
+          onPressed: _busy ? null : _browseTemplates,
+          icon: const Icon(Icons.dashboard_customize_outlined),
+          label: Text('Browse ${pictureTemplates.length} templates'),
         ),
       ],
     ),
@@ -1173,12 +1388,18 @@ class _PictureVersion {
     required this.sourceLabel,
     required this.result,
     required this.options,
+    required this.personalInstructions,
+    this.template,
+    this.beforeTemplate,
   });
   final int number;
   final PlatformFile source;
   final String sourceLabel;
   final PictureEditResult result;
   final PictureEditOptions options;
+  final PictureTemplate? template;
+  final PictureEditOptions? beforeTemplate;
+  final String personalInstructions;
 }
 
 class _TransparencyPainter extends CustomPainter {
