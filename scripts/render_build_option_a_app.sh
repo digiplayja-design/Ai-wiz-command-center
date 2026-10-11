@@ -87,6 +87,9 @@ RELEASE_TESTS=(
   test/social_replies_test.dart
   test/social_online_alerts_test.dart
   test/social_appearance_test.dart
+  test/social_missed_calls_test.dart
+  test/social_global_notifications_model_test.dart
+  test/social_communication_upgrade_test.dart
   test/social_reactions_test.dart
   test/social_media_test.dart
   test/social_dump_truck_test.dart
