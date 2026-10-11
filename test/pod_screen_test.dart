@@ -64,6 +64,8 @@ class _FakePod extends PodClient {
   final List<String> events;
   bool allowed = true, cancelPreparing = true;
   bool smallTalkEnabled = false, rotateRoles = false;
+  int smallTalkSeconds = 1;
+  final smallTalkIds = <String>[];
   int heartbeatFailures = 0;
   Map<String, dynamic> current = _episode();
   final pending = <Completer<Map<String, dynamic>>>[];
@@ -88,6 +90,8 @@ class _FakePod extends PodClient {
     'access': {
       'allowed': allowed,
       'smallTalk': smallTalkEnabled,
+      'smallTalkVersion': 2,
+      'smallTalkExchanges': 32,
       'durations': [300, 600, 900],
       'maxSeconds': 900,
     },
@@ -230,16 +234,20 @@ class _FakePod extends PodClient {
   }
 
   @override
-  Future<Map<String, dynamic>> smallTalk(String id, String clip) async => {
-    'id': clip,
-    'speaker': clip.split('-').first,
-    'text': 'A little room for another perspective.',
-    'audio': {
-      'mime': 'audio/wav',
-      'base64': base64Encode(Uint8List(48044)),
-      'durationSeconds': 1,
-    },
-  };
+  Future<Map<String, dynamic>> smallTalk(String id, String clip) async {
+    smallTalkIds.add(clip);
+    return {
+      'id': clip,
+      'speaker': clip.split('-').first,
+      'text':
+          'A fuller conversation with room to explore another perspective. $clip',
+      'audio': {
+        'mime': 'audio/wav',
+        'base64': base64Encode(Uint8List(44 + 48000 * smallTalkSeconds)),
+        'durationSeconds': smallTalkSeconds,
+      },
+    };
+  }
 
   @override
   Future<String> transcribe(
@@ -471,7 +479,7 @@ void _foreground(WidgetTester tester) {
 void main() {
   for (final hosts in [2, 3]) {
     testWidgets(
-      '$hosts-person long research wait keeps speaking beyond two remarks',
+      '$hosts-person long research wait plays twelve distinct remarks',
       (tester) async {
         final events = <String>[];
         final client = _FakePod(events)..smallTalkEnabled = true;
@@ -482,7 +490,8 @@ void main() {
         (welcome['episode'] as Map)['hostCount'] = hosts;
         client.complete(0, welcome);
         await tester.pumpAndSettle();
-        for (var remark = 0; remark < 6; remark++) {
+        final captions = <String>{};
+        for (var remark = 0; remark < 12; remark++) {
           media.finish();
           await tester.pump();
           await tester.pump(const Duration(milliseconds: 950));
@@ -493,7 +502,23 @@ void main() {
             findsOneWidget,
           );
           expect(media.overlaps, 0);
+          final caption = tester
+              .widget<Text>(find.byKey(const Key('pod-small-talk-caption')))
+              .data!;
+          expect(
+            captions.add(caption),
+            isTrue,
+            reason: 'Do not recycle earlier remarks during the same pod.',
+          );
         }
+        expect(
+          client.smallTalkIds.every((id) => id.contains('-chat-')),
+          isTrue,
+        );
+        expect(
+          client.smallTalkIds.toSet(),
+          hasLength(client.smallTalkIds.length),
+        );
         await tester.ensureVisible(find.byKey(const Key('pod-type')));
         await tester.tap(find.byKey(const Key('pod-type')));
         await tester.pumpAndSettle();
@@ -638,6 +663,39 @@ void main() {
       },
     );
   }
+  testWidgets(
+    'longer interludes remain audible beyond ten seconds and finish before the ready answer',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events)
+        ..smallTalkEnabled = true
+        ..smallTalkSeconds = 18;
+      final media = _FakeMedia(events);
+      await _mount(tester, client, media, events);
+      await _listen(tester);
+      client.complete(0, _turnResponse());
+      await tester.pumpAndSettle();
+      media.finish();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 900));
+      await tester.pump();
+      expect(media.plays, 2);
+      await tester.pump(const Duration(seconds: 12));
+      expect(find.byKey(const Key('pod-small-talk-caption')), findsOneWidget);
+      expect(media.playing, isTrue);
+      client.completePreparation(0);
+      await tester.pump();
+      expect(media.plays, 2);
+      media.finish();
+      await tester.pumpAndSettle();
+      expect(media.plays, 3);
+      expect(media.overlaps, 0);
+      expect(find.byKey(const Key('pod-small-talk-caption')), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+    },
+  );
+
   testWidgets(
     'a stuck small-talk clip cannot hold a ready answer indefinitely',
     (tester) async {

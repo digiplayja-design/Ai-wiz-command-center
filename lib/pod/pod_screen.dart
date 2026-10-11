@@ -829,6 +829,9 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       _smallTalk.warm(
         _s(_episode['id']),
         (_episode['hostCount'] as num?)?.toInt() ?? 2,
+        conversationCount: _access['smallTalkVersion'] == 2
+            ? (_access['smallTalkExchanges'] as num?)?.toInt() ?? 0
+            : 0,
         canLoad: () => _current(epoch) && _canWarmSmallTalk,
       );
     }
@@ -976,6 +979,9 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
           _smallTalk.warm(
             _s(_episode['id']),
             (_episode['hostCount'] as num?)?.toInt() ?? 2,
+            conversationCount: _access['smallTalkVersion'] == 2
+                ? (_access['smallTalkExchanges'] as num?)?.toInt() ?? 0
+                : 0,
             canLoad: () => _current(epoch) && _canWarmSmallTalk,
           );
         }
@@ -2528,6 +2534,9 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
                   _smallTalk.warm(
                     _s(_episode['id']),
                     (_episode['hostCount'] as num?)?.toInt() ?? 2,
+                    conversationCount: _access['smallTalkVersion'] == 2
+                        ? (_access['smallTalkExchanges'] as num?)?.toInt() ?? 0
+                        : 0,
                     canLoad: () => _canWarmSmallTalk,
                   );
                 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 class PodSmallTalkClip {
@@ -9,97 +10,106 @@ class PodSmallTalkClip {
   final Duration duration;
 }
 
-/// Optional, bounded spoken transitions on the SAME unlocked voice player.
-/// No browser speech synthesis, extra audio element, or microphone is used.
+/// Optional spoken interludes on the SAME unlocked voice player.
+/// Each episode consumes its shuffled bank once, with six turns prefetched and
+/// at most two downloads in flight. There is no repeat loop or separate player.
 class PodSmallTalk {
   PodSmallTalk(this.load);
   final Future<Map<String, dynamic>> Function(String episode, String clip) load;
-  final _requested = <String>{};
+  final _loading = <String>{};
   final _clips = <String, PodSmallTalkClip>{};
   List<String> _order = [];
-  String? _episode, _lastClip;
-  int _cursor = 0, _revision = 0, _warming = 0;
+  String? _episode;
+  bool Function()? _canLoad;
+  int _cursor = 0, _nextLoad = 0, _revision = 0;
   bool _closed = false;
   final _disposed = Completer<void>();
 
-  void warm(String episode, int hostCount, {bool Function()? canLoad}) {
+  void warm(
+    String episode,
+    int hostCount, {
+    int conversationCount = 0,
+    bool Function()? canLoad,
+  }) {
     if (_closed) return;
-    final roles = ['host', 'analyst', if (hostCount == 3) 'challenger'];
+    _canLoad = canLoad;
     if (_episode != episode) {
       _episode = episode;
-      _cursor = 0;
-      _lastClip = null;
-      _requested.clear();
-      _order = [
-        for (var n = 0; n < 3; n++)
-          for (final role in roles) '$role-$n',
-      ];
+      _cursor = _nextLoad = 0;
+      _clips.clear();
+      _loading.clear();
       ++_revision;
-      _warming = 0;
-    }
-    if (_warming > 0 || canLoad?.call() == false) return;
-    final revision = _revision;
-    _warming = 2;
-    // Fill the entire reusable bank in two lanes, including during a long
-    // first research gap. Warming only the next pair left that gap stranded.
-    for (var lane = 0; lane < 2; lane++) {
-      unawaited(
-        _warmLane(episode, revision, [
-          for (var i = lane; i < _order.length; i += 2) _order[i],
-        ], canLoad),
+      final roles = ['host', 'analyst', if (hostCount == 3) 'challenger'];
+      final extended = conversationCount > 0 && conversationCount <= 64;
+      final exchanges = List.generate(
+        extended ? conversationCount : 3,
+        (n) => n,
       );
+      // Shuffle exchanges, not individual voices: each mini conversation keeps
+      // its host/analyst/challenger order, with a different route in each pod.
+      if (extended) exchanges.shuffle(Random(episode.hashCode));
+      _order = [
+        for (final n in exchanges)
+          for (final role in roles) extended ? '$role-chat-$n' : '$role-$n',
+      ];
+    }
+    _fillBuffer();
+  }
+
+  void _fillBuffer() {
+    if (_closed || _canLoad?.call() == false) return;
+    while (_loading.length < 2 &&
+        _nextLoad < _order.length &&
+        _nextLoad < _cursor + 6) {
+      final id = _order[_nextLoad++];
+      _loading.add(id);
+      unawaited(_loadOne(_episode!, _revision, id));
     }
   }
 
-  Future<void> _warmLane(
-    String episode,
-    int revision,
-    List<String> ids,
-    bool Function()? canLoad,
-  ) async {
+  Future<void> _loadOne(String episode, int revision, String id) async {
     try {
-      for (final id in ids) {
-        if (_closed || revision != _revision || canLoad?.call() == false) {
-          return;
-        }
-        if (_clips.containsKey(id) || !_requested.add(id)) continue;
-        try {
-          final result = await load(episode, id);
-          final audio = result['audio'];
-          if (_closed ||
-              revision != _revision ||
-              result['id'] != id ||
-              result['speaker'] != id.split('-').first ||
-              result['text'] is! String ||
-              (result['text'] as String).length > 180 ||
-              audio is! Map ||
-              audio['mime'] != 'audio/wav' ||
-              audio['base64'] is! String ||
-              (audio['base64'] as String).length > 640060) {
-            continue;
-          }
-          final seconds = audio['durationSeconds'];
-          if (seconds is! num ||
-              !seconds.isFinite ||
-              seconds <= 0 ||
-              seconds > 10) {
-            continue;
-          }
-          final wav = base64Decode(audio['base64'] as String);
-          if (wav.length < 46 || wav.length > 480044) continue;
-          _clips[id] = PodSmallTalkClip(
-            result['speaker'] as String,
-            result['text'] as String,
-            wav,
-            Duration(milliseconds: (seconds * 1000).ceil()),
-          );
-        } catch (_) {
-          // Each asset is attempted once per episode. A failed download must
-          // not stop warming the other voices or hold up the real discussion.
-        }
+      final result = await load(episode, id);
+      final audio = result['audio'];
+      final extended = id.contains('-chat-');
+      final maxSeconds = extended ? 30 : 10;
+      final maxBytes = 44 + 48000 * maxSeconds;
+      if (_closed ||
+          revision != _revision ||
+          result['id'] != id ||
+          result['speaker'] != id.split('-').first ||
+          result['text'] is! String ||
+          (result['text'] as String).trim().isEmpty ||
+          (result['text'] as String).length > (extended ? 480 : 180) ||
+          audio is! Map ||
+          audio['mime'] != 'audio/wav' ||
+          audio['base64'] is! String ||
+          (audio['base64'] as String).length > ((maxBytes + 2) ~/ 3) * 4) {
+        return;
       }
+      final seconds = audio['durationSeconds'];
+      if (seconds is! num ||
+          !seconds.isFinite ||
+          seconds <= 0 ||
+          seconds > maxSeconds) {
+        return;
+      }
+      final wav = base64Decode(audio['base64'] as String);
+      if (wav.length < 46 || wav.length > maxBytes) return;
+      _clips[id] = PodSmallTalkClip(
+        result['speaker'] as String,
+        result['text'] as String,
+        wav,
+        Duration(milliseconds: (seconds * 1000).ceil()),
+      );
+    } catch (_) {
+      // Attempt each asset once. A missing optional turn cannot block the next
+      // available one or trigger paid retry loops.
     } finally {
-      if (revision == _revision) _warming--;
+      if (revision == _revision) {
+        _loading.remove(id);
+        _fillBuffer();
+      }
     }
   }
 
@@ -130,7 +140,6 @@ class PodSmallTalk {
       limit.complete();
     });
     final revision = _revision;
-    final used = <String>{};
     var delayDuration = const Duration(milliseconds: 800);
     try {
       while (!_closed &&
@@ -154,32 +163,24 @@ class PodSmallTalk {
             ready ||
             expired ||
             revision != _revision ||
-            !canPlay() ||
-            _order.isEmpty) {
+            !canPlay()) {
           return;
         }
-        final available = _order.where((id) => _clips.containsKey(id)).toList();
-        // Rotate through the available bank before reusing a sentence. Never
-        // repeat the same clip consecutively, including across adjacent waits.
-        if (available.length > 1 && available.every(used.contains)) {
-          used.clear();
+        // Only move forward. This cursor survives every gap, pause and warmup
+        // in the episode; exhausting the bank must never restart a recording.
+        while (_cursor < _nextLoad &&
+            !_loading.contains(_order[_cursor]) &&
+            !_clips.containsKey(_order[_cursor])) {
+          _cursor++;
+          _fillBuffer();
         }
-        PodSmallTalkClip? clip;
-        for (var offset = 0; offset < _order.length; offset++) {
-          final id = _order[(_cursor + offset) % _order.length];
-          final candidate = _clips[id];
-          if (candidate != null && !used.contains(id) && id != _lastClip) {
-            _cursor += offset + 1;
-            used.add(id);
-            _lastClip = id;
-            clip = candidate;
-            break;
-          }
-        }
+        if (_cursor >= _order.length) return;
+        final id = _order[_cursor];
+        final clip = _clips[id];
         if (clip == null) {
-          // Slow first downloads used to abandon the entire gap after 800 ms.
-          // Wait only for local availability, racing the real response each time.
-          if (_warming == 0) return;
+          // Keep exchange order even if the second voice downloaded first.
+          // Readiness always wins this wait for optional local audio.
+          if (_loading.isEmpty) return;
           delayDuration = const Duration(milliseconds: 250);
           continue;
         }
@@ -194,13 +195,16 @@ class PodSmallTalk {
               remaining() <= clip.duration) {
             return;
           }
+          _cursor++;
+          _clips.remove(id);
+          _fillBuffer();
           await play(clip);
         } catch (_) {
           return;
         }
-        // Let a short sentence finish naturally if the next panelist became
-        // ready during it. The caller awaits this before starting that panelist.
-        delayDuration = const Duration(milliseconds: 900);
+        // Finish the current thought naturally, then hand off immediately if
+        // the researched turn is ready. Never finish a whole exchange first.
+        delayDuration = const Duration(milliseconds: 450);
       }
     } finally {
       limitTimer.cancel();
@@ -211,6 +215,6 @@ class PodSmallTalk {
     _closed = true;
     if (!_disposed.isCompleted) _disposed.complete();
     _clips.clear();
-    _requested.clear();
+    _loading.clear();
   }
 }
