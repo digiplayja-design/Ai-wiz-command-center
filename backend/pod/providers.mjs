@@ -19,7 +19,12 @@ const SAMPLE_RATE = 24000;
 const BYTES_PER_SECOND = SAMPLE_RATE * 2;
 const MAX_SPEECH_BYTES = 40 * BYTES_PER_SECOND;
 // Keep reasoning plus speech inside the runtime's 210-second operation lease.
-const TIMEOUTS = Object.freeze({research: 120000, turn: 120000, speech: 45000, transcription: 45000});
+const TIMEOUTS = Object.freeze({research: 160000, turn: 120000, speech: 45000, transcription: 45000});
+const BACKGROUND_POLL_MS = 2000;
+const BACKGROUND_CANCEL_MS = 2000;
+const backgroundPending = response => response?.status === 'queued' || response?.status === 'in_progress';
+const retryablePollError = error => [408, 409, 429].includes(error?.status) || error?.status >= 500 ||
+  ['APIConnectionError', 'APIConnectionTimeoutError'].includes(error?.name);
 const CATEGORIES = new Set(['trending', 'politics', 'sports', 'religion', 'culture', 'business', 'technology']);
 const STYLES = new Set(['balanced', 'relaxed', 'debate']);
 const str = {type: 'string'};
@@ -388,6 +393,16 @@ async function boundedPcm(response, signal) {
   return buffer.subarray(0, length);
 }
 
+function waitForPoll(signal) {
+  signal.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const finish = () => {signal.removeEventListener('abort', abort); resolve();};
+    const timer = setTimeout(finish, BACKGROUND_POLL_MS);
+    const abort = () => {clearTimeout(timer); reject(signal.reason);};
+    signal.addEventListener('abort', abort, {once: true});
+  });
+}
+
 /** Inject an OpenAI SDK client. Construction and validation never call a provider. */
 export function createPodProviders({client, now = () => new Date(), timeouts = {}} = {}) {
   const limits = Object.fromEntries(Object.entries(TIMEOUTS).map(([kind, maximum]) => {
@@ -404,7 +419,7 @@ export function createPodProviders({client, now = () => new Date(), timeouts = {
     signal?.addEventListener('abort', parentAbort, {once: true});
     const timer = setTimeout(() => controller.abort(timeoutError), limits[kind]);
     const startedAt = Date.now();
-    let response, dispatched = false, abortListener;
+    let response, dispatched = false, abortListener, cancelBackground;
     const context = {
       signal: controller.signal,
       options: {signal: controller.signal, timeout: limits[kind], maxRetries: 0},
@@ -414,6 +429,49 @@ export function createPodProviders({client, now = () => new Date(), timeouts = {
         dispatched = true;
         response = await method(payload, context.options);
         controller.signal.throwIfAborted();
+        return response;
+      },
+      background: async payload => {
+        controller.signal.throwIfAborted();
+        const api = client?.responses;
+        if (typeof api?.create !== 'function') fail('The host provider is not configured.', 'POD_PROVIDER_UNAVAILABLE', 503);
+        let responseId, cancellation;
+        cancelBackground = () => {
+          if (cancellation || !responseId || !backgroundPending(response) || typeof api.cancel !== 'function') return cancellation;
+          // Cancellation is control-only and uses a fresh, short-lived signal. An
+          // aborted generation signal cannot cancel a provider-side background job.
+          const cleanup = new AbortController();
+          let cleanupTimer;
+          cancellation = Promise.race([
+            Promise.resolve().then(() => api.cancel(responseId, {signal: cleanup.signal, timeout: BACKGROUND_CANCEL_MS, maxRetries: 0}))
+              .then(value => {if (value?.id === responseId && !backgroundPending(value)) response = value;}),
+            new Promise(resolve => {cleanupTimer = setTimeout(() => {cleanup.abort(); resolve();}, BACKGROUND_CANCEL_MS);}),
+          ]).catch(() => {}).finally(() => clearTimeout(cleanupTimer));
+          return cancellation;
+        };
+        dispatched = true;
+        response = await api.create({...payload, background: true}, {...context.options, timeout: Math.min(30000, limits[kind])});
+        responseId = identifier(response?.id);
+        // A create may resolve after the caller has already paused or timed out.
+        // Cancel that late job as soon as its ID arrives; never start another one.
+        if (controller.signal.aborted) {void cancelBackground(); controller.signal.throwIfAborted();}
+        let readFailures = 0;
+        while (backgroundPending(response)) {
+          if (!responseId || typeof api.retrieve !== 'function') fail('The host research status is unavailable.', 'POD_BACKGROUND_UNAVAILABLE');
+          await waitForPoll(controller.signal);
+          controller.signal.throwIfAborted();
+          try {
+            const value = await api.retrieve(responseId, {include: payload.include}, {...context.options, timeout: Math.min(15000, limits[kind])});
+            if (value?.id !== responseId) fail('The host research status could not be verified.', 'POD_BACKGROUND_MISMATCH');
+            response = value;
+            readFailures = 0;
+          } catch (error) {
+            controller.signal.throwIfAborted();
+            // Only GET status checks may repeat. Creation and speech never retry.
+            if (!retryablePollError(error) || ++readFailures > 3) throw error;
+          }
+          controller.signal.throwIfAborted();
+        }
         return response;
       },
     };
@@ -426,10 +484,11 @@ export function createPodProviders({client, now = () => new Date(), timeouts = {
       return {...result, usage: usageEvidence(kind, model, response, 'completed', {...meta,
         elapsedMs: Math.max(0, Date.now() - startedAt), audioSeconds: result.durationSeconds ?? meta.audioSeconds})};
     } catch (cause) {
+      await cancelBackground?.();
       const error = cause instanceof PodProviderError ? cause : new PodProviderError('The host provider could not complete this request.', 'POD_PROVIDER_FAILED');
       if (dispatched) {
         const evidenceResponse = response || cause?.response || {usage: cause?.usage || cause?.error?.usage, request_id: cause?.request_id, headers: cause?.headers};
-        const knownFailure = response || Number.isInteger(cause?.status) || Number.isInteger(cause?.statusCode);
+        const knownFailure = !backgroundPending(response) && (response || Number.isInteger(cause?.status) || Number.isInteger(cause?.statusCode));
         error.usage = usageEvidence(kind, model, evidenceResponse, knownFailure && !controller.signal.aborted ? 'failed' : 'uncertain',
           {...meta, elapsedMs: Math.max(0, Date.now() - startedAt)});
         if (cause instanceof PodProviderError && cause.diagnostic) error.usage.diagnostic = cause.diagnostic;
@@ -451,8 +510,8 @@ export function createPodProviders({client, now = () => new Date(), timeouts = {
       const input = {...topicData({category, topic, style}), contributions: contributions.map(text => text.trim())};
       input.allowComparisonBackground = comparisonBackgroundEligible(input);
       const today = new Date(now()).toISOString();
-      return dispatch('research', CHAT_MODEL, signal, {}, async ({call}) => {
-        const response = await call(client?.responses?.create?.bind(client.responses), {
+      return dispatch('research', CHAT_MODEL, signal, {}, async ({background: generateResearch}) => {
+        const response = await generateResearch({
           model: CHAT_MODEL, reasoning: {effort: POD_REASONING_EFFORT}, store: false,
           max_output_tokens: 32768, max_tool_calls: 2,
           tools: [{type: 'web_search', search_context_size: 'medium'}], tool_choice: 'required',

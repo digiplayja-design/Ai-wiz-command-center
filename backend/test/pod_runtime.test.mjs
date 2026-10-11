@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createPodRuntime} from '../pod/runtime.mjs';
+import {createPodProviders, validatePodWav} from '../pod/providers.mjs';
 import {PodError, podUsage} from '../pod/core.mjs';
 
 const OWNER = '10000000-0000-4000-8000-000000000001';
@@ -541,6 +542,7 @@ function bufferedFixture(options={}) {
     const op=operations.get(requestId);
     if(!op)return legacyFinish(actor,id,requestId,result);
     f.events.push({name:'finish',data:{actor,id,requestId}});f.finishes.push(structuredClone(result));
+    if(result.brief)f.brief=structuredClone(result.brief);
     op.state='prepared';op.result=structuredClone(result);
     f.episode.preparedId=requestId;
     return {committed:true,prepared:true,preparedId:requestId,episode:structuredClone(f.episode)};
@@ -560,6 +562,72 @@ function bufferedFixture(options={}) {
   f.play=(extra={})=>f.runtime.playPrepared({user:{id:OWNER},id:ID,requestId:REQUEST,version:f.episode.version,...extra});
   return f;
 }
+
+test('slow background research reaches a sourced Analyst WAV and the next discussion turn after the welcome',async t=>{
+  t.mock.timers.enable({apis:['setTimeout','Date'],now:NOW});
+  const calls=[],source='https://www.nasa.gov/',opening='NASA describes its mission program. Which priorities should guide its work?';
+  const usage={input_tokens:100,output_tokens:40,total_tokens:140};
+  const final={id:'resp_opening',status:'completed',usage,
+    output:[{type:'web_search_call',status:'completed',action:{type:'search',sources:[{url:source,title:'NASA'}]}}],
+    output_text:JSON.stringify({text:`NASA describes its mission program. Source: ${source}`,requiresCurrentSources:false,
+      currentSourcesAvailable:true,sources:[{url:source}],opening:{text:opening,sourceUrls:[source]}})};
+  const providers=createPodProviders({now:()=>new Date(Date.now()),client:{
+    responses:{
+      create:async payload=>{
+        calls.push({kind:payload.background?'research':'turn',payload});
+        if(payload.background)return {id:'resp_opening',status:'queued'};
+        assert.equal(JSON.parse(payload.input).brief.sources[0].url,source);
+        return {id:'resp_turn',status:'completed',usage,
+          output_text:JSON.stringify({text:'Those priorities raise a useful question about cost and benefit.',sourceIds:['source-1']})};
+      },
+      retrieve:async id=>{assert.equal(id,'resp_opening');return Date.now()-NOW<130000?{id,status:'in_progress'}:final;},
+      cancel:async()=>{assert.fail('completed research must not be cancelled');},
+    },
+    audio:{speech:{create:async payload=>{calls.push({kind:'speech',payload});return new Response(Buffer.alloc(48000),{headers:{'content-type':'audio/pcm'}});}}},
+  }});
+  const f=bufferedFixture({brief:null,hooks:{research:args=>providers.research(args),turn:args=>providers.turn(args),speak:args=>providers.speak(args)}});
+  t.after(()=>f.runtime.stop());
+  const advance=async ms=>{f.time+=ms;t.mock.timers.tick(ms);await new Promise(resolve=>setImmediate(resolve));};
+  const pending=f.prepare();
+  await new Promise(resolve=>setImmediate(resolve));
+  await advance(120000);
+  assert.equal(f.runtime.activeCount,1);assert.equal(f.failures.length,0);assert.equal(calls.length,1);
+  assert.equal(f.episode.turns.length,1,'only the welcome is audible while research is pending');
+  await advance(10000);
+  const prepared=await pending;
+  assert.equal(prepared.prepared,true);assert.equal(prepared.audio,undefined);
+  assert.equal(f.episode.turns.length,1,'topic text remains private until playback acknowledgment');
+  const played=await f.play();
+  assert.equal(played.turn.speaker,'analyst');assert.equal(played.turn.text,opening);
+  assert.deepEqual(played.turn.sourceIds,['source-1']);
+  assert.equal(validatePodWav(Buffer.from(played.audio.base64,'base64')).durationSeconds,1);
+  assert.equal(calls[1].payload.input,opening);assert.equal(calls[1].payload.voice,'cedar');
+  assert.deepEqual(f.receipts.map(r=>r.callKey),['research','speak']);
+  assert.equal(f.receipts[0].evidence.elapsedMs,130000);assert.equal(f.receipts[0].usage.totalTokens,140);
+  await f.prepare({requestId:SECOND});
+  const next=await f.play({requestId:SECOND});
+  assert.equal(next.turn.speaker,'host');assert.match(next.turn.text,/cost and benefit/);
+  assert.deepEqual(calls.map(c=>c.kind),['research','speech','turn','speech']);
+  assert.equal(f.episode.turns.length,3);assert.equal(f.failures.length,0);
+});
+
+test('pausing a real background provider stops preparation before topic speech or commit',async t=>{
+  let cancels=0,speeches=0;
+  const providers=createPodProviders({client:{responses:{
+    create:async()=>({id:'resp_paused',status:'queued'}),
+    retrieve:async()=>({id:'resp_paused',status:'in_progress'}),
+    cancel:async id=>{cancels++;return {id,status:'cancelled'};},
+  },audio:{speech:{create:async()=>{speeches++;}}}}});
+  const f=bufferedFixture({brief:null,hooks:{research:args=>providers.research(args),speak:args=>providers.speak(args)}});
+  t.after(()=>f.runtime.stop());
+  const rejected=assert.rejects(f.prepare(),error=>error.code==='pod_interrupted');
+  await new Promise(resolve=>setImmediate(resolve));
+  f.runtime.abort(OWNER,ID);await rejected;
+  assert.equal(cancels,1);assert.equal(speeches,0);assert.equal(f.finishes.length,0);
+  assert.deepEqual(f.receipts.map(r=>r.callKey),['research']);
+  assert.equal(f.receipts[0].evidence.providerResponseId,'resp_paused');
+  assert.equal(f.receipts[0].evidence.usageKnown,false);assert.equal(f.failures.length,1);
+});
 
 test('one prepared panelist remains private until playback acknowledgment and is consumed only once',async t=>{
   const f=bufferedFixture();t.after(()=>f.runtime.stop());

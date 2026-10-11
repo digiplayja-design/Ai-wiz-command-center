@@ -15,6 +15,7 @@ const researchResult = () => ({status: 'completed', id: 'resp_research', _reques
 const turnResult = (text = 'Welcome! I’m Rici, here with our AI Analyst. What should these missions help us understand?', sourceIds = ['source-1']) =>
   ({status: 'completed', usage, output_text: JSON.stringify({text, sourceIds})});
 const turnArgs = (overrides = {}) => ({episode, brief, remainingSeconds: 300, ...overrides});
+const flush = () => new Promise(resolve => setImmediate(resolve));
 
 function wav(seconds = 1) {
   const pcm = Buffer.alloc(Math.round(seconds * 48000));
@@ -57,6 +58,7 @@ test('research uses the shared Astra max policy, bounded search, verified source
   assert.deepEqual(payload.reasoning, {effort: 'max'});
   assert.equal(chatQuality.CHAT_EFFORT, 'max', 'Pod uses the same reasoning policy as main chat');
   assert.equal(payload.store, false);
+  assert.equal(payload.background, true);
   assert.equal(payload.max_output_tokens, 32768);
   assert.equal(payload.max_tool_calls, 2);
   assert.deepEqual(payload.tools, [{type: 'web_search', search_context_size: 'medium'}]);
@@ -70,7 +72,7 @@ test('research uses the shared Astra max policy, bounded search, verified source
   assert.equal(payload.text.format.schema.properties.opening.properties.text.maxLength, 320);
   assert.match(payload.instructions, /untrusted data/);
   assert.equal(options.maxRetries, 0);
-  assert.equal(options.timeout, 120000);
+  assert.equal(options.timeout, 30000);
   assert(Number.isSafeInteger(result.usage.elapsedMs));
   assert(result.usage.elapsedMs >= 0);
   assert(options.signal instanceof AbortSignal);
@@ -627,6 +629,142 @@ test('timeouts are bounded even with a nonresponsive injected client and do not 
   await assert.rejects(providers.turn(turnArgs()), error => error.code === 'POD_PROVIDER_TIMEOUT' && error.usage.status === 'uncertain');
   assert.equal(signal.aborted, true);
   assert.equal(calls, 1);
+});
+
+test('the installed SDK polls one research job beyond two minutes and recovers a transient GET failure', async t => {
+  const {default: OpenAI} = await import('openai');
+  const started = now().getTime(), calls = [];
+  t.mock.timers.enable({apis: ['setTimeout', 'Date'], now: started});
+  const client = new OpenAI({apiKey: 'pod-offline-sdk-fixture-not-a-real-key', maxRetries: 0,
+    fetch: async (url, options) => {
+      calls.push({url: new URL(url), method: options.method, body: options.body ? JSON.parse(options.body) : null});
+      if (options.method === 'POST') return Response.json({object: 'response', id: 'resp_research', status: 'queued', output: []});
+      if (calls.length === 2) return Response.json({error: {message: 'temporary read failure'}}, {status: 502});
+      assert.equal(new URL(url).pathname, '/v1/responses/resp_research');
+      assert.deepEqual(new URL(url).searchParams.getAll('include[]'), ['web_search_call.action.sources']);
+      if (Date.now() - started < 130000) return Response.json({object: 'response', id: 'resp_research', status: 'in_progress', output: []});
+      const final = researchResult();
+      final.output.push({type: 'message', role: 'assistant', content: [{type: 'output_text', text: final.output_text, annotations: []}]});
+      return Response.json({...final, object: 'response'}, {headers: {'x-request-id': 'req_polled'}});
+    }});
+  let settled = false;
+  const resultPromise = createPodProviders({client, now}).research(episode);
+  resultPromise.then(() => {settled = true;}, () => {settled = true;});
+  await flush();
+  t.mock.timers.tick(2000); await flush();
+  t.mock.timers.tick(118000); await flush();
+  assert.equal(settled, false, 'the old 120-second cutoff must not terminate pending research');
+  t.mock.timers.tick(10000); await flush();
+  const result = await resultPromise;
+  assert.equal(result.initialTurn.text, opening.text);
+  assert.deepEqual(result.initialTurn.sourceIds, ['source-1']);
+  assert.equal(result.usage.elapsedMs, 130000);
+  assert.equal(result.usage.providerResponseId, 'resp_research');
+  assert.equal(result.usage.providerRequestId, 'req_polled');
+  assert.equal(result.usage.totalTokens, 139);
+  assert.equal(calls.filter(call => call.method === 'POST').length, 1);
+  assert.equal(calls.length, 4, 'a failed status read repeats without creating another paid response');
+  assert.equal(calls[0].body.background, true);
+  assert.equal(calls[0].body.store, false);
+});
+
+test('pause cancels the same background job while waiting or reading and retains cancellation usage', async t => {
+  t.mock.timers.enable({apis: ['setTimeout']});
+  for (const duringRead of [false, true]) {
+    const controller = new AbortController();
+    let creates = 0, reads = 0, cancels = 0, finishRead, readSignal;
+    const client = {responses: {
+      create: async () => {creates++; return {id: 'resp_waiting', status: 'queued'};},
+      retrieve: async (_id, _query, options) => {reads++; readSignal = options.signal; return new Promise(resolve => {finishRead = resolve;});},
+      cancel: async (id, options) => {
+        cancels++; assert.equal(id, 'resp_waiting'); assert.equal(options.signal.aborted, false);
+        assert.equal(options.maxRetries, 0); assert.equal(options.timeout, 2000);
+        return {id, status: 'cancelled', usage};
+      },
+    }};
+    const pending = createPodProviders({client, now}).research({...episode, signal: controller.signal});
+    const rejected = assert.rejects(pending, error => error.code === 'POD_ABORTED' &&
+      error.usage.providerResponseId === 'resp_waiting' && error.usage.totalTokens === 139);
+    await flush();
+    if (duringRead) {t.mock.timers.tick(2000); await flush();}
+    controller.abort(); await rejected;
+    assert.equal(cancels, 1); assert.equal(creates, 1); assert.equal(reads, duringRead ? 1 : 0);
+    if (duringRead) {assert.equal(readSignal.aborted, true); finishRead({...researchResult(), id: 'resp_waiting'});}
+    t.mock.timers.tick(10000); await flush();
+    assert.equal(reads, duringRead ? 1 : 0, 'a late result must not resume polling');
+  }
+});
+
+test('a background ID arriving after interruption is cancelled without restarting research', async () => {
+  const controller = new AbortController();
+  let resolveCreate, cancels = 0, reads = 0;
+  const client = {responses: {
+    create: async () => new Promise(resolve => {resolveCreate = resolve;}),
+    retrieve: async () => {reads++;},
+    cancel: async (id, options) => {cancels++; assert.equal(id, 'resp_late'); assert.equal(options.signal.aborted, false); return {id, status: 'cancelled'};},
+  }};
+  const pending = createPodProviders({client, now}).research({...episode, signal: controller.signal});
+  controller.abort();
+  await assert.rejects(pending, error => error.code === 'POD_ABORTED' && error.usage.usageKnown === false);
+  resolveCreate({id: 'resp_late', status: 'queued'}); await flush();
+  assert.equal(cancels, 1); assert.equal(reads, 0);
+});
+
+test('research keeps its 160-second ceiling and cancellation cannot hang settlement', async t => {
+  t.mock.timers.enable({apis: ['setTimeout', 'Date'], now: now().getTime()});
+  let creates = 0, reads = 0, cancels = 0, cleanupSignal;
+  const client = {responses: {
+    create: async () => {creates++; return {id: 'resp_slow', status: 'in_progress'};},
+    retrieve: async () => {reads++; return {id: 'resp_slow', status: 'in_progress'};},
+    cancel: async (_id, options) => {cancels++; cleanupSignal = options.signal; return new Promise(() => {});},
+  }};
+  const pending = createPodProviders({client, now}).research(episode);
+  const rejected = assert.rejects(pending, error => error.code === 'POD_PROVIDER_TIMEOUT' &&
+    error.usage.providerResponseId === 'resp_slow' && error.usage.status === 'uncertain' && error.usage.totalTokens === null);
+  await flush();
+  t.mock.timers.tick(160000); await flush();
+  assert.equal(cancels, 1); assert.equal(reads, 0, 'no status read starts after the deadline');
+  t.mock.timers.tick(2000); await rejected;
+  assert.equal(cleanupSignal.aborted, true); assert.equal(creates, 1);
+});
+
+test('status read retries are bounded and permanent read failures do not retry', async t => {
+  t.mock.timers.enable({apis: ['setTimeout']});
+  for (const status of [503, 401, 404]) {
+    let reads = 0, creates = 0, cancels = 0;
+    const client = {responses: {
+      create: async () => {creates++; return {id: 'resp_failed_read', status: 'queued'};},
+      retrieve: async () => {reads++; throw Object.assign(new Error('PRIVATE upstream error'), {status});},
+      cancel: async id => {cancels++; return {id, status: 'cancelled', usage};},
+    }};
+    const pending = createPodProviders({client, now}).research(episode);
+    const rejected = assert.rejects(pending, error => {
+      assert.equal(error.code, 'POD_PROVIDER_FAILED'); assert.doesNotMatch(error.message, /PRIVATE/);
+      assert.equal(error.usage.providerResponseId, 'resp_failed_read'); assert.equal(error.usage.totalTokens, 139);
+      return true;
+    });
+    await flush();
+    const expectedReads = status === 503 ? 4 : 1;
+    for (let i = 0; i < expectedReads; i++) {t.mock.timers.tick(2000); await flush();}
+    await rejected;
+    assert.equal(reads, expectedReads); assert.equal(creates, 1); assert.equal(cancels, 1);
+  }
+});
+
+test('terminal failed or incomplete research retains actual usage and never starts another job', async t => {
+  t.mock.timers.enable({apis: ['setTimeout']});
+  for (const status of ['failed', 'incomplete', 'cancelled']) {
+    let creates = 0, reads = 0, cancels = 0;
+    const client = {responses: {
+      create: async () => {creates++; return {id: 'resp_terminal', status: 'queued'};},
+      retrieve: async () => {reads++; return {id: 'resp_terminal', status, usage};},
+      cancel: async () => {cancels++;},
+    }};
+    const rejected = assert.rejects(createPodProviders({client, now}).research(episode), error =>
+      error.code === 'POD_INCOMPLETE_RESPONSE' && error.usage.totalTokens === 139 && error.usage.status === 'failed');
+    await flush(); t.mock.timers.tick(2000); await rejected;
+    assert.equal(creates, 1); assert.equal(reads, 1); assert.equal(cancels, 0);
+  }
 });
 
 test('provider failures retain reported partial usage and never expose upstream error text', async () => {
