@@ -56,26 +56,36 @@ Only the last 12 transcript turns and the last four listener contributions are
 sent with each new discussion prompt, alongside the verified research brief.
 This bounds input growth without dropping the current thread or recent input.
 
-Authenticated `POST /episodes/:id/small-talk/:clip` returns one of nine fixed,
-claim-free studio clips, using the normal role voices. It requires an active
-owned episode and current access; Challenger clips require three hosts. No
-user text, topic or source is accepted for synthesis. These are reusable UI
-assets, not newly researched discussion turns: at most nine syntheses per
-server process, two concurrently, 15-second synthesis timeout and ten seconds
-of audio per asset. Cache hits make no provider request. Failures are retained
-until restart to prevent paid retry loops. Asset preparation logs actual
-provider request IDs when available and does not invent text-token usage or
-modify customer quota records. Assets are shared across eligible listeners;
-no private content is stored in this cache.
+Authenticated `POST /episodes/:id/small-talk/:clip` returns an authored studio
+interlude using the normal role voices. It requires an active owned episode and
+current access; Challenger clips require three hosts. No user text, topic or
+source is accepted for synthesis. Catalog access advertises `smallTalkVersion: 2`
+and `smallTalkExchanges: 32`. Each exchange contains distinct host, analyst and
+challenger thoughts of 37–49 words. They are general reflective conversation,
+not topic research or claims about the listener. Each thought stands alone so
+playback can hand off between speakers. The 96 extended `role-chat-N` clips
+allow up to 30 seconds of canonical WAV audio; the nine legacy `role-N` clips
+retain their original text and ten-second limit for already-open clients.
 
-The client warms a small set only after actual main-voice playback starts. It
-uses the same already-unlocked voice sink, starts small talk only in a real gap
-after 800 ms, allows at most two distinct clips per gap, and awaits the current
-sentence before the next panelist. Music fades before speech. Missing assets
-fall back to the existing music; they never hold the discussion up. The small
-talk switch is separate from music. Pause, Chime in, background, sign-out and
-the deadline stop speech through the existing lifecycle controls. Warmup
-completion cannot start audio by itself.
+Assets are generated on demand, shared across eligible listeners, and contain
+no private content. The fixed catalog bounds the cache and synthesis to 105
+assets per process, two concurrently, with a 30-second synthesis timeout.
+Cache hits make no provider request. Failures are retained until restart to
+prevent paid retry loops. Preparation logs provider request IDs when available
+and does not invent text-token usage or modify customer quota records.
+
+The client warms only after main-voice playback establishes the active episode.
+It shuffles the exchange order per episode while retaining panel voice order,
+keeps a rolling six-turn buffer with at most two downloads in flight, and
+releases consumed WAVs. Its cursor only advances: repeated gaps, pause/resume,
+and repeated warmup calls cannot replay a consumed interlude. Exhaustion never
+restarts the bank. Older servers use the legacy bank with the same no-loop rule.
+Speech starts after an 800 ms gap, with 450 ms between interlude voices. The
+current thought may finish naturally, but remaining voices never delay a ready
+researched answer. The existing request and playback timeouts remain bounded.
+Music fades before speech. Missing assets never hold up ready discussion.
+Pause, Chime in, background, sign-out and the episode deadline use the existing
+single-player lifecycle controls. Warmup completion cannot start audio itself.
 
 Heartbeats use an eight-second request timeout and permit one control-only
 retry after three seconds. A single transient network failure no longer

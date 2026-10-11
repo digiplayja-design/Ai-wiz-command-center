@@ -1,9 +1,9 @@
 import {PodError} from './core.mjs';
 import {validatePodWav} from './providers.mjs';
+import {POD_STUDIO_CONVERSATIONS} from './studio_conversations.mjs';
 
-// Shared studio assets: fixed, claim-free lines, never listener text or a second
-// generated discussion. At most nine syntheses per process, with two in flight.
-export const POD_SMALL_TALK = Object.freeze(Object.fromEntries(Object.entries({
+// Version 1 IDs stay byte-for-byte compatible with already-open clients.
+const legacy = Object.entries({
  host: [
   "Let's give that a little room. There are a few ways to look at it.",
   "This is where a conversation gets interesting. Let's follow that thought.",
@@ -19,7 +19,16 @@ export const POD_SMALL_TALK = Object.freeze(Object.fromEntries(Object.entries({
   "There's room to see this differently. Let's keep an open mind.",
   "I like a conversation that leaves room for questions. Let's keep exploring.",
  ],
-}).flatMap(([speaker,lines])=>lines.map((text,i)=>[`${speaker}-${i}`,{id:`${speaker}-${i}`,speaker,text}]))));
+}).flatMap(([speaker,lines])=>lines.map((text,i)=>[`${speaker}-${i}`,{id:`${speaker}-${i}`,speaker,text}]));
+export const POD_SMALL_TALK_VERSION = 2;
+export const POD_SMALL_TALK_EXCHANGES = POD_STUDIO_CONVERSATIONS.length;
+export const POD_SMALL_TALK = Object.freeze(Object.fromEntries([
+ ...legacy,
+ ...POD_STUDIO_CONVERSATIONS.flatMap((lines,n)=>lines.map((text,i)=>{
+  const speaker=['host','analyst','challenger'][i],id=`${speaker}-chat-${n}`;
+  return [id,Object.freeze({id,speaker,text})];
+ })),
+]));
 
 export function createPodSmallTalk({providers,logger=console}={}) {
  const assets=new Map(),controllers=new Set();let closed=false,nextLane=0;
@@ -33,11 +42,11 @@ export function createPodSmallTalk({providers,logger=console}={}) {
    const result=lanes[lane].then(async()=>{
     if(closed)throw new PodError('The pod studio is restarting.',503);
     const controller=new AbortController();controllers.add(controller);
-    const timer=setTimeout(()=>controller.abort(),15000);timer.unref?.();
+    const timer=setTimeout(()=>controller.abort(),30000);timer.unref?.();
     try {
      const speech=await providers.speak({...clip,signal:controller.signal});
      controller.signal.throwIfAborted();
-     const {durationSeconds}=validatePodWav(speech.wav,{maxSeconds:10});
+     const {durationSeconds}=validatePodWav(speech.wav,{maxSeconds:id.includes('-chat-')?30:10});
      logger.info?.('Pod studio asset prepared',{id,seconds:durationSeconds,characters:clip.text.length,
       providerRequestId:speech.usage?.providerRequestId||null});
      return {...clip,audio:{base64:Buffer.from(speech.wav).toString('base64'),mime:'audio/wav',durationSeconds}};

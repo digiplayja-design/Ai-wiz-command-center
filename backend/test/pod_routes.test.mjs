@@ -92,6 +92,7 @@ const endpoints=[
   ['POST','/api/pod/episodes/:id/control',{action:'resume'}],
   ['POST','/api/pod/episodes/:id/contributions',{requestId:REQUEST,text:'My contribution.'}],
   ['POST','/api/pod/episodes/:id/next',{requestId:REQUEST,version:1}],
+  ['POST','/api/pod/episodes/:id/small-talk/:clip',{}],
   ['POST','/api/pod/episodes/:id/prepare',{requestId:REQUEST,version:1}],
   ['POST','/api/pod/episodes/:id/play-prepared',{requestId:REQUEST,version:1}],
   ['POST','/api/pod/episodes/:id/transcribe',{requestId:REQUEST,audioBase64:wav().toString('base64')}],
@@ -394,4 +395,24 @@ test('small-talk assets require an active owned episode and match the selected p
  assert.equal(denied.providerCalls.length,0);
  const other=harness(t,{store:{get:async()=>{throw Object.assign(new Error('Not found'),{name:'PodStorageError',status:404});}}});
  assert.equal((await other.invoke('POST',path,options('host-0'))).statusCode,404);assert.equal(other.providerCalls.length,0);
+});
+
+
+test('catalog advertises the extended studio bank and both panel sizes retain role authorization',async t=>{
+ const path='/api/pod/episodes/:id/small-talk/:clip';
+ for(const hostCount of [2,3]) {
+  const h=harness(t,{state:episode({hostCount,deadlineAt:new Date(Date.now()+60000).toISOString()})});
+  const catalog=await h.invoke('GET','/api/pod');
+  assert.equal(catalog.body.access.smallTalk,true);
+  assert.equal(catalog.body.access.smallTalkVersion,2);
+  assert.equal(catalog.body.access.smallTalkExchanges,32);
+  assert.equal(h.providerCalls.length,0,'Advertising the bank does not synthesize it.');
+  for(const speaker of ['host','analyst','challenger']) {
+   const result=await h.invoke('POST',path,{params:{id:EPISODE,clip:`${speaker}-chat-31`}});
+   assert.equal(result.statusCode,speaker==='challenger'&&hostCount===2?409:200);
+  }
+ }
+ const ended=harness(t,{state:episode({deadlineAt:new Date(Date.now()-1000).toISOString()})});
+ assert.equal((await ended.invoke('POST',path,{params:{id:EPISODE,clip:'host-chat-0'}})).statusCode,409);
+ assert.equal(ended.providerCalls.length,0);
 });

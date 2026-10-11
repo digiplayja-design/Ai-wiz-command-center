@@ -2,7 +2,7 @@ import {PodError,POD_CATALOG,podUuid,podText,podInput,podVersion,podAudioBody,pu
 import {createPodStore,POD_USAGE_LABEL} from './store.mjs';
 import {createPodRuntime} from './runtime.mjs';
 import {validatePodWav} from './providers.mjs';
-import {createPodSmallTalk,POD_SMALL_TALK} from './small_talk.mjs';
+import {createPodSmallTalk,POD_SMALL_TALK,POD_SMALL_TALK_VERSION,POD_SMALL_TALK_EXCHANGES} from './small_talk.mjs';
 
 const base='/api/pod';
 export function registerPod(app,{database,requireUser,access,providers,store:providedStore,logger=console,
@@ -37,7 +37,8 @@ export function registerPod(app,{database,requireUser,access,providers,store:pro
     const [a,list]=await Promise.all([access(u),store.list(u.id)]);
     const maxSeconds=a?.allowed?Math.min(900,a.limits?.maxSessionSeconds||900,a.remainingSeconds??900):0;
     r.json({catalog:POD_CATALOG,access:{allowed:a?.allowed===true,reason:a?.reason||null,maxSeconds,
-      durations:[300,600,900].filter(s=>s<=maxSeconds),usageLabel:POD_USAGE_LABEL,smallTalk:true},
+      durations:[300,600,900].filter(s=>s<=maxSeconds),usageLabel:POD_USAGE_LABEL,smallTalk:true,
+      smallTalkVersion:POD_SMALL_TALK_VERSION,smallTalkExchanges:POD_SMALL_TALK_EXCHANGES},
       episodes:(list.episodes||[]).map(publicPodEpisode)});
   }));
   app.post(base+'/episodes',route(async(q,r,u)=>{
