@@ -27,7 +27,7 @@ class _Fixture {
           return http.Response(
             jsonEncode(
               action == 'call_inbox'
-                  ? {'call': call}
+                  ? {'call': call, 'missed_count': missed}
                   : {'items': action == 'groups' ? groups : peers},
             ),
             status,
@@ -44,6 +44,7 @@ class _Fixture {
   List<SocialMap> peers = [], groups = [];
   SocialMap? call;
   int status = 200;
+  int missed = 0;
   Future<http.Response> Function(http.Request)? respond;
   void dispose() {
     notifications.dispose();
@@ -75,6 +76,56 @@ SocialMap _call(String id, {int age = 0, String state = 'ringing'}) => {
 };
 
 void main() {
+  test(
+    'missed-call totals refresh silently and are cleared on account changes',
+    () async {
+      final f = _Fixture();
+      addTearDown(f.dispose);
+      f.missed = 3;
+      await f.notifications.refreshCalls();
+      expect(f.notifications.missedCallCount, 3);
+      expect(f.notifications.incomingCall, isNull);
+      expect(f.notifications.callRevision, 0);
+      await f.notifications.refreshCalls();
+      expect(
+        f.notifications.missedCallCount,
+        3,
+        reason: 'polling must not add the same calls again',
+      );
+      f.missed = 0;
+      await f.notifications.refreshCallsAfterHistory();
+      expect(f.notifications.missedCallCount, 0);
+      f.missed = 2;
+      await f.notifications.refreshCalls();
+      f.token = 'Bearer second-account';
+      f.revision.value++;
+      expect(f.notifications.missedCallCount, 0);
+    },
+  );
+
+  test(
+    'history refresh waits for an older inbox read before loading the cleared count',
+    () async {
+      final f = _Fixture();
+      addTearDown(f.dispose);
+      final old = Completer<http.Response>();
+      var reads = 0;
+      f.respond = (request) async {
+        reads++;
+        return reads == 1
+            ? old.future
+            : http.Response('{"call":null,"missed_count":0}', 200);
+      };
+      final previous = f.notifications.refreshCalls();
+      final refreshed = f.notifications.refreshCallsAfterHistory();
+      old.complete(http.Response('{"call":null,"missed_count":3}', 200));
+      await previous;
+      await refreshed;
+      expect(reads, 2);
+      expect(f.notifications.missedCallCount, 0);
+    },
+  );
+
   test(
     'initial unread is silent; only later increases produce a new alert',
     () async {

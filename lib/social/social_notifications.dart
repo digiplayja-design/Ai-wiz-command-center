@@ -101,6 +101,8 @@ class SocialNotifications extends ChangeNotifier {
   String? _callExpiryId;
   int _callRevision = 0;
   int get callRevision => _callRevision;
+  int _missedCallCount = 0;
+  int get missedCallCount => _missedCallCount;
   List<SocialUnreadConversation> _conversations = const [];
   List<SocialUnreadConversation> get conversations => _conversations;
   int get totalUnread =>
@@ -161,6 +163,7 @@ class SocialNotifications extends ChangeNotifier {
     _messageAlert = null;
     _activeConversationKey = null;
     _incomingCall = null;
+    _missedCallCount = 0;
     _lastCallId = null;
     _callOpen = false;
     _callExpiry?.cancel();
@@ -444,6 +447,12 @@ class SocialNotifications extends ChangeNotifier {
     return _pendingCalls ??= _loadCalls(_client!, _generation, _callGeneration);
   }
 
+  Future<void> refreshCallsAfterHistory() async {
+    // Let an older inbox read finish before fetching the acknowledged count.
+    await _pendingCalls;
+    await refreshCalls();
+  }
+
   bool _currentCall(SocialClient client, int generation, int callGeneration) =>
       _current(client, generation) &&
       !_callOpen &&
@@ -459,6 +468,11 @@ class SocialNotifications extends ChangeNotifier {
         'device': client.callDevice,
       });
       if (!_currentCall(client, generation, callGeneration)) return;
+      final missed = socialCallCount(response['missed_count']);
+      if (missed != _missedCallCount) {
+        _missedCallCount = missed;
+        notifyListeners();
+      }
       final call = socialMap(response['call']);
       final id = call['id']?.toString();
       final created = DateTime.tryParse('${call['created_at']}');

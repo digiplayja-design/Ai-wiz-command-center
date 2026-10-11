@@ -59,6 +59,7 @@ class _SocialScreenState extends State<SocialScreen>
   Timer? _poll, _heartbeat, _debounce;
   Timer? _calls;
   SocialNotifications? _notifications;
+  int _missedCallCount = 0;
   bool _checkingCalls = false, _callOpen = false;
   bool _initialConversationOpened = false;
   SocialClient get client => widget.client;
@@ -90,7 +91,12 @@ class _SocialScreenState extends State<SocialScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _notifications = SocialAlertScope.maybeOf(context)?.notifications;
+    final notifications = SocialAlertScope.maybeOf(context)?.notifications;
+    if (!identical(notifications, _notifications)) {
+      _notifications?.removeListener(_callCountsChanged);
+      _notifications = notifications;
+      _notifications?.addListener(_callCountsChanged);
+    }
     if (_notifications != null) {
       _calls?.cancel();
       _calls = null;
@@ -103,6 +109,27 @@ class _SocialScreenState extends State<SocialScreen>
     }
   }
 
+  void _callCountsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _openCallHistory() async {
+    await Navigator.of(context).push(
+      SocialPageRoute<void>(
+        builder: (_) => SocialCallHistory(
+          client: client,
+          onCall: (peer, video) => _openCall(peer, video),
+        ),
+      ),
+    );
+    if (!mounted || !client.available) return;
+    if (_notifications != null) {
+      await _notifications!.refreshCallsAfterHistory();
+    } else {
+      await _incomingCall();
+    }
+  }
+
   void _access() {
     if (!client.available && mounted) {
       _generation++;
@@ -110,6 +137,7 @@ class _SocialScreenState extends State<SocialScreen>
         _denied = true;
         _profile = null;
         _items = [];
+        _missedCallCount = 0;
         _error = null;
       });
     }
@@ -141,6 +169,7 @@ class _SocialScreenState extends State<SocialScreen>
     _heartbeat?.cancel();
     _debounce?.cancel();
     _calls?.cancel();
+    _notifications?.removeListener(_callCountsChanged);
     WidgetsBinding.instance.removeObserver(this);
     client.removeListener(_access);
     client.dispose();
@@ -165,10 +194,12 @@ class _SocialScreenState extends State<SocialScreen>
           _notifications != null ||
           _callOpen ||
           !_foreground ||
-          !client.available ||
-          r['call'] == null) {
+          !client.available) {
         return;
       }
+      final missed = socialCallCount(r['missed_count']);
+      if (missed != _missedCallCount) setState(() => _missedCallCount = missed);
+      if (r['call'] == null) return;
       final incoming = socialMap(r['call']);
       unawaited(
         _openCall(
@@ -1220,14 +1251,7 @@ class _SocialScreenState extends State<SocialScreen>
                     ),
                   )
                 : v == 'calls'
-                ? Navigator.of(context).push(
-                    SocialPageRoute<void>(
-                      builder: (_) => SocialCallHistory(
-                        client: client,
-                        onCall: (peer, video) => _openCall(peer, video),
-                      ),
-                    ),
-                  )
+                ? _openCallHistory()
                 : v == 'wall'
                 ? _profileWall(_profile!)
                 : v == 'profile'
@@ -1411,6 +1435,28 @@ class _SocialScreenState extends State<SocialScreen>
                       ),
                     ),
                 ] else ...[
+                  Builder(
+                    builder: (context) {
+                      final missed =
+                          _notifications?.missedCallCount ?? _missedCallCount;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: KorlixActionButton(
+                          label: missed == 0
+                              ? 'Call history'
+                              : '$missed missed ${missed == 1 ? 'call' : 'calls'}',
+                          icon: missed == 0
+                              ? Icons.history_rounded
+                              : Icons.call_missed_rounded,
+                          accent: missed == 0
+                              ? korlixSkinOf(context).primary
+                              : korlixSkinOf(context).danger,
+                          onPressed: _openCallHistory,
+                          expand: true,
+                        ),
+                      );
+                    },
+                  ),
                   if (_tab != 4) ...[
                     SocialPanel(
                       padding: const EdgeInsets.all(14),

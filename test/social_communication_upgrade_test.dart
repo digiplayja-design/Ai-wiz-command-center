@@ -482,6 +482,7 @@ void main() {
           scale: width == 320 ? 2 : 1,
           theme: width == 390 ? 'korlix_blue' : 'pure_black',
         );
+        await old.reveal(t, find.text('Missed call · Video'));
         expect(find.text('Missed call · Video'), findsOneWidget);
         expect(find.text('Audio call'), findsOneWidget);
         expect(t.takeException(), isNull);

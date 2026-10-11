@@ -12,6 +12,10 @@ SocialMap socialMap(dynamic v) => v is Map ? Map<String, dynamic>.from(v) : {};
 List<SocialMap> socialItems(dynamic v) =>
     v is List ? v.map(socialMap).toList() : [];
 String socialId() => agentStudioKey();
+int socialCallCount(dynamic value) {
+  final count = int.tryParse('$value') ?? 0;
+  return count < 0 ? 0 : count;
+}
 
 class SocialException implements Exception {
   const SocialException(this.message, [this.status = 0]);

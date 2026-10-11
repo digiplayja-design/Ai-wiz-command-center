@@ -10,7 +10,9 @@ String socialCallHistoryLabel(SocialMap call) {
   final state = call['state'];
   return state == 'missed'
       ? incoming
-            ? 'Missed call'
+            ? socialCallCount(call['missed_count']) > 1
+                  ? '${socialCallCount(call['missed_count'])} missed calls'
+                  : 'Missed call'
             : 'No answer'
       : state == 'declined'
       ? 'Declined'
@@ -21,6 +23,38 @@ String socialCallHistoryLabel(SocialMap call) {
       : incoming
       ? 'Incoming call'
       : 'Outgoing call';
+}
+
+/// Keep one card per missed caller, ordered by their most recent attempt.
+/// Server totals cover all 30 days, including attempts on later history pages.
+List<SocialMap> socialCallHistoryGroups(List<SocialMap> items) {
+  final result = <SocialMap>[], groups = <String, SocialMap>{};
+  final loaded = <String, int>{}, seen = <String>{};
+  for (final item in items) {
+    final id = item['id']?.toString();
+    if (id != null && !seen.add(id)) continue;
+    final peerId = socialMap(item['peer'])['id']?.toString();
+    if (item['state'] != 'missed' ||
+        item['incoming'] != true ||
+        peerId == null) {
+      result.add(item);
+      continue;
+    }
+    loaded[peerId] = (loaded[peerId] ?? 0) + 1;
+    final group = groups.putIfAbsent(peerId, () {
+      final copy = Map<String, dynamic>.from(item);
+      result.add(copy);
+      return copy;
+    });
+    final serverCount = socialCallCount(item['peer_missed_count']);
+    final previous = socialCallCount(group['missed_count']);
+    group['missed_count'] = [
+      serverCount,
+      previous,
+      loaded[peerId]!,
+    ].reduce((a, b) => a > b ? a : b);
+  }
+  return result;
 }
 
 class SocialCallHistory extends StatefulWidget {
@@ -38,6 +72,7 @@ class SocialCallHistory extends StatefulWidget {
 class _SocialCallHistoryState extends State<SocialCallHistory> {
   final List<SocialMap> _items = [];
   bool _loading = false, _more = false;
+  int _missedTotal = 0;
   String? _error;
   @override
   void initState() {
@@ -51,6 +86,7 @@ class _SocialCallHistoryState extends State<SocialCallHistory> {
       setState(() {
         _items.clear();
         _more = false;
+        _missedTotal = 0;
         _error = 'Sign in again to view call history.';
       });
     }
@@ -78,7 +114,23 @@ class _SocialCallHistoryState extends State<SocialCallHistory> {
         if (!more) _items.clear();
         _items.addAll(socialItems(response['items']));
         _more = response['has_more'] == true;
+        _missedTotal = socialCallCount(response['missed_total']);
       });
+      final through = response['missed_as_of'];
+      if (!more && through is String) {
+        // Acknowledge only the snapshot the recipient actually opened. Calls
+        // ending after this snapshot remain new, even while this POST is pending.
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted ||
+            !widget.client.available ||
+            ModalRoute.of(context)?.isCurrent != true) {
+          return;
+        }
+        await widget.client.post('call_history_read', {
+          'device': widget.client.callDevice,
+          'through': through,
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     } finally {
@@ -113,10 +165,21 @@ class _SocialCallHistoryState extends State<SocialCallHistory> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Missed, incoming and outgoing calls. Tap a call button to start a new call.',
+                  'Last 30 days. Missed calls are grouped by caller.',
                   style: TextStyle(color: skin.mutedText),
                 ),
                 const SizedBox(height: 20),
+                if (_missedTotal > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Text(
+                      '$_missedTotal missed ${_missedTotal == 1 ? 'call' : 'calls'} in the last 30 days',
+                      style: TextStyle(
+                        color: skin.danger,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
                 if (_loading) const LinearProgressIndicator(),
                 if (_error != null)
                   Padding(
@@ -127,7 +190,7 @@ class _SocialCallHistoryState extends State<SocialCallHistory> {
                   const SocialPanel(
                     child: Text('No calls yet. Your calls will appear here.'),
                   ),
-                for (final item in _items)
+                for (final item in socialCallHistoryGroups(_items))
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Builder(
@@ -160,7 +223,7 @@ class _SocialCallHistoryState extends State<SocialCallHistory> {
                               ),
                               const SizedBox(height: 10),
                               Text(
-                                '${socialCallHistoryLabel(item)} · ${item['mode'] == 'video' ? 'Video' : 'Audio'}',
+                                '${socialCallHistoryLabel(item)} · ${socialCallCount(item['missed_count']) > 1 ? 'Latest: ' : ''}${item['mode'] == 'video' ? 'Video' : 'Audio'}',
                                 style: TextStyle(
                                   color: item['state'] == 'missed'
                                       ? skin.danger
