@@ -93,6 +93,10 @@ RELEASE_TESTS=(
   test/social_presence_model_test.dart
   test/social_presence_ui_test.dart
   test/social_attachment_lifetime_test.dart
+  test/pod_small_talk_test.dart
+  test/pod_screen_test.dart
+  test/pod_media_test.dart
+  test/pod_transition_audio_test.dart
   test/meeting_copilot/k135z_ai_sharing_consent_test.dart
   test/workforce/workforce_location_test.dart
   test/workforce/workforce_test.dart

@@ -122,6 +122,14 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
   bool get _hasEpisode => _episode['id'] is String;
   bool get _live => _hasEpisode && !_terminal(_episode);
   bool get _allowed => _access['allowed'] == true && !_locked;
+  bool get _canWarmSmallTalk =>
+      mounted &&
+      !_locked &&
+      _foreground &&
+      _listening &&
+      _live &&
+      _smallTalkEnabled &&
+      _episode['state'] == 'active';
   int? get _remaining => _deadlineLocal == null
       ? null
       : math.max(
@@ -655,11 +663,19 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
     final settled = Completer<void>();
     _nextSettled = settled.future;
     try {
-      final result = await widget.client.next(
+      final fetching = widget.client.next(
         _s(_episode['id']),
         requestId: podRequestId(),
         version: (_episode['version'] as num).toInt(),
       );
+      // Resume and Chime in use /next rather than the prepared-turn path.
+      // Keep those research waits conversational too, without blocking audio
+      // on a slow optional asset or leaving a rejected request unhandled.
+      await _fillGap(
+        fetching.then<void>((_) {}, onError: (Object _) {}),
+        epoch,
+      );
+      final result = await fetching;
       if (!_current(epoch) || !_foreground || !_listening) {
         _retainBackgroundAudio(result, epoch);
         return;
@@ -807,6 +823,15 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
 
   Future<void> _fillGap(Future<void> waiting, int epoch) async {
     if (!_smallTalkEnabled || _access['smallTalk'] != true) return;
+    // The initial welcome establishes the active episode/deadline. Never ask
+    // for paid studio assets before that authorization exists.
+    if (_episode['state'] == 'active') {
+      _smallTalk.warm(
+        _s(_episode['id']),
+        (_episode['hostCount'] as num?)?.toInt() ?? 2,
+        canLoad: () => _current(epoch) && _canWarmSmallTalk,
+      );
+    }
     bool canPlay() =>
         _current(epoch) &&
         _foreground &&
@@ -824,19 +849,22 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
       play: (clip) async {
         if (!canPlay()) return;
         try {
-          await _media.play(
-            clip.wav,
-            onStarted: () {
-              if (canPlay()) {
-                setState(() {
-                  _speaking = clip.speaker;
-                  _smallTalkText = clip.text;
-                });
-              }
-            },
-          );
+          await _media
+              .play(
+                clip.wav,
+                onStarted: () {
+                  if (canPlay()) {
+                    setState(() {
+                      _speaking = clip.speaker;
+                      _smallTalkText = clip.text;
+                    });
+                  }
+                },
+              )
+              .timeout(clip.duration + const Duration(seconds: 5));
         } catch (_) {
           if (_current(epoch)) await _media.stop();
+          rethrow;
         } finally {
           if (_current(epoch)) {
             setState(() {
@@ -948,6 +976,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
           _smallTalk.warm(
             _s(_episode['id']),
             (_episode['hostCount'] as num?)?.toInt() ?? 2,
+            canLoad: () => _current(epoch) && _canWarmSmallTalk,
           );
         }
       },
@@ -2488,7 +2517,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
               key: const Key('pod-small-talk'),
               contentPadding: EdgeInsets.zero,
               title: const Text(
-                'Small talk between voices',
+                'Keep talking while hosts prepare',
                 style: TextStyle(fontSize: 12, color: _muted),
               ),
               value: _smallTalkEnabled,
@@ -2499,6 +2528,7 @@ class _PodScreenState extends State<PodScreen> with WidgetsBindingObserver {
                   _smallTalk.warm(
                     _s(_episode['id']),
                     (_episode['hostCount'] as num?)?.toInt() ?? 2,
+                    canLoad: () => _canWarmSmallTalk,
                   );
                 }
               },

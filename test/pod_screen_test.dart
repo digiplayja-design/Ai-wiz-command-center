@@ -471,6 +471,42 @@ void _foreground(WidgetTester tester) {
 void main() {
   for (final hosts in [2, 3]) {
     testWidgets(
+      '$hosts-person long research wait keeps speaking beyond two remarks',
+      (tester) async {
+        final events = <String>[];
+        final client = _FakePod(events)..smallTalkEnabled = true;
+        final media = _FakeMedia(events);
+        await _mount(tester, client, media, events);
+        await _listen(tester);
+        final welcome = _turnResponse();
+        (welcome['episode'] as Map)['hostCount'] = hosts;
+        client.complete(0, welcome);
+        await tester.pumpAndSettle();
+        for (var remark = 0; remark < 6; remark++) {
+          media.finish();
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 950));
+          await tester.pump();
+          expect(media.plays, remark + 2);
+          expect(
+            find.byKey(const Key('pod-small-talk-caption')),
+            findsOneWidget,
+          );
+          expect(media.overlaps, 0);
+        }
+        await tester.ensureVisible(find.byKey(const Key('pod-type')));
+        await tester.tap(find.byKey(const Key('pod-type')));
+        await tester.pumpAndSettle();
+        expect(media.playing, isFalse);
+        final count = media.plays;
+        await tester.pump(const Duration(seconds: 5));
+        expect(media.plays, count);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+      },
+    );
+
+    testWidgets(
       '$hosts-person pod keeps playing beneath smoke and after waking',
       (tester) async {
         final events = <String>[];
@@ -602,6 +638,34 @@ void main() {
       },
     );
   }
+  testWidgets(
+    'a stuck small-talk clip cannot hold a ready answer indefinitely',
+    (tester) async {
+      final events = <String>[];
+      final client = _FakePod(events)..smallTalkEnabled = true;
+      final media = _FakeMedia(events);
+      await _mount(tester, client, media, events);
+      await _listen(tester);
+      client.complete(0, _turnResponse());
+      await tester.pumpAndSettle();
+      media.finish();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 900));
+      await tester.pump();
+      expect(media.plays, 2);
+      client.completePreparation(0);
+      await tester.pump();
+      // Simulate a device that never sends the filler's completion event.
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pumpAndSettle();
+      expect(media.plays, 3);
+      expect(media.overlaps, 0);
+      expect(find.byKey(const Key('pod-small-talk-caption')), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+    },
+  );
+
   testWidgets('small talk also covers downloading an already prepared voice', (
     tester,
   ) async {
@@ -1069,7 +1133,7 @@ void main() {
     'Chime discards a ready voice and resumes with the new contribution',
     (tester) async {
       final events = <String>[];
-      final client = _FakePod(events);
+      final client = _FakePod(events)..smallTalkEnabled = true;
       final media = _FakeMedia(events);
       await _mount(tester, client, media, events, now: () => _time);
       await _listen(tester);
@@ -1103,6 +1167,22 @@ void main() {
         find.text('The next perspective stays private until playback.'),
         findsNothing,
       );
+      await tester.pump(const Duration(milliseconds: 900));
+      await tester.pump();
+      expect(find.byKey(const Key('pod-small-talk-caption')), findsOneWidget);
+      expect(media.playing, isTrue);
+      final plays = media.plays;
+      client.complete(1, _turnResponse());
+      await tester.pump();
+      expect(
+        media.plays,
+        plays,
+        reason: 'Finish the remark before the answer.',
+      );
+      media.finish();
+      await tester.pumpAndSettle();
+      expect(media.plays, plays + 1);
+      expect(media.overlaps, 0);
       await tester.pumpWidget(const SizedBox());
       await tester.pump();
     },
