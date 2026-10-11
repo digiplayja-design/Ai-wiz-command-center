@@ -20,7 +20,7 @@ export function registerSocial(app, { database, requireUser, logger = console, e
   for (const action of groupActions) actions.add(action);
   const reads = new Set(['online_watches', 'online_events', 'bootstrap', 'members', 'member', 'wall', 'connections', 'messages', 'message', 'topics', 'topic', 'blocks', 'reports']);
   for (const action of ['groups','group_details','group_messages','group_message']) reads.add(action);
-  const callActions = new Set(['call_config', 'call_inbox', 'call_history', 'call_restart', 'call_start', 'call_accept', 'call_end', 'call_poll', 'call_signal']);
+  const callActions = new Set(['call_config', 'call_inbox', 'call_history', 'call_history_read', 'call_restart', 'call_start', 'call_accept', 'call_end', 'call_poll', 'call_signal']);
   for (const action of callActions) actions.add(action);
   for (const action of ['call_config', 'call_inbox', 'call_poll', 'call_history']) reads.add(action);
   const authenticate = async (req, res) => {

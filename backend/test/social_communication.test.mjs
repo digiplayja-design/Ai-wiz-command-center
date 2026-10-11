@@ -57,6 +57,8 @@ before(async()=>{
  await db.exec(await readFile(new URL(dumpScope,folder),'utf8'));
  const online=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_online_alerts.sql'));
  await db.exec(await readFile(new URL(online,folder),'utf8'));
+ const missed=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_missed_call_counts.sql'));
+ await db.exec(await readFile(new URL(missed,folder),'utf8'));
  const app=express();app.use(express.json({limit:'250kb'}));push=registerSocial(app,{database:rpc,env,pushSender:sender,autoStart:false,requireUser:async q=>{if(!users.includes(q.headers.authorization))throw Error();return {id:q.headers.authorization,email_confirmed_at:'2026-01-01'};},logger:{warn(){}}});
  server=app.listen(0);await new Promise(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}/api/social/`;
 });
@@ -160,6 +162,75 @@ test('ICE restart is caller-owned, generation-isolated and idempotent; old clien
  await signal(c.id,0,'offer',{sdp:'second',generation:1});await signal(c.id,1,'answer',{sdp:'new-answer',generation:1});await signal(c.id,0,'candidate',{candidate:'fresh',generation:1});
  const poll=await call(users[1],'call_poll',callData(c.id,1));assert.equal(poll.call.generation,1);assert(poll.signals.some(s=>s.generation===1&&s.kind==='offer'));
  await call(users[0],'call_end',callData(c.id));assert.equal(await count('korlix_social_call_signals'),0);assert.equal((await call(users[0],'call_history',{device:devices[0]})).items.length,1);
+});
+
+test('repeated unanswered calls persist one recipient-only count, including caller hangups and timeouts',async()=>{
+ await connect();
+ const first=(await start()).call;
+ await api('call_end',callData(first.id));
+ await api('call_end',callData(first.id));
+ const second=(await start()).call;
+ await db.query("update korlix_social_calls set created_at=now()-interval '46 seconds' where id=$1",[second.id]);
+ let inbox=await api('call_inbox',{device:randomUUID()},users[1],'GET');
+ assert.equal(inbox.call,null);assert.equal(inbox.missed_count,2);
+ const third=(await start()).call;await api('call_end',callData(third.id));
+ inbox=await api('call_inbox',{device:devices[1]},users[1],'GET');assert.equal(inbox.missed_count,3);
+ assert.equal((await api('call_inbox',{device:devices[0]},users[0],'GET')).missed_count,0);
+ assert.equal((await api('call_inbox',{device:devices[2]},users[2],'GET')).missed_count,0);
+ const history=await api('call_history',{device:devices[1]},users[1],'GET');
+ assert.equal(history.missed_total,3);assert.equal(history.missed_count,3);
+ assert.equal(history.items.length,3);assert(history.items.every(item=>item.peer_missed_count===3&&item.state==='missed'));
+ assert.equal((await api('call_inbox',{device:devices[1]},users[1],'GET')).missed_count,3,'GET history never marks calls seen');
+ const ack=await api('call_history_read',{device:randomUUID(),through:history.missed_as_of},users[1]);
+ assert.equal(ack.missed_count,0);
+ assert.equal((await api('call_inbox',{device:devices[1]},users[1],'GET')).missed_count,0,'seen status survives devices');
+ assert.equal((await api('call_history',{device:devices[1]},users[1],'GET')).missed_total,3,'acknowledgment does not erase history');
+});
+
+test('acknowledging a history snapshot cannot clear newer misses or another recipient’s calls',async()=>{
+ await connect();const first=(await start()).call;await call(users[0],'call_end',callData(first.id));
+ const history=await call(users[1],'call_history',{device:devices[1]});
+ const second=(await start()).call;await call(users[0],'call_end',callData(second.id));
+ await db.query("update korlix_social_calls set ended_at=$2::timestamptz+interval '1 second' where id=$1",[second.id,history.missed_as_of]);
+ await api('call_history_read',{device:devices[2],through:history.missed_as_of,actor:users[1]},users[2]);
+ assert.equal((await call(users[1],'call_inbox',{device:devices[1]})).missed_count,2);
+ const ack=await api('call_history_read',{device:devices[1],through:history.missed_as_of},users[1]);
+ assert.equal(ack.missed_count,1);
+ assert.equal((await api('call_history_read',{device:devices[1],through:history.missed_as_of},users[1])).missed_count,1,'repeated acknowledgment is idempotent');
+ await api('call_history_read',{device:devices[1]},users[1],'POST',400);
+ await api('call_history_read',{device:devices[1],through:'invalid'},users[1],'POST',400);
+ await api('call_history_read',{device:devices[1],through:history.missed_as_of},users[1],'GET',404);
+ await api('call_history_read',{device:devices[1],through:history.missed_as_of},'','POST',401);
+});
+
+test('answered, declined and outgoing calls never inflate recipient missed counts',async()=>{
+ await connect();let attempt=(await start()).call;await accept(attempt.id);await call(users[0],'call_end',callData(attempt.id));
+ attempt=(await start()).call;await call(users[1],'call_end',callData(attempt.id,1));
+ assert.equal((await call(users[1],'call_inbox',{device:devices[1]})).missed_count,0);
+ const outgoing=(await start(1,a.id)).call;await call(users[1],'call_end',callData(outgoing.id,1));
+ assert.equal((await call(users[1],'call_inbox',{device:devices[1]})).missed_count,0);
+ assert.equal((await call(users[0],'call_inbox',{device:devices[0]})).missed_count,1);
+ const history=await call(users[1],'call_history',{device:devices[1]});
+ assert.deepEqual(history.items.map(x=>x.state).sort(),['declined','ended','missed']);
+});
+
+test('missed totals span history pages, preserve redaction, and exclude expired records',async()=>{
+ await connect();
+ for(let i=0;i<55;i++)await db.query("insert into korlix_social_calls(id,caller,callee,caller_device,mode,state,ended_at) values($1,$2,$3,$4,'audio','missed',now())",[randomUUID(),a.id,b.id,devices[0]]);
+ const history=await call(users[1],'call_history',{device:devices[1]});
+ assert.equal(history.items.length,50);assert.equal(history.has_more,true);assert.equal(history.missed_total,55);
+ assert(history.items.every(item=>item.peer_missed_count===55));
+ const page=await call(users[1],'call_history',{device:devices[1],offset:50});assert.equal(page.items.length,5);assert.equal(page.missed_total,55);
+ await call(users[1],'block',{peer:a.id});
+ const blocked=await call(users[1],'call_history',{device:devices[1]});
+ assert(blocked.items.every(item=>item.peer.id===null&&item.can_call===false));
+ assert(!JSON.stringify(blocked).includes(a.id));
+ await db.query("update korlix_social_calls set created_at=now()-interval '31 days'");
+ assert.equal((await call(users[1],'call_inbox',{device:devices[1]})).missed_count,0);
+ for(const role of ['anon','authenticated']) {
+  const access=(await db.query("select has_column_privilege($1,'korlix_social_calls','missed_seen_at','select') can_read,has_function_privilege($1,'korlix_social_calls_v1(uuid,text,jsonb)','execute') can_execute",[role])).rows[0];
+  assert.deepEqual(access,{can_read:false,can_execute:false});
+ }
 });
 test('service-only tables and RPCs have RLS and no security-definer escape',async()=>{
  for(const table of ['korlix_social_push_subscriptions','korlix_social_push_outbox']) {
