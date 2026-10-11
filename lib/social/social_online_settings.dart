@@ -1,3 +1,4 @@
+import 'social_appearance.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../sounds/korlix_sound_service.dart';
@@ -120,7 +121,7 @@ class _SocialOnlineSettingsState extends State<SocialOnlineSettings> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => SocialScaffold(
     appBar: AppBar(title: const Text('Online alerts')),
     body: SafeArea(
       child: Center(

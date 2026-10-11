@@ -1,3 +1,4 @@
+import 'social_appearance.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -97,7 +98,7 @@ class _SocialAlbumsScreenState extends State<SocialAlbumsScreen> {
   Future<void> _open(SocialMap album) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
+      SocialPageRoute(
         builder: (_) => SocialAlbumScreen(
           client: widget.client,
           album: album,
@@ -112,7 +113,7 @@ class _SocialAlbumsScreenState extends State<SocialAlbumsScreen> {
   @override
   Widget build(BuildContext context) {
     final s = korlixSkinOf(context);
-    return Scaffold(
+    return SocialScaffold(
       appBar: AppBar(
         title: Text(
           widget.owned
@@ -452,7 +453,7 @@ class _SocialAlbumScreenState extends State<SocialAlbumScreen> {
   Future<void> _view(int index) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
+      SocialPageRoute(
         builder: (_) =>
             _PhotoViewer(client: widget.client, album: _id, initial: index),
       ),
@@ -466,7 +467,7 @@ class _SocialAlbumScreenState extends State<SocialAlbumScreen> {
         failed = _uploads.where((u) => u.error != null).length;
     return PopScope(
       canPop: !_busy,
-      child: Scaffold(
+      child: SocialScaffold(
         appBar: AppBar(
           title: Text('${_album['title']}'),
           actions: widget.owned
@@ -812,7 +813,7 @@ class _PhotoViewerState extends State<_PhotoViewer> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => SocialScaffold(
     backgroundColor: Colors.black,
     appBar: AppBar(
       backgroundColor: Colors.black,

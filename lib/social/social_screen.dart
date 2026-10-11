@@ -1,3 +1,5 @@
+import 'social_appearance.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -206,7 +208,7 @@ class _SocialScreenState extends State<SocialScreen>
       if (incoming == null) unawaited(media.audio.activate());
       await Navigator.push(
         context,
-        MaterialPageRoute(
+        SocialPageRoute(
           builder: (_) => SocialCallScreen(
             client: sessionClient,
             peer: peer,
@@ -268,7 +270,7 @@ class _SocialScreenState extends State<SocialScreen>
   Future<void> _inviteFriends() async {
     if (_profile == null || !client.available || !mounted) return;
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      SocialPageRoute<void>(
         builder: (_) => SocialInviteScreen(
           client: client,
           handle: '${_profile!['handle'] ?? ''}',
@@ -382,7 +384,7 @@ class _SocialScreenState extends State<SocialScreen>
     if (me == null || _denied) return;
     await Navigator.push(
       context,
-      MaterialPageRoute(
+      SocialPageRoute(
         builder: (_) => SocialProfileWallScreen(
           client: client,
           me: me,
@@ -405,7 +407,7 @@ class _SocialScreenState extends State<SocialScreen>
   Future<void> _composeWall() async {
     final id = await Navigator.push<String>(
       context,
-      MaterialPageRoute(
+      SocialPageRoute(
         builder: (_) => SocialComposeTopic(
           client: client,
           categories: _categories,
@@ -419,7 +421,7 @@ class _SocialScreenState extends State<SocialScreen>
   Future<void> _albums(SocialMap member, {bool owned = false}) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
+      SocialPageRoute(
         builder: (_) =>
             SocialAlbumsScreen(client: client, profile: member, owned: owned),
       ),
@@ -429,7 +431,7 @@ class _SocialScreenState extends State<SocialScreen>
   Future<void> _editProfile() async {
     final result = await Navigator.push<SocialMap>(
       context,
-      MaterialPageRoute(
+      SocialPageRoute(
         builder: (_) => SocialProfileForm(client: client, profile: _profile),
       ),
     );
@@ -457,7 +459,7 @@ class _SocialScreenState extends State<SocialScreen>
   Future<void> _memberAction(String action, SocialMap p) async {
     if (action == 'online_alert') {
       await Navigator.of(context).push(
-        MaterialPageRoute<void>(
+        SocialPageRoute<void>(
           builder: (_) => SocialOnlineSettings(client: client, peer: p),
         ),
       );
@@ -465,7 +467,7 @@ class _SocialScreenState extends State<SocialScreen>
     }
     if (action == 'notifications') {
       await Navigator.of(context).push(
-        MaterialPageRoute<void>(
+        SocialPageRoute<void>(
           builder: (_) => SocialNotificationSettings(client: client),
         ),
       );
@@ -529,7 +531,7 @@ class _SocialScreenState extends State<SocialScreen>
     ScaffoldMessenger.of(context).removeCurrentSnackBar();
     await Navigator.push(
       context,
-      MaterialPageRoute(
+      SocialPageRoute(
         builder: (_) => SocialChatScreen(
           client: client,
           me: me,
@@ -547,7 +549,7 @@ class _SocialScreenState extends State<SocialScreen>
     ScaffoldMessenger.of(context).removeCurrentSnackBar();
     await Navigator.push(
       context,
-      MaterialPageRoute(
+      SocialPageRoute(
         builder: (_) => SocialTopicScreen(
           client: client,
           me: me,
@@ -562,7 +564,7 @@ class _SocialScreenState extends State<SocialScreen>
   Future<void> _compose() async {
     final id = await Navigator.push<String>(
       context,
-      MaterialPageRoute(
+      SocialPageRoute(
         builder: (_) => SocialComposeTopic(
           client: client,
           categories: _categories,
@@ -576,7 +578,7 @@ class _SocialScreenState extends State<SocialScreen>
   Future<void> _manage(String action) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
+      SocialPageRoute(
         builder: (_) => SocialManagementScreen(client: client, action: action),
       ),
     );
@@ -586,7 +588,7 @@ class _SocialScreenState extends State<SocialScreen>
   Future<void> _createGroup() async {
     final group = await Navigator.push<SocialMap>(
       context,
-      MaterialPageRoute(builder: (_) => SocialGroupInvite(client: client)),
+      SocialPageRoute(builder: (_) => SocialGroupInvite(client: client)),
     );
     if (!mounted || _denied || group == null) return;
     await _openGroup(group);
@@ -598,7 +600,7 @@ class _SocialScreenState extends State<SocialScreen>
     try {
       await Navigator.push(
         context,
-        MaterialPageRoute(
+        SocialPageRoute(
           builder: (_) => DominoLobby(client: client, profile: _profile!),
         ),
       );
@@ -1180,36 +1182,46 @@ class _SocialScreenState extends State<SocialScreen>
     ],
   );
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => SocialScaffold(
     appBar: AppBar(
-      title: const Text('KORLIX Social'),
+      title: Text(
+        MediaQuery.sizeOf(context).width < 400 ? 'Social' : 'KORLIX Social',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
       actions: [
+        const SocialAppearanceButton(),
         if (_profile != null && !_denied)
           IconButton(
             tooltip: 'Invite friends & family',
             onPressed: _inviteFriends,
             icon: const Icon(Icons.person_add_alt_1_rounded),
           ),
-        IconButton(
-          tooltip: 'Refresh Social',
-          onPressed: _loading
-              ? null
-              : () => _profile == null ? _initialize() : _load(),
-          icon: const Icon(Icons.refresh_rounded),
-        ),
+        if (_profile == null)
+          IconButton(
+            tooltip: 'Refresh Social',
+            onPressed: _loading
+                ? null
+                : () => _profile == null ? _initialize() : _load(),
+            icon: const Icon(Icons.refresh_rounded),
+          ),
         if (_profile != null)
           PopupMenuButton<String>(
             tooltip: 'Social settings',
-            onSelected: (v) => v == 'notifications'
+            onSelected: (v) => v == 'refresh'
+                ? _load()
+                : v == 'appearance'
+                ? showSocialAppearancePicker(context)
+                : v == 'notifications'
                 ? Navigator.of(context).push(
-                    MaterialPageRoute<void>(
+                    SocialPageRoute<void>(
                       builder: (_) =>
                           SocialNotificationSettings(client: client),
                     ),
                   )
                 : v == 'calls'
                 ? Navigator.of(context).push(
-                    MaterialPageRoute<void>(
+                    SocialPageRoute<void>(
                       builder: (_) => SocialCallHistory(
                         client: client,
                         onCall: (peer, video) => _openCall(peer, video),
@@ -1224,6 +1236,14 @@ class _SocialScreenState extends State<SocialScreen>
                 ? _albums(_profile!, owned: true)
                 : _manage(v),
             itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'refresh',
+                child: Text('Refresh Social'),
+              ),
+              const PopupMenuItem(
+                value: 'appearance',
+                child: Text('Themes & skins'),
+              ),
               const PopupMenuItem(value: 'calls', child: Text('Call history')),
               const PopupMenuItem(
                 value: 'notifications',
@@ -1454,7 +1474,7 @@ class _SocialScreenState extends State<SocialScreen>
                       child: FilledButton.tonalIcon(
                         key: const ValueKey('social-discover'),
                         onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
+                          SocialPageRoute<void>(
                             builder: (_) => SocialDiscoverScreen(
                               client: client,
                               profile: _profile!,

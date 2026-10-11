@@ -1,3 +1,4 @@
+import 'social_appearance.dart';
 import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
@@ -216,7 +217,7 @@ class _SocialDiscoverScreenState extends State<SocialDiscoverScreen> {
 
   Future<void> _upload([SocialMap? draft]) async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      SocialPageRoute<void>(
         builder: (_) =>
             DiscoverUploadScreen(client: widget.client, draft: draft),
       ),
@@ -280,7 +281,7 @@ class _SocialDiscoverScreenState extends State<SocialDiscoverScreen> {
         if (i < _videos.length) cards.add((_videos[i], 'video'));
       }
     }
-    return Scaffold(
+    return SocialScaffold(
       appBar: AppBar(
         title: const Text('Discover'),
         actions: [
@@ -539,7 +540,7 @@ class _SocialDiscoverScreenState extends State<SocialDiscoverScreen> {
             child: InkWell(
               onTap: news
                   ? () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
+                      SocialPageRoute<void>(
                         builder: (_) => DiscoverNewsReader(
                           items: _news,
                           initial: _news.indexOf(item),
@@ -550,7 +551,7 @@ class _SocialDiscoverScreenState extends State<SocialDiscoverScreen> {
                   : item['state'] == 'uploading'
                   ? null
                   : () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
+                      SocialPageRoute<void>(
                         builder: (_) => DiscoverVideoViewer(
                           client: widget.client,
                           items: _videos
@@ -859,7 +860,7 @@ class _DiscoverNewsReaderState extends State<DiscoverNewsReader> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => SocialScaffold(
     appBar: AppBar(title: Text('News · ${_index + 1}/${widget.items.length}')),
     body: !widget.client.available
         ? const Center(child: Text('Your session changed.'))
@@ -1049,7 +1050,7 @@ class _DiscoverUploadScreenState extends State<DiscoverUploadScreen> {
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
-    child: Scaffold(
+    child: SocialScaffold(
       appBar: AppBar(title: const Text('Share a video')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -1080,7 +1081,7 @@ class _DiscoverUploadScreenState extends State<DiscoverUploadScreen> {
                     onPressed: _busy || !widget.client.available
                         ? null
                         : () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
+                            SocialPageRoute<void>(
                               builder: (_) => DiscoverVideoViewer(
                                 client: widget.client,
                                 items: [
@@ -1336,7 +1337,7 @@ class _DiscoverVideoViewerState extends State<DiscoverVideoViewer>
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => SocialScaffold(
     backgroundColor: const Color(0xFF060F19),
     appBar: AppBar(
       title: Text('Videos · ${_index + 1}/${widget.items.length}'),

@@ -1,3 +1,4 @@
+import 'social_appearance.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../theme/korlix_action_button.dart';
@@ -228,7 +229,7 @@ class _SocialInviteScreenState extends State<SocialInviteScreen> {
     final filtered = contacts.values
         .where((c) => c.searchText.contains(search.text.trim().toLowerCase()))
         .toList();
-    return Scaffold(
+    return SocialScaffold(
       appBar: AppBar(title: const Text('Invite friends & family')),
       body: SafeArea(
         child: !available

@@ -1,3 +1,5 @@
+import 'social_appearance.dart';
+
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -647,7 +649,10 @@ class _SocialChatScreenState extends State<SocialChatScreen>
           useSafeArea: true,
           builder: (_) => FractionallySizedBox(
             heightFactor: .9,
-            child: SocialReactionSheet(client: widget.client, initialKind: kind),
+            child: SocialReactionSheet(
+              client: widget.client,
+              initialKind: kind,
+            ),
           ),
         );
       } else if (kind == 'voice') {
@@ -825,15 +830,23 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                           ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: draft.kind == 'gif'
-                                ? SizedBox(width: 52, height: 52, child: SocialReactionImage(provider: MemoryImage(draft.bytes), animated: false, label: 'GIF preview'))
+                                ? SizedBox(
+                                    width: 52,
+                                    height: 52,
+                                    child: SocialReactionImage(
+                                      provider: MemoryImage(draft.bytes),
+                                      animated: false,
+                                      label: 'GIF preview',
+                                    ),
+                                  )
                                 : Image.memory(
-                              draft.bytes,
-                              width: 52,
-                              height: 52,
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, _, _) =>
-                                  const Icon(Icons.image_outlined),
-                            ),
+                                    draft.bytes,
+                                    width: 52,
+                                    height: 52,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, _, _) =>
+                                        const Icon(Icons.image_outlined),
+                                  ),
                           )
                         else
                           const Icon(Icons.description_outlined),
@@ -843,7 +856,11 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                draft.kind == 'gif' ? 'GIF · ${draft.filename}' : draft.kind == 'sticker' ? 'Sticker · ${draft.filename}' : draft.filename,
+                                draft.kind == 'gif'
+                                    ? 'GIF · ${draft.filename}'
+                                    : draft.kind == 'sticker'
+                                    ? 'Sticker · ${draft.filename}'
+                                    : draft.filename,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1139,20 +1156,11 @@ class _SocialChatScreenState extends State<SocialChatScreen>
             bottom: 12,
           ),
           padding: const EdgeInsets.fromLTRB(16, 8, 10, 12),
-          decoration: BoxDecoration(
-            color: mine
-                ? Color.alphaBlend(
-                    s.primary.withValues(alpha: s.isLight ? .12 : .17),
-                    s.panel,
-                  )
-                : s.panelDeep,
-            borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(22),
-              topRight: const Radius.circular(22),
-              bottomLeft: Radius.circular(mine ? 22 : 5),
-              bottomRight: Radius.circular(mine ? 5 : 22),
-            ),
-            border: Border.all(color: s.border.withValues(alpha: .4)),
+          decoration: socialSurfaceDecoration(
+            s,
+            socialScreenSkinOf(context),
+            message: true,
+            mine: mine,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1300,7 +1308,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => SocialScaffold(
     appBar: AppBar(
       toolbarHeight: MediaQuery.textScalerOf(context).scale(1) > 1.3 ? 112 : 76,
       title: Row(
@@ -1393,8 +1401,11 @@ class _SocialChatScreenState extends State<SocialChatScreen>
         else
           PopupMenuButton<String>(
             tooltip: 'Conversation options',
-            onSelected: _connectionAction,
+            onSelected: (action) => action == 'appearance'
+                ? showSocialAppearancePicker(context)
+                : _connectionAction(action),
             itemBuilder: (_) => const [
+              PopupMenuItem(value: 'appearance', child: Text('Themes & skins')),
               PopupMenuItem(value: 'remove', child: Text('Remove connection')),
               PopupMenuItem(value: 'report', child: Text('Report member')),
               PopupMenuItem(value: 'block', child: Text('Block member')),
@@ -1557,7 +1568,11 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                         children: [
                           for (final item in [
                             ('gif', 'GIF', Icons.gif_box_outlined),
-                            ('sticker', 'Stickers', Icons.auto_awesome_outlined),
+                            (
+                              'sticker',
+                              'Stickers',
+                              Icons.auto_awesome_outlined,
+                            ),
                             ('image', 'Photo', Icons.photo_outlined),
                             ('file', 'File', Icons.attach_file_rounded),
                             ('voice', 'Voice note', Icons.mic_none_rounded),
@@ -2030,7 +2045,7 @@ class _SocialTopicScreenState extends State<SocialTopicScreen>
       if (topic) {
         await Navigator.push(
           context,
-          MaterialPageRoute(
+          SocialPageRoute(
             builder: (_) => SocialComposeTopic(
               client: widget.client,
               categories: widget.categories,
@@ -2282,7 +2297,7 @@ class _SocialTopicScreenState extends State<SocialTopicScreen>
   );
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => SocialScaffold(
     appBar: AppBar(
       title: Text(_wall ? 'Wall thread' : 'Discussion'),
       actions: [
@@ -2571,7 +2586,7 @@ class _SocialManagementScreenState extends State<SocialManagementScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => SocialScaffold(
     appBar: AppBar(
       title: Text(_reports ? 'Moderation reports' : 'Blocked members'),
     ),
@@ -2626,7 +2641,7 @@ class _SocialManagementScreenState extends State<SocialManagementScreen> {
                                 if (item['kind'] == 'video')
                                   TextButton.icon(
                                     onPressed: () => Navigator.of(context).push(
-                                      MaterialPageRoute<void>(
+                                      SocialPageRoute<void>(
                                         builder: (_) => DiscoverVideoViewer(
                                           client: widget.client,
                                           items: [

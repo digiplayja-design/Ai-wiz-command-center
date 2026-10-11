@@ -1,3 +1,4 @@
+import 'social_appearance.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -429,7 +430,7 @@ class _SocialProfileWallScreenState extends State<SocialProfileWallScreen>
     if (profile == null) return;
     final updated = await Navigator.push<SocialMap>(
       context,
-      MaterialPageRoute(
+      SocialPageRoute(
         builder: (_) =>
             SocialProfileForm(client: widget.client, profile: profile),
       ),
@@ -443,7 +444,7 @@ class _SocialProfileWallScreenState extends State<SocialProfileWallScreen>
   Future<void> _compose() async {
     final id = await Navigator.push<String>(
       context,
-      MaterialPageRoute(
+      SocialPageRoute(
         builder: (_) => SocialComposeTopic(
           client: widget.client,
           categories: widget.categories,
@@ -458,7 +459,7 @@ class _SocialProfileWallScreenState extends State<SocialProfileWallScreen>
   Future<void> _openPost(String id) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
+      SocialPageRoute(
         builder: (_) => SocialTopicScreen(
           client: widget.client,
           me: widget.me,
@@ -631,7 +632,7 @@ class _SocialProfileWallScreenState extends State<SocialProfileWallScreen>
         OutlinedButton.icon(
           onPressed: () => Navigator.push(
             context,
-            MaterialPageRoute(
+            SocialPageRoute(
               builder: (_) => SocialAlbumsScreen(
                 client: widget.client,
                 profile: p,
@@ -647,7 +648,7 @@ class _SocialProfileWallScreenState extends State<SocialProfileWallScreen>
   );
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => SocialScaffold(
     appBar: AppBar(
       title: Text(_owned ? 'My Social profile' : 'Social profile'),
       actions: [

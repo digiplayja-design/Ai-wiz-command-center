@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import 'korlix_theme.dart';
 import 'korlix_screen_skin.dart';
 import 'korlix_appearance_preferences.dart';
@@ -30,10 +32,19 @@ class KorlixAppearancePicker extends StatefulWidget {
     required this.current,
     this.initialTab = 0,
     this.library,
+    this.title = 'Make it yours',
+    this.subtitle = 'Skins, colors & ready-made looks',
+    this.showScreensaver = true,
+    this.previewBuilder,
+    this.additionalControls,
   });
   final KorlixAppearanceChoice current;
   final int initialTab;
   final KorlixLookLibrary? library;
+  final String title, subtitle;
+  final bool showScreensaver;
+  final Widget Function(BuildContext, KorlixAppearanceChoice)? previewBuilder;
+  final Widget? additionalControls;
   @override
   State<KorlixAppearancePicker> createState() => _KorlixAppearancePickerState();
 }
@@ -95,8 +106,7 @@ class _KorlixAppearancePickerState extends State<KorlixAppearancePicker> {
     setState(() => _notice = null);
     if (!await saving && mounted) {
       setState(
-        () => _notice =
-            'Favorites updated for this visit. Device storage could not save them.',
+        () => _notice = 'Favorites updated for this visit. Device storage could not save them.',
       );
     }
   }
@@ -145,7 +155,7 @@ class _KorlixAppearancePickerState extends State<KorlixAppearancePicker> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Make it yours',
+                                    widget.title,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
@@ -157,7 +167,7 @@ class _KorlixAppearancePickerState extends State<KorlixAppearancePicker> {
                                   ),
                                   if (!short)
                                     Text(
-                                      'Skins, colors & ready-made looks',
+                                      widget.subtitle,
                                       style: TextStyle(
                                         color: palette.mutedText,
                                         fontSize: 12,
@@ -229,7 +239,10 @@ class _KorlixAppearancePickerState extends State<KorlixAppearancePicker> {
                               children: [
                                 _hero(palette),
                                 const SizedBox(height: 12),
-                                const KorlixScreensaverSettings(),
+                                if (widget.additionalControls != null)
+                                  widget.additionalControls!,
+                                if (widget.showScreensaver)
+                                  const KorlixScreensaverSettings(),
                                 const SizedBox(height: 22),
                                 Text(
                                   switch (_tab) {
@@ -380,36 +393,42 @@ class _KorlixAppearancePickerState extends State<KorlixAppearancePicker> {
                   ),
                 ),
               ),
-              for (final (chat, label) in [(false, 'Home'), (true, 'Chat')])
-                Padding(
-                  padding: const EdgeInsets.only(left: 4),
-                  child: Tooltip(
-                    message: '$label preview',
-                    child: IconButton(
-                      key: ValueKey('appearance-preview-$label'),
-                      isSelected: _chat == chat,
-                      onPressed: () => setState(() => _chat = chat),
-                      style: IconButton.styleFrom(
-                        backgroundColor: _chat == chat
-                            ? palette.panelSoft
-                            : null,
-                        side: BorderSide(
-                          color: _chat == chat
-                              ? palette.primary.withValues(alpha: .5)
-                              : Colors.transparent,
+              if (widget.previewBuilder == null)
+                for (final (chat, label) in [(false, 'Home'), (true, 'Chat')])
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Tooltip(
+                      message: '$label preview',
+                      child: IconButton(
+                        key: ValueKey('appearance-preview-$label'),
+                        isSelected: _chat == chat,
+                        onPressed: () => setState(() => _chat = chat),
+                        style: IconButton.styleFrom(
+                          backgroundColor: _chat == chat
+                              ? palette.panelSoft
+                              : null,
+                          side: BorderSide(
+                            color: _chat == chat
+                                ? palette.primary.withValues(alpha: .5)
+                                : Colors.transparent,
+                          ),
                         ),
-                      ),
-                      icon: Icon(
-                        chat ? Icons.chat_bubble_outline : Icons.home_outlined,
-                        size: 19,
+                        icon: Icon(
+                          chat
+                              ? Icons.chat_bubble_outline
+                              : Icons.home_outlined,
+                          size: 19,
+                        ),
                       ),
                     ),
                   ),
-                ),
             ],
           ),
         ),
-        KorlixAppearancePreview(palette: palette, skinId: _skin, chat: _chat),
+        if (widget.previewBuilder != null)
+          widget.previewBuilder!(context, _choice)
+        else
+          KorlixAppearancePreview(palette: palette, skinId: _skin, chat: _chat),
         Padding(
           padding: const EdgeInsets.fromLTRB(4, 12, 0, 0),
           child: Row(
@@ -499,6 +518,7 @@ class _KorlixAppearancePickerState extends State<KorlixAppearancePicker> {
               saved: _library.contains(choice),
               onSave: save && _loaded ? () => unawaited(_save(choice)) : null,
               onTap: () => _select(choice),
+              preview: widget.previewBuilder?.call(context, choice),
             ),
           ),
         );
@@ -709,12 +729,14 @@ class _LookCard extends StatelessWidget {
     required this.saved,
     required this.onTap,
     this.onSave,
+    this.preview,
   });
   final String keyId, title, description, skinId;
   final KorlixSkinPalette palette;
   final bool selected, saved;
   final VoidCallback onTap;
   final VoidCallback? onSave;
+  final Widget? preview;
   @override
   Widget build(BuildContext context) => Material(
     color: palette.panel,
@@ -743,11 +765,14 @@ class _LookCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  KorlixAppearancePreview(
-                    palette: palette,
-                    skinId: skinId,
-                    compact: true,
-                  ),
+                  if (preview != null)
+                    SizedBox(height: 128, child: preview!)
+                  else
+                    KorlixAppearancePreview(
+                      palette: palette,
+                      skinId: skinId,
+                      compact: true,
+                    ),
                   const SizedBox(height: 11),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,

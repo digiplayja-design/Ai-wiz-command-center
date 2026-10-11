@@ -1,3 +1,4 @@
+import 'social_appearance.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/korlix_theme.dart';
@@ -131,7 +132,7 @@ class _SocialNotificationSettingsState
   Widget build(BuildContext context) {
     final skin = korlixSkinOf(context);
     final capable = platform.supported && _config['enabled'] == true;
-    return Scaffold(
+    return SocialScaffold(
       appBar: AppBar(title: const Text('Social notifications')),
       body: SafeArea(
         child: Center(
@@ -186,7 +187,7 @@ class _SocialNotificationSettingsState
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
+                    SocialPageRoute<void>(
                       builder: (_) =>
                           SocialOnlineSettings(client: widget.client),
                     ),

@@ -1,3 +1,4 @@
+import 'social_appearance.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -163,7 +164,7 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => SocialScaffold(
     appBar: AppBar(
       title: Text(
         widget.profile == null ? 'Join KORLIX Social' : 'Your Social profile',
@@ -456,7 +457,7 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
                         ? null
                         : () => Navigator.push(
                             context,
-                            MaterialPageRoute(
+                            SocialPageRoute(
                               builder: (_) => SocialAlbumsScreen(
                                 client: widget.client,
                                 profile: widget.profile!,
@@ -644,7 +645,7 @@ class _SocialComposeTopicState extends State<SocialComposeTopic> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => SocialScaffold(
     appBar: AppBar(
       title: Text(
         _wall

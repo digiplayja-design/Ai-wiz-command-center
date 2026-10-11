@@ -1,3 +1,4 @@
+import 'social_appearance.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -142,7 +143,7 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
             sessionChanges: widget.sessionChanges,
           );
       await navigator.push<void>(
-        MaterialPageRoute<void>(
+        SocialPageRoute<void>(
           settings: const RouteSettings(name: '/social/push'),
           builder: (_) => SocialScreen(client: client),
         ),
@@ -254,7 +255,7 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
         );
     _notifications.dismissMessage();
     await navigator.push<void>(
-      MaterialPageRoute<void>(
+      SocialPageRoute<void>(
         settings: const RouteSettings(name: '/social/message-alert'),
         builder: (_) => SocialScreen(
           client: client,
@@ -286,7 +287,7 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
         );
     _notifications.dismissOnline();
     await navigator.push<void>(
-      MaterialPageRoute<void>(
+      SocialPageRoute<void>(
         settings: const RouteSettings(name: '/social/online-alert'),
         builder: (_) =>
             SocialScreen(client: client, initialConversation: alert.peer),

@@ -1,3 +1,5 @@
+import 'social_appearance.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -15,7 +17,7 @@ Future<void> socialOpenGroup(
   SocialMap group,
 ) => Navigator.push<void>(
   context,
-  MaterialPageRoute(
+  SocialPageRoute(
     builder: (chatContext) => SocialChatScreen(
       client: client,
       me: me,
@@ -24,7 +26,7 @@ Future<void> socialOpenGroup(
       onGroupDetails: () async =>
           await Navigator.push<bool>(
             chatContext,
-            MaterialPageRoute(
+            SocialPageRoute(
               builder: (_) => SocialGroupDetails(client: client, group: group),
             ),
           ) ??
@@ -260,7 +262,7 @@ class _SocialGroupInviteState extends State<SocialGroupInvite> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => SocialScaffold(
     appBar: AppBar(
       title: Text(widget.group == null ? 'Create a group' : 'Invite people'),
     ),
@@ -536,7 +538,7 @@ class _SocialGroupDetailsState extends State<SocialGroupDetails> {
   Future<void> _invite() async {
     await Navigator.push<SocialMap>(
       context,
-      MaterialPageRoute(
+      SocialPageRoute(
         builder: (_) => SocialGroupInvite(
           client: widget.client,
           group: _group,
@@ -550,8 +552,11 @@ class _SocialGroupDetailsState extends State<SocialGroupDetails> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Group details')),
+  Widget build(BuildContext context) => SocialScaffold(
+    appBar: AppBar(
+      title: const Text('Group details'),
+      actions: const [SocialAppearanceButton()],
+    ),
     body: SafeArea(
       child: Center(
         child: ConstrainedBox(

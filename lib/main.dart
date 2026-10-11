@@ -1,3 +1,4 @@
+import 'social/social_appearance.dart';
 import 'sounds/korlix_sound_service.dart';
 import 'sounds/korlix_sound_host.dart';
 import 'sounds/korlix_sound_actions.dart';
@@ -9356,7 +9357,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       await _stopAiCharacterTalkingForQuery();
       if (!mounted || revision != kKorlixAuthRevision.value) return;
       final client = SocialClient(baseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision);
-      await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>SocialScreen(
+      await Navigator.of(context).push(SocialPageRoute<void>(builder:(_)=>SocialScreen(
         client:client,
         initialConversation: conversation?.card,
         initialGroupChat: conversation?.group ?? false,

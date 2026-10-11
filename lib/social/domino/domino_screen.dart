@@ -1,3 +1,4 @@
+import '../social_appearance.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -67,7 +68,7 @@ class _DominoLobbyState extends State<DominoLobby> {
     if (!mounted || !widget.client.available) return;
     await Navigator.push(
       context,
-      MaterialPageRoute(
+      SocialPageRoute(
         builder: (_) =>
             DominoTableScreen(client: widget.client, initial: value),
       ),
@@ -197,7 +198,7 @@ class _DominoLobbyState extends State<DominoLobby> {
     );
     await Navigator.push(
       context,
-      MaterialPageRoute<void>(
+      SocialPageRoute<void>(
         builder: (_) => DominoTableScreen(
           client: widget.client,
           initial: controller.table,
@@ -307,7 +308,7 @@ class _DominoLobbyState extends State<DominoLobby> {
   @override
   Widget build(BuildContext context) {
     final skin = korlixSkinOf(context);
-    return Scaffold(
+    return SocialScaffold(
       backgroundColor: skin.backgroundBottom,
       appBar: AppBar(
         title: const Text('KORLIX Dominoes'),
@@ -1570,7 +1571,7 @@ class _DominoTableScreenState extends State<DominoTableScreen>
     onPopInvokedWithResult: (didPop, _) {
       if (!didPop) unawaited(leave());
     },
-    child: Scaffold(
+    child: SocialScaffold(
       backgroundColor: skin.backgroundBottom,
       appBar: AppBar(
         title: Text(

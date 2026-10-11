@@ -1,3 +1,5 @@
+import 'social_appearance.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -48,27 +50,10 @@ class SocialPanel extends StatelessWidget {
     final s = korlixSkinOf(context), color = accent ?? s.primary;
     return Container(
       padding: padding,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color.alphaBlend(
-              color.withValues(alpha: s.isLight ? .07 : .1),
-              s.panelSoft,
-            ),
-            s.panelDeep,
-          ],
-        ),
-        border: Border.all(color: s.border.withValues(alpha: .55)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: s.isLight ? .05 : .22),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
-          ),
-        ],
+      decoration: socialSurfaceDecoration(
+        s,
+        socialScreenSkinOf(context),
+        accent: color,
       ),
       child: child,
     );

@@ -1,3 +1,4 @@
+import 'social_appearance.dart';
 import 'dart:async';
 import 'dart:typed_data';
 import 'social_note_playback.dart';
@@ -583,7 +584,7 @@ class _SocialAttachmentViewState extends State<SocialAttachmentView> {
         builder: (context) => AnimatedBuilder(
           animation: accessClient,
           builder: (context, _) => Dialog.fullscreen(
-            child: Scaffold(
+            child: SocialScaffold(
               appBar: AppBar(
                 title: Text(socialImageLabel(widget.attachment)),
                 leading: IconButton(

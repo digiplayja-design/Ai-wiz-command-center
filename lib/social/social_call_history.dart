@@ -1,3 +1,4 @@
+import 'social_appearance.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/korlix_theme.dart';
@@ -88,7 +89,7 @@ class _SocialCallHistoryState extends State<SocialCallHistory> {
   @override
   Widget build(BuildContext context) {
     final skin = korlixSkinOf(context);
-    return Scaffold(
+    return SocialScaffold(
       appBar: AppBar(
         title: const Text('Call history'),
         actions: [

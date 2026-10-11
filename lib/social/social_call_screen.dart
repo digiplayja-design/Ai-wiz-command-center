@@ -1,3 +1,4 @@
+import 'social_appearance.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -447,7 +448,7 @@ class _SocialCallScreenState extends State<SocialCallScreen>
     final incoming = call.incoming && call.state == 'ringing' && !call.ended;
     final time =
         '${call.elapsed.inMinutes.toString().padLeft(2, '0')}:${(call.elapsed.inSeconds % 60).toString().padLeft(2, '0')}';
-    return Scaffold(
+    return SocialScaffold(
       appBar: AppBar(
         title: Text(widget.video ? 'Video call' : 'Audio call'),
         actions: [

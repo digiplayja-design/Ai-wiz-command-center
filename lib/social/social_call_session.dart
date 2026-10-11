@@ -1,3 +1,4 @@
+import 'social_appearance.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'social_call_controller.dart';
@@ -74,7 +75,7 @@ class SocialCallSession extends ChangeNotifier {
     minimized = false;
     routeOpen = true;
     notifyListeners();
-    final route = MaterialPageRoute<void>(
+    final route = SocialPageRoute<void>(
       settings: const RouteSettings(name: '/social/call'),
       builder: (_) => SocialCallScreen(
         client: call.client,
