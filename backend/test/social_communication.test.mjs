@@ -59,6 +59,8 @@ before(async()=>{
  await db.exec(await readFile(new URL(online,folder),'utf8'));
  const missed=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_missed_call_counts.sql'));
  await db.exec(await readFile(new URL(missed,folder),'utf8'));
+ const receipts=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_read_receipts.sql'));
+ await db.exec(await readFile(new URL(receipts,folder),'utf8'));
  const app=express();app.use(express.json({limit:'250kb'}));push=registerSocial(app,{database:rpc,env,pushSender:sender,autoStart:false,requireUser:async q=>{if(!users.includes(q.headers.authorization))throw Error();return {id:q.headers.authorization,email_confirmed_at:'2026-01-01'};},logger:{warn(){}}});
  server=app.listen(0);await new Promise(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}/api/social/`;
 });
@@ -71,6 +73,114 @@ const callData=(id,who=0,extra={})=>({id,device:devices[who],...extra});
 const signal=(id,who,kind,payload,signal_id=randomUUID())=>call(users[who],'call_signal',callData(id,who,{kind,payload,signal_id}));
 const accept=async id=>call(users[1],'call_accept',callData(id,1,{protocol:2}));
 const count=async table=>(await db.query(`select count(*)::int n from ${table}`)).rows[0].n;
+
+const receipts=(actor,scope,ids)=>api('message_receipts',{...scope,ids:JSON.stringify(ids)},actor,'GET');
+test('direct receipts change only when the recipient acknowledges the displayed IDs',async()=>{
+ await connect();
+ const first=await send(),second=await send();
+ assert.equal((await receipts(users[0],{peer:b.id},[first.id])).items[0].read_at,null);
+ // Loading a chat or receipt never acknowledges messages.
+ await api('messages',{peer:a.id},users[1],'GET');
+ await api('read',{peer:b.id,ids:[first.id],p_actor:users[1]},users[0]);
+ assert.equal((await receipts(users[0],{peer:b.id},[first.id])).items[0].read_count,0);
+ await api('read',{peer:a.id,ids:[first.id,first.id],through:999999},users[1]);
+ const result=await receipts(users[0],{peer:b.id},[first.id,second.id]);
+ const read=result.items.find(x=>x.id===first.id),unread=result.items.find(x=>x.id===second.id);
+ assert.equal(read.read_count,1);assert(Number.isFinite(Date.parse(read.read_at)));
+ assert.equal(unread.read_at,null);
+ await api('read',{peer:a.id,ids:[first.id]},users[1]);
+ assert.equal((await receipts(users[0],{peer:b.id},[first.id])).items[0].read_at,read.read_at);
+ assert.equal((await receipts(users[1],{peer:a.id},[first.id])).items.length,0);
+});
+test('read acknowledgements exclude removed and personally dumped messages',async()=>{
+ await connect();const removed=await send(),dumped=await send(),visible=await send();
+ await call(users[0],'delete_message',{id:removed.id});
+ await db.query("insert into korlix_social_message_dumps(viewer,scope,message_id,dump_at)values($1,'direct',$2,now()-interval '1 second')",[b.id,dumped.id]);
+ await api('read',{peer:a.id,ids:[removed.id,dumped.id,visible.id]},users[1]);
+ const rows=(await db.query('select id,read_at from korlix_social_messages where id=any($1::uuid[])',[[removed.id,dumped.id,visible.id]])).rows;
+ assert.equal(rows.find(x=>x.id===removed.id).read_at,null);
+ assert.equal(rows.find(x=>x.id===dumped.id).read_at,null);
+ assert(rows.find(x=>x.id===visible.id).read_at);
+ // The existing cursor-only client remains compatible, without reading dumps.
+ await api('read',{peer:a.id,through:999999},users[1]);
+ assert.equal((await db.query('select read_at from korlix_social_messages where id=$1',[dumped.id])).rows[0].read_at,null);
+});
+test('receipt endpoints are method constrained, bounded and conversation private',async()=>{
+ await connect();const message=await send();
+ await receipts(users[0],{peer:b.id},[message.id]);
+ await api('message_receipts',{peer:b.id,ids:JSON.stringify([message.id])},users[2],'GET',403);
+ await api('message_receipts',{peer:b.id,ids:JSON.stringify([message.id])},'','GET',401);
+ await api('message_receipts',{peer:b.id,ids:[message.id]},users[0],'POST',404);
+ await api('read',{peer:a.id,through:999},users[1],'GET',404);
+ for(const ids of ['{}','[null]','[1]','["bad-uuid"]',JSON.stringify(Array(101).fill(message.id))]){
+  await api('message_receipts',{peer:b.id,ids},users[0],'GET',400);
+ }
+ await api('message_receipts',{peer:b.id,group:randomUUID(),ids:'[]'},users[0],'GET',400);
+ await call(users[1],'block',{peer:a.id});
+ await api('message_receipts',{peer:b.id,ids:JSON.stringify([message.id])},users[0],'GET',403);
+ await api('read',{peer:a.id,ids:[message.id]},users[1],'POST',403);
+});
+const receiptGroup=async()=>{
+ await connect();await call(users[0],'request',{peer:c.id});await call(users[2],'accept',{peer:a.id});
+ const group=randomUUID();await call(users[0],'group_create',{group,name:'Receipt group',members:[b.id,c.id]});
+ await call(users[1],'group_accept',{group});await call(users[2],'group_accept',{group});return group;
+};
+test('group receipts name each reader once and retain the first observed read time',async()=>{
+ const group=await receiptGroup(),first=randomUUID(),second=randomUUID();
+ await call(users[0],'group_send',{group,id:first,body:'First message'});
+ await call(users[0],'group_send',{group,id:second,body:'Second message'});
+ // Legacy counters do not fabricate per-message read evidence.
+ await api('group_read',{group,through:999999},users[1]);
+ assert.equal((await receipts(users[0],{group},[first])).items[0].read_count,0);
+ await api('group_read',{group,ids:[first],through:999999},users[1]);
+ await api('group_read',{group,ids:[first]},users[0]);
+ let result=await receipts(users[0],{group},[first,second]);
+ assert.equal(result.items.find(x=>x.id===second).read_count,0);
+ const firstTime=result.items.find(x=>x.id===first).readers[0].read_at;
+ await api('group_read',{group,ids:[first,first]},users[1]);
+ await api('group_read',{group,ids:[first]},users[2]);
+ result=(await receipts(users[0],{group},[first])).items[0];
+ assert.equal(result.read_count,2);
+ assert.deepEqual(new Set(result.readers.map(x=>x.id)),new Set([b.id,c.id]));
+ assert.equal(result.readers.find(x=>x.id===b.id).read_at,firstTime);
+ assert(result.readers.every(x=>x.name&&x.handle&&!x.user_id));
+ assert.equal((await receipts(users[1],{group},[first])).items.length,0);
+ const unrelated=randomUUID();await api('group_read',{group:unrelated,ids:[first]},users[1],'POST',403);
+});
+test('group receipts honor message scope, dumps, membership and hidden readers',async()=>{
+ const group=await receiptGroup(),read=randomUUID(),dumped=randomUUID(),otherGroup=randomUUID();
+ await call(users[0],'group_send',{group,id:read,body:'Read this'});
+ await call(users[0],'group_send',{group,id:dumped,body:'Hidden for Bruno'});
+ await db.query("insert into korlix_social_message_dumps(viewer,scope,message_id,dump_at)values($1,'group',$2,now()-interval '1 second')",[b.id,dumped]);
+ await call(users[0],'group_create',{group:otherGroup,name:'Other',members:[b.id]});
+ await api('group_read',{group:otherGroup,ids:[read]},users[1],'POST',403);
+ await call(users[1],'group_accept',{group:otherGroup});
+ await api('group_read',{group:otherGroup,ids:[read]},users[1]);
+ assert.equal(await count('korlix_social_group_message_reads'),0);
+ await api('group_read',{group,ids:[read,dumped]},users[1]);
+ let result=await receipts(users[0],{group},[read,dumped]);
+ assert.equal(result.items.find(x=>x.id===read).read_count,1);
+ assert.equal(result.items.find(x=>x.id===dumped).read_count,0);
+ await api('group_read',{group,ids:[read]},users[2]);
+ await call(users[1],'block',{peer:a.id});
+ result=(await receipts(users[0],{group},[read])).items[0];
+ assert.deepEqual(result.readers.map(x=>x.id),[c.id]);
+ await call(users[2],'group_leave',{group});
+ await api('group_read',{group,ids:[read]},users[2],'POST',403);
+ assert.equal((await receipts(users[0],{group},[read])).items[0].read_count,0);
+ await call(users[0],'group_delete_message',{group,id:read});
+ assert.equal((await receipts(users[0],{group},[read])).items.length,0);
+});
+test('read receipt storage and RPC remain service-only with RLS enabled',async()=>{
+ const table=(await db.query("select relrowsecurity from pg_class where oid='korlix_social_group_message_reads'::regclass")).rows[0];
+ assert.equal(table.relrowsecurity,true);
+ for(const role of ['anon','authenticated']){
+  const row=(await db.query("select has_table_privilege($1,'korlix_social_group_message_reads','select') can_read,has_function_privilege($1,'korlix_social_receipts_v1(uuid,text,jsonb)','execute') can_execute",[role])).rows[0];
+  assert.deepEqual(row,{can_read:false,can_execute:false});
+ }
+ assert.equal((await db.query("select prosecdef from pg_proc where oid='korlix_social_receipts_v1(uuid,text,jsonb)'::regprocedure")).rows[0].prosecdef,false);
+ assert.equal((await db.query("select has_function_privilege('service_role','korlix_social_receipts_v1(uuid,text,jsonb)','execute') ok")).rows[0].ok,true);
+});
 
 test('configuration exposes only public VAPID key; absent/mismatched keys stay disabled',async()=>{
  assert.equal(socialPushConfig({}).enabled,false);
