@@ -1,6 +1,7 @@
 import 'social_appearance.dart';
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -22,6 +23,7 @@ import 'social_design.dart';
 import 'social_forms.dart';
 import 'social_emoji.dart';
 import 'social_message_quote.dart';
+import 'social_message_receipt.dart';
 import 'social_auto_dump.dart';
 import 'social_dump_truck.dart';
 
@@ -81,6 +83,12 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       _unavailable = false;
   String? _error, _sendKey, _sendBody;
   int _generation = 0, _readThrough = 0;
+  Timer? _readTimer, _receiptCooldown;
+  final _acknowledgedMessages = <String>{};
+  final _receipts = <String, SocialMap>{};
+  Set<String> _hiddenReaders = {};
+  bool _acknowledging = false, _receiptsLoading = false;
+  String _receiptSelection = '';
   SocialNotifications? _notifications;
   RouteObserver<ModalRoute<dynamic>>? _routeObserver;
   ModalRoute<dynamic>? _chatRoute;
@@ -98,6 +106,8 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   @override
   void initState() {
     super.initState();
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    _foreground = lifecycle == null || lifecycle == AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
     widget.client.addListener(_access);
     _dumps.addListener(_dumpChanged);
@@ -108,7 +118,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
           !_loading &&
           !_sending &&
           !_dumpSaving &&
-          ModalRoute.of(context)?.isActive == true) {
+          ModalRoute.of(context)?.isCurrent == true) {
         unawaited(_load(quiet: true));
       }
     });
@@ -201,11 +211,13 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   void didPopNext() {
     _routeVisible = true;
     _syncConversationVisibility();
+    unawaited(_load(quiet: true));
   }
 
   @override
   void didPushNext() {
     _routeVisible = false;
+    _readTimer?.cancel();
     if (_dumpPreview != null) setState(() => _dumpPreview = null);
     _syncConversationVisibility();
   }
@@ -219,6 +231,11 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   void _access() {
     if (!widget.client.available && mounted) {
       _generation++;
+      _readTimer?.cancel();
+      _receiptCooldown?.cancel();
+      _receiptSelection = '';
+      _receipts.clear();
+      _acknowledgedMessages.clear();
       _dumps.clear();
       _dumpedSeen.clear();
       _dumpedLoaded.clear();
@@ -249,6 +266,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
+    if (!_foreground) _readTimer?.cancel();
     _syncConversationVisibility();
     if (!_foreground && _dumpPreview != null) {
       setState(() => _dumpPreview = null);
@@ -261,6 +279,8 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     _routeObserver?.unsubscribe(this);
     _releaseConversation();
     _timer?.cancel();
+    _readTimer?.cancel();
+    _receiptCooldown?.cancel();
     _dumps.removeListener(_dumpChanged);
     _dumps.dispose();
     _discardAttachment();
@@ -276,34 +296,135 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       !_scroll.hasClients ||
       _scroll.position.maxScrollExtent - _scroll.offset < 80;
   void _scrollChanged() {
-    if (_atBottom) _markRead();
+    _scheduleRead();
   }
 
-  void _markRead() {
-    if (!_foreground ||
-        _messages.isEmpty ||
-        !widget.client.available ||
-        ModalRoute.of(context)?.isCurrent != true) {
+  bool get _canRead =>
+      mounted &&
+      _foreground &&
+      !_unavailable &&
+      widget.client.available &&
+      ModalRoute.of(context)?.isCurrent == true;
+
+  List<SocialMap> _visibleMessages() {
+    final viewport = _historyViewportKey.currentContext?.findRenderObject();
+    if (viewport is! RenderBox || !viewport.attached || !viewport.hasSize) {
+      return [];
+    }
+    final bounds = viewport.localToGlobal(Offset.zero) & viewport.size;
+    return _messages.where((message) {
+      if (message['deleted'] == true || _dumps.hidden('${message['id']}')) {
+        return false;
+      }
+      final box = _messageKeys['${message['id']}']?.currentContext
+          ?.findRenderObject();
+      if (box is! RenderBox || !box.attached || !box.hasSize) return false;
+      final rect = box.localToGlobal(Offset.zero) & box.size;
+      final intersection = rect.intersect(bounds);
+      return intersection.width > 0 &&
+          intersection.height >= (rect.height < 32 ? rect.height : 32);
+    }).toList();
+  }
+
+  void _scheduleRead() {
+    _readTimer?.cancel();
+    if (!_canRead) return;
+    _readTimer = Timer(const Duration(milliseconds: 350), () {
+      if (!_canRead) return;
+      unawaited(_markRead());
+      unawaited(_refreshReceipts());
+    });
+  }
+
+  Future<void> _markRead() async {
+    if (!_canRead || _acknowledging || _messages.isEmpty) return;
+    final ids = _visibleMessages()
+        .where(
+          (m) =>
+              m['sender'] != null &&
+              m['sender'] != widget.me['id'] &&
+              !_acknowledgedMessages.contains('${m['id']}'),
+        )
+        .map((m) => '${m['id']}')
+        .take(100)
+        .toList();
+    final seq = _atBottom ? (_messages.last['seq'] as num).toInt() : 0;
+    if (ids.isEmpty && (!widget.groupChat || seq <= _readThrough)) return;
+    _acknowledging = true;
+    var succeeded = false;
+    try {
+      await widget.client.post(_action('read'), {
+        ..._destination,
+        'through': seq,
+        'ids': ids,
+      });
+      if (!mounted || !widget.client.available || _unavailable) return;
+      _acknowledgedMessages.addAll(ids);
+      if (seq > _readThrough) _readThrough = seq;
+      succeeded = true;
+    } catch (_) {
+      // A failed acknowledgement is retried on the next visible refresh.
+    } finally {
+      _acknowledging = false;
+      if (succeeded && _canRead) _scheduleRead();
+    }
+  }
+
+  Future<void> _refreshReceipts() async {
+    if (!_canRead || _receiptsLoading) return;
+    final ids = _visibleMessages()
+        .where((m) => m['sender'] == widget.me['id'])
+        .map((m) => '${m['id']}')
+        .take(100)
+        .toList();
+    if (ids.isEmpty) return;
+    final selection = ids.join(',');
+    if (_receiptSelection == selection && _receiptCooldown?.isActive == true) {
       return;
     }
-    final seq = (_messages.last['seq'] as num).toInt();
-    if (seq <= _readThrough) return;
-    _readThrough = seq;
-    unawaited(
-      widget.client
-          .post(_action('read'), {..._destination, 'through': seq})
-          .catchError((_) {
-            _readThrough = 0;
-            return <String, dynamic>{};
-          }),
-    );
+    _receiptsLoading = true;
+    final generation = _generation;
+    try {
+      final result = await widget.client.get('message_receipts', {
+        ..._destination,
+        'ids': jsonEncode(ids),
+      });
+      if (!_canRead || generation != _generation) return;
+      setState(() {
+        for (final id in ids) {
+          _receipts.remove(id);
+        }
+        for (final receipt in socialItems(result['items'])) {
+          final id = '${receipt['id']}';
+          if (ids.contains(id)) _receipts[id] = receipt;
+        }
+        _receiptSelection = selection;
+        _receiptCooldown?.cancel();
+        _receiptCooldown = Timer(const Duration(seconds: 3), () {});
+      });
+    } catch (error) {
+      if (mounted &&
+          error is SocialException &&
+          [401, 403].contains(error.status)) {
+        setState(_receipts.clear);
+      }
+    } finally {
+      _receiptsLoading = false;
+    }
   }
 
-  void _bottom() {
+  void _bottom({int remainingLayouts = 5}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _scroll.hasClients) {
-        _scroll.jumpTo(_scroll.position.maxScrollExtent);
-        _markRead();
+        final end = _scroll.position.maxScrollExtent;
+        if ((end - _scroll.offset).abs() > 1) {
+          _scroll.jumpTo(end);
+          // Lazy message layout can change the estimated extent after a jump.
+          if (remainingLayouts > 0) {
+            _bottom(remainingLayouts: remainingLayouts - 1);
+          }
+        }
+        _scheduleRead();
       }
     });
   }
@@ -331,6 +452,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
         _scrubDumped();
         if (widget.groupChat && r['hidden_senders'] is List) {
           final hidden = Set<String>.from(r['hidden_senders']);
+          _hiddenReaders = hidden;
           _messages = [
             for (final m in _messages)
               if (hidden.contains(m['sender']))
@@ -389,6 +511,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       });
       _syncConversationVisibility();
       if (!older && atBottom) _bottom();
+      _scheduleRead();
     } catch (e) {
       if (mounted && g == _generation) {
         setState(() {
@@ -396,6 +519,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
           _peer = {..._peer, 'online': null, 'last_login_at': null};
           if (e is SocialException && [401, 403, 404].contains(e.status)) {
             _messages = [];
+            _receipts.clear();
             _attachment = null;
             _replyTo = null;
             _sendKey = _sendBody = _sendReplyId = null;
@@ -578,16 +702,14 @@ class _SocialChatScreenState extends State<SocialChatScreen>
             _loading = false;
           });
           try {
-            final result = await widget.client.post(
-              seconds == null ? 'dump_cancel' : 'dump_schedule',
-              {
-                'id': id,
-                ..._destination,
-                'seconds': ?seconds,
-                'request_id': requestId,
-                'dump_scope': scope,
-              },
-            );
+            final result = await widget.client
+                .post(seconds == null ? 'dump_cancel' : 'dump_schedule', {
+                  'id': id,
+                  ..._destination,
+                  'seconds': ?seconds,
+                  'request_id': requestId,
+                  'dump_scope': scope,
+                });
             if (!mounted || !widget.client.available || _unavailable) {
               throw const SocialException(
                 'Your session changed. Reopen Social.',
@@ -1273,10 +1395,22 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
-                '${socialTime(m['created_at'])}${mine && !removed ? (m['read_at'] != null ? ' · Read' : ' · Sent') : ''}',
-                style: TextStyle(fontSize: 10, color: s.mutedText),
-              ),
+              if (mine && !removed)
+                SocialMessageReceipt(
+                  key: ValueKey('receipt-${m['id']}'),
+                  messageId: '${m['id']}',
+                  createdAt: m['created_at'],
+                  groupChat: widget.groupChat,
+                  readAt: _receipts['${m['id']}']?['read_at'] ?? m['read_at'],
+                  readers: socialItems(_receipts['${m['id']}']?['readers'])
+                      .where((reader) => !_hiddenReaders.contains(reader['id']))
+                      .toList(),
+                )
+              else
+                Text(
+                  socialTime(m['created_at']),
+                  style: TextStyle(fontSize: 10, color: s.mutedText),
+                ),
               if (!removed &&
                   (_dumpMode || _dumps.deadlines.containsKey('${m['id']}')))
                 Padding(
@@ -1449,9 +1583,9 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                               child: Text(
                                 _error!,
                                 style: TextStyle(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onErrorContainer,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onErrorContainer,
                                 ),
                               ),
                             ),
@@ -1474,8 +1608,8 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                           padding: const EdgeInsets.only(bottom: 20),
                           child: Text(
                             widget.groupChat
-                                ? 'Only accepted members can chat. You see messages sent after you join. Reported messages may be reviewed by KORLIX moderators.'
-                                : 'Connected by choice. Your messages are shared only with this connection. Reported messages may be reviewed by KORLIX moderators.',
+                                ? 'Only accepted members can chat. You see messages sent after you join. Senders can see who has read their messages. Reported messages may be reviewed by KORLIX moderators.'
+                                : 'Connected by choice. Your messages are shared only with this connection. Senders can see when you read a message. Reported messages may be reviewed by KORLIX moderators.',
                             textAlign: TextAlign.center,
                             style: const TextStyle(fontSize: 12, height: 1.5),
                           ),
@@ -1646,8 +1780,9 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                             onPressed: _sending ? null : _send,
                             style: IconButton.styleFrom(
                               minimumSize: const Size(52, 52),
-                              foregroundColor: korlixSkinOf(context)
-                                  .textOnAccent,
+                              foregroundColor: korlixSkinOf(
+                                context,
+                              ).textOnAccent,
                             ),
                             icon: _sending
                                 ? const SizedBox(
@@ -2362,7 +2497,8 @@ class _SocialTopicScreenState extends State<SocialTopicScreen>
                   const SocialEmpty(
                     icon: Icons.lock_outline,
                     title: 'This discussion is locked.',
-                    body: 'Existing posts can still be read. New replies are closed.',
+                    body:
+                        'Existing posts can still be read. New replies are closed.',
                   )
                 else
                   _composer(),
@@ -2557,7 +2693,9 @@ class _SocialManagementScreenState extends State<SocialManagementScreen> {
     if (!await socialConfirm(
       context,
       _reports ? 'Confirm moderation action?' : 'Unblock this member?',
-      _reports ? 'Apply “$decision” and resolve this report?' : 'Unblocking does not restore your connection. A new follow request must be accepted.',
+      _reports
+          ? 'Apply “$decision” and resolve this report?'
+          : 'Unblocking does not restore your connection. A new follow request must be accepted.',
       action: _reports ? 'Apply' : 'Unblock',
     )) {
       return;
