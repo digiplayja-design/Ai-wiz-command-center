@@ -1,20 +1,21 @@
 import {BillingError, fail, UUID} from '../web_billing/core.mjs';
 import {PACKAGE, PRODUCTS, VERSION, accountId, observation, playStore, purchaseToken, tokenHash} from './core.mjs';
-import {googlePlay} from './provider.mjs';
+import {CATALOG_FAILURES, googlePlay} from './provider.mjs';
 
 export function registerGooglePlay(app, {database, requireUser, loadProfile, environment = process.env,
   store = playStore(database), provider = googlePlay(environment), autoStart = true, now = Date.now} = {}) {
   const root = '/api/billing/google', rates = new Map();
   const testUsers = new Set((environment.KORLIX_GOOGLE_PLAY_TEST_USER_IDS || '').split(',').map(x => x.trim().toLowerCase()).filter(x => UUID.test(x)));
-  let catalogCheck = {checkedAt: null, ready: false};
+  let catalogCheck = {checkedAt: null, ready: false, reason: null};
   async function checkCatalog() {
     if (!provider.configured) return catalogCheck;
     try {
       await Promise.all(Object.keys(PRODUCTS).map(product => provider.catalog(product)));
-      catalogCheck = {checkedAt: new Date(now()).toISOString(), ready: true};
-    } catch {
+      catalogCheck = {checkedAt: new Date(now()).toISOString(), ready: true, reason: null};
+    } catch (error) {
       // Publish only readiness. Provider errors can contain credential details.
-      catalogCheck = {checkedAt: new Date(now()).toISOString(), ready: false};
+      catalogCheck = {checkedAt: new Date(now()).toISOString(), ready: false,
+        reason: CATALOG_FAILURES.includes(error?.googlePlayReason) ? error.googlePlayReason : 'provider_request_failed'};
     }
     return catalogCheck;
   }

@@ -1,6 +1,24 @@
 import {GoogleAuth, OAuth2Client} from 'google-auth-library';
 import {PACKAGE, purchaseToken, PRODUCTS} from './core.mjs';
-import {fail} from '../web_billing/core.mjs';
+import {BillingError, fail} from '../web_billing/core.mjs';
+
+export const CATALOG_FAILURES = Object.freeze(['api_disabled', 'permission_denied', 'authentication_failed',
+  'product_not_found', 'temporarily_unavailable', 'provider_request_failed', 'monthly_plan_unavailable']);
+function providerFailure(error) {
+  const status = Number(error?.response?.status);
+  const body = error?.response?.data?.error;
+  if (body?.details?.some(detail => detail?.reason === 'SERVICE_DISABLED')) return 'api_disabled';
+  if (status === 401 || ['invalid_grant', 'invalid_client', 'unauthorized_client'].includes(body)) return 'authentication_failed';
+  if (status === 403) return 'permission_denied';
+  if (status === 404) return 'product_not_found';
+  if (status === 429 || status >= 500) return 'temporarily_unavailable';
+  return 'provider_request_failed';
+}
+function catalogError(reason) {
+  const error = new BillingError('Google Play could not verify this subscription. Please retry.', 503);
+  error.googlePlayReason = reason;
+  return error;
+}
 
 export function googlePlay(environment = process.env, {auth, identity = new OAuth2Client()} = {}) {
   let credentials;
@@ -11,7 +29,7 @@ export function googlePlay(environment = process.env, {auth, identity = new OAut
   async function request(url, method = 'GET', data) {
     if (!client) fail('Google Play billing is being set up. Please try again later.', 503);
     try { return (await client.request({url, method, data, timeout: 20000, retry: false})).data; }
-    catch { fail('Google Play could not verify this subscription. Please retry.', 503); }
+    catch (error) { throw catalogError(providerFailure(error)); }
   }
   return {
     configured, ready: configured && environment.KORLIX_GOOGLE_PLAY_BILLING_ENABLED === 'true',
@@ -22,7 +40,9 @@ export function googlePlay(environment = process.env, {auth, identity = new OAut
       const plan = result?.basePlans?.find(p => p.basePlanId === 'monthly');
       if (result?.productId !== product || plan?.state !== 'ACTIVE' ||
           plan?.autoRenewingBasePlanType?.billingPeriodDuration !== 'P1M') {
-        fail('This Google Play monthly plan is not available yet. Please try again later.', 503);
+        const error = new BillingError('This Google Play monthly plan is not available yet. Please try again later.', 503);
+        error.googlePlayReason = 'monthly_plan_unavailable';
+        throw error;
       }
       return true;
     },

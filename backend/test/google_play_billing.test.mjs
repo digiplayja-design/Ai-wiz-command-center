@@ -71,7 +71,7 @@ test('disabled billing can verify both catalogs; public health cannot trigger AP
   await new Promise(resolve => server.once('listening', resolve));
   const health = async () => (await fetch(`http://127.0.0.1:${server.address().port}/api/billing/google/health`)).json();
   try {
-    assert.deepEqual((await health()).catalogCheck, {checkedAt: null, ready: false});
+    assert.deepEqual((await health()).catalogCheck, {checkedAt: null, ready: false, reason: null});
     assert.equal(calls.length, 0);
     await billing.tick();
     assert.deepEqual(calls.sort(), ['korlix_pro', 'korlix_ultra']);
@@ -81,9 +81,30 @@ test('disabled billing can verify both catalogs; public health cannot trigger AP
     fails = true; clock += 300000; await billing.tick();
     const result = await health();
     assert.equal(result.catalogCheck.ready, false);
+    assert.equal(result.catalogCheck.reason, 'provider_request_failed');
     assert.equal(calls.length, 4);
     assert.equal(JSON.stringify(result).includes('private-key-fixture'), false);
   } finally { billing.stop(); await new Promise(resolve => server.close(resolve)); }
+});
+
+test('provider diagnostics use fixed codes and never include credential-bearing errors', async () => {
+  const failures = [
+    [{response:{status:403,data:{error:{details:[{reason:'SERVICE_DISABLED'}]}}}},'api_disabled'],
+    [{response:{status:403,data:{error:{message:'secret-fixture'}}}},'permission_denied'],
+    [{response:{status:400,data:{error:'invalid_grant',error_description:'secret-fixture'}}},'authentication_failed'],
+    [{response:{status:404}},'product_not_found'],
+    [{response:{status:503}},'temporarily_unavailable'],
+    [new Error('secret-fixture'),'provider_request_failed'],
+  ];
+  for (const [failure, expected] of failures) {
+    const provider = googlePlay({}, {auth:{request: async () => { throw failure; }}});
+    await assert.rejects(provider.catalog('korlix_pro'), error => {
+      assert.equal(error.googlePlayReason, expected);
+      assert.equal(JSON.stringify(error).includes('secret-fixture'), false);
+      assert.equal(error.message.includes('secret-fixture'), false);
+      return true;
+    });
+  }
 });
 
 let db;
