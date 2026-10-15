@@ -10,6 +10,7 @@
     "dotenv": "latest",
     "exceljs": "4.4.0",
     "express": "latest",
+    "google-auth-library": "11.3.0",
     "mammoth": "^1.12.0",
     "multer": "2.4.0",
     "openai": "latest",
