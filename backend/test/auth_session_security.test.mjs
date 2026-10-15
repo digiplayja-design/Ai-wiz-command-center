@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import {authenticatedDeveloperUser} from '../security/developer_access.mjs';
 
 // Execute the real server authorization functions with an in-memory provider.
 // No server import, provider credentials, real users, or network access.
@@ -46,6 +47,7 @@ function fixture({ status = 'active', disabled = false, explicit = true, lookupE
     },
   };
   const context = vm.createContext({
+    authenticatedDeveloperUser,
     supabaseAdmin: database,
     supabaseAuth: { auth: { refreshSession: async () => ({ data: { user, session: { access_token: 'rotated-token', refresh_token: 'rotated-refresh' } } }) } },
     getOrCreateProfile: async () => account,

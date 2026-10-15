@@ -1,4 +1,5 @@
 import express from 'express';
+import {UNLIMITED_COMPATIBILITY_LIMIT} from '../security/developer_access.mjs';
 import { randomBytes, randomUUID, createHmac, timingSafeEqual } from 'node:crypto';
 import { FunnelError, fail, text, uuid, version, slug, document, publishReady, leadInput, contactInput, esc } from './core.mjs';
 import { renderPage, publicHeaders } from './render.mjs';
@@ -125,7 +126,7 @@ export function registerFunnels(app,{database,requireUser,store,followups,campai
   registerCleanup(app,{base,owner,command,secret,now});
   registerRehearsal(app,{base,owner,database,rehearsalStore});
   app.get(base,owner(async(_q,r,u)=>{
-    const v=await command(u,'list');r.json({...v,funnels:v.funnels.map(present),ai_ready:!!environment.OPENAI_API_KEY,ai_daily_limit:10});
+    const v=await command(u,'list');r.json({...v,funnels:v.funnels.map(present),ai_ready:!!environment.OPENAI_API_KEY,ai_daily_limit:v.unlimited===true?UNLIMITED_COMPATIBILITY_LIMIT:10});
   }));
   app.post(base,owner(async(q,r,u)=>r.status(201).json({funnel:present(await command(u,'create',null,{name:text(q.body?.name,100,true),slug:slug(q.body?.slug),document:document(q.body?.document)}))})));
   app.post(base+'/generate',owner(async(q,r,u)=>{

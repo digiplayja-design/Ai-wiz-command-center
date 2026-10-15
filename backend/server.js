@@ -3,6 +3,7 @@ import {publicApiErrorHandler} from './security/http_errors.mjs';
 import {createReportSubmissionGuard} from './security/report_submission.mjs';
 import {persistAiReport, markAiReportNotification, listAiReports} from './security/ai_report_persistence.mjs';
 import {createVideoAccess} from './security/video_access.mjs';
+import {hasUnlimitedAccess, authenticatedDeveloperUser, UNLIMITED_FEATURE_LIMITS, UNLIMITED_COMPATIBILITY_LIMIT} from './security/developer_access.mjs';
 import riciVoice from './voice/rici_pronunciation.cjs';
 const {riciRealtimeInstructions} = riciVoice;
 import {registerWelcomeAudio} from './welcome/audio.mjs';
@@ -761,7 +762,8 @@ function calculateCredits({ liveSearchNeeded, fileRequested }) {
   return 1;
 }
 
-function getTierLimits(tier) {
+function getTierLimits(tier, profile = null) {
+  if (hasUnlimitedAccess(profile)) return UNLIMITED_FEATURE_LIMITS;
   const limits = {
     basic: {
       dailyRequestLimit: 3,
@@ -853,6 +855,7 @@ function getRequestDeviceInfo(req) {
 }
 
 function getTierDeviceLimit(profile) {
+  if (hasUnlimitedAccess(profile)) return UNLIMITED_COMPATIBILITY_LIMIT;
   const override = Number(profile?.max_devices_override || 0);
 
   if (Number.isFinite(override) && override > 0) {
@@ -1148,7 +1151,7 @@ async function getAuthenticatedUser(req) {
   // header. Only server-owned profile state is an authorization source.
   const { data: account, error: accountError } = await supabaseAdmin
     .from("user_profiles")
-    .select("is_disabled")
+    .select("id,is_disabled,developer_access:korlix_developer_access(enabled)")
     .eq("id", data.user.id)
     .maybeSingle();
   if (accountError) throw makeHttpError("Account access could not be verified. Please retry.", 503);
@@ -1167,7 +1170,7 @@ async function getAuthenticatedUser(req) {
     });
   }
 
-  return data.user;
+  return authenticatedDeveloperUser(data.user, account);
 }
 
 async function requireUser(req) {
@@ -1272,6 +1275,7 @@ async function getOrCreateUsageCounter(userId) {
 }
 
 function checkUsageAllowed({ profile, usageCounter, creditsNeeded }) {
+  if (hasUnlimitedAccess(profile)) return {allowed:true, reason:null};
   if (!profile || !usageCounter) {
     return {
       allowed: true,
@@ -1280,7 +1284,7 @@ function checkUsageAllowed({ profile, usageCounter, creditsNeeded }) {
   }
 
   const tier = profile.tier || "basic";
-  const limits = getTierLimits(tier);
+  const limits = getTierLimits(tier, profile);
 
   const totalRequests =
     Number(usageCounter.standard_generations || 0) +
@@ -1677,6 +1681,7 @@ function getUploadedImageMime(file) {
 
 
 function getVideoTierLimit(profile) {
+  if (hasUnlimitedAccess(profile)) return UNLIMITED_COMPATIBILITY_LIMIT;
   const override = Number(profile?.video_generation_limit_override || 0);
 
   if (Number.isFinite(override) && override > 0) {
@@ -3664,7 +3669,7 @@ app.get("/api/me", async (req, res) => {
       usage: usageCounter,
       characters: characters || [],
       characterAccess: characterAccess || [],
-      limits: getTierLimits(profile?.tier || "basic"),
+      limits: getTierLimits(profile?.tier || "basic", profile),
     });
   } catch (error) {
     res.status(error.statusCode || 500).json({
@@ -5238,7 +5243,7 @@ registerAppStudio(app,{database:supabaseAdmin,requireUser,
   if(!process.env.OPENAI_API_KEY)return {allowed:false,status:503,reason:'KORLIX app design is temporarily unavailable.'};
   const profile=await getOrCreateProfile(user),usageCounter=await getOrCreateUsageCounter(user.id);
   if(!profile||!usageCounter)throw new Error('App Studio usage unavailable');
-  const limits=getTierLimits(profile.tier||'basic');
+  const limits=getTierLimits(profile.tier||'basic', profile);
   return {...checkUsageAllowed({profile,usageCounter,creditsNeeded:1}),status:429,usageId:usageCounter.id,creditLimit:limits.dailyCreditLimit,requestLimit:limits.dailyRequestLimit};
  },generate:data=>generateSpec({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
 });
@@ -5247,7 +5252,7 @@ registerCyberDefender(app,{database:supabaseAdmin,requireUser,
   if(!process.env.OPENAI_API_KEY)return {allowed:false,status:503,reason:'KORLIX security review is temporarily unavailable.'};
   const profile=await getOrCreateProfile(user),usageCounter=await getOrCreateUsageCounter(user.id);
   if(!profile||!usageCounter)throw new Error('Cybersecurity Defender usage unavailable');
-  const limits=getTierLimits(profile.tier||'basic');
+  const limits=getTierLimits(profile.tier||'basic', profile);
   return {...checkUsageAllowed({profile,usageCounter,creditsNeeded:1}),status:429,usageId:usageCounter.id,creditLimit:limits.dailyCreditLimit,requestLimit:limits.dailyRequestLimit};
  },generate:data=>generateReview({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
 });
@@ -5257,7 +5262,7 @@ registerStudyStudio(app,{database:supabaseAdmin,requireUser,
   if(!process.env.OPENAI_API_KEY)return {allowed:false,status:503,reason:'KORLIX study generation is temporarily unavailable.'};
   const profile=await getOrCreateProfile(user),usageCounter=await getOrCreateUsageCounter(user.id);
   if(!profile||!usageCounter)throw new Error('Study Studio usage unavailable');
-  const limits=getTierLimits(profile.tier||'basic');
+  const limits=getTierLimits(profile.tier||'basic', profile);
   return {...checkUsageAllowed({profile,usageCounter,creditsNeeded:1}),status:429,usageId:usageCounter.id,creditLimit:limits.dailyCreditLimit,requestLimit:limits.dailyRequestLimit};
  },generate:data=>generateLesson({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})}),
 });
@@ -8503,7 +8508,7 @@ function korlixLiveConvoBuild131EntitlementForUser(user) {
       .trim()
       .toLowerCase();
 
-  const unlimited = Boolean(
+  const unlimited = hasUnlimitedAccess(user) || Boolean(
     userId &&
     korlixLiveConvoBuild131UnlimitedUserIds().has(
       userId
@@ -9049,6 +9054,7 @@ app.get(
       version: "build129",
       entitlementVersion:
         "build131_uid_extraction_v2",
+      developerFeatureEntitlementVersion: "account_grant_v1",
       supabaseConfigured: Boolean(
         supabaseAdmin
       ),
@@ -12414,7 +12420,7 @@ registerAgentStudio(app, {database:supabaseAdmin,requireUser,
   if(!process.env.OPENAI_API_KEY)return {allowed:false,status:503,reason:'Agent generation is temporarily unavailable.'};
   const profile=await getOrCreateProfile(user),usageCounter=await getOrCreateUsageCounter(user.id);
   if(!profile||!usageCounter)throw new Error('Agent workflow usage unavailable');
-  const limits=getTierLimits(profile.tier||'basic');
+  const limits=getTierLimits(profile.tier||'basic', profile);
   return {...checkUsageAllowed({profile,usageCounter,creditsNeeded:1}),status:429,usageId:usageCounter.id,creditLimit:limits.dailyCreditLimit,requestLimit:limits.dailyRequestLimit};
  },generate:data=>generateStep({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})})
 });
@@ -12424,7 +12430,7 @@ registerInventory(app,{database:supabaseAdmin,storageDatabase:bookkeepingStorage
   if(!process.env.OPENAI_API_KEY)return {allowed:false,status:503,reason:'KORLIX picture recognition is temporarily unavailable.'};
   const profile=await getOrCreateProfile(user),usageCounter=await getOrCreateUsageCounter(user.id);
   if(!profile||!usageCounter)throw new Error('Inventory usage unavailable');
-  const limits=getTierLimits(profile.tier||'basic');
+  const limits=getTierLimits(profile.tier||'basic', profile);
   return {...checkUsageAllowed({profile,usageCounter,creditsNeeded:1}),status:429,usageId:usageCounter.id,creditLimit:limits.dailyCreditLimit,requestLimit:limits.dailyRequestLimit};
  },recognize:data=>recognizeInventory({...data,client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0})})
 });
@@ -12527,7 +12533,7 @@ registerSeoAgent(app, {database: supabaseAdmin, requireUser, autoStartScheduler:
     if (reserved) return {allowed:true};
     const usageCounter = await getOrCreateUsageCounter(user.id);
     if (!profile || !usageCounter) throw new Error('SEO usage unavailable');
-    const limits = getTierLimits(tier);
+    const limits = getTierLimits(tier, profile);
     return {...checkUsageAllowed({profile,usageCounter,creditsNeeded:SEO_CREDIT_COST}),status:429,
       usageId:usageCounter.id,creditLimit:limits.dailyCreditLimit,requestLimit:limits.dailyRequestLimit};
   },
@@ -12601,7 +12607,7 @@ registerBookkeeping(app, { database: supabaseAdmin, requireUser, receiptOptions:
     if (!profile || !usageCounter) throw new Error('Receipt usage storage unavailable');
     const check = checkUsageAllowed({ profile, usageCounter, creditsNeeded: 1 });
     return { available: hasAdvancedUploadAccess(profile.tier) && check.allowed,
-      reason: check.reason || '', daily_limit: getTierLimits(profile.tier).dailyRequestLimit, credit_cost: 1 };
+      reason: check.reason || '', daily_limit: getTierLimits(profile.tier, profile).dailyRequestLimit, credit_cost: 1 };
   },
   scanReceipt: async ({ receipt, bytes }) => extractReceipt({ receipt, bytes,
     client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY, maxRetries: 0, timeout: 180000 }),

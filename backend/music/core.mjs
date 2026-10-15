@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {hasUnlimitedAccess,UNLIMITED_COMPATIBILITY_LIMIT} from '../security/developer_access.mjs';
 export class MusicError extends Error {
   constructor(message,status=400){super(message);this.name='MusicError';this.status=status;}
 }
@@ -37,6 +38,10 @@ export function providerPayload(o){
 }
 export const digest=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 export function entitlement(user,env=process.env){
+ if(hasUnlimitedAccess(user)){
+  const plan={id:'developer_unlimited',name:'Developer Unlimited',priceMonthly:0,monthlyGenerations:UNLIMITED_COMPATIBILITY_LIMIT,description:'Unlimited developer music access.'};
+  return {active:true,planId:plan.id,plan,plans:PLANS,billingRequired:false,unlimited:true,developerAccess:true};
+ }
  const email=String(user.email??'').trim().toLowerCase();
  const allowed=String(env.KORLIX_MUSIC_ADDON_ALLOWLIST??'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
  const active=String(env.KORLIX_MUSIC_ADDON_DEV_ACTIVE??'').toLowerCase()==='true'||!!email&&allowed.includes(email);

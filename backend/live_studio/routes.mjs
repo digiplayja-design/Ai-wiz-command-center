@@ -22,7 +22,8 @@ export function registerLiveStudio(app,{database,storage,requireUser,access=asyn
     if(u.banned_until&&Date.parse(u.banned_until)>Date.now())throw new LiveStudioError('This account is not available.',403);
   };
   const workspace=async u=>{
-    // Only a server-verified developer entitlement can seed this bounded test grant.
+    // Only a server-verified developer entitlement can seed a grant. SQL resolves
+    // whether this account has the separate, revocable unlimited feature grant.
     // Customers need an explicit server-side grant; no client tier or metadata is trusted.
     const developer=await access(u);
     if(developer.allowed===true){available(u);await store.call(u.id,'grant_developer');}
@@ -33,7 +34,7 @@ export function registerLiveStudio(app,{database,storage,requireUser,access=asyn
   const stateFor=async u=>{
     const [data,channel]=await Promise.all([workspace(u),connections.summary(u.id)]);
     const enabled=data.entitlement?.enabled===true;
-    const canStart=enabled&&(data.usage?.dailyStarts||0)<(data.entitlement?.maxDailyStarts||0);
+    const canStart=enabled&&(data.entitlement?.unlimited===true||(data.usage?.dailyStarts||0)<(data.entitlement?.maxDailyStarts||0));
     const ready=channel.connectionConfigured===true&&channel.connection?.state==='connected'&&data.workerReady===true;
     let message='Activate a Live Studio allowance before generating shows. Your saved shows and channel controls remain available.';
     if(enabled)message=!channel.connectionConfigured?'YouTube setup is being completed. You can prepare shows and use your rehearsal allowance.'
