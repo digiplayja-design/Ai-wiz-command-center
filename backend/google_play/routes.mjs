@@ -6,6 +6,18 @@ export function registerGooglePlay(app, {database, requireUser, loadProfile, env
   store = playStore(database), provider = googlePlay(environment), autoStart = true, now = Date.now} = {}) {
   const root = '/api/billing/google', rates = new Map();
   const testUsers = new Set((environment.KORLIX_GOOGLE_PLAY_TEST_USER_IDS || '').split(',').map(x => x.trim().toLowerCase()).filter(x => UUID.test(x)));
+  let catalogCheck = {checkedAt: null, ready: false};
+  async function checkCatalog() {
+    if (!provider.configured) return catalogCheck;
+    try {
+      await Promise.all(Object.keys(PRODUCTS).map(product => provider.catalog(product)));
+      catalogCheck = {checkedAt: new Date(now()).toISOString(), ready: true};
+    } catch {
+      // Publish only readiness. Provider errors can contain credential details.
+      catalogCheck = {checkedAt: new Date(now()).toISOString(), ready: false};
+    }
+    return catalogCheck;
+  }
   function rate(id, action) {
     const key = `${id}:${action}`, previous = rates.get(key), time = now();
     if (!previous || previous.until < time) rates.set(key, {until: time + 60000, count: 1});
@@ -56,7 +68,8 @@ export function registerGooglePlay(app, {database, requireUser, loadProfile, env
   }
   app.get(root + '/health', (_req, res) => res.set('Cache-Control', 'no-store').json({version: VERSION,
     packageName: PACKAGE, products: PRODUCTS, configured: provider.configured,
-    billingEnabled: provider.ready, notificationsConfigured: provider.notificationsConfigured}));
+    billingEnabled: provider.ready, notificationsConfigured: provider.notificationsConfigured,
+    catalogCheck}));
   app.get(root + '/status', wrap(async (req, res, user) => {
     let snapshot = await store.command(user.id, 'snapshot'), warning = null;
     if (req.query?.refresh === '1' && snapshot.account_id && provider.configured) {
@@ -108,10 +121,13 @@ export function registerGooglePlay(app, {database, requireUser, loadProfile, env
   async function tick() {
     if (running || !provider.configured) return;
     running = true;
-    try { for (const row of await store.command(null, 'due')) await sync(row.user_id).catch(() => {}); }
+    try {
+      if (!catalogCheck.checkedAt || now() - Date.parse(catalogCheck.checkedAt) >= 300000) await checkCatalog();
+      for (const row of await store.command(null, 'due')) await sync(row.user_id).catch(() => {});
+    }
     catch { /* Notification delivery and subsequent reconciliation retry. */ }
     finally { running = false; }
   }
-  if (autoStart && provider.configured) { timer = setInterval(tick, 60000); timer.unref?.(); }
-  return {sync, tick, stop: () => clearInterval(timer)};
+  if (autoStart && provider.configured) { void tick(); timer = setInterval(tick, 60000); timer.unref?.(); }
+  return {sync, tick, checkCatalog, stop: () => clearInterval(timer)};
 }

@@ -60,6 +60,32 @@ test('server catalog preflight rejects missing, inactive or annual-only plans be
   await assert.rejects(provider.catalog('korlix_pro'),/not available/);
 });
 
+test('disabled billing can verify both catalogs; public health cannot trigger API calls or leak errors', async () => {
+  const calls = []; let fails = false, clock = Date.now();
+  const provider = {configured: true, ready: false, notificationsConfigured: false,
+    catalog: async product => { calls.push(product); if (fails) throw new Error('private-key-fixture'); }};
+  const billingApp = express();
+  const billing = registerGooglePlay(billingApp, {provider, autoStart: false, now: () => clock,
+    store: {command: async (_user, action) => { assert.equal(action, 'due'); return []; }}});
+  const server = billingApp.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  const health = async () => (await fetch(`http://127.0.0.1:${server.address().port}/api/billing/google/health`)).json();
+  try {
+    assert.deepEqual((await health()).catalogCheck, {checkedAt: null, ready: false});
+    assert.equal(calls.length, 0);
+    await billing.tick();
+    assert.deepEqual(calls.sort(), ['korlix_pro', 'korlix_ultra']);
+    assert.equal((await health()).catalogCheck.ready, true);
+    assert.equal((await health()).billingEnabled, false);
+    await billing.tick(); assert.equal(calls.length, 2);
+    fails = true; clock += 300000; await billing.tick();
+    const result = await health();
+    assert.equal(result.catalogCheck.ready, false);
+    assert.equal(calls.length, 4);
+    assert.equal(JSON.stringify(result).includes('private-key-fixture'), false);
+  } finally { billing.stop(); await new Promise(resolve => server.close(resolve)); }
+});
+
 let db;
 const rpc = async (actor,action,p={})=>(await db.query('select korlix_play_billing_command($1,$2,$3::jsonb) result',[actor,action,JSON.stringify(p)])).rows[0].result;
 const profile=async(id=owner)=>(await db.query('select korlix_web_billing_profile($1) result',[id])).rows[0].result;
