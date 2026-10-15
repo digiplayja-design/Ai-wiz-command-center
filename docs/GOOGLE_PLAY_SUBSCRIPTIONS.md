@@ -93,6 +93,17 @@ After the frontend fix is checked out, run:
 bash scripts/build-google-play-billing.sh HIGHEST_PLAY_VERSION_CODE
 ```
 
+For an existing Codespace with unfinished work, run
+`scripts/prepare-google-play-billing-build.sh HIGHEST_PLAY_VERSION_CODE COMMIT_SHA`
+from the original repository instead. Download this helper from the same pinned
+commit if it is not already available there. It fetches that exact revision and
+creates a separate detached worktree beside the original repository. It leaves
+the original branch, index, tracked changes and untracked files intact. The
+build's private local signing file references the original keystore by absolute
+path; Java Properties parsing preserves escaped passwords. No new key is made.
+An existing Android SDK path is also preserved, while Flutter regenerates its
+other local settings. The helper prints the new folder and final AAB path.
+
 The script runs the billing tests and builds a signed AAB using the next version
 code. It uses the existing keystore/signing configuration and does not publish.
 Upload the AAB to Internal testing first, opt in with a Play license-test account,
