@@ -38,6 +38,26 @@ annual offers are excluded until their terms have corresponding UI support.
    to publish to the topic, and configure Pub/Sub's token creation permission
    for the push identity as described in Google's setup documentation.
 
+For the existing `korlix-ai` project, run
+`bash scripts/setup-google-play-notifications.sh` in Google Cloud Shell as a
+project administrator. It creates the `korlix-play-billing` topic, the
+`korlix-play-billing-render` push subscription, and the dedicated
+`korlix-play-rtdn@korlix-ai.iam.gserviceaccount.com` delivery identity. It grants
+Google Play publisher access only to that topic and Pub/Sub token creation only
+on that delivery identity. No new credential key is needed. Existing matching
+resources are reused; incompatible subscription settings stop setup for review.
+
+Set Render's expected audience to the notification URL, the service account to
+the delivery identity above, and the subscription to
+`projects/korlix-ai/subscriptions/korlix-play-billing-render`. Then in Play Console
+enable real-time notifications, enter
+`projects/korlix-ai/topics/korlix-play-billing`, keep subscriptions and voided
+purchases selected, save, and send a test notification. A successful Console
+send confirms publishing only. Confirm the backend log
+`[google-play] authenticated RTDN test notification received` before treating
+delivery as verified. The log is emitted only after identity, audience,
+subscription and package validation and contains no tokens or user data.
+
 | Render backend variable | Value |
 | --- | --- |
 | `KORLIX_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Service account JSON secret |

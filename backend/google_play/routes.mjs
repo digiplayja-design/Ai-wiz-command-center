@@ -100,7 +100,10 @@ export function registerGooglePlay(app, {database, requireUser, loadProfile, env
     res.set('Cache-Control', 'no-store');
     try {
       const event = await provider.notification(req);
-      if (event.testNotification) return res.json({received: true});
+      if (event.testNotification) {
+        console.info('[google-play] authenticated RTDN test notification received');
+        return res.json({received: true});
+      }
       const token = event.subscriptionNotification?.purchaseToken || event.voidedPurchaseNotification?.purchaseToken;
       if (!token) return res.json({received: true});
       purchaseToken(token);
