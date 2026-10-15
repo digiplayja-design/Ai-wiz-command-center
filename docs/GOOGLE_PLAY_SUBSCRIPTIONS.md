@@ -16,10 +16,12 @@ annual offers are excluded until their terms have corresponding UI support.
 
 ## Backend setup
 
-1. Apply `backend/google_play/schema.sql` as a tracked Supabase migration named
-   `google_play_subscriptions` in the Korlix AI project. Preserve the migration
-   version returned by Supabase in the repository before merging. This SQL is
-   prepared for review; it has not been applied to production.
+1. Migration `supabase/migrations/20261015212823_google_play_subscriptions.sql`
+   was applied to the Korlix AI project on October 15, 2026. The version is the
+   actual Supabase migration record. The tested source in
+   `backend/google_play/schema.sql` is identical. Both new tables have RLS,
+   browser roles have no table or function access, and Developer Unlimited was
+   verified intact after applying it. Do not apply the migration twice.
 2. Deploy the backend commit after that migration. New Play purchases default
    to disabled; receipt refresh and acknowledgment continue when credentials
    are configured, even if new purchases are subsequently disabled.
@@ -47,7 +49,15 @@ annual offers are excluded until their terms have corresponding UI support.
 
 `GET /api/billing/google/health` exposes configuration booleans, package and
 product IDs, never credentials. Configuration booleans do not prove working
-API permissions. Before opening the purchase sheet, `/prepare` separately
+API permissions. A server-owned read-only check queries both active monthly
+products at startup and every five minutes, including while new purchases are
+disabled. Its cached `catalogCheck.ready` and `checkedAt` prove that the configured
+identity could read both products at that time; health requests never trigger
+Google API calls. This check does not prove an actual purchase or RTDN delivery.
+If it fails, `catalogCheck.reason` contains only a fixed diagnostic code, such as
+`api_disabled`, `permission_denied` or `authentication_failed`. Raw provider
+responses, credential text and account identifiers are never returned.
+Before opening the purchase sheet, `/prepare` separately
 checks the active monthly product through Google's authenticated server API.
 
 Verification uses `purchases.subscriptionsv2.get`, checks the obfuscated account
@@ -60,9 +70,22 @@ missed notifications. Expiry is also enforced on account profile reads.
 
 ## Android release
 
-Use the existing signed Android Codespace. The previously built source was
-version `12.0.0+131`; verify the highest version code across all Play tracks and
-drafts before selecting the next code. Do not reuse 131 or assume 132 is free.
+Use the existing signed Android Codespace. October 15 Console screenshots
+confirm `12.0.0+131` is fully rolled out in Production and Internal testing, and
+131 is the latest uploaded bundle shown. Both product IDs above have an active,
+monthly auto-renewing base plan named `monthly`, available in 175 regions.
+Verify no newer upload or draft exists before selecting the next version code.
+The Console permissions for `korlix-play-billing@korlix-ai.iam.gserviceaccount.com`
+include app-scoped financial data and order/subscription management. Runtime
+catalog checks and an actual license-test purchase still establish API access
+and end-to-end behavior; Console checkboxes alone do not.
+
+The build requires the existing public Supabase client settings. Either export
+`SUPABASE_URL` and `SUPABASE_ANON_KEY` in the Android Codespace, or set
+`KORLIX_ANDROID_DEFINES_FILE` to the existing Flutter client JSON configuration.
+The script validates that the key is public, passes the settings into Flutter,
+and deletes its temporary file after building. The Google service-account JSON
+is a backend-only credential and is never an Android build input.
 
 After the frontend fix is checked out, run:
 
