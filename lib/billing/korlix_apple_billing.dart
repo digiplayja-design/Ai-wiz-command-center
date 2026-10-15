@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:in_app_purchase_android/in_app_purchase_android.dart';
+import 'package:in_app_purchase_android/billing_client_wrappers.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 typedef KorlixBillingHeadersBuilder = Map<String, String> Function();
@@ -20,8 +22,18 @@ const Set<String> kKorlixAppleSubscriptionProductIds = <String>{
   kKorlixAppleUltraMonthlyProductId,
 };
 
+const String kKorlixGoogleProMonthlyProductId = 'korlix_pro';
+const String kKorlixGoogleUltraMonthlyProductId = 'korlix_ultra';
+const Set<String> kKorlixGoogleSubscriptionProductIds = <String>{
+  kKorlixGoogleProMonthlyProductId,
+  kKorlixGoogleUltraMonthlyProductId,
+};
+
+// The existing public class name is retained for iOS callers. The service
+// selects a separate catalog and verification endpoint for each native store.
 // KORLIX_APPLE_SUBSCRIPTIONS_BUILD130_CLIENT_BEGIN
-class KorlixAppleBillingService extends ChangeNotifier {
+class KorlixAppleBillingService extends ChangeNotifier
+    with WidgetsBindingObserver {
   KorlixAppleBillingService._()
     : _store = InAppPurchase.instance,
       _http = http.Client();
@@ -54,6 +66,9 @@ class KorlixAppleBillingService extends ChangeNotifier {
   bool _restoring = false;
   bool _storeAvailable = false;
   bool _webSubscriptionActive = false;
+  bool _otherStoreSubscriptionActive = false;
+  bool _googleCanPurchase = false;
+  final Map<String, GooglePlayPurchaseDetails> _googlePurchases = {};
   String _currentTier = 'basic';
   String? _busyProductId;
   String? _message;
@@ -62,6 +77,44 @@ class KorlixAppleBillingService extends ChangeNotifier {
 
   bool get isApplePlatform =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+  bool get isGooglePlatform =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  bool get isStorePlatform => isApplePlatform || isGooglePlatform;
+  String get storeName => isGooglePlatform ? 'Google Play' : 'App Store';
+  String get storeLabel => isGooglePlatform ? 'Google Play' : 'Apple';
+  String get _providerPath => isGooglePlatform ? 'google' : 'apple';
+  String get proProductId => isGooglePlatform
+      ? kKorlixGoogleProMonthlyProductId
+      : kKorlixAppleProMonthlyProductId;
+  String get ultraProductId => isGooglePlatform
+      ? kKorlixGoogleUltraMonthlyProductId
+      : kKorlixAppleUltraMonthlyProductId;
+  Set<String> get productIds => isGooglePlatform
+      ? kKorlixGoogleSubscriptionProductIds
+      : kKorlixAppleSubscriptionProductIds;
+  bool get canPurchase =>
+      !_webSubscriptionActive &&
+      !_otherStoreSubscriptionActive &&
+      (!isGooglePlatform || _googleCanPurchase);
+
+  bool _eligibleProduct(ProductDetails product) {
+    if (!isGooglePlatform) return productIds.contains(product.id);
+    if (product is! GooglePlayProductDetails ||
+        !productIds.contains(product.id)) {
+      return false;
+    }
+    final index = product.subscriptionIndex;
+    final offers = product.productDetails.subscriptionOfferDetails;
+    if (index == null || offers == null || index >= offers.length) return false;
+    final offer = offers[index];
+    return offer.basePlanId == 'monthly' &&
+        offer.offerId == null &&
+        offer.pricingPhases.length == 1 &&
+        offer.pricingPhases.single.billingPeriod == 'P1M' &&
+        offer.pricingPhases.single.recurrenceMode ==
+            RecurrenceMode.infiniteRecurring;
+  }
 
   bool get loadingProducts => _loadingProducts;
   bool get checkingStatus => _checkingStatus;
@@ -96,6 +149,7 @@ class KorlixAppleBillingService extends ChangeNotifier {
 
     if (!_started) {
       _started = true;
+      WidgetsBinding.instance.addObserver(this);
       _purchaseSubscription = _store.purchaseStream.listen(
         (purchases) {
           final scope = _sessionSnapshot;
@@ -117,21 +171,46 @@ class KorlixAppleBillingService extends ChangeNotifier {
           if (_disposed) return;
           _endPurchaseOperation();
           _setError(
-            'The App Store could not update your purchase. Please try Restore Purchases.',
+            'The $storeName could not update your purchase. Please try Restore Purchases.',
           );
         },
       );
     }
 
-    if (!isApplePlatform) {
+    if (!isStorePlatform) {
       _storeAvailable = false;
       _message =
-          'Apple subscriptions are available in the iPhone and iPad app.';
+          'Subscriptions are available in the Android, iPhone, and iPad apps.';
       notifyListeners();
       return;
     }
 
     await refreshAll();
+    await recoverGooglePurchases();
+  }
+
+  // Recover purchases completed while the app was closed or disconnected.
+  // The purchase stream still verifies each receipt with the signed-in account.
+  Future<void> recoverGooglePurchases() async {
+    if (!isGooglePlatform || busy || _disposed) return;
+    final scope = _sessionSnapshot;
+    if (!_sessionMatches(scope)) return;
+    try {
+      await _store.restorePurchases();
+    } catch (_) {
+      if (_sessionMatches(scope)) {
+        _setError(
+          'Google Play purchases could not be refreshed. Use Restore Purchases to retry.',
+        );
+      }
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(recoverGooglePurchases());
+    }
   }
 
   Future<void> refreshAll() async {
@@ -139,7 +218,7 @@ class KorlixAppleBillingService extends ChangeNotifier {
   }
 
   Future<void> refreshProducts() async {
-    if (!isApplePlatform || _loadingProducts) {
+    if (!isStorePlatform || _loadingProducts) {
       return;
     }
 
@@ -153,33 +232,36 @@ class KorlixAppleBillingService extends ChangeNotifier {
 
       if (!_storeAvailable) {
         _products.clear();
-        _message = 'The App Store is temporarily unavailable.';
+        _message = 'The $storeName is temporarily unavailable.';
         return;
       }
 
       final ProductDetailsResponse response = await _store.queryProductDetails(
-        kKorlixAppleSubscriptionProductIds,
+        productIds,
       );
       if (_disposed) return;
 
       if (response.error != null) {
         throw StateError(
-          response.error?.message ?? 'Could not load App Store products.',
+          response.error?.message ?? 'Could not load $storeName plans.',
         );
       }
 
       _products
         ..clear()
         ..addEntries(
-          response.productDetails.map(
-            (ProductDetails product) =>
-                MapEntry<String, ProductDetails>(product.id, product),
-          ),
+          response.productDetails
+              .where(_eligibleProduct)
+              .map(
+                (ProductDetails product) =>
+                    MapEntry<String, ProductDetails>(product.id, product),
+              ),
         );
 
-      if (response.notFoundIDs.isNotEmpty) {
+      if (response.notFoundIDs.isNotEmpty ||
+          _products.length < productIds.length) {
         _message =
-            'Some plans are temporarily unavailable from the App Store. Please try again later.';
+            'Some plans are temporarily unavailable from $storeName. Please try again later.';
       }
     } catch (error) {
       if (_disposed) return;
@@ -217,7 +299,9 @@ class KorlixAppleBillingService extends ChangeNotifier {
     try {
       final http.Response response = await _http
           .get(
-            Uri.parse('$_backendBaseUrl/api/billing/apple/status?refresh=1'),
+            Uri.parse(
+              '$_backendBaseUrl/api/billing/$_providerPath/status?refresh=1',
+            ),
             headers: headers,
           )
           .timeout(const Duration(seconds: 45));
@@ -235,15 +319,25 @@ class KorlixAppleBillingService extends ChangeNotifier {
 
       _currentTier = _normalizeTier(data['tier']?.toString());
       _webSubscriptionActive = data['webSubscriptionActive'] == true;
+      _otherStoreSubscriptionActive =
+          data['otherStoreSubscriptionActive'] == true;
+      _googleCanPurchase =
+          data['canPurchase'] == true && data['refreshWarning'] == null;
       if (_webSubscriptionActive) {
         _message =
             'Your membership is billed through KORLIX web. Manage it through its original billing provider.';
+      } else if (_otherStoreSubscriptionActive) {
+        _message =
+            'Manage your existing subscription with its original billing provider.';
+      } else if (isGooglePlatform && data['billingEnabled'] != true) {
+        _message =
+            'Google Play subscriptions are being set up. Please try again later.';
       } else if (_currentTier == 'enterprise') {
         _message =
             'Your organization manages this membership. No additional subscription is needed.';
       } else if (data['refreshWarning'] != null) {
         _message =
-            'Your saved subscription status is shown. Apple could not be reached; refresh before changing your plan.';
+            'Your saved subscription status is shown. $storeName could not be reached; refresh before changing your plan.';
       } else {
         _message = null;
       }
@@ -251,6 +345,7 @@ class KorlixAppleBillingService extends ChangeNotifier {
       await _notifyTierChanged(_currentTier);
     } catch (error) {
       if (!_sessionMatches(scope)) return;
+      _googleCanPurchase = false;
       _setError(_friendlyError(error));
     } finally {
       if (_sessionMatches(scope)) {
@@ -262,8 +357,8 @@ class KorlixAppleBillingService extends ChangeNotifier {
 
   Future<void> purchase(String productId) async {
     if (busy || _checkingStatus) return;
-    if (!isApplePlatform) {
-      _setError('Apple subscriptions require the iPhone or iPad app.');
+    if (!isStorePlatform) {
+      _setError('Subscriptions require the Android, iPhone, or iPad app.');
       return;
     }
 
@@ -290,7 +385,7 @@ class KorlixAppleBillingService extends ChangeNotifier {
       );
       return;
     }
-    if (_error != null || _webSubscriptionActive) {
+    if (_error != null || !canPurchase) {
       if (_webSubscriptionActive) {
         _setError(
           'An existing web subscription must be managed with its original billing provider.',
@@ -308,28 +403,80 @@ class KorlixAppleBillingService extends ChangeNotifier {
     }
 
     if (product == null) {
-      _setError('This subscription is not available from the App Store yet.');
+      _setError('This subscription is not available from $storeName yet.');
       return;
     }
     if (busy) return;
 
     _busyProductId = productId;
     _error = null;
-    _message = 'Opening the App Store purchase sheet…';
+    _message = 'Opening $storeName purchase sheet…';
     notifyListeners();
 
     try {
-      final PurchaseParam purchaseParam = PurchaseParam(
-        productDetails: product,
-        applicationUserName: accountId,
-      );
+      PurchaseParam purchaseParam;
+      if (isGooglePlatform) {
+        final response = await _http
+            .post(
+              Uri.parse('$_backendBaseUrl/api/billing/google/prepare'),
+              headers: Map<String, String>.from(builder())
+                ..['Content-Type'] = 'application/json',
+              body: jsonEncode({'productId': productId}),
+            )
+            .timeout(const Duration(seconds: 60));
+        if (!_sessionMatches(scope)) return;
+        final data = _decodeJson(response.body);
+        final obfuscatedAccount = data['accountId']?.toString() ?? '';
+        if (response.statusCode != 200 ||
+            data['canPurchase'] != true ||
+            !RegExp(r'^[0-9a-f]{64}$').hasMatch(obfuscatedAccount)) {
+          throw StateError(
+            data['error']?.toString() ??
+                'This plan cannot be purchased right now. Refresh your subscription.',
+          );
+        }
+        GooglePlayPurchaseDetails? oldPurchase;
+        final existing = (data['entitlement'] as Map?)?.cast<String, dynamic>();
+        if (existing?['active'] == true) {
+          oldPurchase = _googlePurchases[existing?['product_id']];
+          if (existing?['product_id'] == productId) {
+            throw StateError(
+              'You already have this subscription. Use Manage to review it.',
+            );
+          }
+          if (oldPurchase == null) {
+            throw StateError(
+              'Use Restore Purchases before changing your Google Play plan.',
+            );
+          }
+        }
+        if (product is! GooglePlayProductDetails) {
+          throw StateError('Refresh Google Play plans before purchasing.');
+        }
+        purchaseParam = GooglePlayPurchaseParam(
+          productDetails: product,
+          applicationUserName: obfuscatedAccount,
+          offerToken: product.offerToken,
+          changeSubscriptionParam: oldPurchase == null
+              ? null
+              : ChangeSubscriptionParam(
+                  oldPurchaseDetails: oldPurchase,
+                  replacementMode: ReplacementMode.withTimeProration,
+                ),
+        );
+      } else {
+        purchaseParam = PurchaseParam(
+          productDetails: product,
+          applicationUserName: accountId,
+        );
+      }
 
       final bool started = await _store.buyNonConsumable(
         purchaseParam: purchaseParam,
       );
 
       if (!started) {
-        throw StateError('The App Store did not start the purchase.');
+        throw StateError('The $storeName did not start the purchase.');
       }
     } catch (error) {
       if (!_sessionMatches(scope)) return;
@@ -341,7 +488,7 @@ class KorlixAppleBillingService extends ChangeNotifier {
   }
 
   Future<void> restorePurchases() async {
-    if (!isApplePlatform || busy || _checkingStatus) {
+    if (!isStorePlatform || busy || _checkingStatus) {
       return;
     }
 
@@ -354,7 +501,7 @@ class KorlixAppleBillingService extends ChangeNotifier {
 
     _restoring = true;
     _error = null;
-    _message = 'Checking your App Store purchase history…';
+    _message = 'Checking your $storeName purchase history…';
     notifyListeners();
     _restoreTimer?.cancel();
     _restoreTimer = Timer(const Duration(seconds: 60), () {
@@ -367,7 +514,9 @@ class KorlixAppleBillingService extends ChangeNotifier {
 
     try {
       await _store.restorePurchases(
-        applicationUserName: _currentUserIdFromHeaders(builder()),
+        applicationUserName: isApplePlatform
+            ? _currentUserIdFromHeaders(builder())
+            : null,
       );
     } catch (error) {
       if (!_sessionMatches(scope)) return;
@@ -377,7 +526,11 @@ class KorlixAppleBillingService extends ChangeNotifier {
   }
 
   Future<void> openManageSubscriptions() async {
-    await openInformationLink('https://apps.apple.com/account/subscriptions');
+    await openInformationLink(
+      isGooglePlatform
+          ? 'https://play.google.com/store/account/subscriptions?package=com.korlixdeveloper.korlixai'
+          : 'https://apps.apple.com/account/subscriptions',
+    );
   }
 
   Future<void> openInformationLink(String url) async {
@@ -396,10 +549,7 @@ class KorlixAppleBillingService extends ChangeNotifier {
 
   Future<void> _handlePurchaseUpdates(List<PurchaseDetails> purchases) async {
     final scope = _sessionSnapshot;
-    if (!purchases.any(
-          (purchase) =>
-              kKorlixAppleSubscriptionProductIds.contains(purchase.productID),
-        ) &&
+    if (!purchases.any((purchase) => productIds.contains(purchase.productID)) &&
         _restoring) {
       _endPurchaseOperation();
       _message = 'No restorable Korlix subscription was found.';
@@ -409,14 +559,14 @@ class KorlixAppleBillingService extends ChangeNotifier {
 
     for (final PurchaseDetails purchase in purchases) {
       if (!_sessionMatches(scope)) return;
-      if (!kKorlixAppleSubscriptionProductIds.contains(purchase.productID)) {
+      if (!productIds.contains(purchase.productID)) {
         continue;
       }
 
       switch (purchase.status) {
         case PurchaseStatus.pending:
           _busyProductId = purchase.productID;
-          _message = 'Your App Store purchase is pending…';
+          _message = 'Your $storeName purchase is pending…';
           _error = null;
           notifyListeners();
           break;
@@ -425,18 +575,18 @@ class KorlixAppleBillingService extends ChangeNotifier {
           await _verifyAndFinish(purchase);
           break;
         case PurchaseStatus.error:
-          if (purchase.pendingCompletePurchase) {
+          if (isApplePlatform && purchase.pendingCompletePurchase) {
             await _store.completePurchase(purchase);
           }
           if (!_sessionMatches(scope)) return;
           _endPurchaseOperation();
           _setError(
             purchase.error?.message ??
-                'The App Store could not complete this purchase.',
+                'The $storeName could not complete this purchase.',
           );
           break;
         case PurchaseStatus.canceled:
-          if (purchase.pendingCompletePurchase) {
+          if (isApplePlatform && purchase.pendingCompletePurchase) {
             await _store.completePurchase(purchase);
           }
           if (!_sessionMatches(scope)) return;
@@ -473,7 +623,7 @@ class KorlixAppleBillingService extends ChangeNotifier {
 
       final http.Response response = await _http
           .post(
-            Uri.parse('$_backendBaseUrl/api/billing/apple/verify'),
+            Uri.parse('$_backendBaseUrl/api/billing/$_providerPath/verify'),
             headers: headers,
             body: jsonEncode(<String, dynamic>{
               'productId': purchase.productID,
@@ -496,16 +646,20 @@ class KorlixAppleBillingService extends ChangeNotifier {
           data['verified'] != true) {
         throw StateError(
           data['error']?.toString() ??
-              'Apple could not verify this subscription.',
+              '$storeName could not verify this subscription.',
         );
       }
 
-      if (purchase.pendingCompletePurchase) {
+      if (purchase.pendingCompletePurchase &&
+          data['completePurchase'] != false) {
         await _store.completePurchase(purchase);
       }
       storeFinished = true;
 
       if (!_sessionMatches(scope)) return;
+      if (purchase is GooglePlayPurchaseDetails && data['active'] == true) {
+        _googlePurchases[purchase.productID] = purchase;
+      }
 
       _currentTier = _normalizeTier(data['tier']?.toString());
       _entitlement = <String, dynamic>{
@@ -520,7 +674,7 @@ class KorlixAppleBillingService extends ChangeNotifier {
       _endPurchaseOperation();
       _message = data['active'] == true
           ? '${_tierLabel(_currentTier)} is active.'
-          : 'Your Apple subscription is not currently active.';
+          : 'Your $storeName subscription is not currently active.';
       _error = null;
 
       await _notifyTierChanged(_currentTier);
@@ -581,6 +735,9 @@ class KorlixAppleBillingService extends ChangeNotifier {
     _currentTier = 'basic';
     _entitlement = null;
     _webSubscriptionActive = false;
+    _otherStoreSubscriptionActive = false;
+    _googleCanPurchase = false;
+    _googlePurchases.clear();
     _onTierChanged = null;
     _error = null;
     _message =
@@ -687,6 +844,7 @@ class KorlixAppleBillingService extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    if (_started) WidgetsBinding.instance.removeObserver(this);
     _restoreTimer?.cancel();
     _sessionChanges?.removeListener(_handleSessionChange);
     unawaited(_purchaseSubscription?.cancel());
@@ -779,7 +937,7 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
                 const SizedBox(height: 18),
                 Row(
                   children: <Widget>[
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
@@ -793,7 +951,7 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
                           ),
                           SizedBox(height: 4),
                           Text(
-                            'Secure subscriptions through Apple',
+                            'Secure subscriptions through ${service.storeLabel}',
                             style: TextStyle(
                               color: Color(0xFFA9C6CF),
                               fontSize: 13.5,
@@ -816,7 +974,7 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
                 _basicPlan(),
                 const SizedBox(height: 14),
                 _storePlan(
-                  productId: kKorlixAppleProMonthlyProductId,
+                  productId: service.proProductId,
                   title: 'Pro',
                   subtitle: 'For regular creators and daily productivity.',
                   accent: const Color(0xFFB794F4),
@@ -832,7 +990,7 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 _storePlan(
-                  productId: kKorlixAppleUltraMonthlyProductId,
+                  productId: service.ultraProductId,
                   title: 'Ultra Premium',
                   subtitle:
                       'For power users who want the full Korlix experience.',
@@ -850,7 +1008,7 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
                 const SizedBox(height: 14),
                 _enterprisePlan(),
                 const SizedBox(height: 16),
-                if (service.isApplePlatform) ...<Widget>[
+                if (service.isStorePlatform) ...<Widget>[
                   const Text(
                     'Plans renew monthly. AI GAS and Music Studio purchases are separate from your subscription.',
                     style: TextStyle(color: Color(0xFFA9C6CF), height: 1.4),
@@ -900,11 +1058,13 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  const Text(
-                    'Subscriptions renew automatically unless canceled at '
-                    'least 24 hours before the end of the current period. '
-                    'Payment is charged to your Apple Account. You can manage '
-                    'or cancel from Apple subscription settings.',
+                  Text(
+                    service.isGooglePlatform
+                        ? 'Subscriptions renew monthly until canceled. Payment is charged through Google Play. Manage or cancel in Google Play subscriptions.'
+                        : 'Subscriptions renew automatically unless canceled at '
+                              'least 24 hours before the end of the current period. '
+                              'Payment is charged to your Apple Account. You can manage '
+                              'or cancel from Apple subscription settings.',
                     style: TextStyle(
                       color: Color(0xFFA9C6CF),
                       fontSize: 12,
@@ -942,8 +1102,8 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
                   ),
                 ] else
                   const Text(
-                    'Apple subscription purchases are available in the '
-                    'iPhone and iPad version of Korlix.',
+                    'Subscription purchases are available in the '
+                    'Android, iPhone, and iPad apps.',
                     style: TextStyle(color: Color(0xFFA9C6CF), height: 1.4),
                   ),
               ],
@@ -1033,14 +1193,16 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
     required List<String> features,
   }) {
     final ProductDetails? product = service.productFor(productId);
-    final String expectedTier = productId == kKorlixAppleUltraMonthlyProductId
+    final String expectedTier = productId == service.ultraProductId
         ? 'ultra'
         : 'pro';
     final bool current = service.currentTier == expectedTier;
     final bool working = service.busyProductId == productId;
     final String price =
         (product == null ? null : '${product.price} / month') ??
-        (service.loadingProducts ? 'Loading App Store price…' : 'Unavailable');
+        (service.loadingProducts
+            ? 'Loading ${service.storeName} price…'
+            : 'Unavailable');
 
     return _planShell(
       title: title,
@@ -1057,7 +1219,7 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
                   product == null ||
                       service.busy ||
                       service.checkingStatus ||
-                      service.webSubscriptionActive ||
+                      !service.canPurchase ||
                       service.currentTier == 'enterprise'
                   ? null
                   : () => service.purchase(productId),
