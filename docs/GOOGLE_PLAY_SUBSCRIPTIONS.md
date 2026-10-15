@@ -54,6 +54,9 @@ products at startup and every five minutes, including while new purchases are
 disabled. Its cached `catalogCheck.ready` and `checkedAt` prove that the configured
 identity could read both products at that time; health requests never trigger
 Google API calls. This check does not prove an actual purchase or RTDN delivery.
+If it fails, `catalogCheck.reason` contains only a fixed diagnostic code, such as
+`api_disabled`, `permission_denied` or `authentication_failed`. Raw provider
+responses, credential text and account identifiers are never returned.
 Before opening the purchase sheet, `/prepare` separately
 checks the active monthly product through Google's authenticated server API.
 
@@ -76,6 +79,13 @@ The Console permissions for `korlix-play-billing@korlix-ai.iam.gserviceaccount.c
 include app-scoped financial data and order/subscription management. Runtime
 catalog checks and an actual license-test purchase still establish API access
 and end-to-end behavior; Console checkboxes alone do not.
+
+The build requires the existing public Supabase client settings. Either export
+`SUPABASE_URL` and `SUPABASE_ANON_KEY` in the Android Codespace, or set
+`KORLIX_ANDROID_DEFINES_FILE` to the existing Flutter client JSON configuration.
+The script validates that the key is public, passes the settings into Flutter,
+and deletes its temporary file after building. The Google service-account JSON
+is a backend-only credential and is never an Android build input.
 
 After the frontend fix is checked out, run:
 
