@@ -83,6 +83,7 @@ test('Apple refresh and verify share the authenticated account budget before pro
     korlixAppleBuild130ProductTier: () => 'pro',
     korlixAppleBuild130ResolveTransaction: async () => {providerReads++; throw makeHttpError('Stop fixture before mutation.', 503);},
     supabaseAdmin: {}, createWebBillingStore: () => ({command: async () => ({membership: null})}),
+    createGooglePlayStore: () => ({command: async () => ({entitlement: null})}),
     getKorlixUserFacingError: error => error.message, sanitize: value => value,
     console: {error: () => {}},
   });

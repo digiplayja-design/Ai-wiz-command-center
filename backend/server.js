@@ -13,6 +13,8 @@ import { registerDirectory } from './directory/routes.mjs';
 import { registerReceptionist } from './receptionist/routes.mjs';
 import { receptionistAI } from './receptionist/ai.mjs';
 import {registerWebBilling} from './web_billing/routes.mjs';
+import {registerGooglePlay} from './google_play/routes.mjs';
+import {playStore as createGooglePlayStore} from './google_play/core.mjs';
 import {billingStore as createWebBillingStore} from './web_billing/core.mjs';
 import { registerChatMemory, prepareChatMemory } from './chat_memory/memory.mjs';
 import { resumeTextPolicy } from './resume_studio/policy.mjs';
@@ -11393,14 +11395,18 @@ app.get("/api/billing/apple/status", async (req, res) => {
       }
     }
 
+    const googleBilling = await createGooglePlayStore(supabaseAdmin).command(user.id, 'snapshot');
+    const googleSubscriptionActive = googleBilling.entitlement?.active === true;
     return res.json({
       ok: true,
       tier: String(profile?.tier || "basic").toLowerCase(),
       entitlement,
       refreshWarning,
+      otherStoreSubscriptionActive: googleSubscriptionActive,
       webSubscriptionActive: await (async () => {
         const {membership} = await createWebBillingStore(supabaseAdmin).command(user.id, 'snapshot');
-        return !!membership?.subscription_id && !['canceled', 'incomplete_expired'].includes(membership.state);
+        // Existing iOS builds use this legacy flag to prevent a second charge.
+        return googleSubscriptionActive || (!!membership?.subscription_id && !['canceled', 'incomplete_expired'].includes(membership.state));
       })(),
     });
   } catch (error) {
@@ -12653,6 +12659,7 @@ const receptionistRegistration = registerReceptionist(app, {
 process.once('SIGTERM',()=>receptionistRegistration.stop());
 process.once('SIGINT',()=>receptionistRegistration.stop());
 registerWebBilling(app, {database: supabaseAdmin, requireUser, loadProfile: getOrCreateProfile});
+registerGooglePlay(app, {database: supabaseAdmin, requireUser, loadProfile: getOrCreateProfile});
 registerWorkforce(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1, workspaceEmail: workforceEmails }); // K138_WORKFORCE
 registerFunnels(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1, autoStartScheduler: true }); // K141_FUNNEL_SCHEDULING
 

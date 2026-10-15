@@ -27,6 +27,8 @@ test.before(async()=>{
  // Backfill preserves historical ownership even when old payloads lack signedDate.
  await db.query("insert into apple_subscription_entitlements(user_id,product_id,tier,original_transaction_id,environment,status,expires_at) values($1,'legacy','pro','legacy-original','Production','active',$2)",[alice,expires]);
  await db.exec(await readFile(migration,'utf8'));
+ await db.exec(`create function public.korlix_has_unlimited_access(uuid) returns boolean language sql as 'select false';`);
+ await db.exec(await readFile(new URL('../google_play/schema.sql',import.meta.url),'utf8'));
  const bound=(await db.query("select * from korlix_apple_transaction_bindings where original_transaction_id='legacy-original'")).rows[0];
  assert.equal(bound.user_id,alice);assert.equal(bound.last_signed_date,0);
 });

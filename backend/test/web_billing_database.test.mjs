@@ -26,6 +26,9 @@ test.before(async () => {
     grant select,insert,update on public.user_profiles,public.subscriptions to service_role;`);
   await db.exec(await readFile(new URL('../../supabase/migrations/202607130001_apple_subscriptions_build130.sql', import.meta.url), 'utf8'));
   await db.exec(await readFile(new URL('../../supabase/migrations/20261004203621_web_plan_subscriptions.sql', import.meta.url), 'utf8'));
+  await db.exec(await readFile(new URL('../../supabase/migrations/20261007015513_apple_billing_security.sql', import.meta.url), 'utf8'));
+  await db.exec(`create function public.korlix_has_unlimited_access(uuid) returns boolean language sql as 'select false';`);
+  await db.exec(await readFile(new URL('../google_play/schema.sql', import.meta.url), 'utf8'));
   for (const id of [owner, other]) {
     await db.query('insert into auth.users values($1)', [id]);
     await db.query('insert into public.user_profiles(id) values($1)', [id]);
@@ -127,7 +130,7 @@ test('Apple reconciliation preserves the independently paid web tier atomically'
   const m = await start();
   await apply(m, {tier: 'ultra', amount: 12499});
   const args=[owner,'com.korlixdeveloper.korlixai.pro.monthly','pro','expired','Production','apple_original','apple_transaction',null,
-    new Date(Date.now()-86400000).toISOString(),null,owner,'PURCHASED',false,null,null,'EXPIRED','{}'];
+    new Date(Date.now()-86400000).toISOString(),null,owner,'PURCHASED',false,null,null,'EXPIRED',JSON.stringify({transaction:{signedDate:Date.now()}})];
   const placeholders=args.map((_,i)=>'$'+(i+1)).join(',');
   const result=(await db.query(`select korlix_apply_apple_subscription_entitlement(${placeholders}) result`,args)).rows[0].result;
   assert.equal(result.tier, 'ultra');
