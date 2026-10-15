@@ -68,11 +68,6 @@ print(matches[0])
 PY
 )"
 
-if ! git -C "$build_root" diff --quiet || ! git -C "$build_root" diff --cached --quiet; then
-  echo "The prepared build has tracked changes; review these before retrying: $build_root" >&2
-  git -C "$build_root" status --short --untracked-files=no >&2
-  exit 1
-fi
 if [[ -n "${KORLIX_ANDROID_DEFINES_FILE:-}" ]]; then
   KORLIX_ANDROID_DEFINES_FILE="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve(strict=True))' "$KORLIX_ANDROID_DEFINES_FILE")"
   export KORLIX_ANDROID_DEFINES_FILE
@@ -86,7 +81,57 @@ if ! git -C "$build_root" merge-base --is-ancestor HEAD "$revision"; then
   echo 'The requested commit does not extend this prepared build. Nothing was checked out.' >&2
   exit 1
 fi
+
+# Flutter/pub can update these files during a build. Retain those edits only
+# when the reviewed update leaves both files alone; never reset or stash them.
+backup_root="$(python3 - "$build_root" "$revision" <<'PY'
+import os, pathlib, shutil, subprocess, sys, tempfile
+
+root = pathlib.Path(sys.argv[1])
+revision = sys.argv[2]
+
+def git(*args):
+    return subprocess.check_output(['git', '-C', str(root), *args])
+
+def paths(*args):
+    return {os.fsdecode(p) for p in git('diff', '--name-only', '-z', '--no-renames', *args).split(b'\0') if p}
+
+if paths('--cached'):
+    raise SystemExit('The prepared build has staged changes. Review them before retrying; nothing was checked out.')
+changed = paths()
+allowed = {'android/app/build.gradle.kts', 'pubspec.lock'}
+if changed - allowed:
+    raise SystemExit('The prepared build has other tracked changes; review these before retrying: ' + ', '.join(sorted(changed - allowed)))
+overlap = changed & paths('HEAD', revision)
+if overlap:
+    raise SystemExit('The reviewed update also changes these locally edited files; review them before retrying: ' + ', '.join(sorted(overlap)))
+if changed:
+    for name in changed:
+        file = root / name
+        if not file.is_file() or file.is_symlink():
+            raise SystemExit('A build file was removed or replaced; review it before retrying: ' + name)
+    backup = pathlib.Path(tempfile.mkdtemp(prefix='resume-backup-', dir=root.parent))
+    for name in changed:
+        target = backup / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(root / name, target)
+        target.chmod(0o600)
+    (backup / 'changes.patch').write_bytes(git('diff', '--binary', '--no-ext-diff', '--no-textconv', 'HEAD', '--', *sorted(changed)))
+    (backup / 'base-commit.txt').write_bytes(git('rev-parse', 'HEAD'))
+    print('Preserving existing build edits: ' + ', '.join(sorted(changed)), file=sys.stderr)
+    print('Private backup: ' + str(backup), file=sys.stderr)
+    print(backup)
+PY
+)"
 git -C "$build_root" checkout --detach "$revision"
+if [[ -n "$backup_root" ]]; then
+  for name in android/app/build.gradle.kts pubspec.lock; do
+    if [[ -f "$backup_root/$name" ]] && ! cmp -s "$backup_root/$name" "$build_root/$name"; then
+      echo "Build stopped: $name differs from its saved copy at $backup_root. Review before continuing." >&2
+      exit 1
+    fi
+  done
+fi
 
 run_root="$(dirname "$build_root")"
 export GRADLE_USER_HOME="$run_root/gradle-cache"
