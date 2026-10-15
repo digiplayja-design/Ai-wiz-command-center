@@ -104,6 +104,18 @@ path; Java Properties parsing preserves escaped passwords. No new key is made.
 An existing Android SDK path is also preserved, while Flutter regenerates its
 other local settings. The helper prints the new folder and final AAB path.
 
+If the Codespace workspace or home disk is full but another filesystem has
+space, set `KORLIX_ANDROID_BUILD_PARENT` to an existing directory on that disk
+(for example `/tmp`, after checking `df -h /tmp`). The helper checks for at least
+4 GiB of initial free space, creates the worktree there, copies the existing
+Flutter SDK there, and directs Gradle, pub, Android user preferences and
+temporary files there. This initial reserve is not a guarantee of total build
+space requirements. It does not delete source files, Git history, old releases
+or existing SDKs. Git automatic maintenance is disabled for this fetch so it
+does not start repacking on the full disk. Android SDK discovery and the existing
+release signing key are retained. Keep a build under `/tmp` available until its
+AAB is uploaded or copied to durable storage; temporary storage can be cleared.
+
 The script runs the billing tests and builds a signed AAB using the next version
 code. It uses the existing keystore/signing configuration and does not publish.
 Upload the AAB to Internal testing first, opt in with a Play license-test account,

@@ -31,13 +31,55 @@ if [[ -n "${KORLIX_ANDROID_DEFINES_FILE:-}" ]]; then
 fi
 
 next=$((10#$highest + 1))
-git -C "$source_root" fetch --no-tags --no-write-fetch-head \
+build_parent="${KORLIX_ANDROID_BUILD_PARENT:-$(dirname "$source_root")}"
+build_parent="$(python3 - "$build_parent" <<'PY'
+import os, pathlib, shutil, sys
+parent = pathlib.Path(sys.argv[1]).resolve(strict=True)
+if not parent.is_dir() or not os.access(parent, os.W_OK):
+    raise SystemExit('The Android build location must be an existing writable directory.')
+free = shutil.disk_usage(parent).free
+if free < 4 * 1024**3:
+    raise SystemExit(f'Only {free / 1024**3:.2f} GiB free at {parent}. '
+                     'Set KORLIX_ANDROID_BUILD_PARENT to a disk with build space before retrying.')
+print(parent)
+PY
+)"
+# Avoid an automatic Git repack on a nearly full source disk.
+git -C "$source_root" -c gc.auto=0 fetch --no-auto-maintenance --no-tags --no-write-fetch-head \
   https://github.com/digiplayja-design/Ai-wiz-command-center.git "$revision"
-build_root="$(mktemp -d "$(dirname "$source_root")/korlix-play-billing-${next}.XXXXXX")"
+run_root="$(mktemp -d "$build_parent/korlix-play-billing-${next}.XXXXXX")"
+build_root="$run_root/source"
 git -C "$source_root" worktree add --detach "$build_root" "$revision"
 echo "Build folder: $build_root"
 
 java "$build_root/scripts/PrepareAndroidSigning.java" "$source_root" "$build_root"
+
+if [[ -n "${KORLIX_ANDROID_BUILD_PARENT:-}" ]]; then
+  # A separate worktree alone is insufficient when the home disk is also full:
+  # Gradle, pub and Flutter's own SDK caches all need writable space.
+  flutter_sdk="$(python3 - <<'PY'
+import pathlib, shutil
+executable = shutil.which('flutter')
+if not executable:
+    raise SystemExit('Flutter could not be located for the isolated build.')
+sdk = pathlib.Path(executable).resolve(strict=True).parent.parent
+if not (sdk / 'packages/flutter_tools/pubspec.yaml').is_file() or not (sdk / 'bin/internal/shared.sh').is_file():
+    raise SystemExit('Flutter is behind a launcher. Put the existing Flutter SDK bin directory on PATH and retry.')
+print(sdk)
+PY
+)"
+  export GRADLE_USER_HOME="$run_root/gradle-cache"
+  export PUB_CACHE="$run_root/pub-cache"
+  export ANDROID_USER_HOME="$run_root/android-user"
+  export XDG_CACHE_HOME="$run_root/xdg-cache"
+  export TMPDIR="$run_root/tmp"
+  mkdir -p "$GRADLE_USER_HOME" "$PUB_CACHE" "$ANDROID_USER_HOME" "$XDG_CACHE_HOME" "$TMPDIR"
+  echo 'Copying the existing Flutter SDK onto the build disk...'
+  cp -a "$flutter_sdk/." "$run_root/flutter-sdk/"
+  export PATH="$run_root/flutter-sdk/bin:$PATH"
+  echo 'Build, Flutter SDK, Gradle and pub caches are on the selected disk.'
+fi
+
 cd "$build_root"
 bash scripts/build-google-play-billing.sh "$highest"
 echo "AAB ready: $build_root/build/app/outputs/bundle/release/app-release.aab"
