@@ -21,11 +21,11 @@ class KorlixImageToVideoScreen extends StatefulWidget {
   const KorlixImageToVideoScreen({
     super.key,
     required this.backendBaseUrl,
-    this.headersBuilder,
+    required this.headersBuilder,
   });
 
   final String backendBaseUrl;
-  final KorlixImageToVideoHeadersBuilder? headersBuilder;
+  final KorlixImageToVideoHeadersBuilder headersBuilder;
 
   @override
   State<KorlixImageToVideoScreen> createState() =>
@@ -82,8 +82,7 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
   }
 
   Future<Map<String, String>> _headers() async {
-    final supplied =
-        await widget.headersBuilder?.call() ?? const <String, String>{};
+    final supplied = await widget.headersBuilder();
     final headers = Map<String, String>.from(supplied);
     headers.removeWhere((key, _) => key.toLowerCase() == 'content-type');
     headers['Accept'] = 'application/json';

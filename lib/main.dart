@@ -8997,7 +8997,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       MaterialPageRoute(
         builder: (_) => KorlixImageToVideoScreen(
           backendBaseUrl: kKorlixBackendBaseUrl,
-          headersBuilder: () async => KorlixDeviceStore.headers(),
+          headersBuilder: () async => _authHeaders(),
         ),
       ),
     );
