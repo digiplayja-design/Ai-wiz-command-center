@@ -26,6 +26,7 @@ jobs:
     env:
       # Pinned to the verified Flutter stable ref on 2026-10-17.
       FLUTTER_REVISION: abaf9c523780a608bd46686fd5e53740a07077f8
+      FLUTTER_RELEASE: '3.47.7'
     steps:
       - name: Block cloud metadata before SDK setup
         shell: bash
@@ -58,8 +59,9 @@ jobs:
           sudo ip6tables -C OUTPUT -d fd00:ec2::254/128 -j REJECT
           sdk="$RUNNER_TEMP/korlix-flutter"
           git init "$sdk"
-          git -C "$sdk" fetch --depth=1 https://github.com/flutter/flutter.git "$FLUTTER_REVISION"
-          git -C "$sdk" checkout --detach FETCH_HEAD
+          git -C "$sdk" remote add origin https://github.com/flutter/flutter.git
+          git -C "$sdk" fetch --depth=1 origin "refs/tags/$FLUTTER_RELEASE:refs/tags/$FLUTTER_RELEASE"
+          git -C "$sdk" checkout --detach "refs/tags/$FLUTTER_RELEASE"
           test "$(git -C "$sdk" rev-parse HEAD)" = "$FLUTTER_REVISION"
           export PATH="$sdk/bin:$PATH"
           export PUB_CACHE="$RUNNER_TEMP/korlix-pub-cache"
@@ -76,7 +78,7 @@ jobs:
           set -euo pipefail
           # A fresh namespace has no external interface or route. The script
           # verifies that boundary and drops root before invoking Flutter.
-          sudo --preserve-env=PATH,HOME,PUB_CACHE unshare --net \
+          sudo unshare --net env PATH="$PATH" PUB_CACHE="$PUB_CACHE" \
             bash scripts/ci/validate-onboarding-offline.sh "$(id -un)"
 
       - name: Preserve validation logs
