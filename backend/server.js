@@ -1,4 +1,5 @@
 import {createAccountRequestLimiter} from './security/account_request_limiter.mjs';
+import {createOnboardingMeasurement} from './onboarding/measurement.mjs';
 import {publicApiErrorHandler} from './security/http_errors.mjs';
 import {createReportSubmissionGuard} from './security/report_submission.mjs';
 import {persistAiReport, markAiReportNotification, listAiReports} from './security/ai_report_persistence.mjs';
@@ -246,6 +247,7 @@ async function korlixSendSupportReport(payload) {
 const port = process.env.PORT || 8787;
 
 app.use(cors());
+app.use('/api/onboarding/events', express.json({limit: '8kb'}));
 app.use(express.json({
   limit: "5mb",
   verify: (req, _res, buffer) => {
@@ -2150,7 +2152,11 @@ app.post("/api/support/password-reset", async (req, res) => {
 });
 
 
-app.post("/api/auth/signup", createKorlixSignupHandler({
+const onboardingMeasurement = createOnboardingMeasurement({database: supabaseAdmin, requireUser});
+app.post("/api/onboarding/events", onboardingMeasurement.ingest);
+app.get("/api/admin/onboarding/summary", onboardingMeasurement.summary);
+
+app.post("/api/auth/signup", onboardingMeasurement.observeAuth('signup'), createKorlixSignupHandler({
   supabaseAuth,
   getRequestDeviceInfo,
   getOrCreateProfile,
@@ -2158,7 +2164,7 @@ app.post("/api/auth/signup", createKorlixSignupHandler({
   getUserFacingError: getKorlixUserFacingError,
 }));
 
-app.post("/api/auth/signin", async (req, res) => {
+app.post("/api/auth/signin", onboardingMeasurement.observeAuth('signin'), async (req, res) => {
   try {
     if (!supabaseAuth) {
       return res.status(500).json({
