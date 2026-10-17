@@ -282,6 +282,13 @@ void main() {
       }
       await tester.pumpAndSettle();
       await capture(boundary, '$theme-welcome');
+      expect(
+        find.byKey(const Key('welcome-create-account')).hitTestable(),
+        findsOneWidget,
+      );
+      await tap(tester, find.byKey(const Key('entry-intro-read')));
+      await capture(boundary, '$theme-welcome-transcript');
+      await tap(tester, find.byTooltip('Close introduction'));
       await tap(tester, find.byKey(const Key('welcome-create-account')));
       expect(
         find.text('Create your free account').hitTestable(),

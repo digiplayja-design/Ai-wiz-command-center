@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../sounds/korlix_sound_actions.dart';
 import '../theme/korlix_theme.dart';
+import 'korlix_entry_intro.dart';
 
 /// A preview of the product, not an unauthenticated generation surface.
 class KorlixEntryWelcome extends StatelessWidget {
@@ -44,10 +45,12 @@ class KorlixEntryWelcome extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         Text(
-          'Draft emails, improve your writing, and brainstorm content.',
+          'Create for yourself. Build more for your business.',
           style: TextStyle(color: skin.mutedText, fontSize: 16, height: 1.5),
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 10),
+        const KorlixEntryIntro(),
+        const SizedBox(height: 18),
         Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(

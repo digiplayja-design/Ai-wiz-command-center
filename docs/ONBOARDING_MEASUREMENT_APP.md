@@ -17,8 +17,8 @@ Run in the existing Flutter development environment:
 
 ```sh
 flutter pub get
-flutter analyze lib/analytics lib/onboarding lib/auth/korlix_entry_welcome.dart lib/billing/korlix_plan_prompt.dart test/korlix_onboarding_test.dart test/registration_discovery_test.dart
-flutter test test/korlix_onboarding_test.dart test/registration_discovery_test.dart test/auth_welcome_test.dart test/auth_remember_login_test.dart test/auth_october_integration_test.dart test/signup_eligibility_test.dart test/auth_device_session_test.dart
+flutter analyze lib/analytics lib/onboarding lib/auth/korlix_entry_welcome.dart lib/auth/korlix_entry_intro.dart lib/auth/korlix_entry_intro_controller.dart lib/billing/korlix_plan_prompt.dart test/korlix_onboarding_test.dart test/registration_discovery_test.dart test/korlix_entry_intro_test.dart
+flutter test test/korlix_onboarding_test.dart test/registration_discovery_test.dart test/korlix_entry_intro_test.dart test/auth_welcome_test.dart test/auth_remember_login_test.dart test/auth_october_integration_test.dart test/signup_eligibility_test.dart test/auth_device_session_test.dart
 ```
 
 The prepared build script also runs these checks before building an app bundle.
@@ -82,3 +82,31 @@ restore purchases, and Basic/paid account switching. Widget tests cover the
 welcome/form navigation, age and confirmation requirements, autofill, device
 session fields, account-scoped starter dismissal, Basic/paid/unknown presentation,
 large text, and explicit plan navigation. They must pass on the reviewed revision.
+
+## Optional business welcome voice
+
+The new-visitor welcome includes the owner-approved October 17 introduction,
+with friendly language for individuals and emphasis on business tools and
+upgraded plans. **Hear the welcome**, **Stop welcome**, **Replay welcome** and
+**Read intro** are available without submitting credentials. The transcript
+identifies the audio as an AI voice introduction. The free signup and sign-in
+paths remain directly available.
+
+The 30.72-second recording is bundled as 24 kHz mono PCM at
+`assets/onboarding/welcome-business-v1.wav` (1,474,604 bytes; SHA-256
+`d1e6aff7432f5cca5a7f6a0ddf3a4eb6b4dbc97ebefed398a3f689607120050c`).
+It plays locally after an explicit tap and is not a live conversation: it does
+not request microphone permission, start an AI job, transmit a visitor's data,
+or spend a customer's AI GAS. The clip is generated once, not on each launch.
+Existing post-sign-in Rici guidance and live NOVA sessions remain separate.
+
+Leaving the welcome, putting the app in the background, muting welcome audio,
+or starting a competing audio session stops playback. Coming back does not
+resume it automatically. A missing/blocked clip leaves signup and the written
+introduction usable. The transcript follows the approved script and does not
+offer a free trial of paid plans or promise a particular business outcome.
+
+Before promotion, listen on an Android phone and confirm speaker volume,
+pronunciation, interruptions, stop/replay and offline playback. The automated
+checks exercise the bundled audio format/duration, explicit playback, readable
+fallback, delayed-load cancellation, saved mute, backgrounding and navigation.

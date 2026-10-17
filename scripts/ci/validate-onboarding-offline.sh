@@ -47,11 +47,11 @@ check() {
 }
 flutter_cmd=(flutter --suppress-analytics --no-version-check)
 check onboarding-analysis "${flutter_cmd[@]}" analyze --no-pub \
-  lib/analytics lib/onboarding lib/auth/korlix_entry_welcome.dart \
+  lib/analytics lib/onboarding lib/auth/korlix_entry_welcome.dart lib/auth/korlix_entry_intro.dart lib/auth/korlix_entry_intro_controller.dart \
   lib/billing/korlix_plan_prompt.dart test/korlix_onboarding_test.dart \
-  test/registration_discovery_test.dart
+  test/registration_discovery_test.dart test/korlix_entry_intro_test.dart
 check onboarding-tests "${flutter_cmd[@]}" test --no-pub --reporter expanded \
-  test/korlix_onboarding_test.dart test/registration_discovery_test.dart \
+  test/korlix_onboarding_test.dart test/registration_discovery_test.dart test/korlix_entry_intro_test.dart \
   test/auth_welcome_test.dart test/auth_remember_login_test.dart \
   test/auth_october_integration_test.dart test/signup_eligibility_test.dart \
   test/auth_device_session_test.dart

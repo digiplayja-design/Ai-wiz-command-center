@@ -6,6 +6,7 @@ on:
     branches: [fix/image-to-video-session-20261016]
     paths:
       - 'lib/**'
+      - 'assets/onboarding/**'
       - 'test/**'
       - 'pubspec.*'
       - 'third_party/**'
