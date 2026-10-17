@@ -1,4 +1,5 @@
 import 'helpers/signup_eligibility.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -88,8 +89,9 @@ TextField emailField(WidgetTester tester) =>
 TextField passwordField(WidgetTester tester) =>
     tester.widget<TextField>(find.byKey(passwordKey));
 
-bool checked(WidgetTester tester, Key key) =>
-    tester.widget<CheckboxListTile>(find.byKey(key)).value!;
+bool checked(WidgetTester tester, Key key) => tester
+    .widget<CheckboxListTile>(find.byKey(key, skipOffstage: false))
+    .value!;
 
 List<bool> finishedAutofill(WidgetTester tester) => tester.testTextInput.log
     .where((call) => call.method == 'TextInput.finishAutofillContext')
@@ -135,6 +137,7 @@ void main() {
   ) async {
     await mount(tester, login());
     await enterCredentials(tester);
+    await tap(tester, find.text('Login preferences'));
     await tap(tester, find.byKey(rememberKey));
     var saved = (await tester.runAsync(KorlixLoginPreferences.load))!;
     expect(saved.rememberEmail, isTrue);
@@ -150,6 +153,7 @@ void main() {
     expect(emailField(tester).controller!.text, 'changed@example.test');
     expect(passwordField(tester).controller!.text, isEmpty);
     expect(checked(tester, rememberKey), isTrue);
+    await tap(tester, find.text('Login preferences'));
     await tap(tester, find.byKey(rememberKey));
     saved = (await tester.runAsync(KorlixLoginPreferences.load))!;
     expect(saved.rememberEmail, isFalse);
@@ -205,6 +209,7 @@ void main() {
     (tester) async {
       await mount(tester, login());
       await enterCredentials(tester);
+      await tap(tester, find.text('Login preferences'));
       await tap(tester, find.byKey(rememberKey));
       await tap(tester, find.byKey(passwordSaveKey));
       final saved = (await tester.runAsync(KorlixLoginPreferences.load))!;
@@ -288,7 +293,7 @@ void main() {
       await enterCredentials(tester);
       tester.testTextInput.log.clear();
       await acceptAdultSignup(tester);
-      await tap(tester, find.text('Create account'));
+      await tap(tester, find.text('Create free account'));
       expect(path, '/api/auth/signup');
       expect(signIns, 0);
       expect(find.byType(KorlixWelcomeConfirmation), findsOneWidget);

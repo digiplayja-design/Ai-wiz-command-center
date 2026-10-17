@@ -1,4 +1,5 @@
 import 'helpers/signup_eligibility.dart';
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -150,11 +151,11 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tap(tester, find.text('New here? Create account'));
-      expect(find.text('Create your Korlix AI account'), findsOneWidget);
-      expect(find.byType(KorlixOctoberGreeting), findsOneWidget);
+      expect(find.text('Create your free account'), findsOneWidget);
+      expect(find.byType(KorlixOctoberGreeting), findsNothing);
       await credentials(tester);
       await acceptAdultSignup(tester);
-      await tap(tester, find.text('Create account'));
+      await tap(tester, find.text('Create free account'));
       expect(path, '/api/auth/signup');
       expect(signIns, 0);
       expect(find.byType(KorlixWelcomeConfirmation), findsOneWidget);
@@ -216,11 +217,11 @@ void main() {
             reason: '$size/$theme',
           );
           await tap(tester, find.text('New here? Create account'));
-          expect(find.text('Create your Korlix AI account'), findsOneWidget);
-          await tester.ensureVisible(find.text('Create account'));
+          expect(find.text('Create your free account'), findsOneWidget);
+          await tester.ensureVisible(find.text('Create free account'));
           await tester.pumpAndSettle();
           expect(
-            find.text('Create account').hitTestable(),
+            find.text('Create free account').hitTestable(),
             findsOneWidget,
             reason: '$size/$theme',
           );
@@ -253,9 +254,9 @@ void main() {
           );
         final font = FontLoader('Roboto')
           ..addFont(
-            File(
-              'assets/fieldproof/Roboto-Regular.ttf',
-            ).readAsBytes().then(ByteData.sublistView),
+            File('assets/fieldproof/Roboto-Regular.ttf')
+                .readAsBytes()
+                .then(ByteData.sublistView),
           );
         await icons.load();
         await font.load();

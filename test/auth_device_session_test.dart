@@ -133,6 +133,9 @@ void main() {
     expect(headers.containsKey('Authorization'), isFalse);
     expect(app.kKorlixAccessToken, isNull);
     expect(await app.KorlixSessionStore.load(), isNull);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool(app.KorlixSessionStore.hasSignedInKey), isTrue,
+        reason: 'Returning users still get sign-in after an expired session');
   });
 
   test('late refresh cannot restore the account after sign out', () async {
