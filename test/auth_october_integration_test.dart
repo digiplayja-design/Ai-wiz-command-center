@@ -1,4 +1,5 @@
 import 'helpers/signup_eligibility.dart';
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -113,10 +114,13 @@ void main() {
     await tap(tester, find.text('Sign in'));
     expect(requests, hasLength(1));
     expect(requests.single.url.path, '/api/auth/signin');
-    expect(jsonDecode(requests.single.body), {
-      'email': 'member@example.test',
-      'password': 'test-password',
-    });
+    final body = jsonDecode(requests.single.body) as Map<String, dynamic>;
+    expect(body, hasLength(5));
+    expect(body['email'], 'member@example.test');
+    expect(body['password'], 'test-password');
+    expect(body['device_id'], matches(r'^korlix_\d+_\d+$'));
+    expect(body['device_label'], 'android');
+    expect(body['platform'], 'android');
     expect(session?.email, 'member@example.test');
     expect(session?.accessToken, 'offline-test-token');
     expect(
@@ -150,11 +154,11 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tap(tester, find.text('New here? Create account'));
-      expect(find.text('Create your Korlix AI account'), findsOneWidget);
-      expect(find.byType(KorlixOctoberGreeting), findsOneWidget);
+      expect(find.text('Create your free account'), findsOneWidget);
+      expect(find.byType(KorlixOctoberGreeting), findsNothing);
       await credentials(tester);
       await acceptAdultSignup(tester);
-      await tap(tester, find.text('Create account'));
+      await tap(tester, find.text('Create free account'));
       expect(path, '/api/auth/signup');
       expect(signIns, 0);
       expect(find.byType(KorlixWelcomeConfirmation), findsOneWidget);
@@ -216,11 +220,11 @@ void main() {
             reason: '$size/$theme',
           );
           await tap(tester, find.text('New here? Create account'));
-          expect(find.text('Create your Korlix AI account'), findsOneWidget);
-          await tester.ensureVisible(find.text('Create account'));
+          expect(find.text('Create your free account'), findsOneWidget);
+          await tester.ensureVisible(find.text('Create free account'));
           await tester.pumpAndSettle();
           expect(
-            find.text('Create account').hitTestable(),
+            find.text('Create free account').hitTestable(),
             findsOneWidget,
             reason: '$size/$theme',
           );
@@ -253,9 +257,9 @@ void main() {
           );
         final font = FontLoader('Roboto')
           ..addFont(
-            File(
-              'assets/fieldproof/Roboto-Regular.ttf',
-            ).readAsBytes().then(ByteData.sublistView),
+            File('assets/fieldproof/Roboto-Regular.ttf')
+                .readAsBytes()
+                .then(ByteData.sublistView),
           );
         await icons.load();
         await font.load();

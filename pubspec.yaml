@@ -84,6 +84,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/onboarding/welcome-business-v1.wav
     - assets/social_reactions/
     - assets/fieldproof/
     - assets/logo_fonts/
