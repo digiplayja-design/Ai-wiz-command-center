@@ -58,6 +58,8 @@ pathlib.Path(sys.argv[1]).write_text(json.dumps(config))
 PY
 
 flutter pub get
+flutter analyze lib/analytics test/korlix_onboarding_test.dart
+flutter test test/korlix_onboarding_test.dart test/auth_welcome_test.dart
 flutter analyze lib/billing/korlix_apple_billing.dart test/google_play_billing_test.dart
 flutter test test/apple_billing_test.dart test/google_play_billing_test.dart test/web_billing_test.dart
 flutter build appbundle --release --build-name="${version%%+*}" --build-number="$next" --dart-define-from-file="$defines_file"

@@ -1,4 +1,6 @@
 import 'social/social_appearance.dart';
+import 'analytics/korlix_onboarding.dart';
+import 'analytics/korlix_onboarding_report.dart';
 import 'sounds/korlix_sound_service.dart';
 import 'sounds/korlix_sound_host.dart';
 import 'sounds/korlix_sound_actions.dart';
@@ -265,6 +267,15 @@ Future<void> main() async {
           Uri.base.queryParametersAll.containsKey('app_portal');
       _korlixInitialPortalLaunch = captureKorlixPortalLaunch();
 
+      unawaited(KorlixOnboarding.instance.start(
+        baseUrl: kKorlixBackendBaseUrl,
+        context: () async {
+          await KorlixDeviceStore.ensureLoaded();
+          return KorlixOnboardingContext(KorlixDeviceStore.headers(),
+            newSetup: KorlixDeviceStore.createdDuringThisRun);
+        },
+      ));
+
       // Paint the app immediately. On web, waiting for startup services before
       // runApp can create a white screen if a plugin/storage/network step stalls.
       runApp(const CheeChaiCheeApp());
@@ -509,6 +520,8 @@ class CheeChaiCheeApp extends StatelessWidget {
 class KorlixDeviceStore {
   static const String deviceIdKey = 'korlix_device_id';
   static const String deviceLabelKey = 'korlix_device_label';
+  static bool createdDuringThisRun = false;
+  static Future<void>? _loading;
 
   static String defaultDeviceLabel() {
     if (kIsWeb) {
@@ -531,6 +544,7 @@ class KorlixDeviceStore {
     final created = 'korlix_${DateTime.now().millisecondsSinceEpoch}_$random';
 
     await prefs.setString(deviceIdKey, created);
+    createdDuringThisRun = true;
 
     return created;
   }
@@ -551,7 +565,9 @@ class KorlixDeviceStore {
     return label;
   }
 
-  static Future<void> ensureLoaded() async {
+  static Future<void> ensureLoaded() => _loading ??= _load().whenComplete(() => _loading = null);
+
+  static Future<void> _load() async {
     kKorlixDeviceId = await loadOrCreateDeviceId();
     kKorlixDeviceLabel = await loadOrCreateDeviceLabel();
   }
@@ -1060,6 +1076,7 @@ class _AuthScreenState extends State<AuthScreen> {
     super.initState();
     _message = widget.initialNotice;
     _preferencesLoaded = _restoreLoginPreferences();
+    KorlixOnboarding.instance.track('login_screen_viewed');
   }
 
   Future<void> _restoreLoginPreferences() async {
@@ -1177,18 +1194,21 @@ class _AuthScreenState extends State<AuthScreen> {
     final password = _passwordController.text;
 
     if (signingUp) {
+      KorlixOnboarding.instance.track('registration_submit');
       final eligibilityError = korlixSignupEligibilityError(
         ageBand: _signupAgeBand,
         acceptedPolicies: _acceptedSignupPolicies,
         parentPermission: _parentPermission,
       );
       if (eligibilityError != null) {
+        KorlixOnboarding.instance.track('registration_validation_error', errorCode: 'eligibility');
         setState(() { _error = eligibilityError; _message = null; });
         return;
       }
     }
 
     if (email.isEmpty || password.isEmpty) {
+      if (signingUp) KorlixOnboarding.instance.track('registration_validation_error', errorCode: 'required_fields');
       setState(() {
         _error = 'Enter your email and password.';
         _message = null;
@@ -1198,6 +1218,7 @@ class _AuthScreenState extends State<AuthScreen> {
     }
 
     if (password.length < 6) {
+      if (signingUp) KorlixOnboarding.instance.track('registration_validation_error', errorCode: 'password_length');
       setState(() {
         _error = 'Password must be at least 6 characters.';
         _message = null;
@@ -1214,6 +1235,8 @@ class _AuthScreenState extends State<AuthScreen> {
       _showForgotPassword = false;
     });
 
+    bool receivedResponse = false;
+    bool serverRejected = false;
     try {
       await KorlixDeviceStore.ensureLoaded();
       final path = signingUp ? '/api/auth/signup' : '/api/auth/signin';
@@ -1238,6 +1261,8 @@ class _AuthScreenState extends State<AuthScreen> {
           },
         }),
       ).timeout(const Duration(seconds: 30));
+      receivedResponse = true;
+      serverRejected = response.statusCode >= 400;
       if (!mounted) return;
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -1254,6 +1279,7 @@ class _AuthScreenState extends State<AuthScreen> {
         if (!mounted) return;
         TextInput.finishAutofillContext(shouldSave: _offerPasswordSave);
         _passwordController.clear();
+        KorlixOnboarding.instance.track('confirmation_screen_viewed');
         setState(() {
           _confirmationEmail = email;
           _message = null;
@@ -1278,11 +1304,16 @@ class _AuthScreenState extends State<AuthScreen> {
     } catch (error) {
       if (!mounted) return;
       final cleanedError = _cleanError(error);
+      if (signingUp && !serverRejected) {
+        KorlixOnboarding.instance.track('registration_transport_error',
+          errorCode: receivedResponse ? 'response' : 'network');
+      }
 
       setState(() {
         final lower = cleanedError.toLowerCase();
         final unconfirmed = lower.contains('email not confirmed') || lower.contains('email_not_confirmed');
         if (unconfirmed) {
+          KorlixOnboarding.instance.track('confirmation_screen_viewed');
           _confirmationEmail = email;
           _passwordController.clear();
         }
@@ -1599,6 +1630,8 @@ class _AuthScreenState extends State<AuthScreen> {
                                   _message = null;
                                   _showForgotPassword = false;
                                 });
+                                KorlixOnboarding.instance.track(_isSignUp
+                                  ? 'registration_screen_viewed' : 'login_screen_viewed');
                               }),
                         child: Text(
                           _isSignUp
@@ -4455,6 +4488,17 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       ),
                     ),
                     const SizedBox(height: 14),
+                    if (profile['developer_unlimited'] == true) ...[
+                      OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(
+                          builder: (_) => KorlixOnboardingReport(
+                            baseUrl: kKorlixBackendBaseUrl, headersBuilder: _headers),
+                        )),
+                        icon: const Icon(Icons.analytics_outlined),
+                        label: const Text('New user journey'),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                     FilledButton.icon(
                       onPressed: korlixSoundAction(() {
                         if (kIsWeb) Navigator.of(context).pop();
