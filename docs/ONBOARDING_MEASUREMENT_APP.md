@@ -94,11 +94,19 @@ paths remain directly available.
 
 The 30.72-second recording is bundled as 24 kHz mono PCM at
 `assets/onboarding/welcome-business-v1.wav` (1,474,604 bytes; SHA-256
-`d1e6aff7432f5cca5a7f6a0ddf3a4eb6b4dbc97ebefed398a3f689607120050c`).
+`139feee7e6513c06c2a1cb1d24f407a2b2844015ba78a2e2ddc758cee95dfa20`).
 It plays locally after an explicit tap and is not a live conversation: it does
 not request microphone permission, start an AI job, transmit a visitor's data,
 or spend a customer's AI GAS. The clip is generated once, not on each launch.
 Existing post-sign-in Rici guidance and live NOVA sessions remain separate.
+
+The recording includes a quiet instrumental excerpt of **MindStream** by
+**DST / Deceased Superior Technician**, published under **CC0 1.0**. It is mixed
+about 20 dB below active speech, using speech-controlled volume and gentle fades.
+The music and voice stop together through the existing playback controls.
+The original spoken script and duration are unchanged. Source links, terms,
+checksums, mix settings and reproduction instructions are recorded in
+`assets/onboarding/README.md`; no new app dependency or network request is added.
 
 Leaving the welcome, putting the app in the background, muting welcome audio,
 or starting a competing audio session stops playback. Coming back does not
@@ -107,6 +115,6 @@ introduction usable. The transcript follows the approved script and does not
 offer a free trial of paid plans or promise a particular business outcome.
 
 Before promotion, listen on an Android phone and confirm speaker volume,
-pronunciation, interruptions, stop/replay and offline playback. The automated
+music balance, pronunciation, interruptions, stop/replay and offline playback. The automated
 checks exercise the bundled audio format/duration, explicit playback, readable
 fallback, delayed-load cancellation, saved mute, backgrounding and navigation.
