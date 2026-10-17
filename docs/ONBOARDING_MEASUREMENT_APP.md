@@ -92,9 +92,9 @@ upgraded plans. **Hear the welcome**, **Stop welcome**, **Replay welcome** and
 identifies the audio as an AI voice introduction. The free signup and sign-in
 paths remain directly available.
 
-The 30.72-second recording is bundled as 24 kHz mono PCM at
-`assets/onboarding/welcome-business-v1.wav` (1,474,604 bytes; SHA-256
-`aac66676dd1157cfbd0d33b7faf77671ee8582f51bb7101a376f5c891eb6747f`).
+The 32.72-second recording is bundled as 24 kHz mono PCM at
+`assets/onboarding/welcome-business-music-v3.wav` (1,570,604 bytes; SHA-256
+`b867c2215c7471f996d5dc6627a2e4896de237df95618ecbcb8f9658a4d1da07`).
 It plays locally after an explicit tap and is not a live conversation: it does
 not request microphone permission, start an AI job, transmit a visitor's data,
 or spend a customer's AI GAS. The clip is generated once, not on each launch.
@@ -102,10 +102,12 @@ Existing post-sign-in Rici guidance and live NOVA sessions remain separate.
 
 The recording includes an instrumental excerpt of **MindStream** by
 **DST / Deceased Superior Technician**, published under **CC0 1.0**. It is mixed
-about 14 dB below active speech, using speech-controlled volume and gentle fades.
-The owner requested a 6 dB music increase relative to the original music mix.
+7 dB below active speech, using speech-controlled volume and gentle fades.
+After the owner reported that the previous music was inaudible, the mix now uses
+a fuller excerpt starting 32 seconds into the track, with a 1.5-second music-only
+opening and a 0.5-second tail. The new filename avoids reusing the old preview URL.
 The music and voice stop together through the existing playback controls.
-The original spoken script and duration are unchanged. Source links, terms,
+The original spoken script and 30.72-second narration are preserved. Source links, terms,
 checksums, mix settings and reproduction instructions are recorded in
 `assets/onboarding/README.md`; no new app dependency or network request is added.
 

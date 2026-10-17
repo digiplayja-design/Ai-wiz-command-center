@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import '../sounds/korlix_sound_service.dart';
 import 'knova_welcome_player.dart';
 
-const korlixEntryIntroAsset = 'assets/onboarding/welcome-business-v1.wav';
+const korlixEntryIntroAsset = 'assets/onboarding/welcome-business-music-v3.wav';
 const korlixEntryIntroText =
     'Welcome to Korlix AI! Whether you’re working on a personal idea or building '
     'your business, there’s something here for you.\n\n'

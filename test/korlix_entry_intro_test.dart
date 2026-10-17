@@ -124,7 +124,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(f.player.plays, 2);
       expect(f.loads, 1);
+      // The music lead-in extends the complete recording past 31 seconds.
       await tester.pump(const Duration(seconds: 31));
+      expect(f.controller.active, isTrue);
+      await tester.pump(const Duration(seconds: 3));
       expect(f.controller.active, isFalse);
       await tester.pumpWidget(const SizedBox());
       f.dispose();

@@ -19,6 +19,9 @@ import numpy as np
 VOICE_SHA256 = "d1e6aff7432f5cca5a7f6a0ddf3a4eb6b4dbc97ebefed398a3f689607120050c"
 MUSIC_SHA256 = "50e3306a36eabead31dc702bb7654ff935351d19b9ef40421e89b4e037f92bb9"
 RATE = 24000
+VOICE_LEAD_SECONDS = 1.5
+MUSIC_TAIL_SECONDS = 0.5
+MUSIC_OFFSET_SECONDS = 32
 
 
 def rms(samples):
@@ -41,13 +44,19 @@ def mix(voice_path, music_path, output_path):
     with wave.open(str(voice_path), "rb") as source:
         if (source.getnchannels(), source.getsampwidth(), source.getframerate()) != (1, 2, RATE):
             raise ValueError("Narration must be 24 kHz mono PCM16")
-        voice = np.frombuffer(source.readframes(source.getnframes()), dtype="<i2").astype(np.float64) / 32768
+        narration = np.frombuffer(source.readframes(source.getnframes()), dtype="<i2").astype(np.float64) / 32768
+    # Establish the music before the first word. Keep every narration sample,
+    # with a short music tail after the final word.
+    lead = round(VOICE_LEAD_SECONDS * RATE)
+    tail = round(MUSIC_TAIL_SECONDS * RATE)
+    voice = np.pad(narration, (lead, tail))
     length = len(voice)
     duration = length / RATE
     decoded = subprocess.check_output([
-        "ffmpeg", "-hide_banner", "-loglevel", "error", "-i", str(music_path),
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-ss", str(MUSIC_OFFSET_SECONDS),
+        "-i", str(music_path),
         "-t", str(duration), "-ac", "1", "-ar", str(RATE),
-        "-af", "highpass=f=140,lowpass=f=6500", "-f", "f32le", "pipe:1",
+        "-af", "highpass=f=120,lowpass=f=9000", "-f", "f32le", "pipe:1",
     ])
     music = np.frombuffer(decoded, dtype="<f4").astype(np.float64)
     if len(music) < length:
@@ -62,20 +71,21 @@ def mix(voice_path, music_path, output_path):
     active = np.repeat(speech, frame)[:length]
     held = np.array([speech[max(0, i - 6):i + 4].any() for i in range(len(speech))])
     envelope = np.empty(len(held))
-    gain = 0.5
+    speech_gain = 10 ** (-3 / 20)
+    gain = 1.0
     for i, speaking in enumerate(held):
-        target = 0.5 if speaking else 1.0
+        target = speech_gain if speaking else 1.0
         seconds = 0.02 if target < gain else 0.30
         gain += (target - gain) * (1 - math.exp(-0.02 / seconds))
         envelope[i] = gain
     ducking = np.interp(np.arange(length), np.arange(len(envelope)) * frame, envelope)
 
-    # The un-ducked bed is 8 dB below active speech; words lower it another
-    # 6 dB. Only the music receives fades and tone filtering.
-    music *= (rms(voice[active]) * 10 ** (-8 / 20)) / rms(music)
+    # Use a fuller section of the track at a clearly audible level: 4 dB
+    # below active speech before ducking, with just 3 dB of speech ducking.
+    music *= (rms(voice[active]) * 10 ** (-4 / 20)) / rms(music[active])
     music *= ducking
-    fade_in = min(length, round(0.45 * RATE))
-    fade_out = min(length, round(1.25 * RATE))
+    fade_in = min(length, round(0.15 * RATE))
+    fade_out = min(length, round(0.75 * RATE))
     music[:fade_in] *= np.sin(np.linspace(0, math.pi / 2, fade_in)) ** 2
     music[-fade_out:] *= np.cos(np.linspace(0, math.pi / 2, fade_out)) ** 2
     mixed = voice + music
@@ -95,8 +105,12 @@ def mix(voice_path, music_path, output_path):
         "samples": length,
         "bytes": output_path.stat().st_size,
         "sha256": hashlib.sha256(output_path.read_bytes()).hexdigest(),
-        "music_excerpt_start_seconds": 0,
+        "music_excerpt_start_seconds": MUSIC_OFFSET_SECONDS,
+        "narration_duration_seconds": len(narration) / RATE,
+        "narration_start_seconds": VOICE_LEAD_SECONDS,
+        "music_tail_seconds": MUSIC_TAIL_SECONDS,
         "music_below_active_voice_db": round(db(rms(voice[active]) / rms(music[active])), 2),
+        "music_opening_rms_dbfs": round(db(rms(music[:lead] * master)), 2),
         "master_gain_db": round(db(master), 2),
         "sample_peak_dbfs": round(db(float(np.max(np.abs(pcm.astype(float)))) / 32768), 2),
         "clipped_samples": int(np.count_nonzero(np.abs(pcm.astype(np.int32)) >= 32767)),
