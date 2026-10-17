@@ -41,6 +41,11 @@ User IDs appear only on server-verified successful sign-in events. Raw event dat
 is service-role-only with RLS; public and authenticated database roles cannot read
 or write it or invoke its report functions.
 
+The summary function uses an empty search path and fixed, schema-qualified SQL
+with owner rights to aggregate protected authentication records. Its execute
+permission is restricted to `service_role`. It does not grant that role direct
+access to `auth.users` or return raw account records. Cleanup uses caller rights.
+
 Client events wait in a bounded 48-event local queue, expire after seven days on
 restart and retry after network failure. Server receipt time defines the window;
 late delivery can shift dates. Cleanup removes event rows older than 90 days in

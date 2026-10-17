@@ -35,7 +35,10 @@ revoke all on function public.korlix_prune_onboarding_events() from public, anon
 grant execute on function public.korlix_prune_onboarding_events() to service_role;
 
 create function public.korlix_onboarding_summary(p_start timestamptz, p_end timestamptz, p_platform text)
-returns jsonb language plpgsql stable security invoker set search_path = '' as $$
+-- The service role cannot read auth.users directly in production. Only this
+-- fixed aggregate query runs with its owner's rights; no raw account data or
+-- dynamic SQL is exposed, and only service_role may execute the function.
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
 declare result jsonb;
 begin
   if p_start is null or p_end is null or p_end <= p_start or p_end - p_start > interval '31 days'

@@ -95,7 +95,8 @@ test('migration enforces access controls and counts a consistent new-setup cohor
       create schema auth; create table auth.users(id uuid primary key, created_at timestamptz,
         email_confirmed_at timestamptz, last_sign_in_at timestamptz, deleted_at timestamptz, is_anonymous boolean);
       create table public.generation_history(user_id uuid, created_at timestamptz);
-      grant usage on schema public, auth to service_role; grant select on auth.users, public.generation_history to service_role;`);
+      grant usage on schema public, auth to service_role;
+      grant select on public.generation_history to service_role;`);
     await db.exec(await readFile(new URL('../../supabase/migrations/20261017123110_onboarding_measurement.sql', import.meta.url), 'utf8'));
     await db.query('insert into auth.users values ($1,$2,$2,$2,null,false)', [uid, '2026-10-17T13:00:00Z']);
     await db.query('insert into public.generation_history values ($1,$2)', [uid, '2026-10-17T15:00:00Z']);
@@ -115,6 +116,9 @@ test('migration enforces access controls and counts a consistent new-setup cohor
     await event('c', 'registration_submit'); // old cohort is excluded
     await event('d', 'app_open', {newSetup: true, date: '2000-01-01T00:00:00Z'});
     await db.exec('set role service_role');
+    // Match production: report aggregates work without granting direct access
+    // to the underlying authentication records.
+    await assert.rejects(db.query('select * from auth.users'), /permission denied/);
     await db.query('select public.korlix_prune_onboarding_events()');
     assert.equal((await db.query("select count(*)::int n from public.korlix_onboarding_events where installation_hash=repeat('d',64)")).rows[0].n, 0);
     const {rows} = await db.query(`select public.korlix_onboarding_summary($1,$2,'android') as result`,
@@ -123,6 +127,8 @@ test('migration enforces access controls and counts a consistent new-setup cohor
     assert.deepEqual(rows[0].result.new_setup_cohort, {opened: 1, registration_screen: 1,
       registration_submitted: 1, confirmation_screen: 0, signed_in: 1, completed_ai_generation: 1});
     assert.deepEqual(rows[0].result.new_accounts_all_platforms, {created: 1, email_confirmed: 1, signed_in: 1, completed_ai_generation: 1});
+    await assert.rejects(db.query(`select public.korlix_onboarding_summary(now()-interval '40 days',now(),'android')`), /Invalid reporting/);
+    await assert.rejects(db.query('select * from auth.users'), /permission denied/);
     await db.exec('reset role');
     for (const role of ['anon', 'authenticated']) {
       await db.exec(`set role ${role}`);
