@@ -70,9 +70,9 @@ def mix(voice_path, music_path, output_path):
         envelope[i] = gain
     ducking = np.interp(np.arange(length), np.arange(len(envelope)) * frame, envelope)
 
-    # The un-ducked bed is 14 dB below active speech; words lower it another
+    # The un-ducked bed is 8 dB below active speech; words lower it another
     # 6 dB. Only the music receives fades and tone filtering.
-    music *= (rms(voice[active]) * 10 ** (-14 / 20)) / rms(music)
+    music *= (rms(voice[active]) * 10 ** (-8 / 20)) / rms(music)
     music *= ducking
     fade_in = min(length, round(0.45 * RATE))
     fade_out = min(length, round(1.25 * RATE))

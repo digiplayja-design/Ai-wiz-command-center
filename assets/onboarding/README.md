@@ -1,6 +1,6 @@
 # Korlix welcome recording
 
-`welcome-business-v1.wav` contains the approved Korlix introduction with a quiet
+`welcome-business-v1.wav` contains the approved Korlix introduction with an
 instrumental bed. The app uses this single bundled recording for synchronized
 playback; there is no music download or separate background player at runtime.
 
@@ -35,16 +35,18 @@ from 140 Hz to 6.5 kHz, and lowered beneath the voice. Speech detection adds a
 further 6 dB reduction, with lookahead, a hold and a smooth release. Music fades
 in over 0.45 seconds and out over the final 1.25 seconds. A single master gain
 preserves peak headroom; the narrator is not time-stretched or compressed.
+At the owner's request on October 17, the music was raised **6 dB relative to
+the voice** compared with the first music mix, while retaining speech ducking.
 
 Measured delivery:
 
 - PCM WAV, 24 kHz, mono, 16 bit; canonical 44-byte header
 - 737,280 samples, **30.72 seconds**, **1,474,604 bytes**
-- Music averages **20.14 dB below active speech**
-- Integrated loudness **-17.37 LUFS**; true peak **-1.50 dBTP**, sample peak **-1.50 dBFS**
+- Music averages **14.14 dB below active speech**
+- Integrated loudness **-18.01 LUFS**; true peak **-1.47 dBTP**, sample peak **-1.50 dBFS**
 - **Zero clipped samples**
 - Mixed WAV SHA-256:
-  `139feee7e6513c06c2a1cb1d24f407a2b2844015ba78a2e2ddc758cee95dfa20`
+  `aac66676dd1157cfbd0d33b7faf77671ee8582f51bb7101a376f5c891eb6747f`
 
 `scripts/audio/mix_welcome_bed.py` reproduces the mix from the two checked source
 recordings. It requires Python, NumPy and FFmpeg for editing only; it adds no app
