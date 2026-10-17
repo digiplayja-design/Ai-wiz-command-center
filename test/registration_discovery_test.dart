@@ -1,4 +1,9 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -182,6 +187,10 @@ void main() {
         );
         await tester.pumpAndSettle();
         await tap(tester, find.byKey(const Key('welcome-create-account')));
+        expect(
+          find.text('Create your free account').hitTestable(),
+          findsOneWidget,
+        );
         await tester.ensureVisible(find.byKey(const Key('auth-submit')));
         await tester.pumpAndSettle();
         expect(
@@ -205,6 +214,95 @@ void main() {
       }
     },
   );
+
+  testWidgets('review welcome, registration and starter layouts', (
+    tester,
+  ) async {
+    final output = Platform.environment['KORLIX_DISCOVERY_REVIEW'];
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    if (output != null) {
+      await tester.runAsync(() async {
+        final sdk = Platform.environment['KORLIX_FLUTTER_ROOT']!;
+        final icons = FontLoader('MaterialIcons')
+          ..addFont(
+            File(
+              '$sdk/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
+            ).readAsBytes().then(ByteData.sublistView),
+          );
+        final font = FontLoader('Roboto')
+          ..addFont(
+            File('assets/fieldproof/Roboto-Regular.ttf')
+                .readAsBytes()
+                .then(ByteData.sublistView),
+          );
+        await icons.load();
+        await font.load();
+      });
+    }
+    Future<void> capture(GlobalKey key, String name) async {
+      if (output == null) return;
+      await tester.runAsync(() async {
+        final boundary =
+            key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+        final image = await boundary.toImage(pixelRatio: 2);
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        final file = File('$output/$name.png');
+        await file.parent.create(recursive: true);
+        await file.writeAsBytes(bytes!.buffer.asUint8List());
+        image.dispose();
+      });
+    }
+
+    for (final theme in ['korlix_blue', 'pure_white']) {
+      final boundary = GlobalKey();
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: boundary,
+          child: MaterialApp(
+            theme: korlixBuildTheme(theme),
+            home: app.AuthScreen(
+              showWelcome: true,
+              seasonalDate: DateTime(2026, 11, 1),
+              client: MockClient((_) async => http.Response('{}', 500)),
+              onSignedIn: (_) async {},
+            ),
+          ),
+        ),
+      );
+      if (output != null) {
+        await tester.runAsync(
+          () => precacheImage(
+            const AssetImage('assets/branding/korlix_mini_mark.png'),
+            boundary.currentContext!,
+          ),
+        );
+      }
+      await tester.pumpAndSettle();
+      await capture(boundary, '$theme-welcome');
+      await tap(tester, find.byKey(const Key('welcome-create-account')));
+      expect(
+        find.text('Create your free account').hitTestable(),
+        findsOneWidget,
+      );
+      await capture(boundary, '$theme-signup-top');
+      await tester.ensureVisible(find.byKey(const Key('auth-submit')));
+      await tester.pumpAndSettle();
+      await capture(boundary, '$theme-signup-bottom');
+      final starterBoundary = GlobalKey();
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: starterBoundary,
+          child: starters(theme: theme),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await capture(starterBoundary, '$theme-starter');
+      expect(tester.takeException(), isNull, reason: theme);
+    }
+  });
 
   testWidgets('premium prompt only requests plans after an explicit tap', (
     tester,

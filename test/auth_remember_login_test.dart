@@ -192,10 +192,13 @@ void main() {
       await tap(tester, find.text('Sign in'));
       expect(sessions.single.email, testEmail);
       expect(requests.single.url.path, '/api/auth/signin');
-      expect(jsonDecode(requests.single.body), {
-        'email': testEmail,
-        'password': testPassword,
-      });
+      final body = jsonDecode(requests.single.body) as Map<String, dynamic>;
+      expect(body, hasLength(5));
+      expect(body['email'], testEmail);
+      expect(body['password'], testPassword);
+      expect(body['device_id'], matches(r'^korlix_\d+_\d+$'));
+      expect(body['device_label'], 'android');
+      expect(body['platform'], 'android');
       expect(finishedAutofill(tester).where((save) => save), hasLength(1));
       final saved = (await tester.runAsync(KorlixLoginPreferences.load))!;
       expect(saved.rememberEmail, isFalse);

@@ -35,10 +35,17 @@ does not attribute those observations to Google Ads. New-setup counts describe
 fresh local storage, which also includes reinstallations; they are not unique
 new customers. Create-account taps include locally rejected form submissions.
 
-Local verification on 2026-10-17: Dart parsing/formatting completed. Flutter setup
-was blocked by automatic approval review because it attempted to contact cloud
-instance metadata, so Flutter analysis/tests and AAB compilation have not run in
-this environment. Complete the checks above before publishing the update.
+The **Isolated onboarding validation** workflow checks this PR using pinned
+Flutter 3.47.7. Before SDK setup it installs and verifies a metadata firewall.
+After fetching the locked dependencies, it runs analysis and regression tests
+as an unprivileged user in a verified loopback-only network namespace. No cloud
+metadata endpoint is contacted to test the boundary. Logs and synthetic UI
+screenshots are retained in the workflow artifact for seven days. Setup stops
+if the firewall or isolation checks fail; dependency lock changes also fail.
+
+Check the workflow result for the reviewed revision before release. This CI job
+does not hold release-signing keys, compile a release AAB, or publish an app.
+The signed build and on-device checks above remain separate release gates.
 
 
 ## Registration and plan discovery
@@ -49,7 +56,8 @@ this environment. Complete the checks above before publishing the update.
   contains no email or token and does not grant access.
 - Registration keeps email/password, password-manager autofill, required age and
   consent checks, email confirmation, and policy links. Optional login preferences
-  start collapsed. Password reset remains available on sign-in.
+  start collapsed. Password reset remains available on sign-in. Changing between
+  welcome, sign-in, signup and email confirmation starts the next screen at the top.
 - The first-use panel offers three editable text prompts. Choosing one only fills
   the composer; it never generates, spends credits, or skips the normal AI-consent
   and quota checks. Replacing an existing draft or attachments requires confirmation.
@@ -70,5 +78,7 @@ it does not establish ad attribution or guarantee a conversion increase.
 Before release, also check the welcome and forms on a small phone with a keyboard
 and enlarged text; confirm that sign-in/logout and email confirmation work; try
 all three starter tasks and cancel replacing a draft; inspect native plan prices,
-restore purchases, and Basic/paid account switching. Widget regression tests were
-added/updated but remain unexecuted until the Flutter validation blocker is resolved.
+restore purchases, and Basic/paid account switching. Widget tests cover the
+welcome/form navigation, age and confirmation requirements, autofill, device
+session fields, account-scoped starter dismissal, Basic/paid/unknown presentation,
+large text, and explicit plan navigation. They must pass on the reviewed revision.

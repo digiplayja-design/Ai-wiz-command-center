@@ -114,10 +114,13 @@ void main() {
     await tap(tester, find.text('Sign in'));
     expect(requests, hasLength(1));
     expect(requests.single.url.path, '/api/auth/signin');
-    expect(jsonDecode(requests.single.body), {
-      'email': 'member@example.test',
-      'password': 'test-password',
-    });
+    final body = jsonDecode(requests.single.body) as Map<String, dynamic>;
+    expect(body, hasLength(5));
+    expect(body['email'], 'member@example.test');
+    expect(body['password'], 'test-password');
+    expect(body['device_id'], matches(r'^korlix_\d+_\d+$'));
+    expect(body['device_label'], 'android');
+    expect(body['platform'], 'android');
     expect(session?.email, 'member@example.test');
     expect(session?.accessToken, 'offline-test-token');
     expect(

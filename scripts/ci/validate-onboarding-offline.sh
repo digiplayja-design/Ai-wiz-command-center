@@ -35,6 +35,8 @@ runuser -u "$runner" -- env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
   PATH="$PATH" PUB_CACHE="$PUB_CACHE" bash <<'CHECKS'
 set -uo pipefail
 mkdir -p validation-logs
+export KORLIX_DISCOVERY_REVIEW="$PWD/validation-logs/screens"
+export KORLIX_FLUTTER_ROOT="$(dirname "$(dirname "$(command -v flutter)")")"
 result=0
 check() {
   local label="$1"

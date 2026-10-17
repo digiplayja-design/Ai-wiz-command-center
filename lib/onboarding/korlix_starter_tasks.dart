@@ -77,11 +77,12 @@ class _KorlixStarterTasksState extends State<KorlixStarterTasks> {
     } catch (_) {
       // Optional first-use guidance must not block the main tools.
     }
-    if (mounted)
+    if (mounted) {
       setState(() {
         _ready = true;
         _dismissed = dismissed;
       });
+    }
   }
 
   Future<void> _dismiss() async {

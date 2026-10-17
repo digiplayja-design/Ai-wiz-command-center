@@ -40,19 +40,22 @@ class _KorlixOnboardingReportState extends State<KorlixOnboardingReport> {
             headers: widget.headersBuilder(),
           )
           .timeout(const Duration(seconds: 12));
-      if (response.statusCode == 403)
+      if (response.statusCode == 403) {
         throw Exception('This report is limited to authorized administrators.');
-      if (response.statusCode != 200)
+      }
+      if (response.statusCode != 200) {
         throw Exception(
           'The report is not available yet. Check the backend deployment and try again.',
         );
+      }
       final result = jsonDecode(response.body) as Map<String, dynamic>;
       if (mounted) setState(() => _data = result);
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _error = error.toString().replaceFirst('Exception: ', ''),
         );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }

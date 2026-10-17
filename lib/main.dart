@@ -1421,6 +1421,7 @@ class _AuthScreenState extends State<AuthScreen> {
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
+              key: ValueKey('auth-scroll-$_showWelcome-$signup-${_confirmationEmail != null}'),
               padding: const EdgeInsets.all(20),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 450),

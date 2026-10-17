@@ -109,8 +109,9 @@ class KorlixOnboarding {
         _disposed ||
         !_names.contains(name) ||
         name == 'app_open' ||
-        (errorCode != null && !_errors.contains(errorCode)))
+        (errorCode != null && !_errors.contains(errorCode))) {
       return;
+    }
     unawaited(
       _ready!
           .then((_) => _append(name, errorCode: errorCode))
@@ -145,8 +146,8 @@ class KorlixOnboarding {
         'id': _id(),
         'name': name,
         'queued_at': DateTime.now().millisecondsSinceEpoch,
-        if (newSetup != null) 'new_setup': newSetup,
-        if (errorCode != null) 'error_code': errorCode,
+        'new_setup': ?newSetup,
+        'error_code': ?errorCode,
       });
       await _persist();
     });
@@ -180,8 +181,9 @@ class KorlixOnboarding {
             .timeout(const Duration(seconds: 4));
         if (response.statusCode >= 500 ||
             response.statusCode == 429 ||
-            response.statusCode == 404)
+            response.statusCode == 404) {
           break;
+        }
         if (response.statusCode != 202 && response.statusCode != 400) break;
         final sentIds = batch.map((row) => row['id']).toSet();
         await _change(() async {
@@ -193,8 +195,9 @@ class KorlixOnboarding {
       /* Keep bounded pending events for a later attempt. */
     } finally {
       _sending = false;
-      if (!_disposed && _queue.isNotEmpty)
+      if (!_disposed && _queue.isNotEmpty) {
         _retry = Timer(const Duration(minutes: 1), () => unawaited(flush()));
+      }
     }
   }
 
