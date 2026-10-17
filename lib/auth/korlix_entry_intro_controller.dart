@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -31,10 +30,9 @@ enum KorlixEntryIntroState {
 class KorlixEntryIntroController extends ChangeNotifier {
   KorlixEntryIntroController({
     KorlixSoundService? sounds,
-    KnovaWelcomePlayer? player,
+    this._player,
     Future<Uint8List> Function()? loadClip,
   }) : _sounds = sounds ?? kKorlixSounds,
-       _player = player,
        _loadClip = loadClip ?? _loadBundledClip {
     _sounds.addListener(_soundChanged);
   }
