@@ -21,6 +21,7 @@ import 'social/social_notifications.dart';
 import 'social/social_notification_banner.dart';
 import 'social/social_alert_scope.dart';
 import 'social/social_app_alerts.dart';
+import 'social/social_bubble_app.dart';
 import 'camera_ask/camera_ask_client.dart';
 import 'camera_ask/camera_ask_screen.dart';
 import 'inventory/inventory_client.dart';
@@ -263,6 +264,9 @@ const String _kKorlixBackendOverrideUrl = String.fromEnvironment(
 const String kKorlixBackendBaseUrl = _kKorlixBackendOverrideDeclared
     ? _kKorlixBackendOverrideUrl
     : 'https://chee-chai-chee-backend.onrender.com';
+@pragma('vm:entry-point')
+void socialBubbleMain() => runSocialBubble();
+
 Future<void> main() async {
   await runZonedGuarded<Future<void>>(
     () async {
@@ -489,6 +493,7 @@ class CheeChaiCheeApp extends StatelessWidget {
         },
         child: KorlixSoundHost(child: SocialAppAlerts(
         baseUrl: kKorlixBackendBaseUrl,
+        sessionReady: () => kKorlixAuthRevision.value > 0,
         headersBuilder: () => {
           ...KorlixDeviceStore.headers(),
           if (kKorlixAccessToken?.isNotEmpty == true)

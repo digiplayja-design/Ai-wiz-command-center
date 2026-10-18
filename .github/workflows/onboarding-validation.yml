@@ -7,6 +7,10 @@ on:
     paths:
       - 'lib/**'
       - 'android/app/src/main/**'
+      - 'android/app/src/fcm/**'
+      - 'android/app/src/noFcm/**'
+      - 'android/*.gradle.kts'
+      - 'android/app/*.gradle.kts'
       - 'ios/Runner/**'
       - 'assets/onboarding/**'
       - 'test/**'
@@ -97,11 +101,72 @@ jobs:
           flutter --suppress-analytics --no-version-check precache --android --no-ios --no-web --no-linux --no-macos --no-windows
           flutter --suppress-analytics --no-version-check build apk --debug --no-pub --target-platform android-arm64 2>&1 | tee validation-logs/android-debug-build.log
 
+      - name: Compile the optional FCM integration with a synthetic configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'rm -f android/app/google-services.json' EXIT
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          # Public-format compile fixture only; no live project or device token.
+          data = {
+            'project_info': {'project_number': '123456789012', 'project_id': 'korlix-ci-fixture', 'storage_bucket': 'korlix-ci-fixture.appspot.com'},
+            'client': [{'client_info': {'mobilesdk_app_id': '1:123456789012:android:0123456789abcdef012345', 'android_client_info': {'package_name': 'com.korlixdeveloper.korlixai'}},
+                        'api_key': [{'current_key': 'AIzaSyCompileFixtureOnly000000000000000'}]}],
+            'configuration_version': '1'
+          }
+          Path('android/app/google-services.json').write_text(json.dumps(data))
+          PY
+          flutter --suppress-analytics --no-version-check build apk --debug --no-pub --target-platform android-arm64 2>&1 | tee validation-logs/android-fcm-build.log
+
       - name: Preserve validation logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: onboarding-validation-${{ github.run_id }}
+          path: validation-logs/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  ios-social-compile:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      FLUTTER_REVISION: abaf9c523780a608bd46686fd5e53740a07077f8
+      FLUTTER_RELEASE: '3.47.7'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare pinned Flutter for an unsigned simulator build
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk="$RUNNER_TEMP/korlix-flutter"
+          git init "$sdk"
+          git -C "$sdk" remote add origin https://github.com/flutter/flutter.git
+          git -C "$sdk" fetch --depth=1 origin "refs/tags/$FLUTTER_RELEASE:refs/tags/$FLUTTER_RELEASE"
+          git -C "$sdk" checkout --detach "refs/tags/$FLUTTER_RELEASE"
+          test "$(git -C "$sdk" rev-parse HEAD)" = "$FLUTTER_REVISION"
+          export PATH="$sdk/bin:$PATH"
+          export PUB_CACHE="$RUNNER_TEMP/korlix-pub-cache"
+          printf '%s\n' "$sdk/bin" >> "$GITHUB_PATH"
+          printf 'PUB_CACHE=%s\n' "$PUB_CACHE" >> "$GITHUB_ENV"
+          flutter --suppress-analytics --no-version-check precache --ios
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          git diff --exit-code -- pubspec.lock
+      - name: Compile iOS without signing or push credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p validation-logs
+          flutter --suppress-analytics --no-version-check build ios --simulator --debug --no-codesign --no-pub 2>&1 | tee validation-logs/ios-social-build.log
+      - name: Preserve iOS compile log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-social-validation-${{ github.run_id }}
           path: validation-logs/
           if-no-files-found: ignore
           retention-days: 7

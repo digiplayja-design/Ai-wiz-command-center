@@ -11,6 +11,8 @@ import 'social_client.dart';
 import 'social_notifications.dart';
 import 'social_screen.dart';
 import 'social_push_platform.dart';
+import 'social_native_bridge.dart';
+import 'social_native_actions.dart';
 import 'social_push_native.dart'
     if (dart.library.js_interop) 'social_push_web.dart';
 
@@ -29,6 +31,8 @@ class SocialAppAlerts extends StatefulWidget {
     this.notifications,
     this.clientBuilder,
     this.sounds,
+    this.pushPlatform,
+    this.sessionReady,
   });
 
   final String baseUrl;
@@ -41,6 +45,8 @@ class SocialAppAlerts extends StatefulWidget {
   final SocialNotifications? notifications;
   final SocialClient Function()? clientBuilder;
   final KorlixSoundService? sounds;
+  final SocialPushPlatform? pushPlatform;
+  final bool Function()? sessionReady;
 
   @override
   State<SocialAppAlerts> createState() => _SocialAppAlertsState();
@@ -50,7 +56,12 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
     with WidgetsBindingObserver {
   late final SocialNotifications _notifications;
   late final SocialCallSession _calls;
-  final _push = createSocialPushPlatform();
+  late final _push = widget.pushPlatform ?? createSocialPushPlatform();
+  StreamSubscription<SocialMap>? _nativeEvents;
+  final _nativeSeen = <String>{};
+  bool _registrationSyncing = false;
+  bool _registrationPending = false;
+  bool _nativePending = false;
   bool _pushOpening = false, _pushLaunchPending = false;
   bool _declining = false;
   String? _callError;
@@ -88,6 +99,12 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
     _calls.addListener(_callChanged);
     _pushLaunchPending = _push.launchRequested;
     _push.onOpen(() => unawaited(_openPush()));
+    widget.sessionChanges.addListener(_authChanged);
+    if (_push.isNative) {
+      _nativeEvents = SocialNativeBridge.events.listen((event) {
+        if (event['type'] == 'token') unawaited(_refreshNativeRegistration());
+      });
+    }
     unawaited(_syncPush());
     // A restored unread count or a pre-existing popup is not a new message.
     _messageRevision = _notifications.messageRevision;
@@ -107,19 +124,103 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
   }
 
   Future<void> _syncPush() async {
+    if (widget.sessionReady?.call() == false) return;
     try {
       await _push.syncOwner(socialPushOwner(widget.headersBuilder()));
+      if (!mounted) return;
+      if (_push.isNative) {
+        unawaited(_refreshNativeRegistration());
+        unawaited(_openPush());
+      }
     } catch (_) {}
   }
 
+  void _authChanged() {
+    _nativeSeen.clear();
+    unawaited(_syncPush());
+  }
+
+  Future<void> _refreshNativeRegistration() async {
+    if (!_push.isNative || !_push.supported) return;
+    if (_registrationSyncing) { _registrationPending = true; return; }
+    final client = _notifications.client;
+    final owner = socialPushOwner(widget.headersBuilder());
+    if (client == null || owner.isEmpty) return;
+    _registrationSyncing = true;
+    try {
+      final local = await _push.current(owner);
+      if (local == null || !mounted || !identical(client, _notifications.client)) return;
+      final state = await client.get(_push.action('state'));
+      final saved = socialItems(state['subscriptions']).where((item) =>
+        item['device'] == local['device'] && item['binding'] == local['binding']).firstOrNull;
+      // Never enable notifications implicitly. Only refresh an opted-in device.
+      if (saved == null || !mounted || !identical(client, _notifications.client)) return;
+      await client.post(_push.action('subscribe'), {
+        ...local, 'messages': saved['messages'] == true,
+        'calls': saved['calls'] == true, 'online': saved['online'] == true,
+      });
+    } catch (_) {
+      // A provider/backend outage must not interrupt ordinary foreground chat.
+    } finally {
+      _registrationSyncing = false;
+      if (_registrationPending && mounted) {
+        _registrationPending = false;
+        unawaited(_refreshNativeRegistration());
+      }
+    }
+  }
+
+  Future<void> _openNativePush() async {
+    final navigator = widget.navigatorKey.currentState;
+    if (navigator == null) return;
+    final owner = socialPushOwner(widget.headersBuilder());
+    final sessionClient = _notifications.client;
+    final value = await _push.takeAction();
+    if (value != null) _nativePending = true;
+    if (!mounted || value == null || sessionClient == null ||
+        !sessionClient.available || !identical(sessionClient, _notifications.client) ||
+        socialPushOwner(widget.headersBuilder()) != owner) return;
+    final action = SocialNativeAction.parse(value, owner);
+    if (action == null || !_nativeSeen.add(action.requestId)) return;
+    if (_nativeSeen.length > 64) _nativeSeen.remove(_nativeSeen.first);
+    final client = widget.clientBuilder?.call() ?? SocialClient(
+      baseUrl: widget.baseUrl, headersBuilder: widget.headersBuilder,
+      sessionChanges: widget.sessionChanges,
+    );
+    if (!action.matches(client)) { client.dispose(); return; }
+    if (action.reply != null) {
+      final sent = await navigator.push<bool>(SocialPageRoute<bool>(
+        settings: const RouteSettings(name: '/social/notification-reply'),
+        builder: (_) => SocialQuickReplyScreen(action: action, client: client),
+      ));
+      if (!mounted || sent != true || !action.matches(client)) {
+        client.dispose(); return;
+      }
+    }
+    if (!mounted || !action.matches(client)) { client.dispose(); return; }
+    await navigator.push<void>(SocialPageRoute<void>(
+      settings: const RouteSettings(name: '/social/native-alert'),
+      builder: (_) => SocialScreen(client: client,
+        initialConversation: {'id': action.id}, initialGroupChat: action.group),
+    ));
+  }
+
   Future<void> _openPush() async {
-    if (_pushOpening || !mounted || !_notifications.available) return;
+    if (_pushOpening) {
+      if (_push.isNative) _nativePending = true;
+      return;
+    }
+    if (!mounted || !_notifications.available) return;
     final navigator = widget.navigatorKey.currentState;
     final owner = _notifications.client;
     if (navigator == null || owner == null) return;
     _pushOpening = true;
     _pushLaunchPending = false;
     try {
+      if (_push.isNative) {
+        await _openNativePush();
+        return;
+      }
       if (_calls.current != null) {
         await _calls.restore();
         return;
@@ -150,6 +251,12 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
       );
     } finally {
       _pushOpening = false;
+      if (_push.isNative && _nativePending && mounted) {
+        _nativePending = false;
+        scheduleMicrotask(() {
+          if (mounted) unawaited(_openPush());
+        });
+      }
     }
   }
 
@@ -230,6 +337,7 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _notifications.setForeground(state == AppLifecycleState.resumed);
     if (state == AppLifecycleState.resumed) _calls.resume();
+    if (state == AppLifecycleState.resumed && _push.isNative) unawaited(_syncPush());
     if (state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused) {
       _calls.current?.backgrounded();
@@ -363,6 +471,8 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _push.onOpen(null);
+    widget.sessionChanges.removeListener(_authChanged);
+    unawaited(_nativeEvents?.cancel());
     _calls.removeListener(_callChanged);
     _calls.dispose();
     _notifications.removeListener(_changed);

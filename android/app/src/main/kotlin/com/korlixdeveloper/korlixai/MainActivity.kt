@@ -29,6 +29,7 @@ class MainActivity: FlutterActivity() {
     private var storeReviewLaunched = false
     private val storeReviewHandler = Handler(Looper.getMainLooper())
     private var storeReviewDeadline: Runnable? = null
+    private var socialNative: KorlixSocialNativeChannel? = null
 
     private fun finishStoreReview(result: MethodChannel.Result, accepted: Boolean) {
         if (pendingStoreReview !== result) return
@@ -93,6 +94,9 @@ class MainActivity: FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        socialNative = KorlixSocialNativeChannel(this,
+            MethodChannel(flutterEngine.dartExecutor.binaryMessenger, KorlixSocialNative.CHANNEL), true)
+        KorlixSocialNative.acceptIntent(this, intent)
         storeReviews = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "korlix/store_review")
         storeReviews?.setMethodCallHandler { call, result ->
             if (call.method == "requestReview") requestStoreReview(result)
@@ -144,12 +148,14 @@ class MainActivity: FlutterActivity() {
     override fun onResume() {
         super.onResume()
         foreground = true
+        socialNative?.foreground = true
         approvedCall?.let(::launchSocialCall)
         soundEffects?.foreground = true
     }
 
     override fun onPause() {
         foreground = false
+        socialNative?.foreground = false
         // The Play UI itself can pause us. Only cancel before it is launched.
         if (!storeReviewLaunched) pendingStoreReview?.let { finishStoreReview(it, false) }
         soundEffects?.pause()
@@ -158,6 +164,7 @@ class MainActivity: FlutterActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (socialNative?.onPermissionResult(requestCode, grantResults) == true) return
         if (requestCode != 4817) return
         val id = notificationPermissionCall ?: return
         notificationPermissionCall = null
@@ -170,6 +177,8 @@ class MainActivity: FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        socialNative?.close()
+        socialNative = null
         pendingStoreReview?.let { finishStoreReview(it, false) }
         storeReviews?.setMethodCallHandler(null)
         storeReviews = null
@@ -187,6 +196,12 @@ class MainActivity: FlutterActivity() {
         soundEffects?.close()
         soundEffects = null
         super.cleanUpFlutterEngine(flutterEngine)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        KorlixSocialNative.acceptIntent(this, intent)
     }
 }
 

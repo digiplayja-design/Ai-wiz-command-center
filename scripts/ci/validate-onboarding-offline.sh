@@ -76,6 +76,12 @@ check voice-and-plan-tests "${flutter_cmd[@]}" test --no-pub --reporter expanded
 # informational lints in this large file into release failures.
 check voice-analysis "${flutter_cmd[@]}" analyze --no-pub --no-fatal-infos   lib/live_convo/korlix_live_convo_test_screen.dart lib/live_convo/korlix_live_convo_character_stage.dart
 
+check social-native-analysis "${flutter_cmd[@]}" analyze --no-pub --no-fatal-infos \
+  lib/social lib/auth/korlix_token_store.dart \
+  test/social_floating_chat_test.dart test/social_native_actions_test.dart test/social_native_settings_test.dart
+check social-native-tests "${flutter_cmd[@]}" test --no-pub --reporter expanded \
+  test/social_*_test.dart test/auth/korlix_token_store_test.dart
+
 git diff --exit-code -- pubspec.lock || result=1
 exit "$result"
 CHECKS

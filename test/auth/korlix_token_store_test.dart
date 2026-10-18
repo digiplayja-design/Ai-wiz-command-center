@@ -12,13 +12,17 @@ class _SecureBackend implements KorlixSecureTokenBackend {
   bool failDelete = false;
   bool ignoreWrite = false;
   Completer<void>? writeBarrier;
+  Completer<void>? readBarrier, readEntered;
   final calls = <String>[];
 
   @override
   Future<String?> read() async {
     calls.add('read');
     if (failRead) throw StateError('Storage locked');
-    return value;
+    final snapshot = value;
+    if (readEntered?.isCompleted == false) readEntered!.complete();
+    await readBarrier?.future;
+    return snapshot;
   }
 
   @override
@@ -160,5 +164,35 @@ void main() {
     await webStore.clear();
     expect(await webStore.read(), isNull);
     expect(backend.calls, isEmpty);
+  });
+
+  test('secondary engine read never migrates or writes a session', () async {
+    expect(await store.readOnly(), isNull);
+    expect(backend.calls, isEmpty);
+    expect(prefs.getString(KorlixTokenStore.accessTokenKey), 'fixture-access');
+    await store.write(accessToken: 'current-access');
+    backend.calls.clear();
+    expect((await store.readOnly())?.accessToken, 'current-access');
+    expect(backend.calls, ['read']);
+  });
+
+  test('secondary read racing main-engine logout cannot resurrect tokens', () async {
+    await store.write(accessToken: 'current-access');
+    final secondary = KorlixTokenStore(
+      useSecureStorage: true,
+      preferences: () async => prefs,
+      secureStorage: backend,
+    );
+    backend.readBarrier = Completer<void>();
+    backend.readEntered = Completer<void>();
+    final reading = secondary.readOnly();
+    await backend.readEntered!.future;
+    await store.clear();
+    backend.readBarrier!.complete();
+    expect(await reading, isNull);
+    expect(await store.read(), isNull);
+    expect(backend.value, isNull);
+    await prefs.reload();
+    expect(prefs.getBool('korlix_tokens_signed_out_v1'), isTrue);
   });
 }

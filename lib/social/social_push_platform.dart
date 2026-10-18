@@ -24,6 +24,10 @@ String socialPushOwner(Map<String, String> headers) {
 }
 
 abstract class SocialPushPlatform {
+  bool get isNative => false;
+  String get provider => '';
+  String action(String suffix) => 'push_$suffix';
+  Future<SocialMap?> takeAction() async => null;
   bool get supported;
   String get permission;
   bool get launchRequested;

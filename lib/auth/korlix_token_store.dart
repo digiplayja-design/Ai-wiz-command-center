@@ -124,6 +124,33 @@ class KorlixTokenStore {
     return tokens;
   });
 
+  /// A secondary engine must not migrate credentials or rewrite the logout
+  /// marker. Reload it on both sides of the secure read so a concurrent logout
+  /// cannot be undone by a floating chat opening in another Flutter engine.
+  Future<KorlixStoredTokens?> readOnly() => _serial(() async {
+    final prefs = await _preferences();
+    await prefs.reload();
+    if (prefs.getBool(_signedOutKey) != false) return null;
+    if (!_useSecureStorage) {
+      final access = _nonEmpty(prefs.getString(accessTokenKey));
+      return access == null
+          ? null
+          : KorlixStoredTokens(
+              accessToken: access,
+              refreshToken: _nonEmpty(prefs.getString(refreshTokenKey)),
+            );
+    }
+    final String? value;
+    try {
+      value = await _secureStorage.read();
+    } catch (_) {
+      throw const KorlixTokenStorageException();
+    }
+    await prefs.reload();
+    if (prefs.getBool(_signedOutKey) != false || value == null) return null;
+    return _decode(value);
+  });
+
   Future<void> write({required String accessToken, String? refreshToken}) =>
       _serial(() async {
         if (accessToken.isEmpty) throw const KorlixTokenStorageException();
