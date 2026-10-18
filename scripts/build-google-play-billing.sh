@@ -70,7 +70,8 @@ flutter test test/apple_billing_test.dart test/google_play_billing_test.dart tes
 flutter analyze lib/navigation/home_tool_catalog.dart test/home_tool_catalog_test.dart test/home_navigation_test.dart
 flutter test test/home_tool_catalog_test.dart test/home_navigation_test.dart
 flutter test test/fixed_plan_bar_test.dart test/rici_background_audio_test.dart test/k136s_f5_live_convo_integration_test.dart test/korlix_smoke_screensaver_test.dart test/social_communication_upgrade_test.dart
-flutter analyze lib/social/social_native_bridge.dart lib/social/social_native_actions.dart lib/social/social_push_native.dart lib/social/social_floating_chat.dart lib/social/social_notification_settings.dart test/social_native_actions_test.dart test/social_native_routing_test.dart test/social_native_settings_test.dart test/social_floating_chat_test.dart test/auth/korlix_token_store_test.dart
+# Match CI: style-only informational lints are nonfatal; errors/warnings fail.
+flutter analyze --no-fatal-infos lib/social/social_native_bridge.dart lib/social/social_native_actions.dart lib/social/social_push_native.dart lib/social/social_floating_chat.dart lib/social/social_notification_settings.dart test/social_native_actions_test.dart test/social_native_routing_test.dart test/social_native_settings_test.dart test/social_floating_chat_test.dart test/auth/korlix_token_store_test.dart
 flutter test test/social_native_actions_test.dart test/social_native_routing_test.dart test/social_native_settings_test.dart test/social_floating_chat_test.dart test/auth/korlix_token_store_test.dart
 flutter build appbundle --release --build-name="${version%%+*}" --build-number="$next" --dart-define-from-file="$defines_file"
 echo "Built Android version ${version%%+*} ($next). Upload build/app/outputs/bundle/release/app-release.aab to Internal testing."

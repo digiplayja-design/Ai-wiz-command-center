@@ -83,6 +83,10 @@ Before store rollout, test on Samsung/Android and a physical iPhone/iPad:
 
 ## Build and save from the browser
 
+The complete paste-ready command is in
+[CODESPACE_SOCIAL_RELEASE.md](CODESPACE_SOCIAL_RELEASE.md), pinned to the
+application source validated in CI run 39140392738.
+
 Use the existing isolated Codespace release procedure and a version code above
 every Play track/draft. The last user-confirmed local build was **136**; verify
 the highest uploaded code before choosing the next one. Keep the build's exact
