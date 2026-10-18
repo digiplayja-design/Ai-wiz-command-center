@@ -36,6 +36,7 @@ runuser -u "$runner" -- env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
 set -uo pipefail
 mkdir -p validation-logs
 export KORLIX_DISCOVERY_REVIEW="$PWD/validation-logs/screens"
+export KORLIX_NAVIGATION_REVIEW="$PWD/validation-logs/home-screens"
 export KORLIX_FLUTTER_ROOT="$(dirname "$(dirname "$(command -v flutter)")")"
 result=0
 check() {
@@ -53,7 +54,7 @@ check discovery-build-mode env -u KORLIX_DISCOVERY_REVIEW -u KORLIX_FLUTTER_ROOT
   test/registration_discovery_test.dart \
   --plain-name 'review welcome, registration and starter layouts'
 check onboarding-analysis "${flutter_cmd[@]}" analyze --no-pub \
-  lib/analytics lib/onboarding lib/auth/korlix_entry_welcome.dart lib/auth/korlix_entry_intro.dart lib/auth/korlix_entry_intro_controller.dart \
+  lib/analytics lib/onboarding lib/auth/korlix_signup_presentation.dart lib/auth/korlix_entry_welcome.dart lib/auth/korlix_entry_intro.dart lib/auth/korlix_entry_intro_controller.dart \
   lib/billing/korlix_plan_prompt.dart test/korlix_onboarding_test.dart \
   test/registration_discovery_test.dart test/korlix_entry_intro_test.dart
 check onboarding-tests "${flutter_cmd[@]}" test --no-pub --reporter expanded \
@@ -65,6 +66,10 @@ check billing-analysis "${flutter_cmd[@]}" analyze --no-pub \
   lib/billing/korlix_apple_billing.dart test/google_play_billing_test.dart
 check billing-tests "${flutter_cmd[@]}" test --no-pub --reporter expanded \
   test/apple_billing_test.dart test/google_play_billing_test.dart test/web_billing_test.dart
+check home-catalog-analysis "${flutter_cmd[@]}" analyze --no-pub \
+  lib/navigation/home_tool_catalog.dart test/home_tool_catalog_test.dart test/home_navigation_test.dart
+check home-navigation-tests "${flutter_cmd[@]}" test --no-pub --reporter expanded \
+  test/home_tool_catalog_test.dart test/home_navigation_test.dart
 check fixed-plan-analysis "${flutter_cmd[@]}" analyze --no-pub   lib/billing/korlix_fixed_plan_bar.dart lib/social/social_call_background.dart test/fixed_plan_bar_test.dart
 check voice-and-plan-tests "${flutter_cmd[@]}" test --no-pub --reporter expanded   test/fixed_plan_bar_test.dart test/rici_background_audio_test.dart test/k136s_f5_live_convo_integration_test.dart   test/live_convo/nova_live_voice_workspace_test.dart test/korlix_smoke_screensaver_test.dart   test/social_communication_upgrade_test.dart
 # Analyze the touched production voice screen without turning unrelated legacy

@@ -21,6 +21,7 @@ import 'package:ai_wiz_command_center/main.dart' as app;
 import 'package:ai_wiz_command_center/contacts_crm/contacts_screen.dart';
 import 'package:ai_wiz_command_center/navigation/home_tool_finder.dart';
 import 'package:ai_wiz_command_center/theme/korlix_action_grid.dart';
+import 'package:ai_wiz_command_center/theme/korlix_action_button.dart';
 import 'package:ai_wiz_command_center/navigation/home_tool_catalog.dart';
 import 'package:ai_wiz_command_center/social/social_alert_scope.dart';
 import 'package:ai_wiz_command_center/social/social_notifications.dart';
@@ -148,7 +149,41 @@ void main() {
             (w) => w is KorlixActionSection && w.title == 'For business',
           );
           expect(find.descendant(of: business, matching: crm), findsOneWidget);
-          expect(homeBusinessTools.first, 'Contacts CRM');
+          final businessLabels = tester
+              .widgetList<KorlixActionButton>(find.descendant(
+                of: business,
+                matching: find.byType(KorlixActionButton),
+              ))
+              .map((button) => button.label)
+              .toList();
+          final enterprise = scenario == 'enterprise' || scenario == 'denied';
+          expect(businessLabels.take(enterprise ? 6 : 5), [
+            if (enterprise) 'AI Receptionist',
+            'Logo Studio',
+            'Create an App',
+            'CRM',
+            'AI Visibility',
+            'SEO Agent',
+          ]);
+          expect(businessLabels.toSet().length, businessLabels.length);
+          final personal = find.byWidgetPredicate(
+            (w) => w is KorlixActionSection && w.title == 'For personal use',
+          );
+          final personalLabels = tester
+              .widgetList<KorlixActionButton>(find.descendant(
+                of: personal,
+                matching: find.byType(KorlixActionButton),
+              ))
+              .map((button) => button.label)
+              .toList();
+          expect(personalLabels.take(5), [
+            'Improve my picture',
+            'BabyBlend',
+            'Create Video',
+            'Imagine a picture',
+            'Music Studio',
+          ]);
+          expect(personalLabels.toSet().length, personalLabels.length);
           await tester.ensureVisible(crm);
           await frames(tester);
           expect(crm.hitTestable(), findsOneWidget);
@@ -164,7 +199,6 @@ void main() {
               await frames(tester);
               await Scrollable.ensureVisible(tester.element(business));
               await frames(tester);
-              expect(crm.hitTestable(), findsOneWidget);
               expect(tester.takeException(), isNull, reason: 'home $layout');
               final directory =
                   Platform.environment['KORLIX_NAVIGATION_REVIEW'];
@@ -183,7 +217,23 @@ void main() {
                   ).writeAsBytes(bytes!.buffer.asUint8List());
                   shot.dispose();
                 });
+                await Scrollable.ensureVisible(tester.element(personal));
+                await frames(tester);
+                expect(tester.takeException(), isNull, reason: 'personal $layout');
+                await tester.runAsync(() async {
+                  final render = boundary.currentContext!.findRenderObject()
+                      as RenderRepaintBoundary;
+                  final shot = await render.toImage();
+                  final bytes = await shot.toByteData(format: ui.ImageByteFormat.png);
+                  await File(
+                    '$directory/personal-${layout.$1.toInt()}-${layout.$2}.png',
+                  ).writeAsBytes(bytes!.buffer.asUint8List());
+                  shot.dispose();
+                });
               }
+              await tester.ensureVisible(crm);
+              await frames(tester);
+              expect(crm.hitTestable(), findsOneWidget);
             }
             tester.view.physicalSize = const Size(390, 844);
             tester.platformDispatcher.textScaleFactorTestValue = 1;
@@ -244,10 +294,12 @@ void main() {
             });
           }
           if (request.url.path.startsWith('/api/contacts')) {
-            if (scenario == 'denied')
+            if (scenario == 'denied') {
               return response({'error': 'Enterprise required'}, 403);
-            if (request.url.path.endsWith('/counts'))
+            }
+            if (request.url.path.endsWith('/counts')) {
               return response({'total': 0, 'categories': {}});
+            }
             if (request.url.path.endsWith('/capabilities')) return response({});
             return response({'contacts': [], 'count': 0});
           }

@@ -44,6 +44,7 @@ import 'auth/korlix_entry_welcome.dart';
 import 'onboarding/korlix_starter_tasks.dart';
 import 'billing/korlix_plan_prompt.dart';
 import 'auth/korlix_signup_eligibility.dart';
+import 'auth/korlix_signup_presentation.dart';
 import 'auth/knova_welcome_controller.dart';
 import 'auth/rici_welcome_button.dart';
 import 'navigation/home_tool_catalog.dart';
@@ -1378,6 +1379,7 @@ class _AuthScreenState extends State<AuthScreen> {
     final seasonalDate = widget.seasonalDate ?? DateTime.now();
     final busy = _loading || _resetLoading;
     final signup = _isSignUp;
+    final colorfulSignup = signup && !_showWelcome && _confirmationEmail == null;
     final title = signup ? 'Create your free account' : 'Sign in to Korlix AI';
     return Scaffold(
       appBar: _showWelcome ? AppBar(
@@ -1394,7 +1396,8 @@ class _AuthScreenState extends State<AuthScreen> {
           label: const Text('View Plans'),
         ), const SizedBox(width: 12)],
       ) : null,
-      body: KorlixOctoberWelcome(
+      body: KorlixAuthBackground(
+        signup: colorfulSignup,
         date: seasonalDate,
         child: SafeArea(
           child: Center(
@@ -1407,8 +1410,17 @@ class _AuthScreenState extends State<AuthScreen> {
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: skin.panel,
+                    gradient: colorfulSignup ? LinearGradient(
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                      colors: [
+                        Color.alphaBlend(const Color(0xFF8D7CFF).withValues(alpha: .12), skin.panel),
+                        skin.panel,
+                        Color.alphaBlend(const Color(0xFF3BC9DA).withValues(alpha: .09), skin.panel),
+                      ],
+                    ) : null,
                     borderRadius: BorderRadius.circular(28),
-                    border: Border.all(color: skin.primary.withValues(alpha: .35)),
+                    border: Border.all(color: colorfulSignup
+                      ? const Color(0xFF9D8DDF) : skin.primary.withValues(alpha: .35)),
                   ),
                   child: _confirmationEmail != null
                     ? KorlixWelcomeConfirmation(
@@ -1451,20 +1463,18 @@ class _AuthScreenState extends State<AuthScreen> {
                                     )),
                                 if (!signup && korlixIsOctober(seasonalDate))
                                   KorlixOctoberGreeting(date: seasonalDate),
-                                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                                  Image.asset('assets/branding/korlix_mini_mark.png', height: 42),
-                                  const SizedBox(width: 10),
-                                  Flexible(child: Text('KORLIX AI', style: TextStyle(
-                                    color: skin.text, fontSize: 20,
-                                    fontWeight: FontWeight.w800, letterSpacing: 1.5))),
-                                ]),
-                                const SizedBox(height: 24),
-                                Text(title, style: TextStyle(color: skin.text,
-                                  fontSize: 25, height: 1.2, fontWeight: FontWeight.w800)),
-                                if (signup) ...[
-                                  const SizedBox(height: 8),
-                                  Text('Start with Basic. Upgrade when you need more.',
-                                    style: TextStyle(color: skin.mutedText, height: 1.4)),
+                                if (signup) const KorlixSignupHeader(),
+                                if (!signup) ...[
+                                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                                    Image.asset('assets/branding/korlix_mini_mark.png', height: 42),
+                                    const SizedBox(width: 10),
+                                    Flexible(child: Text('KORLIX AI', style: TextStyle(
+                                      color: skin.text, fontSize: 20,
+                                      fontWeight: FontWeight.w800, letterSpacing: 1.5))),
+                                  ]),
+                                  const SizedBox(height: 24),
+                                  Text(title, style: TextStyle(color: skin.text,
+                                    fontSize: 25, height: 1.2, fontWeight: FontWeight.w800)),
                                 ],
                                 const SizedBox(height: 18),
                                 if (!signup) ...[
@@ -1488,6 +1498,8 @@ class _AuthScreenState extends State<AuthScreen> {
                                   style: TextStyle(color: skin.text),
                                   decoration: InputDecoration(
                                     labelText: 'Email', hintText: 'you@example.com',
+                                    prefixIcon: signup ? const Icon(Icons.alternate_email_rounded,
+                                      color: Color(0xFF8A73D6)) : null,
                                     filled: true, fillColor: skin.inputFill,
                                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                                   ),
@@ -1509,6 +1521,8 @@ class _AuthScreenState extends State<AuthScreen> {
                                   style: TextStyle(color: skin.text),
                                   decoration: InputDecoration(
                                     labelText: 'Password',
+                                    prefixIcon: signup ? const Icon(Icons.lock_outline_rounded,
+                                      color: Color(0xFF4389C4)) : null,
                                     helperText: signup ? 'Use at least 6 characters.' : null,
                                     helperMaxLines: 2,
                                     suffixIcon: IconButton(enableFeedback: false,
@@ -13288,10 +13302,17 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       : tile(label, korlixToolIcon(label),
           (_loading || _customAccessLoading) && label != 'THE RECEIPT WIZ' && !_isIncludedTextWorkspace(label)
             ? null : () => _selectUtilityTool(label));
-    bool businessAction(QuickAction action) => const {
-      'create an app', 'email enhancer', 'negocios', 'crear plan', 'ideas de contenido', 'idées contenu',
-    }.contains(action.label.toLowerCase());
+    bool businessAction(QuickAction action) =>
+        isHomeBusinessQuickAction(action.label);
     final quickActions = _homeQuickActions;
+    List<Widget> orderedTiles(
+      List<MapEntry<String, Widget>> entries, {
+      required bool business,
+    }) => orderHomeTools(
+      entries,
+      labelOf: (entry) => entry.key,
+      business: business,
+    ).map((entry) => entry.value).toList(growable: false);
 
     Widget answerReadyBody() => _buildAnswerReadyConversationView(
       activeResult, compact: MediaQuery.sizeOf(context).width < 430);
@@ -13516,20 +13537,21 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 KorlixActionSection(
                   title: 'For business', description: 'Manage operations, grow your reach, and get work done.',
                   icon: Icons.business_center_outlined,
-                  children: [
-                    for (final tool in homeBusinessTools) toolTile(tool),
+                  children: orderedTiles([
+                    for (final tool in homeBusinessTools) MapEntry(tool, toolTile(tool)),
                     if (_currentTier.trim().toLowerCase() == 'enterprise') ...[
-                      for (final tool in homeEnterpriseTools) toolTile(tool),
+                      for (final tool in homeEnterpriseTools) MapEntry(tool, toolTile(tool)),
                     ],
-                    for (final action in quickActions.where(businessAction)) _buildSafeUiQuickActionChip(action, tile: true),
-                  ],
+                    for (final action in quickActions.where(businessAction))
+                      MapEntry(action.label, _buildSafeUiQuickActionChip(action, tile: true)),
+                  ], business: true),
                 ),
                 const SizedBox(height: 30),
                 KorlixActionSection(
                   title: 'For personal use', description: 'Create, learn, organize, and explore your everyday life.',
                   icon: Icons.person_outline_rounded,
-                  children: [
-                    AnimatedBuilder(
+                  children: orderedTiles([
+                    MapEntry('KORLIX Social', AnimatedBuilder(
                       animation: _socialNotifications,
                       builder: (context, _) => tile('KORLIX Social',
                         _socialNotifications.totalUnread > 0
@@ -13538,13 +13560,15 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                         subtitle: _socialNotifications.totalUnread > 0
                           ? '${_socialNotifications.countLabel} unread messages'
                           : 'People, messages & forums'),
-                    ),
-                    for (final tool in homePersonalTools) toolTile(tool),
-                    for (final action in quickActions.where((a) => !businessAction(a))) _buildSafeUiQuickActionChip(action, tile: true),
-                    tile('Music Studio', Icons.library_music_rounded, _loading ? null : _showMusicStudio),
-                    tile('Locator', Icons.location_on_outlined, _loading ? null : _showLocatorOptions),
-                    if (kKorlixMusicDistributionPrelaunchVisible) tile('Music Distribution', Icons.public_rounded, _loading ? null : _showMusicDistribution),
-                  ],
+                    )),
+                    for (final tool in homePersonalTools) MapEntry(tool, toolTile(tool)),
+                    for (final action in quickActions.where((a) => !businessAction(a)))
+                      MapEntry(action.label, _buildSafeUiQuickActionChip(action, tile: true)),
+                    MapEntry('Music Studio', tile('Music Studio', Icons.library_music_rounded, _loading ? null : _showMusicStudio)),
+                    MapEntry('Locator', tile('Locator', Icons.location_on_outlined, _loading ? null : _showLocatorOptions)),
+                    if (kKorlixMusicDistributionPrelaunchVisible)
+                      MapEntry('Music Distribution', tile('Music Distribution', Icons.public_rounded, _loading ? null : _showMusicDistribution)),
+                  ], business: false),
                 ),
                 if (_currentTier == 'basic' && !kKorlixHideTipDeveloperOnIos) ...[
                   const SizedBox(height: 20),

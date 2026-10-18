@@ -1,31 +1,31 @@
 /// Shared by the home sections and More tools so each feature has one entry.
 const homeBusinessTools = <String>[
-  // Keep CRM first and visible independently of the home tier request.
-  'Contacts CRM',
   'Logo Studio',
-  'KORLIX 2MEETU',
-  'SEO Agent',
+  // CRM remains available independently of the home tier request.
+  'Contacts CRM',
   'AI Visibility',
+  'SEO Agent',
   'Contract Radar',
   'Workforce',
+  'KORLIX 2MEETU',
   'Business Passport',
   'Business Directory',
 ];
 const homeEnterpriseTools = <String>[
   'AI Receptionist',
+  'Funnel Studio',
   'FieldProof',
   'Inventory Studio',
   'Bookkeeping 2027',
-  'Funnel Studio',
   'Payroll',
 ];
 const homePersonalTools = <String>[
-  'THE RECEIPT WIZ',
-  'Live Studio',
-  'The Pod and You',
-  'Tax Prep',
   'BabyBlend',
   'Virtual Closet',
+  'The Pod and You',
+  'Live Studio',
+  'THE RECEIPT WIZ',
+  'Tax Prep',
   'Cybersecurity Defender',
 ];
 const _activeTools = <String>[
@@ -44,8 +44,84 @@ const _activeTools = <String>[
 String homeToolIdentity(String label) => switch (label.trim().toLowerCase()) {
   'study / learn' || 'estudiar' || 'étudier' => 'study studio',
   'create an app' || 'build an app' => 'app studio',
+  'crear mi currículum' || 'rédiger mon cv' => 'write my resume',
   final name => name,
 };
+
+// Rank the combined section, so a quick action can appear beside a native
+// feature instead of being relegated to the end of the section.
+const _homeBusinessPriority = <String>[
+  'AI Receptionist',
+  'Logo Studio',
+  'App Studio',
+  'Contacts CRM',
+  'AI Visibility',
+  'SEO Agent',
+  'Contract Radar',
+  'Workforce',
+  'KORLIX 2MEETU',
+  'Funnel Studio',
+  'Business Passport',
+  'FieldProof',
+  'Inventory Studio',
+  'Bookkeeping 2027',
+  'Payroll',
+  'Email enhancer',
+  'Business Directory',
+];
+const _homePersonalPriority = <String>[
+  'Improve my picture',
+  'BabyBlend',
+  'Create a video',
+  'Imagine a picture',
+  'Music Studio',
+  'Virtual Closet',
+  'The Pod and You',
+  'Live Studio',
+  'KORLIX Social',
+  'Write my Resume',
+  'Study Studio',
+  'THE RECEIPT WIZ',
+  'Tax Prep',
+  'Cybersecurity Defender',
+  'Locator',
+  'Music Distribution',
+];
+
+bool isHomeBusinessQuickAction(String label) => const {
+  'app studio',
+  'email enhancer',
+  'negocios',
+  'crear plan',
+  'ideas de contenido',
+  'idées contenu',
+}.contains(homeToolIdentity(label));
+
+/// Keeps the original label and route, removes alias duplicates, and leaves
+/// unranked features in their original order so new tools remain discoverable.
+List<T> orderHomeTools<T>(
+  Iterable<T> tools, {
+  required String Function(T) labelOf,
+  required bool business,
+}) {
+  final priorities = business ? _homeBusinessPriority : _homePersonalPriority;
+  final ranks = <String, int>{
+    for (var i = 0; i < priorities.length; i++)
+      homeToolIdentity(priorities[i]): i,
+  };
+  final unique = <String, T>{};
+  for (final tool in tools) {
+    unique.putIfAbsent(homeToolIdentity(labelOf(tool)), () => tool);
+  }
+  final originalOrder = unique.keys.toList(growable: false);
+  return unique.values.toList()..sort((a, b) {
+    int rank(T tool) {
+      final identity = homeToolIdentity(labelOf(tool));
+      return ranks[identity] ?? priorities.length + originalOrder.indexOf(identity);
+    }
+    return rank(a).compareTo(rank(b));
+  });
+}
 
 List<String> moreHomeTools({
   required Iterable<String> quickActionLabels,
@@ -160,25 +236,34 @@ List<HomeToolEntry> searchableHomeTools({
   for (final tool in ['Live Convo', 'Upload', 'Voice', 'Camera Ask']) {
     add(tool, 'Start here');
   }
-  add('KORLIX Social', 'Personal');
-  for (final tool in homeBusinessTools) {
+  final quickActions = quickActionLabels.toList(growable: false);
+  for (final tool in orderHomeTools(
+    [
+      ...homeBusinessTools,
+      if (enterprise) ...homeEnterpriseTools,
+      ...quickActions.where(isHomeBusinessQuickAction),
+    ],
+    labelOf: (tool) => tool,
+    business: true,
+  )) {
     add(tool, 'Business');
   }
-  if (enterprise) {
-    for (final tool in homeEnterpriseTools) {
-      add(tool, 'Business');
-    }
-  }
-  for (final tool in homePersonalTools) {
+  for (final tool in orderHomeTools(
+    [
+      ...homePersonalTools,
+      ...quickActions.where((tool) => !isHomeBusinessQuickAction(tool)),
+      'Music Studio',
+      'KORLIX Social',
+      'Locator',
+    ],
+    labelOf: (tool) => tool,
+    business: false,
+  )) {
     add(tool, 'Personal');
   }
-  add('Locator', 'Personal');
   for (final tool in _activeTools) {
     if (!enterprise && homeEnterpriseTools.contains(tool)) continue;
     add(tool, 'Create & learn');
-  }
-  for (final tool in quickActionLabels) {
-    add(tool, 'Quick actions');
   }
   return entries.values.toList(growable: false);
 }
