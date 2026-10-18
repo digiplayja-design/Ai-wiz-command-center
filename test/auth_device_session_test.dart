@@ -275,17 +275,24 @@ void main() {
     app.korlixSetInMemorySession(const app.KorlixAuthSession(
       accessToken: 'previous-access', refreshToken: 'previous-refresh',
     ));
-    final cleanupEntered = Completer<void>();
+    final cleanupEntered = Completer<http.Request>();
     final finishCleanup = Completer<void>();
     final requests = <String>[];
-    final signingOut = app.korlixSignOut(client: MockClient((request) async {
-      requests.add(request.url.path);
-      expect(request.headers['Authorization'], 'Bearer previous-access');
-      expect(app.kKorlixAccessToken, isNull);
-      cleanupEntered.complete();
-      await finishCleanup.future;
-      return http.Response('{}', 200);
-    }));
+    late Future<void> signingOut;
+    // Secure-storage and preferences work is real asynchronous work. Waiting
+    // for it inside the widget fake clock without pumping can deadlock.
+    final signoutRequest = await tester.runAsync<http.Request>(() async {
+      signingOut = app.korlixSignOut(client: MockClient((request) async {
+        requests.add(request.url.path);
+        cleanupEntered.complete(request);
+        await finishCleanup.future;
+        return http.Response('{}', 200);
+      }));
+      return cleanupEntered.future.timeout(const Duration(seconds: 5));
+    });
+    expect(signoutRequest, isNotNull);
+    expect(signoutRequest!.headers['Authorization'], 'Bearer previous-access');
+    expect(app.kKorlixAccessToken, isNull);
     await tester.pumpWidget(MaterialApp(home: app.AuthScreen(
       seasonalDate: DateTime(2026, 11, 1),
       client: MockClient((request) async {
@@ -295,7 +302,6 @@ void main() {
       onSignedIn: (_) async {},
     )));
     await tester.pumpAndSettle();
-    await cleanupEntered.future;
     await tester.enterText(find.byKey(const Key('auth-email')),
         'member@example.test');
     await tester.enterText(find.byKey(const Key('auth-password')),
@@ -304,12 +310,14 @@ void main() {
     await tester.tap(find.text('Sign in'));
     await tester.pump();
     expect(requests, ['/api/auth/signout']);
-    finishCleanup.complete();
+    await tester.runAsync(() async {
+      finishCleanup.complete();
+      await signingOut.timeout(const Duration(seconds: 5));
+    });
     await tester.pumpAndSettle();
-    await signingOut;
     expect(requests, ['/api/auth/signout', '/api/auth/signin']);
     await tester.pumpWidget(const SizedBox.shrink());
-  });
+  }, timeout: const Timeout(Duration(seconds: 45)));
 
   test('consent uses stable issuer and subject, never the bearer token or email', () {
     String token(String issuer, String subject, int expiry) =>
