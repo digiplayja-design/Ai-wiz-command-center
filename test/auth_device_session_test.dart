@@ -275,48 +275,61 @@ void main() {
     app.korlixSetInMemorySession(const app.KorlixAuthSession(
       accessToken: 'previous-access', refreshToken: 'previous-refresh',
     ));
-    final cleanupEntered = Completer<http.Request>();
-    final finishCleanup = Completer<void>();
     final requests = <String>[];
-    late Future<void> signingOut;
-    // Secure-storage and preferences work is real asynchronous work. Waiting
-    // for it inside the widget fake clock without pumping can deadlock.
-    final signoutRequest = await tester.runAsync<http.Request>(() async {
-      signingOut = app.korlixSignOut(client: MockClient((request) async {
-        requests.add(request.url.path);
-        cleanupEntered.complete(request);
-        await finishCleanup.future;
-        return http.Response('{}', 200);
-      }));
-      return cleanupEntered.future.timeout(const Duration(seconds: 5));
-    });
-    expect(signoutRequest, isNotNull);
-    expect(signoutRequest!.headers['Authorization'], 'Bearer previous-access');
-    expect(app.kKorlixAccessToken, isNull);
-    await tester.pumpWidget(MaterialApp(home: app.AuthScreen(
-      seasonalDate: DateTime(2026, 11, 1),
-      client: MockClient((request) async {
-        requests.add(request.url.path);
-        return sessionResponse();
-      }),
-      onSignedIn: (_) async {},
-    )));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('auth-email')),
-        'member@example.test');
-    await tester.enterText(find.byKey(const Key('auth-password')),
-        'test-password');
-    await tester.ensureVisible(find.text('Sign in'));
-    await tester.tap(find.text('Sign in'));
-    await tester.pump();
-    expect(requests, ['/api/auth/signout']);
-    await tester.runAsync(() async {
-      finishCleanup.complete();
-      await signingOut.timeout(const Duration(seconds: 5));
-    });
-    await tester.pumpAndSettle();
-    expect(requests, ['/api/auth/signout', '/api/auth/signin']);
-    await tester.pumpWidget(const SizedBox.shrink());
+    Completer<void>? finishCleanup;
+    Future<void>? signingOut;
+    try {
+      final signoutRequest = await tester.runAsync<http.Request>(() async {
+        // Completer completion is scheduled in its creation zone. Both
+        // barriers must originate here, not in the widget's fake-clock zone.
+        final cleanupEntered = Completer<http.Request>();
+        final cleanupBarrier = Completer<void>();
+        finishCleanup = cleanupBarrier;
+        await app.KorlixDeviceStore.ensureLoaded();
+        signingOut = app.korlixSignOut(client: MockClient((request) async {
+          requests.add(request.url.path);
+          cleanupEntered.complete(request);
+          await cleanupBarrier.future;
+          return http.Response('{}', 200);
+        }));
+        return cleanupEntered.future.timeout(const Duration(seconds: 5));
+      });
+      expect(signoutRequest, isNotNull);
+      expect(signoutRequest!.headers['Authorization'], 'Bearer previous-access');
+      expect(app.kKorlixAccessToken, isNull);
+      await tester.pumpWidget(MaterialApp(home: app.AuthScreen(
+        seasonalDate: DateTime(2026, 11, 1),
+        client: MockClient((request) async {
+          requests.add(request.url.path);
+          return sessionResponse();
+        }),
+        onSignedIn: (_) async {},
+      )));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('auth-email')),
+          'member@example.test');
+      await tester.enterText(find.byKey(const Key('auth-password')),
+          'test-password');
+      await tester.ensureVisible(find.text('Sign in'));
+      await tester.tap(find.text('Sign in'));
+      await tester.pump();
+      expect(requests, ['/api/auth/signout']);
+      await tester.runAsync(() async {
+        finishCleanup!.complete();
+        await signingOut!.timeout(const Duration(seconds: 5));
+      });
+      await tester.pumpAndSettle();
+      expect(requests, ['/api/auth/signout', '/api/auth/signin']);
+    } finally {
+      // A failed assertion must not leave the global sign-out barrier pending
+      // and block the next test's sign-in request.
+      await tester.runAsync(() async {
+        final barrier = finishCleanup;
+        if (barrier != null && !barrier.isCompleted) barrier.complete();
+        await signingOut?.timeout(const Duration(seconds: 5));
+      });
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
   }, timeout: const Timeout(Duration(seconds: 45)));
 
   test('consent uses stable issuer and subject, never the bearer token or email', () {
