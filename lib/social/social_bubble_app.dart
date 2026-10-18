@@ -121,7 +121,9 @@ class SocialBubbleHttpClient extends http.BaseClient {
     if (_closed) {
       throw const SocialException('This floating chat is closed.', 401);
     }
-    request.headers.removeWhere((key, _) => key.toLowerCase() == 'authorization');
+    for (final key in request.headers.keys.toList(growable: false)) {
+      if (key.toLowerCase() == 'authorization') request.headers.remove(key);
+    }
     request.headers['Authorization'] = 'Bearer $token';
     // A redirect must never move this credential outside the checked endpoint.
     request.followRedirects = false;

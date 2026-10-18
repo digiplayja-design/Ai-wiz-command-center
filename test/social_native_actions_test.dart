@@ -6,6 +6,7 @@ import 'package:ai_wiz_command_center/social/social_native_actions.dart';
 import 'package:ai_wiz_command_center/social/social_push_native.dart';
 import 'package:ai_wiz_command_center/social/social_push_platform.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -175,5 +176,34 @@ void main() {
     pending.complete(action());
     expect(await taking, isNull);
     platform.onOpen(null);
+  });
+
+  testWidgets('quick reply hides old account text immediately during pending send', (tester) async {
+    debugDefaultTargetPlatformOverride = null;
+    final response = Completer<http.Response>();
+    final requested = Completer<void>();
+    final transport = MockClient((_) {
+      requested.complete();
+      return response.future;
+    });
+    final client = SocialClient(baseUrl: 'https://api.test',
+      headersBuilder: () => {'Authorization': 'Bearer $token'}, client: transport);
+    final reply = SocialNativeAction.parse(action(), owner)!;
+    await tester.pumpWidget(MaterialApp(
+      home: SocialQuickReplyScreen(action: reply, client: client),
+    ));
+    await tester.pump();
+    await requested.future;
+    expect(find.text('Hello from my notification'), findsOneWidget);
+    client.invalidateSession();
+    await tester.pump();
+    expect(find.text('Hello from my notification'), findsNothing);
+    final close = tester.widget<TextButton>(find.widgetWithText(TextButton, 'Close'));
+    expect(close.onPressed, isNotNull);
+    response.complete(http.Response('{}', 200));
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox.shrink());
+    client.dispose();
+    transport.close();
   });
 }

@@ -79,7 +79,10 @@ class _SocialQuickReplyScreenState extends State<SocialQuickReplyScreen> {
 
   void _accessChanged() {
     if (mounted && !widget.action.matches(widget.client)) {
-      setState(() => _error = 'Your account changed. Close this screen and reopen Social.');
+      setState(() {
+        _sending = false;
+        _error = 'Your account changed. Close this screen and reopen Social.';
+      });
     }
   }
 

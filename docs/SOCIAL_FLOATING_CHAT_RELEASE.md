@@ -30,9 +30,18 @@ Android:
 
 1. Use the existing KORLIX Firebase project, or create the intended project and
    register Android package `com.korlixdeveloper.korlixai` if none exists.
-2. Place its client `google-services.json` at `android/app/google-services.json`
-   in the build checkout. The Gradle configuration includes FCM only when this
-   file is present; ordinary builds continue to compile without it.
+2. Place its public client `google-services.json` at
+   `android/app/google-services.json` in the **existing Codespace checkout**.
+   The isolated prepare/resume release scripts automatically validate it and
+   copy it into the new build worktree. Alternatively, set
+   `KORLIX_FIREBASE_ANDROID_CONFIG` to the downloaded public client JSON before
+   running the release script. An explicit selection takes priority; an invalid
+   or missing explicit file stops with an error. Do not use a service-account
+   JSON file. The helper rejects private credentials and mismatched Android
+   packages before copying, and never prints configuration values.
+   The Gradle configuration includes FCM only when the client file is present.
+   With no optional file, existing builds continue with FCM disabled. A resume
+   retains and revalidates an already-copied client when the original is absent.
 3. Configure the companion backend FCM provider using its documented private
    credential-file procedure. Never include a provider service-account key in
    the app or in a public download.
@@ -45,7 +54,9 @@ unchanged by default. iOS cannot use the Android chat overlay; this update adds
 supported message alerts/replies. Video-call Picture in Picture is not part of
 this implementation.
 
-The companion backend requires its additive native-push migration and release.
+The companion backend is staged in [draft PR #25](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/25)
+and requires its additive native-push migration and release. Its release guide
+documents the provider environment variables and private credential-file setup.
 Provider setup, migration application, production deployment, signed-device
 delivery and store rollout must be confirmed separately. Passing compilation
 does not establish delivery or store publication.
@@ -55,6 +66,9 @@ does not establish delivery or store publication.
 CI analyzes and tests the Social changes, compiles Android without FCM and with
 a synthetic FCM configuration, and compiles an unsigned iOS simulator app. It
 does not hold release signing keys, send real notifications or contact users.
+The signed Codespace release gate also runs Firebase client-copy checks and
+the native action, routing, settings, floating-chat and token-store tests in
+addition to the existing onboarding, billing, voice and navigation checks.
 
 Before store rollout, test on Samsung/Android and a physical iPhone/iPad:
 
@@ -73,6 +87,18 @@ Use the existing isolated Codespace release procedure and a version code above
 every Play track/draft. The last user-confirmed local build was **136**; verify
 the highest uploaded code before choosing the next one. Keep the build's exact
 source revision and required optional client push configuration together.
+
+To select a public Firebase client file stored elsewhere, set this before the
+existing prepare/resume command (replace the path with your real file):
+
+```bash
+export KORLIX_FIREBASE_ANDROID_CONFIG=/absolute/path/to/google-services.json
+```
+
+If the file is already at `android/app/google-services.json` in your original
+Codespace checkout, no extra variable or manual worktree copying is needed. The
+helper copies only this validated public client configuration; backend provider
+keys remain on the backend. The AAB download helper remains unchanged.
 
 After a successful signed build, use the existing helper:
 

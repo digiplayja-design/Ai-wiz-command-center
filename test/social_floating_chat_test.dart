@@ -137,6 +137,7 @@ void main() {
       session(read: () async => null),
       session(read: () async => throw StateError('secret-fixture')),
       session(read: () async => const KorlixStoredTokens(accessToken: 'invalid-private-token')),
+      session(read: () async => KorlixStoredTokens(accessToken: _token(session: ''))),
     ];
     for (final guard in guards) {
       await expectLater(guard.authorize(), throwsA(
@@ -158,8 +159,8 @@ void main() {
         return http.Response('{}', 200);
       }),
     );
-    final request = http.Request('GET', Uri.parse('https://api.test/api/social/bootstrap'))
-      ..headers['Authorization'] = 'Bearer stale';
+    final request = http.Request('GET', Uri.parse('https://api.test/api/social/bootstrap'));
+    request.headers['Authorization'] = 'Bearer stale';
     expect((await transport.send(request)).statusCode, 200);
     transport.close();
     guard.dispose();
@@ -204,6 +205,9 @@ void main() {
   });
 
   testWidgets('bubble chat exposes no call, microphone or second pin action', (tester) async {
+    // Platform selection belongs to the unit tests above; widget tests must
+    // leave Flutter's global platform override unchanged at their boundary.
+    debugDefaultTargetPlatformOverride = null;
     final transport = MockClient((request) async => http.Response(jsonEncode(
       request.url.path.endsWith('/messages')
           ? {'peer': {'id': 'peer-one', 'name': 'Jordan'}, 'items': []}

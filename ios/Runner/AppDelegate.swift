@@ -77,7 +77,8 @@ import UserNotifications
         completionHandler([])
         return
       }
-      let silent = notification.request.content.userInfo["silent"] as? String == "true"
+      let silentValue = notification.request.content.userInfo["silent"]
+      let silent = (silentValue as? Bool == true) || (silentValue as? String == "true")
       if #available(iOS 14.0, *) { completionHandler(silent ? [.banner] : [.banner, .sound]) }
       else { completionHandler(silent ? [.alert] : [.alert, .sound]) }
       return
@@ -206,7 +207,7 @@ private final class KorlixSocialNative {
     let reply = UNTextInputNotificationAction(
       identifier: Self.replyAction, title: "Reply",
       options: [.foreground, .authenticationRequired],
-      textInputButtonTitle: "Continue", textInputPlaceholder: "Message")
+      textInputButtonTitle: "Send", textInputPlaceholder: "Message")
     let messages = UNNotificationCategory(identifier: Self.messageCategory,
       actions: [reply], intentIdentifiers: [], options: [])
     // Calls are alerts only: opening one never answers or starts a microphone.
@@ -435,7 +436,7 @@ private final class KorlixSocialNative {
       guard info["type"] as? String == "message",
             let input = response as? UNTextInputNotificationResponse else { return }
       let text = input.userText.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !text.isEmpty, text.utf8.count <= 16000 else { return }
+      guard !text.isEmpty, text.utf16.count <= 2000 else { return }
       event["type"] = "reply"
       event["text"] = text
     } else if response.actionIdentifier != UNNotificationDefaultActionIdentifier { return }

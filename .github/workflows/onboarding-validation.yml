@@ -135,10 +135,23 @@ jobs:
     env:
       FLUTTER_REVISION: abaf9c523780a608bd46686fd5e53740a07077f8
       FLUTTER_RELEASE: '3.47.7'
+      # macos-15 defaults to Xcode 16.4. The locked device_info_plus 12.4.0
+      # references isiOSAppOnVision and needs the newer SDK declarations.
+      # Xcode 26.2 is explicitly listed on the macos-15 runner image.
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Verify the selected iOS SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "$DEVELOPER_DIR"
+          mkdir -p validation-logs
+          xcodebuild -version | tee validation-logs/ios-toolchain.log
+          xcrun --sdk iphonesimulator --show-sdk-version | tee -a validation-logs/ios-toolchain.log
+          test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = '26.2'
       - name: Prepare pinned Flutter for an unsigned simulator build
         shell: bash
         run: |

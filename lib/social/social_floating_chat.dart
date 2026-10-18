@@ -26,7 +26,7 @@ class SocialFloatingTarget {
         owner.length > 2048 ||
         (kind != 'peer' && kind != 'group') ||
         id is! String ||
-        !RegExp(r'^[a-zA-Z0-9_-]{1,128}$').hasMatch(id)) {
+        !RegExp(r'^[a-zA-Z0-9_-]{1,80}$').hasMatch(id)) {
       return null;
     }
     try {

@@ -251,7 +251,7 @@ object KorlixSocialNative {
         val event = launchAction(context, intent)?.toMutableMap() ?: return
         val reply = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(REPLY)?.toString()?.trim()
         if (!reply.isNullOrEmpty()) {
-            if (reply.length > 4000) return
+            if (reply.length > 2000) return
             event["type"] = "reply"
             event["text"] = reply
         }
