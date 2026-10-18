@@ -1,12 +1,13 @@
-# Build KORLIX Social floating chat and save the AAB in your browser
+# Build KORLIX Social and session renewal, then save the AAB in your browser
 
-**Automated validation passed.** This handoff builds release-preparation commit
-`d3948c26fd5cf424b73b7a77397cb0e7c9087ced`. Its application, platform and test
-files are unchanged from `b24e339d36d6ec3da8d2033fdafe1059361568a6`, validated in
-[39140392738](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/39140392738).
-The app regression tests, Android debug builds with and without Firebase, and
-unsigned iOS simulator build passed. Complete the signed-device checks below
-before store rollout; this does not establish a signed release or publication.
+**Automated validation passed.** This handoff builds application commit
+`d6e9251f433a6959fa03be42190b1ad9ca4697ea`. Its validation run is
+[39145471909](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/39145471909).
+All 589 regression tests passed, plus the separate build-mode layout check;
+one existing optional visual test was skipped. Android arm64 debug builds passed
+with and without Firebase, and the unsigned iOS simulator build passed.
+Complete the signed-device checks below before store rollout; this does not
+establish a signed release or publication.
 The release script uses the same analyzer setting as CI: informational style
 messages are nonfatal, while analyzer errors and warnings still fail the build.
 
@@ -19,6 +20,13 @@ This update adds Android 11+ **Keep this chat floating** for direct and group
 conversations, compact authenticated chat outside the main app, and native
 notification/reply support when the required providers are configured. The
 existing signup, fixed Upgrade/My Plan button and Rici voice changes remain.
+
+It also adds automatic login renewal across feature screens and uploads, retains
+credentials during temporary outages, and preserves active work during ordinary
+token rotation. The live server setting is now **12 hours of inactivity**, measured
+since the last session refresh. The app changes require installing this new build;
+they are not delivered by changing the server setting alone. See
+[the session release notes](AUTH_SESSION_12H_RELEASE.md).
 
 ## Optional Firebase client file
 
@@ -58,7 +66,7 @@ if [[ ! -r "$KORLIX_ANDROID_DEFINES_FILE" ]]; then
   echo 'The saved Android client configuration is missing.' >&2
   exit 1
 fi
-KORLIX_RELEASE_REV=d3948c26fd5cf424b73b7a77397cb0e7c9087ced
+KORLIX_RELEASE_REV=d6e9251f433a6959fa03be42190b1ad9ca4697ea
 read -r -p 'Highest version code in all Play tracks and drafts: ' KORLIX_HIGHEST </dev/tty
 if [[ ! "$KORLIX_HIGHEST" =~ ^[1-9][0-9]{0,9}$ ]] || (( 10#$KORLIX_HIGHEST >= 2100000000 )); then
   echo 'Enter the highest version code verified in Play Console.' >&2
@@ -119,6 +127,13 @@ and verify a direct chat and group chat: choose **Keep this chat floating**,
 allow notifications/bubbles, switch to another app, expand, reply, collapse and
 dismiss. Check that logout/account switching invalidates old bubbles and actions.
 Recheck normal Social messages/calls and Rici lock-screen Mute/Stop behavior.
+
+Keep a signed-in session open across the one-hour access-token boundary, lock and
+unlock the device, and switch between feature screens. Verify that requests renew
+silently, temporary offline periods offer retry without losing the login, and
+explicit logout stays logged out after restart. Separately verify a return within
+twelve hours of the last refresh and expiry after twelve hours without refresh.
+An automated short test does not establish a twelve-hour physical-device run.
 
 For background-delivery tests, first confirm the Firebase client and companion
 backend setup are enabled. Then receive a message with KORLIX backgrounded,

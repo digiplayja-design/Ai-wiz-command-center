@@ -26,6 +26,16 @@ timeout; the app fix is still required to prevent unintended earlier sign-outs.
 This server setting is live, while the client changes require a new app release.
 No signing secrets, database migration or backend deployment were involved.
 
+Application commit `d6e9251f433a6959fa03be42190b1ad9ca4697ea` passed
+[validation run 39145471909](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/39145471909):
+56 onboarding/auth, 60 session/transport/Copilot, 24 billing, 16 home navigation,
+86 voice/plan and 347 Social/token-store tests (589 total), plus the separate
+build-mode layout check. One existing optional visual capture was skipped.
+Focused analysis has no errors or warnings; 25 existing style informational
+messages remain nonfatal. Both Android debug variants and the unsigned iOS
+simulator build passed. This is automated validation, not a twelve-hour device
+test or store publication.
+
 ## Choose the session control that matches the goal
 
 Supabase distinguishes these controls:
