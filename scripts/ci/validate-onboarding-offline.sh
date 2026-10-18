@@ -46,6 +46,12 @@ check() {
   fi
 }
 flutter_cmd=(flutter --suppress-analytics --no-version-check)
+# Release builds do not export screenshot-review variables. Exercise that
+# path in a separate Flutter process so font loading cannot leak from review.
+check discovery-build-mode env -u KORLIX_DISCOVERY_REVIEW -u KORLIX_FLUTTER_ROOT \
+  "${flutter_cmd[@]}" test --no-pub --reporter expanded \
+  test/registration_discovery_test.dart \
+  --plain-name 'review welcome, registration and starter layouts'
 check onboarding-analysis "${flutter_cmd[@]}" analyze --no-pub \
   lib/analytics lib/onboarding lib/auth/korlix_entry_welcome.dart lib/auth/korlix_entry_intro.dart lib/auth/korlix_entry_intro_controller.dart \
   lib/billing/korlix_plan_prompt.dart test/korlix_onboarding_test.dart \

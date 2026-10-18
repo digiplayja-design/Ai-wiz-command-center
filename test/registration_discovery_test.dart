@@ -223,8 +223,17 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    if (output != null) {
-      await tester.runAsync(() async {
+    // Visibility depends on real text metrics even when PNG capture is off.
+    // Keep the release build and screenshot-review paths on the same font.
+    await tester.runAsync(() async {
+      final font = FontLoader('Roboto')
+        ..addFont(
+          File('assets/fieldproof/Roboto-Regular.ttf')
+              .readAsBytes()
+              .then(ByteData.sublistView),
+        );
+      await font.load();
+      if (output != null) {
         final sdk = Platform.environment['KORLIX_FLUTTER_ROOT']!;
         final icons = FontLoader('MaterialIcons')
           ..addFont(
@@ -232,16 +241,9 @@ void main() {
               '$sdk/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
             ).readAsBytes().then(ByteData.sublistView),
           );
-        final font = FontLoader('Roboto')
-          ..addFont(
-            File('assets/fieldproof/Roboto-Regular.ttf')
-                .readAsBytes()
-                .then(ByteData.sublistView),
-          );
         await icons.load();
-        await font.load();
-      });
-    }
+      }
+    });
     Future<void> capture(GlobalKey key, String name) async {
       if (output == null) return;
       await tester.runAsync(() async {
