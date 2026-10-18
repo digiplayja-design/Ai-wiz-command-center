@@ -6,6 +6,8 @@ on:
     branches: [fix/image-to-video-session-20261016]
     paths:
       - 'lib/**'
+      - 'android/app/src/main/**'
+      - 'ios/Runner/**'
       - 'assets/onboarding/**'
       - 'test/**'
       - 'pubspec.*'
@@ -23,7 +25,7 @@ concurrency:
 jobs:
   flutter-checks:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       # Pinned to the verified Flutter stable ref on 2026-10-17.
       FLUTTER_REVISION: abaf9c523780a608bd46686fd5e53740a07077f8
@@ -81,6 +83,19 @@ jobs:
           # verifies that boundary and drops root before invoking Flutter.
           sudo unshare --net env PATH="$PATH" PUB_CACHE="$PUB_CACHE" \
             bash scripts/ci/validate-onboarding-offline.sh "$(id -un)"
+
+      - name: Compile Android debug app without release credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compile the platform channel, service and merged manifest too. No
+          # signing secrets, production definitions or install are required.
+          unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+          export NO_PROXY='*' no_proxy='*'
+          sudo iptables -C OUTPUT -d 169.254.0.0/16 -j REJECT
+          sudo ip6tables -C OUTPUT -d fd00:ec2::254/128 -j REJECT
+          flutter --suppress-analytics --no-version-check precache --android --no-ios --no-web --no-linux --no-macos --no-windows
+          flutter --suppress-analytics --no-version-check build apk --debug --no-pub --target-platform android-arm64 2>&1 | tee validation-logs/android-debug-build.log
 
       - name: Preserve validation logs
         if: always()

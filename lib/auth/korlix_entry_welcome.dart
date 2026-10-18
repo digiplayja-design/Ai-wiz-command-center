@@ -10,10 +10,12 @@ class KorlixEntryWelcome extends StatelessWidget {
     super.key,
     required this.onCreateAccount,
     required this.onSignIn,
+    this.showBranding = true,
   });
 
   final VoidCallback onCreateAccount;
   final VoidCallback onSignIn;
+  final bool showBranding;
 
   @override
   Widget build(BuildContext context) {
@@ -21,6 +23,7 @@ class KorlixEntryWelcome extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (showBranding) ...[
         Image.asset('assets/branding/korlix_mini_mark.png', height: 58),
         const SizedBox(height: 12),
         Text(
@@ -34,6 +37,7 @@ class KorlixEntryWelcome extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 28),
+        ],
         Text(
           'Turn your ideas into useful work.',
           style: TextStyle(

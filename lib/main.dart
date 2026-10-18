@@ -1382,6 +1382,8 @@ class _AuthScreenState extends State<AuthScreen> {
     return Scaffold(
       appBar: _showWelcome ? AppBar(
         automaticallyImplyLeading: false,
+        title: Image.asset('assets/branding/korlix_mini_mark.png', height: 32,
+          semanticLabel: 'KORLIX AI'),
         actions: [TextButton.icon(
           key: const Key('welcome-view-plans'),
           onPressed: () async {
@@ -1423,6 +1425,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       )
                     : _showWelcome
                       ? KorlixEntryWelcome(
+                          showBranding: false,
                           onCreateAccount: () => _chooseAuthMode(signUp: true),
                           onSignIn: () => _chooseAuthMode(signUp: false),
                         )
