@@ -21,7 +21,7 @@ class RiciWelcomeButton extends StatelessWidget {
             : () => unawaited(controller.listen()),
         icon: Icon(
           active ? Icons.stop_circle_outlined : Icons.volume_up_rounded,
-          color: const Color(0xFFE4EBEE),
+          color: Theme.of(context).colorScheme.onSurface,
         ),
       );
     },

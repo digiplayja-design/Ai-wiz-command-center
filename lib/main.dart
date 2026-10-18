@@ -2558,7 +2558,7 @@ class _KorlixSoundSettingsButton extends StatelessWidget {
   Widget build(BuildContext context) => IconButton(enableFeedback: false,
     key: const Key('korlix-open-sounds'),
     tooltip: 'Sounds & Alerts',
-    icon: const Icon(Icons.volume_up_outlined, color: Color(0xFF69D9E8)),
+    icon: Icon(Icons.volume_up_outlined, color: korlixSkinOf(context).primary),
     onPressed: korlixSoundAction(() => Navigator.of(context).push<void>(MaterialPageRoute<void>(
       builder: (_) => const KorlixSoundSettingsScreen(),
     ))),
@@ -4862,6 +4862,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
 
   @override
   Widget build(BuildContext context) {
+    final skin = korlixSkinOf(context);
     if (MediaQuery.sizeOf(context).width < 460 &&
         MediaQuery.textScalerOf(context).scale(14) > 18) {
       return IconButton(
@@ -4871,7 +4872,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
         icon: _loading
             ? const SizedBox(width: 17, height: 17,
                 child: CircularProgressIndicator(strokeWidth: 2))
-            : const Icon(Icons.settings_rounded, color: Color(0xFFE4EBEE)),
+            : Icon(Icons.settings_rounded, color: skin.text),
       );
     }
     return TextButton.icon(
@@ -4888,8 +4889,8 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
           : const Icon(Icons.settings_rounded, size: 18),
       label: const Text('Settings'),
       style: korlixSoundButtonStyle(TextButton.styleFrom(
-        foregroundColor: const Color(0xFFE4EBEE),
-        backgroundColor: Colors.black.withOpacity(0.32),
+        foregroundColor: skin.text,
+        backgroundColor: skin.panelSoft,
       )),
     );
   }

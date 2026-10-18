@@ -49,3 +49,23 @@ saved public client config. Check all Play tracks/drafts for the next unused
 version code. Preserve the browser-download method: serve only the completed
 AAB from a private forwarded port with Content-Disposition attachment, then
 save it to the iPad Files app. Do not serve the repository or signing files.
+
+## Save the completed bundle from the browser
+
+After the signed build succeeds, use the printed Build folder as `SOURCE` and
+its actual build number as `BUILD`. These commands run in the Codespace terminal:
+
+```bash
+SOURCE=/tmp/korlix-play-billing-BUILD.ACTUAL_SUFFIX/source
+BUILD=135 # replace with the number confirmed in your successful build output
+python3 "$SOURCE/scripts/download-android-aab.py" \
+  "$SOURCE/build/app/outputs/bundle/release/app-release.aab" \
+  --build-number "$BUILD" --port 8789
+```
+
+Keep the terminal running. In **Ports**, forward **8789**, leave it **Private**,
+and select **Open in Browser**. Tap **Download KORLIX-…aab** and choose
+**Save to Files → Downloads → Save**. If Chrome shows a preview, use its Share
+menu and **Save to Files**. After the save completes, stop the server with Ctrl+C.
+The server exposes only the selected AAB and its download page. It never
+provides a repository directory listing. Use another private port if 8789 is busy.
