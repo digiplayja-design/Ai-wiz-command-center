@@ -1,8 +1,21 @@
-# Build the fixed Upgrade button and Rici background voice
+# Build the colorful signup, feature order and Rici voice update
 
 Use the existing **super bassoon** Codespace. This builds the reviewed source
 without switching or resetting the dirty workspace branch. It reuses the
 saved public client configuration and existing Android signing setup.
+
+This source includes:
+
+- The fixed Upgrade / My Plan button above the home scroll area.
+- Blue, violet, pink and teal signup accents with readable form fields.
+- Business tools led by Logo Studio, Create an App and CRM, with AI Receptionist
+  first when Enterprise is available. AI Visibility and SEO follow.
+- Personal tools led by Improve my picture, BabyBlend, Create Video, Imagine a
+  picture and Music Studio. Existing translated tools retain their labels and
+  routes; this ordering prioritizes whichever tools are available in that language.
+- Native Rici Live Voice continuing under device lock with Mute and Stop.
+  This does not change the separate short welcome recording or guarantee
+  browser lock-screen playback.
 
 First check the highest version code in **all Google Play tracks and drafts**.
 The command asks for that number and builds the next one. Build 134 was created
@@ -21,7 +34,7 @@ if [[ ! -r "$KORLIX_ANDROID_DEFINES_FILE" ]]; then
   echo 'The saved Android client configuration is missing.' >&2
   exit 1
 fi
-KORLIX_RELEASE_REV=fc083e3e0cb0157406a578d52d2338ebb2f9f9cb
+KORLIX_RELEASE_REV=128943728e513ecc49e189b2b70ea81e11b412ba
 read -r -p 'Highest version code in all Play tracks and drafts: ' KORLIX_HIGHEST </dev/tty
 git -c gc.auto=0 fetch --no-auto-maintenance --no-tags \
   https://github.com/digiplayja-design/Ai-wiz-command-center.git "$KORLIX_RELEASE_REV"
@@ -62,6 +75,8 @@ When it says **Serving KORLIX-…aab**, keep that terminal running:
 5. After saving completes, stop the server with **Ctrl+C**.
 
 Upload the saved AAB to **Internal testing** first. Test Upgrade/My Plan and an
-active Rici conversation with the device locked, including Mute and lock-screen
-Stop. The microphone remains active when unmuted. Browser lock-screen playback
+active Rici Live Voice conversation with the device locked, including Mute and
+lock-screen Stop. Check signup in light/dark themes, large text and with the
+keyboard open, then open the first business and personal features from home.
+The microphone remains active when unmuted. Browser lock-screen playback
 and iOS device behavior have not been established by the Android build.
