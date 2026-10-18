@@ -100,6 +100,46 @@ void main() {
     expect(f.requests.where((r) => r == '/api/live-convo/agents:Bearer offline'), isEmpty);
     await tester.pumpWidget(const SizedBox());
   });
+  testWidgets('same-session rotation during restore keeps incoming agent and uses live headers', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    String jwt(int expiry) {
+      final claims = base64Url.encode(utf8.encode(jsonEncode({
+        'iss': 'https://identity.test', 'sub': 'user', 'session_id': 'login-a', 'exp': expiry,
+      }))).replaceAll('=', '');
+      return 'header.$claims.signature';
+    }
+    var token = jwt(100);
+    final renewed = jwt(200), auth = ValueNotifier(0), capture = CaptureFixture();
+    addTearDown(auth.dispose); addTearDown(capture.c.dispose);
+    final requests = <String>[];
+    final client = MockClient((request) async {
+      requests.add(request.url.path);
+      if (request.url.path == '/api/me') {
+        token = renewed;
+        auth.value++;
+        return http.Response('{"user":{"id":"user"},"profile":{"tier":"enterprise"}}', 200);
+      }
+      expect(request.headers['Authorization'], 'Bearer $renewed');
+      return http.Response('{"agents":[{"id":"agent","name":"Nova","active":true},'
+          '{"id":"other","name":"Other agent","active":true}]}', 200);
+    });
+    addTearDown(client.close);
+    Map<String, String> headers() => {'authorization': 'Bearer $token'};
+    final launch = K135zZoomLaunch(agentId: 'agent', backendBaseUri: Uri.parse('https://api.example.test'),
+        headersBuilder: headers, isCurrent: () => true);
+    await tester.pumpWidget(MaterialApp(home: const Scaffold(), initialRoute: '/meeting-copilot',
+      onGenerateRoute: (settings) => MaterialPageRoute(
+        settings: RouteSettings(name: settings.name, arguments: launch),
+        builder: (_) => K135zCopilotEntry(backendBaseUri: Uri.parse('https://api.example.test'),
+          headersBuilder: headers, authChanges: auth, client: client, zoomTransport: capture.c.transport))));
+    await tester.pumpAndSettle();
+    expect(requests, ['/api/me', '/api/live-convo/agents']);
+    expect(find.text('Start listening'), findsOneWidget);
+    expect(find.text('Restoring your agent…'), findsNothing);
+    expect(capture.calls, isEmpty);
+    expect((await SharedPreferences.getInstance()).getString(pref), 'agent');
+    await tester.pumpWidget(const SizedBox());
+  });
   testWidgets('stale enterprise UI does not override the current account tier', (tester) async {
     setKorlixMeetingCopilotEnterpriseAccess(true);
     final f = EntryFixture()..tier = 'basic'; addTearDown(f.dispose);

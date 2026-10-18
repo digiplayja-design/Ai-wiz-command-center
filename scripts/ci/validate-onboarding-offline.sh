@@ -62,6 +62,13 @@ check onboarding-tests "${flutter_cmd[@]}" test --no-pub --reporter expanded \
   test/auth_welcome_test.dart test/auth_remember_login_test.dart \
   test/auth_october_integration_test.dart test/signup_eligibility_test.dart \
   test/auth_device_session_test.dart
+check session-refresh-analysis "${flutter_cmd[@]}" analyze --no-pub \
+  lib/auth/korlix_session_refresh.dart lib/auth/korlix_http.dart \
+  test/auth/korlix_session_refresh_test.dart test/auth/korlix_http_test.dart
+check session-refresh-tests "${flutter_cmd[@]}" test --no-pub --reporter expanded \
+  test/auth/korlix_session_refresh_test.dart test/auth/korlix_http_test.dart \
+  test/meeting_copilot/k135z_copilot_entry_test.dart \
+  test/meeting_copilot/k135z_zoom_runtime_binding_test.dart
 check billing-analysis "${flutter_cmd[@]}" analyze --no-pub \
   lib/billing/korlix_apple_billing.dart test/google_play_billing_test.dart
 check billing-tests "${flutter_cmd[@]}" test --no-pub --reporter expanded \

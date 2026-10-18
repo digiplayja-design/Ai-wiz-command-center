@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ai_wiz_command_center/main.dart' as app;
+import 'package:ai_wiz_command_center/auth/korlix_token_store.dart';
 
 class LockedSecureStorage extends TestFlutterSecureStoragePlatform {
   LockedSecureStorage() : super({});
@@ -21,6 +23,26 @@ class LockedSecureStorage extends TestFlutterSecureStoragePlatform {
   @override
   Future<void> delete({required String key, required Map<String, String> options}) async {
     throw PlatformException(code: 'locked');
+  }
+}
+
+class PausedSecureStorage extends TestFlutterSecureStoragePlatform {
+  PausedSecureStorage() : super({});
+  bool pauseWrites = false;
+  final entered = Completer<void>();
+  final release = Completer<void>();
+
+  @override
+  Future<void> write({
+    required String key,
+    required String value,
+    required Map<String, String> options,
+  }) async {
+    if (pauseWrites) {
+      if (!entered.isCompleted) entered.complete();
+      await release.future;
+    }
+    await super.write(key: key, value: value, options: options);
   }
 }
 
@@ -53,6 +75,7 @@ void main() {
       app.KorlixDeviceStore.deviceIdKey: deviceId,
       app.KorlixDeviceStore.deviceLabelKey: deviceLabel,
     });
+    app.korlixSetInMemorySession(null);
     app.kKorlixDeviceId = null;
     app.kKorlixDeviceLabel = null;
   });
@@ -150,6 +173,142 @@ void main() {
     ), throwsStateError);
     expect(app.kKorlixAccessToken, isNull);
     expect(await app.KorlixSessionStore.load(), isNull);
+  });
+
+  test('temporary refresh failures retain the saved session', () async {
+    for (final response in [
+      http.Response('{"error":"fetch failed"}', 400),
+      http.Response('{"error":"temporarily unavailable"}', 403),
+      http.Response('{"error":"too many requests"}', 429),
+      http.Response('{"error":"maintenance"}', 503),
+      http.Response('not JSON', 200),
+      http.Response('{"session":{}}', 200),
+    ]) {
+      const session = app.KorlixAuthSession(
+        accessToken: 'fixture-access', refreshToken: 'fixture-refresh',
+      );
+      await app.KorlixSessionStore.save(session);
+      app.korlixSetInMemorySession(session);
+      final revision = app.kKorlixAuthRevision.value;
+      final headers = await app.korlixAuthenticatedBackendHeaders(
+        client: MockClient((_) async => response),
+      );
+      expect(headers['Authorization'], 'Bearer fixture-access');
+      expect(app.kKorlixAuthRevision.value, revision);
+      expect((await app.KorlixSessionStore.load())?.refreshToken,
+          'fixture-refresh');
+    }
+  });
+
+  test('refresh rotation preserves the active Social account revision', () async {
+    app.korlixSetInMemorySession(const app.KorlixAuthSession(
+      accessToken: 'fixture-access', refreshToken: 'fixture-refresh',
+    ));
+    final revision = app.kKorlixAuthRevision.value;
+    final headers = await app.korlixAuthenticatedBackendHeaders(
+      client: MockClient((_) async => sessionResponse()),
+    );
+    expect(headers['Authorization'], 'Bearer new-access');
+    expect(app.kKorlixAuthRevision.value, revision);
+    expect((await app.KorlixSessionStore.load())?.refreshToken, 'new-refresh');
+  });
+
+  test('logout during refresh persistence leaves disk signed out', () async {
+    final storage = PausedSecureStorage();
+    FlutterSecureStoragePlatform.instance = storage;
+    addTearDown(() => FlutterSecureStorage.setMockInitialValues({}));
+    const original = app.KorlixAuthSession(
+      accessToken: 'fixture-access', refreshToken: 'fixture-refresh',
+    );
+    await app.KorlixSessionStore.save(original);
+    app.korlixSetInMemorySession(original);
+    storage.pauseWrites = true;
+    final refreshing = app.korlixAuthenticatedBackendHeaders(
+      client: MockClient((_) async => sessionResponse()),
+    );
+    final rejected = expectLater(refreshing, throwsStateError);
+    await storage.entered.future;
+    final signingOut = app.korlixClearLocalAuthSession();
+    expect(app.kKorlixAccessToken, isNull);
+    final prefs = await SharedPreferences.getInstance();
+    await Future<void>.delayed(Duration.zero);
+    expect(prefs.getBool('korlix_tokens_signed_out_v1'), isTrue);
+    // A fresh engine/restart observes logout before the stalled write ends.
+    expect(await KorlixTokenStore().readOnly(), isNull);
+    storage.release.complete();
+    await Future.wait([rejected, signingOut]);
+    expect(await app.KorlixSessionStore.load(), isNull);
+    expect(app.kKorlixAccessToken, isNull);
+  });
+
+  test('new login queued during refresh persistence wins on disk', () async {
+    final storage = PausedSecureStorage();
+    FlutterSecureStoragePlatform.instance = storage;
+    addTearDown(() => FlutterSecureStorage.setMockInitialValues({}));
+    const original = app.KorlixAuthSession(
+      accessToken: 'fixture-access', refreshToken: 'fixture-refresh',
+    );
+    const next = app.KorlixAuthSession(
+      accessToken: 'account-b-access', refreshToken: 'account-b-refresh',
+    );
+    await app.KorlixSessionStore.save(original);
+    app.korlixSetInMemorySession(original);
+    storage.pauseWrites = true;
+    final refreshing = app.korlixAuthenticatedBackendHeaders(
+      client: MockClient((_) async => sessionResponse()),
+    );
+    final rejected = expectLater(refreshing, throwsStateError);
+    await storage.entered.future;
+    app.korlixSetInMemorySession(null);
+    final revision = app.kKorlixAuthRevision.value;
+    final saving = app.KorlixSessionStore.save(next,
+      isCurrent: () => revision == app.kKorlixAuthRevision.value);
+    storage.release.complete();
+    await Future.wait([rejected, saving]);
+    app.korlixSetInMemorySession(next);
+    expect((await app.KorlixSessionStore.load())?.accessToken,
+        'account-b-access');
+    expect(app.kKorlixRefreshToken, 'account-b-refresh');
+  });
+
+  testWidgets('sign in waits for the previous device sign-out cleanup', (tester) async {
+    app.korlixSetInMemorySession(const app.KorlixAuthSession(
+      accessToken: 'previous-access', refreshToken: 'previous-refresh',
+    ));
+    final cleanupEntered = Completer<void>();
+    final finishCleanup = Completer<void>();
+    final requests = <String>[];
+    final signingOut = app.korlixSignOut(client: MockClient((request) async {
+      requests.add(request.url.path);
+      expect(request.headers['Authorization'], 'Bearer previous-access');
+      expect(app.kKorlixAccessToken, isNull);
+      cleanupEntered.complete();
+      await finishCleanup.future;
+      return http.Response('{}', 200);
+    }));
+    await tester.pumpWidget(MaterialApp(home: app.AuthScreen(
+      seasonalDate: DateTime(2026, 11, 1),
+      client: MockClient((request) async {
+        requests.add(request.url.path);
+        return sessionResponse();
+      }),
+      onSignedIn: (_) async {},
+    )));
+    await tester.pumpAndSettle();
+    await cleanupEntered.future;
+    await tester.enterText(find.byKey(const Key('auth-email')),
+        'member@example.test');
+    await tester.enterText(find.byKey(const Key('auth-password')),
+        'test-password');
+    await tester.ensureVisible(find.text('Sign in'));
+    await tester.tap(find.text('Sign in'));
+    await tester.pump();
+    expect(requests, ['/api/auth/signout']);
+    finishCleanup.complete();
+    await tester.pumpAndSettle();
+    await signingOut;
+    expect(requests, ['/api/auth/signout', '/api/auth/signin']);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   test('consent uses stable issuer and subject, never the bearer token or email', () {

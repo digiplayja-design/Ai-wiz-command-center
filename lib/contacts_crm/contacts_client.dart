@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 
 const contactCategories = [
   'friend',
@@ -41,7 +41,7 @@ class ContactsClient {
     required this.headersBuilder,
     http.Client? client,
     this.sessionChanges,
-  }) : _http = client ?? http.Client(),
+  }) : _http = client ?? http.createClient(),
        _ownsClient = client == null {
     _scope = _readScope();
     sessionChanges?.addListener(_checkSession);

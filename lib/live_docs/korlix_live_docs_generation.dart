@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 
 import 'korlix_live_docs.dart';
@@ -349,7 +349,7 @@ class KorlixLiveDocsGenerationClient {
     required this.headersBuilder,
     http.Client? client,
     this.timeout = const Duration(minutes: 4),
-  }) : _client = client ?? http.Client(),
+  }) : _client = client ?? http.createClient(),
        _ownsClient = client == null;
 
   final String backendBaseUrl;

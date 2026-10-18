@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 
 String agentStudioKey() {
   final r = Random.secure(), b = List.generate(16, (_) => 0);
@@ -49,7 +49,7 @@ class AgentStudioClient {
     required this.baseUrl,
     required this.headersBuilder,
     http.Client? client,
-  }) : _http = client ?? http.Client(),
+  }) : _http = client ?? http.createClient(),
        _owns = client == null {
     _scope = agentAccountScope(headersBuilder());
   }

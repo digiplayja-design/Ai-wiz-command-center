@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../chat/chat_memory_client.dart' show chatAccountStorageKey;
 import '../live_convo/agent_studio_client.dart' show agentStudioKey;
@@ -37,7 +37,7 @@ class EmailEnhancerClient extends ChangeNotifier {
     this.sessionChanges,
     http.Client? client,
     EmailDraftStore? store,
-  }) : _http = client ?? http.Client(),
+  }) : _http = client ?? http.createClient(),
        _owns = client == null,
        _store = store ?? EmailPreferences() {
     _scope = _identity();

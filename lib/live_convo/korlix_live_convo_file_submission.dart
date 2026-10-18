@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 
 import 'korlix_live_convo_attachment.dart';
 
@@ -175,7 +175,7 @@ class KorlixLiveConvoFileSubmissionClient {
     required this.headersBuilder,
     http.Client? client,
     this.timeout = const Duration(seconds: 630),
-  }) : _client = client ?? http.Client(),
+  }) : _client = client ?? http.createClient(),
        _ownsClient = client == null;
 
   final String backendBaseUrl;

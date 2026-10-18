@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 class CameraAskException implements Exception {
@@ -139,7 +139,7 @@ class CameraAskClient {
     this.sessionChanges,
     http.Client? client,
     this.timeout = const Duration(seconds: 360),
-  }) : _http = client ?? http.Client(),
+  }) : _http = client ?? http.createClient(),
        _ownsClient = client == null {
     _scope = _readScope();
     sessionChanges?.addListener(_checkSession);

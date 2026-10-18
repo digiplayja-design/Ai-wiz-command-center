@@ -60,6 +60,8 @@ export 'characters/character_catalog.dart' show normalizeKorlixCharacterId;
 import 'auth/korlix_october_welcome.dart';
 import 'auth/korlix_login_preferences.dart';
 import 'auth/korlix_token_store.dart';
+import 'auth/korlix_session_refresh.dart';
+export 'auth/korlix_session_refresh.dart' show KorlixAuthSession;
 import 'ads/korlix_ad_consent.dart';
 import 'account/korlix_account_deletion_dialog.dart';
 import 'support/korlix_ai_report_client.dart';
@@ -123,7 +125,8 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
+import 'auth/korlix_http.dart' as http;
+import 'package:http/http.dart' as raw_http;
 import 'package:http_parser/http_parser.dart' as http_parser;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -186,6 +189,7 @@ bool kSupabaseReady = false;
 String? kKorlixAccessToken;
 String? kKorlixRefreshToken;
 String? kKorlixUserEmail;
+Future<void>? _korlixPendingSignOut;
 String? _korlixReviewAccountScope;
 KorlixPortalLaunch? _korlixInitialPortalLaunch;
 bool _korlixPortalLaunchRequested = false;
@@ -226,12 +230,53 @@ void korlixSetInMemorySession(KorlixAuthSession? session) {
 Future<void> korlixClearLocalAuthSession() async {
   // Invalidate visible sessions before waiting on a locked device's storage.
   korlixSetInMemorySession(null);
+  final marked = KorlixTokenStore.instance.markSignedOut();
+  // Queue deletion before yielding so a subsequent sign-in save is ordered
+  // after this logout, even when preferences or secure storage are slow.
+  final clearing = KorlixSessionStore.clear();
   try {
-    await KorlixSessionStore.clear().timeout(const Duration(seconds: 5));
+    await Future.wait([marked, clearing]).timeout(const Duration(seconds: 5));
   } catch (_) {
     kKorlixBootWarnings.add(
       'Session storage could not be cleared. Unlock your device and try again.',
     );
+  }
+}
+
+/// Fence refresh immediately and let ordinary device cleanup complete before
+/// another sign-in request. A network timeout keeps the UI usable; server-side
+/// session-bound revocation is required to fence cleanup that outlives timeout.
+Future<void> korlixSignOut({http.Client? client}) async {
+  final pending = _korlixPendingSignOut;
+  if (pending != null) return pending;
+  final signedOutToken = kKorlixAccessToken;
+  final localClear = korlixClearLocalAuthSession();
+  final cleanup = () async {
+    await localClear;
+    try {
+      await KorlixDeviceStore.ensureLoaded();
+      final post = client?.post ?? http.post;
+      await post(
+        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/auth/signout'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (signedOutToken?.isNotEmpty == true)
+            'Authorization': 'Bearer $signedOutToken',
+          ...KorlixDeviceStore.headers(),
+        },
+        body: jsonEncode(KorlixDeviceStore.bodyFields()),
+      ).timeout(const Duration(seconds: 8));
+    } catch (_) {
+      // Credentials are already invalid locally; cleanup is best effort.
+    }
+  }();
+  _korlixPendingSignOut = cleanup;
+  try {
+    await cleanup;
+  } finally {
+    if (identical(_korlixPendingSignOut, cleanup)) {
+      _korlixPendingSignOut = null;
+    }
   }
 }
 
@@ -270,6 +315,11 @@ void socialBubbleMain() => runSocialBubble();
 Future<void> main() async {
   await runZonedGuarded<Future<void>>(
     () async {
+      http.configureClientFactory(() => KorlixSessionHttpClient(
+        inner: raw_http.Client(),
+        sessions: kKorlixSessionRefresh,
+        baseUrl: kKorlixBackendBaseUrl,
+      ));
       WidgetsFlutterBinding.ensureInitialized();
       _installKorlixErrorSurface();
       _korlixPortalLaunchRequested =
@@ -613,6 +663,13 @@ class KorlixSessionStore {
   static const String accessTokenKey = 'korlix_access_token';
   static const String refreshTokenKey = 'korlix_refresh_token';
   static const String emailKey = 'korlix_user_email';
+  static Future<void> _writes = Future<void>.value();
+
+  static Future<void> _serial(Future<void> Function() operation) {
+    final result = _writes.then((_) => operation());
+    _writes = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    return result;
+  }
 
   static Future<KorlixAuthSession?> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -632,13 +689,17 @@ class KorlixSessionStore {
     );
   }
 
-  static Future<void> save(KorlixAuthSession session) async {
+  static Future<void> save(KorlixAuthSession session, {bool Function()? isCurrent}) => _serial(() async {
+    if (isCurrent?.call() == false) return;
     final prefs = await SharedPreferences.getInstance();
+    if (isCurrent?.call() == false) return;
 
     await KorlixTokenStore.instance.write(
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
+      isCurrent: isCurrent,
     );
+    if (isCurrent?.call() == false) return;
 
     if (session.email != null && session.email!.isNotEmpty) {
       await prefs.setString(emailKey, session.email!);
@@ -648,14 +709,14 @@ class KorlixSessionStore {
     } catch (_) {
       // A welcome-screen preference must not invalidate a saved session.
     }
-  }
+  });
 
-  static Future<void> clear() async {
+  static Future<void> clear() => _serial(() async {
     final prefs = await SharedPreferences.getInstance();
 
     await KorlixTokenStore.instance.clear();
     await prefs.remove(emailKey);
-  }
+  });
 
   static Future<KorlixAuthSession?> refresh(
     KorlixAuthSession session, {
@@ -667,10 +728,10 @@ class KorlixSessionStore {
       return session;
     }
 
+    final transport = client ?? raw_http.Client();
     try {
       await KorlixDeviceStore.ensureLoaded();
-      final post = client?.post ?? http.post;
-      final response = await post(
+      final response = await transport.post(
         _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/auth/refresh'),
         headers: {
           'Content-Type': 'application/json',
@@ -680,24 +741,28 @@ class KorlixSessionStore {
           'refresh_token': refreshToken,
           ...KorlixDeviceStore.bodyFields(),
         }),
-      );
+      ).timeout(const Duration(seconds: 60));
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) throw const KorlixSessionRefreshUnavailable();
+      final data = decoded;
 
       if (response.statusCode >= 400) {
-        return null;
+        if (korlixRefreshWasRejected(response.statusCode, data)) return null;
+        throw const KorlixSessionRefreshUnavailable();
       }
 
       final refreshedSession = data['session'] as Map<String, dynamic>?;
 
       if (refreshedSession == null ||
-          refreshedSession['access_token'] == null) {
-        return null;
+          refreshedSession['access_token'] is! String ||
+          (refreshedSession['access_token'] as String).trim().isEmpty) {
+        throw const KorlixSessionRefreshUnavailable();
       }
 
       final newSession = KorlixAuthSession(
         accessToken: refreshedSession['access_token'].toString(),
-        refreshToken: refreshedSession['refresh_token']?.toString(),
+        refreshToken: refreshedSession['refresh_token']?.toString() ?? session.refreshToken,
         email: data['user']?['email']?.toString() ?? session.email,
       );
 
@@ -705,62 +770,48 @@ class KorlixSessionStore {
       // before persisting a response that arrived after an account switch.
       return newSession;
     } catch (_) {
-      return session;
+      throw const KorlixSessionRefreshUnavailable();
+    } finally {
+      // The shared coordinator bounds each caller's wait separately. Keep the
+      // transport alive long enough to save a slow token rotation, then abort
+      // a genuinely stalled connection so a later attempt can recover.
+      if (client == null) transport.close();
     }
   }
 }
 
-class KorlixAuthSession {
-  final String accessToken;
-  final String? refreshToken;
-  final String? email;
+KorlixAuthSession? _korlixCurrentSession() => kKorlixAccessToken?.isNotEmpty == true
+    ? KorlixAuthSession(accessToken: kKorlixAccessToken!,
+        refreshToken: kKorlixRefreshToken, email: kKorlixUserEmail)
+    : null;
 
-  const KorlixAuthSession({
-    required this.accessToken,
-    this.refreshToken,
-    this.email,
-  });
-}
+final kKorlixSessionRefresh = KorlixSessionRefreshCoordinator(
+  current: _korlixCurrentSession,
+  revision: () => kKorlixAuthRevision.value,
+  refresh: (session) => KorlixSessionStore.refresh(session),
+  persist: (session, stillCurrent) => KorlixSessionStore.save(session, isCurrent: stillCurrent),
+  publish: (session) {
+    // Same-login bearer rotation is not an account change. Keeping the account
+    // revision stable preserves active Social routes, Rici calls and drafts.
+    kKorlixAccessToken = session.accessToken;
+    kKorlixRefreshToken = session.refreshToken;
+    kKorlixUserEmail = session.email;
+  },
+  clear: korlixClearLocalAuthSession,
+);
 
 Future<Map<String, String>> korlixAuthenticatedBackendHeaders({http.Client? client}) async {
-  final revision = kKorlixAuthRevision.value;
-  KorlixAuthSession? session;
-  final inMemoryAccessToken = kKorlixAccessToken?.trim();
-  if (inMemoryAccessToken != null && inMemoryAccessToken.isNotEmpty) {
-    session = KorlixAuthSession(
-      accessToken: inMemoryAccessToken,
-      refreshToken: kKorlixRefreshToken,
-      email: kKorlixUserEmail,
+  try {
+    await kKorlixSessionRefresh.ensureFresh(
+      // Explicit client overrides keep the diagnostic/test helper's contract.
+      force: client != null,
+      refreshOverride: client == null ? null : (session) => KorlixSessionStore.refresh(session, client: client),
     );
-  } else {
-    try {
-      session = await KorlixSessionStore.load().timeout(const Duration(seconds: 3));
-    } catch (_) {
-      session = null;
-    }
-  }
-  if (session != null && revision == kKorlixAuthRevision.value) {
-    KorlixAuthSession? refreshed;
-    try {
-      refreshed = await KorlixSessionStore.refresh(session, client: client)
-          .timeout(const Duration(seconds: 8));
-    } catch (_) {
-      refreshed = session;
-    }
-    if (revision != kKorlixAuthRevision.value) {
-      throw StateError('Your account changed. Please try again.');
-    }
-    if (refreshed == null) {
-      await korlixClearLocalAuthSession();
-      return KorlixDeviceStore.headers();
-    }
-    await KorlixSessionStore.save(refreshed);
-    if (revision != kKorlixAuthRevision.value) {
-      throw StateError('Your account changed. Please try again.');
-    }
-    korlixSetInMemorySession(refreshed);
-  } else if (revision != kKorlixAuthRevision.value) {
+  } on KorlixSessionChanged {
     throw StateError('Your account changed. Please try again.');
+  } on KorlixSessionRefreshUnavailable {
+    final current = _korlixCurrentSession();
+    if (current == null || kKorlixSessionRefresh.isExpired(current)) rethrow;
   }
 
   final headers = KorlixDeviceStore.headers();
@@ -800,12 +851,44 @@ Uri _assertValidKorlixBackendUri(String rawUri) {
   return uri;
 }
 
-class _AuthGateState extends State<AuthGate> {
+class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   bool _booting = true;
   bool _preferSignIn = false;
   String? _restoreNotice;
   late final KnovaWelcomeController _welcome;
   bool _portalLaunchScheduled = false;
+  Timer? _refreshTimer;
+  bool _refreshForeground = true;
+
+  void _scheduleSessionRefresh() {
+    _refreshTimer?.cancel();
+    if (!mounted || !_signedIn || !_refreshForeground) return;
+    final delay = kKorlixSessionRefresh.nextRefreshDelay();
+    if (delay != null) _refreshTimer = Timer(delay, () => unawaited(_renewSession()));
+  }
+
+  Future<void> _renewSession() async {
+    try {
+      await kKorlixSessionRefresh.ensureFresh();
+    } on KorlixSessionRefreshUnavailable {
+      // Keep the saved session. Requests use the same coordinator and retry
+      // after connectivity recovers; an outage must not become a sign-out.
+    } on KorlixSessionChanged {
+      // The explicit account transition already owns the new UI/session.
+    } finally {
+      _scheduleSessionRefresh();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _refreshForeground = state == AppLifecycleState.resumed;
+    if (_refreshForeground) {
+      unawaited(_renewSession());
+    } else {
+      _refreshTimer?.cancel();
+    }
+  }
 
   void _schedulePortalLaunch() {
     final launch = _korlixInitialPortalLaunch;
@@ -842,6 +925,9 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    _refreshForeground = lifecycle == null || lifecycle == AppLifecycleState.resumed;
     _welcome = KnovaWelcomeController(backendBaseUrl: kKorlixBackendBaseUrl, sounds: kKorlixSounds);
     unawaited(_welcome.preload());
     kKorlixAuthRevision.addListener(_handleAuthRevisionChanged);
@@ -850,6 +936,8 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _refreshTimer?.cancel();
     _welcome.dispose();
     kKorlixAuthRevision.removeListener(_handleAuthRevisionChanged);
     super.dispose();
@@ -857,6 +945,7 @@ class _AuthGateState extends State<AuthGate> {
 
   void _handleAuthRevisionChanged() {
     if (!_signedIn) _welcome.signedOut();
+    _scheduleSessionRefresh();
     if (mounted) {
       setState(() {});
     }
@@ -884,18 +973,16 @@ class _AuthGateState extends State<AuthGate> {
       if (saved == null) {
         await korlixClearLocalAuthSession();
       } else {
-        final refreshed = await KorlixSessionStore.refresh(
-          saved,
-        ).timeout(const Duration(seconds: 8));
-
-        if (!mounted || revision != kKorlixAuthRevision.value) return;
-        if (refreshed != null) {
-          await KorlixSessionStore.save(refreshed).timeout(const Duration(seconds: 5));
-          if (!mounted || revision != kKorlixAuthRevision.value) return;
-          korlixSetInMemorySession(refreshed);
-        } else {
-          await korlixClearLocalAuthSession();
+        korlixSetInMemorySession(saved);
+        try {
+          await kKorlixSessionRefresh.ensureFresh(force: true);
+        } on KorlixSessionRefreshUnavailable {
+          // Cached credentials remain available for a later silent retry.
+          // The HTTP guard does not dispatch an expired bearer meanwhile.
+        } on KorlixSessionChanged {
+          return;
         }
+        _scheduleSessionRefresh();
       }
     } catch (error, stack) {
       final warning = 'Session restore failed: $error';
@@ -916,9 +1003,13 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _handleSignedIn(KorlixAuthSession session) async {
-    await KorlixSessionStore.save(session);
+    // Fence a pending refresh from the previous login before persistence starts.
+    korlixSetInMemorySession(null);
+    final revision = kKorlixAuthRevision.value;
+    await KorlixSessionStore.save(session,
+      isCurrent: () => revision == kKorlixAuthRevision.value);
 
-    if (!mounted) {
+    if (!mounted || revision != kKorlixAuthRevision.value) {
       return;
     }
 
@@ -931,28 +1022,8 @@ class _AuthGateState extends State<AuthGate> {
 
   Future<void> _handleSignOut() async {
     _welcome.signedOut();
-    try {
-      await KorlixDeviceStore.ensureLoaded();
-
-      await http.post(
-        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/auth/signout'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (kKorlixAccessToken != null && kKorlixAccessToken!.isNotEmpty)
-            'Authorization': 'Bearer $kKorlixAccessToken',
-          ...KorlixDeviceStore.headers(),
-        },
-        body: jsonEncode(KorlixDeviceStore.bodyFields()),
-      ).timeout(const Duration(seconds: 8));
-    } catch (_) {
-      // Local sign-out should still happen even if the server cleanup fails.
-    }
-
-    await korlixClearLocalAuthSession();
-
-    if (mounted) {
-      setState(() {});
-    }
+    await korlixSignOut();
+    if (mounted) setState(() {});
   }
 
   @override
@@ -1249,6 +1320,11 @@ class _AuthScreenState extends State<AuthScreen> {
     bool receivedResponse = false;
     bool serverRejected = false;
     try {
+      // Let ordinary sign-out cleanup finish before this device is registered
+      // again. The cleanup request itself is bounded so offline login UI cannot
+      // wait forever. Server-side session-bound revocation is still authoritative.
+      await _korlixPendingSignOut;
+      if (!mounted) return;
       await KorlixDeviceStore.ensureLoaded();
       final path = signingUp ? '/api/auth/signup' : '/api/auth/signin';
 
@@ -2256,7 +2332,8 @@ class _KorlixBasicAdBannerState extends State<KorlixBasicAdBanner> {
         generation == _generation &&
         authRevision == kKorlixAuthRevision.value &&
         billingRevision == kKorlixBillingRevision.value &&
-        token == kKorlixAccessToken;
+        kKorlixAccessToken != null &&
+        korlixSessionIdentity(token) == korlixSessionIdentity(kKorlixAccessToken!);
 
     _preparing = true;
     try {
@@ -2736,7 +2813,8 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     }
     final headers = Map<String, String>.from(_headers());
     bool current() => mounted && revision == kKorlixAuthRevision.value &&
-        token == kKorlixAccessToken;
+        kKorlixAccessToken != null &&
+        korlixSessionIdentity(token) == korlixSessionIdentity(kKorlixAccessToken!);
     _historyReportBusy = true;
     try {
       final reportId = await showDialog<String>(
@@ -3761,7 +3839,8 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     }
     final headers = Map<String, String>.from(_headers());
     bool current() => mounted && revision == kKorlixAuthRevision.value &&
-        token == kKorlixAccessToken;
+        kKorlixAccessToken != null &&
+        korlixSessionIdentity(token) == korlixSessionIdentity(kKorlixAccessToken!);
     _deletionRequestBusy = true;
     try {
       final recorded = await showDialog<bool>(
@@ -6139,26 +6218,6 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     }
   }
 
-  Future<void> _forceSignOutForSessionTimeout() async {
-    await korlixClearLocalAuthSession();
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _loading = false;
-      _error = 'Your session timed out. Please sign in again.';
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Your session timed out. Please sign in again.'),
-        duration: Duration(seconds: 5),
-      ),
-    );
-  }
-
   String _makePendingGenerationJobId(String kind) {
     final safeKind = kind.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '-');
     return 'korlix-$safeKind-${DateTime.now().microsecondsSinceEpoch}-${_chatMessages.length}-${_results.length}';
@@ -6365,8 +6424,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         int.tryParse((result['statusCode'] ?? 200).toString()) ?? 200;
 
     if (korlixIsSessionTimeoutStatus(statusCode)) {
-      unawaited(_forceSignOutForSessionTimeout());
-      throw Exception('Your session timed out. Please sign in again.');
+      // A completed job can contain an upstream provider's authorization
+      // failure. Its old status cannot revoke the currently signed-in account.
+      throw Exception('This operation was not authorized. Please retry it.');
     }
 
     if (statusCode < 200 || statusCode >= 300) {
@@ -6650,8 +6710,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
 
   Map<String, dynamic> _decodeKorlixJsonMap(http.Response response) {
     if (korlixIsSessionTimeoutStatus(response.statusCode)) {
-      unawaited(_forceSignOutForSessionTimeout());
-      throw Exception('Your session timed out. Please sign in again.');
+      // The shared transport renews first and clears only confirmed refresh
+      // revocations. Never clear a newer account from a late API response.
+      throw Exception(kKorlixAccessToken == null
+          ? 'Please sign in again.'
+          : 'Your connection could not be authorized. Please retry.');
     }
 
     final body = response.body.trim();
@@ -6856,7 +6919,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         ),
       );
 
-      final streamedResponse = await request.send().timeout(
+      final streamedResponse = await http.sendMultipart(request).timeout(
         const Duration(seconds: 430),
       );
 
@@ -7001,7 +7064,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
             ),
           );
         }
-        final streamedResponse = await request.send().timeout(
+        final streamedResponse = await http.sendMultipart(request).timeout(
           const Duration(seconds: 360),
         );
         final response = await http.Response.fromStream(streamedResponse);
@@ -7088,7 +7151,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         );
       }
 
-      final streamedResponse = await request.send().timeout(
+      final streamedResponse = await http.sendMultipart(request).timeout(
         const Duration(seconds: 360),
       );
 
@@ -7955,7 +8018,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     }
     final headers = Map<String, String>.from(_authHeaders());
     bool current() => mounted && revision == kKorlixAuthRevision.value &&
-        token == kKorlixAccessToken;
+        kKorlixAccessToken != null &&
+        korlixSessionIdentity(token) == korlixSessionIdentity(kKorlixAccessToken!);
     _aiOutputReportBusy = true;
     var sheetSubmitted = false;
     final detailsController = TextEditingController();
@@ -15163,7 +15227,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     }
     final headers = Map<String, String>.from(_authHeaders());
     bool current() => mounted && revision == kKorlixAuthRevision.value &&
-        token == kKorlixAccessToken;
+        kKorlixAccessToken != null &&
+        korlixSessionIdentity(token) == korlixSessionIdentity(kKorlixAccessToken!);
     _aiOutputReportBusy = true;
     var sheetSubmitted = false;
     final detailsController = TextEditingController();

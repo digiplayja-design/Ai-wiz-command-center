@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 
 // KORLIX_LIVE_CONVO_BUILD129_USAGE_GUARD_BEGIN
 typedef KorlixLiveConvoLimitCallback = Future<void> Function(String message);

@@ -14,7 +14,7 @@ import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 
 import 'package:ai_wiz_command_center/live_docs/korlix_live_docs.dart';
 import 'package:ai_wiz_command_center/live_docs/korlix_live_docs_brief_sheet.dart';

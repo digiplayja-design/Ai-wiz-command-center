@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
+import '../auth/korlix_session_refresh.dart' show korlixSessionIdentity;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'korlix_zoom_connection_client.dart';
@@ -20,7 +21,7 @@ class K135zZoomLaunch {
     required this.backendBaseUri,
     required this.headersBuilder,
     required this.isCurrent,
-  }) : _authorization = authorization(headersBuilder()) {
+  }) : _sessionIdentity = korlixSessionIdentity(authorization(headersBuilder()).substring(7)) {
     if (agentId.trim() != agentId || !RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(agentId) ||
         backendBaseUri.scheme != 'https' || backendBaseUri.host.isEmpty ||
         backendBaseUri.userInfo.isNotEmpty || backendBaseUri.hasQuery ||
@@ -34,7 +35,7 @@ class K135zZoomLaunch {
   final Map<String, String> Function() headersBuilder;
   final bool Function() isCurrent;
   // In-memory comparison only; never persisted, displayed, or logged.
-  final String _authorization;
+  final String _sessionIdentity;
 
   static String authorization(Map<String, String> headers) {
     final values = headers.entries
@@ -49,7 +50,8 @@ class K135zZoomLaunch {
 
   bool get current {
     try {
-      return isCurrent() && authorization(headersBuilder()) == _authorization;
+      return isCurrent() &&
+          korlixSessionIdentity(authorization(headersBuilder()).substring(7)) == _sessionIdentity;
     } catch (_) {
       return false;
     }
@@ -332,7 +334,7 @@ class K135zZoomRuntimeBinding extends ChangeNotifier {
     final isResponse = uri.path.endsWith('/response') || uri.path.endsWith('/response-voice') || uri.path.endsWith('/spoken-reply') || uri.path.endsWith('/waiting-voice');
     final isStartConsent = uri.path.endsWith('/consent') &&
         body is Map<String, dynamic> && body['action'] == 'consent';
-    final client = http.Client();
+    final client = http.createClient();
     if (isResponse) _responseRequests.add(client);
     _requests.add(client);
     if (method == 'POST') _captureRequests.add(client);

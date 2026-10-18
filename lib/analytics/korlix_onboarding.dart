@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class KorlixOnboardingContext {
@@ -33,7 +33,7 @@ class KorlixOnboarding {
     'response',
   };
   final http.Client _client;
-  KorlixOnboarding({http.Client? client}) : _client = client ?? http.Client();
+  KorlixOnboarding({http.Client? client}) : _client = client ?? http.createClient();
   Future<void>? _ready;
   Future<void> _changes = Future<void>.value();
   SharedPreferences? _prefs;

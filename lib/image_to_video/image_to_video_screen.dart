@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
@@ -291,7 +291,7 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
         ),
       );
 
-      final streamed = await request.send();
+      final streamed = await http.sendMultipart(request);
       final response = await http.Response.fromStream(streamed);
       final body = response.body;
       Map<String, dynamic> data = const <String, dynamic>{};

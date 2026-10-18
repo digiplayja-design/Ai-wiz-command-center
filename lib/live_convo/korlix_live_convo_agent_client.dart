@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 
 import 'agent_studio_client.dart' show agentAccountScope;
 import 'korlix_live_convo_agent.dart';
@@ -850,7 +850,7 @@ class KorlixLiveConvoAgentClient {
     required this.headersBuilder,
     http.Client? client,
     this.timeout = const Duration(seconds: 45),
-  }) : _client = client ?? http.Client(),
+  }) : _client = client ?? http.createClient(),
        _ownsClient = client == null {
     _accountScope = agentAccountScope(headersBuilder());
   }

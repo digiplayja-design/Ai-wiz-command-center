@@ -83,6 +83,28 @@ void main() {
     expect(b.usable, isFalse); expect(b.connected, isFalse);
     expect(b.meetings, isEmpty); expect(requests.length, 1);
   });
+  test('access-token rotation preserves launch identity but another session does not', () {
+    String jwt(int expiry, {String issuer = 'https://identity.test',
+        String user = 'member', String session = 'login-a'}) {
+      final claims = base64Url.encode(utf8.encode(jsonEncode({
+        'iss': issuer, 'sub': user, 'session_id': session, 'exp': expiry,
+      }))).replaceAll('=', '');
+      return 'header.$claims.signature';
+    }
+    headers = {'authorization': 'Bearer ${jwt(100)}'};
+    final rotating = K135zZoomLaunch(agentId: 'agent', backendBaseUri: launch.backendBaseUri,
+        headersBuilder: () => headers, isCurrent: () => current);
+    headers = {'authorization': 'Bearer ${jwt(200)}'};
+    expect(rotating.current, isTrue);
+    for (final changed in [jwt(200, issuer: 'https://other.test'),
+        jwt(200, user: 'other'), jwt(200, session: 'login-b')]) {
+      headers = {'authorization': 'Bearer $changed'};
+      expect(rotating.current, isFalse);
+    }
+    headers = {'authorization': 'Bearer ${jwt(300)}'};
+    current = false;
+    expect(rotating.current, isFalse);
+  });
   test('selected-agent change invalidates prepared authorization', () async {
     int opened = 0;
     final b = binding(openUrl: (_) async { opened++; return true; });

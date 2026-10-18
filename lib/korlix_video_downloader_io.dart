@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 import 'sharing/korlix_share.dart';
 
@@ -17,7 +17,7 @@ Future<Uint8List> fetchKorlixVideoBytes({
   if (maxBytes <= 0 || timeout <= Duration.zero) {
     throw ArgumentError('Video download limits must be positive.');
   }
-  final transport = client ?? http.Client();
+  final transport = client ?? http.createClient();
   final aborted = Completer<void>();
   final result = Completer<Uint8List>();
   final bytes = BytesBuilder(copy: false);

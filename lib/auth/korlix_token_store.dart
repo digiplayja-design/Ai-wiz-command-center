@@ -72,6 +72,7 @@ class KorlixTokenStore {
   final Future<SharedPreferences> Function() _preferences;
   final KorlixSecureTokenBackend _secureStorage;
   Future<void> _pending = Future<void>.value();
+  int _generation = 0;
 
   Future<T> _serial<T>(Future<T> Function() operation) {
     final result = _pending.then((_) => operation());
@@ -80,8 +81,11 @@ class KorlixTokenStore {
     return result;
   }
 
-  Future<KorlixStoredTokens?> read() => _serial(() async {
+  Future<KorlixStoredTokens?> read() {
+    final generation = _generation;
+    return _serial(() async {
     final prefs = await _preferences();
+    if (generation != _generation) return null;
     // Persisted before secure deletion: a device-storage failure during logout
     // must not resurrect the session the next time the application opens.
     if (prefs.getBool(_signedOutKey) == true) return null;
@@ -100,11 +104,12 @@ class KorlixTokenStore {
         // Never fall back to plaintext when the keychain/keystore is locked.
         throw const KorlixTokenStorageException();
       }
+      if (generation != _generation) return null;
       if (value != null) {
         final tokens = _decode(value);
         _require(await prefs.setBool(_signedOutKey, false));
         await _removeLegacy(prefs);
-        return tokens;
+        return generation == _generation ? tokens : null;
       }
     }
 
@@ -118,11 +123,13 @@ class KorlixTokenStore {
     if (_useSecureStorage) {
       // Verify the new secure entry before removing either legacy credential.
       await _saveSecure(tokens);
+      if (generation != _generation) return null;
       _require(await prefs.setBool(_signedOutKey, false));
       await _removeLegacy(prefs);
     }
-    return tokens;
-  });
+    return generation == _generation ? tokens : null;
+    });
+  }
 
   /// A secondary engine must not migrate credentials or rewrite the logout
   /// marker. Reload it on both sides of the secure read so a concurrent logout
@@ -151,45 +158,67 @@ class KorlixTokenStore {
     return _decode(value);
   });
 
-  Future<void> write({required String accessToken, String? refreshToken}) =>
-      _serial(() async {
-        if (accessToken.isEmpty) throw const KorlixTokenStorageException();
-        final prefs = await _preferences();
-        final tokens = KorlixStoredTokens(
-          accessToken: accessToken,
-          refreshToken: _nonEmpty(refreshToken),
-        );
-        if (_useSecureStorage) {
-          await _saveSecure(tokens);
-          _require(await prefs.setBool(_signedOutKey, false));
-          await _removeLegacy(prefs);
+  Future<void> write({
+    required String accessToken,
+    String? refreshToken,
+    bool Function()? isCurrent,
+  }) {
+    final generation = _generation;
+    bool current() => generation == _generation && isCurrent?.call() != false;
+    return _serial(() async {
+      if (!current()) return;
+      if (accessToken.isEmpty) throw const KorlixTokenStorageException();
+      final prefs = await _preferences();
+      if (!current()) return;
+      final tokens = KorlixStoredTokens(
+        accessToken: accessToken,
+        refreshToken: _nonEmpty(refreshToken),
+      );
+      if (_useSecureStorage) {
+        await _saveSecure(tokens);
+        if (!current()) return;
+        _require(await prefs.setBool(_signedOutKey, false));
+        await _removeLegacy(prefs);
+      } else {
+        _require(await prefs.setString(accessTokenKey, accessToken));
+        if (!current()) return;
+        if (tokens.refreshToken == null) {
+          _require(await prefs.remove(refreshTokenKey));
         } else {
-          _require(await prefs.setString(accessTokenKey, accessToken));
-          if (tokens.refreshToken == null) {
-            _require(await prefs.remove(refreshTokenKey));
-          } else {
-            _require(
-              await prefs.setString(refreshTokenKey, tokens.refreshToken!),
-            );
-          }
+          _require(await prefs.setString(refreshTokenKey, tokens.refreshToken!));
         }
-        if (!_useSecureStorage) {
-          _require(await prefs.setBool(_signedOutKey, false));
-        }
-      });
+        if (!current()) return;
+        _require(await prefs.setBool(_signedOutKey, false));
+      }
+    });
+  }
 
-  Future<void> clear() => _serial(() async {
+  /// This small durable marker must not wait behind a stalled keychain write.
+  /// A read/migration or write started before logout cannot reset it afterward.
+  Future<void> markSignedOut() async {
+    _generation++;
     final prefs = await _preferences();
     _require(await prefs.setBool(_signedOutKey, true));
-    await _removeLegacy(prefs);
-    if (_useSecureStorage) {
-      try {
-        await _secureStorage.delete();
-      } catch (_) {
-        throw const KorlixTokenStorageException();
+  }
+
+  Future<void> clear() {
+    // Capture an early preference failure while deletion waits for storage.
+    final marked = markSignedOut().then<Object?>((_) => null,
+      onError: (Object error, StackTrace _) => error);
+    return _serial(() async {
+      final markerError = await marked;
+      if (markerError != null) throw markerError;
+      final prefs = await _preferences();
+      await _removeLegacy(prefs);
+      if (_useSecureStorage) {
+        try {
+          await _secureStorage.delete();
+        } catch (_) {
+          throw const KorlixTokenStorageException();
+        }
       }
-    }
-  });
+    });
+  }
 
   Future<void> _saveSecure(KorlixStoredTokens tokens) async {
     final encoded = jsonEncode({

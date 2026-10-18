@@ -18,7 +18,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 
 // ---------------------------------------------------------------------------
 // State
@@ -92,7 +92,7 @@ class K136sLearningApi extends K136sLearningApiBase {
     required this.headersBuilder,
     http.Client? client,
     this.timeout = const Duration(seconds: 20),
-  }) : _client = client ?? http.Client();
+  }) : _client = client ?? http.createClient();
 
   final String baseUrl;
   final Map<String, dynamic> Function() headersBuilder;
