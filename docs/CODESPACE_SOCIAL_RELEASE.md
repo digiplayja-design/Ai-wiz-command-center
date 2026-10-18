@@ -1,11 +1,14 @@
 # Build KORLIX Social floating chat and save the AAB in your browser
 
-**Automated validation passed.** This handoff is pinned to app
-commit `b24e339d36d6ec3da8d2033fdafe1059361568a6`. Its validation run is
+**Automated validation passed.** This handoff builds release-preparation commit
+`d3948c26fd5cf424b73b7a77397cb0e7c9087ced`. Its application, platform and test
+files are unchanged from `b24e339d36d6ec3da8d2033fdafe1059361568a6`, validated in
 [39140392738](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/39140392738).
 The app regression tests, Android debug builds with and without Firebase, and
 unsigned iOS simulator build passed. Complete the signed-device checks below
 before store rollout; this does not establish a signed release or publication.
+The release script uses the same analyzer setting as CI: informational style
+messages are nonfatal, while analyzer errors and warnings still fail the build.
 
 Use the existing **super bassoon** Codespace. The command builds a separate
 detached worktree under `/tmp`, preserving your original workspace branch and
@@ -55,7 +58,7 @@ if [[ ! -r "$KORLIX_ANDROID_DEFINES_FILE" ]]; then
   echo 'The saved Android client configuration is missing.' >&2
   exit 1
 fi
-KORLIX_RELEASE_REV=b24e339d36d6ec3da8d2033fdafe1059361568a6
+KORLIX_RELEASE_REV=d3948c26fd5cf424b73b7a77397cb0e7c9087ced
 read -r -p 'Highest version code in all Play tracks and drafts: ' KORLIX_HIGHEST </dev/tty
 if [[ ! "$KORLIX_HIGHEST" =~ ^[1-9][0-9]{0,9}$ ]] || (( 10#$KORLIX_HIGHEST >= 2100000000 )); then
   echo 'Enter the highest version code verified in Play Console.' >&2
