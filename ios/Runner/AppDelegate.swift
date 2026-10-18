@@ -1,4 +1,5 @@
 import AVFoundation
+import MediaPlayer
 import Flutter
 import StoreKit
 import UIKit
@@ -8,6 +9,39 @@ import UIKit
   private var soundEffects: KorlixSoundEffects?
   private var socialCalls: FlutterMethodChannel?
   private var socialCallId: String?
+  private var riciStopTarget: Any?
+  private var riciPauseTarget: Any?
+
+  private func clearRiciControls() {
+    let commands = MPRemoteCommandCenter.shared()
+    if let target = riciStopTarget { commands.stopCommand.removeTarget(target) }
+    if let target = riciPauseTarget { commands.pauseCommand.removeTarget(target) }
+    if riciStopTarget != nil || riciPauseTarget != nil {
+      MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    }
+    riciStopTarget = nil
+    riciPauseTarget = nil
+  }
+
+  private func showRiciControls(_ id: String) {
+    clearRiciControls()
+    let commands = MPRemoteCommandCenter.shared()
+    let stop: (MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus = { [weak self] _ in
+      guard let self = self, self.socialCallId == id else { return .commandFailed }
+      self.clearRiciControls()
+      self.socialCalls?.invokeMethod("stopped", arguments: ["id": id])
+      return .success
+    }
+    commands.stopCommand.isEnabled = true
+    commands.pauseCommand.isEnabled = true
+    riciStopTarget = commands.stopCommand.addTarget(handler: stop)
+    riciPauseTarget = commands.pauseCommand.addTarget(handler: stop)
+    MPNowPlayingInfoCenter.default().nowPlayingInfo = [
+      MPMediaItemPropertyTitle: "Rici live voice",
+      MPNowPlayingInfoPropertyIsLiveStream: true,
+      MPNowPlayingInfoPropertyPlaybackRate: 1.0
+    ]
+  }
   private var storeReviews: FlutterMethodChannel?
 
   override func application(
@@ -58,10 +92,16 @@ import UIKit
           let ready = UIApplication.shared.applicationState == .active && modes.contains("audio") &&
             session.category == .playAndRecord && session.recordPermission == .granted &&
             (self.socialCallId == nil || self.socialCallId == id)
-          if ready { self.socialCallId = id }
+          if ready {
+            self.socialCallId = id
+            if args["kind"] as? String == "rici" { self.showRiciControls(id) }
+          }
           result(ready)
         } else if call.method == "stop" {
-          if self.socialCallId == id { self.socialCallId = nil }
+          if self.socialCallId == id {
+            self.socialCallId = nil
+            self.clearRiciControls()
+          }
           // Do not deactivate the shared audio session underneath another tool.
           result(true)
         } else { result(FlutterMethodNotImplemented) }

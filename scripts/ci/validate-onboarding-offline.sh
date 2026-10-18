@@ -65,6 +65,12 @@ check billing-analysis "${flutter_cmd[@]}" analyze --no-pub \
   lib/billing/korlix_apple_billing.dart test/google_play_billing_test.dart
 check billing-tests "${flutter_cmd[@]}" test --no-pub --reporter expanded \
   test/apple_billing_test.dart test/google_play_billing_test.dart test/web_billing_test.dart
+check fixed-plan-analysis "${flutter_cmd[@]}" analyze --no-pub   lib/billing/korlix_fixed_plan_bar.dart lib/social/social_call_background.dart test/fixed_plan_bar_test.dart
+check voice-and-plan-tests "${flutter_cmd[@]}" test --no-pub --reporter expanded   test/fixed_plan_bar_test.dart test/rici_background_audio_test.dart test/k136s_f5_live_convo_integration_test.dart   test/live_convo/nova_live_voice_workspace_test.dart test/korlix_smoke_screensaver_test.dart   test/social_communication_upgrade_test.dart
+# Analyze the touched production voice screen without turning unrelated legacy
+# informational lints in this large file into release failures.
+check voice-analysis "${flutter_cmd[@]}" analyze --no-pub --no-fatal-infos --no-fatal-warnings   lib/live_convo/korlix_live_convo_test_screen.dart lib/live_convo/korlix_live_convo_character_stage.dart
+
 git diff --exit-code -- pubspec.lock || result=1
 exit "$result"
 CHECKS

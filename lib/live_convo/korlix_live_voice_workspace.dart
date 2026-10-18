@@ -765,6 +765,12 @@ extension _LiveVoiceWorkspace on _KorlixLiveConvoCharacterStageState {
                           24,
                         ),
                         children: [
+                          if (widget.backgroundAudioNotice != null) Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Text(widget.backgroundAudioNotice!,
+                              key: const Key('rici-background-audio-notice'),
+                              style: TextStyle(color: _secondary, height: 1.4)),
+                          ),
                           if (widget.crmPanelBuilder != null) ...[
                             widget.crmPanelBuilder!(_finishCrmAction),
                             const SizedBox(height: 14),

@@ -5,6 +5,9 @@ import 'package:flutter/services.dart';
 /// Only a call explicitly started in the foreground may acquire this lease.
 /// Old app builds and missing/failed native services return false safely.
 class SocialCallBackground {
+  SocialCallBackground({this.kind = 'social'})
+      : assert(kind == 'social' || kind == 'rici');
+  final String kind;
   static const _channel = MethodChannel('korlix/social_call_background');
   static final _owners = <String, VoidCallback>{};
   static bool _listening = false;
@@ -42,7 +45,7 @@ class SocialCallBackground {
       });
       unawaited(
         _channel
-            .invokeMethod<bool>('start', {'id': id})
+            .invokeMethod<bool>('start', {'id': id, 'kind': kind})
             .then((value) {
               if (!pending.isCompleted) pending.complete(value == true);
             })
@@ -63,6 +66,7 @@ class SocialCallBackground {
       }
       ready = started;
       if (!started) {
+        _owners.remove(id);
         unawaited(
           _channel
               .invokeMethod<void>('stop', {'id': id})

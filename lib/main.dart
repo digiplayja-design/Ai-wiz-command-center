@@ -76,6 +76,7 @@ import 'theme/korlix_screen_skin.dart';
 import 'theme/korlix_appearance_preferences.dart';
 import 'theme/korlix_appearance_picker.dart';
 import 'theme/korlix_screensaver_controller.dart';
+import 'billing/korlix_fixed_plan_bar.dart';
 import 'theme/korlix_smoke_screensaver.dart';
 export 'theme/korlix_theme.dart';
 import 'chat/chat_request.dart';
@@ -1000,56 +1001,19 @@ class _AuthGateState extends State<AuthGate> {
 
     _schedulePortalLaunch();
 
-    return Stack(
-      children: [
-        CommandCenterScreen(key: _korlixReviewHomeKey),
-        Positioned(
-          top: 8,
-          left: 8,
-          child: SafeArea(
-            child: Material(
-              color: Colors.transparent,
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const KorlixAccountButton(),
-                const _KorlixSoundSettingsButton(),
-                RiciWelcomeButton(controller: _welcome),
-              ]),
-            ),
-          ),
-        ),
-        const Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: SafeArea(top: false, child: KorlixBasicAdBanner()),
-        ),
-        Positioned(
-          top: 8,
-          right: 8,
-          child: SafeArea(
-            child: Material(
-              color: Colors.transparent,
-              child: MediaQuery.sizeOf(context).width < 460 &&
-                      MediaQuery.textScalerOf(context).scale(14) > 18
-                  ? IconButton(
-                      tooltip: 'Sign out',
-                      enableFeedback: false,
-                      onPressed: korlixSoundAction(_handleSignOut),
-                      icon: const Icon(Icons.logout, color: Color(0xFFE4EBEE)),
-                    )
-                  : TextButton.icon(
-                onPressed: korlixSoundAction(_handleSignOut),
-                icon: const Icon(Icons.logout, size: 18),
-                label: const Text('Sign out'),
-                style: korlixSoundButtonStyle(TextButton.styleFrom(
-                  foregroundColor: const Color(0xFFE4EBEE),
-                  backgroundColor: Colors.black.withOpacity(0.32),
-                )),
-              ),
-            ),
-          ),
+    return CommandCenterScreen(
+      key: _korlixReviewHomeKey,
+      toolbarActions: [
+        const KorlixAccountButton(),
+        const _KorlixSoundSettingsButton(),
+        RiciWelcomeButton(controller: _welcome),
+        IconButton(
+          tooltip: 'Sign out',
+          onPressed: korlixSoundAction(_handleSignOut),
+          icon: const Icon(Icons.logout),
         ),
       ],
+      bottomBar: const KorlixBasicAdBanner(),
     );
   }
 }
@@ -1416,6 +1380,18 @@ class _AuthScreenState extends State<AuthScreen> {
     final signup = _isSignUp;
     final title = signup ? 'Create your free account' : 'Sign in to Korlix AI';
     return Scaffold(
+      appBar: _showWelcome ? AppBar(
+        automaticallyImplyLeading: false,
+        actions: [TextButton.icon(
+          key: const Key('welcome-view-plans'),
+          onPressed: () async {
+            final create = await showKorlixPublicPlans(context);
+            if (mounted && create) _chooseAuthMode(signUp: true);
+          },
+          icon: const Icon(Icons.workspace_premium_outlined),
+          label: const Text('View Plans'),
+        ), const SizedBox(width: 12)],
+      ) : null,
       body: KorlixOctoberWelcome(
         date: seasonalDate,
         child: SafeArea(
@@ -5467,7 +5443,9 @@ class KorlixLocalChatTopic {
 }
 
 class CommandCenterScreen extends StatefulWidget {
-  const CommandCenterScreen({super.key});
+  const CommandCenterScreen({super.key, this.toolbarActions = const [], this.bottomBar});
+  final List<Widget> toolbarActions;
+  final Widget? bottomBar;
 
   @override
   State<CommandCenterScreen> createState() => _CommandCenterScreenState();
@@ -5570,6 +5548,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   final List<fp.PlatformFile> _pickedUploadFiles = <fp.PlatformFile>[];
   bool _loadingTier = false;
   bool _tierKnown = false;
+  bool _developerPlan = false;
   bool _openingDiscoveryPlans = false;
   late final String _starterTasksPrefsKey;
   String _currentTier = 'basic';
@@ -9448,10 +9427,20 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     final t = _t;
 
     return Scaffold(
-      body: ValueListenableBuilder<String>(valueListenable: kKorlixScreenSkinNotifier,
+      bottomNavigationBar: widget.bottomBar == null ? null : SafeArea(top: false, child: widget.bottomBar!),
+      body: Column(children: [
+        KorlixFixedPlanBar(
+          actions: widget.toolbarActions,
+          tier: _tierKnown ? _currentTier : null,
+          developer: _developerPlan,
+          busy: _openingDiscoveryPlans,
+          onOpenPlans: () => unawaited(_openDiscoveryPlans()),
+        ),
+        Expanded(child: ValueListenableBuilder<String>(valueListenable: kKorlixScreenSkinNotifier,
         builder: (context, screenSkin, _) => KorlixScreenBackdrop(
         palette: korlixSkinPaletteFor(kKorlixThemeNotifier.value), skinId: screenSkin,
         child: SafeArea(
+          top: false,
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 980),
@@ -9494,7 +9483,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
             ),
           ),
         ),
-      )),
+      ))),
+      ]),
     );
   }
 
@@ -9546,7 +9536,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
 
   Future<void> _openDiscoveryPlans() async {
     if (!mounted || _openingDiscoveryPlans) return;
-    _openingDiscoveryPlans = true;
+    setState(() => _openingDiscoveryPlans = true);
     try {
       if (kIsWeb) {
         await showKorlixWebBilling(context, baseUrl: kKorlixBackendBaseUrl,
@@ -9567,7 +9557,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         content: Text('Plans could not be opened. Please try again.'),
       ));
     } finally {
-      _openingDiscoveryPlans = false;
+      if (mounted) setState(() => _openingDiscoveryPlans = false);
     }
   }
 
@@ -9715,6 +9705,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         if (tier != null && tier.isNotEmpty) {
           _currentTier = tier;
           _tierKnown = true;
+          _developerPlan = profile['developer_unlimited'] == true;
         }
       });
     } catch (_) {

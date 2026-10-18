@@ -75,7 +75,7 @@
         android:usesCleartextTraffic="false"
         android:icon="@mipmap/ic_launcher">
 
-        <!-- Explicit, active Social calls only. Never restarted after termination. -->
+        <!-- Explicit, active Social calls and Rici voice conversations. Never restarted after termination. -->
         <service android:name=".KorlixSocialCallService"
             android:exported="false"
             android:stopWithTask="true"

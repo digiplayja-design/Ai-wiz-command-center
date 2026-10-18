@@ -20,6 +20,7 @@ class MainActivity: FlutterActivity() {
     private var soundEffects: KorlixSoundEffects? = null
     private var socialCalls: MethodChannel? = null
     private var foreground = false
+    private val callKinds = mutableMapOf<String, String>()
     private val pendingCalls = mutableMapOf<String, MethodChannel.Result>()
     private var notificationPermissionCall: String? = null
     private var approvedCall: String? = null
@@ -82,6 +83,7 @@ class MainActivity: FlutterActivity() {
         approvedCall = null
         try {
             val intent = Intent(this, KorlixSocialCallService::class.java).putExtra("id", id)
+                .putExtra("kind", callKinds[id] ?: "social")
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
         } catch (_: Exception) {
             KorlixSocialCallService.authorized.remove(id)
@@ -105,7 +107,7 @@ class MainActivity: FlutterActivity() {
             cacheDir
         )
         socialCalls = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "korlix/social_call_background")
-        KorlixSocialCallService.onStarted = { id, ready -> pendingCalls.remove(id)?.success(ready) }
+        KorlixSocialCallService.onStarted = { id, ready -> pendingCalls.remove(id)?.success(ready); callKinds.remove(id) }
         KorlixSocialCallService.onStopped = { id -> socialCalls?.invokeMethod("stopped", mapOf("id" to id)) }
         socialCalls?.setMethodCallHandler { call, result ->
             val id = call.argument<String>("id")
@@ -113,6 +115,7 @@ class MainActivity: FlutterActivity() {
                 result.success(false)
             } else if (call.method == "stop") {
                 KorlixSocialCallService.authorized.remove(id)
+                callKinds.remove(id)
                 if (approvedCall == id) approvedCall = null
                 pendingCalls.remove(id)?.success(false)
                 if (KorlixSocialCallService.activeId == id) stopService(Intent(this, KorlixSocialCallService::class.java))
@@ -120,11 +123,13 @@ class MainActivity: FlutterActivity() {
             } else if (call.method == "start") {
                 // Start while the Activity is visible, after getUserMedia has
                 // granted RECORD_AUDIO. Require a visible notification too.
+                val kind = call.argument<String>("kind") ?: "social"
                 val microphone = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
                 val notifications = Build.VERSION.SDK_INT < 33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-                if (!foreground || !microphone || pendingCalls.containsKey(id) || notificationPermissionCall != null) {
+                if (kind !in setOf("social", "rici") || !foreground || !microphone || pendingCalls.containsKey(id) || notificationPermissionCall != null) {
                     result.success(false)
                 } else {
+                    callKinds[id] = kind
                     pendingCalls[id] = result
                     KorlixSocialCallService.authorized.add(id)
                     if (!notifications && Build.VERSION.SDK_INT >= 33) {
@@ -170,6 +175,7 @@ class MainActivity: FlutterActivity() {
         storeReviews = null
         pendingCalls.values.forEach { it.success(false) }
         pendingCalls.clear()
+        callKinds.clear()
         approvedCall = null
         notificationPermissionCall = null
         KorlixSocialCallService.authorized.clear()

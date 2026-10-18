@@ -77,6 +77,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(KorlixEntryWelcome), findsOneWidget);
     expect(find.byType(TextField), findsNothing);
+    await tap(tester, find.byKey(const Key('welcome-view-plans')));
+    expect(find.text('Choose your Korlix plan'), findsOneWidget);
+    await tap(tester, find.text('Close'));
     await tap(tester, find.byKey(const Key('welcome-create-account')));
     expect(find.text('Create your free account'), findsOneWidget);
     expect(find.byKey(const Key('signup-age-range')), findsOneWidget);
