@@ -120,10 +120,23 @@ app-link handler with Flutter's default deep-link handling disabled.
 - Build log: `/tmp/korlix-confirmation-139.86kdDM.log`.
 - Isolated build worktree: `/tmp/korlix-play-billing-139.oIMaoB/source`.
 
-Play upload is pending. Automatic approval review rejected opening a forwarded
-HTTP transfer port without explicit artifact-transfer authorization; no port was
-opened. The existing authenticated Explorer Download action did not yield a
-completed browser download either. The next step is an explicitly authorized
-transfer of this single verified bundle to Korlix AI's Google Play internal
-testing track. Physical-device confirmation checks remain required before
-production promotion.
+The user explicitly authorized transferring this bundle through a private,
+GitHub-authenticated Codespaces URL and publishing it to Korlix AI's Google Play
+internal testing track. The downloaded file's size and SHA-256 matched the
+verified artifact. The single-file transfer server was stopped and Codespaces
+confirmed that no ports remained forwarded.
+
+Google Play accepted **139 (12.0.1)** and published internal release `43` on
+October 19, 2026 at 1:56 PM America/New_York. The release details show
+**Available to internal testers**, with 19,280 supported devices. The release
+review reported no devices losing support. Play reports API 24+, target SDK 36,
+three ABIs, a 61.7 MB new install, and a 6.77 MB update.
+
+Release record:
+https://play.google.com/console/u/0/developers/4772708594176030332/app/4974117289022654668/tracks/4701415604792469412/releases/43/details
+
+Physical-device confirmation checks remain required before production promotion.
+Install build 139, start a fresh signup, and open its confirmation email on the
+same device. Verify both backgrounded and fully closed app entry, then restart
+KORLIX and confirm that the signed-in session persists. Android production was
+not changed by this internal testing release.
