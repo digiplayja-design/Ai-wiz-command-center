@@ -2,7 +2,8 @@ import {createAccountRequestLimiter} from './security/account_request_limiter.mj
 import {createOnboardingMeasurement} from './onboarding/measurement.mjs';
 import {publicApiErrorHandler} from './security/http_errors.mjs';
 import {createReportSubmissionGuard} from './security/report_submission.mjs';
-import {persistAiReport, markAiReportNotification, listAiReports} from './security/ai_report_persistence.mjs';
+import {prepareReportImageEvidence, reportImageMetadata, reportImageAttachments} from './security/report_image_evidence.mjs';
+import {persistAiReport, markAiReportNotification, listAiReports, readAiReportImage} from './security/ai_report_persistence.mjs';
 import {createVideoAccess} from './security/video_access.mjs';
 import {hasUnlimitedAccess, authenticatedDeveloperUser, UNLIMITED_FEATURE_LIMITS, UNLIMITED_COMPATIBILITY_LIMIT} from './security/developer_access.mjs';
 import riciVoice from './voice/rici_pronunciation.cjs';
@@ -10592,9 +10593,11 @@ function korlixReportDeliveryV2Text(report) {
     "OUTPUT SUMMARY:",
     report.outputSummary || "[No output summary provided]",
     "",
+    ...(report.contentType === "image" ? ["REPORTED IMAGE:",
+      report.imageEvidence ? "Review copy attached as reported-image.jpg." : "[No image attached by this app version]", ""] : []),
     "CONTENT REFERENCES:",
     `Content ID: ${report.contentId}`,
-    `Image URL: ${report.imageUrl}`,
+    `Image URL: ${report.imageUrl || "[Not provided]"}`,
     `Video ID: ${report.videoId}`,
     `Video URL: ${report.videoUrl}`,
   ];
@@ -10626,11 +10629,13 @@ function korlixReportDeliveryV2Html(report) {
     <pre>${escape(report.prompt || "[No prompt provided]")}</pre>
     <h3>Output Summary</h3>
     <pre>${escape(report.outputSummary || "[No output summary provided]")}</pre>
+${report.contentType === "image" ? `<h3>Reported image</h3>
+    ${report.imageEvidence ? '<p>Review copy attached as reported-image.jpg.</p><img src="cid:reported-image" alt="Reported generated image" style="max-width:100%;height:auto;" width="640">' : '<p>No image was attached by this app version.</p>'}` : ""}
     <h3>References</h3>
     <pre>${escape(
       [
         `Content ID: ${report.contentId}`,
-        `Image URL: ${report.imageUrl}`,
+        `Image URL: ${report.imageUrl || "[Not provided]"}`,
         `Video ID: ${report.videoId}`,
         `Video URL: ${report.videoUrl}`,
       ].join("\n"),
@@ -10638,11 +10643,11 @@ function korlixReportDeliveryV2Html(report) {
   `;
 }
 
-async function korlixReportDeliveryV2Persist(report) {
-  return persistAiReport(supabaseAdmin, report);
+async function korlixReportDeliveryV2Persist(report, imageEvidence) {
+  return persistAiReport(supabaseAdmin, report, imageEvidence);
 }
 
-async function korlixReportDeliveryV2SendEmail(report) {
+async function korlixReportDeliveryV2SendEmail(report, imageEvidence) {
   const resendKey = process.env.RESEND_API_KEY || "";
 
   if (!resendKey) {
@@ -10679,6 +10684,7 @@ async function korlixReportDeliveryV2SendEmail(report) {
         subject,
         text: korlixReportDeliveryV2Text(report),
         html: korlixReportDeliveryV2Html(report),
+        attachments: reportImageAttachments(imageEvidence),
       }),
     });
 
@@ -10748,10 +10754,12 @@ app.post(
       // Validate size and consume the verified account's allowance before any
       // persistence, logging, or email. Client identity fields are discarded.
       const report = prepareSupportReport({req,user});
-      // Never acknowledge a report or email its contents until durable intake succeeds.
-      await korlixReportDeliveryV2Persist(report);
+      const imageEvidence = await prepareReportImageEvidence(req.body?.imageDataUrl);
+      if (imageEvidence) report.imageEvidence = reportImageMetadata(imageEvidence);
+      // The report and image are inserted atomically before acknowledgement/email.
+      await korlixReportDeliveryV2Persist(report, imageEvidence);
       console.log("[KORLIX_AI_OUTPUT_REPORT_RECEIVED]", report.id);
-      const supportNotification = await korlixReportDeliveryV2SendEmail(report);
+      const supportNotification = await korlixReportDeliveryV2SendEmail(report, imageEvidence);
       await markAiReportNotification(supabaseAdmin, report.id, supportNotification.delivered);
       return res.status(supportNotification.delivered ? 200 : 202).json({
         ok: true,
@@ -10764,7 +10772,7 @@ app.post(
       if (status === 500) console.error("[KORLIX_AI_OUTPUT_REPORT_ERROR]");
       const messages = {
         400: "Invalid report.", 401: "Sign in to submit a report.",
-        403: "Sign in again to submit a report.", 413: "Keep the report under 32 KiB.",
+        403: "Sign in again to submit a report.", 413: "The report or image is too large.",
         429: "Too many reports. Please try again later.",
         503: "Reports are temporarily unavailable. Please try again later.",
       };
@@ -10777,8 +10785,25 @@ app.get("/api/report-output/health", (_req, res) => {
   res.set("Cache-Control", "no-store").json({
     ok: true,
     feature: "ai_output_reporting",
-    reportDeliveryVersion: "v4",
+    reportDeliveryVersion: "v5",
   });
+});
+
+app.get("/api/report-output/:id/image", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.set("X-Content-Type-Options", "nosniff");
+  try {
+    const admin = korlixReportDeliveryV2AdminAuthorized(req);
+    const user = admin ? null : await requireUser(req);
+    const evidence = await readAiReportImage(supabaseAdmin, req.params.id, {admin,userId:user?.id});
+    if (!evidence) return res.status(404).json({ok:false,error:"Report image not found."});
+    res.set("Content-Type", "image/jpeg");
+    res.set("Content-Disposition", 'inline; filename="reported-image.jpg"');
+    return res.send(Buffer.from(evidence.base64, "base64"));
+  } catch (error) {
+    const status = [401,403].includes(error?.statusCode) ? error.statusCode : 503;
+    return res.status(status).json({ok:false,error:status === 503 ? "Report images are temporarily unavailable." : "Sign in to view this report image."});
+  }
 });
 
 app.get("/api/report-output/recent", async (req, res) => {

@@ -4,14 +4,29 @@ const table = 'korlix_ai_output_reports';
 const unavailable = () => Object.assign(new Error('Reports are temporarily unavailable. Please try again later.'), {statusCode:503});
 const deadline = () => AbortSignal.timeout(8000);
 
-export async function persistAiReport(database, report) {
+export async function persistAiReport(database, report, imageEvidence = null) {
   if (!database) throw unavailable();
   try {
     const {error} = await database.from(table).insert({
       id:report.id, user_id:report.userId, report, created_at:report.createdAt,
+      image_evidence:imageEvidence,
     }).abortSignal(deadline());
     if (error) throw unavailable();
     return {saved:true};
+  } catch { throw unavailable(); }
+}
+
+export async function readAiReportImage(database, id, {userId, admin = false} = {}) {
+  if (!admin && !userId) throw Object.assign(new Error('Sign in required.'), {statusCode:401});
+  if (!/^korlix_report_[0-9a-f-]{36}$/i.test(id || '')) return null;
+  if (!database) throw unavailable();
+  try {
+    let query = database.from(table).select('image_evidence').eq('id', id);
+    // Apply ownership in the database query, before any private bytes are read.
+    if (!admin) query = query.eq('user_id', userId);
+    const {data,error} = await query.maybeSingle().abortSignal(deadline());
+    if (error) throw unavailable();
+    return data?.image_evidence || null;
   } catch { throw unavailable(); }
 }
 

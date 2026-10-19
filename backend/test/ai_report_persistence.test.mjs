@@ -1,4 +1,6 @@
 import test from 'node:test';
+import sharp from 'sharp';
+import {prepareReportImageEvidence, reportImageMetadata} from '../security/report_image_evidence.mjs';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
@@ -24,7 +26,7 @@ function adapter(db) {
         try {
           if(this.kind==='insert') {
             const r=this.args;
-            await db.query('insert into public.korlix_ai_output_reports(id,user_id,report,created_at) values($1,$2,$3,$4)',[r.id,r.user_id,r.report,r.created_at]);
+            await db.query('insert into public.korlix_ai_output_reports(id,user_id,report,created_at,image_evidence) values($1,$2,$3,$4,$5)',[r.id,r.user_id,r.report,r.created_at,r.image_evidence]);
             return {error:null};
           }
           if(this.kind==='update') {
@@ -48,6 +50,7 @@ test('durable AI report migration protects browser roles and survives fresh clie
       grant usage on schema public,auth to anon,authenticated,service_role;
       insert into auth.users values('${userId}');`);
     await db.exec(await readFile(migration,'utf8'));
+    await db.exec(await readFile(new URL('../../supabase/migrations/20261019211556_private_report_image_evidence.sql',import.meta.url),'utf8'));
     await t.test('acknowledged data survives client/process state loss, including failed notification',async()=>{
       await db.exec('set role service_role');
       await persistAiReport(adapter(db),report);
@@ -77,6 +80,28 @@ test('durable AI report migration protects browser roles and survives fresh clie
         await assert.rejects(db.query('insert into public.korlix_ai_output_reports(id,user_id,report) values($1,$2,$3)',[id,userId,payload]),e=>e.code==='23514');
       }
       await assert.rejects(db.query("update public.korlix_ai_output_reports set state='resolved'"),e=>e.code==='23514');
+    });
+    await t.test('image and metadata commit together and remain private across fresh clients',async()=>{
+      const image=await sharp({create:{width:12,height:8,channels:3,background:'blue'}}).png().toBuffer();
+      const evidence=await prepareReportImageEvidence('data:image/png;base64,'+image.toString('base64'));
+      const id='korlix_report_20000000-0000-4000-8000-000000000010';
+      const imageReport={...report,id,reportId:id,contentType:'image',imageEvidence:reportImageMetadata(evidence)};
+      // A partial insert cannot be acknowledged: metadata must match real bytes.
+      await assert.rejects(persistAiReport(adapter(db),imageReport),e=>e.statusCode===503);
+      assert.equal((await db.query('select count(*)::int n from public.korlix_ai_output_reports where id=$1',[id])).rows[0].n,0);
+      await persistAiReport(adapter(db),imageReport,evidence);
+      const saved=(await db.query('select image_evidence from public.korlix_ai_output_reports where id=$1',[id])).rows[0].image_evidence;
+      assert.deepEqual(saved,evidence);
+      assert(!JSON.stringify(await listAiReports(adapter(db))).includes(evidence.base64));
+      for(const patch of [{byteLength:0},{width:1281},{mimeType:'image/svg+xml'},{base64:'invalid'},{}]) {
+        const bad=Object.keys(patch).length ? {...evidence,...patch} : {};
+        await assert.rejects(db.query('update public.korlix_ai_output_reports set image_evidence=$1 where id=$2',[bad,id]));
+      }
+      for(const role of ['anon','authenticated']) {
+        await db.exec('set role '+role);
+        await assert.rejects(db.query('select image_evidence from public.korlix_ai_output_reports'),e=>e.code==='42501');
+        await db.exec('reset role');
+      }
     });
     await t.test('account deletion cascade includes this private report payload',async()=>{
       await db.query('delete from auth.users where id=$1',[userId]);

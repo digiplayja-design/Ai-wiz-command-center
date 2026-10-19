@@ -1,4 +1,5 @@
 import {randomUUID} from 'node:crypto';
+import {validateReportImageInput} from './report_image_evidence.mjs';
 
 export class ReportSubmissionError extends Error {
   constructor(statusCode, code, message, retryAfter) {
@@ -29,7 +30,9 @@ export function createReportSubmissionGuard({now=Date.now,idFactory=randomUUID,w
     if (!user || typeof user.id!=='string' || !user.id) throw new ReportSubmissionError(401,'sign_in_required','Sign in required.');
     const body=req.body??{};
     if (typeof body!=='object' || Array.isArray(body)) throw new ReportSubmissionError(400,'report_invalid','Invalid report.');
-    boundedPayload(body);
+    const {imageDataUrl, ...metadata} = body;
+    boundedPayload(metadata);
+    validateReportImageInput(imageDataUrl, body.contentType || body.type || 'ai_output');
     const timestamp=now();
     const reportId='korlix_report_'+idFactory();
     const headers=req.headers??{};
