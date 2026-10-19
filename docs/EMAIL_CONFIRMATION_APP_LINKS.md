@@ -80,3 +80,50 @@ with this candidate's full commit and the highest version code verified across
 all Play tracks and drafts. Do not build the old pinned revisions in previous
 release handoff documents. Physical-device confirmation checks above remain
 required before store promotion.
+
+## Release verification — October 19, 2026
+
+The iOS candidate was built from
+`cf1a36370acd6d50f0268e61d733248c0ecba33e` as **12.0.1 (132)**. Codemagic
+build `6ad645697550aed8109033b0` passed all 96 selected checks, produced the
+signed IPA, and uploaded it successfully to App Store Connect app
+`6783100102`. Apple finished processing the build and its TestFlight beta
+review submission was `WAITING_FOR_REVIEW` when checked. This is not an App
+Store production submission.
+
+The Android candidate is **12.0.1 (139)**, using source
+`f3b8fce9fedc60c0eb65d1814c2a14cf37a1895b`. The user confirmed Play's highest
+uploaded version code was 138; Play Console's release and bundle list also
+showed 138 as the latest version. The build uses the existing signed Codespace
+and an isolated worktree on its temporary build disk. The user's working branch
+and uncommitted files are preserved.
+
+The Android release gates passed 281 Flutter tests and eight configuration
+tests. One existing smoke-preview test was skipped because
+`KORLIX_SMOKE_PREVIEWS` was not enabled. The Codespace SDK is Flutter 3.44.0 /
+Dart 3.12.0. Its SDK constraints resolve `matcher` 0.12.19, `meta` 1.18.0,
+`test_api` 0.7.11, and `vector_math` 2.2.0 in the isolated build. Flutter also
+migrates the Android minimum SDK setting to `flutter.minSdkVersion` (24),
+matching the API 24+ minimum already shown for Play release 138. These generated
+Android build adjustments do not replace the iOS workflow's locked SDK setup.
+
+Android packaging completed after Flutter automatically retried a timed-out
+Kotlin compiler download. The completed AAB passed archive integrity and JAR
+signature verification. Its merged release manifest confirms the expected
+package, version 12.0.1 (139), API 24 minimum, target API 36, and the confirmation
+app-link handler with Flutter's default deep-link handling disabled.
+
+- Saved Codespace artifact:
+  `/workspaces/Ai-wiz-command-center/release_uploads/KORLIX-12.0.1-139-email-confirmation.aab`
+- Size: 156,314,545 bytes.
+- SHA-256: `c1d467253e731d7dfa5cee5204ca9d5efb8892f2ddac4c5d9972711690200e06`.
+- Build log: `/tmp/korlix-confirmation-139.86kdDM.log`.
+- Isolated build worktree: `/tmp/korlix-play-billing-139.oIMaoB/source`.
+
+Play upload is pending. Automatic approval review rejected opening a forwarded
+HTTP transfer port without explicit artifact-transfer authorization; no port was
+opened. The existing authenticated Explorer Download action did not yield a
+completed browser download either. The next step is an explicitly authorized
+transfer of this single verified bundle to Korlix AI's Google Play internal
+testing track. Physical-device confirmation checks remain required before
+production promotion.
