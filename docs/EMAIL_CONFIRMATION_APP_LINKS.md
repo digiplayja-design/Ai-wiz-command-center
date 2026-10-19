@@ -135,8 +135,23 @@ three ABIs, a 61.7 MB new install, and a 6.77 MB update.
 Release record:
 https://play.google.com/console/u/0/developers/4772708594176030332/app/4974117289022654668/tracks/4701415604792469412/releases/43/details
 
-Physical-device confirmation checks remain required before production promotion.
-Install build 139, start a fresh signup, and open its confirmation email on the
-same device. Verify both backgrounded and fully closed app entry, then restart
-KORLIX and confirm that the signed-in session persists. Android production was
-not changed by this internal testing release.
+## Android production submission — October 19, 2026
+
+At 2:05 PM America/New_York, the user reported that the confirmation flow worked.
+At 2:06 PM they requested the production push. The same tested **139 (12.0.1)**
+bundle was promoted from internal testing into production release `8`, retaining
+its release notes and targeting 100% of users in all existing targeted countries.
+The production review reported no devices losing support.
+
+The production change was saved and sent to Google Play for review. Publishing
+overview shows **Changes in review**, with **Production — 139 (12.0.1) — Start
+full rollout**. Google's quick checks were still running when verified. Managed
+publishing is off, so successful approval is followed by automatic publication.
+The production submission is complete; public availability is pending Google's
+checks and review.
+
+Publishing status:
+https://play.google.com/console/u/0/developers/4772708594176030332/app/4974117289022654668/publishing
+
+This action only promotes the Android build. The iOS build remains in its
+separate TestFlight submission workflow.
