@@ -107,6 +107,15 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- app_links handles confirmation on both cold and warm starts. -->
+            <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.korlixdeveloper.korlixai"
+                      android:host="auth" android:pathPrefix="/confirm/" />
+            </intent-filter>
         </activity>
         <meta-data
             android:name="flutterEmbedding"

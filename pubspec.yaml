@@ -42,6 +42,7 @@ dependencies:
   video_player: ^2.11.1
   audioplayers: ^6.7.0
   supabase_flutter: ^2.12.4
+  app_links: 7.1.2
   shared_preferences: ^2.5.5
   # Last compatible major for Android API 23 / compile SDK 36.
   flutter_secure_storage: 10.3.4
