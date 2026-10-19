@@ -1,5 +1,6 @@
 export const KORLIX_SIGNUP_POLICY_VERSION = '2026-10-06';
 export const KORLIX_MINIMUM_AGE = 16;
+export const KORLIX_EMAIL_APP_CALLBACK = 'com.korlixdeveloper.korlixai://auth/confirm/';
 
 export function validateSignupEligibility(value, now = new Date()) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -66,10 +67,23 @@ export function createKorlixSignupHandler({
         return res.status(400).json({error: 'Password must be at least 6 characters.'});
       }
 
+      // Only new mobile clients opt in. Older app builds and web signup keep
+      // their current redirect until they support receiving app links.
+      const nativeConfirmation = body.confirmation_target === 'native';
+      const confirmationState = body.confirmation_state;
+      if (nativeConfirmation &&
+          (typeof confirmationState !== 'string' || !/^[a-f0-9]{64}$/.test(confirmationState))) {
+        return res.status(400).json({error: 'Please restart signup to prepare your confirmation link.'});
+      }
       const {data, error} = await supabaseAuth.auth.signUp({
         email,
         password,
-        options: {data: {korlix_signup_declaration: eligibility.declaration}},
+        options: {
+          data: {korlix_signup_declaration: eligibility.declaration},
+          ...(nativeConfirmation ? {
+            emailRedirectTo: `${KORLIX_EMAIL_APP_CALLBACK}${confirmationState}`,
+          } : {}),
+        },
       });
       if (error) {
         return res.status(error.status || 400).json({error: getUserFacingError(error)});

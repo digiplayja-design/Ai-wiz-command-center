@@ -9,6 +9,38 @@ const valid = {
 };
 const credentials = {email: ' Member@Example.Test ', password: 'test-password'};
 
+test('new mobile signup uses only the fixed app callback with a validated state', async () => {
+  const state = 'a1'.repeat(32);
+  const {calls, response} = await request(valid, {body: {
+    ...credentials, confirmation_target: 'native', confirmation_state: state,
+    emailRedirectTo: 'https://attacker.example',
+  }});
+  assert.equal(response.statusCode, 200);
+  assert.equal(calls[0].options.emailRedirectTo,
+    `com.korlixdeveloper.korlixai://auth/confirm/${state}`);
+  assert.equal(response.body.session, null, 'Confirmation still required');
+});
+
+test('bad native state never creates an account or sends confirmation mail', async () => {
+  for (const state of [undefined, '', 'a'.repeat(63), '../other', 'https://attacker.example', ['a'.repeat(64)]]) {
+    const {calls, response} = await request(valid, {body: {
+      ...credentials, confirmation_target: 'native', confirmation_state: state,
+    }});
+    assert.equal(response.statusCode, 400);
+    assert.equal(calls.length, 0);
+  }
+});
+
+test('old clients and web cannot override their redirect through input', async () => {
+  for (const target of [undefined, 'web', 'https://attacker.example']) {
+    const {calls} = await request(valid, {body: {
+      ...credentials, confirmation_target: target,
+      emailRedirectTo: 'https://attacker.example',
+    }});
+    assert.equal(calls[0].options.emailRedirectTo, undefined);
+  }
+});
+
 async function request(eligibility, {data = {user: {id: 'fixture-user', email: 'member@example.test'}, session: null}, error, body = credentials, throws = false} = {}) {
   const calls = [], profiles = [], sessions = [];
   const handler = createKorlixSignupHandler({
