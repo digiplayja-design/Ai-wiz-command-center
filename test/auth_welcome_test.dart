@@ -59,7 +59,7 @@ void main() {
       expect(signedIn, isFalse);
       expect(find.byType(KorlixWelcomeConfirmation), findsOneWidget);
       expect(find.text('Welcome to KORLIX AI'), findsOneWidget);
-      expect(find.text('Look for Supabase'), findsOneWidget);
+      expect(find.text('Look for KORLIX AI'), findsOneWidget);
       expect(find.textContaining('before you can log in'), findsOneWidget);
       await tester.ensureVisible(find.text('Back to sign in'));
       await tester.tap(find.text('Back to sign in'));

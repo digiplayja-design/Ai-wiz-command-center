@@ -97,8 +97,8 @@ class KorlixWelcomeConfirmation extends StatelessWidget {
             ('1', 'Open your inbox', 'Use the email address shown above.'),
             (
               '2',
-              'Look for Supabase',
-              'Find the confirmation email from Supabase, the service KORLIX uses for sign-in.',
+              'Look for KORLIX AI',
+              'Find the email titled “Confirm your KORLIX AI email address”.',
             ),
             (
               '3',
@@ -156,7 +156,7 @@ class KorlixWelcomeConfirmation extends StatelessWidget {
               ),
             ),
           Text(
-            'Not seeing it? Check Spam or Junk and search your inbox for “Supabase”. Email delivery may take a few minutes.',
+            'Not seeing it? Check Spam or Junk and search your inbox for “KORLIX AI”. Email delivery may take a few minutes.',
             style: TextStyle(color: skin.mutedText, fontSize: 12, height: 1.5),
           ),
           const SizedBox(height: 22),
