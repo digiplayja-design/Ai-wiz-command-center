@@ -44,6 +44,8 @@ import 'auth/korlix_welcome_confirmation.dart';
 import 'auth/korlix_entry_welcome.dart';
 import 'onboarding/korlix_starter_tasks.dart';
 import 'billing/korlix_plan_prompt.dart';
+import 'auth/korlix_email_confirmation.dart';
+import 'package:app_links/app_links.dart';
 import 'auth/korlix_signup_eligibility.dart';
 import 'auth/korlix_signup_presentation.dart';
 import 'auth/knova_welcome_controller.dart';
@@ -355,6 +357,11 @@ Future<void> main() async {
               await Supabase.initialize(
                 url: supabaseUrl,
                 anonKey: supabaseAnonKey,
+                // KORLIX validates app callbacks through its backend and stores
+                // sessions in its existing secure token store.
+                authOptions: const FlutterAuthClientOptions(
+                  detectSessionInUri: kIsWeb,
+                ),
               ).timeout(const Duration(seconds: 8));
 
               kSupabaseReady = true;
@@ -890,6 +897,70 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     }
   }
 
+  final _emailConfirmation = KorlixEmailConfirmation();
+  StreamSubscription<Uri>? _confirmationLinks;
+  Uri? _pendingConfirmationLink;
+  bool _confirmingEmail = false;
+
+  Future<void> _startConfirmationLinks() async {
+    if (!korlixSupportsEmailAppLink) return;
+    try {
+      final links = AppLinks();
+      _confirmationLinks = links.uriLinkStream.listen(
+        _receiveConfirmationLink,
+        onError: (Object _) {}, // Never log credential-bearing link errors.
+      );
+      final initial = await links.getInitialLink();
+      if (mounted && initial != null) _receiveConfirmationLink(initial);
+    } catch (_) {
+      // Unsupported test/desktop hosts retain the ordinary sign-in flow.
+    }
+  }
+
+  void _receiveConfirmationLink(Uri uri) {
+    if (!mounted || !KorlixEmailConfirmation.matches(uri) || _signedIn) return;
+    if (_booting) {
+      _pendingConfirmationLink = uri;
+      return;
+    }
+    unawaited(_completeEmailConfirmation(uri));
+  }
+
+  Future<void> _completeEmailConfirmation(Uri uri) async {
+    if (_confirmingEmail || _signedIn || !mounted) return;
+    final revision = kKorlixAuthRevision.value;
+    setState(() => _confirmingEmail = true);
+    try {
+      await _emailConfirmation.complete(
+        uri,
+        canAccept: () => mounted && !_signedIn &&
+            revision == kKorlixAuthRevision.value,
+        exchange: (refreshToken) async {
+          final session = await KorlixSessionStore.refresh(
+            KorlixAuthSession(accessToken: '', refreshToken: refreshToken),
+          ).timeout(const Duration(seconds: 15));
+          if (session == null) return null;
+          return KorlixConfirmedSession(
+            accessToken: session.accessToken,
+            refreshToken: session.refreshToken ?? '',
+            email: session.email ?? '',
+          );
+        },
+        accept: (session) => _handleSignedIn(KorlixAuthSession(
+          accessToken: session.accessToken,
+          refreshToken: session.refreshToken,
+          email: session.email,
+        )),
+      );
+    } on KorlixConfirmationException catch (error) {
+      if (mounted && revision == kKorlixAuthRevision.value) {
+        _restoreNotice = error.message;
+      }
+    } finally {
+      if (mounted) setState(() => _confirmingEmail = false);
+    }
+  }
+
   void _schedulePortalLaunch() {
     final launch = _korlixInitialPortalLaunch;
     if (launch == null || _portalLaunchScheduled || !_signedIn) return;
@@ -931,6 +1002,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     _welcome = KnovaWelcomeController(backendBaseUrl: kKorlixBackendBaseUrl, sounds: kKorlixSounds);
     unawaited(_welcome.preload());
     kKorlixAuthRevision.addListener(_handleAuthRevisionChanged);
+    unawaited(_startConfirmationLinks());
     _restoreSession();
   }
 
@@ -938,6 +1010,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _refreshTimer?.cancel();
+    unawaited(_confirmationLinks?.cancel());
     _welcome.dispose();
     kKorlixAuthRevision.removeListener(_handleAuthRevisionChanged);
     super.dispose();
@@ -998,6 +1071,9 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     } finally {
       if (mounted) {
         setState(() => _booting = false);
+        final pendingLink = _pendingConfirmationLink;
+        _pendingConfirmationLink = null;
+        if (pendingLink != null) _receiveConfirmationLink(pendingLink);
       }
     }
   }
@@ -1028,7 +1104,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    if (_booting) {
+    if (_booting || _confirmingEmail) {
       return Scaffold(
         body: Container(
           width: double.infinity,
@@ -1070,6 +1146,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     if (!_signedIn) {
       return AuthScreen(
         showWelcome: !_preferSignIn && _restoreNotice == null,
+        key: ValueKey(_restoreNotice),
         onSignedIn: _handleSignedIn,
         onSignInGesture: _welcome.prepareGesture,
         initialNotice: _restoreNotice,
@@ -1327,6 +1404,9 @@ class _AuthScreenState extends State<AuthScreen> {
       if (!mounted) return;
       await KorlixDeviceStore.ensureLoaded();
       final path = signingUp ? '/api/auth/signup' : '/api/auth/signin';
+      final confirmationState = signingUp && korlixSupportsEmailAppLink
+          ? await KorlixEmailConfirmation.begin(email)
+          : null;
 
       final post = widget.client?.post ?? http.post;
       final response = await post(
@@ -1338,6 +1418,10 @@ class _AuthScreenState extends State<AuthScreen> {
         body: jsonEncode({
           'email': email,
           'password': password,
+          if (confirmationState != null) ...{
+            'confirmation_target': 'native',
+            'confirmation_state': confirmationState,
+          },
           ...KorlixDeviceStore.bodyFields(),
           if (signingUp) 'signup_eligibility': {
             'age_band': _signupAgeBand!.value,
@@ -1388,6 +1472,7 @@ class _AuthScreenState extends State<AuthScreen> {
           email: data['user']?['email']?.toString() ?? email,
         ),
       );
+      await KorlixEmailConfirmation.clear();
     } catch (error) {
       if (!mounted) return;
       final cleanedError = _cleanError(error);

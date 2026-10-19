@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'korlix_email_confirmation.dart';
 import '../theme/korlix_action_button.dart';
 import '../theme/korlix_theme.dart';
 
@@ -93,7 +95,7 @@ class KorlixWelcomeConfirmation extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          for (final step in const [
+          for (final step in [
             ('1', 'Open your inbox', 'Use the email address shown above.'),
             (
               '2',
@@ -102,8 +104,12 @@ class KorlixWelcomeConfirmation extends StatelessWidget {
             ),
             (
               '3',
-              'Confirm, then sign in',
-              'Tap the confirmation link in that email. You must confirm your email address before you can log in.',
+              korlixSupportsEmailAppLink
+                  ? 'Confirm and open KORLIX'
+                  : 'Confirm, then sign in',
+              korlixSupportsEmailAppLink
+                  ? 'On this device, the confirmation link opens KORLIX and signs you in. If you confirm on another device, return here and sign in.'
+                  : 'Tap Confirm Email Address in your email, then return here to sign in.',
             ),
           ])
             Padding(

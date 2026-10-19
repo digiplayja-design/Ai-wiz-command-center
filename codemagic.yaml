@@ -8,8 +8,8 @@ workflows:
       app_store_connect: Codemagic Korlix AI
 
     environment:
-      flutter: stable
-      xcode: latest
+      flutter: 3.47.7
+      xcode: 26.6
       cocoapods: default
       ios_signing:
         provisioning_profiles:
@@ -27,7 +27,35 @@ workflows:
 
       - name: Flutter pub get
         script: |
-          flutter pub get
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+
+      - name: Verify email confirmation and session integration
+        script: |
+          set -euo pipefail
+          flutter --suppress-analytics --no-version-check analyze --no-pub lib/auth/korlix_email_confirmation.dart test/auth/korlix_email_confirmation_test.dart
+          flutter --suppress-analytics --no-version-check test --no-pub --reporter expanded \
+            test/auth/korlix_email_confirmation_test.dart \
+            test/auth_welcome_test.dart test/auth_remember_login_test.dart \
+            test/auth_october_integration_test.dart test/signup_eligibility_test.dart \
+            test/auth_device_session_test.dart test/auth/korlix_session_refresh_test.dart \
+            test/auth/korlix_http_test.dart test/registration_discovery_test.dart \
+            test/korlix_entry_intro_test.dart
+
+      - name: Select the next iOS build number
+        script: |
+          set -euo pipefail
+          KORLIX_LAST_IOS_BUILD="$(app-store-connect get-latest-testflight-build-number 6783100102 --platform IOS)"
+          if [[ ! "$KORLIX_LAST_IOS_BUILD" =~ ^[0-9]+$ ]]; then
+            echo 'Could not verify the latest iOS build number.' >&2
+            exit 1
+          fi
+          KORLIX_SOURCE_BUILD="$(sed -n 's/^version: .*+//p' pubspec.yaml)"
+          KORLIX_NEXT_IOS_BUILD=$((10#$KORLIX_LAST_IOS_BUILD + 1))
+          if (( KORLIX_NEXT_IOS_BUILD < KORLIX_SOURCE_BUILD )); then
+            KORLIX_NEXT_IOS_BUILD="$KORLIX_SOURCE_BUILD"
+          fi
+          printf 'KORLIX_IOS_BUILD_NUMBER=%s\n' "$KORLIX_NEXT_IOS_BUILD" >> "$CM_ENV"
+          printf 'Verified latest iOS build %s; building %s next.\n' "$KORLIX_LAST_IOS_BUILD" "$KORLIX_NEXT_IOS_BUILD"
 
       - name: Install CocoaPods
         script: |
@@ -46,9 +74,9 @@ workflows:
           echo "Building IPA..."
           VERSION_LINE="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
           BUILD_NAME="${VERSION_LINE%%+*}"
-          BUILD_NUMBER="${VERSION_LINE##*+}"
+          BUILD_NUMBER="${KORLIX_IOS_BUILD_NUMBER:?Verified iOS build number is required}"
           echo "Building IPA version $BUILD_NAME ($BUILD_NUMBER)..."
-          flutter build ipa --release --build-name="$BUILD_NAME" --build-number="$BUILD_NUMBER" --export-options-plist=/Users/builder/export_options.plist
+          flutter build ipa --release --no-pub --build-name="$BUILD_NAME" --build-number="$BUILD_NUMBER" --export-options-plist=/Users/builder/export_options.plist
           echo ""
           echo "Searching for generated IPA files..."
           find build -type f -name "*.ipa" -print || true

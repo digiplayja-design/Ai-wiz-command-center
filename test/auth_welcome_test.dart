@@ -9,6 +9,7 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ai_wiz_command_center/main.dart' as app;
 import 'package:ai_wiz_command_center/auth/korlix_welcome_confirmation.dart';
+import 'package:ai_wiz_command_center/auth/korlix_email_confirmation.dart';
 import 'package:ai_wiz_command_center/theme/korlix_theme.dart';
 
 Future<void> credentials(WidgetTester tester) async {
@@ -27,6 +28,13 @@ void main() {
       String? path;
       final client = MockClient((request) async {
         path = request.url.path;
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        if (korlixSupportsEmailAppLink) {
+          expect(body['confirmation_target'], 'native');
+          expect(body['confirmation_state'], matches(RegExp(r'^[a-f0-9]{64}$')));
+        } else {
+          expect(body.containsKey('confirmation_target'), isFalse);
+        }
         return http.Response(
           jsonEncode({
             'session': null,
@@ -60,7 +68,7 @@ void main() {
       expect(find.byType(KorlixWelcomeConfirmation), findsOneWidget);
       expect(find.text('Welcome to KORLIX AI'), findsOneWidget);
       expect(find.text('Look for KORLIX AI'), findsOneWidget);
-      expect(find.textContaining('before you can log in'), findsOneWidget);
+      expect(find.textContaining('return here'), findsOneWidget);
       await tester.ensureVisible(find.text('Back to sign in'));
       await tester.tap(find.text('Back to sign in'));
       await tester.pumpAndSettle();
